@@ -16,4 +16,14 @@ Mesh generation
 
 .. automodule:: pytential.mesh.generation
 
+Mesh input/output
+-----------------
+
+.. automodule:: pytential.mesh.io
+
+Mesh connections (for interpolation)
+------------------------------------
+
+.. automodule:: pytential.mesh.connection
+
 .. vim: sw=4

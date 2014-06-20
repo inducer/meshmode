@@ -107,16 +107,16 @@ class PolynomialElementGroupBase(object):
 # }}}
 
 
-# {{{ element group
+# {{{ concrete element groups
 
-class PolynomialElementGroup(PolynomialElementGroupBase):
+class PolynomialQuadratureElementGroup(PolynomialElementGroupBase):
     @memoize_method
     def _quadrature_rule(self):
         dims = self.mesh_el_group.dim
         if dims == 1:
             return mp.LegendreGaussQuadrature(self.order)
         else:
-            return mp.VioreanuRokhlinSimplexQuad(self.order, dims)
+            return mp.VioreanuRokhlinSimplexQuadrature(self.order, dims)
 
     @property
     @memoize_method
@@ -128,12 +128,25 @@ class PolynomialElementGroup(PolynomialElementGroupBase):
     def weights(self):
         return self._quadrature_rule().weights
 
+
+class PolynomialWarpAndBlendElementGroup(PolynomialElementGroupBase):
+    @property
+    @memoize_method
+    def unit_nodes(self):
+        dims = self.mesh_el_group.dim
+        return mp.warp_and_blend_nodes(dims, self.order)
+
+    @property
+    @memoize_method
+    def weights(self):
+        raise NotImplementedError()
+
 # }}}
 
 
 # {{{ discretization
 
-class PolynomialElementDiscretization(Discretization):
+class PolynomialElementDiscretizationBase(Discretization):
     """An (unstructured) composite polynomial discretization without
     any specific opinion on how to evaluate layer potentials.
 
@@ -280,9 +293,16 @@ class PolynomialElementDiscretization(Discretization):
 
         return result
 
-    group_class = PolynomialElementGroup
-
 # }}}
 
+
+class PolynomialQuadratureElementDiscretization(
+        PolynomialElementDiscretizationBase):
+    group_class = PolynomialQuadratureElementGroup
+
+
+class PolynomialWarpAndBlendElementDiscretization(
+        PolynomialElementDiscretizationBase):
+    group_class = PolynomialWarpAndBlendElementGroup
 
 # vim: fdm=marker

@@ -82,6 +82,10 @@ class MeshElementGroup(Record):
         """
 
         if unit_nodes is None:
+            if dim is None:
+                raise TypeError("'dim' must be passed "
+                        "if 'unit_nodes' is not passed")
+
             unit_nodes = mp.warp_and_blend_nodes(dim, order)
 
         dims = unit_nodes.shape[0]
