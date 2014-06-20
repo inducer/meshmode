@@ -138,6 +138,7 @@ class Visualizer(object):
                 nodes.append(0*nodes[0])
 
             args = tuple(nodes) + (vis_connectivity.reshape(-1, 3),)
+            kwargs["scalars"] = field
 
             mlab.triangular_mesh(*args, **kwargs)
 
