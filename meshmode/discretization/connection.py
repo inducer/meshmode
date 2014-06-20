@@ -187,6 +187,12 @@ def make_same_mesh_connection(queue, to_discr, from_discr):
     return DiscretizationConnection(
             from_discr, to_discr, groups)
 
+
+def make_boundary_extractor(queue, discr):
+    """
+    :return: a tuple ``(bdry_mesh, bdry_discr, connection)``
+    """
+
 # }}}
 
 # vim: foldmethod=marker
