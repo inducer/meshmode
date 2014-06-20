@@ -71,6 +71,14 @@ class Visualizer(object):
         self.vis_discr = vis_discr
         self.connection = connection
 
+    def _resample_and_get(self, queue, vec):
+        from pytools.obj_array import with_object_array_or_scalar
+
+        def resample_and_get_one(fld):
+            return self.connection(queue, fld).get(queue=queue)
+
+        return with_object_array_or_scalar(resample_and_get_one, vec)
+
     @memoize_method
     def _vis_connectivity(self):
         """
@@ -116,6 +124,8 @@ class Visualizer(object):
         with cl.CommandQueue(self.vis_discr.cl_context) as queue:
             nodes = self.vis_discr.nodes().with_queue(queue).get()
 
+            field = self._resample_and_get(queue, field)
+
         assert nodes.shape[0] == self.vis_discr.ambient_dim
         #mlab.points3d(nodes[0], nodes[1], 0*nodes[0])
 
@@ -138,7 +148,7 @@ class Visualizer(object):
         if do_show:
             mlab.show()
 
-    def write_vtk_file(self, file_name, fields_and_names, compressor=None,
+    def write_vtk_file(self, file_name, names_and_fields, compressor=None,
             real_only=False):
 
         from pyvisfile.vtk import (
@@ -156,6 +166,10 @@ class Visualizer(object):
 
         with cl.CommandQueue(self.vis_discr.cl_context) as queue:
             nodes = self.vis_discr.nodes().with_queue(queue).get()
+
+            names_and_fields = [
+                    (name, self._resample_and_get(queue, fld))
+                    for name, fld in names_and_fields]
 
         connectivity = self._vis_connectivity()
 
@@ -176,7 +190,7 @@ class Visualizer(object):
         #     grid.add_celldata(DataArray(name, field,
         #         vector_format=VF_LIST_OF_COMPONENTS))
 
-        for name, field in separate_by_real_and_imag(fields_and_names, real_only):
+        for name, field in separate_by_real_and_imag(names_and_fields, real_only):
             grid.add_pointdata(DataArray(name, field,
                 vector_format=VF_LIST_OF_COMPONENTS))
 
@@ -197,7 +211,7 @@ def make_visualizer(queue, discr, vis_order):
             real_dtype=discr.real_dtype)
     from meshmode.discretization.connection import \
             make_same_mesh_connection
-    cnx = make_same_mesh_connection(queue, discr, vis_discr)
+    cnx = make_same_mesh_connection(queue, vis_discr, discr)
 
     return Visualizer(discr, vis_discr, cnx)
 

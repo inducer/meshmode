@@ -25,6 +25,7 @@ THE SOFTWARE.
 import numpy as np
 import pyopencl as cl
 import pyopencl.array  # noqa
+from pytools import memoize_method, memoize_method_nested
 
 
 __doc__ = """
@@ -35,14 +36,21 @@ __doc__ = """
 Implementation details
 ^^^^^^^^^^^^^^^^^^^^^^
 
-.. autoclass:: InterpolationGroup
+.. autoclass:: InterpolationBatch
 
 .. autoclass:: DiscretizationConnectionElementGroup
 """
 
 
-class InterpolationGroup(object):
-    """
+class InterpolationBatch(object):
+    """One interpolation batch captures how a batch of elements *within* an
+    element group should be an interpolated. Note that while it's possible that
+    an interpolation batch takes care of interpolating an entire element group
+    from source to target, that's not *necessarily* the case. Consider the case
+    of extracting boundary values of a discretization. For, say, a triangle, at
+    least three different interpolation batches are needed to cover boundary
+    edges that fall onto each of the three edges of the unit triangle.
+
     .. attribute:: source_element_indices
 
         A :class:`numpy.ndarray` of length ``nelements``, containing the
@@ -55,7 +63,7 @@ class InterpolationGroup(object):
         element index to which this "*to*" element's data will be
         interpolated.
 
-    .. attribute:: source_interpolation_nodes
+    .. attribute:: result_unit_nodes
 
         A :class:`numpy.ndarray` of shape
         ``(from_group.dim,to_group.nelements,to_group.nunit_nodes)``
@@ -64,10 +72,10 @@ class InterpolationGroup(object):
         locations of this element should be interpolated.
     """
     def __init__(self, source_element_indices,
-            target_element_indices, source_interpolation_nodes):
+            target_element_indices, result_unit_nodes):
         self.source_element_indices = source_element_indices
         self.target_element_indices = target_element_indices
-        self.source_interpolation_nodes = source_interpolation_nodes
+        self.result_unit_nodes = result_unit_nodes
 
     @property
     def nelements(self):
@@ -76,12 +84,12 @@ class InterpolationGroup(object):
 
 class DiscretizationConnectionElementGroup(object):
     """
-    .. attribute:: interpolation_groups
+    .. attribute:: batches
 
-        A list of :class:`InterpolationGroup` instances.
+        A list of :class:`InterpolationBatch` instances.
     """
-    def __init__(self, interpolation_groups):
-        self.interpolation_groups = interpolation_groups
+    def __init__(self, batches):
+        self.batches = batches
 
 
 class DiscretizationConnection(object):
@@ -108,13 +116,54 @@ class DiscretizationConnection(object):
         self.to_discr = to_discr
         self.groups = groups
 
-    def __call__(self, queue, field):
-        pass
+    @memoize_method
+    def _resample_matrix(self, elgroup_index, ibatch_index):
+        import modepy as mp
+        ibatch = self.groups[elgroup_index].batches[ibatch_index]
+        from_grp = self.from_discr.groups[elgroup_index]
+
+        return mp.resampling_matrix(
+                mp.simplex_onb(self.from_discr.dim, from_grp.order),
+                ibatch.result_unit_nodes, from_grp.unit_nodes)
+
+    def __call__(self, queue, vec):
+        @memoize_method_nested
+        def knl():
+            import loopy as lp
+            knl = lp.make_kernel(
+                """{[k,i,j]:
+                    0<=k<nelements and
+                    0<=i<n_to_nodes and
+                    0<=j<n_from_nodes}""",
+                "result[k,i] = sum(j, resample_mat[i, j] * vec[k, j])",
+                name="oversample")
+
+            knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
+            return lp.tag_inames(knl, dict(k="g.0"))
+
+        if not isinstance(vec, cl.array.Array):
+            return vec
+
+        result = self.to_discr.empty(vec.dtype)
+
+        if vec.shape != (self.from_discr.nnodes,):
+            raise ValueError("invalid shape of incoming resampling data")
+
+        for i_grp, (sgrp, tgrp, cgrp) in enumerate(
+                zip(self.to_discr.groups, self.from_discr.groups, self.groups)):
+            for i_batch, batch in enumerate(cgrp.batches):
+                knl()(queue,
+                        resample_mat=self._resample_matrix(i_grp, i_batch),
+                        result=sgrp.view(result), vec=tgrp.view(vec))
+
+        return result
+
+    # }}}
 
 
 # {{{ constructor functions
 
-def make_same_mesh_connection(queue, from_discr, to_discr):
+def make_same_mesh_connection(queue, to_discr, from_discr):
     if from_discr.mesh is not to_discr.mesh:
         raise ValueError("from_discr and to_discr must be based on "
                 "the same mesh")
@@ -126,15 +175,14 @@ def make_same_mesh_connection(queue, from_discr, to_discr):
     for fgrp, tgrp in zip(from_discr.groups, to_discr.groups):
         all_elements = cl.array.arange(queue,
                 fgrp.nelements,
-                dtype=np.intp)
-        igroup = InterpolationGroup(
+                dtype=np.intp).with_queue(None)
+        ibatch = InterpolationBatch(
                 source_element_indices=all_elements,
                 target_element_indices=all_elements,
-                source_interpolation_nodes=tgrp.unit_nodes)
+                result_unit_nodes=tgrp.unit_nodes)
 
         groups.append(
-                DiscretizationConnectionElementGroup(
-                    igroup))
+                DiscretizationConnectionElementGroup([ibatch]))
 
     return DiscretizationConnection(
             from_discr, to_discr, groups)
