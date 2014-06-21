@@ -80,7 +80,7 @@ class MeshElementGroup(Record):
             vertex_indices=vertex_indices,
             nodes=nodes,
             unit_nodes=unit_nodes,
-            element_nr_base=None, node_nr_base=None)
+            element_nr_base=element_nr_base, node_nr_base=node_nr_base)
 
     @property
     def dim(self):
@@ -217,7 +217,7 @@ class Mesh(Record):
             el_nr += ng.nelements
             node_nr += ng.nnodes
 
-        Record.__init__(self, vertices=vertices, groups=groups)
+        Record.__init__(self, vertices=vertices, groups=new_groups)
 
     @property
     def ambient_dim(self):

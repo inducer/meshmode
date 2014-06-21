@@ -96,7 +96,13 @@ class QuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
     @property
     @memoize_method
     def unit_nodes(self):
-        return self._quadrature_rule().nodes
+        result = self._quadrature_rule().nodes
+        if len(result.shape) == 1:
+            result = np.array([result])
+
+        dim2, nunit_nodes = result.shape
+        assert dim2 == self.mesh_el_group.dim
+        return result
 
     @property
     @memoize_method
@@ -108,8 +114,12 @@ class PolynomialWarpAndBlendElementGroup(PolynomialSimplexElementGroupBase):
     @property
     @memoize_method
     def unit_nodes(self):
-        dims = self.mesh_el_group.dim
-        return mp.warp_and_blend_nodes(dims, self.order)
+        dim = self.mesh_el_group.dim
+        result = mp.warp_and_blend_nodes(dim, self.order)
+
+        dim2, nunit_nodes = result.shape
+        assert dim2 == dim
+        return result
 
     @property
     @memoize_method

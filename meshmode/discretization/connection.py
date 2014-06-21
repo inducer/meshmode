@@ -26,13 +26,15 @@ import numpy as np
 import modepy as mp
 import pyopencl as cl
 import pyopencl.array  # noqa
-from pytools import memoize_method, memoize_method_nested
+from pytools import memoize_method, memoize_method_nested, Record
 
 
 __doc__ = """
 .. autoclass:: DiscretizationConnection
 
 .. autofunction:: make_same_mesh_connection
+
+.. autofunction:: make_boundary_restriction
 
 Implementation details
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -54,13 +56,13 @@ class InterpolationBatch(object):
 
     .. attribute:: source_element_indices
 
-        A :class:`numpy.ndarray` of length ``nelements``, containing the
+        A :class:`pyopencl.array.Arrays` of length ``nelements``, containing the
         element index from which this "*to*" element's data will be
         interpolated.
 
     .. attribute:: target_element_indices
 
-        A :class:`numpy.ndarray` of length ``nelements``, containing the
+        A :class:`pyopencl.array.Arrays` of length ``nelements``, containing the
         element index to which this "*to*" element's data will be
         interpolated.
 
@@ -72,6 +74,7 @@ class InterpolationBatch(object):
         of the *from* reference element) from which the node
         locations of this element should be interpolated.
     """
+
     def __init__(self, source_element_indices,
             target_element_indices, result_unit_nodes):
         self.source_element_indices = source_element_indices
@@ -136,7 +139,18 @@ class DiscretizationConnection(object):
                     0<=k<nelements and
                     0<=i<n_to_nodes and
                     0<=j<n_from_nodes}""",
-                "result[k,i] = sum(j, resample_mat[i, j] * vec[k, j])",
+                "result[target_element_indices[k], i] \
+                    = sum(j, resample_mat[i, j] \
+                    * vec[source_element_indices[k], j])",
+                [
+                    lp.GlobalArg("result", None,
+                        shape="nelements_result, n_to_nodes"),
+                    lp.GlobalArg("vec", None,
+                        shape="nelements_vec, n_from_nodes"),
+                    lp.ValueArg("nelements_result", np.int32),
+                    lp.ValueArg("nelements_vec", np.int32),
+                    "...",
+                    ],
                 name="oversample")
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
@@ -153,9 +167,12 @@ class DiscretizationConnection(object):
         for i_grp, (sgrp, tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.from_discr.groups, self.groups)):
             for i_batch, batch in enumerate(cgrp.batches):
-                knl()(queue,
-                        resample_mat=self._resample_matrix(i_grp, i_batch),
-                        result=sgrp.view(result), vec=tgrp.view(vec))
+                if len(batch.source_element_indices):
+                    knl()(queue,
+                            resample_mat=self._resample_matrix(i_grp, i_batch),
+                            result=sgrp.view(result), vec=tgrp.view(vec),
+                            source_element_indices=batch.source_element_indices,
+                            target_element_indices=batch.target_element_indices)
 
         return result
 
@@ -193,7 +210,47 @@ def make_same_mesh_connection(queue, to_discr, from_discr):
 
 # {{{ boundary restriction constructor
 
-def make_boundary_extractor(queue, discr, group_factory):
+class _ConnectionBatchData(Record):
+    pass
+
+
+def _build_boundary_connection(queue, vol_discr, bdry_discr, connection_data):
+    connection_groups = []
+    for igrp, (vol_grp, bdry_grp) in enumerate(
+            zip(vol_discr.groups, bdry_discr.groups)):
+        connection_batches = []
+        mgrp = vol_grp.mesh_el_group
+
+        for face_id in xrange(len(mgrp.face_vertex_indices())):
+            data = connection_data[igrp, face_id]
+
+            bdry_unit_nodes_01 = (bdry_grp.unit_nodes + 1)*0.5
+            result_unit_nodes = (np.dot(data.A, bdry_unit_nodes_01).T + data.b).T
+
+            connection_batches.append(
+                    InterpolationBatch(
+                        source_element_indices=cl.array.to_device(
+                            queue,
+                            vol_grp.mesh_el_group.element_nr_base
+                            + data.group_source_element_indices)
+                        .with_queue(None),
+                        target_element_indices=cl.array.to_device(
+                            queue,
+                            bdry_grp.mesh_el_group.element_nr_base
+                            + data.group_target_element_indices)
+                        .with_queue(None),
+                        result_unit_nodes=result_unit_nodes,
+                        ))
+
+        connection_groups.append(
+                DiscretizationConnectionElementGroup(
+                    connection_batches))
+
+    return DiscretizationConnection(
+            vol_discr, bdry_discr, connection_groups)
+
+
+def make_boundary_restriction(queue, discr, group_factory):
     """
     :return: a tuple ``(bdry_mesh, bdry_discr, connection)``
     """
@@ -205,6 +262,7 @@ def make_boundary_extractor(queue, discr, group_factory):
 
     for igrp, mgrp in enumerate(discr.mesh.groups):
         grp_face_vertex_indices = mgrp.face_vertex_indices()
+
         for iel_grp in xrange(mgrp.nelements):
             for fid, loc_face_vertices in enumerate(grp_face_vertex_indices):
                 face_vertices = frozenset(
@@ -237,6 +295,8 @@ def make_boundary_extractor(queue, discr, group_factory):
 
     from meshmode.mesh import Mesh, SimplexElementGroup
     bdry_mesh_groups = []
+    connection_data = {}
+
     for igrp, grp in enumerate(discr.groups):
         mgrp = grp.mesh_el_group
         group_boundary_faces = [
@@ -274,7 +334,7 @@ def make_boundary_extractor(queue, discr, group_factory):
         batch_base = 0
 
         for face_id in xrange(len(grp_face_vertex_indices)):
-            batch_boundary_el_numbers_in_vol = np.array(
+            batch_boundary_el_numbers_in_grp = np.array(
                     [
                         ibface_el
                         for ibface_el, ibface_face in group_boundary_faces
@@ -283,7 +343,7 @@ def make_boundary_extractor(queue, discr, group_factory):
 
             new_el_numbers = np.arange(
                     batch_base,
-                    batch_base + len(batch_boundary_el_numbers_in_vol))
+                    batch_base + len(batch_boundary_el_numbers_in_grp))
 
             # {{{ no per-element axes in these computations
 
@@ -309,9 +369,11 @@ def make_boundary_extractor(queue, discr, group_factory):
 
             # }}}
 
+            # {{{ build information for mesh element group
+
             # Find vertex_indices
             glob_face_vertices = mgrp.vertex_indices[
-                    batch_boundary_el_numbers_in_vol][:, loc_face_vertices]
+                    batch_boundary_el_numbers_in_grp][:, loc_face_vertices]
             vertex_indices[new_el_numbers] = \
                     vol_to_bdry_vertices[glob_face_vertices]
 
@@ -319,9 +381,18 @@ def make_boundary_extractor(queue, discr, group_factory):
             nodes[:, new_el_numbers, :] = np.einsum(
                     "ij,dej->dei",
                     resampling_mat,
-                    mgrp.nodes[:, batch_boundary_el_numbers_in_vol, :])
+                    mgrp.nodes[:, batch_boundary_el_numbers_in_grp, :])
 
-            batch_base += len(batch_boundary_el_numbers_in_vol)
+            # }}}
+
+            connection_data[igrp, face_id] = _ConnectionBatchData(
+                    group_source_element_indices=batch_boundary_el_numbers_in_grp,
+                    group_target_element_indices=new_el_numbers,
+                    A=A,
+                    b=b,
+                    )
+
+            batch_base += len(batch_boundary_el_numbers_in_grp)
 
         bdry_mesh_group = SimplexElementGroup(
                 mgrp.order, vertex_indices, nodes, unit_nodes=bdry_unit_nodes)
@@ -333,10 +404,8 @@ def make_boundary_extractor(queue, discr, group_factory):
     bdry_discr = Discretization(
             discr.cl_context, bdry_mesh, group_factory)
 
-    # FIXME
-    connection = None
-
-    return bdry_mesh, bdry_discr, connection
+    return bdry_mesh, bdry_discr, _build_boundary_connection(
+            queue, discr, bdry_discr, connection_data)
 
 # }}}
 
