@@ -39,6 +39,11 @@ def main():
               'Topic :: Utilities',
               ],
 
+          packages=[
+              "meshmode",
+              "meshmode.mesh",
+              "meshmode.discretization",
+              ],
           install_requires=[
               "numpy",
               "modepy",
