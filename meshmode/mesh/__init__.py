@@ -70,30 +70,11 @@ class MeshElementGroup(Record):
             The nodes are assumed to be mapped versions of *unit_nodes*.
         :arg unit_nodes: ``[dim, nunit_nodes]``
             The unit nodes of which *nodes* is a mapped
-            version. If unspecified, the nodes from
-            :func:`modepy.warp_and_blend_nodes` for *dim*
-            are assumed. These must be in unit coordinates
-            as defined in :mod:`modepy.nodes`.
-        :arg dim: only used if *unit_nodes* is None, to get
-            the default unit nodes.
+            version.
 
         Do not supply *element_nr_base* and *node_nr_base*, they will be
         automatically assigned.
         """
-
-        if unit_nodes is None:
-            if dim is None:
-                raise TypeError("'dim' must be passed "
-                        "if 'unit_nodes' is not passed")
-
-            unit_nodes = mp.warp_and_blend_nodes(dim, order)
-
-        dims = unit_nodes.shape[0]
-
-        if vertex_indices.shape[-1] != dims+1:
-            raise ValueError("vertex_indices has wrong number of vertices per "
-                    "element. expected: %d, got: %d" % (dims+1,
-                        vertex_indices.shape[-1]))
 
         Record.__init__(self,
             order=order,
@@ -126,6 +107,45 @@ class MeshElementGroup(Record):
     @property
     def nunit_nodes(self):
         return self.unit_nodes.shape[-1]
+
+
+class SimplexElementGroup(MeshElementGroup):
+    def __init__(self, order, vertex_indices, nodes,
+            element_nr_base=None, node_nr_base=None,
+            unit_nodes=None, dim=None):
+        """
+        :arg order: the mamximum total degree used for interpolation.
+        :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
+            The nodes are assumed to be mapped versions of *unit_nodes*.
+        :arg unit_nodes: ``[dim, nunit_nodes]``
+            The unit nodes of which *nodes* is a mapped
+            version. If unspecified, the nodes from
+            :func:`modepy.warp_and_blend_nodes` for *dim*
+            are assumed. These must be in unit coordinates
+            as defined in :mod:`modepy.nodes`.
+        :arg dim: only used if *unit_nodes* is None, to get
+            the default unit nodes.
+
+        Do not supply *element_nr_base* and *node_nr_base*, they will be
+        automatically assigned.
+        """
+
+        if unit_nodes is None:
+            if dim is None:
+                raise TypeError("'dim' must be passed "
+                        "if 'unit_nodes' is not passed")
+
+            unit_nodes = mp.warp_and_blend_nodes(dim, order)
+
+        dims = unit_nodes.shape[0]
+
+        if vertex_indices.shape[-1] != dims+1:
+            raise ValueError("vertex_indices has wrong number of vertices per "
+                    "element. expected: %d, got: %d" % (dims+1,
+                        vertex_indices.shape[-1]))
+
+        MeshElementGroup.__init__(self, order, vertex_indices, nodes,
+                element_nr_base, node_nr_base, unit_nodes, dim)
 
 # }}}
 

@@ -122,7 +122,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         # }}}
 
-        from meshmode.mesh import MeshElementGroup, Mesh
+        from meshmode.mesh import SimplexElementGroup, Mesh
 
         for group_el_type, ngroup_elements in el_type_hist.iteritems():
             if group_el_type.dimensions != mesh_bulk_dim:
@@ -150,7 +150,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             unit_nodes = (np.array(group_el_type.lexicographic_node_tuples(),
                     dtype=np.float64).T/group_el_type.order)*2 - 1
 
-            groups.append(MeshElementGroup(
+            groups.append(SimplexElementGroup(
                 group_el_type.order,
                 vertex_indices,
                 nodes,

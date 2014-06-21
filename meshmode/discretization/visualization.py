@@ -205,10 +205,12 @@ class Visualizer(object):
 
 
 def make_visualizer(queue, discr, vis_order):
+    from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlendElementDiscretization
-    vis_discr = PolynomialWarpAndBlendElementDiscretization(
-            discr.cl_context, discr.mesh, order=vis_order,
+            PolynomialWarpAndBlendGroupFactory
+    vis_discr = Discretization(
+            discr.cl_context, discr.mesh,
+            PolynomialWarpAndBlendGroupFactory(vis_order),
             real_dtype=discr.real_dtype)
     from meshmode.discretization.connection import \
             make_same_mesh_connection

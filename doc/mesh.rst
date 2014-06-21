@@ -1,7 +1,7 @@
 Mesh management
 ===============
 
-.. automodule:: pytential.mesh
+.. automodule:: meshmode.mesh
 
 .. autoclass:: MeshElementGroup
     :members:
@@ -14,16 +14,11 @@ Mesh management
 Mesh generation
 ---------------
 
-.. automodule:: pytential.mesh.generation
+.. automodule:: meshmode.mesh.generation
 
 Mesh input/output
 -----------------
 
-.. automodule:: pytential.mesh.io
-
-Mesh connections (for interpolation)
-------------------------------------
-
-.. automodule:: pytential.mesh.connection
+.. automodule:: meshmode.mesh.io
 
 .. vim: sw=4

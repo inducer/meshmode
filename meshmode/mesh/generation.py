@@ -165,8 +165,8 @@ def make_curve_mesh(curve_f, element_boundaries, order):
     t = el_starts[:, np.newaxis] + el_lengths[:, np.newaxis]*nodes_01
     nodes = curve_f(t.ravel()).reshape(vertices.shape[0], nelements, -1)
 
-    from meshmode.mesh import Mesh, MeshElementGroup
-    egroup = MeshElementGroup(
+    from meshmode.mesh import Mesh, SimplexElementGroup
+    egroup = SimplexElementGroup(
             order,
             vertex_indices=np.vstack([
                 np.arange(nelements),
