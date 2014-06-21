@@ -131,7 +131,22 @@ class Visualizer(object):
 
         vis_connectivity = self._vis_connectivity()
 
-        if self.vis_discr.dim == 2:
+        if self.vis_discr.dim == 1:
+            nodes = list(nodes)
+            # pad to 3D with zeros
+            while len(nodes) < 3:
+                nodes.append(0*nodes[0])
+            assert len(nodes) == 3
+
+            args = tuple(nodes) + (field,)
+
+            # http://docs.enthought.com/mayavi/mayavi/auto/example_plotting_many_lines.html  # noqa
+            src = mlab.pipeline.scalar_scatter(*args)
+            src.mlab_source.dataset.lines = vis_connectivity.reshape(-1, 2)
+            lines = mlab.pipeline.stripper(src)
+            mlab.pipeline.surface(lines, **kwargs)
+
+        elif self.vis_discr.dim == 2:
             nodes = list(nodes)
             # pad to 3D with zeros
             while len(nodes) < 3:

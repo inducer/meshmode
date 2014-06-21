@@ -23,6 +23,7 @@ THE SOFTWARE.
 """
 
 import numpy as np
+import modepy as mp
 import pyopencl as cl
 import pyopencl.array  # noqa
 from pytools import memoize_method, memoize_method_nested
@@ -188,10 +189,126 @@ def make_same_mesh_connection(queue, to_discr, from_discr):
             from_discr, to_discr, groups)
 
 
-def make_boundary_extractor(queue, discr):
+def make_boundary_extractor(queue, discr, group_factory):
     """
     :return: a tuple ``(bdry_mesh, bdry_discr, connection)``
     """
+
+    # {{{ build face_map
+
+    # maps (igrp, el_grp, face_id) to a frozenset of vertex IDs
+    face_map = {}
+
+    for igrp, mgrp in enumerate(discr.mesh.groups):
+        grp_face_vertex_indices = mgrp.face_vertex_indices()
+        for iel_grp in xrange(mgrp.nelements):
+            for fid, loc_face_vertices in enumerate(grp_face_vertex_indices):
+                face_vertices = frozenset(
+                        mgrp.vertex_indices[iel_grp, fvi]
+                        for fvi in loc_face_vertices
+                        )
+                face_map.setdefault(face_vertices, []).append(
+                        (igrp, iel_grp, fid))
+
+    del face_vertices
+
+    # }}}
+
+    boundary_faces = [
+            face_ids[0]
+            for face_vertices, face_ids in face_map.iteritems()
+            if len(face_ids) == 1]
+
+    from pytools import flatten
+    bdry_vertex_vol_nrs = sorted(set(flatten(face_map.iterkeys())))
+
+    vol_to_bdry_vertices = np.empty(
+            discr.mesh.vertices.shape[-1],
+            discr.mesh.vertices.dtype)
+    vol_to_bdry_vertices.fill(-1)
+    vol_to_bdry_vertices[bdry_vertex_vol_nrs] = np.arange(
+            len(bdry_vertex_vol_nrs))
+
+    bdry_vertices = discr.mesh.vertices[:, bdry_vertex_vol_nrs]
+
+    from meshmode.mesh import Mesh, SimplexElementGroup
+    bdry_mesh_groups = []
+    for igrp, grp in enumerate(discr.groups):
+        mgrp = grp.mesh_el_group
+        group_boundary_faces = [
+                (ibface_group, ibface_el, ibface_face)
+                for ibface_group, ibface_el, ibface_face in boundary_faces
+                if ibface_group == igrp]
+
+        if not isinstance(mgrp, SimplexElementGroup):
+            raise NotImplementedError("can only take boundary of "
+                    "SimplexElementGroup-based meshes")
+
+        # {{{ Preallocate arrays for mesh group
+
+        ngroup_bdry_elements = len(group_boundary_faces)
+        vertex_indices = np.empty(
+                (ngroup_bdry_elements, mgrp.dim+1-1),
+                mgrp.vertex_indices.dtype)
+
+        bdry_unit_nodes = mp.warp_and_blend_nodes(mgrp.dim-1, mgrp.order)
+        bdry_unit_nodes_01 = (bdry_unit_nodes + 1)*0.5
+
+        vol_basis = mp.simplex_onb(mgrp.dim, mgrp.order)
+        nbdry_unit_nodes = bdry_unit_nodes_01.shape[-1]
+        nodes = np.empty(
+                (discr.ambient_dim, ngroup_bdry_elements, nbdry_unit_nodes),
+                dtype=np.float64)
+
+        # }}}
+
+        grp_face_vertex_indices = mgrp.face_vertex_indices()
+        grp_vertex_unit_coordinates = mgrp.vertex_unit_coordinates()
+
+        for ibdry_el, (ibface_group, ibface_el, ibface_face) in enumerate(
+                group_boundary_faces):
+
+            # Find boundary vertex indices
+            loc_face_vertices = list(grp_face_vertex_indices[ibface_face])
+            glob_face_vertices = mgrp.vertex_indices[ibface_el, loc_face_vertices]
+            vertex_indices[ibdry_el] = vol_to_bdry_vertices[glob_face_vertices]
+
+            # Find unit nodes for boundary element
+            face_vertex_unit_coordinates = \
+                    grp_vertex_unit_coordinates[loc_face_vertices]
+
+            # Find A, b such that A [e_1 e_2] + b = [r_1 r_2]
+            # (Notation assumes that the volume is 3D and the face is 2D.)
+            b = face_vertex_unit_coordinates[0]
+            A = (
+                    face_vertex_unit_coordinates[1:]
+                    - face_vertex_unit_coordinates[0]).T
+
+            face_unit_nodes = (np.dot(A, bdry_unit_nodes_01).T + b).T
+
+            resampling_mat = mp.resampling_matrix(
+                    vol_basis,
+                    face_unit_nodes, mgrp.unit_nodes)
+
+            nodes[:, ibdry_el, :] = np.einsum(
+                    "ij,dj->di",
+                    resampling_mat,
+                    mgrp.nodes[:, ibface_el, :])
+
+        bdry_mesh_group = SimplexElementGroup(
+                mgrp.order, vertex_indices, nodes, unit_nodes=bdry_unit_nodes)
+        bdry_mesh_groups.append(bdry_mesh_group)
+
+    bdry_mesh = Mesh(bdry_vertices, bdry_mesh_groups)
+
+    from meshmode.discretization import Discretization
+    bdry_discr = Discretization(
+            discr.cl_context, bdry_mesh, group_factory)
+
+    # FIXME
+    connection = None
+
+    return bdry_mesh, bdry_discr, connection
 
 # }}}
 

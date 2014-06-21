@@ -133,7 +133,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             el_vertex_count = group_el_type.vertex_count()
             vertex_indices = np.empty(
                     (ngroup_elements, el_vertex_count),
-                    np.float64)
+                    np.int32)
             i = 0
 
             for el_vertices, el_nodes, el_type in zip(

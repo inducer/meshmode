@@ -22,8 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-
-#import numpy as np
+import numpy as np
 import modepy as mp
 #import numpy.linalg as la
 from pytools import Record
@@ -130,6 +129,9 @@ class SimplexElementGroup(MeshElementGroup):
         automatically assigned.
         """
 
+        if not issubclass(vertex_indices.dtype.type, np.integer):
+            raise TypeError("vertex_indices must be integral")
+
         if unit_nodes is None:
             if dim is None:
                 raise TypeError("'dim' must be passed "
@@ -146,6 +148,46 @@ class SimplexElementGroup(MeshElementGroup):
 
         MeshElementGroup.__init__(self, order, vertex_indices, nodes,
                 element_nr_base, node_nr_base, unit_nodes, dim)
+
+    def face_vertex_indices(self):
+        if self.dim == 1:
+            return ((0, 1))
+        elif self.dim == 2:
+            return (
+                (0, 1),
+                (1, 2),
+                (0, 2),
+                )
+        elif self.dim == 3:
+            return (
+                (0, 1, 2),
+                (0, 1, 3),
+                (0, 2, 3),
+                (1, 2, 3)
+                )
+        else:
+            raise NotImplementedError("dim=%d" % self.dim)
+
+    def vertex_unit_coordinates(self):
+        if self.dim == 1:
+            return np.array([
+                [-1], [1]
+                ], dtype=np.float64)
+        elif self.dim == 2:
+            return np.array([
+                [-1, -1],
+                [1, -1],
+                [-1, 1],
+                ], dtype=np.float64)
+        elif self.dim == 3:
+            return np.array([
+                [-1, -1, -1],
+                [1, -1, -1],
+                [-1, 1, -1],
+                [-1, -1, 1],
+                ], dtype=np.float64)
+        else:
+            raise NotImplementedError("dim=%d" % self.dim)
 
 # }}}
 
