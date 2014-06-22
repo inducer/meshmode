@@ -80,6 +80,35 @@ def test_boundary_interpolation(ctx_getter):
     assert eoc_rec.order_estimate() >= order-0.5
 
 
+def test_element_orientation():
+    from meshmode.mesh.io import generate_gmsh, FileSource
+
+    mesh_order = 3
+
+    mesh = generate_gmsh(
+            FileSource("blob-2d.step"), 2, order=mesh_order,
+            force_ambient_dimension=2,
+            other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"]
+            )
+
+    from meshmode.mesh.processing import (perform_flips,
+            find_volume_mesh_element_orientations)
+    mesh_orient = find_volume_mesh_element_orientations(mesh)
+
+    assert (mesh_orient > 0).all()
+
+    from random import randrange
+    flippy = np.zeros(mesh.nelements, np.int8)
+    for i in range(int(0.3*mesh.nelements)):
+        flippy[randrange(0, mesh.nelements)] = 1
+
+    mesh = perform_flips(mesh, flippy)
+
+    mesh_orient = find_volume_mesh_element_orientations(mesh)
+
+    assert ((mesh_orient < 0) == (flippy > 0)).all()
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:

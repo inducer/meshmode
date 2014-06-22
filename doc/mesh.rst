@@ -21,4 +21,9 @@ Mesh input/output
 
 .. automodule:: meshmode.mesh.io
 
+Mesh processing
+-----------------
+
+.. automodule:: meshmode.mesh.processing
+
 .. vim: sw=4

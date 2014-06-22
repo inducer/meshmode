@@ -43,7 +43,11 @@ class MeshElementGroup(Record):
     .. attribute:: nodes
 
         An array of node coordinates with shape
-        *(mesh.ambient_dim, nelements, ref_element.nnodes)*.
+        *(mesh.ambient_dim, nelements, nunit_nodes)*.
+
+    .. attribute:: unit_nodes
+
+        *(dim, nunit_nodes)*
 
     .. attribute:: element_nr_base
 
@@ -227,6 +231,10 @@ class Mesh(Record):
     def dim(self):
         from pytools import single_valued
         return single_valued(grp.dim for grp in self.groups)
+
+    @property
+    def nelements(self):
+        return sum(grp.nelements for grp in self.groups)
 
     # Design experience: Try not to add too many global data structures
     # to the mesh. Let the element groups be responsible for that.

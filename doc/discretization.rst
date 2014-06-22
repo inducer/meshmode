@@ -11,10 +11,10 @@ Composite polynomial discretization
 
 .. automodule:: meshmode.discretization.poly_element
 
-Resampling
-----------
+Connection/interpolation
+------------------------
 
-.. automodule:: meshmode.discretization.resampling
+.. automodule:: meshmode.discretization.connection
 
 Visualization
 -------------
