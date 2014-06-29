@@ -28,6 +28,9 @@ import pyopencl as cl
 import pyopencl.array  # noqa
 from pytools import memoize_method, memoize_method_nested, Record
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 __doc__ = """
 .. autoclass:: DiscretizationConnection
@@ -255,6 +258,8 @@ def make_boundary_restriction(queue, discr, group_factory):
     :return: a tuple ``(bdry_mesh, bdry_discr, connection)``
     """
 
+    logger.info("building boundary connection: start")
+
     # {{{ build face_map
 
     # maps (igrp, el_grp, face_id) to a frozenset of vertex IDs
@@ -355,7 +360,9 @@ def make_boundary_restriction(queue, discr, group_factory):
                     grp_vertex_unit_coordinates[loc_face_vertices]
 
             # Find A, b such that A [e_1 e_2] + b = [r_1 r_2]
-            # (Notation assumes that the volume is 3D and the face is 2D.)
+            # (Notation assumes that the volume is 3D and the face is 2D.
+            # Code does not.)
+
             b = face_vertex_unit_coordinates[0]
             A = (
                     face_vertex_unit_coordinates[1:]
@@ -404,8 +411,12 @@ def make_boundary_restriction(queue, discr, group_factory):
     bdry_discr = Discretization(
             discr.cl_context, bdry_mesh, group_factory)
 
-    return bdry_mesh, bdry_discr, _build_boundary_connection(
+    connection = _build_boundary_connection(
             queue, discr, bdry_discr, connection_data)
+
+    logger.info("building boundary connection: done")
+
+    return bdry_mesh, bdry_discr, connection
 
 # }}}
 
