@@ -162,27 +162,27 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 # }}}
 
 
-def read_gmsh(filename, force_ambient_dimension=None):
+def read_gmsh(filename, force_ambient_dim=None):
     """Read a gmsh mesh file from *filename* and return a
     :class:`meshmode.mesh.Mesh`.
 
-    :arg force_dimension: if not None, truncate point coordinates to
+    :arg force_ambient_dim: if not None, truncate point coordinates to
         this many dimensions.
     """
     from meshpy.gmsh_reader import read_gmsh
     recv = GmshMeshReceiver()
-    read_gmsh(recv, filename, force_dimension=force_ambient_dimension)
+    read_gmsh(recv, filename, force_dimension=force_ambient_dim)
     return recv.get_mesh()
 
 
 def generate_gmsh(source, dimensions, order=None, other_options=[],
-        extension="geo", gmsh_executable="gmsh", force_ambient_dimension=None):
+        extension="geo", gmsh_executable="gmsh", force_ambient_dim=None):
     """Run :cmd:`gmsh` on the input given by *source*, and return a
     :class:`meshmode.mesh.Mesh` based on the result.
 
     :arg source: an instance of either :class:`FileSource` or
         :class:`LiteralSource`
-    :arg force_ambient_dimension: if not None, truncate point coordinates to
+    :arg force_ambient_dim: if not None, truncate point coordinates to
         this many dimensions.
     """
     recv = GmshMeshReceiver()
@@ -193,6 +193,21 @@ def generate_gmsh(source, dimensions, order=None, other_options=[],
             other_options=other_options, extension=extension,
             gmsh_executable=gmsh_executable) as runner:
         parse_gmsh(recv, runner.output_file,
-                force_dimension=force_ambient_dimension)
+                force_dimension=force_ambient_dim)
 
-    return recv.get_mesh()
+    mesh = recv.get_mesh()
+
+    if force_ambient_dim is None:
+        AXIS_NAMES = "xyz"
+
+        dim = mesh.vertices.shape[0]
+        for idim in range(dim):
+            if (mesh.vertices[idim] == 0).all():
+                from warnings import warn
+                warn("all vertices' %s coordinate is zero--perhaps you want to pass "
+                        "force_ambient_dim=%d (pass any fixed value to "
+                        "force_ambient_dim to silence this warning)" % (
+                            AXIS_NAMES[idim], idim))
+                break
+
+    return mesh
