@@ -25,13 +25,9 @@ THE SOFTWARE.
 
 import numpy as np
 #import numpy.linalg as la
-from pytools import memoize_method, memoize_method_nested
-from meshmode.discretization import Discretization
+from pytools import memoize_method
 from meshmode.mesh import SimplexElementGroup as _MeshSimplexElementGroup
 
-import pyopencl as cl
-
-import loopy as lp
 import modepy as mp
 
 __doc__ = """
@@ -124,7 +120,9 @@ class PolynomialWarpAndBlendElementGroup(PolynomialSimplexElementGroupBase):
     @property
     @memoize_method
     def weights(self):
-        raise NotImplementedError()
+        return np.dot(
+                mp.mass_matrix(self.basis(), self.unit_nodes),
+                np.ones(len(self.basis())))
 
 # }}}
 
