@@ -2,3 +2,4 @@ numpy
 git+git://github.com/inducer/modepy
 git+git://github.com/pyopencl/pyopencl
 git+git://github.com/inducer/loopy
+git+git://github.com/inducer/pytential
