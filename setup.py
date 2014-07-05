@@ -50,7 +50,7 @@ def main():
               "six",
               "pytools>=2013.1",
               "pytest>=2.3",
-              "loopy>=2014.1",
+              "loo.py>=2014.1",
               ],
           )
 
