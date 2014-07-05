@@ -223,6 +223,8 @@ class Mesh(Record):
 
         Record.__init__(self, vertices=vertices, groups=new_groups)
 
+        assert _test_node_vertex_consistency(self)
+
     @property
     def ambient_dim(self):
         return self.vertices.shape[0]
@@ -239,6 +241,49 @@ class Mesh(Record):
     # Design experience: Try not to add too many global data structures
     # to the mesh. Let the element groups be responsible for that.
     # The interpolatory discretization has these big global things.
+
+# }}}
+
+
+# {{{ node-vertex consistency test
+
+def _test_node_vertex_consistency_simplex(mesh, mgrp):
+    from modepy.tools import UNIT_VERTICES
+    resampling_mat = mp.resampling_matrix(
+            mp.simplex_onb(mgrp.dim, mgrp.order),
+            UNIT_VERTICES[mgrp.dim].T.copy(), mgrp.unit_nodes)
+
+    # dim, nelments, nnvertices
+    map_vertices = np.einsum(
+            "ij,dej->dei", resampling_mat, mgrp.nodes)
+
+    grp_vertices = mesh.vertices[:, mgrp.vertex_indices]
+
+    per_element_vertex_errors = np.sqrt(np.sum(
+            np.sum((map_vertices - grp_vertices)**2, axis=0),
+            axis=-1))
+
+    tol = 1e2 * np.finfo(per_element_vertex_errors.dtype).eps
+
+    assert np.max(per_element_vertex_errors) < tol, np.max(per_element_vertex_errors)
+
+    return True
+
+
+def _test_node_vertex_consistency(mesh):
+    """Ensure that order of by-index vertices matches that of mapped
+    unit vertices.
+    """
+
+    for mgrp in mesh.groups:
+        if isinstance(mgrp, SimplexElementGroup):
+            assert _test_node_vertex_consistency_simplex(mesh, mgrp)
+        else:
+            from warnings import warn
+            warn("not implemented: node-vertex consistency check for '%s'"
+                    % type(mgrp).__name__)
+
+    return True
 
 # }}}
 
