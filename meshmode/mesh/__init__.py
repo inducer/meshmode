@@ -217,7 +217,11 @@ class Mesh(Record):
         A list of :class:`MeshElementGroup` instances.
     """
 
-    def __init__(self, vertices, groups):
+    def __init__(self, vertices, groups, skip_tests=False):
+        """
+        :arg skip_tests: Skip mesh tests, in case you want to load a broken
+            mesh anyhow and then fix it inside of this data structure.
+        """
         el_nr = 0
         node_nr = 0
 
@@ -230,7 +234,16 @@ class Mesh(Record):
 
         Record.__init__(self, vertices=vertices, groups=new_groups)
 
-        assert _test_node_vertex_consistency(self)
+        if not skip_tests:
+            assert _test_node_vertex_consistency(self)
+
+            from meshmode.mesh.processing import \
+                    test_volume_mesh_element_orientations
+
+            if self.dim == self.ambient_dim:
+                # only for volume meshes, for now
+                assert test_volume_mesh_element_orientations(self), \
+                        "negatively oriented elements found"
 
     @property
     def ambient_dim(self):
