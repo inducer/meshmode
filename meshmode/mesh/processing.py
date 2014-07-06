@@ -30,8 +30,11 @@ import modepy as mp
 __doc__ = """
 .. autofunction:: find_volume_mesh_element_orientations
 .. autofunction:: perform_flips
+.. autofunction:: find_bounding_box
 """
 
+
+# {{{ orientations
 
 def find_volume_mesh_element_group_orientation(mesh, grp):
     """Return a positive floating point number for each positively
@@ -117,6 +120,8 @@ def test_volume_mesh_element_orientations(mesh):
 
     return (area_elements[valid] > 0).all()
 
+# }}}
+
 
 # {{{ flips
 
@@ -191,5 +196,20 @@ def perform_flips(mesh, flip_flags, skip_tests=False):
 
 # }}}
 
+
+# {{{ bounding box
+
+def find_bounding_box(mesh):
+    """
+    :return: a tuple *(min, max)*, each consisting of a :class:`numpy.ndarray`
+        indicating the minimal and maximal extent of the geometry along each axis.
+    """
+
+    return (
+            np.min(mesh.vertices, axis=-1),
+            np.max(mesh.vertices, axis=-1),
+            )
+
+# }}}
 
 # vim: foldmethod=marker
