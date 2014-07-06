@@ -31,6 +31,24 @@ from meshmode.mesh import SimplexElementGroup as _MeshSimplexElementGroup
 import modepy as mp
 
 __doc__ = """
+
+Group types
+^^^^^^^^^^^
+
+.. autclass:: InterpolatoryQuadratureSimplexElementGroup
+.. autoclass:: QuadratureSimplexElementGroup
+.. autoclass:: PolynomialWarpAndBlendElementGroup
+
+Group factories
+^^^^^^^^^^^^^^^
+
+.. autclass:: InterpolatoryQuadratureSimplexGroupFactory
+.. autoclass:: QuadratureSimplexGroupFactory
+.. autoclass:: PolynomialWarpAndBlendGroupFactory
+
+Discretization class
+^^^^^^^^^^^^^^^^^^^^
+
 .. autoclass:: PolynomialElementDiscretization
 """
 
@@ -80,7 +98,14 @@ class PolynomialSimplexElementGroupBase(ElementGroupBase):
                 self.unit_nodes, meg.unit_nodes)
 
 
-class QuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
+class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
+    """Elemental discretization supplying a high-order quadrature rule
+    with a number of nodes matching the number of polynomials in :math:`P^k`,
+    hence usable for differentiation and interpolation.
+
+    No interpolation nodes are present on the boundary of the simplex.
+    """
+
     @memoize_method
     def _quadrature_rule(self):
         dims = self.mesh_el_group.dim
@@ -106,7 +131,40 @@ class QuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
         return self._quadrature_rule().weights
 
 
+class QuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
+    """Elemental discretization supplying a high-order quadrature rule
+    with a number of nodes which does not necessarily match the number of
+    polynomials in :math:`P^k`. This discretization therefore excels at
+    quadarature, but is not necessarily usable for interpolation.
+
+    No interpolation nodes are present on the boundary of the simplex.
+    """
+
+    @memoize_method
+    def _quadrature_rule(self):
+        dims = self.mesh_el_group.dim
+        if dims == 1:
+            return mp.LegendreGaussQuadrature(self.order)
+        else:
+            return mp.XiaoGimbutasSimplexQuadrature(self.order, dims)
+
+    @property
+    @memoize_method
+    def unit_nodes(self):
+        return self._quadrature_rule().nodes
+
+    @property
+    @memoize_method
+    def weights(self):
+        return self._quadrature_rule().weights
+
+
 class PolynomialWarpAndBlendElementGroup(PolynomialSimplexElementGroupBase):
+    """Elemental discretization with a number of nodes matching the number of
+    polynomials in :math:`P^k`, hence usable for differentiation and
+    interpolation. Interpolation nodes are present on the boundary of the
+    simplex.
+    """
     @property
     @memoize_method
     def unit_nodes(self):
@@ -143,6 +201,11 @@ class OrderBasedGroupFactory(ElementGroupFactory):
                     "are supported" % self.mesh_group_class.__name__)
 
         return self.group_class(mesh_el_group, self.order, node_nr_base)
+
+
+class InterpolatoryQuadratureSimplexGroupFactory(OrderBasedGroupFactory):
+    mesh_group_class = _MeshSimplexElementGroup
+    group_class = InterpolatoryQuadratureSimplexElementGroup
 
 
 class QuadratureSimplexGroupFactory(OrderBasedGroupFactory):

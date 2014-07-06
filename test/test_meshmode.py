@@ -45,7 +45,7 @@ def test_boundary_interpolation(ctx_getter):
     from meshmode.mesh.io import generate_gmsh, FileSource
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
-            QuadratureSimplexGroupFactory
+            InterpolatoryQuadratureSimplexGroupFactory
     from meshmode.discretization.connection import make_boundary_restriction
 
     from pytools.convergence import EOCRecorder
@@ -64,7 +64,7 @@ def test_boundary_interpolation(ctx_getter):
         print "END GEN"
 
         vol_discr = Discretization(cl_ctx, mesh,
-                QuadratureSimplexGroupFactory(order))
+                InterpolatoryQuadratureSimplexGroupFactory(order))
         print "h=%s -> %d elements" % (
                 h, sum(mgrp.nelements for mgrp in mesh.groups))
 
@@ -72,7 +72,7 @@ def test_boundary_interpolation(ctx_getter):
         f = 0.1*cl.clmath.sin(30*x)
 
         bdry_mesh, bdry_discr, bdry_connection = make_boundary_restriction(
-                queue, vol_discr, QuadratureSimplexGroupFactory(order))
+                queue, vol_discr, InterpolatoryQuadratureSimplexGroupFactory(order))
 
         bdry_x = bdry_discr.nodes()[0].with_queue(queue)
         bdry_f = 0.1*cl.clmath.sin(30*bdry_x)
@@ -233,13 +233,13 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
 
         from meshmode.discretization import Discretization
         from meshmode.discretization.poly_element import \
-                QuadratureSimplexGroupFactory
+                InterpolatoryQuadratureSimplexGroupFactory
         vol_discr = Discretization(ctx, mesh,
-                QuadratureSimplexGroupFactory(quad_order))
+                InterpolatoryQuadratureSimplexGroupFactory(quad_order))
 
         from meshmode.discretization.connection import make_boundary_restriction
         bdry_mesh, bdry_discr, bdry_connection = make_boundary_restriction(
-                queue, vol_discr, QuadratureSimplexGroupFactory(quad_order))
+                queue, vol_discr, InterpolatoryQuadratureSimplexGroupFactory(quad_order))
 
         # }}}
 
