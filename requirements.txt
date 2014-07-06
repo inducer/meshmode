@@ -3,6 +3,7 @@ git+git://github.com/inducer/modepy
 git+git://github.com/pyopencl/pyopencl
 git+git://github.com/inducer/loopy
 
-# required by pytential
+# required by pytential, which is in turn needed for some tests
+git+git://github.com/inducer/sumpy
 git+git://github.com/inducer/boxtree
 git+git://github.com/inducer/pytential
