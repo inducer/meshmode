@@ -47,6 +47,7 @@ def main():
           install_requires=[
               "numpy",
               "modepy",
+              "meshpy>=2014.1",
               "six",
               "pytools>=2013.1",
               "pytest>=2.3",
