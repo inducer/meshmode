@@ -27,6 +27,20 @@ import modepy as mp
 #import numpy.linalg as la
 from pytools import Record
 
+__doc__ = """
+
+.. autoclass:: MeshElementGroup
+    :members:
+    :undoc-members:
+
+.. autoclass:: Mesh
+    :members:
+    :undoc-members:
+
+.. autoclass:: ElementConnectivity
+
+"""
+
 
 # {{{ element group
 

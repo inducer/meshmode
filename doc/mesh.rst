@@ -1,3 +1,8 @@
+Common infrastructure
+=====================
+
+.. automodule:: meshmode
+
 Mesh management
 ===============
 

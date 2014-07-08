@@ -188,7 +188,7 @@ def read_gmsh(filename, force_ambient_dim=None):
 
 def generate_gmsh(source, dimensions, order=None, other_options=[],
         extension="geo", gmsh_executable="gmsh", force_ambient_dim=None):
-    """Run :cmd:`gmsh` on the input given by *source*, and return a
+    """Run :command:`gmsh` on the input given by *source*, and return a
     :class:`meshmode.mesh.Mesh` based on the result.
 
     :arg source: an instance of either :class:`FileSource` or

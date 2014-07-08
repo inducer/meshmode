@@ -35,21 +35,16 @@ __doc__ = """
 Group types
 ^^^^^^^^^^^
 
-.. autclass:: InterpolatoryQuadratureSimplexElementGroup
+.. autoclass:: InterpolatoryQuadratureSimplexElementGroup
 .. autoclass:: QuadratureSimplexElementGroup
 .. autoclass:: PolynomialWarpAndBlendElementGroup
 
 Group factories
 ^^^^^^^^^^^^^^^
 
-.. autclass:: InterpolatoryQuadratureSimplexGroupFactory
+.. autoclass:: InterpolatoryQuadratureSimplexGroupFactory
 .. autoclass:: QuadratureSimplexGroupFactory
 .. autoclass:: PolynomialWarpAndBlendGroupFactory
-
-Discretization class
-^^^^^^^^^^^^^^^^^^^^
-
-.. autoclass:: PolynomialElementDiscretization
 """
 
 # FIXME Most of the loopy kernels will break as soon as we start using multiple
