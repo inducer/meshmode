@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 import numpy as np
 import modepy as mp
-#import numpy.linalg as la
+import numpy.linalg as la
 from pytools import Record
 
 __doc__ = """
@@ -297,9 +297,15 @@ def _test_node_vertex_consistency_simplex(mesh, mgrp):
             np.sum((map_vertices - grp_vertices)**2, axis=0),
             axis=-1))
 
-    tol = 1e2 * np.finfo(per_element_vertex_errors.dtype).eps
+    tol = 1e3 * np.finfo(per_element_vertex_errors.dtype).eps
 
-    assert np.max(per_element_vertex_errors) < tol, np.max(per_element_vertex_errors)
+    from meshmode.mesh.processing import find_bounding_box
+
+    bbox_min, bbox_max = find_bounding_box(mesh)
+    size = la.norm(bbox_max-bbox_min)
+
+    assert np.max(per_element_vertex_errors) < tol*size, \
+            np.max(per_element_vertex_errors)
 
     return True
 
