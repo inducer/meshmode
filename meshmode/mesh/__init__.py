@@ -219,6 +219,24 @@ class SimplexElementGroup(MeshElementGroup):
 
 # {{{ mesh
 
+class ElementConnectivity(Record):
+    """
+    .. attribute:: neighbors_starts
+
+        ``element_id_t [nelments+1]``
+
+        Use together with :attr:`neighbors`.  ``neighbors_starts[iel]`` and
+        ``neighbors_starts[iel+1]`` together indicate a ranges of element indices
+        :attr:`neighbors` which are adjacent to *iel*.
+
+    .. attribute:: neighbors
+
+        ``element_id_t []``
+
+        See :attr:`neighbors_starts`.
+    """
+
+
 class Mesh(Record):
     """
     .. attribute:: vertices
@@ -229,12 +247,38 @@ class Mesh(Record):
     .. attribute:: groups
 
         A list of :class:`MeshElementGroup` instances.
+
+    .. attribute:: element_connectivity
+
+        An instance of :class:`ElementConnectivity`.
+
+        Referencing this attribute may raise
+        :exc:`meshmode.ConnectivityUnavailable`.
+
+    .. attribute:: vertex_id_dtype
+
+    .. attribute:: element_id_dtype
     """
 
-    def __init__(self, vertices, groups, skip_tests=False):
+    def __init__(self, vertices, groups, skip_tests=False,
+            element_connectivity=False,
+            vertex_id_dtype=np.int32,
+            element_id_dtype=np.int32):
         """
+        The following are keyword-only:
+
         :arg skip_tests: Skip mesh tests, in case you want to load a broken
             mesh anyhow and then fix it inside of this data structure.
+        :arg element_connectivity: One of three options:
+            *None*, in which case this information
+            will be deduced from vertex adjacency. *False*, in which case
+            this information will be marked unavailable (such as if there are
+            hanging nodes in the geometry, so that vertex adjacency does not convey
+            the full picture), and references to
+            :attr:`element_neighbors_starts` and :attr:`element_neighbors`
+            will result in exceptions. Lastly, a tuple
+            *(element_neighbors_starts, element_neighbors)*, representing the
+            correspondingly-named attributes.
         """
         el_nr = 0
         node_nr = 0
@@ -246,10 +290,27 @@ class Mesh(Record):
             el_nr += ng.nelements
             node_nr += ng.nnodes
 
-        Record.__init__(self, vertices=vertices, groups=new_groups)
+        if element_connectivity is not False and element_connectivity is not None:
+            nb_starts, nbs = element_connectivity
+            element_connectivity = ElementConnectivity(
+                    element_neighbors_starts=nb_starts,
+                    element_neighbors=nbs)
+
+            del nb_starts
+            del nbs
+
+        Record.__init__(
+                self, vertices=vertices, groups=new_groups,
+                _element_connectivity=element_connectivity,
+                vertex_id_dtype=np.dtype(vertex_id_dtype),
+                element_id_dtype=np.dtype(element_id_dtype),
+                )
 
         if not skip_tests:
             assert _test_node_vertex_consistency(self)
+
+            for g in self.groups:
+                assert g.vertex_indices.dtype == self.vertex_id_dtype
 
             from meshmode.mesh.processing import \
                     test_volume_mesh_element_orientations
@@ -272,9 +333,21 @@ class Mesh(Record):
     def nelements(self):
         return sum(grp.nelements for grp in self.groups)
 
-    # Design experience: Try not to add too many global data structures
-    # to the mesh. Let the element groups be responsible for that.
-    # The interpolatory discretization has these big global things.
+    @property
+    def element_connectivity(self):
+        if self._element_connectivity is False:
+            from meshmode import ConnectivityUnavailable
+            raise ConnectivityUnavailable()
+        elif self._element_connectivity is None:
+            self._element_connectivity = _compute_connectivity_from_vertices(self)
+
+        return self._element_connectivity
+
+
+    # Design experience: Try not to add too many global data structures to the
+    # mesh. Let the element groups be responsible for that at the mesh level.
+    #
+    # There are more big, global structures on the discretization level.
 
 # }}}
 
@@ -327,5 +400,43 @@ def _test_node_vertex_consistency(mesh):
 
 # }}}
 
+
+# {{{ vertex-based connectivity
+
+def _compute_connectivity_from_vertices(mesh):
+    # FIXME Native code would make this faster
+
+    _, nvertices = mesh.vertices.shape
+    vertex_to_element = [[] for i in xrange(nvertices)]
+
+    for grp in mesh.groups:
+        iel_base = grp.element_nr_base
+        for iel_grp in xrange(grp.nelements):
+            for ivertex in grp.vertex_indices[iel_grp]:
+                vertex_to_element[ivertex].append(iel_base + iel_grp)
+
+    element_to_element = [set() for i in xrange(mesh.nelements)]
+    for grp in mesh.groups:
+        iel_base = grp.element_nr_base
+        for iel_grp in xrange(grp.nelements):
+            for ivertex in grp.vertex_indices[iel_grp]:
+                element_to_element[iel_base + iel_grp].update(
+                        vertex_to_element[ivertex])
+
+    lengths = [len(el_list) for el_list in element_to_element]
+    neighbors_starts = np.cumsum(
+            np.array([0] + lengths, dtype=mesh.element_id_dtype))
+    from pytools import flatten
+    neighbors = np.array(
+            list(flatten(element_to_element)),
+            dtype=mesh.element_id_dtype)
+
+    assert neighbors_starts[-1] == len(neighbors)
+
+    return ElementConnectivity(
+            neighbors_starts=neighbors_starts,
+            neighbors=neighbors)
+
+# }}}
 
 # vim: foldmethod=marker

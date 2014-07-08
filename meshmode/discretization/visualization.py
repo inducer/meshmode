@@ -31,8 +31,12 @@ __doc__ = """
 .. autofunction:: make_visualizer
 
 .. autoclass:: Visualizer
+
+.. autofunction:: write_mesh_connectivity_vtk_file
 """
 
+
+# {{{ visualizer
 
 def separate_by_real_and_imag(data, real_only):
     for name, field in data:
@@ -66,6 +70,11 @@ def separate_by_real_and_imag(data, real_only):
 
 
 class Visualizer(object):
+    """
+    .. automethod:: show_scalar_in_mayavi
+    .. automethod:: write_vtk_file
+    """
+
     def __init__(self, discr, vis_discr, connection):
         self.discr = discr
         self.vis_discr = vis_discr
@@ -232,5 +241,57 @@ def make_visualizer(queue, discr, vis_order):
     cnx = make_same_mesh_connection(queue, vis_discr, discr)
 
     return Visualizer(discr, vis_discr, cnx)
+
+# }}}
+
+
+# {{{ connectivity
+
+def write_mesh_connectivity_vtk_file(file_name, mesh,  compressor=None,):
+    from pyvisfile.vtk import (
+            UnstructuredGrid, DataArray,
+            AppendedDataXMLGenerator,
+            VTK_LINE,
+            VF_LIST_OF_COMPONENTS)
+
+    centroids = np.empty(
+            (mesh.ambient_dim, mesh.nelements),
+            dtype=mesh.vertices.dtype)
+
+    for grp in mesh.groups:
+        iel_base = grp.element_nr_base
+        centroids[:, iel_base:iel_base+grp.nelements] = (
+                np.sum(mesh.vertices[:, grp.vertex_indices], axis=-1)
+                / grp.vertex_indices.shape[-1])
+
+    cnx = mesh.element_connectivity
+
+    nconnections = len(cnx.neighbors)
+    connections = np.empty((nconnections, 2), dtype=np.int32)
+
+    nb_starts = cnx.neighbors_starts
+    for iel in xrange(mesh.nelements):
+        connections[nb_starts[iel]:nb_starts[iel+1], 0] = iel
+
+    connections[:, 1] = cnx.neighbors
+
+    grid = UnstructuredGrid(
+            (mesh.nelements,
+                DataArray("points",
+                    centroids,
+                    vector_format=VF_LIST_OF_COMPONENTS)),
+            cells=connections.reshape(-1),
+            cell_types=np.asarray([VTK_LINE] * nconnections,
+                dtype=np.uint8))
+
+    from os.path import exists
+    if exists(file_name):
+        raise RuntimeError("output file '%s' already exists"
+                % file_name)
+
+    with open(file_name, "w") as outf:
+        AppendedDataXMLGenerator(compressor)(grid).write(outf)
+
+# }}}
 
 # vim: foldmethod=marker

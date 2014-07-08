@@ -138,6 +138,34 @@ def qbx_peanut(t):
 # }}}
 
 
+def make_group_from_vertices(vertices, vertex_indices, order):
+    el_vertices = vertices[:, vertex_indices]
+
+    el_origins = el_vertices[:, :, 0][:, :, np.newaxis]
+    # ambient_dim, nelements, nspan_vectors
+    spanning_vectors = (
+            el_vertices[:, :, 1:] - el_origins)
+
+    nspan_vectors = spanning_vectors.shape[-1]
+    dim = nspan_vectors
+
+    # dim, nunit_nodes
+    unit_nodes = mp.warp_and_blend_nodes(dim, order)
+    unit_nodes_01 = 0.5 + 0.5*unit_nodes
+
+    nodes = np.einsum(
+            "si,des->dei",
+            unit_nodes_01, spanning_vectors) + el_origins
+
+    # make contiguous
+    nodes = nodes.copy()
+
+    from meshmode.mesh import SimplexElementGroup
+    return SimplexElementGroup(
+            order, vertex_indices, nodes,
+            unit_nodes=unit_nodes)
+
+
 def make_curve_mesh(curve_f, element_boundaries, order):
     """
     :arg curve_f: A callable representing a parametrization for a curve,
@@ -175,23 +203,23 @@ def make_curve_mesh(curve_f, element_boundaries, order):
             nodes=nodes,
             unit_nodes=unodes)
 
-    return Mesh(vertices=vertices, groups=[egroup])
+    return Mesh(vertices=vertices, groups=[egroup],
+            element_connectivity=None)
 
 
-def generate_icosahedron(r):
+def generate_icosahedron(r, order):
     # http://en.wikipedia.org/w/index.php?title=Icosahedron&oldid=387737307
 
     phi = (1+5**(1/2))/2
 
     from pytools import flatten
-    pts = np.array(sorted(flatten([
+    vertices = np.array(sorted(flatten([
             (0, pm1*1, pm2*phi),
             (pm1*1, pm2*phi, 0),
             (pm1*phi, 0, pm2*1)]
             for pm1 in [-1, 1]
-            for pm2 in [-1, 1])))
+            for pm2 in [-1, 1]))).T.copy()
 
-    from meshmode.mesh import Mesh
     top_ring = [11, 7, 1, 2, 8]
     bottom_ring = [10, 9, 3, 0, 4]
     bottom_point = 6
@@ -205,55 +233,34 @@ def generate_icosahedron(r):
         tris.append([bottom_ring[i], bottom_ring[(i+1) % l], top_ring[i]])
         tris.append([top_ring[i], bottom_ring[(i+1) % l], top_ring[(i+1) % l]])
 
-    pts *= r/la.norm(pts[0])
+    vertices *= r/la.norm(vertices[:, 0])
 
-    return Mesh(pts, tris)
+    vertex_indices = np.array(tris, dtype=np.int32)
 
-
-def generate_icosphere(r, refinements, order=1):
-    mesh = generate_icosahedron(r)
+    grp = make_group_from_vertices(vertices, vertex_indices, order)
 
     from meshmode.mesh import Mesh
-    from meshmode.mesh import bisect_geometry
-    for i in range(refinements):
-        mesh, _ = bisect_geometry(mesh)
+    return Mesh(vertices, [grp],
+            element_connectivity=None)
 
-        pts = mesh.vertex_coordinates
-        pt_norms = np.sum(pts**2, axis=-1)**0.5
-        pts = pts * r / pt_norms[:, np.newaxis]
 
-        mesh = Mesh(pts, mesh.elements)
+def generate_icosphere(r, order):
+    mesh = generate_icosahedron(r, order)
 
-    if order > 1:
-        from meshmode.mesh.trianglemaps import interv_pts_on_unit
-        eq_nodes = interv_pts_on_unit(order, 0, 1)
+    grp, = mesh.groups
 
-        # indices: triangle #, node #, xyz axis
-        mapped_eq_nodes = np.empty((len(mesh), len(eq_nodes), 3))
+    grp = grp.copy(
+            nodes=grp.nodes * r / np.sqrt(np.sum(grp.nodes**2, axis=0)))
 
-        for iel, el_nodes in enumerate(mesh.elements):
-            n1, n2, n3 = mesh.vertex_coordinates[el_nodes]
-            a = np.vstack([n2-n1, n3-n1]).T
-            b = n1
-
-            mapped_eq_nodes[iel] = np.dot(a, eq_nodes.T).T + b
-
-        mn = mapped_eq_nodes
-        mapped_eq_nodes = \
-                r * mn / np.sqrt(np.sum(mn**2, axis=-1))[:, :, np.newaxis]
-
-        reshaped_nodes = mapped_eq_nodes.reshape(-1, 3)
-
-        mesh = Mesh(
-                vertex_coordinates=reshaped_nodes,
-                elements=np.arange(len(reshaped_nodes)).reshape(len(mesh), -1),
-                order=order)
-
-    return mesh
+    from meshmode.mesh import Mesh
+    return Mesh(mesh.vertices, [grp],
+            element_connectivity=None)
 
 
 def generate_torus_and_cycle_vertices(r_outer, r_inner,
         n_outer=20, n_inner=10, order=1):
+    raise NotImplementedError("not yet updated for meshmode")
+
     a = r_outer
     b = r_inner
     u, v = np.mgrid[0:2*np.pi:2*np.pi/n_outer, 0:2*np.pi:2*np.pi/n_inner]
@@ -333,6 +340,9 @@ def generate_torus_and_cycle_vertices(r_outer, r_inner,
 
 
 def generate_torus(r_outer, r_inner, n_outer=20, n_inner=10, order=1):
+    # FIXME
+    raise NotImplementedError("not yet updated for meshmode")
+
     geo, a_cycle, b_cycle = generate_torus_and_cycle_vertices(
             r_outer, r_inner, n_outer, n_inner, order)
     return geo
