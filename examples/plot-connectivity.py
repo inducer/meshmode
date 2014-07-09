@@ -4,7 +4,7 @@ import numpy as np  # noqa
 import pyopencl as cl
 
 
-order = 3
+order = 4
 
 
 def main():
@@ -12,9 +12,11 @@ def main():
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.mesh.generation import (  # noqa
-            generate_icosphere, generate_icosahedron)
+            generate_icosphere, generate_icosahedron,
+            generate_torus)
     #mesh = generate_icosphere(1, order=order)
-    mesh = generate_icosahedron(1, order=order)
+    #mesh = generate_icosahedron(1, order=order)
+    mesh = generate_torus(3, 1, order=order)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \

@@ -420,4 +420,12 @@ def make_boundary_restriction(queue, discr, group_factory):
 
 # }}}
 
+
+# {{{ refinement connection
+
+def make_refinement_connection(refiner, coarse_discr):
+    pass
+
+# }}}
+
 # vim: foldmethod=marker

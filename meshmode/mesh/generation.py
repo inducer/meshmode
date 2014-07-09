@@ -28,6 +28,33 @@ import numpy.linalg as la
 import modepy as mp
 
 
+__doc__ = """
+
+Curves
+------
+
+.. autofunction:: make_curve_mesh
+
+Curve parametrizations
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. autofunction:: ellipse
+.. autofunction:: cloverleaf
+.. autofunction:: starfish
+.. autofunction:: drop
+.. autofunction:: n_gon
+.. autofunction:: qbx_peanut
+
+Surfaces
+--------
+
+.. autofunction:: generate_icosahedron
+.. autofunction:: generate_icosphere
+.. autofunction:: generate_torus
+
+"""
+
+
 # {{{ test curve parametrizations
 
 def ellipse(aspect_ratio, t):
@@ -138,34 +165,6 @@ def qbx_peanut(t):
 # }}}
 
 
-def make_group_from_vertices(vertices, vertex_indices, order):
-    el_vertices = vertices[:, vertex_indices]
-
-    el_origins = el_vertices[:, :, 0][:, :, np.newaxis]
-    # ambient_dim, nelements, nspan_vectors
-    spanning_vectors = (
-            el_vertices[:, :, 1:] - el_origins)
-
-    nspan_vectors = spanning_vectors.shape[-1]
-    dim = nspan_vectors
-
-    # dim, nunit_nodes
-    unit_nodes = mp.warp_and_blend_nodes(dim, order)
-    unit_nodes_01 = 0.5 + 0.5*unit_nodes
-
-    nodes = np.einsum(
-            "si,des->dei",
-            unit_nodes_01, spanning_vectors) + el_origins
-
-    # make contiguous
-    nodes = nodes.copy()
-
-    from meshmode.mesh import SimplexElementGroup
-    return SimplexElementGroup(
-            order, vertex_indices, nodes,
-            unit_nodes=unit_nodes)
-
-
 def make_curve_mesh(curve_f, element_boundaries, order):
     """
     :arg curve_f: A callable representing a parametrization for a curve,
@@ -205,6 +204,34 @@ def make_curve_mesh(curve_f, element_boundaries, order):
 
     return Mesh(vertices=vertices, groups=[egroup],
             element_connectivity=None)
+
+
+def make_group_from_vertices(vertices, vertex_indices, order):
+    el_vertices = vertices[:, vertex_indices]
+
+    el_origins = el_vertices[:, :, 0][:, :, np.newaxis]
+    # ambient_dim, nelements, nspan_vectors
+    spanning_vectors = (
+            el_vertices[:, :, 1:] - el_origins)
+
+    nspan_vectors = spanning_vectors.shape[-1]
+    dim = nspan_vectors
+
+    # dim, nunit_nodes
+    unit_nodes = mp.warp_and_blend_nodes(dim, order)
+    unit_nodes_01 = 0.5 + 0.5*unit_nodes
+
+    nodes = np.einsum(
+            "si,des->dei",
+            unit_nodes_01, spanning_vectors) + el_origins
+
+    # make contiguous
+    nodes = nodes.copy()
+
+    from meshmode.mesh import SimplexElementGroup
+    return SimplexElementGroup(
+            order, vertex_indices, nodes,
+            unit_nodes=unit_nodes)
 
 
 def generate_icosahedron(r, order):
@@ -259,8 +286,6 @@ def generate_icosphere(r, order):
 
 def generate_torus_and_cycle_vertices(r_outer, r_inner,
         n_outer=20, n_inner=10, order=1):
-    raise NotImplementedError("not yet updated for meshmode")
-
     a = r_outer
     b = r_inner
     u, v = np.mgrid[0:2*np.pi:2*np.pi/n_outer, 0:2*np.pi:2*np.pi/n_inner]
@@ -269,82 +294,59 @@ def generate_torus_and_cycle_vertices(r_outer, r_inner,
     x = np.cos(u)*(a+b*np.cos(v))
     y = np.sin(u)*(a+b*np.cos(v))
     z = b*np.sin(v)
-    pts = (np.vstack((x[np.newaxis], y[np.newaxis], z[np.newaxis]))
-            .T.copy().reshape(-1, 3))
+    vertices = (np.vstack((x[np.newaxis], y[np.newaxis], z[np.newaxis]))
+            .transpose(0, 2, 1).copy().reshape(3, -1))
 
     def idx(i, j):
         return (i % n_outer) + (j % n_inner) * n_outer
-    tris = ([(idx(i, j), idx(i+1, j), idx(i, j+1))
+    vertex_indices = ([(idx(i, j), idx(i+1, j), idx(i, j+1))
             for i in xrange(n_outer) for j in xrange(n_inner)]
             + [(idx(i+1, j), idx(i+1, j+1), idx(i, j+1))
             for i in xrange(n_outer) for j in xrange(n_inner)])
 
+    vertex_indices = np.array(vertex_indices, dtype=np.int32)
+    grp = make_group_from_vertices(vertices, vertex_indices, order)
+
+    # ambient_dim, nelements, nunit_nodes
+    nodes = grp.nodes.copy()
+
+    major_theta = np.arctan2(nodes[1], nodes[0])
+    rvec = np.array([
+        np.cos(major_theta),
+        np.sin(major_theta),
+        np.zeros_like(major_theta)])
+
+    #               ^
+    #               |
+    # --------------+----.
+    #           /   |     \
+    #          /    |  _-- \
+    #         |     |.^  | | y
+    #         |     +------+--->
+    #         |       x    |
+    #          \          /
+    #           \        /
+    # ------------------'
+
+    x = np.sum(nodes*rvec, axis=0) - a
+
+    minor_theta = np.arctan2(nodes[2], x)
+
+    nodes[0] = np.cos(major_theta)*(a+b*np.cos(
+        minor_theta))
+    nodes[1] = np.sin(major_theta)*(a+b*np.cos(
+        minor_theta))
+    nodes[2] = b*np.sin(minor_theta)
+
     from meshmode.mesh import Mesh
-    mesh = Mesh(pts, tris)
-
-    if order > 1:
-        from meshmode.mesh.trianglemaps import interv_pts_on_unit
-        eq_nodes = interv_pts_on_unit(order, 0, 1)
-
-        # indices: triangle #, node #, xyz axis
-        mapped_eq_nodes = np.empty((len(mesh), len(eq_nodes), 3))
-
-        for iel, el_nodes in enumerate(mesh.elements):
-            n1, n2, n3 = mesh.vertex_coordinates[el_nodes]
-            a1 = np.vstack([n2-n1, n3-n1]).T
-            b1 = n1
-
-            mapped_eq_nodes[iel] = np.dot(a1, eq_nodes.T).T + b1
-
-        mn = mapped_eq_nodes
-        major_theta = np.arctan2(mapped_eq_nodes[:, :, 1],
-            mapped_eq_nodes[:, :, 0])
-        rvec = np.array([
-            np.cos(major_theta),
-            np.sin(major_theta),
-            np.zeros_like(major_theta)]).transpose((1, 2, 0))
-
-        #               ^
-        #               |
-        # --------------+----.
-        #           /   |     \
-        #          /    |  _-- \
-        #         |     |.^  | | y
-        #         |     +------+--->
-        #         |       x    |
-        #          \          /
-        #           \        /
-        # ------------------'
-
-        x = np.sum(mapped_eq_nodes*rvec, axis=-1) - a
-
-        minor_theta = np.arctan2(mapped_eq_nodes[:, :, 2], x)
-
-        mapped_eq_nodes[:, :, 0] = np.cos(major_theta)*(a+b*np.cos(
-            minor_theta))
-        mapped_eq_nodes[:, :, 1] = np.sin(major_theta)*(a+b*np.cos(
-            minor_theta))
-        mapped_eq_nodes[:, :, 2] = b*np.sin(minor_theta)
-
-        #reshaped_nodes = mapped_eq_nodes.reshape(-1, 3)
-        reshaped_nodes = mn.reshape(-1, 3)
-
-        mesh = Mesh(
-                vertex_coordinates=reshaped_nodes,
-                elements=np.arange(len(reshaped_nodes)).reshape(len(mesh), -1),
-                order=order)
-
-    return mesh, \
-            [idx(i, 0) for i in xrange(n_outer)], \
-            [idx(0, j) for j in xrange(n_inner)]
+    return (Mesh(vertices, [grp.copy(nodes=nodes)], element_connectivity=None),
+            [idx(i, 0) for i in xrange(n_outer)],
+            [idx(0, j) for j in xrange(n_inner)])
 
 
 def generate_torus(r_outer, r_inner, n_outer=20, n_inner=10, order=1):
-    # FIXME
-    raise NotImplementedError("not yet updated for meshmode")
-
-    geo, a_cycle, b_cycle = generate_torus_and_cycle_vertices(
+    mesh, a_cycle, b_cycle = generate_torus_and_cycle_vertices(
             r_outer, r_inner, n_outer, n_inner, order)
-    return geo
+    return mesh
 
 # vim: fdm=marker
