@@ -132,7 +132,7 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
     from meshmode.mesh import SimplexElementGroup, Mesh
     mg = SimplexElementGroup(
             order=order,
-            vertex_indices=np.arange(dim+1).reshape(1, -1),
+            vertex_indices=np.arange(dim+1, dtype=np.int32).reshape(1, -1),
             nodes=mp.warp_and_blend_nodes(dim, order).reshape(dim, 1, -1),
             dim=dim)
 
