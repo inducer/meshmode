@@ -196,8 +196,8 @@ def make_curve_mesh(curve_f, element_boundaries, order):
     egroup = SimplexElementGroup(
             order,
             vertex_indices=np.vstack([
-                np.arange(nelements),
-                np.arange(1, nelements+1) % nelements,
+                np.arange(nelements, dtype=np.int32),
+                np.arange(1, nelements+1, dtype=np.int32) % nelements,
                 ]).T,
             nodes=nodes,
             unit_nodes=unodes)
