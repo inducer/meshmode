@@ -15,8 +15,8 @@ def main():
             generate_icosphere, generate_icosahedron,
             generate_torus)
     #mesh = generate_icosphere(1, order=order)
-    #mesh = generate_icosahedron(1, order=order)
-    mesh = generate_torus(3, 1, order=order)
+    mesh = generate_icosahedron(1, order=order)
+    #mesh = generate_torus(3, 1, order=order)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
