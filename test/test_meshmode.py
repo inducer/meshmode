@@ -1,4 +1,7 @@
 from __future__ import division
+from __future__ import absolute_import
+from __future__ import print_function
+from six.moves import range
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -54,19 +57,19 @@ def test_boundary_interpolation(ctx_getter):
     order = 4
 
     for h in [1e-1, 3e-2, 1e-2]:
-        print "BEGIN GEN"
+        print("BEGIN GEN")
         mesh = generate_gmsh(
                 FileSource("blob-2d.step"), 2, order=order,
                 force_ambient_dim=2,
                 other_options=[
                     "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
                 )
-        print "END GEN"
+        print("END GEN")
 
         vol_discr = Discretization(cl_ctx, mesh,
                 InterpolatoryQuadratureSimplexGroupFactory(order))
-        print "h=%s -> %d elements" % (
-                h, sum(mgrp.nelements for mgrp in mesh.groups))
+        print("h=%s -> %d elements" % (
+                h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
         x = vol_discr.nodes()[0].with_queue(queue)
         f = 0.1*cl.clmath.sin(30*x)
@@ -81,7 +84,7 @@ def test_boundary_interpolation(ctx_getter):
         err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
         eoc_rec.add_data_point(h, err)
 
-    print eoc_rec
+    print(eoc_rec)
     assert eoc_rec.order_estimate() >= order-0.5
 
 
@@ -264,7 +267,7 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
         comp_vol = integral(vol_discr, queue, vol_one)
         rel_vol_err = abs(true_vol - comp_vol) / true_vol
         vol_eoc_rec.add_data_point(h, rel_vol_err)
-        print "VOL", true_vol, comp_vol
+        print("VOL", true_vol, comp_vol)
 
         bdry_x = bdry_discr.nodes().with_queue(queue)
 
@@ -278,7 +281,7 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
         comp_surf = integral(bdry_discr, queue, bdry_one)
         rel_surf_err = abs(true_surf - comp_surf) / true_surf
         surf_eoc_rec.add_data_point(h, rel_surf_err)
-        print "SURF", true_surf, comp_surf
+        print("SURF", true_surf, comp_surf)
 
         if visualize:
             vol_vis.write_vtk_file("volume-h=%g.vtu" % h, [
@@ -297,16 +300,16 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
 
         # }}}
 
-    print "---------------------------------"
-    print "VOLUME"
-    print "---------------------------------"
-    print vol_eoc_rec
+    print("---------------------------------")
+    print("VOLUME")
+    print("---------------------------------")
+    print(vol_eoc_rec)
     assert vol_eoc_rec.order_estimate() >= mesh_order
 
-    print "---------------------------------"
-    print "SURFACE"
-    print "---------------------------------"
-    print surf_eoc_rec
+    print("---------------------------------")
+    print("SURFACE")
+    print("---------------------------------")
+    print(surf_eoc_rec)
     assert surf_eoc_rec.order_estimate() >= mesh_order
 
 

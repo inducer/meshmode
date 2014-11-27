@@ -1,4 +1,7 @@
 from __future__ import division
+from __future__ import absolute_import
+from six.moves import range
+from functools import reduce
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -64,8 +67,8 @@ def find_volume_mesh_element_group_orientation(mesh, grp):
             (nspan_vectors, ambient_dim),
             dtype=np.object)
 
-    for ispan in xrange(nspan_vectors):
-        for idim in xrange(ambient_dim):
+    for ispan in range(nspan_vectors):
+        for idim in range(ambient_dim):
             spanning_object_array[ispan, idim] = \
                     spanning_vectors[idim, :, ispan]
 

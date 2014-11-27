@@ -1,4 +1,6 @@
 from __future__ import division
+from __future__ import absolute_import
+from six.moves import range
 
 __copyright__ = "Copyright (C) 2010,2012,2013 Andreas Kloeckner, Michael Tom"
 
@@ -407,18 +409,18 @@ def _compute_connectivity_from_vertices(mesh):
     # FIXME Native code would make this faster
 
     _, nvertices = mesh.vertices.shape
-    vertex_to_element = [[] for i in xrange(nvertices)]
+    vertex_to_element = [[] for i in range(nvertices)]
 
     for grp in mesh.groups:
         iel_base = grp.element_nr_base
-        for iel_grp in xrange(grp.nelements):
+        for iel_grp in range(grp.nelements):
             for ivertex in grp.vertex_indices[iel_grp]:
                 vertex_to_element[ivertex].append(iel_base + iel_grp)
 
-    element_to_element = [set() for i in xrange(mesh.nelements)]
+    element_to_element = [set() for i in range(mesh.nelements)]
     for grp in mesh.groups:
         iel_base = grp.element_nr_base
-        for iel_grp in xrange(grp.nelements):
+        for iel_grp in range(grp.nelements):
             for ivertex in grp.vertex_indices[iel_grp]:
                 element_to_element[iel_base + iel_grp].update(
                         vertex_to_element[ivertex])

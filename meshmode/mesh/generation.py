@@ -1,4 +1,6 @@
 from __future__ import division
+from __future__ import absolute_import
+from six.moves import range
 
 __copyright__ = "Copyright (C) 2013 Andreas Kloeckner"
 
@@ -300,9 +302,9 @@ def generate_torus_and_cycle_vertices(r_outer, r_inner,
     def idx(i, j):
         return (i % n_outer) + (j % n_inner) * n_outer
     vertex_indices = ([(idx(i, j), idx(i+1, j), idx(i, j+1))
-            for i in xrange(n_outer) for j in xrange(n_inner)]
+            for i in range(n_outer) for j in range(n_inner)]
             + [(idx(i+1, j), idx(i+1, j+1), idx(i, j+1))
-            for i in xrange(n_outer) for j in xrange(n_inner)])
+            for i in range(n_outer) for j in range(n_inner)])
 
     vertex_indices = np.array(vertex_indices, dtype=np.int32)
     grp = make_group_from_vertices(vertices, vertex_indices, order)
@@ -340,8 +342,8 @@ def generate_torus_and_cycle_vertices(r_outer, r_inner,
 
     from meshmode.mesh import Mesh
     return (Mesh(vertices, [grp.copy(nodes=nodes)], element_connectivity=None),
-            [idx(i, 0) for i in xrange(n_outer)],
-            [idx(0, j) for j in xrange(n_inner)])
+            [idx(i, 0) for i in range(n_outer)],
+            [idx(0, j) for j in range(n_inner)])
 
 
 def generate_torus(r_outer, r_inner, n_outer=20, n_inner=10, order=1):

@@ -57,7 +57,7 @@ copyright = u'2014, Andreas Klöckner'
 #
 # The short X.Y version.
 ver_dic = {}
-execfile("../meshmode/version.py", ver_dic)
+exec(compile(open("../meshmode/version.py").read(), "../meshmode/version.py", 'exec'), ver_dic)
 version = ".".join(str(x) for x in ver_dic["VERSION"])
 # The full version, including alpha/beta/rc tags.
 release = ver_dic["VERSION_TEXT"]
