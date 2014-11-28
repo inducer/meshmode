@@ -3,7 +3,7 @@
 
 
 def main():
-    from setuptools import setup
+    from setuptools import setup, find_packages
 
     version_dict = {}
     init_filename = "meshmode/version.py"
@@ -39,11 +39,7 @@ def main():
               'Topic :: Utilities',
               ],
 
-          packages=[
-              "meshmode",
-              "meshmode.mesh",
-              "meshmode.discretization",
-              ],
+          packages=find_packages(),
           install_requires=[
               "numpy",
               "modepy",
