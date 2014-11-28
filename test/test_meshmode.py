@@ -117,6 +117,37 @@ def test_element_orientation():
     assert ((mesh_orient < 0) == (flippy > 0)).all()
 
 
+def test_merge_and_map(ctx_getter, visualize=False):
+    from meshmode.mesh.io import generate_gmsh, FileSource
+
+    mesh_order = 3
+
+    mesh = generate_gmsh(
+            FileSource("blob-2d.step"), 2, order=mesh_order,
+            force_ambient_dim=2,
+            other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"]
+            )
+
+    from meshmode.mesh.processing import merge_dijsoint_meshes, affine_map
+    mesh2 = affine_map(mesh, A=np.eye(2), b=np.array([5, 0]))
+
+    mesh3 = merge_dijsoint_meshes((mesh2, mesh))
+
+    if visualize:
+        from meshmode.discretization import Discretization
+        from meshmode.discretization.poly_element import \
+                PolynomialWarpAndBlendGroupFactory
+        cl_ctx = ctx_getter()
+        queue = cl.CommandQueue(cl_ctx)
+
+        discr = Discretization(cl_ctx, mesh3,
+                PolynomialWarpAndBlendGroupFactory(3))
+
+        from meshmode.discretization.visualization import make_visualizer
+        vis = make_visualizer(queue, discr, 1)
+        vis.write_vtk_file("merged.vtu", [])
+
+
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("order", [1, 3])
 def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
@@ -242,7 +273,8 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
 
         from meshmode.discretization.connection import make_boundary_restriction
         bdry_mesh, bdry_discr, bdry_connection = make_boundary_restriction(
-                queue, vol_discr, InterpolatoryQuadratureSimplexGroupFactory(quad_order))
+                queue, vol_discr,
+                InterpolatoryQuadratureSimplexGroupFactory(quad_order))
 
         # }}}
 

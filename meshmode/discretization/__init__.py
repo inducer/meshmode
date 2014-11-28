@@ -241,10 +241,14 @@ class Discretization(object):
                     result[d, k, i] = \
                         sum(j, resampling_mat[i, j] * nodes[d, k, j])
                     """,
-                name="nodes")
+                name="nodes",
+                default_offset=lp.auto)
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
-            return lp.tag_inames(knl, dict(k="g.0"))
+            knl = lp.tag_inames(knl, dict(k="g.0"))
+            knl = lp.tag_data_axes(knl, "result",
+                    "stride:auto,stride:auto,stride:auto")
+            return knl
 
         result = self.empty(self.real_dtype, extra_dims=(self.ambient_dim,))
 
