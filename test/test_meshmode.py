@@ -254,7 +254,7 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
 
     from pytential import bind, sym
 
-    for h in [0.2, 0.15, 0.1]:
+    for h in [0.2, 0.14, 0.1]:
         from meshmode.mesh.io import generate_gmsh, FileSource
         mesh = generate_gmsh(
                 FileSource(src_file), dim, order=mesh_order,
