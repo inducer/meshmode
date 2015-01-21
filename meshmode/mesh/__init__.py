@@ -293,8 +293,8 @@ class Mesh(Record):
         if element_connectivity is not False and element_connectivity is not None:
             nb_starts, nbs = element_connectivity
             element_connectivity = ElementConnectivity(
-                    element_neighbors_starts=nb_starts,
-                    element_neighbors=nbs)
+                    neighbors_starts=nb_starts,
+                    neighbors=nbs)
 
             del nb_starts
             del nbs
@@ -308,7 +308,6 @@ class Mesh(Record):
 
         if not skip_tests:
             assert _test_node_vertex_consistency(self)
-
             for g in self.groups:
                 assert g.vertex_indices.dtype == self.vertex_id_dtype
 
@@ -422,7 +421,6 @@ def _compute_connectivity_from_vertices(mesh):
             for ivertex in grp.vertex_indices[iel_grp]:
                 element_to_element[iel_base + iel_grp].update(
                         vertex_to_element[ivertex])
-
     lengths = [len(el_list) for el_list in element_to_element]
     neighbors_starts = np.cumsum(
             np.array([0] + lengths, dtype=mesh.element_id_dtype))
