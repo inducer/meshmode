@@ -345,6 +345,27 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
     assert surf_eoc_rec.order_estimate() >= mesh_order
 
 
+def test_rect_mesh(do_plot=False):
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh = generate_regular_rect_mesh()
+
+    if do_plot:
+        cl_ctx = cl.create_some_context()
+        queue = cl.CommandQueue(cl_ctx)
+
+        from meshmode.discretization import Discretization
+        from meshmode.discretization.poly_element import \
+                PolynomialWarpAndBlendGroupFactory
+        discr = Discretization(cl_ctx, mesh,
+                PolynomialWarpAndBlendGroupFactory(order=3))
+
+        from meshmode.discretization.visualization import make_visualizer
+        vis = make_visualizer(queue, discr, vis_order=1)
+        vis.write_vtk_file("rect.vtu", [
+            ("f", discr.nodes()[0]),
+            ])
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:

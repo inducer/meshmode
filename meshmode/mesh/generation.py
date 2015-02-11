@@ -53,6 +53,7 @@ Surfaces
 .. autofunction:: generate_icosahedron
 .. autofunction:: generate_icosphere
 .. autofunction:: generate_torus
+.. autofunction:: generate_regular_rect_mesh
 
 """
 
@@ -167,6 +168,8 @@ def qbx_peanut(t):
 # }}}
 
 
+# {{{ make_curve_mesh
+
 def make_curve_mesh(curve_f, element_boundaries, order):
     """
     :arg curve_f: A callable representing a parametrization for a curve,
@@ -207,6 +210,10 @@ def make_curve_mesh(curve_f, element_boundaries, order):
     return Mesh(vertices=vertices, groups=[egroup],
             element_connectivity=None)
 
+# }}}
+
+
+# {{{ make_group_from_vertices
 
 def make_group_from_vertices(vertices, vertex_indices, order):
     el_vertices = vertices[:, vertex_indices]
@@ -235,6 +242,10 @@ def make_group_from_vertices(vertices, vertex_indices, order):
             order, vertex_indices, nodes,
             unit_nodes=unit_nodes)
 
+# }}}
+
+
+# {{{ generate_icosahedron
 
 def generate_icosahedron(r, order):
     # http://en.wikipedia.org/w/index.php?title=Icosahedron&oldid=387737307
@@ -272,6 +283,10 @@ def generate_icosahedron(r, order):
     return Mesh(vertices, [grp],
             element_connectivity=None)
 
+# }}}
+
+
+# {{{ generate_icosphere
 
 def generate_icosphere(r, order):
     mesh = generate_icosahedron(r, order)
@@ -285,6 +300,10 @@ def generate_icosphere(r, order):
     return Mesh(mesh.vertices, [grp],
             element_connectivity=None)
 
+# }}}
+
+
+# {{{ generate_torus_and_cycle_vertices
 
 def generate_torus_and_cycle_vertices(r_outer, r_inner,
         n_outer=20, n_inner=10, order=1):
@@ -345,10 +364,66 @@ def generate_torus_and_cycle_vertices(r_outer, r_inner,
             [idx(i, 0) for i in range(n_outer)],
             [idx(0, j) for j in range(n_inner)])
 
+# }}}
+
 
 def generate_torus(r_outer, r_inner, n_outer=20, n_inner=10, order=1):
     mesh, a_cycle, b_cycle = generate_torus_and_cycle_vertices(
             r_outer, r_inner, n_outer, n_inner, order)
     return mesh
+
+
+# {{{ generate_regular_rect_mesh
+
+def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1):
+    """Create a semi-structured rectangular mesh.
+
+    :param a: the lower left hand point of the rectangle
+    :param b: the upper right hand point of the rectangle
+    :param n: a tuple of integers indicating the total number of points
+      on [a,b].
+    """
+    if min(n) < 2:
+        raise ValueError("need at least two points in each direction")
+
+    node_dict = {}
+    vertices = []
+    points_1d = [np.linspace(a_i, b_i, n_i)
+            for a_i, b_i, n_i in zip(a, b, n)]
+
+    for j in range(n[1]):
+        for i in range(n[0]):
+            node_dict[i, j] = len(vertices)
+            vertices.append(np.array([points_1d[0][i], points_1d[1][j]]))
+
+    vertices = np.array(vertices).T.copy()
+
+    vertex_indices = []
+
+    for i in range(n[0]-1):
+        for j in range(n[1]-1):
+
+            # c--d
+            # |  |
+            # a--b
+
+            a = node_dict[i, j]
+            b = node_dict[i+1, j]
+            c = node_dict[i, j+1]
+            d = node_dict[i+1, j+1]
+
+            vertex_indices.append((a, b, c))
+            vertex_indices.append((d, c, b))
+
+    vertex_indices = np.array(vertex_indices, dtype=np.int32)
+
+    grp = make_group_from_vertices(vertices, vertex_indices, order)
+
+    from meshmode.mesh import Mesh
+    return Mesh(vertices, [grp],
+            element_connectivity=None)
+
+# }}}
+
 
 # vim: fdm=marker
