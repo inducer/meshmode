@@ -1,4 +1,8 @@
 from __future__ import division
+from __future__ import absolute_import
+import six
+from six.moves import range
+from six.moves import zip
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -97,7 +101,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         ambient_dim = self.points.shape[-1]
 
         mesh_bulk_dim = max(
-                el_type.dimensions for el_type in el_type_hist.iterkeys())
+                el_type.dimensions for el_type in six.iterkeys(el_type_hist))
 
         # {{{ build vertex numbering
 
@@ -114,7 +118,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         # {{{ build vertex array
 
         gmsh_vertex_indices, my_vertex_indices = \
-                zip(*vertex_index_gmsh_to_mine.iteritems())
+                list(zip(*six.iteritems(vertex_index_gmsh_to_mine)))
         vertices = np.empty(
                 (ambient_dim, len(vertex_index_gmsh_to_mine)), dtype=np.float64)
         vertices[:, np.array(my_vertex_indices, np.intp)] = \
@@ -124,7 +128,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         from meshmode.mesh import SimplexElementGroup, Mesh
 
-        for group_el_type, ngroup_elements in el_type_hist.iteritems():
+        for group_el_type, ngroup_elements in six.iteritems(el_type_hist):
             if group_el_type.dimensions != mesh_bulk_dim:
                 continue
 

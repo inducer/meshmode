@@ -1,4 +1,6 @@
 from __future__ import division
+from __future__ import absolute_import
+from six.moves import range
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -270,7 +272,7 @@ def write_mesh_connectivity_vtk_file(file_name, mesh,  compressor=None,):
     connections = np.empty((nconnections, 2), dtype=np.int32)
 
     nb_starts = cnx.neighbors_starts
-    for iel in xrange(mesh.nelements):
+    for iel in range(mesh.nelements):
         connections[nb_starts[iel]:nb_starts[iel+1], 0] = iel
 
     connections[:, 1] = cnx.neighbors

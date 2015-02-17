@@ -1,4 +1,7 @@
 from __future__ import division
+from __future__ import absolute_import
+from six.moves import range
+from functools import reduce
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -31,6 +34,8 @@ __doc__ = """
 .. autofunction:: find_volume_mesh_element_orientations
 .. autofunction:: perform_flips
 .. autofunction:: find_bounding_box
+.. autofunction:: merge_dijsoint_meshes
+.. autofunction:: affine_map
 """
 
 
@@ -64,8 +69,8 @@ def find_volume_mesh_element_group_orientation(mesh, grp):
             (nspan_vectors, ambient_dim),
             dtype=np.object)
 
-    for ispan in xrange(nspan_vectors):
-        for idim in xrange(ambient_dim):
+    for ispan in range(nspan_vectors):
+        for idim in range(ambient_dim):
             spanning_object_array[ispan, idim] = \
                     spanning_vectors[idim, :, ispan]
 
@@ -209,6 +214,84 @@ def find_bounding_box(mesh):
             np.min(mesh.vertices, axis=-1),
             np.max(mesh.vertices, axis=-1),
             )
+
+# }}}
+
+
+# {{{ merging
+
+def merge_dijsoint_meshes(meshes, skip_tests=False):
+    if not meshes:
+        raise ValueError("must pass at least one mesh")
+
+    from pytools import is_single_valued
+    if not is_single_valued(mesh.ambient_dim for mesh in meshes):
+        raise ValueError("all meshes must share the same ambient dimension")
+
+    # {{{ assemble combined vertex array
+
+    ambient_dim = meshes[0].ambient_dim
+    nvertices = sum(
+            mesh.vertices.shape[-1]
+            for mesh in meshes)
+
+    vert_dtype = np.find_common_type(
+            [mesh.vertices.dtype for mesh in meshes],
+            [])
+    vertices = np.empty(
+            (ambient_dim, nvertices), vert_dtype)
+
+    current_vert_base = 0
+    vert_bases = []
+    for mesh in meshes:
+        mesh_nvert = mesh.vertices.shape[-1]
+        vertices[:, current_vert_base:current_vert_base+mesh_nvert] = \
+                mesh.vertices
+
+        vert_bases.append(current_vert_base)
+        current_vert_base += mesh_nvert
+
+    # }}}
+
+    # {{{ assemble new groups list
+
+    new_groups = []
+
+    for mesh, vert_base in zip(meshes, vert_bases):
+        for group in mesh.groups:
+            new_vertex_indices = group.vertex_indices + vert_base
+            new_group = group.copy(vertex_indices=new_vertex_indices)
+            new_groups.append(new_group)
+
+    # }}}
+
+    from meshmode.mesh import Mesh
+    return Mesh(vertices, new_groups, skip_tests=skip_tests)
+
+# }}}
+
+
+# {{{ affine map
+
+def affine_map(mesh, A=None, b=None):
+    """Apply the affine map *f(x)=Ax+b* to the geometry of *mesh*."""
+
+    vertices = np.einsum("ij,jv->iv", A, mesh.vertices) + b[:, np.newaxis]
+
+    # {{{ assemble new groups list
+
+    new_groups = []
+
+    for group in mesh.groups:
+        nodes = (
+                np.einsum("ij,jen->ien", A, group.nodes)
+                + b[:, np.newaxis, np.newaxis])
+        new_groups.append(group.copy(nodes=nodes))
+
+    # }}}
+
+    from meshmode.mesh import Mesh
+    return Mesh(vertices, new_groups, skip_tests=True)
 
 # }}}
 

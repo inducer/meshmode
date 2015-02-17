@@ -28,7 +28,7 @@ def main():
             cl_ctx, mesh, PolynomialWarpAndBlendGroupFactory(order))
 
     from meshmode.discretization.visualization import make_visualizer
-    vis = make_visualizer(queue, discr, order)
+    vis = make_visualizer(queue, discr, order=1)
     os.remove("geometry.vtu")
     os.remove("connectivity.vtu")
     vis.write_vtk_file("geometry.vtu", [

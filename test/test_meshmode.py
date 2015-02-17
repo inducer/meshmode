@@ -1,4 +1,7 @@
 from __future__ import division
+from __future__ import absolute_import
+from __future__ import print_function
+from six.moves import range
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -54,19 +57,19 @@ def test_boundary_interpolation(ctx_getter):
     order = 4
 
     for h in [1e-1, 3e-2, 1e-2]:
-        print "BEGIN GEN"
+        print("BEGIN GEN")
         mesh = generate_gmsh(
                 FileSource("blob-2d.step"), 2, order=order,
                 force_ambient_dim=2,
                 other_options=[
                     "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
                 )
-        print "END GEN"
+        print("END GEN")
 
         vol_discr = Discretization(cl_ctx, mesh,
                 InterpolatoryQuadratureSimplexGroupFactory(order))
-        print "h=%s -> %d elements" % (
-                h, sum(mgrp.nelements for mgrp in mesh.groups))
+        print("h=%s -> %d elements" % (
+                h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
         x = vol_discr.nodes()[0].with_queue(queue)
         f = 0.1*cl.clmath.sin(30*x)
@@ -81,7 +84,7 @@ def test_boundary_interpolation(ctx_getter):
         err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
         eoc_rec.add_data_point(h, err)
 
-    print eoc_rec
+    print(eoc_rec)
     assert eoc_rec.order_estimate() >= order-0.5
 
 
@@ -112,6 +115,37 @@ def test_element_orientation():
     mesh_orient = find_volume_mesh_element_orientations(mesh)
 
     assert ((mesh_orient < 0) == (flippy > 0)).all()
+
+
+def test_merge_and_map(ctx_getter, visualize=False):
+    from meshmode.mesh.io import generate_gmsh, FileSource
+
+    mesh_order = 3
+
+    mesh = generate_gmsh(
+            FileSource("blob-2d.step"), 2, order=mesh_order,
+            force_ambient_dim=2,
+            other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"]
+            )
+
+    from meshmode.mesh.processing import merge_dijsoint_meshes, affine_map
+    mesh2 = affine_map(mesh, A=np.eye(2), b=np.array([5, 0]))
+
+    mesh3 = merge_dijsoint_meshes((mesh2, mesh))
+
+    if visualize:
+        from meshmode.discretization import Discretization
+        from meshmode.discretization.poly_element import \
+                PolynomialWarpAndBlendGroupFactory
+        cl_ctx = ctx_getter()
+        queue = cl.CommandQueue(cl_ctx)
+
+        discr = Discretization(cl_ctx, mesh3,
+                PolynomialWarpAndBlendGroupFactory(3))
+
+        from meshmode.discretization.visualization import make_visualizer
+        vis = make_visualizer(queue, discr, 1)
+        vis.write_vtk_file("merged.vtu", [])
 
 
 @pytest.mark.parametrize("dim", [2, 3])
@@ -220,7 +254,7 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
 
     from pytential import bind, sym
 
-    for h in [0.2, 0.15, 0.1]:
+    for h in [0.2, 0.14, 0.1]:
         from meshmode.mesh.io import generate_gmsh, FileSource
         mesh = generate_gmsh(
                 FileSource(src_file), dim, order=mesh_order,
@@ -239,7 +273,8 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
 
         from meshmode.discretization.connection import make_boundary_restriction
         bdry_mesh, bdry_discr, bdry_connection = make_boundary_restriction(
-                queue, vol_discr, InterpolatoryQuadratureSimplexGroupFactory(quad_order))
+                queue, vol_discr,
+                InterpolatoryQuadratureSimplexGroupFactory(quad_order))
 
         # }}}
 
@@ -264,7 +299,7 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
         comp_vol = integral(vol_discr, queue, vol_one)
         rel_vol_err = abs(true_vol - comp_vol) / true_vol
         vol_eoc_rec.add_data_point(h, rel_vol_err)
-        print "VOL", true_vol, comp_vol
+        print("VOL", true_vol, comp_vol)
 
         bdry_x = bdry_discr.nodes().with_queue(queue)
 
@@ -278,7 +313,7 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
         comp_surf = integral(bdry_discr, queue, bdry_one)
         rel_surf_err = abs(true_surf - comp_surf) / true_surf
         surf_eoc_rec.add_data_point(h, rel_surf_err)
-        print "SURF", true_surf, comp_surf
+        print("SURF", true_surf, comp_surf)
 
         if visualize:
             vol_vis.write_vtk_file("volume-h=%g.vtu" % h, [
@@ -297,17 +332,28 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
 
         # }}}
 
-    print "---------------------------------"
-    print "VOLUME"
-    print "---------------------------------"
-    print vol_eoc_rec
+    print("---------------------------------")
+    print("VOLUME")
+    print("---------------------------------")
+    print(vol_eoc_rec)
     assert vol_eoc_rec.order_estimate() >= mesh_order
 
-    print "---------------------------------"
-    print "SURFACE"
-    print "---------------------------------"
-    print surf_eoc_rec
+    print("---------------------------------")
+    print("SURFACE")
+    print("---------------------------------")
+    print(surf_eoc_rec)
     assert surf_eoc_rec.order_estimate() >= mesh_order
+
+
+def test_rect_mesh(do_plot=False):
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh = generate_regular_rect_mesh()
+
+    if do_plot:
+        from meshmode.mesh.visualization import draw_2d_mesh
+        draw_2d_mesh(mesh, fill=None)
+        import matplotlib.pyplot as pt
+        pt.show()
 
 
 if __name__ == "__main__":

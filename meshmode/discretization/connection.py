@@ -1,4 +1,8 @@
 from __future__ import division
+from __future__ import absolute_import
+import six
+from six.moves import range
+from six.moves import zip
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -224,7 +228,7 @@ def _build_boundary_connection(queue, vol_discr, bdry_discr, connection_data):
         connection_batches = []
         mgrp = vol_grp.mesh_el_group
 
-        for face_id in xrange(len(mgrp.face_vertex_indices())):
+        for face_id in range(len(mgrp.face_vertex_indices())):
             data = connection_data[igrp, face_id]
 
             bdry_unit_nodes_01 = (bdry_grp.unit_nodes + 1)*0.5
@@ -268,7 +272,7 @@ def make_boundary_restriction(queue, discr, group_factory):
     for igrp, mgrp in enumerate(discr.mesh.groups):
         grp_face_vertex_indices = mgrp.face_vertex_indices()
 
-        for iel_grp in xrange(mgrp.nelements):
+        for iel_grp in range(mgrp.nelements):
             for fid, loc_face_vertices in enumerate(grp_face_vertex_indices):
                 face_vertices = frozenset(
                         mgrp.vertex_indices[iel_grp, fvi]
@@ -283,11 +287,11 @@ def make_boundary_restriction(queue, discr, group_factory):
 
     boundary_faces = [
             face_ids[0]
-            for face_vertices, face_ids in face_map.iteritems()
+            for face_vertices, face_ids in six.iteritems(face_map)
             if len(face_ids) == 1]
 
     from pytools import flatten
-    bdry_vertex_vol_nrs = sorted(set(flatten(face_map.iterkeys())))
+    bdry_vertex_vol_nrs = sorted(set(flatten(six.iterkeys(face_map))))
 
     vol_to_bdry_vertices = np.empty(
             discr.mesh.vertices.shape[-1],
@@ -338,7 +342,7 @@ def make_boundary_restriction(queue, discr, group_factory):
 
         batch_base = 0
 
-        for face_id in xrange(len(grp_face_vertex_indices)):
+        for face_id in range(len(grp_face_vertex_indices)):
             batch_boundary_el_numbers_in_grp = np.array(
                     [
                         ibface_el
