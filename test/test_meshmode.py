@@ -350,20 +350,10 @@ def test_rect_mesh(do_plot=False):
     mesh = generate_regular_rect_mesh()
 
     if do_plot:
-        cl_ctx = cl.create_some_context()
-        queue = cl.CommandQueue(cl_ctx)
-
-        from meshmode.discretization import Discretization
-        from meshmode.discretization.poly_element import \
-                PolynomialWarpAndBlendGroupFactory
-        discr = Discretization(cl_ctx, mesh,
-                PolynomialWarpAndBlendGroupFactory(order=3))
-
-        from meshmode.discretization.visualization import make_visualizer
-        vis = make_visualizer(queue, discr, vis_order=1)
-        vis.write_vtk_file("rect.vtu", [
-            ("f", discr.nodes()[0]),
-            ])
+        from meshmode.mesh.visualization import draw_2d_mesh
+        draw_2d_mesh(mesh, fill=None)
+        import matplotlib.pyplot as pt
+        pt.show()
 
 
 if __name__ == "__main__":
