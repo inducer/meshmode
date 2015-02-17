@@ -2,7 +2,7 @@ from __future__ import division
 
 import numpy as np  # noqa
 import pyopencl as cl
-
+import random
 import os
 order = 4
 
@@ -54,11 +54,14 @@ def main2():
     mesh = generate_torus(3, 1, order=order)
     from meshmode.mesh.refinement import Refiner
     r = Refiner(mesh)
-    flags = np.zeros(len(mesh.groups[0].vertex_indices))
-    for i in range(0, len(flags)):
-        if i % 2 == 0:
-            flags[i] = 1
-    mesh = r.refine(flags)
+    
+    times = random.randint(1, 1)
+    for time in xrange(times):
+        flags = np.zeros(len(mesh.groups[0].vertex_indices))
+        for i in xrange(0, len(flags)):
+            flags[i] = random.randint(0, 1)
+        mesh = r.refine(flags)
+
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
             PolynomialWarpAndBlendGroupFactory
