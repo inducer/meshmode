@@ -29,7 +29,8 @@ import numpy as np
 
 # {{{ draw_2d_mesh
 
-def draw_2d_mesh(mesh, draw_numbers=True, **kwargs):
+def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
+        **kwargs):
     assert mesh.ambient_dim == 2
 
     import matplotlib.pyplot as pt
@@ -55,7 +56,7 @@ def draw_2d_mesh(mesh, draw_numbers=True, **kwargs):
             patch = mpatches.PathPatch(path, **kwargs)
             pt.gca().add_patch(patch)
 
-            if draw_numbers:
+            if draw_element_numbers:
                 centroid = (np.sum(elverts, axis=1)
                         / elverts.shape[1])
 
@@ -67,6 +68,12 @@ def draw_2d_mesh(mesh, draw_numbers=True, **kwargs):
                 pt.text(centroid[0], centroid[1], el_label, fontsize=17,
                         ha="center", va="center",
                         bbox=dict(facecolor='white', alpha=0.5, lw=0))
+
+    if draw_vertex_numbers:
+        for ivert, vert in enumerate(mesh.vertices.T):
+            pt.text(vert[0], vert[1], str(ivert), fontsize=15,
+                    ha="center", va="center", color="blue",
+                    bbox=dict(facecolor='white', alpha=0.5, lw=0))
 
 # }}}
 
