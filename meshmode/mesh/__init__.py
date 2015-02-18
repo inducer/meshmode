@@ -344,7 +344,6 @@ class Mesh(Record):
 
         return self._element_connectivity
 
-
     # Design experience: Try not to add too many global data structures to the
     # mesh. Let the element groups be responsible for that at the mesh level.
     #
@@ -423,6 +422,10 @@ def _compute_connectivity_from_vertices(mesh):
             for ivertex in grp.vertex_indices[iel_grp]:
                 element_to_element[iel_base + iel_grp].update(
                         vertex_to_element[ivertex])
+
+    for iel, neighbors in enumerate(element_to_element):
+        neighbors.remove(iel)
+
     lengths = [len(el_list) for el_list in element_to_element]
     neighbors_starts = np.cumsum(
             np.array([0] + lengths, dtype=mesh.element_id_dtype))

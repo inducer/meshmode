@@ -30,7 +30,7 @@ import numpy as np
 # {{{ draw_2d_mesh
 
 def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
-        **kwargs):
+        draw_connectivity=False, **kwargs):
     assert mesh.ambient_dim == 2
 
     import matplotlib.pyplot as pt
@@ -57,8 +57,7 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
             pt.gca().add_patch(patch)
 
             if draw_element_numbers:
-                centroid = (np.sum(elverts, axis=1)
-                        / elverts.shape[1])
+                centroid = (np.sum(elverts, axis=1) / elverts.shape[1])
 
                 if len(mesh.groups) == 1:
                     el_label = str(iel)
@@ -74,6 +73,42 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
             pt.text(vert[0], vert[1], str(ivert), fontsize=15,
                     ha="center", va="center", color="blue",
                     bbox=dict(facecolor='white', alpha=0.5, lw=0))
+
+    if draw_connectivity:
+        def global_iel_to_group_and_iel(global_iel):
+            for igrp, grp in enumerate(mesh.groups):
+                if global_iel < grp.nelements:
+                    return grp, global_iel
+                global_iel -= grp.nelements
+
+            raise ValueError("invalid element nr")
+
+        cnx = mesh.element_connectivity
+
+        nb_starts = cnx.neighbors_starts
+        for iel_g in range(mesh.nelements):
+            for nb_iel_g in cnx.neighbors[nb_starts[iel_g]:nb_starts[iel_g+1]]:
+                assert iel_g != nb_iel_g
+
+                grp, iel = global_iel_to_group_and_iel(iel_g)
+                nb_grp, nb_iel = global_iel_to_group_and_iel(nb_iel_g)
+
+                elverts = mesh.vertices[:, grp.vertex_indices[iel]]
+                nb_elverts = mesh.vertices[:, nb_grp.vertex_indices[nb_iel]]
+
+                centroid = (np.sum(elverts, axis=1) / elverts.shape[1])
+                nb_centroid = (np.sum(nb_elverts, axis=1) / nb_elverts.shape[1])
+
+                dx = nb_centroid - centroid
+                start = centroid + 0.15*dx
+
+                mag = np.max(np.abs(dx))
+                start += 0.05*(np.random.rand(2)-0.5)*mag
+                dx += 0.05*(np.random.rand(2)-0.5)*mag
+
+                pt.arrow(start[0], start[1], 0.7*dx[0], 0.7*dx[1],
+                        length_includes_head=True,
+                        color="green", head_width=1e-2, lw=1e-2)
 
 # }}}
 
