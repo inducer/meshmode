@@ -351,7 +351,7 @@ def test_rect_mesh(do_plot=False):
 
     if do_plot:
         from meshmode.mesh.visualization import draw_2d_mesh
-        draw_2d_mesh(mesh, fill=None)
+        draw_2d_mesh(mesh, fill=None, draw_connectivity=True)
         import matplotlib.pyplot as pt
         pt.show()
 
