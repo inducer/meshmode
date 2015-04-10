@@ -51,12 +51,14 @@ class Adj:
         :attr:`vertex`.
 
     """
-    def __init__(self, vertex=None, elements=[None, None], velements=[None, None]):
+    def __init__(self, vertex=None, elements=[None, None], velements
+            =[None, None]):
         self.vertex = vertex
         self.elements = elements
         self.velements = velements
     def __str__(self):
-        return 'vertex: ' + str(self.vertex) + ' ' + 'elements: ' + str(self.elements) + ' velements: ' + str(self.velements)
+        return 'vertex: ' + str(self.vertex) + ' ' + 'elements: ' +\
+        str(self.elements) + ' velements: ' + str(self.velements)
 #map pair of vertices to ray and midpoint
 class PairMap:
     """Describes a segment of a ray between two vertices.
@@ -80,15 +82,21 @@ class PairMap:
 
     def __init__(self, ray=None, d = True, midpoint=None):
         self.ray = ray
-        #direction in ray, True means that second node (bigger index) is after first in ray
+        #direction in ray, True means that second node (bigger index
+        #) is after first in ray
         self.d = d
         self.midpoint = midpoint
     def __str__(self):
-        return 'ray: ' + str(self.ray) + ' d: ' + str(self.d) + ' midpoint: ' + str(self.midpoint)
+        return 'ray: ' + str(self.ray) + ' d: ' + str(self.d) + \
+                ' midpoint: ' + str(self.midpoint)
 
 class Refiner(object):
     def __init__(self, mesh):
         from llist import dllist, dllistnode
+        from meshmode.mesh.tesselate  import tesselatetri
+        self.tri_node_tuples, self.tri_result = tesselatetri()
+        print self.tri_node_tuples
+        print self.tri_result
         self.last_mesh = mesh
         # Indices in last_mesh that were split in the last round of
         # refinement. Only these elements may be split this time
@@ -117,30 +125,38 @@ class Refiner(object):
         #                 (part of *rays*)
         self.vertex_to_ray = []
 
-        for i in xrange(nvertices):
+        import six
+        for i in six.moves.range(nvertices):
             self.vertex_to_ray.append({})
         for grp in mesh.groups:
             iel_base = grp.element_nr_base
-            for iel_grp in xrange(grp.nelements):
+            for iel_grp in six.moves.range(grp.nelements):
                 #use six.moves.range
-                for i in range(len(grp.vertex_indices[iel_grp])):
-                    for j in range(i+1, len(grp.vertex_indices[iel_grp])):
-                        vertex_pair = (min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]), \
-                            max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]))
+
+                vert_indices = grp.vertex_indices[iel_grp]
+
+                for i in six.moves.range(len(vert_indices)):
+                    for j in six.moves.range(i+1, len(vert_indices)):
+                       
+                        #minimum and maximum of the two indices for storing 
+                        #data in vertex_pair
+                        mn_idx = min(vert_indices[i], vert_indices[j])
+                        mx_idx = max(vert_indices[i], vert_indices[j])
+
+                        vertex_pair = (mn_idx, mx_idx)
                         if vertex_pair not in self.pair_map:
                             els = []
                             els.append(iel_base+iel_grp)
-                            fr = Adj(min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]), els)
-                            to = Adj(max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]), [None, None])
+                            fr = Adj(mn_idx, els)
+                            to = Adj(mx_idx, [None, None])
                             self.rays.append(dllist([fr, to]))
                             self.pair_map[vertex_pair] = PairMap(len(self.rays) - 1)
-                            self.vertex_to_ray[min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])][len(self.rays)-1]\
+                            self.vertex_to_ray[mn_idx][len(self.rays)-1]\
                                 = self.rays[len(self.rays)-1].nodeat(0)
-                            self.vertex_to_ray[max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])][len(self.rays)-1]\
+                            self.vertex_to_ray[mx_idx][len(self.rays)-1]\
                                 = self.rays[len(self.rays)-1].nodeat(1)
                         else:
                             self.rays[self.pair_map[vertex_pair].ray].nodeat(0).value.elements.append(iel_base+iel_grp)
-        
         # }}}
 
         #print mesh.groups[0].vertex_indices
@@ -186,8 +202,6 @@ class Refiner(object):
             ind += 1
         '''
 
-
-
     def get_refine_base_index(self):
         if self.last_split_elements is None:
             return 0
@@ -198,6 +212,31 @@ class Refiner(object):
         return np.zeros(
                 self.last_mesh.nelements - self.get_refine_base_index(),
                 np.bool)
+
+    def get_current_mesh(self):
+        
+        from meshmode.mesh import Mesh
+        #return Mesh(vertices, [grp], element_connectivity=self.generate_connectivity(len(self.last_mesh.groups[group].vertex_indices) \
+        #            + count*3))
+        groups = [] 
+        grpn = 0
+        for grp in self.last_mesh.groups:
+            groups.append(np.empty([len(grp.vertex_indices),
+                len(self.last_mesh.groups[grpn].vertex_indices[0])], dtype=np.int32))
+            for iel_grp in xrange(grp.nelements):
+                for i in range(0, len(grp.vertex_indices[iel_grp])):
+                    groups[grpn][iel_grp][i] = grp.vertex_indices[iel_grp][i]
+            grpn += 1
+        grp = []
+
+        from meshmode.mesh.generation import make_group_from_vertices
+        for grpn in range(0, len(groups)):
+            grp.append(make_group_from_vertices(self.last_mesh.vertices, groups[grpn], 4))
+        self.last_mesh = Mesh(self.last_mesh.vertices, grp,\
+                element_connectivity=self.generate_connectivity(len(self.last_mesh.groups[0].vertex_indices),\
+                    len(self.last_mesh.vertices[0])))
+        
+        return self.last_mesh
 
     #refine_flag tells you which elements to split as a numpy array of bools
     def refine(self, refine_flags):
@@ -304,6 +343,7 @@ class Refiner(object):
                         indices_i += 1
         '''
         import numpy as np
+        import six
         # if (isinstance(self.last_mesh.groups[0], SimplexElementGroup) and 
         #           self.last_mesh.groups[0].dim == 2):
         print 'refining'
@@ -321,18 +361,22 @@ class Refiner(object):
                 iel_base = grp.element_nr_base
                 nelements = 0
                 #print grp.nelements
-                for iel_grp in xrange(grp.nelements):
+                for iel_grp in six.moves.range(grp.nelements):
                     nelements += 1
+                    vert_indices = grp.vertex_indices[iel_grp]
                     if refine_flags[iel_base+iel_grp]:
                         nelements += 3
-                        for i in range(0, len(grp.vertex_indices[iel_grp])):
-                            for j in range(i+1, len(grp.vertex_indices[iel_grp])):
-                                vertex_pair = (min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]), \
-                                max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]))
-                                if vertex_pair not in midpoint_already and self.pair_map[vertex_pair].midpoint is None:
+                        for i in six.moves.range(0, len(vert_indices)):
+                            for j in six.moves.range(i+1, len(vert_indices)):
+                                mn_idx = min(vert_indices[i], vert_indices[j])
+                                mx_idx = max(vert_indices[i], vert_indices[j])
+                                vertex_pair = (mn_idx, mx_idx)
+                                if vertex_pair not in midpoint_already and \
+                                    self.pair_map[vertex_pair].midpoint is None:
                                     nvertices += 1
                                     midpoint_already[vertex_pair] = True
-                groups.append(np.empty([nelements, len(self.last_mesh.groups[grpn].vertex_indices[grpn])], dtype=np.int32))
+                groups.append(np.empty([nelements,
+                    len(grp.vertex_indices[0])], dtype=np.int32))
                 grpn += 1
                 totalnelements += nelements
 
@@ -342,14 +386,14 @@ class Refiner(object):
 
             # {{{ bring over vertex_indices and vertices info from previous generation
 
-            for i in range(0, len(self.last_mesh.vertices)):
-                for j in range(0, len(self.last_mesh.vertices[i])):
+            for i in six.moves.range(0, len(self.last_mesh.vertices)):
+                for j in six.moves.range(0, len(self.last_mesh.vertices[i])):
                     # always use v[i,j]
-                    vertices[i][j] = self.last_mesh.vertices[i][j]
+                    vertices[i,j] = self.last_mesh.vertices[i,j]
             grpn = 0
             for grp in self.last_mesh.groups:
-                for iel_grp in xrange(grp.nelements):
-                    for i in range(0, len(grp.vertex_indices[iel_grp])):
+                for iel_grp in six.moves.range(grp.nelements):
+                    for i in six.moves.range(0, len(grp.vertex_indices[iel_grp])):
                         groups[grpn][iel_grp][i] = grp.vertex_indices[iel_grp][i]
                 grpn += 1
             grpn = 0
@@ -359,10 +403,10 @@ class Refiner(object):
             vertices_idx = len(self.last_mesh.vertices[0])
             for grp in self.last_mesh.groups:
                 iel_base = grp.element_nr_base
-                indices_idx = len(grp.vertex_indices)
+                nelements_in_grp = len(grp.vertex_indices)
                 
                 # np.where
-                for iel_grp in xrange(grp.nelements):
+                for iel_grp in six.moves.range(grp.nelements):
                     if refine_flags[iel_base+iel_grp]:
 
                         # {{{ split element
@@ -373,42 +417,52 @@ class Refiner(object):
                         # (in order of vertex pairs in elements)
                         verts = []
 
-                        for i in range(0, len(grp.vertex_indices[iel_grp])):
-                            for j in range(i+1, len(grp.vertex_indices[iel_grp])):
-                                vertex_pair = (min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]), \
-                                max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]))
+                        vert_indices = grp.vertex_indices[iel_grp]
+                        for i in six.moves.range(0, len(vert_indices)):
+                            for j in six.moves.range(i+1, len(vert_indices)):
+                                mn_idx = min(vert_indices[i], vert_indices[j])
+                                mx_idx = max(vert_indices[i], vert_indices[j])
+                                vertex_pair = (mn_idx, mx_idx)
                                 
                                 # {{{ create midpoint if it doesn't exist already
 
-                                if self.pair_map[vertex_pair].midpoint is None:
+                                cur_pmap = self.pair_map[vertex_pair]
+                                if cur_pmap.midpoint is None:
                                     self.pair_map[vertex_pair].midpoint = vertices_idx
-                                    vertex_pair1 = (min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]), vertices_idx)
-                                    vertex_pair2 = (max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]), vertices_idx)
-                                    self.pair_map[vertex_pair1] = PairMap(self.pair_map[vertex_pair].ray, self.pair_map[vertex_pair].d, \
-                                        None)
-                                    self.pair_map[vertex_pair2] = PairMap(self.pair_map[vertex_pair].ray, not self.pair_map[vertex_pair].d, \
-                                        None)
+                                    vertex_pair1 = (mn_idx, vertices_idx)
+                                    vertex_pair2 = (mx_idx, vertices_idx)
+                                    self.pair_map[vertex_pair1] =\
+                                        PairMap(cur_pmap.ray, cur_pmap.d, None)
+                                    self.pair_map[vertex_pair2] =\
+                                        PairMap(cur_pmap.ray, not cur_pmap.d, None)
                                     self.vertex_to_ray.append({})
                                     
+                                    # FIXME: Check where the new Adj.elements
+                                    # gets populated.
+
                                     # try and collapse the two branches by setting up variables
                                     # ahead of time
+                                    import copy
                                     if self.pair_map[vertex_pair].d:
-                                        velements = self.vertex_to_ray[min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])][self.pair_map[vertex_pair].ray].value.elements
-                                        self.rays[self.pair_map[vertex_pair].ray].insert(Adj(vertices_idx, [None, None], velements), \
-                                            self.vertex_to_ray[max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])][self.pair_map[vertex_pair].ray])
-                                        self.vertex_to_ray[vertices_idx][self.pair_map[vertex_pair].ray] = \
-                                            self.vertex_to_ray[max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])][self.pair_map[vertex_pair].ray].prev
+                                        velements = self.vertex_to_ray[mn_idx][cur_pmap.ray].value.elements
+                                        self.rays[cur_pmap.ray].insert(Adj(vertices_idx, copy.deepcopy(velements), 
+                                            copy.deepcopy(velements)), \
+                                            self.vertex_to_ray[mx_idx][cur_pmap.ray])
+                                        self.vertex_to_ray[vertices_idx][cur_pmap.ray] = \
+                                            self.vertex_to_ray[mx_idx][cur_pmap.ray].prev
                                     else:
-                                        velements = self.vertex_to_ray[max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])][self.pair_map[vertex_pair].ray].value.elements
-                                        self.rays[self.pair_map[vertex_pair].ray].insert(Adj(vertices_idx, [None, None], velements), \
-                                            self.vertex_to_ray[min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])][self.pair_map[vertex_pair].ray])
-                                        self.vertex_to_ray[vertices_idx][self.pair_map[vertex_pair].ray] = \
-                                            self.vertex_to_ray[min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])][self.pair_map[vertex_pair].ray].prev
+                                        velements = self.vertex_to_ray[mx_idx][cur_pmap.ray].value.elements
+                                        self.rays[cur_pmap.ray].insert(Adj(vertices_idx, copy.deepcopy(velements), 
+                                            copy.deepcopy(velements)), \
+                                            self.vertex_to_ray[mn_idx][cur_pmap.ray])
+                                        self.vertex_to_ray[vertices_idx][cur_pmap.ray] = \
+                                            self.vertex_to_ray[mn_idx][cur_pmap.ray].prev
                                     
                                     # compute location of midpoint
-                                    for k in range(0, 3):
-                                        vertices[k][vertices_idx] = (self.last_mesh.vertices[k][grp.vertex_indices[iel_grp][i]]
-                                            + self.last_mesh.vertices[k][grp.vertex_indices[iel_grp][j]]) / 2.0
+                                    for k in six.moves.range(len(self.last_mesh.vertices)):
+                                        vertices[k,vertices_idx] =\
+                                            (self.last_mesh.vertices[k,vert_indices[i]]\
+                                            +self.last_mesh.vertices[k,vert_indices[j]]) / 2.0
                                     
                                     verts.append(vertices_idx)
                                     vertices_idx += 1
@@ -425,58 +479,110 @@ class Refiner(object):
                         # (While those don't exist yet, we generate connectivity for them
                         # anyhow.)
 
-                        ind = 0
+                        nnew_elements = 0
 
-                        # vertex_pairs = [(i,j) for i in range(3) for j in range(i+1, 3)]
-                        for i in range(0, len(grp.vertex_indices[iel_grp])):
-                            for j in range(i+1, len(grp.vertex_indices[iel_grp])):
-                                vertex_pair = (min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]),
-                                max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]))
-                                if self.pair_map[vertex_pair].d:
-                                    start_node = self.vertex_to_ray[min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])][self.pair_map[vertex_pair].ray]
-                                else:
-                                    start_node = self.vertex_to_ray[max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])][self.pair_map[vertex_pair].ray]
-                                end_node = self.vertex_to_ray[self.pair_map[vertex_pair].midpoint][self.pair_map[vertex_pair].ray]
-
-                                # hop along ray from start node to end node
-                                while start_node != end_node:
-                                    # start_node.value.elements.index(iel_base+iel_grp)
-                                    if start_node.value.elements[0] == iel_base+iel_grp:
-                                        start_node.value.elements[0] = iel_base+indices_idx+ind
-                                    elif start_node.value.elements[1] == iel_base+iel_grp:
-                                        start_node.value.elements[1] = iel_base+indices_idx+ind
-                                    else:
-                                        assert False
-                                    start_node = start_node.next
-                                ind += 1
-                        ind = 0
+                        unique_vertex_pairs = [
+                                (i,j) for i in range(3) for j in range(i+1, 3)]
+                        for i, j in unique_vertex_pairs:
+                            mn_idx = min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]) 
+                            mx_idx = max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])
+                            if mn_idx == grp.vertex_indices[iel_grp][i]:
+                                min_element_index = i
+                                max_element_index = j
+                            else:
+                                min_element_index = j
+                                max_element_index = i
+                            vertex_pair = (mn_idx, mx_idx)
+                            cur_pmap = self.pair_map[vertex_pair]
+                            if cur_pmap.d:
+                                start_node =\
+                                self.vertex_to_ray[mn_idx][cur_pmap.ray]
+                                end_node = self.vertex_to_ray[mx_idx][cur_pmap.ray]
+                                first_element_index = min_element_index
+                                second_element_index = max_element_index
+                            else:
+                                start_node =\
+                                self.vertex_to_ray[mx_idx][cur_pmap.ray]
+                                end_node = self.vertex_to_ray[mn_idx][cur_pmap.ray]
+                                first_element_index = max_element_index
+                                second_element_index = min_element_index
+                            midpoint_node=\
+                            self.vertex_to_ray[cur_pmap.midpoint][cur_pmap.ray]
+                            # hop along ray from start node to midpoint node
+                            while start_node != midpoint_node:
+                                # replace old (big) element with new
+                                # (refined) element
+                                node_els = start_node.value.elements
+                                #print node_els
+                                iold_el = node_els.index(iel_base+iel_grp)
+                                node_els[iold_el] = iel_base+nelements_in_grp+first_element_index
+                                start_node = start_node.next
+                            # hop along ray from midpoint node to end node
+                            while start_node != end_node:
+                                #replace old (big) element with new
+                                # (refined element
+                                node_els = start_node.value.elements
+                                iold_el = node_els.index(iel_base+iel_grp)
+                                node_els[iold_el] = iel_base+nelements_in_grp+second_element_index
+                                start_node = start_node.next
 
                         # }}}
 
                         #generate new rays
                         from llist import dllist, dllistnode
+                        ind = 0
 
-                        for i in range(0, len(verts)):
-                            for j in range(i+1, len(verts)):
-                                vertex_pair = (min(verts[i], verts[j]), max(verts[i], verts[j]))
+                        for i in six.moves.range(0, len(verts)):
+                            for j in six.moves.range(i+1, len(verts)):
+                                mn_vert = min(verts[i], verts[j])
+                                mx_vert = max(verts[i], verts[j])
+                                vertex_pair = (mn_vert, mx_vert)
                                 els = []
                                 els.append(iel_base+iel_grp)
-                                els.append(iel_base+indices_idx+ind)
+                                els.append(iel_base+nelements_in_grp+ind)
                                 
-                                fr = Adj(min(verts[i], verts[j]), els)
+                                fr = Adj(mn_vert, els)
 
                                 # We're creating a new ray, and this is the end node
                                 # of it.
-                                to = Adj(max(verts[i], verts[j]), [None, None])
+                                to = Adj(mx_vert, [None, None])
 
                                 self.rays.append(dllist([fr, to]))
                                 self.pair_map[vertex_pair] = PairMap(len(self.rays) - 1)
-                                self.vertex_to_ray[min(verts[i], verts[j])][len(self.rays)-1]\
+                                self.vertex_to_ray[mn_vert][len(self.rays)-1]\
                                     = self.rays[len(self.rays)-1].nodeat(0)
-                                self.vertex_to_ray[max(verts[i], verts[j])][len(self.rays)-1]\
+                                self.vertex_to_ray[mx_vert][len(self.rays)-1]\
                                     = self.rays[len(self.rays)-1].nodeat(1)
+                                ind += 1
+                        ind = 0
 
+                        #map vertex indices to coordinates
+                        node_tuple_to_coord = {}
+                        node_tuple_to_coord[(0, 0)] = grp.vertex_indices[iel_grp][0]
+                        node_tuple_to_coord[(2, 0)] = grp.vertex_indices[iel_grp][1]
+                        node_tuple_to_coord[(0, 2)] = grp.vertex_indices[iel_grp][2]
+                        vertex_pair = (min(grp.vertex_indices[iel_grp][0], grp.vertex_indices[iel_grp][1]), \
+                        max(grp.vertex_indices[iel_grp][0], grp.vertex_indices[iel_grp][1]))
+                        node_tuple_to_coord[(1, 0)] = self.pair_map[vertex_pair].midpoint 
+                        vertex_pair = (min(grp.vertex_indices[iel_grp][0], grp.vertex_indices[iel_grp][2]), \
+                        max(grp.vertex_indices[iel_grp][0], grp.vertex_indices[iel_grp][2]))
+                        node_tuple_to_coord[(0, 1)] = self.pair_map[vertex_pair].midpoint
+                        vertex_pair = (min(grp.vertex_indices[iel_grp][1], grp.vertex_indices[iel_grp][2]), \
+                        max(grp.vertex_indices[iel_grp][1], grp.vertex_indices[iel_grp][2]))
+                        node_tuple_to_coord[(1, 1)] = self.pair_map[vertex_pair].midpoint
                         #generate actual elements
+                        #middle element
+                        for i in six.moves.range(0, len(self.tri_result[1])):
+                            groups[grpn][iel_grp][i] = \
+                            node_tuple_to_coord[self.tri_node_tuples[self.tri_result[1][i]]]
+                        for i in six.moves.range(0, 4):
+                            if i == 1:
+                                continue
+                            for j in six.moves.range(0, len(self.tri_result[i])):
+                                groups[grpn][nelements_in_grp][j] = \
+                                        node_tuple_to_coord[self.tri_node_tuples[self.tri_result[i][j]]]
+                            nelements_in_grp += 1
+                        '''
                         #middle element
                         vertex_pair = (min(grp.vertex_indices[iel_grp][0], grp.vertex_indices[iel_grp][1]), \
                         max(grp.vertex_indices[iel_grp][0], grp.vertex_indices[iel_grp][1]))
@@ -488,33 +594,33 @@ class Refiner(object):
                         max(grp.vertex_indices[iel_grp][0], grp.vertex_indices[iel_grp][2]))
                         groups[grpn][iel_grp][2] = self.pair_map[vertex_pair].midpoint
                         #element 0
-                        groups[grpn][indices_idx][0] = grp.vertex_indices[iel_grp][0]
+                        groups[grpn][nelements_in_grp][0] = grp.vertex_indices[iel_grp][0]
                         vertex_pair = (min(grp.vertex_indices[iel_grp][0], grp.vertex_indices[iel_grp][1]), \
                         max(grp.vertex_indices[iel_grp][0], grp.vertex_indices[iel_grp][1]))
-                        groups[grpn][indices_idx][1] = self.pair_map[vertex_pair].midpoint
+                        groups[grpn][nelements_in_grp][1] = self.pair_map[vertex_pair].midpoint
                         vertex_pair = (min(grp.vertex_indices[iel_grp][0], grp.vertex_indices[iel_grp][2]), \
                         max(grp.vertex_indices[iel_grp][0], grp.vertex_indices[iel_grp][2]))
-                        groups[grpn][indices_idx][2] = self.pair_map[vertex_pair].midpoint
-                        indices_idx += 1
+                        groups[grpn][nelements_in_grp][2] = self.pair_map[vertex_pair].midpoint
+                        nelements_in_grp += 1
                         #element 1
-                        groups[grpn][indices_idx][0] = grp.vertex_indices[iel_grp][1]
+                        groups[grpn][nelements_in_grp][0] = grp.vertex_indices[iel_grp][1]
                         vertex_pair = (min(grp.vertex_indices[iel_grp][1], grp.vertex_indices[iel_grp][0]), \
                         max(grp.vertex_indices[iel_grp][1], grp.vertex_indices[iel_grp][0]))
-                        groups[grpn][indices_idx][1] = self.pair_map[vertex_pair].midpoint
+                        groups[grpn][nelements_in_grp][1] = self.pair_map[vertex_pair].midpoint
                         vertex_pair = (min(grp.vertex_indices[iel_grp][1], grp.vertex_indices[iel_grp][2]), \
                         max(grp.vertex_indices[iel_grp][1], grp.vertex_indices[iel_grp][2]))
-                        groups[grpn][indices_idx][2] = self.pair_map[vertex_pair].midpoint
-                        indices_idx += 1
+                        groups[grpn][nelements_in_grp][2] = self.pair_map[vertex_pair].midpoint
+                        nelements_in_grp += 1
                         #element 2
-                        groups[grpn][indices_idx][0] = grp.vertex_indices[iel_grp][2]
+                        groups[grpn][nelements_in_grp][0] = grp.vertex_indices[iel_grp][2]
                         vertex_pair = (min(grp.vertex_indices[iel_grp][2], grp.vertex_indices[iel_grp][0]), \
                         max(grp.vertex_indices[iel_grp][2], grp.vertex_indices[iel_grp][0]))
-                        groups[grpn][indices_idx][1] = self.pair_map[vertex_pair].midpoint
+                        groups[grpn][nelements_in_grp][1] = self.pair_map[vertex_pair].midpoint
                         vertex_pair = (min(grp.vertex_indices[iel_grp][2], grp.vertex_indices[iel_grp][1]), \
                         max(grp.vertex_indices[iel_grp][2], grp.vertex_indices[iel_grp][1]))
-                        groups[grpn][indices_idx][2] = self.pair_map[vertex_pair].midpoint
-                        indices_idx += 1
-
+                        groups[grpn][nelements_in_grp][2] = self.pair_map[vertex_pair].midpoint
+                        nelements_in_grp += 1
+                        '''
                         # }}}
 
                 grpn += 1
@@ -533,7 +639,7 @@ class Refiner(object):
         #return Mesh(vertices, [grp], element_connectivity=self.generate_connectivity(len(self.last_mesh.groups[group].vertex_indices) \
         #            + count*3))
         
-        self.last_mesh = Mesh(vertices, grp, element_connectivity=self.generate_connectivity(totalnelements, nvertices))
+        self.last_mesh = Mesh(vertices, grp, element_connectivity=self.generate_connectivity(totalnelements, nvertices, groups))
         return self.last_mesh
         split_faces = {}
 
@@ -545,39 +651,43 @@ class Refiner(object):
 
 
 
-    def generate_connectivity(self, nelements, nvertices):
+    def generate_connectivity(self, nelements, nvertices, groups):
         # medium-term FIXME: make this an incremental update
         # rather than build-from-scratch
-
         vertex_to_element = [[] for i in xrange(nvertices)]
 
-        for grp in self.last_mesh.groups:
-            iel_base = grp.element_nr_base
-            for iel_grp in xrange(grp.nelements):
-                for ivertex in grp.vertex_indices[iel_grp]:
-                    vertex_to_element[ivertex].append(iel_base + iel_grp)
-
+        element_index = 0
+        for grp in groups:
+            for iel_grp in xrange(len(grp)):
+                for ivertex in grp[iel_grp]:
+                    vertex_to_element[ivertex].append(element_index)
+                element_index += 1
         element_to_element = [set() for i in xrange(nelements)]
-        for grp in self.last_mesh.groups:
-            iel_base = grp.element_nr_base
-            for iel_grp in xrange(grp.nelements):
-                for ivertex in grp.vertex_indices[iel_grp]:
-                    element_to_element[iel_base + iel_grp].update(
+        element_index = 0
+        for grp in groups:
+            for iel_grp in xrange(len(grp)):
+                for ivertex in grp[iel_grp]:
+                    element_to_element[element_index].update(
                             vertex_to_element[ivertex])
-        
+                element_index += 1
         #print self.ray_elements
         for ray in self.rays:
             curnode = ray.first
             while curnode is not None:
-                if curnode.value.elements[0] is not None:
-                    element_to_element[curnode.value.elements[0]].update(curnode.value.elements)
-                if curnode.value.elements[1] is not None:
-                    element_to_element[curnode.value.elements[1]].update(curnode.value.elements)
-                if curnode.value.velements[0] is not None:
-                    element_to_element[curnode.value.velements[0]].update(curnode.value.velements)
-                if curnode.value.velements[1] is not None:
-                    element_to_element[curnode.value.velements[1]].update(curnode.value.velements)
+                '''
+                if len(curnode.value.elements) >= 2:
+                    if curnode.value.elements[0] is not None:
+                        element_to_element[curnode.value.elements[0]].update(curnode.value.elements)
+                    if curnode.value.elements[1] is not None:
+                        element_to_element[curnode.value.elements[1]].update(curnode.value.elements)
+                '''
+                if len(curnode.value.velements) >= 2:
+                    if curnode.value.velements[0] is not None:
+                        element_to_element[curnode.value.velements[0]].update(curnode.value.velements)
+                    if curnode.value.velements[1] is not None:
+                        element_to_element[curnode.value.velements[1]].update(curnode.value.velements)
                 curnode = curnode.next
+
         '''
         for i in self.ray_elements:
             for j in i:
@@ -607,3 +717,5 @@ class Refiner(object):
 
 
 # vim: foldmethod=marker
+# vim: shiftwidth=4
+# vim: softtabstop=4
