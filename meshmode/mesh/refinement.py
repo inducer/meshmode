@@ -467,7 +467,9 @@ class Refiner(object):
                                     verts.append(vertices_idx)
                                     vertices_idx += 1
                                 else:
-                                    verts.append(self.pair_map[vertex_pair].midpoint)
+                                    cur_midpoint = self.pair_map[vertex_pair].midpoint
+                                    verts.append(cur_midpoint)
+                                    self.vertex_to_ray[cur_midpoint][cur_pmap.ray].value.velements = [None, None]
 
                                 # }}}
                         
@@ -674,13 +676,11 @@ class Refiner(object):
         for ray in self.rays:
             curnode = ray.first
             while curnode is not None:
-                '''
                 if len(curnode.value.elements) >= 2:
                     if curnode.value.elements[0] is not None:
                         element_to_element[curnode.value.elements[0]].update(curnode.value.elements)
                     if curnode.value.elements[1] is not None:
                         element_to_element[curnode.value.elements[1]].update(curnode.value.elements)
-                '''
                 if len(curnode.value.velements) >= 2:
                     if curnode.value.velements[0] is not None:
                         element_to_element[curnode.value.velements[0]].update(curnode.value.velements)
