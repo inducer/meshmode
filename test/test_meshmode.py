@@ -1,6 +1,4 @@
-from __future__ import division
-from __future__ import absolute_import
-from __future__ import print_function
+from __future__ import division, absolute_import, print_function
 from six.moves import range
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
@@ -354,6 +352,24 @@ def test_rect_mesh(do_plot=False):
         draw_2d_mesh(mesh, fill=None, draw_connectivity=True)
         import matplotlib.pyplot as pt
         pt.show()
+
+
+def test_as_python():
+    from meshmode.mesh.generation import make_curve_mesh, cloverleaf
+    mesh = make_curve_mesh(cloverleaf, np.linspace(0, 1, 100), order=3)
+
+    mesh.element_connectivity
+
+    from meshmode.mesh import as_python
+    code = as_python(mesh)
+
+    print(code)
+    exec_dict = {}
+    exec(compile(code, "gen_code.py", "exec"), exec_dict)
+
+    mesh_2 = exec_dict["make_mesh"]()
+
+    assert mesh == mesh_2
 
 
 if __name__ == "__main__":
