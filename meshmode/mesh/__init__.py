@@ -78,6 +78,9 @@ class MeshElementGroup(Record):
         The number of dimensions spanned by the element.
         *Not* the ambient dimension, see :attr:`Mesh.ambient_dim`
         for that.
+
+    .. automethod:: __eq__
+    .. automethod:: __ne__
     """
 
     def __init__(self, order, vertex_indices, nodes,
@@ -133,6 +136,19 @@ class MeshElementGroup(Record):
     @property
     def nunit_nodes(self):
         return self.unit_nodes.shape[-1]
+
+    def __eq__(self, other):
+        return (
+                type(self) == type(other)
+                and self.order == other.order
+                and np.array_equal(self.vertex_indices, other.vertex_indices)
+                and np.array_equal(self.nodes, other.nodes)
+                and np.array_equal(self.unit_nodes, other.unit_nodes)
+                and self.element_nr_base == other.element_nr_base
+                and self.node_nr_base == other.node_nr_base)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 class SimplexElementGroup(MeshElementGroup):
@@ -236,7 +252,20 @@ class ElementConnectivity(Record):
         ``element_id_t []``
 
         See :attr:`neighbors_starts`.
+
+    .. automethod:: __eq__
+    .. automethod:: __ne__
     """
+
+    def __eq__(self, other):
+        return (
+                type(self) == type(other)
+                and np.array_equal(self.neighbors_starts,
+                    other.neighbors_starts)
+                and np.array_equal(self.neighbors, other.neighbors))
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 class Mesh(Record):
@@ -260,6 +289,9 @@ class Mesh(Record):
     .. attribute:: vertex_id_dtype
 
     .. attribute:: element_id_dtype
+
+    .. automethod:: __eq__
+    .. automethod:: __ne__
     """
 
     def __init__(self, vertices, groups, skip_tests=False,
@@ -343,6 +375,19 @@ class Mesh(Record):
             self._element_connectivity = _compute_connectivity_from_vertices(self)
 
         return self._element_connectivity
+
+    def __eq__(self, other):
+        return (
+                type(self) == type(other)
+                and np.array_equal(self.vertices, other.vertices)
+                and self.groups == other.groups
+                and self.vertex_id_dtype == other.vertex_id_dtype
+                and self.element_id_dtype == other.element_id_dtype
+                and (self._element_connectivity
+                        == other._element_connectivity))
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     # Design experience: Try not to add too many global data structures to the
     # mesh. Let the element groups be responsible for that at the mesh level.
