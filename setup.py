@@ -42,6 +42,7 @@ def main():
           packages=find_packages(),
           install_requires=[
               "numpy",
+              "llist",
               "modepy",
               "meshpy>=2014.1",
               "six",
