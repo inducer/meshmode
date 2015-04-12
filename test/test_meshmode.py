@@ -354,6 +354,11 @@ def test_rect_mesh(do_plot=False):
         pt.show()
 
 
+def test_box_mesh():
+    from meshmode.mesh.generation import generate_box_mesh
+    generate_box_mesh(3*(np.linspace(0, 1, 5),))
+
+
 def test_as_python():
     from meshmode.mesh.generation import make_curve_mesh, cloverleaf
     mesh = make_curve_mesh(cloverleaf, np.linspace(0, 1, 100), order=3)
