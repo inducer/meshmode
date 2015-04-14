@@ -377,6 +377,29 @@ def test_as_python():
     assert mesh == mesh_2
 
 
+def test_lookup_tree(do_plot=False):
+    from meshmode.mesh.generation import make_curve_mesh, cloverleaf
+    mesh = make_curve_mesh(cloverleaf, np.linspace(0, 1, 1000), order=3)
+
+    from meshmode.mesh.tools import make_element_lookup_tree
+    tree = make_element_lookup_tree(mesh)
+
+    from meshmode.mesh.processing import find_bounding_box
+    bbox_min, bbox_max = find_bounding_box(mesh)
+
+    extent = bbox_max-bbox_min
+
+    for i in range(20):
+        pt = bbox_min + np.random.rand(2) * extent
+        print(pt)
+        for igrp, iel in tree.generate_matches(pt):
+            print(igrp, iel)
+
+    if do_plot:
+        with open("tree.dat", "w") as outf:
+            tree.visualize(outf)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
