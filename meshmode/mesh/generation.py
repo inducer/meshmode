@@ -53,6 +53,11 @@ Surfaces
 .. autofunction:: generate_icosahedron
 .. autofunction:: generate_icosphere
 .. autofunction:: generate_torus
+
+Volumes
+-------
+
+.. autofunction:: generate_box_mesh
 .. autofunction:: generate_regular_rect_mesh
 
 """
@@ -373,6 +378,103 @@ def generate_torus(r_outer, r_inner, n_outer=20, n_inner=10, order=1):
     return mesh
 
 
+# {{{ generate_box_mesh
+
+def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64):
+    """Create a semi-structured mesh.
+
+    :param axis_coords: a tuple with a number of entries corresponding
+        to the number of dimensions, with each entry a numpy array
+        specifying the coordinates to be used along that axis.
+    """
+
+    for iaxis, axc in enumerate(axis_coords):
+        if len(axc) < 2:
+            raise ValueError("need at least two points along axis %d"
+                    % (iaxis+1))
+
+    dim = len(axis_coords)
+
+    shape = tuple(len(axc) for axc in axis_coords)
+
+    from pytools import product
+    nvertices = product(shape)
+
+    vertex_indices = np.arange(nvertices).reshape(*shape, order="F")
+
+    vertices = np.empty((dim,)+shape, dtype=coord_dtype)
+    for idim in range(dim):
+        vshape = (shape[idim],) + (1,)*idim
+        vertices[idim] = axis_coords[idim].reshape(*vshape)
+
+    vertices = vertices.reshape(dim, -1)
+
+    el_vertices = []
+
+    if dim == 1:
+        for i in range(shape[0]-1):
+            # a--b
+
+            a = vertex_indices[i]
+            b = vertex_indices[i+1]
+
+            el_vertices.append((a, b,))
+
+    elif dim == 2:
+        for i in range(shape[0]-1):
+            for j in range(shape[1]-1):
+
+                # c--d
+                # |  |
+                # a--b
+
+                a = vertex_indices[i, j]
+                b = vertex_indices[i+1, j]
+                c = vertex_indices[i, j+1]
+                d = vertex_indices[i+1, j+1]
+
+                el_vertices.append((a, b, c))
+                el_vertices.append((d, c, b))
+
+    elif dim == 3:
+        for i in range(shape[0]-1):
+            for j in range(shape[1]-1):
+                for k in range(shape[2]-1):
+
+                    a000 = vertex_indices[i, j, k]
+                    a001 = vertex_indices[i, j, k+1]
+                    a010 = vertex_indices[i, j+1, k]
+                    a011 = vertex_indices[i, j+1, k+1]
+
+                    a100 = vertex_indices[i+1, j, k]
+                    a101 = vertex_indices[i+1, j, k+1]
+                    a110 = vertex_indices[i+1, j+1, k]
+                    a111 = vertex_indices[i+1, j+1, k+1]
+
+                    el_vertices.append((a000, a100, a010, a001))
+                    el_vertices.append((a101, a100, a001, a010))
+                    el_vertices.append((a101, a011, a010, a001))
+
+                    el_vertices.append((a100, a010, a101, a110))
+                    el_vertices.append((a011, a010, a110, a101))
+                    el_vertices.append((a011, a111, a101, a110))
+
+    else:
+        raise NotImplementedError("box meshes of dimension %d"
+                % dim)
+
+    el_vertices = np.array(el_vertices, dtype=np.int32)
+
+    grp = make_group_from_vertices(
+            vertices.reshape(dim, -1), el_vertices, order)
+
+    from meshmode.mesh import Mesh
+    return Mesh(vertices, [grp],
+            element_connectivity=None)
+
+# }}}
+
+
 # {{{ generate_regular_rect_mesh
 
 def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1):
@@ -386,44 +488,11 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1):
     if min(n) < 2:
         raise ValueError("need at least two points in each direction")
 
-    node_dict = {}
-    vertices = []
-    points_1d = [np.linspace(a_i, b_i, n_i)
+    axis_coords = [np.linspace(a_i, b_i, n_i)
             for a_i, b_i, n_i in zip(a, b, n)]
 
-    for j in range(n[1]):
-        for i in range(n[0]):
-            node_dict[i, j] = len(vertices)
-            vertices.append(np.array([points_1d[0][i], points_1d[1][j]]))
-
-    vertices = np.array(vertices).T.copy()
-
-    vertex_indices = []
-
-    for i in range(n[0]-1):
-        for j in range(n[1]-1):
-
-            # c--d
-            # |  |
-            # a--b
-
-            a = node_dict[i, j]
-            b = node_dict[i+1, j]
-            c = node_dict[i, j+1]
-            d = node_dict[i+1, j+1]
-
-            vertex_indices.append((a, b, c))
-            vertex_indices.append((d, c, b))
-
-    vertex_indices = np.array(vertex_indices, dtype=np.int32)
-
-    grp = make_group_from_vertices(vertices, vertex_indices, order)
-
-    from meshmode.mesh import Mesh
-    return Mesh(vertices, [grp],
-            element_connectivity=None)
+    return generate_box_mesh(axis_coords, order=order)
 
 # }}}
-
 
 # vim: fdm=marker
