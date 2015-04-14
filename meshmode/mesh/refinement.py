@@ -9,10 +9,8 @@ in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
-
 The above copyright notice and this permission notice shall be included in
 all copies or substantial portions of the Software.
-
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -33,23 +31,17 @@ class _SplitFaceRecord(object):
     """
     .. attribute:: neighboring_elements
     .. attribute:: new_vertex_nr
-
         integer or None
     """
 class Adj:
     """One vertex-associated entry of a ray.
-
     .. attribute:: elements
-
         A list of numbers of elements adjacent to
         the edge following :attr:`vertex`
         along the ray.
-
     .. attribute:: velements
-
         A list of numbers of elements adjacent to
         :attr:`vertex`.
-
     """
     def __init__(self, vertex=None, elements=[None, None], velements
             =[None, None]):
@@ -62,21 +54,14 @@ class Adj:
 #map pair of vertices to ray and midpoint
 class PairMap:
     """Describes a segment of a ray between two vertices.
-
     .. attribute:: ray
-
         Index of the ray in the *rays* list.
-
     .. attribute:: d
-
         A :class:`bool` denoting direction in the ray,
         with *True* representing "positive" and *False*
         representing "negative".
-
     .. attribute:: midpoint
-
         Vertex index of the midpoint of this segment.
-
         *None* if no midpoint has been assigned yet.
     """
 
@@ -168,7 +153,6 @@ class Refiner(object):
             len(mesh.groups[0].vertex_indices[0]) * (len(mesh.groups[0].vertex_indices[0]) - 1)
              / 2, 1, 2], dtype=np.int32)
         self.vertex_to_ray = []
-
         for i in mesh.vertices[0]:
             self.vertex_to_ray.append([]);
         count = 0
@@ -258,7 +242,6 @@ class Refiner(object):
                 count += 1
         
         le = len(self.last_mesh.vertices[0])
-
         vertices = np.empty([len(self.last_mesh.vertices), len(self.last_mesh.groups[0].vertex_indices[0])
             * count + le])
         vertex_indices = np.empty([len(self.last_mesh.groups[0].vertex_indices)
@@ -271,7 +254,6 @@ class Refiner(object):
         for i in range(0, len(self.last_mesh.groups[0].vertex_indices)):
             for j in range(0, len(self.last_mesh.groups[0].vertex_indices[i])):
                 vertex_indices[i][j] = self.last_mesh.groups[0].vertex_indices[i][j]
-
         
         import itertools
         for i in range(0, len(refine_flags)):

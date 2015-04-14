@@ -48,20 +48,24 @@ def main2():
 
     from meshmode.mesh.generation import (  # noqa
             generate_icosphere, generate_icosahedron,
-            generate_torus)
+            generate_torus, generate_regular_rect_mesh)
     #mesh = generate_icosphere(1, order=order)
     #mesh = generate_icosahedron(1, order=order)
-    mesh = generate_torus(3, 1, order=order)
+#    mesh = generate_torus(3, 1, order=order)
+    mesh = generate_regular_rect_mesh()
     from meshmode.mesh.refinement import Refiner
     r = Refiner(mesh)
-    
     times = random.randint(1, 1)
     for time in xrange(times):
         flags = np.zeros(len(mesh.groups[0].vertex_indices))
-        for i in xrange(0, len(flags)):
-            flags[i] = random.randint(0, 1)
+#        for i in xrange(0, len(flags)):
+#            flags[i] = random.randint(0, 1)
         mesh = r.refine(flags)
-
+    from meshmode.mesh.visualization import draw_2d_mesh
+    draw_2d_mesh(mesh, True, True, True);
+    import matplotlib.pyplot as pt
+    pt.show()
+    '''
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
             PolynomialWarpAndBlendGroupFactory
@@ -71,7 +75,6 @@ def main2():
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(queue, discr, order)
-    os.remove("geometry2.vtu")
     os.remove("connectivity2.vtu")
     vis.write_vtk_file("geometry2.vtu", [
         ("f", discr.nodes()[0]),
@@ -82,7 +85,7 @@ def main2():
 
     write_mesh_connectivity_vtk_file("connectivity2.vtu",
             mesh)
-
+    '''
 if __name__ == "__main__":
-    main()
+#    main()
     main2()
