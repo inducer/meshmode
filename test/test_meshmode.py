@@ -399,6 +399,74 @@ def test_lookup_tree(do_plot=False):
         with open("tree.dat", "w") as outf:
             tree.visualize(outf)
 
+#construct vertex vertex_index
+def get_vertex(mesh, vertex_index):
+    vertex = np.empty([mesh.dim])
+    for i_cur_dim, cur_dim_coords in enumerate(mesh.vertices):
+        vertex[i_cur_dim] = cur_dim_coords[vertex_index]
+    return vertex
+
+def test_refiner_connectivity(mesh):
+    def group_and_iel_to_global_iel(igrp, iel):
+        return mesh.groups[igrp].element_nr_base + iel
+
+    from meshmode.mesh.tools import make_element_lookup_tree
+    tree = make_element_lookup_tree(mesh)
+
+    from meshmode.mesh.processing import find_bounding_box
+    bbox_min, bbox_max = find_bounding_box(mesh)
+
+    extent = bbox_max-bbox_min
+    cnx = mesh.element_connectivity
+    nvertices_per_element = len(mesh.groups[0].vertex_indices[0])
+    #stores connectivity obtained from geometry using barycentric coordinates
+    connected_to_element_geometry = np.zeros([mesh.nelements, mesh.nelements], dtype=bool)
+    #store connectivity obtained from mesh's connectivity
+    connected_to_element_connectivity = np.zeros([mesh.nelements, mesh.nelements], dtype=bool) 
+
+    import six
+    for igrp, grp in enumerate(mesh.groups):
+        iel_base = grp.element_nr_base
+        for iel_grp in six.moves.range(grp.nelements):
+
+            iel_g = group_and_iel_to_global_iel(igrp, iel_grp)
+            nb_starts = cnx.neighbors_starts
+            for nb_iel_g in cnx.neighbors[nb_starts[iel_g]:nb_starts[iel_g+1]]:
+                connected_to_element_connectivity[nb_iel_g, iel_g] = True
+                connected_to_element_connectivity[iel_g, nb_iel_g] = True
+                
+            for vertex_index in grp.vertex_indices[iel_grp]:
+                vertex = get_vertex(mesh, vertex_index)
+                #check which elements touch this vertex
+                for bounding_igrp, bounding_iel in tree.generate_matches(vertex):
+                    bounding_grp = mesh.groups[bounding_igrp]
+
+                    last_bounding_vertex = get_vertex(mesh, \
+                            bounding_grp.vertex_indices[bounding_iel][nvertices_per_element-1])
+                    transformation = np.empty([mesh.dim, nvertices_per_element-1])
+                    vertex_transformed = vertex - last_bounding_vertex
+                    for ibounding_vertex_index, bounding_vertex_index in \
+                        enumerate(bounding_grp.vertex_indices[bounding_iel][:nvertices_per_element-1]):
+                        bounding_vertex = get_vertex(mesh, bounding_vertex_index)
+                        transformation[:,ibounding_vertex_index] = bounding_vertex - last_bounding_vertex
+                    barycentric_coordinates = np.linalg.solve(transformation, vertex_transformed)
+                    is_connected = True
+                    sum_of_coords = 0.0
+                    for coord in barycentric_coordinates:
+                        if coord < 0:
+                            is_connected = False
+                        sum_of_coords += coord
+                    if sum_of_coords > 1:
+                        is_connected = False
+                    if is_connected:
+                        connected_to_element_geometry[group_and_iel_to_global_iel(bounding_igrp, bounding_iel),\
+                                group_and_iel_to_global_iel(igrp, iel_grp)] = True
+                        connected_to_element_geometry[group_and_iel_to_global_iel(igrp, iel_grp),\
+                                group_and_iel_to_global_iel(bounding_igrp, bounding_iel)] = True
+    #print connected_to_element_geometry 
+    #print connected_to_element_connectivity
+    assert (connected_to_element_geometry == connected_to_element_connectivity).all()
+
 
 if __name__ == "__main__":
     import sys
