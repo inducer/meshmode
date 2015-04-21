@@ -692,10 +692,12 @@ class Refiner(object):
                 for ivertex in grp[iel_grp]:
                     element_to_element[element_index].update(
                             vertex_to_element[ivertex])
-                    if self.hanging_vertex_element[ivertex] != -1:
+                    if self.hanging_vertex_element[ivertex] != -1 and element_index != self.hanging_vertex_element[ivertex]:
                         element_to_element[element_index].update([self.hanging_vertex_element[ivertex]])
                         element_to_element[self.hanging_vertex_element[ivertex]].update([element_index])
                 element_index += 1
+        for iel, neighbors in enumerate(element_to_element):
+            neighbors.remove(iel)
         #print self.ray_elements
         '''
         for ray in self.rays:
