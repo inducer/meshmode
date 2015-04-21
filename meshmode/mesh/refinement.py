@@ -540,6 +540,10 @@ class Refiner(object):
                                 #print node_els
                                 iold_el = node_els.index(iel_base+iel_grp)
                                 node_els[iold_el] = iel_base+nelements_in_grp+first_element_index
+                                if new_hanging_vertex_element[start_node.value.vertex] == \
+                                    iel_base+iel_grp:
+                                        new_hanging_vertex_element[start_node.value.vertex] =\
+                                                iel_base+nelements_in_grp+first_element_index
                                 start_node = start_node.next
                             # hop along ray from midpoint node to end node
                             while start_node != end_node:
@@ -548,6 +552,10 @@ class Refiner(object):
                                 node_els = start_node.value.elements
                                 iold_el = node_els.index(iel_base+iel_grp)
                                 node_els[iold_el] = iel_base+nelements_in_grp+second_element_index
+                                if new_hanging_vertex_element[start_node.value.vertex] == \
+                                    iel_base+iel_grp:
+                                        new_hanging_vertex_element[start_node.value.vertex] =\
+                                                iel_base+nelements_in_grp+second_element_index
                                 start_node = start_node.next
 
                         # }}}
