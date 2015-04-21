@@ -401,7 +401,7 @@ def test_lookup_tree(do_plot=False):
 
 #construct vertex vertex_index
 def get_vertex(mesh, vertex_index):
-    vertex = np.empty([mesh.dim])
+    vertex = np.empty([len(mesh.vertices)])
     for i_cur_dim, cur_dim_coords in enumerate(mesh.vertices):
         vertex[i_cur_dim] = cur_dim_coords[vertex_index]
     return vertex
@@ -443,7 +443,7 @@ def test_refiner_connectivity(mesh):
 
                     last_bounding_vertex = get_vertex(mesh, \
                             bounding_grp.vertex_indices[bounding_iel][nvertices_per_element-1])
-                    transformation = np.empty([mesh.dim, nvertices_per_element-1])
+                    transformation = np.empty([len(mesh.vertices), nvertices_per_element-1])
                     vertex_transformed = vertex - last_bounding_vertex
                     for ibounding_vertex_index, bounding_vertex_index in \
                         enumerate(bounding_grp.vertex_indices[bounding_iel][:nvertices_per_element-1]):
