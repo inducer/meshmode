@@ -406,7 +406,15 @@ def get_vertex(mesh, vertex_index):
         vertex[i_cur_dim] = cur_dim_coords[vertex_index]
     return vertex
 
-def test_refiner_connectivity(mesh):
+
+def get_some_mesh():
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    return generate_regular_rect_mesh()
+
+
+@pytest.mark.parametrize("mesh_factory", [get_some_mesh])
+def test_refiner_connectivity(mesh_factory):
+    mesh = mesh_factory()
     def group_and_iel_to_global_iel(igrp, iel):
         return mesh.groups[igrp].element_nr_base + iel
 
@@ -439,6 +447,8 @@ def test_refiner_connectivity(mesh):
                 vertex = get_vertex(mesh, vertex_index)
                 #check which elements touch this vertex
                 for bounding_igrp, bounding_iel in tree.generate_matches(vertex):
+                    if bounding_igrp == igrp and bounding_iel == iel_grp:
+                        continue
                     bounding_grp = mesh.groups[bounding_igrp]
 
                     last_bounding_vertex = get_vertex(mesh, \
@@ -463,10 +473,22 @@ def test_refiner_connectivity(mesh):
                                 group_and_iel_to_global_iel(igrp, iel_grp)] = True
                         connected_to_element_geometry[group_and_iel_to_global_iel(igrp, iel_grp),\
                                 group_and_iel_to_global_iel(bounding_igrp, bounding_iel)] = True
-    #print connected_to_element_geometry 
-    #print connected_to_element_connectivity
+    '''
+    print "GEOMETRY: "
+    print connected_to_element_geometry 
+    print "CONNECTIVITY: "
+    print connected_to_element_connectivity
+#    cmpmatrix = (connected_to_element_geometry == connected_to_element_connectivity)
+    #print cmpmatrix
+#    print np.where(cmpmatrix == False)
+    if not (connected_to_element_geometry == connected_to_element_connectivity).all():
+        cmpmatrix = connected_to_element_connectivity == connected_to_element_geometry
+        for ii, i in enumerate(cmpmatrix):
+            for ij, j in enumerate(i):
+                if j == False:
+                    print ii, ij
+    '''
     assert (connected_to_element_geometry == connected_to_element_connectivity).all()
-
 
 if __name__ == "__main__":
     import sys
