@@ -378,6 +378,17 @@ class Mesh(Record):
 
         return self._element_connectivity
 
+    def connectivity_init_arg(self):
+        """Returns an 'elment_connectivity' argument that can be
+        passed to a Mesh constructor.
+        """
+
+        if isinstance(self._element_connectivity, ElementConnectivity):
+            return (self._element_connectivity.neighbors_starts,
+                    self._element_connectivity.neighbors)
+        else:
+            return self._element_connectivity
+
     def __eq__(self, other):
         return (
                 type(self) == type(other)

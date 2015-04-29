@@ -291,7 +291,8 @@ def affine_map(mesh, A=None, b=None):
     # }}}
 
     from meshmode.mesh import Mesh
-    return Mesh(vertices, new_groups, skip_tests=True)
+    return Mesh(vertices, new_groups, skip_tests=True,
+            element_connectivity=mesh.connectivity_init_arg())
 
 # }}}
 
