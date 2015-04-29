@@ -30,7 +30,7 @@ import numpy as np
 # {{{ draw_2d_mesh
 
 def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
-        draw_connectivity=False, **kwargs):
+        draw_connectivity=False, set_bounding_box=False, **kwargs):
     assert mesh.ambient_dim == 2
 
     import matplotlib.pyplot as pt
@@ -109,6 +109,12 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
                 pt.arrow(start[0], start[1], 0.7*dx[0], 0.7*dx[1],
                         length_includes_head=True,
                         color="green", head_width=1e-2, lw=1e-2)
+
+    if set_bounding_box:
+        from meshmode.mesh.processing import find_bounding_box
+        lower, upper = find_bounding_box(mesh)
+        pt.xlim([lower[0], upper[0]])
+        pt.ylim([lower[1], upper[1]])
 
 # }}}
 
