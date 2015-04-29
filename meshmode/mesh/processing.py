@@ -273,8 +273,14 @@ def merge_dijsoint_meshes(meshes, skip_tests=False):
 
 # {{{ affine map
 
-def affine_map(mesh, A=None, b=None):
+def affine_map(mesh, A=None, b=None):  # noqa
     """Apply the affine map *f(x)=Ax+b* to the geometry of *mesh*."""
+
+    if A is None:
+        A = np.eye(mesh.ambient_dim)  # noqa
+
+    if b is None:
+        b = np.zeros(A.shape[0])
 
     vertices = np.einsum("ij,jv->iv", A, mesh.vertices) + b[:, np.newaxis]
 
