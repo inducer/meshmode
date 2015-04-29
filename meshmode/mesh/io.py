@@ -213,7 +213,7 @@ def generate_gmsh(source, dimensions, order=None, other_options=[],
     mesh = recv.get_mesh()
 
     if force_ambient_dim is None:
-        AXIS_NAMES = "xyz"
+        AXIS_NAMES = "xyz"  # noqa
 
         dim = mesh.vertices.shape[0]
         for idim in range(dim):
