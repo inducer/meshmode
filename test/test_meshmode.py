@@ -39,6 +39,29 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def test_circle_mesh(do_plot=False):
+    from meshmode.mesh.io import generate_gmsh, FileSource
+    print("BEGIN GEN")
+    mesh = generate_gmsh(
+            FileSource("circle.step"), 2, order=2,
+            force_ambient_dim=2,
+            other_options=[
+                "-string", "Mesh.CharacteristicLengthMax = 0.05;"]
+            )
+    print("END GEN")
+    print(mesh.nelements)
+
+    from meshmode.mesh.processing import affine_map
+    mesh = affine_map(mesh, A=3*np.eye(2))
+
+    if do_plot:
+        from meshmode.mesh.visualization import draw_2d_mesh
+        draw_2d_mesh(mesh, fill=None, draw_connectivity=True,
+                set_bounding_box=True)
+        import matplotlib.pyplot as pt
+        pt.show()
+
+
 def test_boundary_interpolation(ctx_getter):
     cl_ctx = ctx_getter()
     queue = cl.CommandQueue(cl_ctx)
