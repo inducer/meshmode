@@ -151,9 +151,11 @@ class DiscretizationConnection(object):
                     * vec[source_element_indices[k], j])",
                 [
                     lp.GlobalArg("result", None,
-                        shape="nelements_result, n_to_nodes"),
+                        shape="nelements_result, n_to_nodes",
+                        offset=lp.auto),
                     lp.GlobalArg("vec", None,
-                        shape="nelements_vec, n_from_nodes"),
+                        shape="nelements_vec, n_from_nodes",
+                        offset=lp.auto),
                     lp.ValueArg("nelements_result", np.int32),
                     lp.ValueArg("nelements_vec", np.int32),
                     "...",
