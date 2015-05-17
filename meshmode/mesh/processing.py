@@ -34,7 +34,7 @@ __doc__ = """
 .. autofunction:: find_volume_mesh_element_orientations
 .. autofunction:: perform_flips
 .. autofunction:: find_bounding_box
-.. autofunction:: merge_dijsoint_meshes
+.. autofunction:: merge_disjoint_meshes
 .. autofunction:: affine_map
 """
 
@@ -220,7 +220,7 @@ def find_bounding_box(mesh):
 
 # {{{ merging
 
-def merge_dijsoint_meshes(meshes, skip_tests=False):
+def merge_disjoint_meshes(meshes, skip_tests=False):
     if not meshes:
         raise ValueError("must pass at least one mesh")
 
