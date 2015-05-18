@@ -149,10 +149,10 @@ def test_merge_and_map(ctx_getter, visualize=False):
             other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"]
             )
 
-    from meshmode.mesh.processing import merge_dijsoint_meshes, affine_map
+    from meshmode.mesh.processing import merge_disjoint_meshes, affine_map
     mesh2 = affine_map(mesh, A=np.eye(2), b=np.array([5, 0]))
 
-    mesh3 = merge_dijsoint_meshes((mesh2, mesh))
+    mesh3 = merge_disjoint_meshes((mesh2, mesh))
 
     if visualize:
         from meshmode.discretization import Discretization
