@@ -173,15 +173,17 @@ class DiscretizationConnection(object):
         if vec.shape != (self.from_discr.nnodes,):
             raise ValueError("invalid shape of incoming resampling data")
 
-        for i_grp, (sgrp, tgrp, cgrp) in enumerate(
+        for i_grp, (tgrp, sgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.from_discr.groups, self.groups)):
             for i_batch, batch in enumerate(cgrp.batches):
-                if len(batch.source_element_indices):
-                    knl()(queue,
-                            resample_mat=self._resample_matrix(i_grp, i_batch),
-                            result=sgrp.view(result), vec=tgrp.view(vec),
-                            source_element_indices=batch.source_element_indices,
-                            target_element_indices=batch.target_element_indices)
+                if not len(batch.source_element_indices):
+                    continue
+
+                knl()(queue,
+                        resample_mat=self._resample_matrix(i_grp, i_batch),
+                        result=tgrp.view(result), vec=sgrp.view(vec),
+                        source_element_indices=batch.source_element_indices,
+                        target_element_indices=batch.target_element_indices)
 
         return result
 
