@@ -370,7 +370,7 @@ def make_boundary_restriction(queue, discr, group_factory):
             # Code does not.)
 
             b = face_vertex_unit_coordinates[0]
-            A = (
+            A = (  # noqa
                     face_vertex_unit_coordinates[1:]
                     - face_vertex_unit_coordinates[0]).T
 
