@@ -118,4 +118,18 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
 
 # }}}
 
+
+# {{{ draw_curve
+
+def draw_curve(mesh):
+    import matplotlib.pyplot as pt
+    pt.plot(mesh.vertices[0], mesh.vertices[1], "o")
+
+    for i, group in enumerate(mesh.groups):
+        pt.plot(
+                group.nodes[0].ravel(),
+                group.nodes[1].ravel(), "-x", label="Group %d" % i)
+
+# }}}
+
 # vim: foldmethod=marker
