@@ -247,6 +247,24 @@ def make_visualizer(queue, discr, vis_order):
 # }}}
 
 
+# {{{ draw_curve
+
+def draw_curve(discr):
+    mesh = discr.mesh
+
+    import matplotlib.pyplot as pt
+    pt.plot(mesh.vertices[0], mesh.vertices[1], "o")
+
+    with cl.CommandQueue(discr.cl_context) as queue:
+        for i, group in enumerate(discr.groups):
+            group_nodes = group.view(discr.nodes()).get(queue=queue)
+            pt.plot(
+                    group_nodes[0].reshape(-1),
+                    group_nodes[1].reshape(-1), "-x", label="Group %d" % i)
+
+# }}}
+
+
 # {{{ connectivity
 
 def write_mesh_connectivity_vtk_file(file_name, mesh,  compressor=None,):
