@@ -102,6 +102,11 @@ def test_boundary_interpolation(ctx_getter):
         bdry_f = 0.1*cl.clmath.sin(30*bdry_x)
         bdry_f_2 = bdry_connection(queue, f)
 
+        mat = bdry_connection.full_resample_matrix(queue).get(queue)
+        bdry_f_2_by_mat = mat.dot(f.get())
+
+        assert(la.norm(bdry_f_2.get(queue=queue) - bdry_f_2_by_mat)) < 1e-14
+
         err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
         eoc_rec.add_data_point(h, err)
 
