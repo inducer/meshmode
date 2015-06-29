@@ -1,6 +1,7 @@
 numpy
 git+git://github.com/inducer/modepy
-git+git://github.com/pyopencl/pyopencl
+git+git://github.com/pyopencl/pyopencl@cffi
+git+git://github.com/inducer/islpy
 git+git://github.com/inducer/loopy
 
 # required by pytential, which is in turn needed for some tests
