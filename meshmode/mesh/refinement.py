@@ -74,6 +74,7 @@ class ElementRefinementTemplate:
     def __init__(self, dim):
         from meshmode.mesh.tesselate import tesselatetri
         self.node_tuples, self.refined_elements = tesselatetri()
+        print self.node_tuples
         #dicionary that maps a pair of vertices (node arrays) to a special element
         self.special_elements = {}
         self.vertices_to_midpoint = {}
@@ -98,9 +99,9 @@ class ElementRefinementTemplate:
 class Refiner(object):
     def __init__(self, mesh):
         from llist import dllist, dllistnode
-        from meshmode.mesh.tesselate  import tesselatetri
-        self.tri_node_tuples, self.tri_result = tesselatetri()
-        #print self.tri_node_tuples
+        from meshmode.mesh.tesselate  import tesselatetet
+        self.tri_node_tuples, self.tri_result = tesselatetet()
+        print self.tri_node_tuples
         #print self.tri_result
         self.last_mesh = mesh
         # Indices in last_mesh that were split in the last round of
@@ -131,8 +132,12 @@ class Refiner(object):
         self.vertex_to_ray = []
 
         #np array containing element whose edge lies on corresponding vertex
-        self.hanging_vertex_element = np.empty([nvertices], dtype=np.int32)
-        self.hanging_vertex_element.fill(-1)
+        import six
+        self.hanging_vertex_element = []
+        for i in six.moves.range(nvertices):
+            self.hanging_vertex_element.append([])
+#        self.hanging_vertex_element = np.empty([nvertices], dtype=np.int32)
+#        self.hanging_vertex_element.fill(-1)
 
         import six
         for i in six.moves.range(nvertices):
@@ -154,10 +159,10 @@ class Refiner(object):
 
                         vertex_pair = (mn_idx, mx_idx)
                         if vertex_pair not in self.pair_map:
-                            els = [-1, -1]
-                            els[0] = (iel_base+iel_grp)
+                            els = []
+                            els.append(iel_base+iel_grp)
                             fr = Adj(mn_idx, els)
-                            to = Adj(mx_idx, [-1, -1])
+                            to = Adj(mx_idx, [])
                             self.rays.append(dllist([fr, to]))
                             self.pair_map[vertex_pair] = PairMap(len(self.rays) - 1)
                             self.vertex_to_ray[mn_idx][len(self.rays)-1]\
@@ -165,9 +170,30 @@ class Refiner(object):
                             self.vertex_to_ray[mx_idx][len(self.rays)-1]\
                                 = self.rays[len(self.rays)-1].nodeat(1)
                         else:
-                            self.rays[self.pair_map[vertex_pair].ray].nodeat(0).value.elements[1] = (iel_base+iel_grp)
+                            self.rays[self.pair_map[vertex_pair].ray].nodeat(0).value.elements.append(iel_base+iel_grp)
         # }}}
 
+        #generate reference tuples
+        self.index_to_node_tuple = [()] * (len(vert_indices))
+        for i in six.moves.range(0, len(vert_indices)-1):
+            self.index_to_node_tuple[0] = self.index_to_node_tuple[0] + (0,)
+        for i in six.moves.range(1, len(vert_indices)):
+            for j in six.moves.range(1, len(vert_indices)):
+                if i == j:
+                    self.index_to_node_tuple[i] = self.index_to_node_tuple[i] + (2,)
+                else:
+                    self.index_to_node_tuple[i] = self.index_to_node_tuple[i] + (0,)
+        self.index_to_midpoint_tuple = [()] * (int((len(vert_indices) * (len(vert_indices) - 1)) / 2))
+        curind = 0
+        for ind1 in six.moves.range(0, len(self.index_to_node_tuple)):
+            for ind2 in six.moves.range(ind1+1, len(self.index_to_node_tuple)):
+                i = self.index_to_node_tuple[ind1]
+                j = self.index_to_node_tuple[ind2]
+                for k in six.moves.range(0, len(vert_indices)-1):
+                    cur = int((i[k] + j[k]) / 2)
+                    self.index_to_midpoint_tuple[curind] = self.index_to_midpoint_tuple[curind] + (cur,)
+                curind += 1
+        print self.index_to_midpoint_tuple
         #print mesh.groups[0].vertex_indices
         '''
         self.ray_vertices = np.empty([len(mesh.groups[0].vertex_indices) * 
@@ -248,6 +274,7 @@ class Refiner(object):
 
     #refine_flag tells you which elements to split as a numpy array of bools
     def refine(self, refine_flags):
+        print "RES: ", self.tri_result
         """
         :return: a refined mesh
         """
@@ -353,7 +380,7 @@ class Refiner(object):
         # if (isinstance(self.last_mesh.groups[0], SimplexElementGroup) and 
         #           self.last_mesh.groups[0].dim == 2):
         print 'refining'
-        if(len(self.last_mesh.groups[0].vertex_indices[0]) == 3):
+        if(len(self.last_mesh.groups[0].vertex_indices[0]) == 3 or len(self.last_mesh.groups[0].vertex_indices[0]) == 4):
             groups = []
             midpoint_already = {}
             nelements = 0
@@ -362,7 +389,6 @@ class Refiner(object):
             totalnelements=0
 
             # {{{ create new vertices array and each group's vertex_indices
-            
             for grp in self.last_mesh.groups:
                 iel_base = grp.element_nr_base
                 nelements = 0
@@ -371,7 +397,7 @@ class Refiner(object):
                     nelements += 1
                     vert_indices = grp.vertex_indices[iel_grp]
                     if refine_flags[iel_base+iel_grp]:
-                        nelements += 3
+                        nelements += len(self.tri_result) - 1
                         for i in six.moves.range(0, len(vert_indices)):
                             for j in six.moves.range(i+1, len(vert_indices)):
                                 mn_idx = min(vert_indices[i], vert_indices[j])
@@ -389,8 +415,11 @@ class Refiner(object):
             vertices = np.empty([len(self.last_mesh.vertices), nvertices])
             
             #create new hanging_vertex_element array
-            new_hanging_vertex_element = np.empty([nvertices], dtype=np.int32)
-            new_hanging_vertex_element.fill(-1) 
+#            new_hanging_vertex_element = np.empty([nvertices], dtype=np.int32)
+#            new_hanging_vertex_element.fill(-1) 
+            new_hanging_vertex_element = []
+            for i in range(0, nvertices):
+                new_hanging_vertex_element.append([])
             # }}}
 
             # {{{ bring over hanging_vertex_element, vertex_indices and vertices info from previous generation
@@ -399,8 +428,9 @@ class Refiner(object):
                 for j in six.moves.range(0, len(self.last_mesh.vertices[i])):
                     # always use v[i,j]
                     vertices[i,j] = self.last_mesh.vertices[i,j]
+                    import copy
                     if i == 0:
-                        new_hanging_vertex_element[j] = self.hanging_vertex_element[j]
+                        new_hanging_vertex_element[j] = copy.deepcopy(self.hanging_vertex_element[j])
             grpn = 0
             for grp in self.last_mesh.groups:
                 for iel_grp in six.moves.range(grp.nelements):
@@ -427,10 +457,15 @@ class Refiner(object):
                         # stores indices of all midpoints for this element
                         # (in order of vertex pairs in elements)
                         verts = []
-
+                        midpoint_tuples = [] 
+                        verts_elements = []
                         vert_indices = grp.vertex_indices[iel_grp]
+                        #print vert_indices
                         for i in six.moves.range(0, len(vert_indices)):
                             for j in six.moves.range(i+1, len(vert_indices)):
+                                verts_elements.append([])
+                                midpoint_tuples.append(tuple([(item1 + item2) / 2 for item1, item2 in zip(self.index_to_node_tuple[i],
+                                    self.index_to_node_tuple[j])]))
                                 if vert_indices[i] < vert_indices[j]:
                                     mn_idx = vert_indices[i]
                                     mx_idx = vert_indices[j] 
@@ -467,55 +502,78 @@ class Refiner(object):
                                         elements = self.vertex_to_ray[mn_idx][cur_pmap.ray].value.elements
                                         self.rays[cur_pmap.ray].insert(Adj(vertices_idx, copy.deepcopy(elements)),
                                             self.vertex_to_ray[mx_idx][cur_pmap.ray])
-                                        new_hanging_vertex_element[vertices_idx] = elements[(elements.index(iel_base+\
-                                            iel_grp)+1)%2]
+
+                                        #stupid bug: don't use i when already in use
+                                        for el in elements:
+                                            if el != (iel_base + iel_grp):
+                                                verts_elements[len(verts_elements)-1].append(el)
+                                                new_hanging_vertex_element[vertices_idx].append(el)
+
                                         self.vertex_to_ray[vertices_idx][cur_pmap.ray] = \
                                             self.vertex_to_ray[mx_idx][cur_pmap.ray].prev
                                     else:
                                         elements = self.vertex_to_ray[mx_idx][cur_pmap.ray].value.elements
                                         self.rays[cur_pmap.ray].insert(Adj(vertices_idx, copy.deepcopy(elements)),
                                             self.vertex_to_ray[mn_idx][cur_pmap.ray])
-                                        new_hanging_vertex_element[vertices_idx] = elements[(elements.index(iel_base+
-                                            iel_grp)+1)%2]
+
+                                        for el in elements:
+                                            if el != (iel_base + iel_grp):
+                                                verts_elements[len(verts_elements)-1].append(el)
+                                                new_hanging_vertex_element[vertices_idx].append(el)
+
                                         self.vertex_to_ray[vertices_idx][cur_pmap.ray] = \
                                             self.vertex_to_ray[mn_idx][cur_pmap.ray].prev
-                                    
+                                    #print len(vert_indices)
                                     # compute location of midpoint
                                     for k in six.moves.range(len(self.last_mesh.vertices)):
                                         vertices[k,vertices_idx] =\
-                                            (self.last_mesh.vertices[k,vert_indices[i]]\
-                                            +self.last_mesh.vertices[k,vert_indices[j]]) / 2.0
+                                            (self.last_mesh.vertices[k,vert_indices[i]] +
+                                                    self.last_mesh.vertices[k,vert_indices[j]]) / 2.0
                                     
                                     verts.append(vertices_idx)
                                     vertices_idx += 1
                                 else:
                                     cur_midpoint = self.pair_map[vertex_pair].midpoint
                                     verts.append(cur_midpoint)
-                                    new_hanging_vertex_element[cur_midpoint] = -1
-
+                                    new_hanging_vertex_element[cur_midpoint] = []
+                                #print new_hanging_vertex_element
                                 # }}}
                         
                         # }}}
 
                         # {{{ fix connectivity
 
-                        # new elements will be nels+0 .. nels+2
+                        # new elements will be nels+0 .. nels+2 ...
                         # (While those don't exist yet, we generate connectivity for them
                         # anyhow.)
 
-                        nnew_elements = 0
-
                         unique_vertex_pairs = [
-                                (i,j) for i in range(3) for j in range(i+1, 3)]
+                                (i,j) for i in range(len(vert_indices)) for j in range(i+1, len(vert_indices))]
+                        midpoint_ind = 0
                         for i, j in unique_vertex_pairs:
-                            mn_idx = min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j]) 
-                            mx_idx = max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])
-                            if mn_idx == grp.vertex_indices[iel_grp][i]:
-                                min_element_index = i
-                                max_element_index = j
+                            mn_idx = min(vert_indices[i], vert_indices[j]) 
+                            mx_idx = max(vert_indices[i], vert_indices[j])
+                            element_indices_1 = []
+                            element_indices_2 = []
+                            for k_ind, k in enumerate(self.tri_result):
+                                ituple_ind = self.tri_node_tuples.index(self.index_to_node_tuple[i])
+                                jtuple_ind = self.tri_node_tuples.index(self.index_to_node_tuple[j])
+                                midpointtuple_ind = self.tri_node_tuples.index(self.index_to_midpoint_tuple[midpoint_ind])
+                                if ituple_ind in k and\
+                                    midpointtuple_ind in k:
+                                        element_indices_1.append(k_ind)
+                                if jtuple_ind in k and\
+                                    midpointtuple_ind in k:
+                                        element_indices_2.append(k_ind)
+                            midpoint_ind += 1
+                            #print "ELEMENTIDX1: ", element_indices_1
+                            #print "ELEMENTIDX2: ", element_indices_2
+                            if mn_idx == vert_indices[i]:
+                                min_element_index = element_indices_1
+                                max_element_index = element_indices_2
                             else:
-                                min_element_index = j
-                                max_element_index = i
+                                min_element_index = element_indices_2
+                                max_element_index = element_indices_1
                             vertex_pair = (mn_idx, mx_idx)
                             cur_pmap = self.pair_map[vertex_pair]
                             if cur_pmap.d:
@@ -537,25 +595,62 @@ class Refiner(object):
                                 # replace old (big) element with new
                                 # (refined) element
                                 node_els = start_node.value.elements
+                                #print "OLD NODE ELS: ", node_els
                                 #print node_els
-                                iold_el = node_els.index(iel_base+iel_grp)
-                                node_els[iold_el] = iel_base+nelements_in_grp+first_element_index
-                                if new_hanging_vertex_element[start_node.value.vertex] == \
-                                    iel_base+iel_grp:
-                                        new_hanging_vertex_element[start_node.value.vertex] =\
+                                node_els.remove(iel_base+iel_grp)
+                                for k in first_element_index:
+                                    if k == 0:
+                                        node_els.append(iel_base+iel_grp)
+                                    else:
+                                        node_els.append(iel_base+nelements_in_grp+k - 1)
+                                #print "NEW_NODE_ELS: ", node_els
+                                #node_els[iold_el] = iel_base+nelements_in_grp+first_element_index
+                                if new_hanging_vertex_element[start_node.value.vertex] and \
+                                    new_hanging_vertex_element[start_node.value.vertex].count(
+                                        iel_base+iel_grp):
+                                        '''
+                                        to_replace_index = new_hanging_vertex_element[start_node.value.vertex].\
+                                                index(iel_base+iel_grp)
+                                        new_hanging_vertex_element[start_node.value.vertex][to_replace_index] =\
                                                 iel_base+nelements_in_grp+first_element_index
+                                        '''
+                                        #print "OLD HANGING VERTEX ELEMENT: ", new_hanging_vertex_element
+                                        new_hanging_vertex_element[start_node.value.vertex].remove(iel_base+iel_grp)
+                                        for k in first_element_index:
+                                            if k == 0:
+                                                new_hanging_vertex_element[start_node.value.vertex].append(iel_base+iel_grp)
+                                            else:
+                                                new_hanging_vertex_element[start_node.value.vertex].append(iel_base+nelements_in_grp+k - 1)
+                                        #print "NEW HANGING VERTEX ELEMENT: ", new_hanging_vertex_element
                                 start_node = start_node.next
                             # hop along ray from midpoint node to end node
                             while start_node != end_node:
                                 #replace old (big) element with new
                                 # (refined element
                                 node_els = start_node.value.elements
-                                iold_el = node_els.index(iel_base+iel_grp)
-                                node_els[iold_el] = iel_base+nelements_in_grp+second_element_index
-                                if new_hanging_vertex_element[start_node.value.vertex] == \
-                                    iel_base+iel_grp:
-                                        new_hanging_vertex_element[start_node.value.vertex] =\
+                                #iold_el = node_els.index(iel_base+iel_grp)
+                                #node_els[iold_el] = iel_base+nelements_in_grp+second_element_index
+                                node_els.remove(iel_base+iel_grp)
+                                for k in second_element_index:
+                                    if k == 0:
+                                        node_els.append(iel_base+iel_grp)
+                                    else:
+                                        node_els.append(iel_base+nelements_in_grp+k-1)
+                                if new_hanging_vertex_element[start_node.value.vertex] and \
+                                    new_hanging_vertex_element[start_node.value.vertex].count(
+                                        iel_base+iel_grp):
+                                        '''
+                                        to_replace_index = new_hanging_vertex_element[start_node.value.vertex].\
+                                                index(iel_base+iel_grp)
+                                        new_hanging_vertex_element[start_node.value.vertex][to_replace_index] =\
                                                 iel_base+nelements_in_grp+second_element_index
+                                        '''
+                                        new_hanging_vertex_element[start_node.value.vertex].remove(iel_base+iel_grp)
+                                        for k in second_element_index:
+                                            if k == 0:
+                                                new_hanging_vertex_element[start_node.value.vertex].append(iel_base+iel_grp)
+                                            else:
+                                                new_hanging_vertex_element[start_node.value.vertex].append(iel_base+nelements_in_grp+k-1)
                                 start_node = start_node.next
 
                         # }}}
@@ -563,21 +658,33 @@ class Refiner(object):
                         #generate new rays
                         from llist import dllist, dllistnode
                         ind = 0
-
                         for i in six.moves.range(0, len(verts)):
                             for j in six.moves.range(i+1, len(verts)):
                                 mn_vert = min(verts[i], verts[j])
                                 mx_vert = max(verts[i], verts[j])
                                 vertex_pair = (mn_vert, mx_vert)
                                 els = []
-                                els.append(iel_base+iel_grp)
-                                els.append(iel_base+nelements_in_grp+ind)
+                                common_elements = list(set(verts_elements[i]).intersection(
+                                    verts_elements[j]))
+                                for cel in common_elements:
+                                    els.append(cel)
+                                vert1ind = self.tri_node_tuples.index(self.index_to_midpoint_tuple[i])
+                                vert2ind = self.tri_node_tuples.index(self.index_to_midpoint_tuple[j])
+                                for kind, k in enumerate(self.tri_result):
+                                    if vert1ind in k and vert2ind in k:
+                                        if kind == 0:
+                                            els.append(iel_base+iel_grp)
+                                        else:
+                                            els.append(iel_base + nelements_in_grp + kind - 1)
+                                #print "ELS: ", els
+                                #els.append(iel_base+iel_grp)
+                                #els.append(iel_base+nelements_in_grp+ind)
                                 
                                 fr = Adj(mn_vert, els)
 
                                 # We're creating a new ray, and this is the end node
                                 # of it.
-                                to = Adj(mx_vert, [-1, -1])
+                                to = Adj(mx_vert, [])
 
                                 self.rays.append(dllist([fr, to]))
                                 self.pair_map[vertex_pair] = PairMap(len(self.rays) - 1)
@@ -587,7 +694,33 @@ class Refiner(object):
                                     = self.rays[len(self.rays)-1].nodeat(1)
                                 ind += 1
                         ind = 0
-
+                        #map vertex indices to coordinates
+                        print nvertices
+                        print nelements_in_grp
+                        node_tuple_to_coord = {}
+                        for j in groups[grpn][iel_grp]:
+                            for i in vertices:
+                                print i[j]
+                        for node_ind, node_tuple in enumerate(self.index_to_node_tuple):
+                            node_tuple_to_coord[node_tuple] = grp.vertex_indices[iel_grp][node_ind]
+                        for midpoint_ind, midpoint_tuple in enumerate(self.index_to_midpoint_tuple):
+                            node_tuple_to_coord[midpoint_tuple] = verts[midpoint_ind]
+                        for i in six.moves.range(0, len(self.tri_result)):
+                            print "HERE"
+                            for j in six.moves.range(0, len(self.tri_result[i])):
+                                if i == 0:
+                                    groups[grpn][iel_grp][j] = \
+                                            node_tuple_to_coord[self.tri_node_tuples[self.tri_result[i][j]]]
+                                else:
+                                    #print nelements_in_grp
+                                    groups[grpn][nelements_in_grp][j] = \
+                                        node_tuple_to_coord[self.tri_node_tuples[self.tri_result[i][j]]]
+                            if i != 0:
+                                nelements_in_grp += 1
+                        #print nelements_in_grp
+                        #print self.tri_node_tuples
+                        #print self.tri_result
+                        '''
                         #map vertex indices to coordinates
                         node_tuple_to_coord = {}
                         node_tuple_to_coord[(0, 0)] = grp.vertex_indices[iel_grp][0]
@@ -614,6 +747,7 @@ class Refiner(object):
                                 groups[grpn][nelements_in_grp][j] = \
                                         node_tuple_to_coord[self.tri_node_tuples[self.tri_result[i][j]]]
                             nelements_in_grp += 1
+                        '''
                         '''
                         #middle element
                         vertex_pair = (min(grp.vertex_indices[iel_grp][0], grp.vertex_indices[iel_grp][1]), \
@@ -700,9 +834,9 @@ class Refiner(object):
                 for ivertex in grp[iel_grp]:
                     element_to_element[element_index].update(
                             vertex_to_element[ivertex])
-                    if self.hanging_vertex_element[ivertex] != -1 and element_index != self.hanging_vertex_element[ivertex]:
-                        element_to_element[element_index].update([self.hanging_vertex_element[ivertex]])
-                        element_to_element[self.hanging_vertex_element[ivertex]].update([element_index])
+                    if self.hanging_vertex_element[ivertex] and element_index != self.hanging_vertex_element[ivertex][0]:
+                        element_to_element[element_index].update([self.hanging_vertex_element[ivertex][0]])
+                        element_to_element[self.hanging_vertex_element[ivertex][0]].update([element_index])
                 element_index += 1
         for iel, neighbors in enumerate(element_to_element):
             neighbors.remove(iel)
