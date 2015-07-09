@@ -382,9 +382,23 @@ def test_rect_mesh(do_plot=False):
         pt.show()
 
 
-def test_box_mesh():
+def test_box_mesh(ctx_getter, visualize=False):
     from meshmode.mesh.generation import generate_box_mesh
-    generate_box_mesh(3*(np.linspace(0, 1, 5),))
+    mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
+
+    if visualize:
+        from meshmode.discretization import Discretization
+        from meshmode.discretization.poly_element import \
+                PolynomialWarpAndBlendGroupFactory
+        cl_ctx = ctx_getter()
+        queue = cl.CommandQueue(cl_ctx)
+
+        discr = Discretization(cl_ctx, mesh,
+                PolynomialWarpAndBlendGroupFactory(1))
+
+        from meshmode.discretization.visualization import make_visualizer
+        vis = make_visualizer(queue, discr, 1)
+        vis.write_vtk_file("box.vtu", [])
 
 
 def test_as_python():
