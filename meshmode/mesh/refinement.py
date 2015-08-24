@@ -445,6 +445,7 @@ class Refiner(object):
                 
                 # np.where
                 for iel_grp in six.moves.range(grp.nelements):
+                    #print iel_base+iel_grp, '/', grp.nelements
                     if refine_flags[iel_base+iel_grp]:
 
                         # {{{ split element
@@ -603,6 +604,7 @@ class Refiner(object):
                             while start_node != midpoint_node:
                                 # replace old (big) element with new
                                 # (refined) element
+                                print "BEFOREEEalsdfjlkjasdfl:", mn_idx, mx_idx, start_node.value
                                 node_els = start_node.value.elements
                                 #print "OLD NODE ELS: ", node_els
                                 #print node_els
@@ -612,6 +614,7 @@ class Refiner(object):
                                         node_els.append(iel_base+iel_grp)
                                     else:
                                         node_els.append(iel_base+nelements_in_grp+k - 1)
+                                print "AFTERLKjlajsdfljkadf:", mn_idx, mx_idx, start_node.value
                                 #print "NEW_NODE_ELS: ", node_els
                                 #node_els[iold_el] = iel_base+nelements_in_grp+first_element_index
                                 #print "HANGING: ", new_hanging_vertex_element[start_node.value.vertex]
@@ -635,6 +638,7 @@ class Refiner(object):
                             while start_node != end_node:
                                 #replace old (big) element with new
                                 # (refined element
+                                print "BEFOREEEalsdfjlkjasdfl:", mn_idx, mx_idx, start_node.value
                                 node_els = start_node.value.elements
                                 #iold_el = node_els.index(iel_base+iel_grp)
                                 #node_els[iold_el] = iel_base+nelements_in_grp+second_element_index
@@ -644,6 +648,7 @@ class Refiner(object):
                                         node_els.append(iel_base+iel_grp)
                                     else:
                                         node_els.append(iel_base+nelements_in_grp+k-1)
+                                print "AFTERLKjlajsdfljkadf:", mn_idx, mx_idx, start_node.value
                                 if new_hanging_vertex_element[start_node.value.vertex] and \
                                     new_hanging_vertex_element[start_node.value.vertex].count(
                                         iel_base+iel_grp):
@@ -668,8 +673,10 @@ class Refiner(object):
                             mn_idx = min(verts[i], verts[j]) 
                             mx_idx = max(verts[i], verts[j])
                             vertex_pair = (mn_idx, mx_idx)
+                            print "ASFLKJALFKJASFLKJAFVERTEXPAIR:", vertex_pair
                             if not vertex_pair in self.pair_map:
                                 continue
+                            print "DOING STUASASLKFJLASKFJ"
                             element_indices = []
                             for k_ind, k in enumerate(self.tri_result):
                                 ituple_ind = self.tri_node_tuples.index(self.index_to_midpoint_tuple[i])
@@ -727,8 +734,10 @@ class Refiner(object):
                                 if vertex_pair in self.pair_map:
                                     continue
                                 els = []
-                                common_elements = list(set(verts_elements[i]).intersection(
-                                    verts_elements[j]))
+                                #common_elements = list(set(verts_elements[i]).intersection(
+                                #    verts_elements[j]))
+                                common_elements = list(set(new_hanging_vertex_element[mn_vert]).
+                                        intersection(new_hanging_vertex_element[mx_vert]))
                                 for cel in common_elements:
                                     els.append(cel)
                                 vert1ind = self.tri_node_tuples.index(self.index_to_midpoint_tuple[i])
@@ -930,14 +939,14 @@ class Refiner(object):
                 d = self.pair_map[(mn, mx)].d
                 ray = self.pair_map[(mn, mx)].ray
                 if d:
-                    print self.vertex_to_ray[mn][ray]
+                    print "FROM:", mn, "TO:", mx, self.vertex_to_ray[mn][ray]
                 else:
-                    print self.vertex_to_ray[mx][ray]
+                    print "FROM:", mn, "TO:", mx, self.vertex_to_ray[mx][ray]
 
     def print_hanging_elements(self, ind):
         import six
         for i in self.last_mesh.groups[0].vertex_indices[ind]:
-            print self.hanging_vertex_element[i]
+            print "IND:", i, self.hanging_vertex_element[i]
 
     def generate_connectivity(self, nelements, nvertices, groups):
         # medium-term FIXME: make this an incremental update
@@ -965,7 +974,7 @@ class Refiner(object):
                     if self.hanging_vertex_element[ivertex] and element_index != self.hanging_vertex_element[ivertex][0]:
                         element_to_element[element_index].update([self.hanging_vertex_element[ivertex][0]])
                         element_to_element[self.hanging_vertex_element[ivertex][0]].update([element_index])
-                    '''
+                        '''
                 element_index += 1
         for iel, neighbors in enumerate(element_to_element):
             neighbors.remove(iel)
@@ -1015,5 +1024,3 @@ class Refiner(object):
 
 
 # vim: foldmethod=marker
-# vim: shiftwidth=4
-# vim: softtabstop=4
