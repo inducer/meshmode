@@ -171,7 +171,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
             groups.append(group)
 
-        return Mesh(vertices, groups, element_connectivity=None)
+        return Mesh(vertices, groups, nodal_adjacency=None)
 
 # }}}
 

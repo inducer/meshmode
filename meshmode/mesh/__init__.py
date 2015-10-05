@@ -39,7 +39,7 @@ __doc__ = """
     :members:
     :undoc-members:
 
-.. autoclass:: ElementConnectivity
+.. autoclass:: NodalAdjacency
 
 .. autofunction:: as_python
 
@@ -239,8 +239,10 @@ class SimplexElementGroup(MeshElementGroup):
 
 # {{{ mesh
 
-class ElementConnectivity(Record):
-    """
+class NodalAdjacency(Record):
+    """Describes element adjacency information, i.e. information about
+    elements that touch in at least one point.
+
     .. attribute:: neighbors_starts
 
         ``element_id_t [nelments+1]``
@@ -281,12 +283,12 @@ class Mesh(Record):
 
         A list of :class:`MeshElementGroup` instances.
 
-    .. attribute:: element_connectivity
+    .. attribute:: nodal_adjacency
 
-        An instance of :class:`ElementConnectivity`.
+        An instance of :class:`NodalAdjacency`.
 
         Referencing this attribute may raise
-        :exc:`meshmode.ConnectivityUnavailable`.
+        :exc:`meshmode.DataUnavailable`.
 
     .. attribute:: vertex_id_dtype
 
@@ -297,7 +299,7 @@ class Mesh(Record):
     """
 
     def __init__(self, vertices, groups, skip_tests=False,
-            element_connectivity=False,
+            nodal_adjacency=False,
             vertex_id_dtype=np.int32,
             element_id_dtype=np.int32):
         """
@@ -305,7 +307,7 @@ class Mesh(Record):
 
         :arg skip_tests: Skip mesh tests, in case you want to load a broken
             mesh anyhow and then fix it inside of this data structure.
-        :arg element_connectivity: One of three options:
+        :arg nodal_adjacency: One of three options:
             *None*, in which case this information
             will be deduced from vertex adjacency. *False*, in which case
             this information will be marked unavailable (such as if there are
@@ -326,9 +328,9 @@ class Mesh(Record):
             el_nr += ng.nelements
             node_nr += ng.nnodes
 
-        if element_connectivity is not False and element_connectivity is not None:
-            nb_starts, nbs = element_connectivity
-            element_connectivity = ElementConnectivity(
+        if nodal_adjacency is not False and nodal_adjacency is not None:
+            nb_starts, nbs = nodal_adjacency
+            nodal_adjacency = NodalAdjacency(
                     neighbors_starts=nb_starts,
                     neighbors=nbs)
 
@@ -337,7 +339,7 @@ class Mesh(Record):
 
         Record.__init__(
                 self, vertices=vertices, groups=new_groups,
-                _element_connectivity=element_connectivity,
+                _nodal_adjacency=nodal_adjacency,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),
                 element_id_dtype=np.dtype(element_id_dtype),
                 )
@@ -369,25 +371,25 @@ class Mesh(Record):
         return sum(grp.nelements for grp in self.groups)
 
     @property
-    def element_connectivity(self):
-        if self._element_connectivity is False:
-            from meshmode import ConnectivityUnavailable
-            raise ConnectivityUnavailable()
-        elif self._element_connectivity is None:
-            self._element_connectivity = _compute_connectivity_from_vertices(self)
+    def nodal_adjacency(self):
+        if self._nodal_adjacency is False:
+            from meshmode import DataUnavailable
+            raise DataUnavailable("nodal_adjacency")
+        elif self._nodal_adjacency is None:
+            self._nodal_adjacency = _compute_nodal_adjacency_from_vertices(self)
 
-        return self._element_connectivity
+        return self._nodal_adjacency
 
-    def connectivity_init_arg(self):
-        """Returns an 'elment_connectivity' argument that can be
+    def nodal_adjacency_init_arg(self):
+        """Returns an 'nodal_adjacency' argument that can be
         passed to a Mesh constructor.
         """
 
-        if isinstance(self._element_connectivity, ElementConnectivity):
-            return (self._element_connectivity.neighbors_starts,
-                    self._element_connectivity.neighbors)
+        if isinstance(self._nodal_adjacency, NodalAdjacency):
+            return (self._nodal_adjacency.neighbors_starts,
+                    self._nodal_adjacency.neighbors)
         else:
-            return self._element_connectivity
+            return self._nodal_adjacency
 
     def __eq__(self, other):
         return (
@@ -396,8 +398,8 @@ class Mesh(Record):
                 and self.groups == other.groups
                 and self.vertex_id_dtype == other.vertex_id_dtype
                 and self.element_id_dtype == other.element_id_dtype
-                and (self._element_connectivity
-                        == other._element_connectivity))
+                and (self._nodal_adjacency
+                        == other._nodal_adjacency))
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -459,9 +461,9 @@ def _test_node_vertex_consistency(mesh):
 # }}}
 
 
-# {{{ vertex-based connectivity
+# {{{ vertex-based adjacency
 
-def _compute_connectivity_from_vertices(mesh):
+def _compute_nodal_adjacency_from_vertices(mesh):
     # FIXME Native code would make this faster
 
     _, nvertices = mesh.vertices.shape
@@ -494,7 +496,7 @@ def _compute_connectivity_from_vertices(mesh):
 
     assert neighbors_starts[-1] == len(neighbors)
 
-    return ElementConnectivity(
+    return NodalAdjacency(
             neighbors_starts=neighbors_starts,
             neighbors=neighbors)
 
@@ -545,17 +547,17 @@ def as_python(mesh, function_name="make_mesh"):
         cg("    vertex_id_dtype=np.%s," % mesh.vertex_id_dtype.name)
         cg("    element_id_dtype=np.%s," % mesh.element_id_dtype.name)
 
-        if isinstance(mesh._element_connectivity, ElementConnectivity):
+        if isinstance(mesh._nodal_adjacency, NodalAdjacency):
             el_con_str = "(%s, %s)" % (
                     _numpy_array_as_python(
-                        mesh._element_connectivity.neighbors_starts),
+                        mesh._nodal_adjacency.neighbors_starts),
                     _numpy_array_as_python(
-                        mesh._element_connectivity.neighbors),
+                        mesh._nodal_adjacency.neighbors),
                     )
         else:
-            el_con_str = repr(mesh._element_connectivity)
+            el_con_str = repr(mesh._nodal_adjacency)
 
-        cg("    element_connectivity=%s)" % el_con_str)
+        cg("    nodal_adjacency=%s)" % el_con_str)
 
     return cg.get()
 

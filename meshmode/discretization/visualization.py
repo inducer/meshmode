@@ -34,7 +34,7 @@ __doc__ = """
 
 .. autoclass:: Visualizer
 
-.. autofunction:: write_mesh_connectivity_vtk_file
+.. autofunction:: write_nodal_adjacency_vtk_file
 """
 
 
@@ -265,9 +265,9 @@ def draw_curve(discr):
 # }}}
 
 
-# {{{ connectivity
+# {{{ adjacency
 
-def write_mesh_connectivity_vtk_file(file_name, mesh,  compressor=None,):
+def write_nodal_adjacency_vtk_file(file_name, mesh, compressor=None,):
     from pyvisfile.vtk import (
             UnstructuredGrid, DataArray,
             AppendedDataXMLGenerator,
@@ -284,16 +284,16 @@ def write_mesh_connectivity_vtk_file(file_name, mesh,  compressor=None,):
                 np.sum(mesh.vertices[:, grp.vertex_indices], axis=-1)
                 / grp.vertex_indices.shape[-1])
 
-    cnx = mesh.element_connectivity
+    adj = mesh.nodal_adjacency
 
-    nconnections = len(cnx.neighbors)
+    nconnections = len(adj.neighbors)
     connections = np.empty((nconnections, 2), dtype=np.int32)
 
-    nb_starts = cnx.neighbors_starts
+    nb_starts = adj.neighbors_starts
     for iel in range(mesh.nelements):
         connections[nb_starts[iel]:nb_starts[iel+1], 0] = iel
 
-    connections[:, 1] = cnx.neighbors
+    connections[:, 1] = adj.neighbors
 
     grid = UnstructuredGrid(
             (mesh.nelements,

@@ -25,7 +25,7 @@ THE SOFTWARE.
 
 __doc__ = """
 .. exception:: Error
-.. exception:: ConnectivityUnavailable
+.. exception:: DataUnavailable
 """
 
 
@@ -33,5 +33,5 @@ class Error(RuntimeError):
     pass
 
 
-class ConnectivityUnavailable(Error):
+class DataUnavailable(Error):
     pass

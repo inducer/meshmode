@@ -298,7 +298,7 @@ def affine_map(mesh, A=None, b=None):  # noqa
 
     from meshmode.mesh import Mesh
     return Mesh(vertices, new_groups, skip_tests=True,
-            element_connectivity=mesh.connectivity_init_arg())
+            nodal_adjacency=mesh.nodal_adjacency_init_arg())
 
 # }}}
 

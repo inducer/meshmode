@@ -25,6 +25,105 @@ THE SOFTWARE.
 import numpy as np
 
 
+# {{{ simple, no-connectivity refinement
+
+def _refine_simplex_el_group(grp, refine_flags, vertex_nr_base):
+    from pytools import (
+            generate_nonnegative_integer_tuples_summing_to_at_most as gnitstam)
+    from modepy.tools import submesh
+
+    node_tuples = gnitstam(2, grp.dim)
+    template = submesh(node_tuples)
+
+    nrefined_elements = np.sum(refine_flags != 0)
+
+    old_vertex_tuples = (
+            [(0,) * grp.dim]
+            + [(0,)*i + (2,) + (0,)*(grp.dim-1-i) for i in range(grp.dim)])
+    new_vertex_tuples = [
+            vertex_tuple
+            for vertex_tuple in node_tuples
+            if vertex_tuple not in old_vertex_tuples]
+
+    new_unit_nodes = np.array(new_vertex_tuples, dtype=grp.nodes.dtype) - 1
+
+    nnew_vertices = nrefined_elements * len(new_vertex_tuples)
+    ambient_dim = grp.nodes.shape[0]
+    new_vertices = np.empty((nnew_vertices, ambient_dim))
+
+    nnew_elements = (len(template) - 1) * nrefined_elements
+    new_vertex_indices = np.empty(
+            (nnew_elements, grp.dim+1),
+            dtype=grp.vertex_indices.dtype)
+
+    new_nodes = np.empty(
+            (ambient_dim, nnew_elements, grp.nunit_nodes),
+            dtype=grp.nodes.dtype)
+
+    inew_vertex = vertex_nr_base
+    inew_el = 0
+    for iel in xrange(grp.nelements):
+        if not refine_flags[iel]:
+            new_nodes[:, inew_el, :] = grp.nodes[:, iel, :]
+
+            # old vertices always keep their numbers
+            new_vertex_indices[inew_el, :] = grp.vertex_indices[iel, :]
+            continue
+
+        el_vertex_indices = grp.vertex_indices[iel, :]
+
+
+
+
+
+
+
+
+
+
+
+
+    from meshmode.mesh import SimplexElementGroup
+    new_grp = SimplexElementGroup(grp.order, new_vertex_indices,
+            new_nodes, unit_nodes=grp.unit_nodes)
+
+    return new_vertices, new_grp
+
+
+def refine_without_connectivity(mesh, refine_flags):
+    vertex_chunks = [mesh.vertices]
+    nvertices = mesh.vertices.shape[1]
+
+    groups = []
+
+    from meshmode.mesh import SimplexElementGroup, Mesh
+    for grp in mesh.groups:
+        if isinstance(grp, SimplexElementGroup):
+            enb = grp.element_nr_base
+            added_vertices, new_grp = _refine_simplex_el_group(
+                    grp, refine_flags[enb:enb+grp.nelements], nvertices)
+
+            vertex_chunks.append(added_vertices)
+            groups.append(new_grp)
+        else:
+            raise NotImplementedError("refining element group of type %s"
+                    % type(grp).__name__)
+
+    vertices = np.hstack(vertex_chunks)
+
+    if all(grp.dim == 1 for grp in groups):
+        # For meshes that are exclusively 1D, deducing connectivity from vertex
+        # indices is still OK. For everyone else, not really.
+
+        connectivity = None
+    else:
+        connectivity = False
+
+    return Mesh(vertices, groups, element_connectivity=connectivity)
+
+# }}}
+
+
 class _SplitFaceRecord(object):
     """
     .. attribute:: neighboring_elements

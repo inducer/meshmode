@@ -33,9 +33,9 @@ def main():
         ])
 
     from meshmode.discretization.visualization import \
-            write_mesh_connectivity_vtk_file
+            write_nodal_adjacency_vtk_file
 
-    write_mesh_connectivity_vtk_file("connectivity.vtu",
+    write_nodal_adjacency_vtk_file("adjacency.vtu",
             mesh)
 
 

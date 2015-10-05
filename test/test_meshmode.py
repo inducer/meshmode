@@ -56,7 +56,7 @@ def test_circle_mesh(do_plot=False):
 
     if do_plot:
         from meshmode.mesh.visualization import draw_2d_mesh
-        draw_2d_mesh(mesh, fill=None, draw_connectivity=True,
+        draw_2d_mesh(mesh, fill=None, draw_nodal_adjacency=True,
                 set_bounding_box=True)
         import matplotlib.pyplot as pt
         pt.show()
@@ -377,7 +377,7 @@ def test_rect_mesh(do_plot=False):
 
     if do_plot:
         from meshmode.mesh.visualization import draw_2d_mesh
-        draw_2d_mesh(mesh, fill=None, draw_connectivity=True)
+        draw_2d_mesh(mesh, fill=None, draw_nodal_adjacency=True)
         import matplotlib.pyplot as pt
         pt.show()
 
@@ -405,7 +405,7 @@ def test_as_python():
     from meshmode.mesh.generation import make_curve_mesh, cloverleaf
     mesh = make_curve_mesh(cloverleaf, np.linspace(0, 1, 100), order=3)
 
-    mesh.element_connectivity
+    mesh.nodal_adjacency
 
     from meshmode.mesh import as_python
     code = as_python(mesh)

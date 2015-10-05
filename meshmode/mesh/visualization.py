@@ -30,7 +30,7 @@ import numpy as np
 # {{{ draw_2d_mesh
 
 def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
-        draw_connectivity=False, set_bounding_box=False, **kwargs):
+        draw_nodal_adjacency=False, set_bounding_box=False, **kwargs):
     assert mesh.ambient_dim == 2
 
     import matplotlib.pyplot as pt
@@ -74,7 +74,7 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
                     ha="center", va="center", color="blue",
                     bbox=dict(facecolor='white', alpha=0.5, lw=0))
 
-    if draw_connectivity:
+    if draw_nodal_adjacency:
         def global_iel_to_group_and_iel(global_iel):
             for igrp, grp in enumerate(mesh.groups):
                 if global_iel < grp.nelements:
@@ -83,7 +83,7 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
 
             raise ValueError("invalid element nr")
 
-        cnx = mesh.element_connectivity
+        cnx = mesh.nodal_adjacency
 
         nb_starts = cnx.neighbors_starts
         for iel_g in range(mesh.nelements):
