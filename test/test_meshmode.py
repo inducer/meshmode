@@ -402,10 +402,12 @@ def test_box_mesh(ctx_getter, visualize=False):
 
 
 def test_as_python():
-    from meshmode.mesh.generation import make_curve_mesh, cloverleaf
-    mesh = make_curve_mesh(cloverleaf, np.linspace(0, 1, 100), order=3)
+    from meshmode.mesh.generation import generate_box_mesh
+    mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
 
+    # These implicitly compute these adjacency structures.
     mesh.nodal_adjacency
+    mesh.facial_adjacency_groups
 
     from meshmode.mesh import as_python
     code = as_python(mesh)

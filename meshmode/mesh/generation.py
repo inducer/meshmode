@@ -212,8 +212,10 @@ def make_curve_mesh(curve_f, element_boundaries, order):
             nodes=nodes,
             unit_nodes=unodes)
 
-    return Mesh(vertices=vertices, groups=[egroup],
-            nodal_adjacency=None)
+    return Mesh(
+            vertices=vertices, groups=[egroup],
+            nodal_adjacency=None,
+            facial_adjacency_groups=None)
 
 # }}}
 
@@ -285,8 +287,10 @@ def generate_icosahedron(r, order):
     grp = make_group_from_vertices(vertices, vertex_indices, order)
 
     from meshmode.mesh import Mesh
-    return Mesh(vertices, [grp],
-            nodal_adjacency=None)
+    return Mesh(
+            vertices, [grp],
+            nodal_adjacency=None,
+            facial_adjacency_groups=None)
 
 # }}}
 
@@ -302,8 +306,10 @@ def generate_icosphere(r, order):
             nodes=grp.nodes * r / np.sqrt(np.sum(grp.nodes**2, axis=0)))
 
     from meshmode.mesh import Mesh
-    return Mesh(mesh.vertices, [grp],
-            nodal_adjacency=None)
+    return Mesh(
+            mesh.vertices, [grp],
+            nodal_adjacency=None,
+            facial_adjacency_groups=None)
 
 # }}}
 
@@ -365,7 +371,11 @@ def generate_torus_and_cycle_vertices(r_outer, r_inner,
     nodes[2] = b*np.sin(minor_theta)
 
     from meshmode.mesh import Mesh
-    return (Mesh(vertices, [grp.copy(nodes=nodes)], nodal_adjacency=None),
+    return (
+            Mesh(
+                vertices, [grp.copy(nodes=nodes)],
+                nodal_adjacency=None,
+                facial_adjacency_groups=None),
             [idx(i, 0) for i in range(n_outer)],
             [idx(0, j) for j in range(n_inner)])
 
@@ -470,7 +480,8 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64):
 
     from meshmode.mesh import Mesh
     return Mesh(vertices, [grp],
-            nodal_adjacency=None)
+            nodal_adjacency=None,
+            facial_adjacency_groups=None)
 
 # }}}
 
