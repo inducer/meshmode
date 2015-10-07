@@ -215,7 +215,7 @@ class DiscretizationConnection(object):
         if not isinstance(vec, cl.array.Array):
             return vec
 
-        result = self.to_discr.empty(vec.dtype)
+        result = self.to_discr.empty(dtype=vec.dtype)
 
         if vec.shape != (self.from_discr.nnodes,):
             raise ValueError("invalid shape of incoming resampling data")

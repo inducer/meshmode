@@ -26,6 +26,7 @@ import numpy as np
 from pytools import memoize_method, memoize_method_nested
 import loopy as lp
 import pyopencl as cl
+import pyopencl.array  # noqa
 
 __doc__ = """
 .. autoclass:: ElementGroupBase
@@ -127,7 +128,9 @@ class Discretization(object):
 
     .. attribute :: groups
 
-    .. method:: empty(dtype, queue=None, extra_dims=None)
+    .. automethod:: empty
+
+    .. automethod:: zeros
 
     .. method:: nodes()
 
@@ -141,11 +144,6 @@ class Discretization(object):
     """
 
     def __init__(self, cl_ctx, mesh, group_factory, real_dtype=np.float64):
-        """
-        :arg order: A polynomial-order-like parameter passed unmodified to
-            :attr:`group_class`. See subclasses for more precise definition.
-        """
-
         self.cl_context = cl_ctx
 
         self.mesh = mesh
@@ -170,7 +168,20 @@ class Discretization(object):
     def ambient_dim(self):
         return self.mesh.ambient_dim
 
-    def empty(self, dtype, queue=None, extra_dims=None):
+    def empty(self, queue=None, dtype=None, extra_dims=None):
+        """Return an empty DOF vector.
+
+        :arg dtype: type special value 'c' will result in a
+            vector of dtype :attr:`self.complex_dtype`. If
+            *None* (the default), a real vector will be returned.
+        """
+        if dtype is None:
+            dtype = self.real_dtype
+        elif dtype == "c":
+            dtype = self.complex_dtype
+        else:
+            dtype = np.dtype(dtype)
+
         if queue is None:
             first_arg = self.cl_context
         else:
@@ -181,6 +192,9 @@ class Discretization(object):
             shape = extra_dims + shape
 
         return cl.array.empty(first_arg, shape, dtype=dtype)
+
+    def zeros(self, queue, dtype=None, extra_dims=None):
+        return self.empty(queue, dtype, extra_dims).fill(0)
 
     def num_reference_derivative(
             self, queue, ref_axes, vec):
