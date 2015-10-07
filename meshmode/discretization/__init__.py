@@ -210,7 +210,7 @@ class Discretization(object):
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))
 
-        result = self.empty(vec.dtype)
+        result = self.empty(dtype=vec.dtype)
 
         for grp in self.groups:
             mat = None
@@ -236,7 +236,7 @@ class Discretization(object):
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))
 
-        result = self.empty(self.real_dtype)
+        result = self.empty(dtype=self.real_dtype)
         for grp in self.groups:
             knl()(queue, result=grp.view(result), weights=grp.weights)
         return result
@@ -264,7 +264,7 @@ class Discretization(object):
                     "stride:auto,stride:auto,stride:auto")
             return knl
 
-        result = self.empty(self.real_dtype, extra_dims=(self.ambient_dim,))
+        result = self.empty(dtype=self.real_dtype, extra_dims=(self.ambient_dim,))
 
         with cl.CommandQueue(self.cl_context) as queue:
             for grp in self.groups:
