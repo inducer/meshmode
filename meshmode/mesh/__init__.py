@@ -44,6 +44,7 @@ __doc__ = """
 .. autoclass:: FacialAdjacencyGroup
 
 .. autofunction:: as_python
+.. autofunction:: check_bc_coverage
 
 Predefined Boundary tags
 ------------------------
@@ -486,6 +487,9 @@ class Mesh(Record):
         else:
             boundary_tags = boundary_tags[:]
 
+        if BTAG_NONE in boundary_tags:
+            raise ValueError("BTAG_NONE is not allowed to be part of "
+                    "boundary_tags")
         if BTAG_ALL not in boundary_tags:
             boundary_tags.append(BTAG_ALL)
         if BTAG_REALLY_ALL not in boundary_tags:
@@ -934,5 +938,49 @@ def as_python(mesh, function_name="make_mesh"):
 
 # }}}
 
+
+# {{{ check_bc_coverage
+
+def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False):
+    """Verify boundary condition coverage.
+
+    Given a list of boundary tags as *boundary_tags*, this function verifies
+    that
+
+     1. the union of all these boundaries gives the complete boundary,
+     1. all these boundaries are disjoint.
+
+    :arg incomplete_ok: Do not report an error if some faces are not covered
+      by the boundary conditions.
+    """
+
+    for igrp, fagrp_map in enumerate(mesh.facial_adjacency_groups):
+        bdry_grp = fagrp_map.get((igrp, None))
+        if bdry_grp is None:
+            continue
+
+        nb_elements = bdry_grp.neighbor_elements
+        assert (nb_elements < 0).all()
+
+        nb_el_bits = -nb_elements
+
+        seen = np.zeros_like(nb_el_bits, dtype=np.bool)
+
+        for btag in boundary_tags:
+            if btag is BTAG_NONE:
+                continue
+
+            tag_bit = 1 << mesh.btag_to_index[btag]
+            tag_set = (nb_el_bits & tag_bit) != 0
+
+            if seen & tag_set:
+                raise RuntimeError("faces with multiple boundary conditions found")
+
+            seen = seen | tag_set
+
+        if not incomplete_ok and not seen.all():
+            raise RuntimeError("found faces without boundary conditions")
+
+# }}}
 
 # vim: foldmethod=marker
