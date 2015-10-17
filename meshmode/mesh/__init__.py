@@ -45,6 +45,7 @@ __doc__ = """
 
 .. autofunction:: as_python
 .. autofunction:: check_bc_coverage
+.. autofunction:: is_boundary_tag_empty
 
 Predefined Boundary tags
 ------------------------
@@ -982,5 +983,33 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False):
             raise RuntimeError("found faces without boundary conditions")
 
 # }}}
+
+
+# {{{ is_boundary_tag_empty
+
+def is_boundary_tag_empty(mesh, btag):
+    """Return *True* if the corresponding boundary tag does not occur as part of
+    *mesh*.
+    """
+
+    btag_index = mesh.btag_to_index.get(btag, None)
+    if btag_index is None:
+        return True
+
+    btag_bit = 1 << btag_index
+
+    for igrp in range(len(mesh.groups)):
+        bdry_fagrp = mesh.facial_adjacency_groups[igrp].get(None, None)
+        if bdry_fagrp is None:
+            continue
+
+        neg = bdry_fagrp.neighbors < 0
+        if (-bdry_fagrp.neighbors[neg] & btag_bit).any():
+            return False
+
+    return True
+
+# }}}
+
 
 # vim: foldmethod=marker
