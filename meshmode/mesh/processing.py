@@ -285,7 +285,9 @@ def map_mesh(mesh, f):  # noqa
     new_groups = []
 
     for group in mesh.groups:
-        new_groups.append(group.copy(nodes=f(group.nodes)))
+        mapped_nodes = f(group.nodes.reshape(mesh.ambient_dim, -1))
+        new_groups.append(group.copy(
+            nodes=mapped_nodes.reshape(*group.nodes.shape)))
 
     # }}}
 
