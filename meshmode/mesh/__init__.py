@@ -238,7 +238,7 @@ class SimplexElementGroup(MeshElementGroup):
                     "element. expected: %d, got: %d" % (dims+1,
                         vertex_indices.shape[-1]))
 
-        MeshElementGroup.__init__(self, order, vertex_indices, nodes,
+        super(SimplexElementGroup, self).__init__(order, vertex_indices, nodes,
                 element_nr_base, node_nr_base, unit_nodes, dim)
 
     def face_vertex_indices(self):
