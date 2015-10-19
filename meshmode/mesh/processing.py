@@ -35,6 +35,7 @@ __doc__ = """
 .. autofunction:: perform_flips
 .. autofunction:: find_bounding_box
 .. autofunction:: merge_disjoint_meshes
+.. autofunction:: map_mesh
 .. autofunction:: affine_map
 """
 
@@ -271,6 +272,31 @@ def merge_disjoint_meshes(meshes, skip_tests=False):
 # }}}
 
 
+# {{{ map
+
+def map_mesh(mesh, f):  # noqa
+    """Apply the map *f* to the mesh. *f* needs to accept and return arrays of
+    shape ``(ambient_dim, npoints)``."""
+
+    vertices = f(mesh.vertices)
+
+    # {{{ assemble new groups list
+
+    new_groups = []
+
+    for group in mesh.groups:
+        new_groups.append(group.copy(nodes=f(group.nodes)))
+
+    # }}}
+
+    from meshmode.mesh import Mesh
+    return Mesh(vertices, new_groups, skip_tests=True,
+            nodal_adjacency=mesh.nodal_adjacency_init_arg(),
+            facial_adjacency_groups=mesh._facial_adjacency_groups)
+
+# }}}
+
+
 # {{{ affine map
 
 def affine_map(mesh, A=None, b=None):  # noqa
@@ -282,23 +308,10 @@ def affine_map(mesh, A=None, b=None):  # noqa
     if b is None:
         b = np.zeros(A.shape[0])
 
-    vertices = np.einsum("ij,jv->iv", A, mesh.vertices) + b[:, np.newaxis]
+    def f(x):
+        return np.einsum("ij,jv->iv", A, x) + b[:, np.newaxis]
 
-    # {{{ assemble new groups list
-
-    new_groups = []
-
-    for group in mesh.groups:
-        nodes = (
-                np.einsum("ij,jen->ien", A, group.nodes)
-                + b[:, np.newaxis, np.newaxis])
-        new_groups.append(group.copy(nodes=nodes))
-
-    # }}}
-
-    from meshmode.mesh import Mesh
-    return Mesh(vertices, new_groups, skip_tests=True,
-            nodal_adjacency=mesh.nodal_adjacency_init_arg())
+    return map_mesh(mesh, f)
 
 # }}}
 
