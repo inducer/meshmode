@@ -82,6 +82,10 @@ def find_volume_mesh_element_group_orientation(mesh, grp):
     from operator import xor
     outer_prod = -reduce(xor, mvs)
 
+    if grp.dim == 1:
+        # FIXME: This is a little weird.
+        outer_prod = -outer_prod
+
     return (outer_prod.I | outer_prod).as_scalar()
 
 
