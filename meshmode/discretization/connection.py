@@ -30,7 +30,7 @@ import numpy as np
 import modepy as mp
 import pyopencl as cl
 import pyopencl.array  # noqa
-from pytools import memoize_method, memoize_method_nested, Record
+from pytools import memoize_method, memoize_in, Record
 
 import logging
 logger = logging.getLogger(__name__)
@@ -138,7 +138,7 @@ class DiscretizationConnection(object):
                 ibatch.result_unit_nodes, from_grp.unit_nodes)
 
     def full_resample_matrix(self, queue):
-        @memoize_method_nested
+        @memoize_in(self, "oversample_mat_knl")
         def knl():
             import loopy as lp
             knl = lp.make_kernel(
@@ -185,7 +185,7 @@ class DiscretizationConnection(object):
         return result
 
     def __call__(self, queue, vec):
-        @memoize_method_nested
+        @memoize_in(self, "oversample_knl")
         def knl():
             import loopy as lp
             knl = lp.make_kernel(

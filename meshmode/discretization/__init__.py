@@ -23,7 +23,7 @@ THE SOFTWARE.
 """
 
 import numpy as np
-from pytools import memoize_method, memoize_method_nested
+from pytools import memoize_method, memoize_in
 import loopy as lp
 import pyopencl as cl
 import pyopencl.array  # noqa
@@ -196,9 +196,8 @@ class Discretization(object):
     def zeros(self, queue, dtype=None, extra_dims=None):
         return self.empty(queue, dtype, extra_dims).fill(0)
 
-    def num_reference_derivative(
-            self, queue, ref_axes, vec):
-        @memoize_method_nested
+    def num_reference_derivative(self, queue, ref_axes, vec):
+        @memoize_in(self, "reference_derivative_knl")
         def knl():
             knl = lp.make_kernel(
                 """{[k,i,j]:
@@ -226,7 +225,7 @@ class Discretization(object):
         return result
 
     def quad_weights(self, queue):
-        @memoize_method_nested
+        @memoize_in(self, "quad_weights_knl")
         def knl():
             knl = lp.make_kernel(
                 "{[k,i]: 0<=k<nelements and 0<=i<ndiscr_nodes}",
@@ -243,7 +242,7 @@ class Discretization(object):
 
     @memoize_method
     def nodes(self):
-        @memoize_method_nested
+        @memoize_in(self, "nodes_knl")
         def knl():
             knl = lp.make_kernel(
                 """{[d,k,i,j]:
