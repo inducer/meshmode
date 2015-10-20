@@ -168,7 +168,7 @@ class Discretization(object):
     def ambient_dim(self):
         return self.mesh.ambient_dim
 
-    def empty(self, queue=None, dtype=None, extra_dims=None):
+    def empty(self, queue=None, dtype=None, extra_dims=None, allocator=None):
         """Return an empty DOF vector.
 
         :arg dtype: type special value 'c' will result in a
@@ -191,10 +191,11 @@ class Discretization(object):
         if extra_dims is not None:
             shape = extra_dims + shape
 
-        return cl.array.empty(first_arg, shape, dtype=dtype)
+        return cl.array.empty(first_arg, shape, dtype=dtype, allocator=allocator)
 
-    def zeros(self, queue, dtype=None, extra_dims=None):
-        return self.empty(queue, dtype, extra_dims).fill(0)
+    def zeros(self, queue, dtype=None, extra_dims=None, allocator=None):
+        return self.empty(queue, dtype=dtype, extra_dims=extra_dims,
+                allocator=allocator).fill(0)
 
     def num_reference_derivative(self, queue, ref_axes, vec):
         @memoize_in(self, "reference_derivative_knl")
