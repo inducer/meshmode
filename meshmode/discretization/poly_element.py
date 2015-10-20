@@ -85,13 +85,6 @@ class PolynomialSimplexElementGroupBase(ElementGroupBase):
         else:
             return result
 
-    @memoize_method
-    def resampling_matrix(self):
-        meg = self.mesh_el_group
-        return mp.resampling_matrix(
-                mp.simplex_onb(self.dim, meg.order),
-                self.unit_nodes, meg.unit_nodes)
-
 
 class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
     """Elemental discretization supplying a high-order quadrature rule

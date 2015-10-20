@@ -270,7 +270,7 @@ class Discretization(object):
             for grp in self.groups:
                 meg = grp.mesh_el_group
                 knl()(queue,
-                        resampling_mat=grp.resampling_matrix(),
+                        resampling_mat=grp.from_mesh_interp_matrix(),
                         result=grp.view(result), nodes=meg.nodes)
 
         return result
