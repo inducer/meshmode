@@ -243,7 +243,10 @@ class SimplexElementGroup(MeshElementGroup):
 
     def face_vertex_indices(self):
         if self.dim == 1:
-            return ((0, 1),)
+            return (
+                (0,),
+                (1,),
+                )
         elif self.dim == 2:
             return (
                 (0, 1),
