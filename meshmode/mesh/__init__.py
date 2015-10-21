@@ -412,7 +412,7 @@ class Mesh(Record):
 
     .. attribute:: facial_adjacency_groups
 
-        An list of mappings from neighbor group IDs to instances of
+        A list of mappings from neighbor group IDs to instances of
         :class:`FacialAdjacencyGroup`.
 
         ``facial_adjacency_groups[igrp][ineighbor_group]`` gives
