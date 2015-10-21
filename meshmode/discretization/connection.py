@@ -41,7 +41,7 @@ __doc__ = """
 
 .. autofunction:: make_same_mesh_connection
 
-.. autofunction:: make_boundary_restriction
+.. autofunction:: make_face_restriction
 
 Implementation details
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -318,65 +318,114 @@ def _build_boundary_connection(queue, vol_discr, bdry_discr, connection_data):
             vol_discr, bdry_discr, connection_groups)
 
 
-def make_boundary_restriction(queue, discr, group_factory):
-    """
+def _get_face_vertices(mesh, boundary_tag):
+    # a set of volume vertex numbers
+    bdry_vertex_vol_nrs = set()
+
+    # {{{ pull together boundary vertices
+
+    if boundary_tag is not None:
+        # {{{ boundary faces
+
+        btag_bit = mesh.boundary_tag_bit(boundary_tag)
+
+        for fagrp_map in mesh.facial_adjacency_groups:
+            bdry_grp = fagrp_map.get(None)
+            if bdry_grp is None:
+                continue
+
+            assert (bdry_grp.neighbors < 0).all()
+
+            grp = mesh.groups[bdry_grp.igroup]
+
+            nb_el_bits = -bdry_grp.neighbors
+            face_relevant_flags = (nb_el_bits & btag_bit) != 0
+
+            for iface, fvi in enumerate(grp.face_vertex_indices()):
+                bdry_vertex_vol_nrs.update(
+                        grp.vertex_indices
+                        [bdry_grp.elements[face_relevant_flags]]
+                        [:, np.array(fvi, dtype=np.intp)]
+                        .flat)
+
+        return np.array(sorted(bdry_vertex_vol_nrs), dtype=np.intp)
+
+        # }}}
+    else:
+        # For interior faces, this is likely every vertex in the book.
+        # Don't ever bother trying to cut the list down.
+
+        return np.arange(mesh.nvertices, dtype=np.intp)
+
+
+def make_face_restriction(queue, discr, group_factory, boundary_tag):
+    """Create a mesh, a discretization and a connection to restrict
+    a function on *discr* to its values on the edges of element faces
+    denoted by *boundary_tag*.
+
+    :arg boundary_tag: The boundary tag for which to create a face
+        restriction. May be *None* to indicate interior faces.
+
     :return: a tuple ``(bdry_mesh, bdry_discr, connection)``
     """
 
-    logger.info("building boundary connection: start")
+    logger.info("building face restriction: start")
 
-    # {{{ build face_map
+    # {{{ gather boundary vertices
 
-    # maps (igrp, el_grp, face_id) to a frozenset of vertex IDs
-    face_map = {}
-
-    for igrp, mgrp in enumerate(discr.mesh.groups):
-        grp_face_vertex_indices = mgrp.face_vertex_indices()
-
-        for iel_grp in range(mgrp.nelements):
-            for fid, loc_face_vertices in enumerate(grp_face_vertex_indices):
-                face_vertices = frozenset(
-                        mgrp.vertex_indices[iel_grp, fvi]
-                        for fvi in loc_face_vertices
-                        )
-                face_map.setdefault(face_vertices, []).append(
-                        (igrp, iel_grp, fid))
-
-    del face_vertices
-
-    # }}}
-
-    boundary_faces = [
-            face_ids[0]
-            for face_vertices, face_ids in six.iteritems(face_map)
-            if len(face_ids) == 1]
-
-    from pytools import flatten
-    bdry_vertex_vol_nrs = sorted(set(flatten(six.iterkeys(face_map))))
+    bdry_vertex_vol_nrs = _get_face_vertices(discr.mesh, boundary_tag)
 
     vol_to_bdry_vertices = np.empty(
             discr.mesh.vertices.shape[-1],
             discr.mesh.vertices.dtype)
     vol_to_bdry_vertices.fill(-1)
     vol_to_bdry_vertices[bdry_vertex_vol_nrs] = np.arange(
-            len(bdry_vertex_vol_nrs))
+            len(bdry_vertex_vol_nrs), dtype=np.intp)
 
     bdry_vertices = discr.mesh.vertices[:, bdry_vertex_vol_nrs]
+
+    # }}}
 
     from meshmode.mesh import Mesh, SimplexElementGroup
     bdry_mesh_groups = []
     connection_data = {}
 
-    for igrp, grp in enumerate(discr.groups):
+    btag_bit = discr.mesh.boundary_tag_bit(boundary_tag)
+
+    for igrp, (grp, fagrp_map) in enumerate(
+            zip(discr.groups, discr.mesh.facial_adjacency_groups)):
+
         mgrp = grp.mesh_el_group
-        group_boundary_faces = [
-                (ibface_el, ibface_face)
-                for ibface_group, ibface_el, ibface_face in boundary_faces
-                if ibface_group == igrp]
 
         if not isinstance(mgrp, SimplexElementGroup):
             raise NotImplementedError("can only take boundary of "
                     "SimplexElementGroup-based meshes")
+
+        # {{{ pull together per-group face lists
+
+        group_boundary_faces = []
+
+        if boundary_tag is not None:
+            bdry_grp = fagrp_map.get(None)
+            if bdry_grp is not None:
+                nb_el_bits = -bdry_grp.neighbors
+                face_relevant_flags = (nb_el_bits & btag_bit) != 0
+
+                group_boundary_faces.extend(
+                            zip(
+                                bdry_grp.elements[face_relevant_flags],
+                                bdry_grp.element_faces[face_relevant_flags]))
+
+        else:
+            for fagrp in six.itervalues(fagrp_map):
+                if fagrp.ineighbor_group is None:
+                    # boundary faces -> not looking for those
+                    continue
+
+                group_boundary_faces.extend(
+                        zip(bdry_grp.elements, bdry_grp.element_faces))
+
+        # }}}
 
         # {{{ Preallocate arrays for mesh group
 
@@ -479,7 +528,7 @@ def make_boundary_restriction(queue, discr, group_factory):
     connection = _build_boundary_connection(
             queue, discr, bdry_discr, connection_data)
 
-    logger.info("building boundary connection: done")
+    logger.info("building face restriction: done")
 
     return bdry_mesh, bdry_discr, connection
 

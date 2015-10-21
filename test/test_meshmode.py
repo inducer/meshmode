@@ -67,10 +67,11 @@ def test_boundary_interpolation(ctx_getter):
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.mesh.io import generate_gmsh, FileSource
+    from meshmode.mesh import BTAG_ALL
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
             InterpolatoryQuadratureSimplexGroupFactory
-    from meshmode.discretization.connection import make_boundary_restriction
+    from meshmode.discretization.connection import make_face_restriction
 
     from pytools.convergence import EOCRecorder
     eoc_rec = EOCRecorder()
@@ -95,8 +96,9 @@ def test_boundary_interpolation(ctx_getter):
         x = vol_discr.nodes()[0].with_queue(queue)
         f = 0.1*cl.clmath.sin(30*x)
 
-        bdry_mesh, bdry_discr, bdry_connection = make_boundary_restriction(
-                queue, vol_discr, InterpolatoryQuadratureSimplexGroupFactory(order))
+        bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
+                queue, vol_discr, InterpolatoryQuadratureSimplexGroupFactory(order),
+                BTAG_ALL)
 
         bdry_x = bdry_discr.nodes()[0].with_queue(queue)
         bdry_f = 0.1*cl.clmath.sin(30*bdry_x)
@@ -189,14 +191,14 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
     center.fill(-0.5)
 
     import modepy as mp
-    from meshmode.mesh import SimplexElementGroup, Mesh
+    from meshmode.mesh import SimplexElementGroup, Mesh, BTAG_ALL
     mg = SimplexElementGroup(
             order=order,
             vertex_indices=np.arange(dim+1, dtype=np.int32).reshape(1, -1),
             nodes=mp.warp_and_blend_nodes(dim, order).reshape(dim, 1, -1),
             dim=dim)
 
-    mesh = Mesh(vertices, [mg])
+    mesh = Mesh(vertices, [mg], nodal_adjacency=None, facial_adjacency_groups=None)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
@@ -224,9 +226,10 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
 
     # {{{ boundary discretization
 
-    from meshmode.discretization.connection import make_boundary_restriction
-    bdry_mesh, bdry_discr, bdry_connection = make_boundary_restriction(
-            queue, vol_discr, PolynomialWarpAndBlendGroupFactory(order + 3))
+    from meshmode.discretization.connection import make_face_restriction
+    bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
+            queue, vol_discr, PolynomialWarpAndBlendGroupFactory(order + 3),
+            BTAG_ALL)
 
     # }}}
 
@@ -281,6 +284,7 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
     from pytential import bind, sym
 
     for h in [0.2, 0.14, 0.1]:
+        from meshmode.mesh import BTAG_ALL
         from meshmode.mesh.io import generate_gmsh, FileSource
         mesh = generate_gmsh(
                 FileSource(src_file), dim, order=mesh_order,
@@ -297,10 +301,11 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
         vol_discr = Discretization(ctx, mesh,
                 InterpolatoryQuadratureSimplexGroupFactory(quad_order))
 
-        from meshmode.discretization.connection import make_boundary_restriction
-        bdry_mesh, bdry_discr, bdry_connection = make_boundary_restriction(
+        from meshmode.discretization.connection import make_face_restriction
+        bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
                 queue, vol_discr,
-                InterpolatoryQuadratureSimplexGroupFactory(quad_order))
+                InterpolatoryQuadratureSimplexGroupFactory(quad_order),
+                BTAG_ALL)
 
         # }}}
 
