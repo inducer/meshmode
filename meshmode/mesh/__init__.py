@@ -828,7 +828,7 @@ def _compute_facial_adjacency_from_vertices(mesh):
             idx = fill_count.get((igrp, None), 0)
             fill_count[igrp, None] = idx + 1
 
-            fagrp = facial_adjacency_groups[igroup][inb_grp]
+            fagrp = facial_adjacency_groups[igroup][None]
             fagrp.elements[idx] = iel
             fagrp.element_faces[idx] = iface
 
