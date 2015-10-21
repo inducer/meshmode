@@ -965,7 +965,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False):
     """
 
     for igrp, fagrp_map in enumerate(mesh.facial_adjacency_groups):
-        bdry_grp = fagrp_map.get((igrp, None))
+        bdry_grp = fagrp_map.get(None)
         if bdry_grp is None:
             continue
 
