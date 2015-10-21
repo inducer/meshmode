@@ -61,17 +61,22 @@ class InterpolationBatch(object):
     least three different interpolation batches are needed to cover boundary
     edges that fall onto each of the three edges of the unit triangle.
 
-    .. attribute:: source_element_indices
+    .. attribute:: from_group_index
 
-        A :class:`pyopencl.array.Arrays` of length ``nelements``, containing the
-        element index from which this "*to*" element's data will be
-        interpolated.
+        An integer indicating from which element group in the *from* discretization
+        the data should be interpolated.
 
-    .. attribute:: target_element_indices
+    .. attribute:: from_element_indices
 
-        A :class:`pyopencl.array.Arrays` of length ``nelements``, containing the
-        element index to which this "*to*" element's data will be
-        interpolated.
+        A :class:`pyopencl.array.Array` of length ``nelements``, containing the
+        (group-local) element index (relative to :attr:`from_group_index` from
+        which this "*to*" element's data will be interpolated.
+
+    .. attribute:: to_element_indices
+
+        A :class:`pyopencl.array.Arrays` of length ``nelements``, containing
+        the (group-local) element index to which this "*to*" element's data
+        will be interpolated.
 
     .. attribute:: result_unit_nodes
 
@@ -82,15 +87,16 @@ class InterpolationBatch(object):
         locations of this element should be interpolated.
     """
 
-    def __init__(self, source_element_indices,
-            target_element_indices, result_unit_nodes):
-        self.source_element_indices = source_element_indices
-        self.target_element_indices = target_element_indices
+    def __init__(self, from_group_index, from_element_indices,
+            to_element_indices, result_unit_nodes):
+        self.from_group_index = from_group_index
+        self.from_element_indices = from_element_indices
+        self.to_element_indices = to_element_indices
         self.result_unit_nodes = result_unit_nodes
 
     @property
     def nelements(self):
-        return len(self.source_element_indices)
+        return len(self.from_element_indices)
 
 
 class DiscretizationConnectionElementGroup(object):
@@ -113,7 +119,7 @@ class DiscretizationConnection(object):
 
         a list of :class:`MeshConnectionGroup` instances, with
         a one-to-one correspondence to the groups in
-        :attr:`from_discr` and :attr:`to_discr`.
+        :attr:`to_discr`.
     """
 
     def __init__(self, from_discr, to_discr, groups):
@@ -128,10 +134,10 @@ class DiscretizationConnection(object):
         self.groups = groups
 
     @memoize_method
-    def _resample_matrix(self, elgroup_index, ibatch_index):
+    def _resample_matrix(self, to_group_index, ibatch_index):
         import modepy as mp
-        ibatch = self.groups[elgroup_index].batches[ibatch_index]
-        from_grp = self.from_discr.groups[elgroup_index]
+        ibatch = self.groups[to_group_index].batches[ibatch_index]
+        from_grp = self.from_discr.groups[ibatch.from_group_index]
 
         return mp.resampling_matrix(
                 mp.simplex_onb(self.from_discr.dim, from_grp.order),
@@ -146,8 +152,8 @@ class DiscretizationConnection(object):
                     0<=k<nelements and
                     0<=i<n_to_nodes and
                     0<=j<n_from_nodes}""",
-                "result[itgt_base + target_element_indices[k]*n_to_nodes + i, \
-                        isrc_base + source_element_indices[k]*n_from_nodes + j] \
+                "result[itgt_base + to_element_indices[k]*n_to_nodes + i, \
+                        isrc_base + from_element_indices[k]*n_from_nodes + j] \
                     = resample_mat[i, j]",
                 [
                     lp.GlobalArg("result", None,
@@ -167,20 +173,22 @@ class DiscretizationConnection(object):
                 (self.to_discr.nnodes, self.from_discr.nnodes),
                 dtype=self.to_discr.real_dtype)
 
-        for i_grp, (tgrp, sgrp, cgrp) in enumerate(
-                zip(self.to_discr.groups, self.from_discr.groups, self.groups)):
+        for i_tgrp, (tgrp, cgrp) in enumerate(
+                zip(self.to_discr.groups, self.groups)):
             for i_batch, batch in enumerate(cgrp.batches):
-                if len(batch.source_element_indices):
-                    if not len(batch.source_element_indices):
+                if len(batch.from_element_indices):
+                    if not len(batch.from_element_indices):
                         continue
 
+                    sgrp = self.from_discr.groups[batch.from_group_index]
+
                     knl()(queue,
-                            resample_mat=self._resample_matrix(i_grp, i_batch),
+                            resample_mat=self._resample_matrix(i_tgrp, i_batch),
                             result=result,
                             itgt_base=tgrp.node_nr_base,
                             isrc_base=sgrp.node_nr_base,
-                            source_element_indices=batch.source_element_indices,
-                            target_element_indices=batch.target_element_indices)
+                            from_element_indices=batch.from_element_indices,
+                            to_element_indices=batch.to_element_indices)
 
         return result
 
@@ -193,9 +201,9 @@ class DiscretizationConnection(object):
                     0<=k<nelements and
                     0<=i<n_to_nodes and
                     0<=j<n_from_nodes}""",
-                "result[target_element_indices[k], i] \
+                "result[to_element_indices[k], i] \
                     = sum(j, resample_mat[i, j] \
-                    * vec[source_element_indices[k], j])",
+                    * vec[from_element_indices[k], j])",
                 [
                     lp.GlobalArg("result", None,
                         shape="nelements_result, n_to_nodes",
@@ -223,14 +231,14 @@ class DiscretizationConnection(object):
         for i_grp, (tgrp, sgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.from_discr.groups, self.groups)):
             for i_batch, batch in enumerate(cgrp.batches):
-                if not len(batch.source_element_indices):
+                if not len(batch.from_element_indices):
                     continue
 
                 knl()(queue,
                         resample_mat=self._resample_matrix(i_grp, i_batch),
                         result=tgrp.view(result), vec=sgrp.view(vec),
-                        source_element_indices=batch.source_element_indices,
-                        target_element_indices=batch.target_element_indices)
+                        from_element_indices=batch.from_element_indices,
+                        to_element_indices=batch.to_element_indices)
 
         return result
 
@@ -248,13 +256,14 @@ def make_same_mesh_connection(queue, to_discr, from_discr):
     assert queue.context == to_discr.cl_context
 
     groups = []
-    for fgrp, tgrp in zip(from_discr.groups, to_discr.groups):
+    for igrp, (fgrp, tgrp) in enumerate(zip(from_discr.groups, to_discr.groups)):
         all_elements = cl.array.arange(queue,
                 fgrp.nelements,
                 dtype=np.intp).with_queue(None)
         ibatch = InterpolationBatch(
-                source_element_indices=all_elements,
-                target_element_indices=all_elements,
+                from_group_index=igrp,
+                from_element_indices=all_elements,
+                to_element_indices=all_elements,
                 result_unit_nodes=tgrp.unit_nodes)
 
         groups.append(
@@ -287,12 +296,13 @@ def _build_boundary_connection(queue, vol_discr, bdry_discr, connection_data):
 
             connection_batches.append(
                     InterpolationBatch(
-                        source_element_indices=cl.array.to_device(
+                        from_group_index=igrp,
+                        from_element_indices=cl.array.to_device(
                             queue,
                             vol_grp.mesh_el_group.element_nr_base
                             + data.group_source_element_indices)
                         .with_queue(None),
-                        target_element_indices=cl.array.to_device(
+                        to_element_indices=cl.array.to_device(
                             queue,
                             bdry_grp.mesh_el_group.element_nr_base
                             + data.group_target_element_indices)
