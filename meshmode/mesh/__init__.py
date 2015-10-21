@@ -610,6 +610,12 @@ class Mesh(Record):
 
         return self._facial_adjacency_groups
 
+    def boundary_tag_bit(self, boundary_tag):
+        try:
+            return 1 << self.btag_to_index[boundary_tag]
+        except KeyError:
+            return 0
+
     def __eq__(self, other):
         return (
                 type(self) == type(other)
@@ -770,8 +776,8 @@ def _compute_facial_adjacency_from_vertices(mesh):
             neighbor_faces = np.zeros(bdry_count, dtype=mesh.face_id_dtype)
 
             neighbors.fill(-(
-                    1 << mesh.btag_to_index[BTAG_ALL]
-                    | 1 << mesh.btag_to_index[BTAG_REALLY_ALL]))
+                    mesh.boundary_tag_bit(BTAG_ALL)
+                    | mesh.boundary_tag_bit(BTAG_REALLY_ALL)))
 
             grp_map[None] = FacialAdjacencyGroup(
                     igroup=igroup,
@@ -971,10 +977,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False):
         seen = np.zeros_like(nb_el_bits, dtype=np.bool)
 
         for btag in boundary_tags:
-            if btag is BTAG_NONE:
-                continue
-
-            tag_bit = 1 << mesh.btag_to_index[btag]
+            tag_bit = mesh.boundary_tag_bit(btag)
             tag_set = (nb_el_bits & tag_bit) != 0
 
             if seen & tag_set:
@@ -990,16 +993,14 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False):
 
 # {{{ is_boundary_tag_empty
 
-def is_boundary_tag_empty(mesh, btag):
+def is_boundary_tag_empty(mesh, boundary_tag):
     """Return *True* if the corresponding boundary tag does not occur as part of
     *mesh*.
     """
 
-    btag_index = mesh.btag_to_index.get(btag, None)
-    if btag_index is None:
+    btag_bit = mesh.boundary_tag_bit(boundary_tag)
+    if not btag_bit:
         return True
-
-    btag_bit = 1 << btag_index
 
     for igrp in range(len(mesh.groups)):
         bdry_fagrp = mesh.facial_adjacency_groups[igrp].get(None, None)
