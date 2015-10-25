@@ -33,6 +33,11 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 
+from meshmode.discretization.poly_element import (
+        InterpolatoryQuadratureSimplexGroupFactory,
+        PolynomialWarpAndBlendGroupFactory
+        )
+
 import pytest
 
 import logging
@@ -62,15 +67,17 @@ def test_circle_mesh(do_plot=False):
         pt.show()
 
 
-def test_boundary_interpolation(ctx_getter):
+@pytest.mark.parametrize("group_factory", [
+    InterpolatoryQuadratureSimplexGroupFactory,
+    PolynomialWarpAndBlendGroupFactory
+    ])
+def test_boundary_interpolation(ctx_getter, group_factory):
     cl_ctx = ctx_getter()
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.mesh.io import generate_gmsh, FileSource
     from meshmode.mesh import BTAG_ALL
     from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-            InterpolatoryQuadratureSimplexGroupFactory
     from meshmode.discretization.connection import make_face_restriction
 
     from pytools.convergence import EOCRecorder
@@ -89,7 +96,7 @@ def test_boundary_interpolation(ctx_getter):
         print("END GEN")
 
         vol_discr = Discretization(cl_ctx, mesh,
-                InterpolatoryQuadratureSimplexGroupFactory(order))
+                group_factory(order))
         print("h=%s -> %d elements" % (
                 h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
@@ -97,7 +104,7 @@ def test_boundary_interpolation(ctx_getter):
         f = 0.1*cl.clmath.sin(30*x)
 
         bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
-                queue, vol_discr, InterpolatoryQuadratureSimplexGroupFactory(order),
+                queue, vol_discr, group_factory(order),
                 BTAG_ALL)
 
         bdry_x = bdry_discr.nodes()[0].with_queue(queue)
@@ -113,7 +120,9 @@ def test_boundary_interpolation(ctx_getter):
         eoc_rec.add_data_point(h, err)
 
     print(eoc_rec)
-    assert eoc_rec.order_estimate() >= order-0.5
+    assert (
+            eoc_rec.order_estimate() >= order-0.5
+            or eoc_rec.max_error() < 1e-14)
 
 
 def test_element_orientation():

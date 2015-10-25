@@ -120,12 +120,27 @@ class DiscretizationConnection(object):
         a list of :class:`MeshConnectionGroup` instances, with
         a one-to-one correspondence to the groups in
         :attr:`to_discr`.
+
+    .. automethod:: __call__
+
+    .. automethod:: full_resample_matrix
+
     """
 
     def __init__(self, from_discr, to_discr, groups):
         if from_discr.cl_context != to_discr.cl_context:
             raise ValueError("from_discr and to_discr must live in the "
                     "same OpenCL context")
+
+        self.cl_context = from_discr.cl_context
+
+        if from_discr.mesh.vertex_id_dtype != to_discr.mesh.vertex_id_dtype:
+            raise ValueError("from_discr and to_discr must agree on the "
+                    "vertex_id_dtype")
+
+        if from_discr.mesh.element_id_dtype != to_discr.mesh.element_id_dtype:
+            raise ValueError("from_discr and to_discr must agree on the "
+                    "element_id_dtype")
 
         self.cl_context = from_discr.cl_context
 
@@ -139,11 +154,60 @@ class DiscretizationConnection(object):
         ibatch = self.groups[to_group_index].batches[ibatch_index]
         from_grp = self.from_discr.groups[ibatch.from_group_index]
 
-        return mp.resampling_matrix(
+        result = mp.resampling_matrix(
                 mp.simplex_onb(self.from_discr.dim, from_grp.order),
                 ibatch.result_unit_nodes, from_grp.unit_nodes)
 
+        with cl.CommandQueue(self.cl_context) as queue:
+            return cl.array.to_device(queue, result).with_queue(None)
+
+    @memoize_method
+    def _resample_point_pick_indices(self, to_group_index, ibatch_index,
+            tol_multiplier=None):
+        """If :meth:`_resample_matrix` *R* is a row subset of a permutation matrix *P*,
+        return the index subset I so that, loosely, ``x[I] == R @ x``.
+
+        Will return *None* if no such index array exists, or a
+        :class:`pyopencl.array.Array` containing the index subset.
+        """
+
+        with cl.CommandQueue(self.cl_context) as queue:
+            mat = self._resample_matrix(to_group_index, ibatch_index).get(
+                    queue=queue)
+
+        nrows, ncols = mat.shape
+        result = np.zeros(nrows, dtype=self.to_discr.mesh.element_id_dtype)
+
+        if tol_multiplier is None:
+            tol_multiplier = 50
+
+        tol = np.finfo(mat.dtype).eps * tol_multiplier
+
+        for irow in range(nrows):
+            one_indices, = np.where(np.abs(mat[irow] - 1) < tol)
+            zero_indices, = np.where(np.abs(mat[irow]) < tol)
+
+            if len(one_indices) != 1:
+                return None
+            if len(zero_indices) != ncols - 1:
+                return None
+
+            one_index, = one_indices
+            result[irow] = one_index
+
+        with cl.CommandQueue(self.cl_context) as queue:
+            return cl.array.to_device(queue, result).with_queue(None)
+
     def full_resample_matrix(self, queue):
+        """Build a dense matrix representing this discretization connection.
+
+        .. warning::
+
+            On average, this will be exceedingly expensive (:math:`O(N^2)` in
+            the number *N* of discretization points) in terms of memory usage
+            and thus not what you'd typically want.
+        """
+
         @memoize_in(self, "oversample_mat_knl")
         def knl():
             import loopy as lp
@@ -193,8 +257,8 @@ class DiscretizationConnection(object):
         return result
 
     def __call__(self, queue, vec):
-        @memoize_in(self, "oversample_knl")
-        def knl():
+        @memoize_in(self, "resample_by_mat_knl")
+        def mat_knl():
             import loopy as lp
             knl = lp.make_kernel(
                 """{[k,i,j]:
@@ -215,7 +279,33 @@ class DiscretizationConnection(object):
                     lp.ValueArg("nelements_vec", np.int32),
                     "...",
                     ],
-                name="oversample")
+                name="resample_by_mat")
+
+            knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
+            return lp.tag_inames(knl, dict(k="g.0"))
+
+        @memoize_in(self, "resample_by_picking_knl")
+        def pick_knl():
+            import loopy as lp
+            knl = lp.make_kernel(
+                """{[k,i,j]:
+                    0<=k<nelements and
+                    0<=i<n_to_nodes}""",
+                "result[to_element_indices[k], i] \
+                    = vec[from_element_indices[k], pick_list[i]]",
+                [
+                    lp.GlobalArg("result", None,
+                        shape="nelements_result, n_to_nodes",
+                        offset=lp.auto),
+                    lp.GlobalArg("vec", None,
+                        shape="nelements_vec, n_from_nodes",
+                        offset=lp.auto),
+                    lp.ValueArg("nelements_result", np.int32),
+                    lp.ValueArg("nelements_vec", np.int32),
+                    lp.ValueArg("n_from_nodes", np.int32),
+                    "...",
+                    ],
+                name="resample_by_picking")
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))
@@ -228,17 +318,28 @@ class DiscretizationConnection(object):
         if vec.shape != (self.from_discr.nnodes,):
             raise ValueError("invalid shape of incoming resampling data")
 
-        for i_grp, (tgrp, sgrp, cgrp) in enumerate(
+        for i_tgrp, (tgrp, sgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.from_discr.groups, self.groups)):
             for i_batch, batch in enumerate(cgrp.batches):
                 if not len(batch.from_element_indices):
                     continue
 
-                knl()(queue,
-                        resample_mat=self._resample_matrix(i_grp, i_batch),
-                        result=tgrp.view(result), vec=sgrp.view(vec),
-                        from_element_indices=batch.from_element_indices,
-                        to_element_indices=batch.to_element_indices)
+                point_pick_indices = self._resample_point_pick_indices(
+                        i_tgrp, i_batch)
+
+                if point_pick_indices is None:
+                    mat_knl()(queue,
+                            resample_mat=self._resample_matrix(i_tgrp, i_batch),
+                            result=tgrp.view(result), vec=sgrp.view(vec),
+                            from_element_indices=batch.from_element_indices,
+                            to_element_indices=batch.to_element_indices)
+
+                else:
+                    pick_knl()(queue,
+                            pick_list=point_pick_indices,
+                            result=tgrp.view(result), vec=sgrp.view(vec),
+                            from_element_indices=batch.from_element_indices,
+                            to_element_indices=batch.to_element_indices)
 
         return result
 
@@ -318,11 +419,11 @@ def _build_boundary_connection(queue, vol_discr, bdry_discr, connection_data):
             vol_discr, bdry_discr, connection_groups)
 
 
+# {{{ pull together boundary vertices
+
 def _get_face_vertices(mesh, boundary_tag):
     # a set of volume vertex numbers
     bdry_vertex_vol_nrs = set()
-
-    # {{{ pull together boundary vertices
 
     if boundary_tag is not None:
         # {{{ boundary faces
@@ -356,6 +457,8 @@ def _get_face_vertices(mesh, boundary_tag):
         # Don't ever bother trying to cut the list down.
 
         return np.arange(mesh.nvertices, dtype=np.intp)
+
+# }}}
 
 
 def make_face_restriction(queue, discr, group_factory, boundary_tag):
