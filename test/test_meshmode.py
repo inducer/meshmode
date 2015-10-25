@@ -305,8 +305,6 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
         # {{{ discretizations and connections
 
         from meshmode.discretization import Discretization
-        from meshmode.discretization.poly_element import \
-                InterpolatoryQuadratureSimplexGroupFactory
         vol_discr = Discretization(ctx, mesh,
                 InterpolatoryQuadratureSimplexGroupFactory(quad_order))
 
