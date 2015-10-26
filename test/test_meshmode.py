@@ -37,6 +37,7 @@ from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
         PolynomialWarpAndBlendGroupFactory
         )
+from meshmode.mesh import BTAG_ALL
 
 import pytest
 
@@ -71,12 +72,16 @@ def test_circle_mesh(do_plot=False):
     InterpolatoryQuadratureSimplexGroupFactory,
     PolynomialWarpAndBlendGroupFactory
     ])
-def test_boundary_interpolation(ctx_getter, group_factory):
+@pytest.mark.parametrize("boundary_tag", [
+    BTAG_ALL,
+    # all internal faces:
+    None
+    ])
+def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag):
     cl_ctx = ctx_getter()
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.mesh.io import generate_gmsh, FileSource
-    from meshmode.mesh import BTAG_ALL
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import make_face_restriction
 
@@ -88,7 +93,7 @@ def test_boundary_interpolation(ctx_getter, group_factory):
     def f(x):
         return 0.1*cl.clmath.sin(30*x)
 
-    for h in [1e-1, 3e-2, 1e-2]:
+    for h in [1e-1, 8e-2, 5e-2]:
         print("BEGIN GEN")
         mesh = generate_gmsh(
                 FileSource("blob-2d.step"), 2, order=order,
@@ -108,7 +113,7 @@ def test_boundary_interpolation(ctx_getter, group_factory):
 
         bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
                 vol_discr, group_factory(order),
-                BTAG_ALL)
+                boundary_tag)
 
         bdry_x = bdry_discr.nodes()[0].with_queue(queue)
         bdry_f = f(bdry_x)
