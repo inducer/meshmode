@@ -85,6 +85,9 @@ def test_boundary_interpolation(ctx_getter, group_factory):
 
     order = 4
 
+    def f(x):
+        return 0.1*cl.clmath.sin(30*x)
+
     for h in [1e-1, 3e-2, 1e-2]:
         print("BEGIN GEN")
         mesh = generate_gmsh(
@@ -101,18 +104,18 @@ def test_boundary_interpolation(ctx_getter, group_factory):
                 h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
         x = vol_discr.nodes()[0].with_queue(queue)
-        f = 0.1*cl.clmath.sin(30*x)
+        vol_f = f(x)
 
         bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
                 vol_discr, group_factory(order),
                 BTAG_ALL)
 
         bdry_x = bdry_discr.nodes()[0].with_queue(queue)
-        bdry_f = 0.1*cl.clmath.sin(30*bdry_x)
-        bdry_f_2 = bdry_connection(queue, f)
+        bdry_f = f(bdry_x)
+        bdry_f_2 = bdry_connection(queue, vol_f)
 
         mat = bdry_connection.full_resample_matrix(queue).get(queue)
-        bdry_f_2_by_mat = mat.dot(f.get())
+        bdry_f_2_by_mat = mat.dot(vol_f.get())
 
         assert(la.norm(bdry_f_2.get(queue=queue) - bdry_f_2_by_mat)) < 1e-14
 
