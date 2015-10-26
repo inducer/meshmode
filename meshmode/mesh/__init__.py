@@ -579,6 +579,10 @@ class Mesh(Record):
         return single_valued(grp.dim for grp in self.groups)
 
     @property
+    def nvertices(self):
+        return self.vertices.shape[-1]
+
+    @property
     def nelements(self):
         return sum(grp.nelements for grp in self.groups)
 
