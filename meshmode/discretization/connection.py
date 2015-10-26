@@ -130,8 +130,8 @@ class DiscretizationConnection(object):
 
     .. attribute:: groups
 
-        a list of :class:`MeshConnectionGroup` instances, with
-        a one-to-one correspondence to the groups in
+        a list of :class:`DiscretizationConnectionElementGroup`
+        instances, with a one-to-one correspondence to the groups in
         :attr:`to_discr`.
 
     .. automethod:: __call__
@@ -541,7 +541,7 @@ def make_face_restriction(discr, group_factory, boundary_tag):
                     continue
 
                 group_boundary_faces.extend(
-                        zip(bdry_grp.elements, bdry_grp.element_faces))
+                        zip(fagrp.elements, fagrp.element_faces))
 
         # }}}
 
