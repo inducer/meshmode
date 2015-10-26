@@ -240,7 +240,7 @@ def make_visualizer(queue, discr, vis_order):
             real_dtype=discr.real_dtype)
     from meshmode.discretization.connection import \
             make_same_mesh_connection
-    cnx = make_same_mesh_connection(queue, vis_discr, discr)
+    cnx = make_same_mesh_connection(vis_discr, discr)
 
     return Visualizer(discr, vis_discr, cnx)
 

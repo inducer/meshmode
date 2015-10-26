@@ -68,15 +68,16 @@ class InterpolationBatch(object):
 
     .. attribute:: from_element_indices
 
-        A :class:`pyopencl.array.Array` of length ``nelements``, containing the
-        (group-local) element index (relative to :attr:`from_group_index` from
-        which this "*to*" element's data will be interpolated.
+        ``element_id_t [nelements]``. (a :class:`pyopencl.array.Array`)
+        This contains the (group-local) element index (relative to
+        :attr:`from_group_index` from which this "*to*" element's data will be
+        interpolated.
 
     .. attribute:: to_element_indices
 
-        A :class:`pyopencl.array.Arrays` of length ``nelements``, containing
-        the (group-local) element index to which this "*to*" element's data
-        will be interpolated.
+        ``element_id_t [nelements]``. (a :class:`pyopencl.array.Array`)
+        This contains the (group-local) element index to which this "*to*"
+        element's data will be interpolated.
 
     .. attribute:: result_unit_nodes
 
@@ -85,14 +86,26 @@ class InterpolationBatch(object):
         storing the coordinates of the nodes (in unit coordinates
         of the *from* reference element) from which the node
         locations of this element should be interpolated.
+
+    .. autoattribute:: nelements
+
+    .. attribute:: to_element_face
+
+        *int* or *None*. (a :class:`pyopencl.array.Array` if existent) If this
+        interpolation batch targets interpolation *to* a face, then this number
+        captures the face number (on all elements referenced by
+        :attr:`from_element_indices` to which this batch interpolates. (Since
+        there is a fixed set of "from" unit nodes per batch, one batch will
+        always go to a single face index.)
     """
 
     def __init__(self, from_group_index, from_element_indices,
-            to_element_indices, result_unit_nodes):
+            to_element_indices, result_unit_nodes, to_element_face):
         self.from_group_index = from_group_index
         self.from_element_indices = from_element_indices
         self.to_element_indices = to_element_indices
         self.result_unit_nodes = result_unit_nodes
+        self.to_element_face = to_element_face
 
     @property
     def nelements(self):
@@ -348,27 +361,28 @@ class DiscretizationConnection(object):
 
 # {{{ same-mesh constructor
 
-def make_same_mesh_connection(queue, to_discr, from_discr):
+def make_same_mesh_connection(to_discr, from_discr):
     if from_discr.mesh is not to_discr.mesh:
         raise ValueError("from_discr and to_discr must be based on "
                 "the same mesh")
 
-    assert queue.context == from_discr.cl_context
-    assert queue.context == to_discr.cl_context
+    assert to_discr.cl_context == from_discr.cl_context
 
-    groups = []
-    for igrp, (fgrp, tgrp) in enumerate(zip(from_discr.groups, to_discr.groups)):
-        all_elements = cl.array.arange(queue,
-                fgrp.nelements,
-                dtype=np.intp).with_queue(None)
-        ibatch = InterpolationBatch(
-                from_group_index=igrp,
-                from_element_indices=all_elements,
-                to_element_indices=all_elements,
-                result_unit_nodes=tgrp.unit_nodes)
+    with cl.CommandQueue(to_discr.cl_context) as queue:
+        groups = []
+        for igrp, (fgrp, tgrp) in enumerate(zip(from_discr.groups, to_discr.groups)):
+            all_elements = cl.array.arange(queue,
+                    fgrp.nelements,
+                    dtype=np.intp).with_queue(None)
+            ibatch = InterpolationBatch(
+                    from_group_index=igrp,
+                    from_element_indices=all_elements,
+                    to_element_indices=all_elements,
+                    result_unit_nodes=tgrp.unit_nodes,
+                    to_element_face=None)
 
-        groups.append(
-                DiscretizationConnectionElementGroup([ibatch]))
+            groups.append(
+                    DiscretizationConnectionElementGroup([ibatch]))
 
     return DiscretizationConnection(
             from_discr, to_discr, groups)
@@ -409,6 +423,7 @@ def _build_boundary_connection(queue, vol_discr, bdry_discr, connection_data):
                             + data.group_target_element_indices)
                         .with_queue(None),
                         result_unit_nodes=result_unit_nodes,
+                        to_element_face=face_id
                         ))
 
         connection_groups.append(
@@ -461,7 +476,7 @@ def _get_face_vertices(mesh, boundary_tag):
 # }}}
 
 
-def make_face_restriction(queue, discr, group_factory, boundary_tag):
+def make_face_restriction(discr, group_factory, boundary_tag):
     """Create a mesh, a discretization and a connection to restrict
     a function on *discr* to its values on the edges of element faces
     denoted by *boundary_tag*.
@@ -628,8 +643,9 @@ def make_face_restriction(queue, discr, group_factory, boundary_tag):
     bdry_discr = Discretization(
             discr.cl_context, bdry_mesh, group_factory)
 
-    connection = _build_boundary_connection(
-            queue, discr, bdry_discr, connection_data)
+    with cl.CommandQueue(discr.cl_context) as queue:
+        connection = _build_boundary_connection(
+                queue, discr, bdry_discr, connection_data)
 
     logger.info("building face restriction: done")
 

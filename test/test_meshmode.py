@@ -104,7 +104,7 @@ def test_boundary_interpolation(ctx_getter, group_factory):
         f = 0.1*cl.clmath.sin(30*x)
 
         bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
-                queue, vol_discr, group_factory(order),
+                vol_discr, group_factory(order),
                 BTAG_ALL)
 
         bdry_x = bdry_discr.nodes()[0].with_queue(queue)
@@ -237,7 +237,7 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
 
     from meshmode.discretization.connection import make_face_restriction
     bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
-            queue, vol_discr, PolynomialWarpAndBlendGroupFactory(order + 3),
+            vol_discr, PolynomialWarpAndBlendGroupFactory(order + 3),
             BTAG_ALL)
 
     # }}}
@@ -310,7 +310,7 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
 
         from meshmode.discretization.connection import make_face_restriction
         bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
-                queue, vol_discr,
+                vol_discr,
                 InterpolatoryQuadratureSimplexGroupFactory(quad_order),
                 BTAG_ALL)
 
