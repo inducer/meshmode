@@ -30,7 +30,8 @@ import numpy as np
 # {{{ draw_2d_mesh
 
 def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
-        draw_nodal_adjacency=False, set_bounding_box=False, **kwargs):
+        draw_nodal_adjacency=False, draw_face_numbers=False,
+        set_bounding_box=False, **kwargs):
     assert mesh.ambient_dim == 2
 
     import matplotlib.pyplot as pt
@@ -109,6 +110,22 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
                 pt.arrow(start[0], start[1], 0.7*dx[0], 0.7*dx[1],
                         length_includes_head=True,
                         color="green", head_width=1e-2, lw=1e-2)
+
+    if draw_face_numbers:
+        for igrp, grp in enumerate(mesh.groups):
+            for iel, el in enumerate(grp.vertex_indices):
+                elverts = mesh.vertices[:, el]
+                el_center = np.mean(elverts, axis=-1)
+
+                for iface, fvi in enumerate(grp.face_vertex_indices()):
+                    face_center = (
+                            0.3*el_center
+                            +
+                            0.7*np.mean(elverts[:, fvi], axis=-1))
+
+                    pt.text(face_center[0], face_center[1], str(iface), fontsize=12,
+                            ha="center", va="center", color="purple",
+                            bbox=dict(facecolor='white', alpha=0.5, lw=0))
 
     if set_bounding_box:
         from meshmode.mesh.processing import find_bounding_box
