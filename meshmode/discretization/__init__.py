@@ -42,7 +42,14 @@ class ElementGroupBase(object):
     one :class:`meshmode.mesh.MeshElementGroup`.
 
     .. attribute :: mesh_el_group
+    .. attribute :: order
     .. attribute :: node_nr_base
+
+    .. autoattribute:: nelements
+    .. autoattribute:: nunit_nodes
+    .. autoattribute:: nnodes
+    .. autoattribute:: dim
+    .. automethod:: view
     """
 
     def __init__(self, mesh_el_group, order, node_nr_base):
@@ -80,6 +87,11 @@ class ElementGroupBase(object):
                 (-1, -1))
 
     def view(self, global_array):
+        """Return a view of *global_array* of shape ``(..., nelements,
+        nunit_nodes)`` where *global_array* is of shape ``(..., nnodes)``,
+        where *nnodes* is the global (per-discretization) node count.
+        """
+
         return global_array[
                 ..., self.node_nr_base:self.node_nr_base + self.nnodes] \
                 .reshape(
