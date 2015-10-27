@@ -27,6 +27,7 @@ THE SOFTWARE.
 """
 
 import numpy as np
+import numpy.linalg as la
 import modepy as mp
 import pyopencl as cl
 import pyopencl.array  # noqa
@@ -42,6 +43,8 @@ __doc__ = """
 .. autofunction:: make_same_mesh_connection
 
 .. autofunction:: make_face_restriction
+
+.. autofunction:: make_opposite_face_connection
 
 Implementation details
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -650,6 +653,243 @@ def make_face_restriction(discr, group_factory, boundary_tag):
     logger.info("building face restriction: done")
 
     return bdry_mesh, bdry_discr, connection
+
+# }}}
+
+
+# {{{ opposite-face connection
+
+def _make_cross_face_batches(
+        queue, bdry_discr,
+        i_tgt_grp, i_src_grp,
+        i_face_tgt,
+        adj_grp, adj_grp_tgt_flags,
+        vbc_tgt_grp_face_batch,
+        src_grp_batch_and_el_lookup):
+
+    # find to_element_indices
+
+    to_bdry_element_indices = (
+            vbc_tgt_grp_face_batch.from_element_indices
+            .get(queue=queue))
+
+    # find from_element_indices
+
+    from_vol_element_indices = adj_grp.neighbors[adj_grp_tgt_flags]
+    from_element_faces = adj_grp.neighbor_faces[adj_grp_tgt_flags]
+
+    from_bdry_element_indices = \
+            src_grp_batch_and_el_lookup.iel_lookup[
+                    from_vol_element_indices, from_element_faces]
+
+    # {{{ invert face map (using Newton)
+
+    to_bdry_nodes = (
+            bdry_discr.groups[i_tgt_grp].view(bdry_discr.nodes())
+            .get(queue=queue)
+            [:, to_bdry_element_indices])
+
+    from_mesh_grp = bdry_discr.mesh.groups[i_src_grp]
+    from_grp = bdry_discr.groups[i_src_grp]
+
+    dim = from_grp.dim
+    ambient_dim, nelements, nto_unit_nodes = to_bdry_nodes.shape
+
+    initial_guess = np.mean(from_mesh_grp.vertex_unit_coordinates(), axis=0)
+    from_unit_nodes = np.empty((dim, nelements, nto_unit_nodes))
+    from_unit_nodes[:] = initial_guess.reshape(-1, 1, 1)
+
+    import modepy as mp
+    from_vdm = mp.vandermonde(from_grp.basis(), from_grp.unit_nodes)
+    from_inv_t_vdm = la.inv(from_vdm.T)
+    from_nfuncs = len(from_grp.basis())
+
+    # (ambient_dim, nelements, nfrom_unit_nodes)
+    from_bdry_nodes = (
+            bdry_discr.groups[i_src_grp].view(bdry_discr.nodes())
+            .get(queue=queue)
+            [:, from_bdry_element_indices])
+
+    def apply_map(unit_nodes):
+        # unit_nodes: (dim, nelements, nto_unit_nodes)
+
+        # basis_at_unit_nodes
+        basis_at_unit_nodes = np.empty((from_nfuncs, nelements, nto_unit_nodes))
+
+        for i, f in enumerate(from_grp.basis()):
+            basis_at_unit_nodes[i] = f(unit_nodes)
+
+        intp_coeffs = np.einsum("fj,jet->fet", from_inv_t_vdm, basis_at_unit_nodes)
+
+        return np.einsum("fet,aef->aet", intp_coeffs, from_bdry_nodes)
+
+    def get_map_jacobian(unit_nodes):
+        # unit_nodes: (dim, nelements, nto_unit_nodes)
+
+        # basis_at_unit_nodes
+        dbasis_at_unit_nodes = np.empty(
+                (dim, from_nfuncs, nelements, nto_unit_nodes))
+
+        for i, df in enumerate(from_grp.grad_basis()):
+            df_result = df(unit_nodes)
+
+            for rst_axis, df_r in enumerate(df_result):
+                dbasis_at_unit_nodes[rst_axis, i] = df_r
+
+        dintp_coeffs = np.einsum(
+                "fj,rjet->rfet", from_inv_t_vdm, dbasis_at_unit_nodes)
+
+        return np.einsum("rfet,aef->raet", dintp_coeffs, from_bdry_nodes)
+
+    if 1:
+        u = from_unit_nodes
+        f = apply_map(u)
+        for h in [1e-1, 1e-2]:
+            du = h*np.random.randn(*u.shape)
+
+            f_2 = apply_map(u+du)
+
+            jf = get_map_jacobian(u)
+
+            f2_2 = f + np.einsum("raet,ret->aet", jf, du)
+
+            print(h, la.norm((f_2-f2_2).ravel()))
+
+
+
+    print(r[:, 0])
+    print(to_bdry_nodes[:, 0])
+
+
+    # }}}
+
+
+
+
+    # group by face maps
+
+    yield InterpolationBatch(
+            from_group_index=i_src_grp,
+            from_element_indices=None,
+            to_element_indices=None,
+            result_unit_nodes=None,
+            to_element_face=None)
+
+
+def _find_ibatch_for_face(vbc_tgt_grp_batches, iface):
+    vbc_tgt_grp_face_batches = [
+            batch
+            for batch in vbc_tgt_grp_batches
+            if batch.to_element_face == iface]
+
+    assert len(vbc_tgt_grp_face_batches) == 1
+
+    vbc_tgt_grp_face_batch, = vbc_tgt_grp_face_batches
+
+    return vbc_tgt_grp_face_batch
+
+
+class GroupBatchAndElementLookup(Record):
+    """
+    .. attribute:: ibatch_lookup
+
+        ``element_id_t [from_nelements, from_nfaces]``
+
+    .. attribute:: iel_lookup
+
+        ``element_id_t [from_nelements, from_nfaces]``
+    """
+
+
+def _make_batch_and_el_lookup_table(queue, connection, igrp):
+    from_nelements = connection.from_discr.groups[igrp].nelements
+    from_nfaces = connection.from_discr.mesh.groups[igrp].nfaces
+
+    ibatch_lookup = np.empty((from_nelements, from_nfaces),
+            dtype=connection.from_discr.mesh.element_id_dtype)
+    ibatch_lookup.fill(-1)
+    iel_lookup = np.empty((from_nelements, from_nfaces),
+            dtype=connection.from_discr.mesh.element_id_dtype)
+    iel_lookup.fill(-1)
+
+    for ibatch, batch in enumerate(connection.groups[igrp].batches):
+        from_element_indices = batch.from_element_indices.get(queue=queue)
+        ibatch_lookup[from_element_indices, batch.to_element_face] = ibatch
+        iel_lookup[from_element_indices, batch.to_element_face] = \
+                batch.to_element_indices.get(queue=queue)
+
+    return GroupBatchAndElementLookup(
+            ibatch_lookup=ibatch_lookup,
+            iel_lookup=iel_lookup)
+
+
+def make_opposite_face_connection(volume_to_bdry_conn):
+    """Given a boundary restriction connection *volume_to_bdry_conn*,
+    return a :class:`DiscretizationConnection` that performs data
+    exchange across opposite faces.
+    """
+
+    vol_discr = volume_to_bdry_conn.from_discr
+    vol_mesh = vol_discr.mesh
+    bdry_discr = volume_to_bdry_conn.to_discr
+
+    # make sure we were handed a volume-to-boundary connection
+    for i_tgrp, conn_grp in enumerate(volume_to_bdry_conn.groups):
+        for batch in conn_grp.batches:
+            assert batch.from_group_index == i_tgrp
+            assert batch.to_element_face is not None
+
+    ngrps = len(volume_to_bdry_conn.groups)
+    assert ngrps == len(vol_discr.groups)
+    assert ngrps == len(bdry_discr.groups)
+
+    # One interpolation batch in this connection corresponds
+    # to a key (i_tgt_grp,)  (i_src_grp, i_face_tgt,)
+
+    with cl.CommandQueue(vol_discr.cl_context) as queue:
+        # a list of batches for each group
+        groups = [[] for i_tgt_grp in range(ngrps)]
+
+        for i_src_grp in range(ngrps):
+            src_grp_batch_and_el_lookup = _make_batch_and_el_lookup_table(
+                    queue, volume_to_bdry_conn, i_src_grp)
+
+            for i_tgt_grp in range(ngrps):
+                vbc_tgt_grp_batches = volume_to_bdry_conn.groups[i_tgt_grp].batches
+
+                adj_grp = vol_mesh.facial_adjacency_groups[i_tgt_grp][i_src_grp]
+
+                for i_face_tgt in range(vol_mesh.groups[i_tgt_grp].nfaces):
+                    vbc_tgt_grp_face_batch = _find_ibatch_for_face(
+                            vbc_tgt_grp_batches, i_face_tgt)
+
+                    # Assert that the adjacency group and the restriction
+                    # interpolation batch and the adjacency group have the same
+                    # element ordering.
+
+                    adj_grp_tgt_flags = adj_grp.element_faces == i_face_tgt
+
+                    assert (
+                            np.array_equal(
+                                adj_grp.elements[adj_grp_tgt_flags],
+                                vbc_tgt_grp_face_batch.from_element_indices
+                                .get(queue=queue)))
+
+                    groups[i_tgt_grp].extend(
+                        _make_cross_face_batches(
+                            queue, bdry_discr,
+                            i_tgt_grp, i_src_grp,
+                            i_face_tgt,
+                            adj_grp, adj_grp_tgt_flags,
+                            vbc_tgt_grp_face_batch,
+                            src_grp_batch_and_el_lookup))
+
+    return DiscretizationConnection(
+            from_discr=bdry_discr,
+            to_discr=bdry_discr,
+            groups=[
+                DiscretizationConnectionElementGroup(batches=batches)
+                for batches in groups])
 
 # }}}
 
