@@ -1,8 +1,4 @@
-from __future__ import division
-from __future__ import absolute_import
-import six
-from six.moves import range
-from six.moves import zip
+from __future__ import division, print_function, absolute_import
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -25,6 +21,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
+
+import six
+from six.moves import range, zip
 
 import numpy as np
 import numpy.linalg as la
@@ -660,17 +659,30 @@ def make_face_restriction(discr, group_factory, boundary_tag):
 # {{{ opposite-face connection
 
 def _make_cross_face_batches(
-        queue, bdry_discr,
+        queue, vol_discr, bdry_discr,
         i_tgt_grp, i_src_grp,
         i_face_tgt,
-        adj_grp, adj_grp_tgt_flags,
-        vbc_tgt_grp_face_batch,
-        src_grp_batch_and_el_lookup):
+        adj_grp,
+        vbc_tgt_grp_face_batch, src_grp_el_lookup):
+
+    # {{{ index wrangling
+
+    # Assert that the adjacency group and the restriction
+    # interpolation batch and the adjacency group have the same
+    # element ordering.
+
+    adj_grp_tgt_flags = adj_grp.element_faces == i_face_tgt
+
+    assert (
+            np.array_equal(
+                adj_grp.elements[adj_grp_tgt_flags],
+                vbc_tgt_grp_face_batch.from_element_indices
+                .get(queue=queue)))
 
     # find to_element_indices
 
     to_bdry_element_indices = (
-            vbc_tgt_grp_face_batch.from_element_indices
+            vbc_tgt_grp_face_batch.to_element_indices
             .get(queue=queue))
 
     # find from_element_indices
@@ -678,16 +690,43 @@ def _make_cross_face_batches(
     from_vol_element_indices = adj_grp.neighbors[adj_grp_tgt_flags]
     from_element_faces = adj_grp.neighbor_faces[adj_grp_tgt_flags]
 
-    from_bdry_element_indices = \
-            src_grp_batch_and_el_lookup.iel_lookup[
-                    from_vol_element_indices, from_element_faces]
+    from_bdry_element_indices = src_grp_el_lookup[
+            from_vol_element_indices, from_element_faces]
 
-    # {{{ invert face map (using Newton)
+    # }}}
+
+    # {{{ visualization (for debugging)
+
+    if 0:
+        print("TVE", adj_grp.elements[adj_grp_tgt_flags])
+        print("TBE", to_bdry_element_indices)
+        print("FVE", from_vol_element_indices)
+        from meshmode.mesh.visualization import draw_2d_mesh
+        import matplotlib.pyplot as pt
+        draw_2d_mesh(vol_discr.mesh, draw_element_numbers=True,
+                set_bounding_box=True,
+                draw_vertex_numbers=False,
+                draw_face_numbers=True,
+                fill=None)
+        pt.figure()
+
+        draw_2d_mesh(bdry_discr.mesh, draw_element_numbers=True,
+                set_bounding_box=True,
+                draw_vertex_numbers=False,
+                draw_face_numbers=True,
+                fill=None)
+
+        pt.show()
+    # }}}
+
+    # {{{ invert face map (using Gauss-Newton)
 
     to_bdry_nodes = (
             bdry_discr.groups[i_tgt_grp].view(bdry_discr.nodes())
             .get(queue=queue)
             [:, to_bdry_element_indices])
+
+    tol = 1e3 * np.finfo(to_bdry_nodes.dtype).eps
 
     from_mesh_grp = bdry_discr.mesh.groups[i_src_grp]
     from_grp = bdry_discr.groups[i_src_grp]
@@ -717,9 +756,15 @@ def _make_cross_face_batches(
         basis_at_unit_nodes = np.empty((from_nfuncs, nelements, nto_unit_nodes))
 
         for i, f in enumerate(from_grp.basis()):
-            basis_at_unit_nodes[i] = f(unit_nodes)
+            basis_at_unit_nodes[i] = (
+                    f(unit_nodes.reshape(dim, -1))
+                    .reshape(nelements, nto_unit_nodes))
 
         intp_coeffs = np.einsum("fj,jet->fet", from_inv_t_vdm, basis_at_unit_nodes)
+
+        # If we're interpolating 1, we had better get 1 back.
+        one_deviation = np.abs(np.sum(intp_coeffs, axis=0) - 1)
+        assert (one_deviation < tol).all(), np.max(one_deviation)
 
         return np.einsum("fet,aef->aet", intp_coeffs, from_bdry_nodes)
 
@@ -731,17 +776,20 @@ def _make_cross_face_batches(
                 (dim, from_nfuncs, nelements, nto_unit_nodes))
 
         for i, df in enumerate(from_grp.grad_basis()):
-            df_result = df(unit_nodes)
+            df_result = df(unit_nodes.reshape(dim, -1))
 
             for rst_axis, df_r in enumerate(df_result):
-                dbasis_at_unit_nodes[rst_axis, i] = df_r
+                dbasis_at_unit_nodes[rst_axis, i] = (
+                        df_r.reshape(nelements, nto_unit_nodes))
 
         dintp_coeffs = np.einsum(
                 "fj,rjet->rfet", from_inv_t_vdm, dbasis_at_unit_nodes)
 
         return np.einsum("rfet,aef->raet", dintp_coeffs, from_bdry_nodes)
 
-    if 1:
+    # {{{ test map applier and jacobian
+
+    if 0:
         u = from_unit_nodes
         f = apply_map(u)
         for h in [1e-1, 1e-2]:
@@ -755,25 +803,93 @@ def _make_cross_face_batches(
 
             print(h, la.norm((f_2-f2_2).ravel()))
 
+    # }}}
 
+    # {{{ visualize initial guess
 
-    print(r[:, 0])
-    print(to_bdry_nodes[:, 0])
+    if 0:
+        import matplotlib.pyplot as pt
+        guess = apply_map(from_unit_nodes)
+        goals = to_bdry_nodes
 
+        from meshmode.discretization.visualization import draw_curve
+        draw_curve(bdry_discr)
+
+        pt.plot(guess[0].reshape(-1), guess[1].reshape(-1), "or")
+        pt.plot(goals[0].reshape(-1), goals[1].reshape(-1), "og")
+        pt.plot(from_bdry_nodes[0].reshape(-1), from_bdry_nodes[1].reshape(-1), "o",
+                color="purple")
+        pt.show()
 
     # }}}
 
+    logger.info("make_opposite_face_connection: begin gauss-newton")
 
+    niter = 0
+    while True:
+        resid = apply_map(from_unit_nodes) - to_bdry_nodes
 
+        df = get_map_jacobian(from_unit_nodes)
+        df_inv_resid = np.empty_like(from_unit_nodes)
+        # FIXME: Should look for a way to batch this
+        for e in range(nelements):
+            for t in range(nto_unit_nodes):
+                df_inv_resid[:, e, t], _, _, _ = \
+                        la.lstsq(df[:, :, e, t].T, resid[:, e, t])
 
-    # group by face maps
+        from_unit_nodes = from_unit_nodes - df_inv_resid
 
-    yield InterpolationBatch(
-            from_group_index=i_src_grp,
-            from_element_indices=None,
-            to_element_indices=None,
-            result_unit_nodes=None,
-            to_element_face=None)
+        max_resid = np.max(np.abs(resid))
+        logger.debug("gauss-newton residual: %g" % max_resid)
+
+        if max_resid < tol:
+            logger.info("make_opposite_face_connection: gauss-newton: done, "
+                    "final residual: %g" % max_resid)
+            break
+
+        niter += 1
+        if niter > 10:
+            raise RuntimeError("Gauss-Newton (for finding opposite-face reference "
+                    "coordinates) did not converge")
+
+    # }}}
+
+    # {{{ find groups of from_unit_nodes
+
+    def to_dev(ary):
+        return cl.array.to_device(queue, ary, array_queue=None)
+
+    done_elements = np.zeros(nelements, dtype=np.bool)
+    while True:
+        todo_elements, = np.where(~done_elements)
+        if not len(todo_elements):
+            return
+
+        template_unit_nodes = from_unit_nodes[:, todo_elements[0], :]
+
+        unit_node_dist = np.max(np.max(np.abs(
+                from_unit_nodes[:, todo_elements, :]
+                -
+                template_unit_nodes.reshape(dim, 1, -1)),
+                axis=2), axis=0)
+
+        close_els = todo_elements[unit_node_dist < tol]
+        done_elements[close_els] = True
+
+        unit_node_dist = np.max(np.max(np.abs(
+                from_unit_nodes[:, todo_elements, :]
+                -
+                template_unit_nodes.reshape(dim, 1, -1)),
+                axis=2), axis=0)
+
+        yield InterpolationBatch(
+                from_group_index=i_src_grp,
+                from_element_indices=to_dev(from_bdry_element_indices[close_els]),
+                to_element_indices=to_dev(to_bdry_element_indices[close_els]),
+                result_unit_nodes=template_unit_nodes,
+                to_element_face=None)
+
+    # }}}
 
 
 def _find_ibatch_for_face(vbc_tgt_grp_batches, iface):
@@ -789,38 +905,20 @@ def _find_ibatch_for_face(vbc_tgt_grp_batches, iface):
     return vbc_tgt_grp_face_batch
 
 
-class GroupBatchAndElementLookup(Record):
-    """
-    .. attribute:: ibatch_lookup
-
-        ``element_id_t [from_nelements, from_nfaces]``
-
-    .. attribute:: iel_lookup
-
-        ``element_id_t [from_nelements, from_nfaces]``
-    """
-
-
-def _make_batch_and_el_lookup_table(queue, connection, igrp):
+def _make_el_lookup_table(queue, connection, igrp):
     from_nelements = connection.from_discr.groups[igrp].nelements
     from_nfaces = connection.from_discr.mesh.groups[igrp].nfaces
 
-    ibatch_lookup = np.empty((from_nelements, from_nfaces),
-            dtype=connection.from_discr.mesh.element_id_dtype)
-    ibatch_lookup.fill(-1)
     iel_lookup = np.empty((from_nelements, from_nfaces),
             dtype=connection.from_discr.mesh.element_id_dtype)
     iel_lookup.fill(-1)
 
     for ibatch, batch in enumerate(connection.groups[igrp].batches):
         from_element_indices = batch.from_element_indices.get(queue=queue)
-        ibatch_lookup[from_element_indices, batch.to_element_face] = ibatch
         iel_lookup[from_element_indices, batch.to_element_face] = \
                 batch.to_element_indices.get(queue=queue)
 
-    return GroupBatchAndElementLookup(
-            ibatch_lookup=ibatch_lookup,
-            iel_lookup=iel_lookup)
+    return iel_lookup
 
 
 def make_opposite_face_connection(volume_to_bdry_conn):
@@ -851,7 +949,7 @@ def make_opposite_face_connection(volume_to_bdry_conn):
         groups = [[] for i_tgt_grp in range(ngrps)]
 
         for i_src_grp in range(ngrps):
-            src_grp_batch_and_el_lookup = _make_batch_and_el_lookup_table(
+            src_grp_el_lookup = _make_el_lookup_table(
                     queue, volume_to_bdry_conn, i_src_grp)
 
             for i_tgt_grp in range(ngrps):
@@ -863,26 +961,13 @@ def make_opposite_face_connection(volume_to_bdry_conn):
                     vbc_tgt_grp_face_batch = _find_ibatch_for_face(
                             vbc_tgt_grp_batches, i_face_tgt)
 
-                    # Assert that the adjacency group and the restriction
-                    # interpolation batch and the adjacency group have the same
-                    # element ordering.
-
-                    adj_grp_tgt_flags = adj_grp.element_faces == i_face_tgt
-
-                    assert (
-                            np.array_equal(
-                                adj_grp.elements[adj_grp_tgt_flags],
-                                vbc_tgt_grp_face_batch.from_element_indices
-                                .get(queue=queue)))
-
                     groups[i_tgt_grp].extend(
                         _make_cross_face_batches(
-                            queue, bdry_discr,
+                            queue, vol_discr, bdry_discr,
                             i_tgt_grp, i_src_grp,
                             i_face_tgt,
-                            adj_grp, adj_grp_tgt_flags,
-                            vbc_tgt_grp_face_batch,
-                            src_grp_batch_and_el_lookup))
+                            adj_grp,
+                            vbc_tgt_grp_face_batch, src_grp_el_lookup))
 
     return DiscretizationConnection(
             from_discr=bdry_discr,

@@ -156,6 +156,87 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
             or eoc_rec.max_error() < 1e-14)
 
 
+@pytest.mark.parametrize("group_factory", [
+    InterpolatoryQuadratureSimplexGroupFactory,
+    PolynomialWarpAndBlendGroupFactory
+    ])
+@pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
+    ("blob", 2, [1e-1, 8e-2, 5e-2]),
+    ("warp", 2, [3, 5, 7]),
+    ("warp", 3, [3, 5]),
+    ])
+@pytest.mark.parametrize("dim", [2, 3])
+def test_opposite_face_interpolation(ctx_getter, group_factory,
+        mesh_name, dim, mesh_pars):
+    logging.basicConfig(level=logging.INFO)
+
+    cl_ctx = ctx_getter()
+    queue = cl.CommandQueue(cl_ctx)
+
+    from meshmode.discretization import Discretization
+    from meshmode.discretization.connection import (
+            make_face_restriction, make_opposite_face_connection)
+
+    from pytools.convergence import EOCRecorder
+    eoc_rec = EOCRecorder()
+
+    order = 5
+
+    def f(x):
+        return 0.1*cl.clmath.sin(30*x)
+
+    for mesh_par in mesh_pars:
+        # {{{ get mesh
+
+        if mesh_name == "blob":
+            assert dim == 2
+
+            h = mesh_par
+
+            from meshmode.mesh.io import generate_gmsh, FileSource
+            print("BEGIN GEN")
+            mesh = generate_gmsh(
+                    FileSource("blob-2d.step"), 2, order=order,
+                    force_ambient_dim=2,
+                    other_options=[
+                        "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
+                    )
+            print("END GEN")
+        elif mesh_name == "warp":
+            from meshmode.mesh.generation import generate_warped_rect_mesh
+            mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par)
+
+            h = 1/mesh_par
+        else:
+            raise ValueError("mesh_name not recognized")
+
+        # }}}
+
+        vol_discr = Discretization(cl_ctx, mesh,
+                group_factory(order))
+        print("h=%s -> %d elements" % (
+                h, sum(mgrp.nelements for mgrp in mesh.groups)))
+
+        bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
+                vol_discr, group_factory(order),
+                None)
+
+        opp_face = make_opposite_face_connection(bdry_connection)
+
+        bdry_x = bdry_discr.nodes()[0].with_queue(queue)
+        bdry_f = f(bdry_x)
+
+        bdry_f_2 = opp_face(queue, bdry_f)
+
+        err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
+        eoc_rec.add_data_point(h, err)
+
+    print(eoc_rec)
+    assert (
+            eoc_rec.order_estimate() >= order-0.5
+            or eoc_rec.max_error() < 1e-13)
+
+
 def test_element_orientation():
     from meshmode.mesh.io import generate_gmsh, FileSource
 
