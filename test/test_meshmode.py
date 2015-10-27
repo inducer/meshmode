@@ -165,7 +165,6 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
     ("warp", 2, [3, 5, 7]),
     ("warp", 3, [3, 5]),
     ])
-@pytest.mark.parametrize("dim", [2, 3])
 def test_opposite_face_interpolation(ctx_getter, group_factory,
         mesh_name, dim, mesh_pars):
     logging.basicConfig(level=logging.INFO)
