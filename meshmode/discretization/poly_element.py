@@ -65,6 +65,9 @@ class PolynomialSimplexElementGroupBase(ElementGroupBase):
     def basis(self):
         return mp.simplex_onb(self.dim, self.order)
 
+    def grad_basis(self):
+        return mp.grad_simplex_onb(self.dim, self.order)
+
     @memoize_method
     def from_mesh_interp_matrix(self):
         meg = self.mesh_el_group
@@ -77,7 +80,7 @@ class PolynomialSimplexElementGroupBase(ElementGroupBase):
     def diff_matrices(self):
         result = mp.differentiation_matrices(
                 self.basis(),
-                mp.grad_simplex_onb(self.dim, self.order),
+                self.grad_basis(),
                 self.unit_nodes)
 
         if not isinstance(result, tuple):
