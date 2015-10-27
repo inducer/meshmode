@@ -255,12 +255,15 @@ def draw_curve(discr):
     import matplotlib.pyplot as pt
     pt.plot(mesh.vertices[0], mesh.vertices[1], "o")
 
+    color = pt.cm.rainbow(np.linspace(0, 1, len(discr.groups)))
     with cl.CommandQueue(discr.cl_context) as queue:
         for i, group in enumerate(discr.groups):
             group_nodes = group.view(discr.nodes()).get(queue=queue)
             pt.plot(
-                    group_nodes[0].reshape(-1),
-                    group_nodes[1].reshape(-1), "-x", label="Group %d" % i)
+                    group_nodes[0].T,
+                    group_nodes[1].T, "-x",
+                    label="Group %d" % i,
+                    color=color[i])
 
 # }}}
 
