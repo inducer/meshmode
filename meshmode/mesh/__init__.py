@@ -128,6 +128,11 @@ class MeshElementGroup(Record):
         *Not* the ambient dimension, see :attr:`Mesh.ambient_dim`
         for that.
 
+    .. automethod:: face_vertex_indices
+    .. automethod:: vertex_unit_coordinates
+
+    .. attribute:: nfaces
+
     .. automethod:: __eq__
     .. automethod:: __ne__
     """
@@ -185,6 +190,23 @@ class MeshElementGroup(Record):
     @property
     def nunit_nodes(self):
         return self.unit_nodes.shape[-1]
+
+    def face_vertex_indices(self):
+        """Return a tuple of tuples indicating which vertices
+        (in mathematically positive ordering) make up each face
+        of an element in this group.
+        """
+        raise NotImplementedError()
+
+    def vertex_unit_coordinates(self):
+        """Return an array of shape ``(nfaces, dim)`` with the unit
+        coordinates of each vertex.
+        """
+        raise NotImplementedError()
+
+    @property
+    def nfaces(self):
+        return len(self.face_vertex_indices())
 
     def __eq__(self, other):
         return (
