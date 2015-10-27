@@ -1,5 +1,4 @@
 from __future__ import division, absolute_import, print_function
-from six.moves import range
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -23,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from six.moves import range
 import numpy as np
 import numpy.linalg as la
 import pyopencl as cl
@@ -77,11 +77,16 @@ def test_circle_mesh(do_plot=False):
     # all internal faces:
     None
     ])
-def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag):
+@pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
+    ("blob", 2, [1e-1, 8e-2, 5e-2]),
+    ("warp", 2, [10, 20, 30]),
+    ("warp", 3, [10, 20, 30]),
+    ])
+def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
+        mesh_name, dim, mesh_pars):
     cl_ctx = ctx_getter()
     queue = cl.CommandQueue(cl_ctx)
 
-    from meshmode.mesh.io import generate_gmsh, FileSource
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import make_face_restriction
 
@@ -93,15 +98,32 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag):
     def f(x):
         return 0.1*cl.clmath.sin(30*x)
 
-    for h in [1e-1, 8e-2, 5e-2]:
-        print("BEGIN GEN")
-        mesh = generate_gmsh(
-                FileSource("blob-2d.step"), 2, order=order,
-                force_ambient_dim=2,
-                other_options=[
-                    "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
-                )
-        print("END GEN")
+    for mesh_par in mesh_pars:
+        # {{{ get mesh
+
+        if mesh_name == "blob":
+            assert dim == 2
+
+            h = mesh_par
+
+            from meshmode.mesh.io import generate_gmsh, FileSource
+            print("BEGIN GEN")
+            mesh = generate_gmsh(
+                    FileSource("blob-2d.step"), 2, order=order,
+                    force_ambient_dim=2,
+                    other_options=[
+                        "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
+                    )
+            print("END GEN")
+        elif mesh_name == "warp":
+            from meshmode.mesh.generation import generate_warped_rect_mesh
+            mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par)
+
+            h = 1/mesh_par
+        else:
+            raise ValueError("mesh_name not recognized")
+
+        # }}}
 
         vol_discr = Discretization(cl_ctx, mesh,
                 group_factory(order))
@@ -119,10 +141,11 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag):
         bdry_f = f(bdry_x)
         bdry_f_2 = bdry_connection(queue, vol_f)
 
-        mat = bdry_connection.full_resample_matrix(queue).get(queue)
-        bdry_f_2_by_mat = mat.dot(vol_f.get())
+        if mesh_name == "blob" and dim == 2:
+            mat = bdry_connection.full_resample_matrix(queue).get(queue)
+            bdry_f_2_by_mat = mat.dot(vol_f.get())
 
-        assert(la.norm(bdry_f_2.get(queue=queue) - bdry_f_2_by_mat)) < 1e-14
+            assert(la.norm(bdry_f_2.get(queue=queue) - bdry_f_2_by_mat)) < 1e-14
 
         err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
         eoc_rec.add_data_point(h, err)
@@ -301,7 +324,6 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
     from pytential import bind, sym
 
     for h in [0.2, 0.14, 0.1]:
-        from meshmode.mesh import BTAG_ALL
         from meshmode.mesh.io import generate_gmsh, FileSource
         mesh = generate_gmsh(
                 FileSource(src_file), dim, order=mesh_order,
