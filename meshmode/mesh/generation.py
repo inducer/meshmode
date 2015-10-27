@@ -59,6 +59,7 @@ Volumes
 
 .. autofunction:: generate_box_mesh
 .. autofunction:: generate_regular_rect_mesh
+.. autofunction:: generate_warped_rect_mesh
 
 """
 
@@ -505,5 +506,36 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1):
     return generate_box_mesh(axis_coords, order=order)
 
 # }}}
+
+
+# {{{ generate_warped_rect_mesh
+
+def generate_warped_rect_mesh(dim, order, n):
+    """Generate a mesh of a warped line/square/cube. Mainly useful for testing
+    functionality with curvilinear meshes.
+    """
+
+    assert dim in [1, 2, 3]
+    mesh = generate_regular_rect_mesh(
+            a=(-0.5,)*dim, b=(0.5,)*dim,
+            n=(n,)*dim, order=order)
+
+    def m(x):
+        result = np.empty_like(x)
+        result[0] = (
+                1.5*x[0] + np.cos(x[0])
+                + 0.1*np.sin(10*x[1]))
+        result[1] = (
+                0.05*np.cos(10*x[0])
+                + 1.3*x[1] + np.sin(x[1]))
+        if len(x) == 3:
+            result[2] = x[2] + np.sin(x[0])
+        return result
+
+    from meshmode.mesh.processing import map_mesh
+    return map_mesh(mesh, m)
+
+# }}}
+
 
 # vim: fdm=marker
