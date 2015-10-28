@@ -831,11 +831,40 @@ def _make_cross_face_batches(
 
         df = get_map_jacobian(from_unit_nodes)
         df_inv_resid = np.empty_like(from_unit_nodes)
-        # FIXME: Should look for a way to batch this
-        for e in range(nelements):
-            for t in range(nto_unit_nodes):
-                df_inv_resid[:, e, t], _, _, _ = \
-                        la.lstsq(df[:, :, e, t].T, resid[:, e, t])
+
+        # For the 1D/2D accelerated versions, we'll use the normal
+        # equations and Cramer's rule. If you're looking for high-end
+        # numerics, look no further than meshmode.
+
+        if dim == 1:
+            # A is df.T
+            ata = np.einsum("iket,jket->ijet", df, df)
+            atb = np.einsum("iket,ket->iet", df, resid)
+
+            df_inv_resid = atb / ata[0, 0]
+
+        elif dim == 2:
+            # A is df.T
+            ata = np.einsum("iket,jket->ijet", df, df)
+            atb = np.einsum("iket,ket->iet", df, resid)
+
+            det = ata[0, 0]*ata[1, 1] - ata[0, 1]*ata[1, 0]
+
+            df_inv_resid = np.empty_like(from_unit_nodes)
+            df_inv_resid[0] = 1/det * (ata[1, 1] * atb[0] - ata[1, 0]*atb[1])
+            df_inv_resid[1] = 1/det * (-ata[0, 1] * atb[0] + ata[0, 0]*atb[1])
+
+        else:
+            # The boundary of a 3D mesh is 2D, so that's the
+            # highest-dimensional case we genuinely care about.
+            #
+            # This stinks, performance-wise, because it's not vectorized.
+            # But we'll only hit it for boundaries of 4+D meshes, in which
+            # case... good luck. :)
+            for e in range(nelements):
+                for t in range(nto_unit_nodes):
+                    df_inv_resid[:, e, t], _, _, _ = \
+                            la.lstsq(df[:, :, e, t].T, resid[:, e, t])
 
         from_unit_nodes = from_unit_nodes - df_inv_resid
 
