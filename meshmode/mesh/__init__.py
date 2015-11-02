@@ -995,7 +995,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False):
         if bdry_grp is None:
             continue
 
-        nb_elements = bdry_grp.neighbor_elements
+        nb_elements = bdry_grp.neighbors
         assert (nb_elements < 0).all()
 
         nb_el_bits = -nb_elements
@@ -1006,7 +1006,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False):
             tag_bit = mesh.boundary_tag_bit(btag)
             tag_set = (nb_el_bits & tag_bit) != 0
 
-            if seen & tag_set:
+            if (seen & tag_set).any():
                 raise RuntimeError("faces with multiple boundary conditions found")
 
             seen = seen | tag_set
