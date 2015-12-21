@@ -296,11 +296,44 @@ class Refiner(object):
                                         vertex_elements[len(vertex_elements)-1].append(el)
                                 midpoint_vertices.append(cur_midpoint)
 
-
+                    #fix connectivity for elements
                     unique_vertex_pairs = [
-                        (i, j) for i in range(len(midpoint_vertices)) for j in range(
-                            i+1, len(midpoint_vertices))]
+                        (i, j) for i in range(len(vertex_indices)) for j in range(
+                            i+1, len(vertex_indices))]
                     midpoint_index = 0
+                    for i, j in unique_vertex_pairs:
+                        min_index = min(vertex_indices[i], vertex_indices[j])
+                        max_index = max(vertex_indices[i], vertex_indices[j])
+                        element_indices_1 = []
+                        element_indices_2 = []
+                        for k_index, k, in enumerate(self.simplex_result):
+                            ituple_index = self.simplex_node_tuples.index(
+                                self.index_to_node_tuple[i])
+                            jtuple_index = self.simplex_node_tuples.index(
+                                self.index_to_node_tuple[j])
+                            midpoint_tuple_index = self.simplex_node_tuples.index(
+                                self.index_to_midpoint_tuple[midpoint_index])
+                            if ituple_index in k and midpoint_tuple_index in k:
+                                element_indices_1.append(k_index)
+                            if jtuple_index in k and midpoint_tuple_index in k:
+                                element_indices_2.append(k_index)
+                        midpoint_index += 1
+                        if min_index == vertex_indices[i]:
+                            min_element_index = element_indices_1
+                            max_element_index = element_indices_2
+                        else:
+                            min_element_index = element_indices_2
+                            max_element_index = element_indices_1
+                        vertex_pair = (min_index, max_index)
+                        cur_node = self.pair_map[vertex_pair]
+                        if cur_node.direction:
+                            first_element_index = min_element_index
+                            second_element_index = max_element_index
+                        else:
+                            first_element_index = max_element_index
+                            second_element_index = min_element_index
+                        
+
                     for i, j in unique_vertex_pairs:
                         min_index = min(midpoint_vertices[i], midpoint_vertices[j])
                         max_index = max(midpoint_vertices[i], midpoint_vertices[j])
