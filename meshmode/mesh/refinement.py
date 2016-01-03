@@ -41,9 +41,11 @@ class TreeRayNode:
         List containing elements indices of elements adjacent
         to this ray segment.
     """
-    def __init__(self, direction = True, adjacent_elements = []):
+    def __init__(self, left_vertex, right_vertex, direction = True, adjacent_elements = []):
         self.left = None
         self.right = None
+        self.left_vertex = left_vertex
+        self.right_vertex = right_vertex
         self.midpoint = None
         self.direction = direction
         self.adjacent_elements = adjacent_elements
@@ -81,12 +83,12 @@ class Refiner(object):
                        
                         #minimum and maximum of the two indices for storing 
                         #data in vertex_pair
-                        mn_idx = min(vert_indices[i], vert_indices[j])
-                        mx_idx = max(vert_indices[i], vert_indices[j])
+                        min_index = min(vert_indices[i], vert_indices[j])
+                        max_index = max(vert_indices[i], vert_indices[j])
 
-                        vertex_pair = (mn_idx, mx_idx)
+                        vertex_pair = (min_index, max_index)
                         if vertex_pair not in self.pair_map:
-                            self.pair_map[vertex_pair] = TreeRayNode()
+                            self.pair_map[vertex_pair] = TreeRayNode(min_index, max_index)
 
                         (self.pair_map[vertex_pair].
                             adjacent_elements.append(iel_base+iel_grp))
@@ -247,6 +249,7 @@ class Refiner(object):
 
         grpn = 0
         vertices_index = self.last_mesh.nvertices
+        nelements_in_grp = grp.nelements
         for grp in self.last_mesh.groups:
             iel_base = grp.element_nr_base
             for iel_grp in six.moves.range(grp.nelements):
@@ -264,9 +267,10 @@ class Refiner(object):
                             if cur_node.midpoint is None:
                                 cur_node.midpoint = vertices_index
                                 import copy
-                                cur_node.left = TreeRayNode(cur_node.direction, 
-                                        copy.deepcopy(cur_node.adjacent_elements))
-                                cur_node.right = TreeRayNode(not cur_node.direction,
+                                cur_node.left = TreeRayNode(min_index, vertices_index,
+                                        cur_node.direction, copy.deepcopy(cur_node.adjacent_elements))
+                                cur_node.right = TreeRayNode(max_index, vertices_index,
+                                        not cur_node.direction,
                                         copy.deepcopy(cur_node.adjacent_elements))
                                 vertex_pair1 = (min_index, vertices_index)
                                 vertex_pair2 = (max_index, vertices_index)
@@ -332,7 +336,85 @@ class Refiner(object):
                         else:
                             first_element_index = max_element_index
                             second_element_index = min_element_index
-                        
+                        queue = [cur_node.left]
+                        while queue:
+                            vertex = queue.pop(0)
+                            #if leaf node
+                            if vertex.left is None and vertex.right is None:
+                                node_elements = vertex.adjacent_elements
+                                node_elements.remove(iel_base+iel_grp)
+                                for k in first_element_index:
+                                    if k == 0:
+                                        node_elements.append(iel_base+iel_grp)
+                                    else:
+                                        node_elements.append(iel_base+grp.nelements+k-1)
+                                if new_hanging_vertex_element[vertex.left_vertex] and \
+                                    new_hanging_vertex_element[vertex.left_vertex].count(
+                                    iel_base+iel_grp):
+                                    new_hanging_vertex_element[vertex.left_vertex].remove(
+                                        iel_base+iel_grp)
+                                    for k in first_element_index:
+                                        if k == 0:
+                                            new_hanging_vertex_element[vertex.left_vertex].remove(
+                                                iel_base+iel_grp)
+                                        else:
+                                            new_hanging_vertex_element[vertex.left_vertex.append(
+                                                iel_base+grp.nelements+k-1)
+                                if new_hanging_vertex_element[vertex.right_vertex] and \
+                                    new_hanging_vertex_element[vertex.right_vertex].count(
+                                    iel_base+iel_grp):
+                                    new_hanging_vertex_element[vertex.right_vertex].remove(
+                                        iel_base+iel_grp)
+                                    for k in first_element_index:
+                                        if k == 0:
+                                            new_hanging_vertex_element[vertex.right_vertex.remove(
+                                                iel_base+iel_grp)
+                                        else:
+                                            new_hanging_vertex_element[vertex.left_vertex.append(
+                                                iel_base+grp.nelements+k-1)
+                            else:
+                                queue.append(vertex.left)
+                                queue.append(vertex.right)
+
+                        queue = [cur_node.right]
+                        while queue:
+                            vertex = queue.pop(0)
+                            #if leaf node
+                            if vertex.left is None and vertex.right is None:
+                                node_elements = vertex.adjacent_elements
+                                node_elements.remove(iel_base+iel_grp)
+                                for k in second_element_index:
+                                    if k == 0:
+                                        node_elements.append(iel_base+iel_grp)
+                                    else:
+                                        node_elements.append(iel_base+grp.nelements+k-1)
+                                if new_hanging_vertex_element[vertex.left_vertex] and \
+                                    new_hanging_vertex_element[vertex.left_vertex].count(
+                                    iel_base+iel_grp):
+                                    new_hanging_vertex_element[vertex.left_vertex].remove(
+                                        iel_base+iel_grp)
+                                    for k in second_element_index:
+                                        if k == 0:
+                                            new_hanging_vertex_element[vertex.left_vertex].remove(
+                                                iel_base+iel_grp)
+                                        else:
+                                            new_hanging_vertex_element[vertex.left_vertex.append(
+                                                iel_base+grp.nelements+k-1)
+                                if new_hanging_vertex_element[vertex.right_vertex] and \
+                                    new_hanging_vertex_element[vertex.right_vertex].count(
+                                    iel_base+iel_grp):
+                                    new_hanging_vertex_element[vertex.right_vertex].remove(
+                                        iel_base+iel_grp)
+                                    for k in second_element_index:
+                                        if k == 0:
+                                            new_hanging_vertex_element[vertex.right_vertex.remove(
+                                                iel_base+iel_grp)
+                                        else:
+                                            new_hanging_vertex_element[vertex.left_vertex.append(
+                                                iel_base+grp.nelements+k-1)
+                            else:
+                                queue.append(vertex.left)
+                                queue.append(vertex.right)
 
                     for i, j in unique_vertex_pairs:
                         min_index = min(midpoint_vertices[i], midpoint_vertices[j])
