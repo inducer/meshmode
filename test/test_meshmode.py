@@ -97,7 +97,8 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.discretization import Discretization
-    from meshmode.discretization.connection import make_face_restriction
+    from meshmode.discretization.connection import (
+            make_face_restriction, check_connection)
 
     from pytools.convergence import EOCRecorder
     eoc_rec = EOCRecorder()
@@ -145,6 +146,7 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
         bdry_connection = make_face_restriction(
                 vol_discr, group_factory(order),
                 boundary_tag, per_face_groups=per_face_groups)
+        check_connection(bdry_connection)
         bdry_discr = bdry_connection.to_discr
 
         bdry_x = bdry_discr.nodes()[0].with_queue(queue)
@@ -185,7 +187,8 @@ def test_opposite_face_interpolation(ctx_getter, group_factory,
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
-            make_face_restriction, make_opposite_face_connection)
+            make_face_restriction, make_opposite_face_connection,
+            check_connection)
 
     from pytools.convergence import EOCRecorder
     eoc_rec = EOCRecorder()
@@ -233,6 +236,7 @@ def test_opposite_face_interpolation(ctx_getter, group_factory,
         bdry_discr = bdry_connection.to_discr
 
         opp_face = make_opposite_face_connection(bdry_connection)
+        check_connection(opp_face)
 
         bdry_x = bdry_discr.nodes()[0].with_queue(queue)
         bdry_f = f(bdry_x)
