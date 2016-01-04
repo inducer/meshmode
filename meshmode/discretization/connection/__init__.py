@@ -371,7 +371,7 @@ class DiscretizationConnection(object):
         if self.is_surjective:
             result = self.to_discr.empty(dtype=vec.dtype)
         else:
-            result = self.to_discr.zeros(dtype=vec.dtype)
+            result = self.to_discr.zeros(queue, dtype=vec.dtype)
 
         if vec.shape != (self.from_discr.nnodes,):
             raise ValueError("invalid shape of incoming resampling data")
