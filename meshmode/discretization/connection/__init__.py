@@ -406,6 +406,32 @@ class DiscretizationConnection(object):
 # }}}
 
 
+# {{{ check connection
+
+def check_connection(connection):
+    from_discr = connection.to_discr
+    to_discr = connection.to_discr
+
+    assert len(connection.groups) == len(to_discr.groups)
+
+    with cl.CommandQueue(to_discr.cl_context) as queue:
+        for cgrp, tgrp in zip(connection.groups, to_discr.groups):
+            for batch in cgrp.batches:
+                fgrp = from_discr.groups[batch.from_group_index]
+
+                from_element_indices = batch.from_element_indices.get(queue)
+                to_element_indices = batch.to_element_indices.get(queue)
+
+                assert (0 <= from_element_indices).all()
+                assert (0 <= to_element_indices).all()
+                assert (from_element_indices < fgrp.nelements).all()
+                assert (to_element_indices < tgrp.nelements).all()
+                if batch.to_element_face is not None:
+                    assert 0 <= batch.to_element_face < fgrp.mesh_el_group.nfaces
+
+# }}}
+
+
 # {{{ refinement connection
 
 def make_refinement_connection(refiner, coarse_discr):
