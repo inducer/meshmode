@@ -81,7 +81,8 @@ def _build_boundary_connection(queue, vol_discr, bdry_discr, connection_data):
                     connection_batches))
 
     return DiscretizationConnection(
-            vol_discr, bdry_discr, connection_groups)
+            vol_discr, bdry_discr, connection_groups,
+            is_surjective=True)
 
 # }}}
 

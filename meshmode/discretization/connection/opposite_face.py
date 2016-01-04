@@ -383,7 +383,8 @@ def make_opposite_face_connection(volume_to_bdry_conn):
             to_discr=bdry_discr,
             groups=[
                 DiscretizationConnectionElementGroup(batches=batches)
-                for batches in groups])
+                for batches in groups],
+            is_surjective=True)
 
 # }}}
 

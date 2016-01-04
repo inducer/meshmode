@@ -164,13 +164,18 @@ class DiscretizationConnection(object):
         instances, with a one-to-one correspondence to the groups in
         :attr:`to_discr`.
 
+    .. attribute:: is_surjective
+
+        A :class:`bool` indicating whether every output degree
+        of freedom is set by the connection.
+
     .. automethod:: __call__
 
     .. automethod:: full_resample_matrix
 
     """
 
-    def __init__(self, from_discr, to_discr, groups):
+    def __init__(self, from_discr, to_discr, groups, is_surjective):
         if from_discr.cl_context != to_discr.cl_context:
             raise ValueError("from_discr and to_discr must live in the "
                     "same OpenCL context")
@@ -190,6 +195,8 @@ class DiscretizationConnection(object):
         self.from_discr = from_discr
         self.to_discr = to_discr
         self.groups = groups
+
+        self.is_surjective = is_surjective
 
     @memoize_method
     def _resample_matrix(self, to_group_index, ibatch_index):
@@ -356,7 +363,10 @@ class DiscretizationConnection(object):
         if not isinstance(vec, cl.array.Array):
             return vec
 
-        result = self.to_discr.empty(dtype=vec.dtype)
+        if self.is_surjective:
+            result = self.to_discr.empty(dtype=vec.dtype)
+        else:
+            result = self.to_discr.zeros(dtype=vec.dtype)
 
         if vec.shape != (self.from_discr.nnodes,):
             raise ValueError("invalid shape of incoming resampling data")

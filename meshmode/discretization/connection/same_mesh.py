@@ -57,7 +57,8 @@ def make_same_mesh_connection(to_discr, from_discr):
                     DiscretizationConnectionElementGroup([ibatch]))
 
     return DiscretizationConnection(
-            from_discr, to_discr, groups)
+            from_discr, to_discr, groups,
+            is_surjective=True)
 
 # }}}
 
