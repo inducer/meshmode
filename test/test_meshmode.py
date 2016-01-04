@@ -38,6 +38,8 @@ from meshmode.discretization.poly_element import (
         PolynomialWarpAndBlendGroupFactory
         )
 from meshmode.mesh import BTAG_ALL
+from meshmode.discretization.connection import \
+        FRESTR_ALL_FACES, FRESTR_INTERIOR_FACES
 
 import pytest
 
@@ -80,16 +82,17 @@ def test_circle_mesh(do_plot=False):
     ])
 @pytest.mark.parametrize("boundary_tag", [
     BTAG_ALL,
-    # all internal faces:
-    None
+    FRESTR_ALL_FACES,
+    FRESTR_INTERIOR_FACES,
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
     ("blob", 2, [1e-1, 8e-2, 5e-2]),
     ("warp", 2, [10, 20, 30]),
     ("warp", 3, [10, 20, 30]),
     ])
+@pytest.mark.parametrize("per_face_groups", [False, True])
 def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
-        mesh_name, dim, mesh_pars):
+        mesh_name, dim, mesh_pars, per_face_groups):
     cl_ctx = ctx_getter()
     queue = cl.CommandQueue(cl_ctx)
 
@@ -141,7 +144,7 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
 
         bdry_connection = make_face_restriction(
                 vol_discr, group_factory(order),
-                boundary_tag)
+                boundary_tag, per_face_groups=per_face_groups)
         bdry_discr = bdry_connection.to_discr
 
         bdry_x = bdry_discr.nodes()[0].with_queue(queue)
@@ -152,7 +155,8 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
             mat = bdry_connection.full_resample_matrix(queue).get(queue)
             bdry_f_2_by_mat = mat.dot(vol_f.get())
 
-            assert(la.norm(bdry_f_2.get(queue=queue) - bdry_f_2_by_mat)) < 1e-14
+            mat_error = la.norm(bdry_f_2.get(queue=queue) - bdry_f_2_by_mat)
+            assert mat_error < 1e-14, mat_error
 
         err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
         eoc_rec.add_data_point(h, err)

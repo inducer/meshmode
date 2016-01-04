@@ -31,8 +31,9 @@ from pytools import memoize_method, memoize_in
 
 from meshmode.discretization.connection.same_mesh import \
         make_same_mesh_connection
-from meshmode.discretization.connection.face import \
-        make_face_restriction
+from meshmode.discretization.connection.face import (
+        FRESTR_INTERIOR_FACES, FRESTR_ALL_FACES,
+        make_face_restriction)
 from meshmode.discretization.connection.opposite_face import \
         make_opposite_face_connection
 
@@ -42,7 +43,9 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
         "DiscretizationConnection",
-        "make_same_mesh_connection", "make_face_restriction",
+        "make_same_mesh_connection",
+        "FRESTR_INTERIOR_FACES", "FRESTR_ALL_FACES",
+        "make_face_restriction",
         "make_opposite_face_connection"
         ]
 
@@ -51,6 +54,8 @@ __doc__ = """
 
 .. autofunction:: make_same_mesh_connection
 
+.. autofunction:: FRESTR_INTERIOR_FACES
+.. autofunction:: FRESTR_ALL_FACES
 .. autofunction:: make_face_restriction
 
 .. autofunction:: make_opposite_face_connection
