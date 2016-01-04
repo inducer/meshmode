@@ -168,6 +168,119 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
             eoc_rec.order_estimate() >= order-0.5
             or eoc_rec.max_error() < 1e-14)
 
+# }}}
+
+
+# {{{ boundary-to-all-faces connecttion
+
+@pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
+    ("blob", 2, [1e-1, 8e-2, 5e-2]),
+    ("warp", 2, [10, 20, 30]),
+    ("warp", 3, [10, 20, 30]),
+    ])
+@pytest.mark.parametrize("per_face_groups", [False, True])
+def test_all_faces_interpolation(ctx_getter, mesh_name, dim, mesh_pars,
+        per_face_groups):
+    cl_ctx = ctx_getter()
+    queue = cl.CommandQueue(cl_ctx)
+
+    from meshmode.discretization import Discretization
+    from meshmode.discretization.connection import (
+            make_face_restriction, make_face_to_all_faces_embedding,
+            check_connection)
+
+    from pytools.convergence import EOCRecorder
+    eoc_rec = EOCRecorder()
+
+    order = 4
+
+    def f(x):
+        return 0.1*cl.clmath.sin(30*x)
+
+    for mesh_par in mesh_pars:
+        # {{{ get mesh
+
+        if mesh_name == "blob":
+            assert dim == 2
+
+            h = mesh_par
+
+            from meshmode.mesh.io import generate_gmsh, FileSource
+            print("BEGIN GEN")
+            mesh = generate_gmsh(
+                    FileSource("blob-2d.step"), 2, order=order,
+                    force_ambient_dim=2,
+                    other_options=[
+                        "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
+                    )
+            print("END GEN")
+        elif mesh_name == "warp":
+            from meshmode.mesh.generation import generate_warped_rect_mesh
+            mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par)
+
+            h = 1/mesh_par
+        else:
+            raise ValueError("mesh_name not recognized")
+
+        # }}}
+
+        vol_discr = Discretization(cl_ctx, mesh,
+                PolynomialWarpAndBlendGroupFactory(order))
+        print("h=%s -> %d elements" % (
+                h, sum(mgrp.nelements for mgrp in mesh.groups)))
+
+        all_face_bdry_connection = make_face_restriction(
+                vol_discr, PolynomialWarpAndBlendGroupFactory(order),
+                FRESTR_ALL_FACES, per_face_groups=per_face_groups)
+        all_face_bdry_discr = all_face_bdry_connection.to_discr
+
+        for ito_grp, ceg in enumerate(all_face_bdry_connection.groups):
+            for ibatch, batch in enumerate(ceg.batches):
+                assert np.array_equal(
+                        batch.from_element_indices.get(queue),
+                        np.arange(vol_discr.mesh.nelements))
+
+                if per_face_groups:
+                    assert ito_grp == batch.to_element_face
+                else:
+                    assert ibatch == batch.to_element_face
+
+        all_face_x = all_face_bdry_discr.nodes()[0].with_queue(queue)
+        all_face_f = f(all_face_x)
+
+        all_face_f_2 = all_face_bdry_discr.zeros(queue)
+
+        for boundary_tag in [
+                BTAG_ALL,
+                FRESTR_INTERIOR_FACES,
+                ]:
+            bdry_connection = make_face_restriction(
+                    vol_discr, PolynomialWarpAndBlendGroupFactory(order),
+                    boundary_tag, per_face_groups=per_face_groups)
+            bdry_discr = bdry_connection.to_discr
+
+            bdry_x = bdry_discr.nodes()[0].with_queue(queue)
+            bdry_f = f(bdry_x)
+
+            all_face_embedding = make_face_to_all_faces_embedding(
+                    bdry_connection, all_face_bdry_discr)
+
+            check_connection(all_face_embedding)
+
+            all_face_f_2 += all_face_embedding(queue, bdry_f)
+
+        err = la.norm((all_face_f-all_face_f_2).get(), np.inf)
+        eoc_rec.add_data_point(h, err)
+
+    print(eoc_rec)
+    assert (
+            eoc_rec.order_estimate() >= order-0.5
+            or eoc_rec.max_error() < 1e-14)
+
+# }}}
+
+
+# {{{ convergence of opposite-face interpolation
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
