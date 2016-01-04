@@ -135,9 +135,28 @@ def make_face_restriction(discr, group_factory, boundary_tag):
     denoted by *boundary_tag*.
 
     :arg boundary_tag: The boundary tag for which to create a face
-        restriction. May be *None* to indicate interior faces.
+        restriction. May be
+        :class:`meshmode.discretization.connection.INTERIOR_FACES`
+        to indicate interior faces, or
+        :class:`meshmode.discretization.connection.ALL_FACES`
+        to make a discretization consisting of all (interior and
+        boundary) faces.
 
-    :return: a tuple ``(bdry_mesh, bdry_discr, connection)``
+    :return: a :class:`meshmode.discretization.connection.DiscretizationConnection`
+        representing the new connection. The new boundary discretization can be
+        obtained from the
+        :attr:`meshmode.discretization.connection.DiscretizationConnection.to_discr`
+        attribute of the return value, and the corresponding new boundary mesh
+        from that.
+
+    The resulting discretization is guaranteed to have groups
+    organized as::
+
+        (grp0, face0), (grp0, face1), ... (grp0, faceN),
+        (grp1, face0), (grp1, face1), ... (grp1, faceN), ...
+
+    each with the elements in the same order as the originating
+    group.
     """
 
     logger.info("building face restriction: start")
@@ -302,7 +321,7 @@ def make_face_restriction(discr, group_factory, boundary_tag):
 
     logger.info("building face restriction: done")
 
-    return bdry_mesh, bdry_discr, connection
+    return connection
 
 # }}}
 

@@ -139,9 +139,10 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
         x = vol_discr.nodes()[0].with_queue(queue)
         vol_f = f(x)
 
-        bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
+        bdry_connection = make_face_restriction(
                 vol_discr, group_factory(order),
                 boundary_tag)
+        bdry_discr = bdry_connection.to_discr
 
         bdry_x = bdry_discr.nodes()[0].with_queue(queue)
         bdry_f = f(bdry_x)
@@ -222,9 +223,10 @@ def test_opposite_face_interpolation(ctx_getter, group_factory,
         print("h=%s -> %d elements" % (
                 h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
-        bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
+        bdry_connection = make_face_restriction(
                 vol_discr, group_factory(order),
-                None)
+                FRESTR_INTERIOR_FACES)
+        bdry_discr = bdry_connection.to_discr
 
         opp_face = make_opposite_face_connection(bdry_connection)
 
@@ -365,9 +367,10 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
     # {{{ boundary discretization
 
     from meshmode.discretization.connection import make_face_restriction
-    bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
+    bdry_connection = make_face_restriction(
             vol_discr, PolynomialWarpAndBlendGroupFactory(order + 3),
             BTAG_ALL)
+    bdry_discr = bdry_connection.to_discr
 
     # }}}
 
@@ -441,10 +444,11 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
                 InterpolatoryQuadratureSimplexGroupFactory(quad_order))
 
         from meshmode.discretization.connection import make_face_restriction
-        bdry_mesh, bdry_discr, bdry_connection = make_face_restriction(
+        bdry_connection = make_face_restriction(
                 vol_discr,
                 InterpolatoryQuadratureSimplexGroupFactory(quad_order),
                 BTAG_ALL)
+        bdry_discr = bdry_connection.to_discr
 
         # }}}
 
