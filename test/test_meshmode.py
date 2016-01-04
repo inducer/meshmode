@@ -45,6 +45,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# {{{ circle mesh
+
 def test_circle_mesh(do_plot=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
     print("BEGIN GEN")
@@ -67,6 +69,10 @@ def test_circle_mesh(do_plot=False):
         import matplotlib.pyplot as pt
         pt.show()
 
+# }}}
+
+
+# {{{ convergence of boundary interpolation
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
@@ -235,6 +241,10 @@ def test_opposite_face_interpolation(ctx_getter, group_factory,
             eoc_rec.order_estimate() >= order-0.5
             or eoc_rec.max_error() < 1e-13)
 
+# }}}
+
+
+# {{{ element orientation
 
 def test_element_orientation():
     from meshmode.mesh.io import generate_gmsh, FileSource
@@ -264,6 +274,10 @@ def test_element_orientation():
 
     assert ((mesh_orient < 0) == (flippy > 0)).all()
 
+# }}}
+
+
+# {{{ merge and map
 
 def test_merge_and_map(ctx_getter, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
@@ -295,6 +309,10 @@ def test_merge_and_map(ctx_getter, visualize=False):
         vis = make_visualizer(queue, discr, 1)
         vis.write_vtk_file("merged.vtu", [])
 
+# }}}
+
+
+# {{{ sanity checks: single element
 
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("order", [1, 3])
@@ -378,6 +396,10 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
 
     assert normal_outward_check.get().all(), normal_outward_check.get()
 
+# }}}
+
+
+# {{{ sanity checks: ball meshes
 
 # python test_meshmode.py 'test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)'  # noqa
 @pytest.mark.parametrize(("src_file", "dim"), [
@@ -492,6 +514,10 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
     print(surf_eoc_rec)
     assert surf_eoc_rec.order_estimate() >= mesh_order
 
+# }}}
+
+
+# {{{ rect/box mesh generation
 
 def test_rect_mesh(do_plot=False):
     from meshmode.mesh.generation import generate_regular_rect_mesh
@@ -522,6 +548,10 @@ def test_box_mesh(ctx_getter, visualize=False):
         vis = make_visualizer(queue, discr, 1)
         vis.write_vtk_file("box.vtu", [])
 
+# }}}
+
+
+# {{{ as_python stringification
 
 def test_as_python():
     from meshmode.mesh.generation import generate_box_mesh
@@ -542,6 +572,10 @@ def test_as_python():
 
     assert mesh == mesh_2
 
+# }}}
+
+
+# {{{ lookup tree for element finding
 
 def test_lookup_tree(do_plot=False):
     from meshmode.mesh.generation import make_curve_mesh, cloverleaf
@@ -564,6 +598,8 @@ def test_lookup_tree(do_plot=False):
     if do_plot:
         with open("tree.dat", "w") as outf:
             tree.visualize(outf)
+
+# }}}
 
 
 if __name__ == "__main__":
