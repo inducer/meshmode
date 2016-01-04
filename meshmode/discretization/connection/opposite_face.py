@@ -99,8 +99,10 @@ def _make_cross_face_batches(
     # {{{ invert face map (using Gauss-Newton)
 
     to_bdry_nodes = (
-            bdry_discr.groups[i_tgt_grp].view(bdry_discr.nodes())
-            .get(queue=queue)
+            # FIXME: This should view-then-transfer (but PyOpenCL doesn't do
+            # non-contiguous transfers for now).
+            bdry_discr.groups[i_tgt_grp].view(
+                bdry_discr.nodes().get(queue=queue))
             [:, to_bdry_element_indices])
 
     tol = 1e3 * np.finfo(to_bdry_nodes.dtype).eps
@@ -122,8 +124,10 @@ def _make_cross_face_batches(
 
     # (ambient_dim, nelements, nfrom_unit_nodes)
     from_bdry_nodes = (
-            bdry_discr.groups[i_src_grp].view(bdry_discr.nodes())
-            .get(queue=queue)
+            # FIXME: This should view-then-transfer (but PyOpenCL doesn't do
+            # non-contiguous transfers for now).
+            bdry_discr.groups[i_src_grp].view(
+                bdry_discr.nodes().get(queue=queue))
             [:, from_bdry_element_indices])
 
     def apply_map(unit_nodes):
