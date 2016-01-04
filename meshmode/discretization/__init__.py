@@ -225,6 +225,9 @@ class Discretization(object):
         result = self.empty(dtype=vec.dtype)
 
         for grp in self.groups:
+            if grp.nelements == 0:
+                continue
+
             mat = None
             for ref_axis in ref_axes:
                 next_mat = grp.diff_matrices()[ref_axis]
@@ -243,13 +246,17 @@ class Discretization(object):
             knl = lp.make_kernel(
                 "{[k,i]: 0<=k<nelements and 0<=i<ndiscr_nodes}",
                 "result[k,i] = weights[i]",
-                name="quad_weights")
+                name="quad_weights",
+                default_offset=lp.auto)
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))
 
         result = self.empty(dtype=self.real_dtype)
         for grp in self.groups:
+            if grp.nelements == 0:
+                continue
+
             knl()(queue, result=grp.view(result), weights=grp.weights)
         return result
 
@@ -280,6 +287,9 @@ class Discretization(object):
 
         with cl.CommandQueue(self.cl_context) as queue:
             for grp in self.groups:
+                if grp.nelements == 0:
+                    continue
+
                 meg = grp.mesh_el_group
                 knl()(queue,
                         resampling_mat=grp.from_mesh_interp_matrix(),
