@@ -364,6 +364,7 @@ class FacialAdjacencyGroup(Record):
     .. attribute:: elements
 
         ``element_id_t [nfagrp_elements]``. ``elements[i]``
+        Group-local element numbers.
 
     .. attribute:: element_faces
 
@@ -669,6 +670,9 @@ class Mesh(Record):
 # {{{ node-vertex consistency test
 
 def _test_node_vertex_consistency_simplex(mesh, mgrp):
+    if mgrp.nelements == 0:
+        return True
+
     from modepy.tools import UNIT_VERTICES
     resampling_mat = mp.resampling_matrix(
             mp.simplex_onb(mgrp.dim, mgrp.order),
