@@ -409,7 +409,7 @@ class DiscretizationConnection(object):
 # {{{ check connection
 
 def check_connection(connection):
-    from_discr = connection.to_discr
+    from_discr = connection.from_discr
     to_discr = connection.to_discr
 
     assert len(connection.groups) == len(to_discr.groups)
