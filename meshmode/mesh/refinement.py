@@ -355,7 +355,7 @@ class Refiner(object):
                                         iel_base+iel_grp)
                                     for k in first_element_index:
                                         if k == 0:
-                                            new_hanging_vertex_element[vertex.left_vertex].remove(
+                                            new_hanging_vertex_element[vertex.left_vertex].append(
                                                 iel_base+iel_grp)
                                         else:
                                             new_hanging_vertex_element[vertex.left_vertex.append(
@@ -367,10 +367,10 @@ class Refiner(object):
                                         iel_base+iel_grp)
                                     for k in first_element_index:
                                         if k == 0:
-                                            new_hanging_vertex_element[vertex.right_vertex.remove(
+                                            new_hanging_vertex_element[vertex.right_vertex].append(
                                                 iel_base+iel_grp)
                                         else:
-                                            new_hanging_vertex_element[vertex.left_vertex.append(
+                                            new_hanging_vertex_element[vertex.right_vertex].append(
                                                 iel_base+grp.nelements+k-1)
                             else:
                                 queue.append(vertex.left)
@@ -395,11 +395,11 @@ class Refiner(object):
                                         iel_base+iel_grp)
                                     for k in second_element_index:
                                         if k == 0:
-                                            new_hanging_vertex_element[vertex.left_vertex].remove(
+                                            new_hanging_vertex_element[vertex.left_vertex].append(
                                                 iel_base+iel_grp)
                                         else:
                                             new_hanging_vertex_element[vertex.left_vertex.append(
-                                                iel_base+grp.nelements+k-1)
+                                                iel_base+grp.nelements+k-2)
                                 if new_hanging_vertex_element[vertex.right_vertex] and \
                                     new_hanging_vertex_element[vertex.right_vertex].count(
                                     iel_base+iel_grp):
@@ -407,15 +407,20 @@ class Refiner(object):
                                         iel_base+iel_grp)
                                     for k in second_element_index:
                                         if k == 0:
-                                            new_hanging_vertex_element[vertex.right_vertex.remove(
+                                            new_hanging_vertex_element[vertex.right_vertex.append(
                                                 iel_base+iel_grp)
                                         else:
-                                            new_hanging_vertex_element[vertex.left_vertex.append(
+                                            new_hanging_vertex_element[vertex.right_vertex.append(
                                                 iel_base+grp.nelements+k-1)
                             else:
                                 queue.append(vertex.left)
                                 queue.append(vertex.right)
 
+                    #update connectivity of edges in the center
+                    unique_vertex_pairs = [
+                        (i,j) for i in range(len(midpoint_vertices)) for j in range(i+1,
+                            len(midpoint_vertices))]
+                    midpoint_index = 0
                     for i, j in unique_vertex_pairs:
                         min_index = min(midpoint_vertices[i], midpoint_vertices[j])
                         max_index = max(midpoint_vertices[i], midpoint_vertices[j])
@@ -432,15 +437,55 @@ class Refiner(object):
                                 element_indices.append(k_index)
 
                         cur_node = self.pair_map[vertex_pair]
-                        cur_node.adjacent_elements.remove(iel_base+iel_grp)
-                        for k in element_indices:
-                            if k == 0:
-                                cur_node.adjacent_elements.append(iel_base+iel_grp)
+                        queue = [cur_node]
+                        while queue:
+                            vertex = queue.pop(0)
+                            #if leaf node
+                            if vertex.left is None and vertex.right is None:
+                                node_elements = vertex.adjacent_elements
+                                node_elements.remove(iel_base+iel_grp)
+                                for k in element_indices:
+                                    if k == 0:
+                                        node_elements.append(iel_base+iel_grp)
+                                    else:
+                                        node_elements.append(iel_base+grp.nelements+k-1)
+                                if new_hanging_vertex_element[vertex.left_vertex] and \
+                                    new_hanging_vertex_element[vertex.left_vertex].count(
+                                    iel_base+iel_grp):
+                                    new_hanging_vertex_element[vertex.left_vertex].remove(
+                                        iel_base+iel_grp)
+                                    for k in element_indices:
+                                        if k == 0:
+                                            new_hanging_vertex_element[vertex.left_vertex].append(
+                                                iel_base+iel_grp)
+                                        else:
+                                            new_hanging_vertex_element[vertex.left_vertex.append(
+                                                iel_base+grp.nelements+k-1)
+                                if new_hanging_vertex_element[vertex.right_vertex] and \
+                                    new_hanging_vertex_element[vertex.right_vertex].count(
+                                    iel_base+iel_grp):
+                                    new_hanging_vertex_element[vertex.right_vertex].remove(
+                                        iel_base+iel_grp)
+                                    for k in second_element_index:
+                                        if k == 0:
+                                            new_hanging_vertex_element[vertex.right_vertex.append(
+                                                iel_base+iel_grp)
+                                        else:
+                                            new_hanging_vertex_element[vertex.right_vertex.append(
+                                                iel_base+grp.nelements+k-1)
                             else:
-                                cur_node.adjacent_elements.append(iel_base+grp.nelements
-                                    + k - 1)
-
-
+                                queue.append(vertex.left)
+                                queue.append(vertex.right)
+                    #generate new rays
+                    for i in six.moves.range(len(midpoint_vertices)):
+                        for j in six.moves.range(i+1, len(midpoint_vertices)):
+                            min_index = min(midpoint_vertices[i], midpoint_vertices[j])
+                            max_index = max(midpoint_vertices[i], midpoint_vertices[j])
+                            vertex_pair = (min_index, max_index)
+                            if vertex_pair in self.pair_map:
+                                continue
+                            elements = []
+                            common_elements = list(
 
     def print_rays(self, ind):
         import six
