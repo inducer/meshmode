@@ -434,7 +434,8 @@ def make_face_to_all_faces_embedding(faces_connection, all_faces_discr):
                 if per_face_groups:
                     assert len(faces_connection.groups[i_faces_grp].batches) == 1
                 else:
-                    assert len(faces_connection.groups[i_faces_grp].batches) == nfaces
+                    assert (len(faces_connection.groups[i_faces_grp].batches)
+                            == nfaces)
 
                 assert np.array_equal(
                         faces_grp.unit_nodes, all_faces_grp.unit_nodes)
