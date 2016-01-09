@@ -77,10 +77,10 @@ class Visualizer(object):
     .. automethod:: write_vtk_file
     """
 
-    def __init__(self, discr, vis_discr, connection):
-        self.discr = discr
-        self.vis_discr = vis_discr
+    def __init__(self, connection):
         self.connection = connection
+        self.discr = connection.from_discr
+        self.vis_discr = connection.to_discr
 
     def _resample_and_get(self, queue, vec):
         from pytools.obj_array import with_object_array_or_scalar
@@ -240,9 +240,8 @@ def make_visualizer(queue, discr, vis_order):
             real_dtype=discr.real_dtype)
     from meshmode.discretization.connection import \
             make_same_mesh_connection
-    cnx = make_same_mesh_connection(vis_discr, discr)
 
-    return Visualizer(discr, vis_discr, cnx)
+    return Visualizer(make_same_mesh_connection(vis_discr, discr))
 
 # }}}
 
