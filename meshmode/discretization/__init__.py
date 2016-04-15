@@ -38,7 +38,7 @@ __doc__ = """
 # {{{ element group base
 
 class ElementGroupBase(object):
-    """Container for the :class:`QBXGrid` data corresponding to
+    """Container for the :class:`Discretization` data corresponding to
     one :class:`meshmode.mesh.MeshElementGroup`.
 
     .. attribute :: mesh_el_group
@@ -50,6 +50,38 @@ class ElementGroupBase(object):
     .. autoattribute:: nnodes
     .. autoattribute:: dim
     .. automethod:: view
+
+    .. method:: unit_nodes()
+
+        Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_nodes)``
+        of reference coordinates of interpolation nodes.
+
+    .. method:: basis()
+
+        Returns a :class:`list` of basis functions that take arrays
+        of shape ``(dim, n)`` and return an array of shape (n,)``
+        (which performs evaluation of the basis function).
+
+    .. method:: grad_basis()
+
+        :returns: a :class:`tuple` of functions, each of  which
+        accepts arrays of shape *(dims, npts)*
+        and returns a :class:`tuple` of length *dims* containing
+        the derivatives along each axis as an array of size *npts*.
+        'Scalar' evaluation, by passing just one vector of length *dims*,
+        is also supported.
+
+    .. method:: diff_matrices()
+
+        Return a :attr:`dim`-long :class:`tuple` of matrices of
+        shape ``(nunit_nodes, nunit_nodes)``, each of which,
+        when applied to an array of nodal values, take derivatives
+        in the reference (r,s,t) directions.
+
+    .. method:: weights()
+
+        Returns an array of length :attr:`nunit_nodes` containing
+        quadrature weights.
     """
 
     def __init__(self, mesh_el_group, order, node_nr_base):
