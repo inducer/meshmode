@@ -105,7 +105,7 @@ def _make_cross_face_batches(
                 bdry_discr.nodes().get(queue=queue))
             [:, to_bdry_element_indices])
 
-    tol = 1e3 * np.finfo(to_bdry_nodes.dtype).eps
+    tol = 1e4 * np.finfo(to_bdry_nodes.dtype).eps
 
     from_mesh_grp = bdry_discr.mesh.groups[i_src_grp]
     from_grp = bdry_discr.groups[i_src_grp]
