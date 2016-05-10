@@ -321,8 +321,8 @@ class Refiner(object):
                     else:
                         split_possible = False
 
-            for node in element_rays:
-                self.remove_from_subtree(node, new_hanging_vertex_elements, to_remove)
+            #for node in element_rays:
+                #self.remove_from_subtree(node, new_hanging_vertex_elements, to_remove)
             #if split_possible:
             if split_possible:
                 node_tuple_to_coord = {}
@@ -372,8 +372,8 @@ class Refiner(object):
                         midpoints.append(element_rays[len(element_rays)-1].midpoint)
                     else:
                         split_possible = False
-            for node in element_rays:
-                self.add_to_subtree(node, new_hanging_vertex_elements, to_add)
+            #for node in element_rays:
+                #self.add_to_subtree(node, new_hanging_vertex_elements, to_add)
             if split_possible:
                 node_tuple_to_coord = {}
                 for node_index, node_tuple in enumerate(self.index_to_node_tuple[cur_dim]):
@@ -850,7 +850,7 @@ class Refiner(object):
                         add_verts.append(grp.vertex_indices[iel_grp][i])
                     add_element_to_connectivity(add_verts, new_hanging_vertex_element, iel_base+iel_grp)
         #assert ray connectivity
-        check_adjacent_elements(groups, new_hanging_vertex_element, nelements_in_grp)
+        #check_adjacent_elements(groups, new_hanging_vertex_element, nelements_in_grp)
 
 
 
