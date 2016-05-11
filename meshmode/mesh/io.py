@@ -38,6 +38,7 @@ __doc__ = """
 .. autofunction:: read_gmsh
 .. autofunction:: generate_gmsh
 .. autofunction:: from_meshpy
+.. autofunction:: from_vertices_and_simplices
 
 """
 
@@ -257,5 +258,39 @@ def from_meshpy(mesh_info, order=1):
             facial_adjacency_groups=None)
 
 # }}}
+
+
+# {{{ from_vertices_and_simplices
+
+def from_vertices_and_simplices(vertices, simplices, order=1, fix_orientation=False):
+    """Imports a mesh from a numpy array of vertices and an array
+    of simplices.
+
+    :arg vertices:
+        An array of vertex coordinates with shape
+        *(ambient_dim, nvertices)*
+    :arg simplices:
+        An array *(nelements, nvertices)* of (mesh-wide)
+        vertex indices.
+    """
+    from meshmode.mesh import Mesh
+    from meshmode.mesh.generation import make_group_from_vertices
+
+    grp = make_group_from_vertices(vertices, simplices, order)
+
+    if fix_orientation:
+        from meshmode.mesh.processing import (
+                find_volume_mesh_element_group_orientation,
+                flip_simplex_element_group)
+        orient = find_volume_mesh_element_group_orientation(vertices, grp)
+        grp = flip_simplex_element_group(vertices, grp, orient < 0)
+
+    return Mesh(
+            vertices=vertices, groups=[grp],
+            nodal_adjacency=None,
+            facial_adjacency_groups=None)
+
+# }}}
+
 
 # vim: foldmethod=marker
