@@ -445,8 +445,8 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
     cl_ctx = ctx_getter()
     queue = cl.CommandQueue(cl_ctx)
 
-    from modepy.tools import UNIT_VERTICES
-    vertices = UNIT_VERTICES[dim].T.copy()
+    from modepy.tools import unit_vertices
+    vertices = unit_vertices(dim).T.copy()
 
     center = np.empty(dim, np.float64)
     center.fill(-0.5)
