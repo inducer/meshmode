@@ -234,7 +234,11 @@ def make_group_from_vertices(vertices, vertex_indices, order):
     dim = nspan_vectors
 
     # dim, nunit_nodes
-    unit_nodes = mp.warp_and_blend_nodes(dim, order)
+    if dim <= 3:
+        unit_nodes = mp.warp_and_blend_nodes(dim, order)
+    else:
+        unit_nodes = mp.equidistant_nodes(dim, order)
+
     unit_nodes_01 = 0.5 + 0.5*unit_nodes
 
     nodes = np.einsum(

@@ -35,7 +35,8 @@ from pyopencl.tools import (  # noqa
 
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
-        PolynomialWarpAndBlendGroupFactory
+        PolynomialWarpAndBlendGroupFactory,
+        PolynomialEquidistantGroupFactory,
         )
 from meshmode.mesh import BTAG_ALL
 from meshmode.discretization.connection import \
@@ -519,6 +520,56 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
             )(queue).as_scalar() > 0
 
     assert normal_outward_check.get().all(), normal_outward_check.get()
+
+# }}}
+
+
+# {{{ sanity check: volume interpolation on scipy/qhull delaunay meshes in nD
+
+@pytest.mark.parametrize("dim", [2, 3, 4])
+@pytest.mark.parametrize("order", [3])
+def test_sanity_qhull_nd(ctx_getter, dim, order):
+    pytest.importorskip("scipy")
+
+    logging.basicConfig(level=logging.INFO)
+
+    ctx = ctx_getter()
+    queue = cl.CommandQueue(ctx)
+
+    from scipy.spatial import Delaunay
+    verts = np.random.rand(1000, dim)
+    dtri = Delaunay(verts)
+
+    from meshmode.mesh.io import from_vertices_and_simplices
+    mesh = from_vertices_and_simplices(dtri.points.T, dtri.simplices,
+            fix_orientation=True)
+
+    from meshmode.discretization import Discretization
+    low_discr = Discretization(ctx, mesh,
+            PolynomialEquidistantGroupFactory(order))
+    high_discr = Discretization(ctx, mesh,
+            PolynomialEquidistantGroupFactory(order+1))
+
+    from meshmode.discretization.connection import make_same_mesh_connection
+    cnx = make_same_mesh_connection(high_discr, low_discr)
+
+    def f(x):
+        return 0.1*cl.clmath.sin(x)
+
+    x_low = low_discr.nodes()[0].with_queue(queue)
+    f_low = f(x_low)
+
+    x_high = high_discr.nodes()[0].with_queue(queue)
+    f_high_ref = f(x_high)
+
+    f_high_num = cnx(queue, f_low)
+
+    err = (f_high_ref-f_high_num).get()
+
+    err = la.norm(err, np.inf)/la.norm(f_high_ref.get(), np.inf)
+
+    print(err)
+    assert err < 1e-2
 
 # }}}
 

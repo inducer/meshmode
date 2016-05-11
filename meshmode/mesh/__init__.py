@@ -251,7 +251,10 @@ class SimplexElementGroup(MeshElementGroup):
                 raise TypeError("'dim' must be passed "
                         "if 'unit_nodes' is not passed")
 
-            unit_nodes = mp.warp_and_blend_nodes(dim, order)
+            if dim <= 3:
+                unit_nodes = mp.warp_and_blend_nodes(dim, order)
+            else:
+                unit_nodes = mp.equidistant_nodes(dim, order)
 
         dims = unit_nodes.shape[0]
 
@@ -286,25 +289,8 @@ class SimplexElementGroup(MeshElementGroup):
             raise NotImplementedError("dim=%d" % self.dim)
 
     def vertex_unit_coordinates(self):
-        if self.dim == 1:
-            return np.array([
-                [-1], [1]
-                ], dtype=np.float64)
-        elif self.dim == 2:
-            return np.array([
-                [-1, -1],
-                [1, -1],
-                [-1, 1],
-                ], dtype=np.float64)
-        elif self.dim == 3:
-            return np.array([
-                [-1, -1, -1],
-                [1, -1, -1],
-                [-1, 1, -1],
-                [-1, -1, 1],
-                ], dtype=np.float64)
-        else:
-            raise NotImplementedError("dim=%d" % self.dim)
+        from modepy.tools import unit_vertices
+        return unit_vertices(self.dim)
 
 # }}}
 
@@ -673,10 +659,10 @@ def _test_node_vertex_consistency_simplex(mesh, mgrp):
     if mgrp.nelements == 0:
         return True
 
-    from modepy.tools import UNIT_VERTICES
     resampling_mat = mp.resampling_matrix(
-            mp.simplex_onb(mgrp.dim, mgrp.order),
-            UNIT_VERTICES[mgrp.dim].T.copy(), mgrp.unit_nodes)
+            mp.simplex_best_available_basis(mgrp.dim, mgrp.order),
+            mgrp.vertex_unit_coordinates().T,
+            mgrp.unit_nodes)
 
     # dim, nelments, nnvertices
     map_vertices = np.einsum(

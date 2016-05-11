@@ -212,7 +212,7 @@ class DiscretizationConnection(object):
         from_grp = self.from_discr.groups[ibatch.from_group_index]
 
         result = mp.resampling_matrix(
-                mp.simplex_onb(self.from_discr.dim, from_grp.order),
+                from_grp.basis(),
                 ibatch.result_unit_nodes, from_grp.unit_nodes)
 
         with cl.CommandQueue(self.cl_context) as queue:
