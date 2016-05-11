@@ -42,7 +42,7 @@ __doc__ = """
 
 # {{{ orientations
 
-def find_volume_mesh_element_group_orientation(mesh, grp):
+def find_volume_mesh_element_group_orientation(vertices, grp):
     """Return a positive floating point number for each positively
     oriented element, and a negative floating point number for
     each negatively oriented element.
@@ -57,11 +57,11 @@ def find_volume_mesh_element_group_orientation(mesh, grp):
                 "exclusively SimplexElementGroup-based meshes")
 
     # (ambient_dim, nelements, nvertices)
-    vertices = mesh.vertices[:, grp.vertex_indices]
+    my_vertices = vertices[:, grp.vertex_indices]
 
     # (ambient_dim, nelements, nspan_vectors)
     spanning_vectors = (
-            vertices[:, :, 1:] - vertices[:, :, 0][:, :, np.newaxis])
+            my_vertices[:, :, 1:] - my_vertices[:, :, 0][:, :, np.newaxis])
 
     ambient_dim = spanning_vectors.shape[0]
     nspan_vectors = spanning_vectors.shape[-1]
@@ -107,7 +107,8 @@ def find_volume_mesh_element_orientations(mesh, tolerate_unimplemented_checks=Fa
         if tolerate_unimplemented_checks:
             try:
                 signed_area_elements = \
-                        find_volume_mesh_element_group_orientation(mesh, grp)
+                        find_volume_mesh_element_group_orientation(
+                                mesh.vertices, grp)
             except NotImplementedError:
                 result_grp_view[:] = float("nan")
             else:
@@ -115,7 +116,8 @@ def find_volume_mesh_element_orientations(mesh, tolerate_unimplemented_checks=Fa
                 result_grp_view[:] = signed_area_elements
         else:
             signed_area_elements = \
-                    find_volume_mesh_element_group_orientation(mesh, grp)
+                    find_volume_mesh_element_group_orientation(
+                            mesh.vertices, grp)
             assert not np.isnan(signed_area_elements).any()
             result_grp_view[:] = signed_area_elements
 
@@ -163,7 +165,7 @@ def flip_simplex_element_group(vertices, grp, grp_flip_flags):
     flipped_unit_nodes = barycentric_to_unit(flipped_bary_unit_nodes)
 
     flip_matrix = mp.resampling_matrix(
-            mp.simplex_onb(grp.dim, grp.order),
+            mp.simplex_best_available_basis(grp.dim, grp.order),
             flipped_unit_nodes, grp.unit_nodes)
 
     flip_matrix[np.abs(flip_matrix) < 1e-15] = 0
