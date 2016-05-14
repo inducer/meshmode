@@ -45,17 +45,22 @@ class TreeRayNode:
         import copy
         self.left = None
         self.right = None
+        self.parent = None
         self.left_vertex = left_vertex
         self.right_vertex = right_vertex
         self.midpoint = None
         self.direction = direction
         self.adjacent_elements = copy.deepcopy(adjacent_elements)
+        self.adjacent_add_diff = []
+        self.adjacent_remove_diff = []
 
 class Refiner(object):
     def __init__(self, mesh):
         #print 'herlkjjlkjasdf'
         from llist import dllist, dllistnode
         from meshmode.mesh.tesselate  import tesselatetet, tesselatetri
+        self.lazy = False
+        self.seen_tuple = {}
         tri_node_tuples, tri_result = tesselatetri()
         tet_node_tuples, tet_result = tesselatetet()
         #print tri_result, tet_result
@@ -234,25 +239,99 @@ class Refiner(object):
                 queue.append(vertex.right)
         return res
     
+    def apply_diff(self, cur_node, new_hanging_vertex_elements):
+        for el in cur_node.adjacent_remove_diff:
+            if el in cur_node.adjacent_elements:
+                cur_node.adjacent_elements.remove(el)
+            if el in new_hanging_vertex_elements[cur_node.left_vertex]:
+                new_hanging_vertex_elements[cur_node.left_vertex].remove(el)
+            if el in new_hanging_vertex_elements[cur_node.right_vertex]:
+                new_hanging_vertex_elements[cur_node.right_vertex].remove(el)
+            if cur_node.left is not None and cur_node.right is not None:
+                if el in cur_node.left.adjacent_add_diff:
+                    cur_node.left.adjacent_add_diff.remove(el)
+                if el in cur_node.right.adjacent_add_diff:
+                    cur_node.right.adjacent_add_diff.remove(el)
+                if el not in cur_node.left.adjacent_remove_diff:
+                    cur_node.left.adjacent_remove_diff.append(el)
+                if el not in cur_node.right.adjacent_remove_diff:
+                    cur_node.right.adjacent_remove_diff.append(el)
+        for el in cur_node.adjacent_add_diff:
+            if el not in cur_node.adjacent_elements:
+                cur_node.adjacent_elements.append(el)
+            if el not in new_hanging_vertex_elements[cur_node.left_vertex]:
+                new_hanging_vertex_elements[cur_node.left_vertex].append(el)
+            if el not in new_hanging_vertex_elements[cur_node.right_vertex]:
+                new_hanging_vertex_elements[cur_node.right_vertex].append(el)
+            if cur_node.left is not None and cur_node.right is not None:
+                if el in cur_node.left.adjacent_remove_diff:
+                    cur_node.left.adjacent_remove_diff.remove(el)
+                if el in cur_node.right.adjacent_remove_diff:
+                    cur_node.right.adjacent_remove_diff.remove(el)
+                if el not in cur_node.left.adjacent_add_diff:
+                    cur_node.left.adjacent_add_diff.append(el)
+                if el not in cur_node.right.adjacent_add_diff:
+                    cur_node.right.adjacent_add_diff.append(el)
+        cur_node.adjacent_remove_diff = []
+        cur_node.adjacent_add_diff = []
+
+    def propagate(self, cur_node, new_hanging_vertex_elements):
+        if cur_node.parent is not None:
+            parent_node = cur_node.parent
+            self.propagate(parent_node, new_hanging_vertex_elements)
+            self.apply_diff(parent_node, new_hanging_vertex_elements)
+
+    def get_root(self, cur_node):
+        while(cur_node.parent is not None):
+            cur_node = cur_node.parent
+        return cur_node
+
+    def propagate_tree(self, cur_node, new_hanging_vertex_elements, element_to_element):
+        vertex_tuple = (min(cur_node.left_vertex, cur_node.right_vertex), max(cur_node.left_vertex, cur_node.right_vertex))
+        self.seen_tuple[vertex_tuple] = True
+        self.apply_diff(cur_node, new_hanging_vertex_elements)
+        if cur_node.left is not None and cur_node.right is not None:
+            self.propagate_tree(cur_node.left, new_hanging_vertex_elements, element_to_element)
+            self.propagate_tree(cur_node.right, new_hanging_vertex_elements, element_to_element)
+        else:
+            for el in cur_node.adjacent_elements:
+                element_to_element[el].update(cur_node.adjacent_elements)
+            for el in new_hanging_vertex_elements[cur_node.left_vertex]:
+                element_to_element[el].update(new_hanging_vertex_elements[cur_node.left_vertex])
+            for el in new_hanging_vertex_elements[cur_node.right_vertex]:
+                element_to_element[el].update(new_hanging_vertex_elements[cur_node.right_vertex])
+
     def remove_from_subtree(self, cur_node, new_hanging_vertex_elements, to_remove):
-        subtree = self.get_subtree(cur_node)
-        for node in subtree:
-            if to_remove in node.adjacent_elements:
-                node.adjacent_elements.remove(to_remove)
-            if to_remove in new_hanging_vertex_elements[node.left_vertex]:
-                new_hanging_vertex_elements[node.left_vertex].remove(to_remove)
-            if to_remove in new_hanging_vertex_elements[node.right_vertex]:
-                new_hanging_vertex_elements[node.right_vertex].remove(to_remove)
+        if self.lazy:
+            self.propagate(cur_node, new_hanging_vertex_elements)
+            if to_remove in cur_node.adjacent_add_diff:
+                cur_node.adjacent_add_diff.remove(to_remove)
+            cur_node.adjacent_remove_diff.append(to_remove)
+        else:
+            subtree = self.get_subtree(cur_node)
+            for node in subtree:
+                if to_remove in node.adjacent_elements:
+                    node.adjacent_elements.remove(to_remove)
+                if to_remove in new_hanging_vertex_elements[node.left_vertex]:
+                    new_hanging_vertex_elements[node.left_vertex].remove(to_remove)
+                if to_remove in new_hanging_vertex_elements[node.right_vertex]:
+                    new_hanging_vertex_elements[node.right_vertex].remove(to_remove)
 
     def add_to_subtree(self, cur_node, new_hanging_vertex_elements, to_add):
-        subtree = self.get_subtree(cur_node)
-        for node in subtree:
-            if to_add not in node.adjacent_elements:
-                node.adjacent_elements.append(to_add)
-            if to_add not in new_hanging_vertex_elements[node.left_vertex]:
-                new_hanging_vertex_elements[node.left_vertex].append(to_add)
-            if to_add not in new_hanging_vertex_elements[node.right_vertex]:
-                new_hanging_vertex_elements[node.right_vertex].append(to_add)
+        if self.lazy:
+            self.propagate(cur_node, new_hanging_vertex_elements)
+            if to_add in cur_node.adjacent_remove_diff:
+                cur_node.adjacent_remove_diff.remove(to_add)
+            cur_node.adjacent_add_diff.append(to_add)
+        else:
+            subtree = self.get_subtree(cur_node)
+            for node in subtree:
+                if to_add not in node.adjacent_elements:
+                    node.adjacent_elements.append(to_add)
+                if to_add not in new_hanging_vertex_elements[node.left_vertex]:
+                    new_hanging_vertex_elements[node.left_vertex].append(to_add)
+                if to_add not in new_hanging_vertex_elements[node.right_vertex]:
+                    new_hanging_vertex_elements[node.right_vertex].append(to_add)
 
     #refine_flag tells you which elements to split as a numpy array of bools
     def refine(self, refine_flags):
@@ -499,9 +578,11 @@ class Refiner(object):
                                 import copy
                                 cur_node.left = TreeRayNode(min_index, vertices_index,
                                         cur_node.direction, copy.deepcopy(cur_node.adjacent_elements))
+                                cur_node.left.parent = cur_node
                                 cur_node.right = TreeRayNode(max_index, vertices_index,
                                         not cur_node.direction,
                                         copy.deepcopy(cur_node.adjacent_elements))
+                                cur_node.right.parent = cur_node
                                 vertex_pair1 = (min_index, vertices_index)
                                 vertex_pair2 = (max_index, vertices_index)
                                 self.pair_map[vertex_pair1] = cur_node.left
@@ -916,40 +997,51 @@ class Refiner(object):
                 element_index += 1
         element_to_element = [set() for i in xrange(nelements)]
         element_index = 0
-        for grp in groups:
-            for iel_grp in xrange(len(grp)):
-                for ivertex in grp[iel_grp]:
-                    element_to_element[element_index].update(
-                            vertex_to_element[ivertex])
-                    if self.hanging_vertex_element[ivertex]:
-                        for hanging_element in self.hanging_vertex_element[ivertex]:
-                            if element_index != hanging_element:
-                                element_to_element[element_index].update([hanging_element])
-                                element_to_element[hanging_element].update([element_index])
-                for i in six.moves.range(len(grp[iel_grp])):
-                    for j in six.moves.range(i+1, len(grp[iel_grp])):
-                        vertex_pair = (min(grp[iel_grp][i], grp[iel_grp][j]),
-                                max(grp[iel_grp][i], grp[iel_grp][j]))
-                        #element_to_element[element_index].update(
-                                #self.pair_map[vertex_pair].adjacent_elements)
-                        queue = [self.pair_map[vertex_pair]]
-                        while queue:
-                            vertex = queue.pop(0)
-                            #if leaf node
-                            if vertex.left is None and vertex.right is None:
-                                element_to_element[element_index].update(
-                                        vertex.adjacent_elements)
-                            else:
-                                queue.append(vertex.left)
-                                queue.append(vertex.right)
-                    '''
-                    if self.hanging_vertex_element[ivertex] and element_index != self.hanging_vertex_element[ivertex][0]:
-                        element_to_element[element_index].update([self.hanging_vertex_element[ivertex][0]])
-                        element_to_element[self.hanging_vertex_element[ivertex][0]].update([element_index])
+        if self.lazy:
+            for grp in groups:
+                for iel_grp in six.moves.range(len(grp.vertex_indices)):
+                    for i in six.moves.range(len(grp.vertex_indices[iel_grp])):
+                        for j in six.moves.range(i+1, len(grp.vertex_indices[iel_grp])):
+                            vertex_pair = (min(grp[iel_grp][i], grp[iel_grp][j]), max(grp[iel_grp][i], grp[iel_grp][j]))
+                            self.propagate_tree(self.pair_map[vertex_pair], self.hanging_vertex_element, element_to_element)
+
+        else:
+            for grp in groups:
+                for iel_grp in xrange(len(grp)):
+                    for ivertex in grp[iel_grp]:
+                        element_to_element[element_index].update(
+                                vertex_to_element[ivertex])
+                        if self.hanging_vertex_element[ivertex]:
+                            for hanging_element in self.hanging_vertex_element[ivertex]:
+                                if element_index != hanging_element:
+                                    element_to_element[element_index].update([hanging_element])
+                                    element_to_element[hanging_element].update([element_index])
+                    for i in six.moves.range(len(grp[iel_grp])):
+                        for j in six.moves.range(i+1, len(grp[iel_grp])):
+                            vertex_pair = (min(grp[iel_grp][i], grp[iel_grp][j]),
+                                    max(grp[iel_grp][i], grp[iel_grp][j]))
+                            #element_to_element[element_index].update(
+                                    #self.pair_map[vertex_pair].adjacent_elements)
+                            queue = [self.pair_map[vertex_pair]]
+                            while queue:
+                                vertex = queue.pop(0)
+                                #if leaf node
+                                if vertex.left is None and vertex.right is None:
+                                    element_to_element[element_index].update(
+                                            vertex.adjacent_elements)
+                                else:
+                                    queue.append(vertex.left)
+                                    queue.append(vertex.right)
                         '''
-                element_index += 1
+                        if self.hanging_vertex_element[ivertex] and element_index != self.hanging_vertex_element[ivertex][0]:
+                            element_to_element[element_index].update([self.hanging_vertex_element[ivertex][0]])
+                            element_to_element[self.hanging_vertex_element[ivertex][0]].update([element_index])
+                            '''
+                    element_index += 1
+        print len(element_to_element)
         for iel, neighbors in enumerate(element_to_element):
-            neighbors.remove(iel)
+            if iel in neighbors:
+                neighbors.remove(iel)
         #print self.ray_elements
         '''
         for ray in self.rays:
