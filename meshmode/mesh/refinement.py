@@ -33,15 +33,11 @@ class TreeRayNode:
     .. attribute:: midpoint
         Vertex index of midpoint of this ray segment.
         *None* if no midpoint has been assigned yet.
-    .. attribute:: direction
-        A :class:`bool` denoting direction in the ray,
-        with *True* representing "positive" and *False*
-        representing "negative".
     .. attribute:: adjacent_elements
         List containing elements indices of elements adjacent
         to this ray segment.
     """
-    def __init__(self, left_vertex, right_vertex, direction = True, adjacent_elements = []):
+    def __init__(self, left_vertex, right_vertex, adjacent_elements = []):
         import copy
         self.left = None
         self.right = None
@@ -49,7 +45,6 @@ class TreeRayNode:
         self.left_vertex = left_vertex
         self.right_vertex = right_vertex
         self.midpoint = None
-        self.direction = direction
         self.adjacent_elements = copy.deepcopy(adjacent_elements)
         self.adjacent_add_diff = []
 
@@ -62,6 +57,8 @@ class Refiner(object):
         self.seen_tuple = {}
         tri_node_tuples, tri_result = tesselatetri()
         tet_node_tuples, tet_result = tesselatetet()
+        print tri_node_tuples, tri_result
+        #quadrilateral_node_tuples = [
         #print tri_result, tet_result
         self.simplex_node_tuples = [None, None, tri_node_tuples, tet_node_tuples]
         self.simplex_result = [None, None, tri_result, tet_result]
@@ -542,290 +539,69 @@ class Refiner(object):
                 if refine_flags[iel_base+iel_grp]:
                     midpoint_vertices = []
                     midpoint_tuples = []
-                    vertex_elements = []
                     vertex_indices = grp.vertex_indices[iel_grp]
-                    for i in six.moves.range(len(vertex_indices)):
-                        for j in six.moves.range(i+1, len(vertex_indices)):
-                            vertex_elements.append([])
-                            min_index = min(vertex_indices[i], vertex_indices[j])
-                            max_index = max(vertex_indices[i], vertex_indices[j])
-                            cur_node = self.pair_map[(min_index, max_index)]
-                            if cur_node.midpoint is None:
-                                cur_node.midpoint = vertices_index
-                                import copy
-                                cur_node.left = TreeRayNode(min_index, vertices_index,
-                                        cur_node.direction, copy.deepcopy(cur_node.adjacent_elements))
-                                cur_node.left.parent = cur_node
-                                cur_node.right = TreeRayNode(max_index, vertices_index,
-                                        not cur_node.direction,
-                                        copy.deepcopy(cur_node.adjacent_elements))
-                                cur_node.right.parent = cur_node
-                                vertex_pair1 = (min_index, vertices_index)
-                                vertex_pair2 = (max_index, vertices_index)
-                                self.pair_map[vertex_pair1] = cur_node.left
-                                self.pair_map[vertex_pair2] = cur_node.right
-#                                for el in cur_node.adjacent_elements:
-#                                    if el != (iel_base+iel_grp):
-#                                        vertex_elements[len(vertex_elements)-1].append(el)
-#                                        #new_hanging_vertex_element[vertices_index].append(el)
-#                                        add_hanging_vertex_el(vertices_index, el)
-                                #compute midpoint coordinates
-                                for k in six.moves.range(len(self.last_mesh.vertices)):
-                                    #print 'STUFF:', k, vertices_index, vertex_indices[i], vertex_indices[j]
-                                    vertices[k, vertices_index] = \
-                                    (self.last_mesh.vertices[k, vertex_indices[i]] +
-                                    self.last_mesh.vertices[k, vertex_indices[j]]) / 2.0
-                                midpoint_vertices.append(vertices_index)
-                                vertices_index += 1
-                            else:
-                                cur_midpoint = cur_node.midpoint
-#                                elements = cur_node.left.adjacent_elements
-#                                for el in elements:
-#                                    if el != (iel_base + iel_grp) and el not in (
-#                                        vertex_elements[len(vertex_elements)-1]):
-#                                        vertex_elements[len(vertex_elements)-1].append(el)
-#                                elements = cur_node.right.adjacent_elements
-#                                for el in elements:
-#                                    if el != (iel_base+iel_grp) and el not in (
-#                                        vertex_elements[len(vertex_elements)-1]):
-#                                        vertex_elements[len(vertex_elements)-1].append(el)
-#                                for el in new_hanging_vertex_element[cur_midpoint]:
-#                                    if el != (iel_base + iel_grp) and el not in (
-#                                        vertex_elements[len(vertex_elements)-1]):
-#                                        vertex_elements[len(vertex_elements)-1].append(el)
-#                                if (iel_base+iel_grp) in new_hanging_vertex_element[cur_midpoint]:
-#                                    new_hanging_vertex_element[cur_midpoint].remove(iel_base+iel_grp)
-                                midpoint_vertices.append(cur_midpoint)
+                    #if simplex
+                    if len(grp.vertex_indices[iel_grp]) == len(self.last_mesh.vertices)+1:
+                        for i in six.moves.range(len(vertex_indices)):
+                            for j in six.moves.range(i+1, len(vertex_indices)):
+                                min_index = min(vertex_indices[i], vertex_indices[j])
+                                max_index = max(vertex_indices[i], vertex_indices[j])
+                                cur_node = self.pair_map[(min_index, max_index)]
+                                if cur_node.midpoint is None:
+                                    cur_node.midpoint = vertices_index
+                                    import copy
+                                    cur_node.left = TreeRayNode(min_index, vertices_index,
+                                            copy.deepcopy(cur_node.adjacent_elements))
+                                    cur_node.left.parent = cur_node
+                                    cur_node.right = TreeRayNode(max_index, vertices_index,
+                                            copy.deepcopy(cur_node.adjacent_elements))
+                                    cur_node.right.parent = cur_node
+                                    vertex_pair1 = (min_index, vertices_index)
+                                    vertex_pair2 = (max_index, vertices_index)
+                                    self.pair_map[vertex_pair1] = cur_node.left
+                                    self.pair_map[vertex_pair2] = cur_node.right
+                                    for k in six.moves.range(len(self.last_mesh.vertices)):
+                                        vertices[k, vertices_index] = \
+                                        (self.last_mesh.vertices[k, vertex_indices[i]] +
+                                        self.last_mesh.vertices[k, vertex_indices[j]]) / 2.0
+                                    midpoint_vertices.append(vertices_index)
+                                    vertices_index += 1
+                                else:
+                                    cur_midpoint = cur_node.midpoint
+                                    midpoint_vertices.append(cur_midpoint)
 
-#                    #fix connectivity for elements
-#                    unique_vertex_pairs = [
-#                        (i, j) for i in range(len(vertex_indices)) for j in range(
-#                            i+1, len(vertex_indices))]
-#                    midpoint_index = 0
-#                    for i, j in unique_vertex_pairs:
-#                        min_index = min(vertex_indices[i], vertex_indices[j])
-#                        max_index = max(vertex_indices[i], vertex_indices[j])
-#                        element_indices_1 = []
-#                        element_indices_2 = []
-#                        for k_index, k, in enumerate(self.simplex_result):
-#                            ituple_index = self.simplex_node_tuples.index(
-#                                self.index_to_node_tuple[i])
-#                            jtuple_index = self.simplex_node_tuples.index(
-#                                self.index_to_node_tuple[j])
-#                            midpoint_tuple_index = self.simplex_node_tuples.index(
-#                                self.index_to_midpoint_tuple[midpoint_index])
-#                            if ituple_index in k and midpoint_tuple_index in k:
-#                                element_indices_1.append(k_index)
-#                            if jtuple_index in k and midpoint_tuple_index in k:
-#                                element_indices_2.append(k_index)
-#                        midpoint_index += 1
-#                        if min_index == vertex_indices[i]:
-#                            min_element_index = element_indices_1
-#                            max_element_index = element_indices_2
-#                        else:
-#                            min_element_index = element_indices_2
-#                            max_element_index = element_indices_1
-#                        vertex_pair = (min_index, max_index)
-#                        cur_node = self.pair_map[vertex_pair]
-#                        '''
-#                        if cur_node.direction:
-#                            first_element_index = min_element_index
-#                            second_element_index = max_element_index
-#                        else:
-#                            first_element_index = max_element_index
-#                            second_element_index = min_element_index
-#                        '''
-#                        first_element_index = min_element_index
-#                        second_element_index = max_element_index
-#                        subtree = self.get_subtree(cur_node.left)
-#                        for vertex in subtree:
-#                            node_elements = vertex.adjacent_elements
 
-#                            '''
-#                            remove_ray_el(node_elements, iel_base+iel_grp)
-#                            #node_elements.remove(iel_base+iel_grp)
-#                            for k in first_element_index:
-#                                if k == 0:
-#                                    node_elements.append(iel_base+iel_grp)
-#                                else:
-#                                    node_elements.append(iel_base+nelements_in_grp+k-1)
-#                            '''
-#                            if new_hanging_vertex_element[vertex.left_vertex] and \
-#                                    new_hanging_vertex_element[vertex.left_vertex].count(
-#                                    iel_base+iel_grp):
-#                                new_hanging_vertex_element[vertex.left_vertex].remove(
-#                                    iel_base+iel_grp)
-#                                for k in first_element_index:
-#                                    if k == 0:
-#                                        el_to_add = iel_base+iel_grp
-#                                    else:
-#                                        el_to_add = iel_base+nelements_in_grp+k-1
-#
-#                                    add_hanging_vertex_el(vertex.left_vertex,
-#                                            el_to_add)
-#                                    del el_to_add
-#
-#                            if new_hanging_vertex_element[vertex.right_vertex] and \
-#                                    new_hanging_vertex_element[vertex.right_vertex].count(
-#                                    iel_base+iel_grp):
-#                                new_hanging_vertex_element[vertex.right_vertex].remove(
-#                                    iel_base+iel_grp)
-#                                for k in first_element_index:
-#                                    if k == 0:
-#                                        el_to_add = iel_base+iel_grp
-#                                    else:
-#                                        el_to_add = iel_base+nelements_in_grp+k-1
-#
-#                                    add_hanging_vertex_el(vertex.right_vertex, el_to_add)
-#                                    del el_to_add
+                        #generate new rays
+                        cur_dim = len(grp.vertex_indices[0])-1
+                        for i in six.moves.range(len(midpoint_vertices)):
+                            for j in six.moves.range(i+1, len(midpoint_vertices)):
+                                min_index = min(midpoint_vertices[i], midpoint_vertices[j])
+                                max_index = max(midpoint_vertices[i], midpoint_vertices[j])
+                                vertex_pair = (min_index, max_index)
+                                if vertex_pair in self.pair_map:
+                                    continue
+                                self.pair_map[vertex_pair] = TreeRayNode(min_index, max_index, [])
+                        node_tuple_to_coord = {}
+                        for node_index, node_tuple in enumerate(self.index_to_node_tuple[cur_dim]):
+                            node_tuple_to_coord[node_tuple] = grp.vertex_indices[iel_grp][node_index]
+                        for midpoint_index, midpoint_tuple in enumerate(self.index_to_midpoint_tuple[cur_dim]):
+                            node_tuple_to_coord[midpoint_tuple] = midpoint_vertices[midpoint_index]
+                        for i in six.moves.range(len(self.simplex_result[cur_dim])):
+                            for j in six.moves.range(len(self.simplex_result[cur_dim][i])):
+                                if i == 0:
+                                    groups[grpn][iel_grp][j] = \
+                                            node_tuple_to_coord[self.simplex_node_tuples[cur_dim][self.simplex_result[cur_dim][i][j]]]
+                                else:
+                                    groups[grpn][nelements_in_grp+i-1][j] = \
+                                            node_tuple_to_coord[self.simplex_node_tuples[cur_dim][self.simplex_result[cur_dim][i][j]]]
+                        nelements_in_grp += len(self.simplex_result[cur_dim])-1
+                    #assuming quad otherwise
+                    #else:
+                        #quadrilateral
 
-#                        subtree = self.get_subtree(cur_node.right)
-#                        for vertex in subtree:
-#                            node_elements = vertex.adjacent_elements
-#                            #node_elements.remove(iel_base+iel_grp)
-#                            '''
-#                            remove_ray_el(node_elements, iel_base+iel_grp)
-#                            for k in second_element_index:
-#                                if k == 0:
-#                                    node_elements.append(iel_base+iel_grp)
-#                                else:
-#                                    node_elements.append(iel_base+nelements_in_grp+k-1)
-#                            '''
-#                            if new_hanging_vertex_element[vertex.left_vertex] and \
-#                                new_hanging_vertex_element[vertex.left_vertex].count(
-#                                iel_base+iel_grp):
-#                                new_hanging_vertex_element[vertex.left_vertex].remove(
-#                                    iel_base+iel_grp)
-#                                for k in second_element_index:
-#                                    if k == 0:
-#                                        el_to_add = iel_base+iel_grp
-#                                    else:
-#                                        el_to_add = iel_base+nelements_in_grp+k-1
-#
-#                                    add_hanging_vertex_el(vertex.left_vertex, el_to_add)
-#
-#                                    del el_to_add
-#
-#                            if new_hanging_vertex_element[vertex.right_vertex] and \
-#                                new_hanging_vertex_element[vertex.right_vertex].count(
-#                                iel_base+iel_grp):
-#                                new_hanging_vertex_element[vertex.right_vertex].remove(
-#                                    iel_base+iel_grp)
-#                                for k in second_element_index:
-#                                    if k == 0:
-#                                        el_to_add = iel_base+iel_grp
-#                                    else:
-#                                        el_to_add = iel_base+nelements_in_grp+k-1
-#
-#                                    add_hanging_vertex_el(vertex.right_vertex, el_to_add)
-#                                    del el_to_add
 
-                    #update connectivity of edges in the center
-#                    unique_vertex_pairs = [
-#                        (i,j) for i in range(len(midpoint_vertices)) for j in range(i+1,
-#                            len(midpoint_vertices))]
-#                    midpoint_index = 0
-#                    for i, j in unique_vertex_pairs:
-#                        min_index = min(midpoint_vertices[i], midpoint_vertices[j])
-#                        max_index = max(midpoint_vertices[i], midpoint_vertices[j])
-#                        vertex_pair = (min_index, max_index)
-#                        if vertex_pair not in self.pair_map:
-#                            continue
-#                        element_indices = []
-#                        for k_index, k in enumerate(self.simplex_result):
-#                            ituple_index = self.simplex_node_tuples.index(
-#                                self.index_to_midpoint_tuple[i])
-#                            jtuple_index = self.simplex_node_tuples.index(
-#                                self.index_to_midpoint_tuple[j])
-#                            if ituple_index in k and jtuple_index in k:
-#                                element_indices.append(k_index)
 
-#                        cur_node = self.pair_map[vertex_pair]
-#                        subtree = self.get_subtree(cur_node)
-#                        for vertex in subtree:
-#                            node_elements = vertex.adjacent_elements
-#                            #print iel_base+iel_grp
-#                            node_elements.remove(iel_base+iel_grp)
-#                            for k in element_indices:
-#                                if k == 0:
-#                                    node_elements.append(iel_base+iel_grp)
-#                                else:
-#                                    node_elements.append(iel_base+nelements_in_grp+k-1)
-#                            if new_hanging_vertex_element[vertex.left_vertex] and \
-#                                new_hanging_vertex_element[vertex.left_vertex].count(
-#                                iel_base+iel_grp):
-#                                new_hanging_vertex_element[vertex.left_vertex].remove(
-#                                    iel_base+iel_grp)
-#                                for k in element_indices:
-#                                    if k == 0:
-#                                        el_to_add = iel_base+iel_grp
-#                                    else:
-#                                        el_to_add = iel_base+nelements_in_grp+k-1
-#                                    add_hanging_vertex_el(vertex.left_vertex, el_to_add)
-#                                    del el_to_add
-#                                    
-#                            if new_hanging_vertex_element[vertex.right_vertex] and \
-#                                new_hanging_vertex_element[vertex.right_vertex].count(
-#                                iel_base+iel_grp):
-#                                new_hanging_vertex_element[vertex.right_vertex].remove(
-#                                    iel_base+iel_grp)
-#                                for k in second_element_index:
-#                                    if k == 0:
-#                                        el_to_add = iel_base+iel_grp
-#                                    else:
-#                                        el_to_add = iel_base+nelements_in_grp+k-1
-#
-#                                    add_hanging_vertex_el(vertex.right_vertex, el_to_add)
-#                                    del el_to_add
-
-                    #generate new rays
-                    cur_dim = len(grp.vertex_indices[0])-1
-                    for i in six.moves.range(len(midpoint_vertices)):
-                        for j in six.moves.range(i+1, len(midpoint_vertices)):
-                            min_index = min(midpoint_vertices[i], midpoint_vertices[j])
-                            max_index = max(midpoint_vertices[i], midpoint_vertices[j])
-                            vertex_pair = (min_index, max_index)
-                            if vertex_pair in self.pair_map:
-                                continue
-#                            elements = []
-#                            common_elements = list(set(new_hanging_vertex_element[min_index]).
-#                                intersection(new_hanging_vertex_element[max_index]))
-#                            for cel in common_elements:
-#                                elements.append(cel)
-#                            vertex_1_index = self.simplex_node_tuples[cur_dim].index(
-#                                self.index_to_midpoint_tuple[i])
-#                            vertex_2_index = self.simplex_node_tuples[cur_dim].index(
-#                                self.index_to_midpoint_tuple[j])
-                            
-#                            for kind, k in enumerate(self.simplex_result):
-#                                if vertex_1_index in k and vertex_2_index in k:
-#                                    if kind == 0:
-#                                        elements.append(iel_base+iel_grp)
-#                                    else:
-#                                        elements.append(iel_base+nelements_in_grp+kind-1)
-#                            #print min_index, max_index, elements
-                            self.pair_map[vertex_pair] = TreeRayNode(min_index, max_index,
-                                    True, [])
-                    node_tuple_to_coord = {}
-                    for node_index, node_tuple in enumerate(self.index_to_node_tuple[cur_dim]):
-                        node_tuple_to_coord[node_tuple] = grp.vertex_indices[iel_grp][node_index]
-                    for midpoint_index, midpoint_tuple in enumerate(self.index_to_midpoint_tuple[cur_dim]):
-                        node_tuple_to_coord[midpoint_tuple] = midpoint_vertices[midpoint_index]
-                    for i in six.moves.range(len(self.simplex_result[cur_dim])):
-                        for j in six.moves.range(len(self.simplex_result[cur_dim][i])):
-                            if i == 0:
-                                #print node_tuple_to_coord[self.simplex_node_tuples[cur_dim][self.simplex_result[cur_dim][i][j]]]
-                                #print 'GRP:', groups[grpn][iel_grp]
-                                groups[grpn][iel_grp][j] = \
-                                        node_tuple_to_coord[self.simplex_node_tuples[cur_dim][self.simplex_result[cur_dim][i][j]]]
-                            else:
-                                #print self.simplex_result[cur_dim][i][j]
-                                #print node_tuple_to_coord[self.simplex_node_tuples[cur_dim][self.simplex_result[cur_dim][i][j]]]
-                                #print i, j, cur_dim
-                                groups[grpn][nelements_in_grp+i-1][j] = \
-                                        node_tuple_to_coord[self.simplex_node_tuples[cur_dim][self.simplex_result[cur_dim][i][j]]]
-                    nelements_in_grp += len(self.simplex_result[cur_dim])-1
-                    #update tet connectivity
+                          
 
         #clear connectivity data
         for grp in self.last_mesh.groups:
@@ -838,91 +614,20 @@ class Refiner(object):
                         vertex_pair = (min_vert, max_vert)
                         root_ray = self.get_root(self.pair_map[vertex_pair])
                         if root_ray not in self.seen_tuple:
+                            self.seen_tuple[root_ray] = True
                             cur_tree = self.get_subtree(root_ray)
                             for node in cur_tree:
                                 node.adjacent_elements = []
                                 new_hanging_vertex_element[node.left_vertex] = []
                                 new_hanging_vertex_element[node.right_vertex] = []
 
+        self.seen_tuple.clear()
+
         nelements_in_grp = grp.nelements
         for grp in groups:
             for iel_grp in six.moves.range(len(grp)):
-#                if refine_flags[iel_base+iel_grp]:
-#                    cur_dim = len(grp.vertex_indices[iel_grp])-1
-#                    midpoint_vertices = []
-#                    for i in six.moves.range(len(grp.vertex_indices[iel_grp])):
-#                        for j in six.moves.range(i+1, len(grp.vertex_indices[iel_grp])):
-#                            min_vert = min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])
-#                            max_vert = max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])
-#                            midpoint_vertices.append(self.pair_map[(min_vert, max_vert)].midpoint)
-#                    node_tuple_to_coord = {}
-#                    for node_index, node_tuple in enumerate(self.index_to_node_tuple[cur_dim]):
-#                        node_tuple_to_coord[node_tuple] = grp.vertex_indices[iel_grp][node_index]
-#                    for midpoint_index, midpoint_tuple in enumerate(self.index_to_midpoint_tuple[cur_dim]):
-#                        node_tuple_to_coord[midpoint_tuple] = midpoint_vertices[midpoint_index]
-#                    #remove from connectivity
-#                    #if len(grp.vertex_indices[0]) == 4:
-#                    for tup_index, tup in enumerate(self.simplex_result[cur_dim]):
-#                        rem_vertices = []
-#                        for vert in tup:
-#                            rem_vertices.append(node_tuple_to_coord[self.simplex_node_tuples[cur_dim][vert]])
-#                        remove_element_from_connectivity(rem_vertices, new_hanging_vertex_element, iel_base+iel_grp)
-##                        three_vertex_tuples = [
-##                                (i, j, k) for i in range(len(tup)) for j in range(i+1, len(tup))
-##                                for k in range(j+1, len(tup))]
-##                        for i, j, k in three_vertex_tuples:
-#                    
-##                        vertex_i = node_tuple_to_coord[self.simplex_node_tuples[tup[i]]]
-##                        vertex_j = node_tuple_to_coord[self.simplex_node_tuples[tup[j]]]
-##                        vertex_k = node_tuple_to_coord[self.simplex_node_tuples[tup[k]]]
-##                        element_rays.append(self.pair_map[(
-##                            min(vertex_i, vertex_j), max(vertex_i, vertex_j))])
-##                        element_rays.append(self.pair_map[(
-##                            min(vertex_i, vertex_k), max(vertex_i, vertex_k))])
-##                        element_rays.append(self.pair_map[(
-##                            min(vertex_j, vertex_k), max(vertex_j, vertex_k))])
-#
-#                    #add to connectivity
-#                    for tup_index, tup in enumerate(self.simplex_result[cur_dim]):
-#                        add_vertices = []
-#                        #print 'TUP:', tup
-#                        for vert in tup:
-#                            add_vertices.append(node_tuple_to_coord[self.simplex_node_tuples[cur_dim][vert]])
-#                        if tup_index == 0:
-#                            add_element_to_connectivity(add_vertices, new_hanging_vertex_element,
-#                                    iel_base+iel_grp)
-#                        else:
-#                            add_element_to_connectivity(add_vertices, new_hanging_vertex_element,
-#                                nelements_in_grp+tup_index-1)
-##                            three_vertex_tuples = [
-##                                    (i, j, k) for i in range(len(tup)) for j in range(i+1, len(tup))
-##                                    for k in range(j+1, len(tup))]
-##                            for i, j, k in three_vertex_tuples:
-##                                vertex_i = node_tuple_to_coord[self.simplex_node_tuples[tup[i]]]
-##                                vertex_j = node_tuple_to_coord[self.simplex_node_tuples[tup[j]]]
-##                                vertex_k = node_tuple_to_coord[self.simplex_node_tuples[tup[k]]]
-##                                element_rays = []
-##                                element_rays.append(self.pair_map[(
-##                                    min(vertex_i, vertex_j), max(vertex_i, vertex_j))])
-##                                element_rays.append(self.pair_map[(
-##                                    min(vertex_i, vertex_k), max(vertex_i, vertex_k))])
-##                                element_rays.append(self.pair_map[(
-##                                    min(vertex_j, vertex_k), max(vertex_j, vertex_k))])
-##                                if tup_index != 0:
-##                                    if (nelements_in_grp+tup_index-1) == 263:
-##                                        print "VS:", vertex_i, vertex_j, vertex_k
-##                                        for ray in element_rays:
-##                                            print ray.left_vertex, ray.right_vertex
-##                                    add_element_to_connectivity(element_rays, new_hanging_vertex_element,
-##                                            nelements_in_grp+tup_index-1)
-##                                else:
-##                                    add_element_to_connectivity(element_rays, new_hanging_vertex_element, iel_base+iel_grp)
-#                    nelements_in_grp += len(self.simplex_result[cur_dim])-1
-#                else:
                 add_verts = []
                 for i in six.moves.range(len(grp[iel_grp])):
-                    if iel_grp == 1:
-                        print grp[iel_grp][i]
                     add_verts.append(grp[iel_grp][i])
                 add_element_to_connectivity(add_verts, new_hanging_vertex_element, iel_base+iel_grp)
         #assert ray connectivity
