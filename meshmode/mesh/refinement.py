@@ -598,10 +598,12 @@ class Refiner(object):
                     #assuming quad otherwise
                     #else:
                         #quadrilateral
-
-
-
-                          
+#                        node_tuple_to_coord = {}
+#                        for node_index, node_tuple in enumerate(self.index_to_node_tuple[cur_dim]):
+#                            node_tuple_to_coord[node_tuple] = grp.vertex_indices[iel_grp][node_index]
+#                        def generate_all_tuples(cur_list):
+#                            if len(cur_list[len(cur_list)-1])
+                                
 
         #clear connectivity data
         for grp in self.last_mesh.groups:
