@@ -118,7 +118,7 @@ def test_refiner_connectivity(mesh):
             for ij, j in enumerate(i):
                 if j == False:
                     print ii, ij, "GEOMETRY: ", connected_to_element_geometry[ii][ij], "CONNECTIVITY: ", connected_to_element_connectivity[ii][ij]
-    #assert (connected_to_element_geometry == connected_to_element_connectivity).all()
+    assert (connected_to_element_geometry == connected_to_element_connectivity).all()
 
 def test_refiner_connectivity_efficient(mesh):
     def group_and_iel_to_global_iel(igrp, iel):
@@ -194,8 +194,85 @@ def test_refiner_connectivity_efficient(mesh):
     for i in six.moves.range(mesh.nelements):
         assert(Counter(connected_to_element_connectivity[i]) == Counter(connected_to_element_geometry[i]))
 
+def linear_func(vert):
+    csum = 0
+    for i in vert:
+        csum += i
+        #print csum
+    return csum
 
+def sine_func(vert):
+    #print vert
+    import math
+    res = 1
+    for i in vert:
+        res *= math.sin(i*2.0*math.pi)
+    #print res
+    return abs(res) * 0.2
+
+def quadratic_func(vert):
+    csum = 0
+    for i in vert:
+        csum += i * i
+    return csum * 1.5
+def get_function_flags(mesh, function):
+    import six
+    from math import sqrt
+    flags = np.zeros(len(mesh.groups[0].vertex_indices))
+    for grp in mesh.groups:
+        iel_base = grp.element_nr_base
+        for iel_grp in six.moves.range(grp.nelements):
+            vertex_indices = grp.vertex_indices[iel_grp]
+            max_edge_len = 0
+            for i in six.moves.range(len(vertex_indices)):
+                for j in six.moves.range(i+1, len(vertex_indices)):
+                    edge_len = 0
+                    for k in six.moves.range(len(mesh.vertices)):
+                        edge_len += (mesh.vertices[k,vertex_indices[i]] - mesh.vertices[k,vertex_indices[j]]) * (mesh.vertices[k,vertex_indices[i]] - mesh.vertices[k,vertex_indices[j]])
+                    edge_len = sqrt(edge_len) 
+                    max_edge_len = max(max_edge_len, edge_len)
+                #print edge_lens[0], mesh.vertices[0, vertex_indices[i]], mesh.vertices[1, vertex_indices[i]], mesh.vertices[2, vertex_indices[i]]
+                centroid = [0] * len(mesh.vertices)
+                for j in six.moves.range(len(mesh.vertices)):
+                    centroid[j] += mesh.vertices[j,vertex_indices[i]]
+            for i in six.moves.range(len(mesh.vertices)):
+                centroid[i] /= len(vertex_indices)
+            yes = False
+            val = function(centroid)
+            print val, max_edge_len
+            if max_edge_len > val:
+                flags[iel_grp] = True
+    return flags
+
+def get_corner_flags(mesh):
+    import six
+    flags = np.zeros(len(mesh.groups[0].vertex_indices))
+    for grp in mesh.groups:
+        iel_base = grp.element_nr_base
+        for iel_grp in six.moves.range(grp.nelements):
+            is_corner_el = False
+            vertex_indices = grp.vertex_indices[iel_grp]
+            for i in six.moves.range(len(vertex_indices)):
+                cur_vertex_corner = True
+                for j in six.moves.range(len(mesh.vertices)):
+                    print iel_grp, i, mesh.vertices[j, vertex_indices[i]]
+                    if mesh.vertices[j, vertex_indices[i]] != 0.0:
+                        cur_vertex_corner = False
+                if cur_vertex_corner:
+                    is_corner_el = True
+                    break
+            if is_corner_el:
+                print iel_grp
+                flags[iel_grp] = True
+    return flags
+
+def get_random_flags(mesh):
+    flags = np.zeros(len(mesh.groups[0].vertex_indices))
+    for i in xrange(0, len(flags)):
+            flags[i] = random.randint(0, 1)
+    return flags
 def main2():
+    import six
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
     from meshmode.mesh.generation import (  # noqa
@@ -205,37 +282,44 @@ def main2():
 #    mesh = generate_icosphere(1, order=order)
     #mesh = generate_icosahedron(1, order=order)
     #mesh = generate_torus(3, 1, order=order)
-    #mesh = generate_regular_rect_mesh()
-    mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),))
+    mesh = generate_regular_rect_mesh()
+    #mesh =  generate_box_mesh(3*(np.linspace(0, 3, 5),))
+    #mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),))
     print "NELEMENTS: ", mesh.nelements
     #print mesh
-    test_refiner_connectivity(mesh);
+    for i in six.moves.range(len(mesh.groups[0].vertex_indices[0])):
+        for k in six.moves.range(len(mesh.vertices)):
+            print mesh.vertices[k, i]
+
+    #test_refiner_connectivity(mesh);
     from meshmode.mesh.refinement import Refiner
     r = Refiner(mesh)
     #random.seed(0)
-    times = random.randint(4, 4)
-    count = 0
     poss_flags = np.ones(len(mesh.groups[0].vertex_indices))
+    times = 6
+    #nelements = mesh.nelements
     for time in xrange(times):
+    #while True:
         print "NELS:", mesh.nelements
-        count = 0
-        flags = np.zeros(len(mesh.groups[0].vertex_indices))
-        for i in xrange(0, len(flags)):
-                flags[i] = random.randint(0, 1)
-                if flags[i] == 1:
-                    #print "REFINING:", i
-                    count += 1
+        #flags = get_corner_flags(mesh)
+        flags = get_function_flags(mesh, sine_func)
+        #flags = get_corner_flags(mesh)
         mesh = r.refine(flags)
+        #if nelements == mesh.nelements:
+            #break
+        #nelements = mesh.nelements
         #from meshmode.mesh.visualization import draw_2d_mesh
         #draw_2d_mesh(mesh, True, True, True, fill=None)
-        import matplotlib.pyplot as pt
-        pt.show()
+        #import matplotlib.pyplot as pt
+        #pt.show()
 
-        poss_flags = np.zeros(len(mesh.groups[0].vertex_indices))
-        for i in xrange(0, len(flags)):
-            poss_flags[i] = flags[i]
-        for i in xrange(len(flags), len(poss_flags)):
-            poss_flags[i] = 1
+        #poss_flags = np.zeros(len(mesh.groups[0].vertex_indices))
+        #for i in xrange(0, len(flags)):
+        #    poss_flags[i] = flags[i]
+        #for i in xrange(len(flags), len(poss_flags)):
+        #    poss_flags[i] = 1
+
+    print 'DONE REFINING'
     '''
     flags = np.zeros(len(mesh.groups[0].vertex_indices))
     flags[0] = 1
@@ -247,18 +331,16 @@ def main2():
     flags[2] = 1
     mesh = r.refine(flags)
     '''
-    test_refiner_connectivity(mesh)
+    #test_refiner_connectivity_efficient(mesh)
     #r.print_rays(70)
     #r.print_rays(117)
     #r.print_hanging_elements(10)
     #r.print_hanging_elements(117)
     #r.print_hanging_elements(757)
-    '''
     from meshmode.mesh.visualization import draw_2d_mesh
-    draw_2d_mesh(mesh, True, True, True, fill=None)
+    draw_2d_mesh(mesh, False, False, False, fill=None)
     import matplotlib.pyplot as pt
     pt.show()
-    '''
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
             PolynomialWarpAndBlendGroupFactory
