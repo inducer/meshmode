@@ -208,7 +208,7 @@ def sine_func(vert):
     for i in vert:
         res *= math.sin(i*2.0*math.pi)
     #print res
-    return abs(res) * 0.2
+    return abs(res) * 0.2 + 0.2
 
 def quadratic_func(vert):
     csum = 0
@@ -239,7 +239,6 @@ def get_function_flags(mesh, function):
                 centroid[i] /= len(vertex_indices)
             yes = False
             val = function(centroid)
-            print val, max_edge_len
             if max_edge_len > val:
                 flags[iel_grp] = True
     return flags
@@ -271,20 +270,11 @@ def get_random_flags(mesh):
     for i in xrange(0, len(flags)):
             flags[i] = random.randint(0, 1)
     return flags
-def main2():
+def refine_and_generate_chart_function(mesh, filename, function):
     import six
+    from time import clock
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    from meshmode.mesh.generation import (  # noqa
-            generate_icosphere, generate_icosahedron,
-            generate_torus, generate_regular_rect_mesh,
-            generate_box_mesh)
-#    mesh = generate_icosphere(1, order=order)
-    #mesh = generate_icosahedron(1, order=order)
-    #mesh = generate_torus(3, 1, order=order)
-    mesh = generate_regular_rect_mesh()
-    #mesh =  generate_box_mesh(3*(np.linspace(0, 3, 5),))
-    #mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),))
     print "NELEMENTS: ", mesh.nelements
     #print mesh
     for i in six.moves.range(len(mesh.groups[0].vertex_indices[0])):
@@ -296,15 +286,29 @@ def main2():
     r = Refiner(mesh)
     #random.seed(0)
     poss_flags = np.ones(len(mesh.groups[0].vertex_indices))
-    times = 6
+    #times = 3
+    num_elements = []
+    time_t = []
     #nelements = mesh.nelements
-    for time in xrange(times):
+    while True:
     #while True:
         print "NELS:", mesh.nelements
         #flags = get_corner_flags(mesh)
-        flags = get_function_flags(mesh, sine_func)
+        flags = get_function_flags(mesh, function)
+        nels = 0
+        for i in flags:
+            if i:
+                nels += 1
+        if nels == 0:
+            break
+        print "LKJASLFKJALKASF:", nels
+        num_elements.append(nels)
         #flags = get_corner_flags(mesh)
+        beg = clock()
         mesh = r.refine(flags)
+        end = clock()
+        time_taken = end - beg
+        time_t.append(time_taken)
         #if nelements == mesh.nelements:
             #break
         #nelements = mesh.nelements
@@ -319,6 +323,11 @@ def main2():
         #for i in xrange(len(flags), len(poss_flags)):
         #    poss_flags[i] = 1
 
+    import matplotlib.pyplot as plt
+    import matplotlib.pyplot as pt
+    pt.plot(num_elements, time_t, "o")
+    pt.savefig(filename)
+    pt.clf()
     print 'DONE REFINING'
     '''
     flags = np.zeros(len(mesh.groups[0].vertex_indices))
@@ -337,17 +346,16 @@ def main2():
     #r.print_hanging_elements(10)
     #r.print_hanging_elements(117)
     #r.print_hanging_elements(757)
-    from meshmode.mesh.visualization import draw_2d_mesh
-    draw_2d_mesh(mesh, False, False, False, fill=None)
-    import matplotlib.pyplot as pt
-    pt.show()
+    #from meshmode.mesh.visualization import draw_2d_mesh
+    #draw_2d_mesh(mesh, False, False, False, fill=None)
+    #import matplotlib.pyplot as pt
+    #pt.show()
+
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
             PolynomialWarpAndBlendGroupFactory
-
     discr = Discretization(
             cl_ctx, mesh, PolynomialWarpAndBlendGroupFactory(order))
-
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(queue, discr, order)
     os.remove("connectivity2.vtu")
@@ -361,6 +369,20 @@ def main2():
 
     write_mesh_connectivity_vtk_file("connectivity2.vtu",
             mesh)
+    
+def main2():
+    from meshmode.mesh.generation import (  # noqa
+            generate_icosphere, generate_icosahedron,
+            generate_torus, generate_regular_rect_mesh,
+            generate_box_mesh)
+#    mesh = generate_icosphere(1, order=order)
+    #mesh = generate_icosahedron(1, order=order)
+    #mesh = generate_torus(3, 1, order=order)
+    #mesh = generate_regular_rect_mesh()
+    #mesh =  generate_box_mesh(3*(np.linspace(0, 3, 5),))
+    #mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),))
+    mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
+    refine_and_generate_chart_function(mesh, "plot", sine_func)
 
 def all_refine(num_mesh, depth, fname):
     import six
