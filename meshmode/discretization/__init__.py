@@ -23,9 +23,10 @@ THE SOFTWARE.
 """
 
 import numpy as np
-from pytools import memoize_method, memoize_method_nested
+from pytools import memoize_method, memoize_in
 import loopy as lp
 import pyopencl as cl
+import pyopencl.array  # noqa
 
 __doc__ = """
 .. autoclass:: ElementGroupBase
@@ -37,11 +38,50 @@ __doc__ = """
 # {{{ element group base
 
 class ElementGroupBase(object):
-    """Container for the :class:`QBXGrid` data corresponding to
+    """Container for the :class:`Discretization` data corresponding to
     one :class:`meshmode.mesh.MeshElementGroup`.
 
     .. attribute :: mesh_el_group
+    .. attribute :: order
     .. attribute :: node_nr_base
+
+    .. autoattribute:: nelements
+    .. autoattribute:: nunit_nodes
+    .. autoattribute:: nnodes
+    .. autoattribute:: dim
+    .. automethod:: view
+
+    .. method:: unit_nodes()
+
+        Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_nodes)``
+        of reference coordinates of interpolation nodes.
+
+    .. method:: basis()
+
+        Returns a :class:`list` of basis functions that take arrays
+        of shape ``(dim, n)`` and return an array of shape (n,)``
+        (which performs evaluation of the basis function).
+
+    .. method:: grad_basis()
+
+        :returns: a :class:`tuple` of functions, each of  which
+        accepts arrays of shape *(dims, npts)*
+        and returns a :class:`tuple` of length *dims* containing
+        the derivatives along each axis as an array of size *npts*.
+        'Scalar' evaluation, by passing just one vector of length *dims*,
+        is also supported.
+
+    .. method:: diff_matrices()
+
+        Return a :attr:`dim`-long :class:`tuple` of matrices of
+        shape ``(nunit_nodes, nunit_nodes)``, each of which,
+        when applied to an array of nodal values, take derivatives
+        in the reference (r,s,t) directions.
+
+    .. method:: weights()
+
+        Returns an array of length :attr:`nunit_nodes` containing
+        quadrature weights.
     """
 
     def __init__(self, mesh_el_group, order, node_nr_base):
@@ -79,6 +119,11 @@ class ElementGroupBase(object):
                 (-1, -1))
 
     def view(self, global_array):
+        """Return a view of *global_array* of shape ``(..., nelements,
+        nunit_nodes)`` where *global_array* is of shape ``(..., nnodes)``,
+        where *nnodes* is the global (per-discretization) node count.
+        """
+
         return global_array[
                 ..., self.node_nr_base:self.node_nr_base + self.nnodes] \
                 .reshape(
@@ -127,7 +172,9 @@ class Discretization(object):
 
     .. attribute :: groups
 
-    .. method:: empty(dtype, queue=None, extra_dims=None)
+    .. automethod:: empty
+
+    .. automethod:: zeros
 
     .. method:: nodes()
 
@@ -141,11 +188,6 @@ class Discretization(object):
     """
 
     def __init__(self, cl_ctx, mesh, group_factory, real_dtype=np.float64):
-        """
-        :arg order: A polynomial-order-like parameter passed unmodified to
-            :attr:`group_class`. See subclasses for more precise definition.
-        """
-
         self.cl_context = cl_ctx
 
         self.mesh = mesh
@@ -170,7 +212,20 @@ class Discretization(object):
     def ambient_dim(self):
         return self.mesh.ambient_dim
 
-    def empty(self, dtype, queue=None, extra_dims=None):
+    def empty(self, queue=None, dtype=None, extra_dims=None, allocator=None):
+        """Return an empty DOF vector.
+
+        :arg dtype: type special value 'c' will result in a
+            vector of dtype :attr:`self.complex_dtype`. If
+            *None* (the default), a real vector will be returned.
+        """
+        if dtype is None:
+            dtype = self.real_dtype
+        elif dtype == "c":
+            dtype = self.complex_dtype
+        else:
+            dtype = np.dtype(dtype)
+
         if queue is None:
             first_arg = self.cl_context
         else:
@@ -180,11 +235,14 @@ class Discretization(object):
         if extra_dims is not None:
             shape = extra_dims + shape
 
-        return cl.array.empty(first_arg, shape, dtype=dtype)
+        return cl.array.empty(first_arg, shape, dtype=dtype, allocator=allocator)
 
-    def num_reference_derivative(
-            self, queue, ref_axes, vec):
-        @memoize_method_nested
+    def zeros(self, queue, dtype=None, extra_dims=None, allocator=None):
+        return self.empty(queue, dtype=dtype, extra_dims=extra_dims,
+                allocator=allocator).fill(0)
+
+    def num_reference_derivative(self, queue, ref_axes, vec):
+        @memoize_in(self, "reference_derivative_knl")
         def knl():
             knl = lp.make_kernel(
                 """{[k,i,j]:
@@ -196,9 +254,12 @@ class Discretization(object):
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))
 
-        result = self.empty(vec.dtype)
+        result = self.empty(dtype=vec.dtype)
 
         for grp in self.groups:
+            if grp.nelements == 0:
+                continue
+
             mat = None
             for ref_axis in ref_axes:
                 next_mat = grp.diff_matrices()[ref_axis]
@@ -212,24 +273,28 @@ class Discretization(object):
         return result
 
     def quad_weights(self, queue):
-        @memoize_method_nested
+        @memoize_in(self, "quad_weights_knl")
         def knl():
             knl = lp.make_kernel(
                 "{[k,i]: 0<=k<nelements and 0<=i<ndiscr_nodes}",
                 "result[k,i] = weights[i]",
-                name="quad_weights")
+                name="quad_weights",
+                default_offset=lp.auto)
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))
 
-        result = self.empty(self.real_dtype)
+        result = self.empty(dtype=self.real_dtype)
         for grp in self.groups:
+            if grp.nelements == 0:
+                continue
+
             knl()(queue, result=grp.view(result), weights=grp.weights)
         return result
 
     @memoize_method
     def nodes(self):
-        @memoize_method_nested
+        @memoize_in(self, "nodes_knl")
         def knl():
             knl = lp.make_kernel(
                 """{[d,k,i,j]:
@@ -250,13 +315,16 @@ class Discretization(object):
                     "stride:auto,stride:auto,stride:auto")
             return knl
 
-        result = self.empty(self.real_dtype, extra_dims=(self.ambient_dim,))
+        result = self.empty(dtype=self.real_dtype, extra_dims=(self.ambient_dim,))
 
         with cl.CommandQueue(self.cl_context) as queue:
             for grp in self.groups:
+                if grp.nelements == 0:
+                    continue
+
                 meg = grp.mesh_el_group
                 knl()(queue,
-                        resampling_mat=grp.resampling_matrix(),
+                        resampling_mat=grp.from_mesh_interp_matrix(),
                         result=grp.view(result), nodes=meg.nodes)
 
         return result

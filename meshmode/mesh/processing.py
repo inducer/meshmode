@@ -1,7 +1,4 @@
-from __future__ import division
-from __future__ import absolute_import
-from six.moves import range
-from functools import reduce
+from __future__ import division, absolute_import, print_function
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -25,6 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from six.moves import range
+from functools import reduce
+
 import numpy as np
 import numpy.linalg as la
 import modepy as mp
@@ -34,14 +34,15 @@ __doc__ = """
 .. autofunction:: find_volume_mesh_element_orientations
 .. autofunction:: perform_flips
 .. autofunction:: find_bounding_box
-.. autofunction:: merge_dijsoint_meshes
+.. autofunction:: merge_disjoint_meshes
+.. autofunction:: map_mesh
 .. autofunction:: affine_map
 """
 
 
 # {{{ orientations
 
-def find_volume_mesh_element_group_orientation(mesh, grp):
+def find_volume_mesh_element_group_orientation(vertices, grp):
     """Return a positive floating point number for each positively
     oriented element, and a negative floating point number for
     each negatively oriented element.
@@ -56,11 +57,11 @@ def find_volume_mesh_element_group_orientation(mesh, grp):
                 "exclusively SimplexElementGroup-based meshes")
 
     # (ambient_dim, nelements, nvertices)
-    vertices = mesh.vertices[:, grp.vertex_indices]
+    my_vertices = vertices[:, grp.vertex_indices]
 
     # (ambient_dim, nelements, nspan_vectors)
     spanning_vectors = (
-            vertices[:, :, 1:] - vertices[:, :, 0][:, :, np.newaxis])
+            my_vertices[:, :, 1:] - my_vertices[:, :, 0][:, :, np.newaxis])
 
     ambient_dim = spanning_vectors.shape[0]
     nspan_vectors = spanning_vectors.shape[-1]
@@ -80,6 +81,10 @@ def find_volume_mesh_element_group_orientation(mesh, grp):
 
     from operator import xor
     outer_prod = -reduce(xor, mvs)
+
+    if grp.dim == 1:
+        # FIXME: This is a little weird.
+        outer_prod = -outer_prod
 
     return (outer_prod.I | outer_prod).as_scalar()
 
@@ -102,7 +107,8 @@ def find_volume_mesh_element_orientations(mesh, tolerate_unimplemented_checks=Fa
         if tolerate_unimplemented_checks:
             try:
                 signed_area_elements = \
-                        find_volume_mesh_element_group_orientation(mesh, grp)
+                        find_volume_mesh_element_group_orientation(
+                                mesh.vertices, grp)
             except NotImplementedError:
                 result_grp_view[:] = float("nan")
             else:
@@ -110,7 +116,8 @@ def find_volume_mesh_element_orientations(mesh, tolerate_unimplemented_checks=Fa
                 result_grp_view[:] = signed_area_elements
         else:
             signed_area_elements = \
-                    find_volume_mesh_element_group_orientation(mesh, grp)
+                    find_volume_mesh_element_group_orientation(
+                            mesh.vertices, grp)
             assert not np.isnan(signed_area_elements).any()
             result_grp_view[:] = signed_area_elements
 
@@ -158,7 +165,7 @@ def flip_simplex_element_group(vertices, grp, grp_flip_flags):
     flipped_unit_nodes = barycentric_to_unit(flipped_bary_unit_nodes)
 
     flip_matrix = mp.resampling_matrix(
-            mp.simplex_onb(grp.dim, grp.order),
+            mp.simplex_best_available_basis(grp.dim, grp.order),
             flipped_unit_nodes, grp.unit_nodes)
 
     flip_matrix[np.abs(flip_matrix) < 1e-15] = 0
@@ -220,7 +227,7 @@ def find_bounding_box(mesh):
 
 # {{{ merging
 
-def merge_dijsoint_meshes(meshes, skip_tests=False):
+def merge_disjoint_meshes(meshes, skip_tests=False):
     if not meshes:
         raise ValueError("must pass at least one mesh")
 
@@ -271,27 +278,48 @@ def merge_dijsoint_meshes(meshes, skip_tests=False):
 # }}}
 
 
-# {{{ affine map
+# {{{ map
 
-def affine_map(mesh, A=None, b=None):
-    """Apply the affine map *f(x)=Ax+b* to the geometry of *mesh*."""
+def map_mesh(mesh, f):  # noqa
+    """Apply the map *f* to the mesh. *f* needs to accept and return arrays of
+    shape ``(ambient_dim, npoints)``."""
 
-    vertices = np.einsum("ij,jv->iv", A, mesh.vertices) + b[:, np.newaxis]
+    vertices = f(mesh.vertices)
 
     # {{{ assemble new groups list
 
     new_groups = []
 
     for group in mesh.groups:
-        nodes = (
-                np.einsum("ij,jen->ien", A, group.nodes)
-                + b[:, np.newaxis, np.newaxis])
-        new_groups.append(group.copy(nodes=nodes))
+        mapped_nodes = f(group.nodes.reshape(mesh.ambient_dim, -1))
+        new_groups.append(group.copy(
+            nodes=mapped_nodes.reshape(*group.nodes.shape)))
 
     # }}}
 
     from meshmode.mesh import Mesh
-    return Mesh(vertices, new_groups, skip_tests=True)
+    return Mesh(vertices, new_groups, skip_tests=True,
+            nodal_adjacency=mesh.nodal_adjacency_init_arg(),
+            facial_adjacency_groups=mesh._facial_adjacency_groups)
+
+# }}}
+
+
+# {{{ affine map
+
+def affine_map(mesh, A=None, b=None):  # noqa
+    """Apply the affine map *f(x)=Ax+b* to the geometry of *mesh*."""
+
+    if A is None:
+        A = np.eye(mesh.ambient_dim)  # noqa
+
+    if b is None:
+        b = np.zeros(A.shape[0])
+
+    def f(x):
+        return np.einsum("ij,jv->iv", A, x) + b[:, np.newaxis]
+
+    return map_mesh(mesh, f)
 
 # }}}
 

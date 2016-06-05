@@ -34,7 +34,7 @@ __doc__ = """
 
 .. autoclass:: Visualizer
 
-.. autofunction:: write_mesh_connectivity_vtk_file
+.. autofunction:: write_nodal_adjacency_vtk_file
 """
 
 
@@ -77,10 +77,10 @@ class Visualizer(object):
     .. automethod:: write_vtk_file
     """
 
-    def __init__(self, discr, vis_discr, connection):
-        self.discr = discr
-        self.vis_discr = vis_discr
+    def __init__(self, connection):
         self.connection = connection
+        self.discr = connection.from_discr
+        self.vis_discr = connection.to_discr
 
     def _resample_and_get(self, queue, vec):
         from pytools.obj_array import with_object_array_or_scalar
@@ -240,16 +240,36 @@ def make_visualizer(queue, discr, vis_order):
             real_dtype=discr.real_dtype)
     from meshmode.discretization.connection import \
             make_same_mesh_connection
-    cnx = make_same_mesh_connection(queue, vis_discr, discr)
 
-    return Visualizer(discr, vis_discr, cnx)
+    return Visualizer(make_same_mesh_connection(vis_discr, discr))
 
 # }}}
 
 
-# {{{ connectivity
+# {{{ draw_curve
 
-def write_mesh_connectivity_vtk_file(file_name, mesh,  compressor=None,):
+def draw_curve(discr):
+    mesh = discr.mesh
+
+    import matplotlib.pyplot as pt
+    pt.plot(mesh.vertices[0], mesh.vertices[1], "o")
+
+    color = pt.cm.rainbow(np.linspace(0, 1, len(discr.groups)))
+    with cl.CommandQueue(discr.cl_context) as queue:
+        for i, group in enumerate(discr.groups):
+            group_nodes = group.view(discr.nodes()).get(queue=queue)
+            pt.plot(
+                    group_nodes[0].T,
+                    group_nodes[1].T, "-x",
+                    label="Group %d" % i,
+                    color=color[i])
+
+# }}}
+
+
+# {{{ adjacency
+
+def write_nodal_adjacency_vtk_file(file_name, mesh, compressor=None,):
     from pyvisfile.vtk import (
             UnstructuredGrid, DataArray,
             AppendedDataXMLGenerator,
@@ -266,16 +286,16 @@ def write_mesh_connectivity_vtk_file(file_name, mesh,  compressor=None,):
                 np.sum(mesh.vertices[:, grp.vertex_indices], axis=-1)
                 / grp.vertex_indices.shape[-1])
 
-    cnx = mesh.element_connectivity
+    adj = mesh.nodal_adjacency
 
-    nconnections = len(cnx.neighbors)
+    nconnections = len(adj.neighbors)
     connections = np.empty((nconnections, 2), dtype=np.int32)
 
-    nb_starts = cnx.neighbors_starts
+    nb_starts = adj.neighbors_starts
     for iel in range(mesh.nelements):
         connections[nb_starts[iel]:nb_starts[iel+1], 0] = iel
 
-    connections[:, 1] = cnx.neighbors
+    connections[:, 1] = adj.neighbors
 
     grid = UnstructuredGrid(
             (mesh.nelements,
