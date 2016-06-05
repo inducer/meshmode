@@ -30,7 +30,8 @@ import numpy as np
 # {{{ draw_2d_mesh
 
 def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
-        draw_connectivity=False, **kwargs):
+        draw_nodal_adjacency=False, draw_face_numbers=False,
+        set_bounding_box=False, **kwargs):
     assert mesh.ambient_dim == 2
 
     import matplotlib.pyplot as pt
@@ -74,7 +75,7 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
                     ha="center", va="center", color="blue",
                     bbox=dict(facecolor='white', alpha=0.5, lw=0))
 
-    if draw_connectivity:
+    if draw_nodal_adjacency:
         def global_iel_to_group_and_iel(global_iel):
             for igrp, grp in enumerate(mesh.groups):
                 if global_iel < grp.nelements:
@@ -83,7 +84,7 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
 
             raise ValueError("invalid element nr")
 
-        cnx = mesh.element_connectivity
+        cnx = mesh.nodal_adjacency
 
         nb_starts = cnx.neighbors_starts
         for iel_g in range(mesh.nelements):
@@ -109,6 +110,42 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
                 pt.arrow(start[0], start[1], 0.7*dx[0], 0.7*dx[1],
                         length_includes_head=True,
                         color="green", head_width=1e-2, lw=1e-2)
+
+    if draw_face_numbers:
+        for igrp, grp in enumerate(mesh.groups):
+            for iel, el in enumerate(grp.vertex_indices):
+                elverts = mesh.vertices[:, el]
+                el_center = np.mean(elverts, axis=-1)
+
+                for iface, fvi in enumerate(grp.face_vertex_indices()):
+                    face_center = (
+                            0.3*el_center
+                            +
+                            0.7*np.mean(elverts[:, fvi], axis=-1))
+
+                    pt.text(face_center[0], face_center[1], str(iface), fontsize=12,
+                            ha="center", va="center", color="purple",
+                            bbox=dict(facecolor='white', alpha=0.5, lw=0))
+
+    if set_bounding_box:
+        from meshmode.mesh.processing import find_bounding_box
+        lower, upper = find_bounding_box(mesh)
+        pt.xlim([lower[0], upper[0]])
+        pt.ylim([lower[1], upper[1]])
+
+# }}}
+
+
+# {{{ draw_curve
+
+def draw_curve(mesh):
+    import matplotlib.pyplot as pt
+    pt.plot(mesh.vertices[0], mesh.vertices[1], "o")
+
+    for i, group in enumerate(mesh.groups):
+        pt.plot(
+                group.nodes[0].ravel(),
+                group.nodes[1].ravel(), "-x", label="Group %d" % i)
 
 # }}}
 

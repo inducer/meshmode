@@ -22,6 +22,8 @@ THE SOFTWARE.
 
 
 import numpy as np
+import itertools
+from six.moves import range
 
 
 class TreeRayNode(object):
@@ -39,7 +41,7 @@ class TreeRayNode(object):
         List containing elements indices of elements adjacent
         to this ray segment.
     """
-    def __init__(self, left_vertex, right_vertex, adjacent_elements = []):
+    def __init__(self, left_vertex, right_vertex, adjacent_elements=[]):
         import copy
         self.left = None
         self.right = None
@@ -50,16 +52,15 @@ class TreeRayNode(object):
         self.adjacent_elements = copy.deepcopy(adjacent_elements)
         self.adjacent_add_diff = []
 
+
 class Refiner(object):
     def __init__(self, mesh):
-        #print 'herlkjjlkjasdf'
-        from llist import dllist, dllistnode
-        from meshmode.mesh.tesselate  import tesselatetet, tesselatetri
+        from meshmode.mesh.tesselate import tesselatetet, tesselatetri
         self.lazy = False
         self.seen_tuple = {}
         tri_node_tuples, tri_result = tesselatetri()
         tet_node_tuples, tet_result = tesselatetet()
-        print tri_node_tuples, tri_result
+        print(tri_node_tuples, tri_result)
         #quadrilateral_node_tuples = [
         #print tri_result, tet_result
         self.simplex_node_tuples = [None, None, tri_node_tuples, tet_node_tuples]
@@ -67,38 +68,36 @@ class Refiner(object):
         #print tri_node_tuples, tri_result
         #self.simplex_node_tuples, self.simplex_result = tesselatetet()
         self.last_mesh = mesh
-        
+
         # {{{ initialization
 
-        # mapping: (vertex_1, vertex_2) -> TreeRayNode 
+        # mapping: (vertex_1, vertex_2) -> TreeRayNode
         # where vertex_i represents a vertex number
         #
         # Assumption: vertex_1 < vertex_2
         self.pair_map = {}
 
         nvertices = len(mesh.vertices[0])
-        
+
         #array containing element whose edge lies on corresponding vertex
         self.hanging_vertex_element = []
-        import six
-        for i in six.moves.range(nvertices):
+        for i in range(nvertices):
             self.hanging_vertex_element.append([])
 
-        import six
         for grp in mesh.groups:
             iel_base = grp.element_nr_base
-            for iel_grp in six.moves.range(grp.nelements):
+            for iel_grp in range(grp.nelements):
                 vert_indices = grp.vertex_indices[iel_grp]
-                for i in six.moves.range(len(vert_indices)):
-                    for j in six.moves.range(i+1, len(vert_indices)):
-                       
-                        #minimum and maximum of the two indices for storing 
+                for i in range(len(vert_indices)):
+                    for j in range(i+1, len(vert_indices)):
+
+                        #minimum and maximum of the two indices for storing
                         #data in vertex_pair
                         min_index = min(vert_indices[i], vert_indices[j])
                         max_index = max(vert_indices[i], vert_indices[j])
 
                         vertex_pair = (min_index, max_index)
-                        #print vertex_pair
+                        #print(vertex_pair)
                         if vertex_pair not in self.pair_map:
                             self.pair_map[vertex_pair] = TreeRayNode(min_index, max_index)
                             self.pair_map[vertex_pair].adjacent_elements.append(iel_base+iel_grp)
@@ -107,39 +106,39 @@ class Refiner(object):
                                 adjacent_elements.append(iel_base+iel_grp))
         # }}}
 
-        #print vert_indices
+        #print(vert_indices)
         #generate reference tuples
         self.index_to_node_tuple = []
         self.index_to_midpoint_tuple = []
-        for d in six.moves.range(len(vert_indices)):
+        for d in range(len(vert_indices)):
             dim = d + 1
             cur_index_to_node_tuple = [()] * dim
-            for i in six.moves.range(0, dim-1):
+            for i in range(0, dim-1):
                 cur_index_to_node_tuple[0] = cur_index_to_node_tuple[0] + (0,)
-            for i in six.moves.range(1, dim):
-                for j in six.moves.range(1, dim):
+            for i in range(1, dim):
+                for j in range(1, dim):
                     if i == j:
                         cur_index_to_node_tuple[i] = cur_index_to_node_tuple[i] + (2,)
                     else:
                         cur_index_to_node_tuple[i] = cur_index_to_node_tuple[i] + (0,)
             cur_index_to_midpoint_tuple = [()] * (int((dim * (dim - 1)) / 2))
             curind = 0
-            for ind1 in six.moves.range(0, len(cur_index_to_node_tuple)):
-                for ind2 in six.moves.range(ind1+1, len(cur_index_to_node_tuple)):
+            for ind1 in range(0, len(cur_index_to_node_tuple)):
+                for ind2 in range(ind1+1, len(cur_index_to_node_tuple)):
                     i = cur_index_to_node_tuple[ind1]
                     j = cur_index_to_node_tuple[ind2]
-                    #print i, j
-                    for k in six.moves.range(0, dim-1):
+                    #print(i, j)
+                    for k in range(0, dim-1):
                         cur = int((i[k] + j[k]) / 2)
                         cur_index_to_midpoint_tuple[curind] = cur_index_to_midpoint_tuple[curind] + (cur,)
                     curind += 1
             self.index_to_node_tuple.append(cur_index_to_node_tuple)
             self.index_to_midpoint_tuple.append(cur_index_to_midpoint_tuple)
         '''
-        self.ray_vertices = np.empty([len(mesh.groups[0].vertex_indices) * 
-            len(mesh.groups[0].vertex_indices[0]) * (len(mesh.groups[0].vertex_indices[0]) - 1) / 2, 2], 
+        self.ray_vertices = np.empty([len(mesh.groups[0].vertex_indices) *
+            len(mesh.groups[0].vertex_indices[0]) * (len(mesh.groups[0].vertex_indices[0]) - 1) / 2, 2],
                 dtype=np.int32)
-        self.ray_elements = np.zeros([len(mesh.groups[0].vertex_indices) * 
+        self.ray_elements = np.zeros([len(mesh.groups[0].vertex_indices) *
             len(mesh.groups[0].vertex_indices[0]) * (len(mesh.groups[0].vertex_indices[0]) - 1)
              / 2, 1, 2], dtype=np.int32)
         self.vertex_to_ray = []
@@ -158,7 +157,7 @@ class Refiner(object):
                         self.vertex_to_ray[grp.vertex_indices[i][k]].append(temp2)
                         count += 1
         ind = 0
-        #print self.ray_vertices
+        #print(self.ray_vertices)
         for i in self.ray_vertices:
             which = 0
             for grp in mesh.groups:
@@ -188,16 +187,16 @@ class Refiner(object):
                 np.bool)
 
     def get_current_mesh(self):
-        
+
         from meshmode.mesh import Mesh
         #return Mesh(vertices, [grp], element_connectivity=self.generate_connectivity(len(self.last_mesh.groups[group].vertex_indices) \
         #            + count*3))
-        groups = [] 
+        groups = []
         grpn = 0
         for grp in self.last_mesh.groups:
             groups.append(np.empty([len(grp.vertex_indices),
                 len(self.last_mesh.groups[grpn].vertex_indices[0])], dtype=np.int32))
-            for iel_grp in xrange(grp.nelements):
+            for iel_grp in range(grp.nelements):
                 for i in range(0, len(grp.vertex_indices[iel_grp])):
                     groups[grpn][iel_grp][i] = grp.vertex_indices[iel_grp][i]
             grpn += 1
@@ -209,9 +208,9 @@ class Refiner(object):
         self.last_mesh = Mesh(self.last_mesh.vertices, grp,\
                 element_connectivity=self.generate_connectivity(len(self.last_mesh.groups[0].vertex_indices),\
                     len(self.last_mesh.vertices[0])))
-        
+
         return self.last_mesh
-    
+
 
     def get_leaves(self, cur_node):
         queue = [cur_node]
@@ -236,7 +235,7 @@ class Refiner(object):
                 queue.append(vertex.left)
                 queue.append(vertex.right)
         return res
-    
+
     def apply_diff(self, cur_node, new_hanging_vertex_elements):
         for el in cur_node.adjacent_add_diff:
             if el not in cur_node.adjacent_elements:
@@ -311,30 +310,27 @@ class Refiner(object):
 
     #refine_flag tells you which elements to split as a numpy array of bools
     def refine(self, refine_flags):
-        import six
         import numpy as np
-        from sets import Set
         #vertices and groups for next generation
         nvertices = len(self.last_mesh.vertices[0])
 
         groups = []
 
-        midpoint_already = Set([])
+        midpoint_already = set()
         grpn = 0
         totalnelements = 0
-
 
         for grp in self.last_mesh.groups:
             iel_base = grp.element_nr_base
             nelements = 0
-            for iel_grp in six.moves.range(grp.nelements):
+            for iel_grp in range(grp.nelements):
                 nelements += 1
                 vertex_indices = grp.vertex_indices[iel_grp]
                 if refine_flags[iel_base+iel_grp]:
                     cur_dim = len(grp.vertex_indices[iel_grp])-1
                     nelements += len(self.simplex_result[cur_dim]) - 1
-                    for i in six.moves.range(len(vertex_indices)):
-                        for j in six.moves.range(i+1, len(vertex_indices)):
+                    for i in range(len(vertex_indices)):
+                        for j in range(i+1, len(vertex_indices)):
                             i_index = vertex_indices[i]
                             j_index = vertex_indices[j]
                             index_tuple = (i_index, j_index) if i_index < j_index else (j_index, i_index)
@@ -349,11 +345,10 @@ class Refiner(object):
         vertices = np.empty([len(self.last_mesh.vertices), nvertices])
 
         new_hanging_vertex_element = [
-                [] for i in six.moves.range(nvertices)]
+                [] for i in range(nvertices)]
 
 #        def remove_element_from_connectivity(vertices, new_hanging_vertex_elements, to_remove):
-#            #print vertices
-#            import six
+#            #print(vertices)
 #            import itertools
 #            if len(vertices) == 2:
 #                min_vertex = min(vertices[0], vertices[1])
@@ -366,8 +361,8 @@ class Refiner(object):
 #            element_rays = []
 #            midpoints = []
 #            split_possible = True
-#            for i in six.moves.range(len(vertices)):
-#                for j in six.moves.range(i+1, len(vertices)):
+#            for i in range(len(vertices)):
+#                for j in range(i+1, len(vertices)):
 #                    min_vertex = min(vertices[i], vertices[j])
 #                    max_vertex = max(vertices[i], vertices[j])
 #                    element_rays.append(self.pair_map[(min_vertex, max_vertex)])
@@ -385,13 +380,13 @@ class Refiner(object):
 #                    node_tuple_to_coord[node_tuple] = vertices[node_index]
 #                for midpoint_index, midpoint_tuple in enumerate(self.index_to_midpoint_tuple[cur_dim]):
 #                    node_tuple_to_coord[midpoint_tuple] = midpoints[midpoint_index]
-#                for i in six.moves.range(len(self.simplex_result[cur_dim])):
+#                for i in range(len(self.simplex_result[cur_dim])):
 #                    next_vertices = []
-#                    for j in six.moves.range(len(self.simplex_result[cur_dim][i])):
+#                    for j in range(len(self.simplex_result[cur_dim][i])):
 #                        next_vertices.append(node_tuple_to_coord[self.simplex_node_tuples[cur_dim][self.simplex_result[cur_dim][i][j]]])
 #                    all_rays_present = True
-#                    for v1 in six.moves.range(len(next_vertices)):
-#                        for v2 in six.moves.range(v1+1, len(next_vertices)):
+#                    for v1 in range(len(next_vertices)):
+#                        for v2 in range(v1+1, len(next_vertices)):
 #                            vertex_tuple = (min(next_vertices[v1], next_vertices[v2]), max(next_vertices[v1], next_vertices[v2]))
 #                            if vertex_tuple not in self.pair_map:
 #                                all_rays_present = False
@@ -400,13 +395,11 @@ class Refiner(object):
 #                    else:
 #                        split_possible = False
 #            if not split_possible:
-#                next_vertices_list = list(itertools.combinations(vertices, len(vertices)-1)) 
+#                next_vertices_list = list(itertools.combinations(vertices, len(vertices)-1))
 #                for next_vertices in next_vertices_list:
 #                    remove_element_from_connectivity(next_vertices, new_hanging_vertex_elements, to_remove)
 
         def add_element_to_connectivity(vertices, new_hanging_vertex_elements, to_add):
-            import six
-            import itertools
             if len(vertices) == 2:
                 min_vertex = min(vertices[0], vertices[1])
                 max_vertex = max(vertices[0], vertices[1])
@@ -418,8 +411,8 @@ class Refiner(object):
             element_rays = []
             midpoints = []
             split_possible = True
-            for i in six.moves.range(len(vertices)):
-                for j in six.moves.range(i+1, len(vertices)):
+            for i in range(len(vertices)):
+                for j in range(i+1, len(vertices)):
                     min_vertex = min(vertices[i], vertices[j])
                     max_vertex = max(vertices[i], vertices[j])
                     element_rays.append(self.pair_map[(min_vertex, max_vertex)])
@@ -435,13 +428,13 @@ class Refiner(object):
                     node_tuple_to_coord[node_tuple] = vertices[node_index]
                 for midpoint_index, midpoint_tuple in enumerate(self.index_to_midpoint_tuple[cur_dim]):
                     node_tuple_to_coord[midpoint_tuple] = midpoints[midpoint_index]
-                for i in six.moves.range(len(self.simplex_result[cur_dim])):
+                for i in range(len(self.simplex_result[cur_dim])):
                     next_vertices = []
-                    for j in six.moves.range(len(self.simplex_result[cur_dim][i])):
+                    for j in range(len(self.simplex_result[cur_dim][i])):
                         next_vertices.append(node_tuple_to_coord[self.simplex_node_tuples[cur_dim][self.simplex_result[cur_dim][i][j]]])
                     all_rays_present = True
-                    for v1 in six.moves.range(len(next_vertices)):
-                        for v2 in six.moves.range(v1+1, len(next_vertices)):
+                    for v1 in range(len(next_vertices)):
+                        for v2 in range(v1+1, len(next_vertices)):
                             vertex_tuple = (min(next_vertices[v1], next_vertices[v2]), max(next_vertices[v1], next_vertices[v2]))
                             if vertex_tuple not in self.pair_map:
                                 all_rays_present = False
@@ -450,10 +443,9 @@ class Refiner(object):
                     else:
                         split_possible = False
             if not split_possible:
-                next_vertices_list = list(itertools.combinations(vertices, len(vertices)-1)) 
+                next_vertices_list = list(itertools.combinations(vertices, len(vertices)-1))
                 for next_vertices in next_vertices_list:
                     add_element_to_connectivity(next_vertices, new_hanging_vertex_elements, to_add)
-#            import six
 #            for node in element_rays:
 #                self.add_element_to_connectivity(node, new_hanging_vertex_elements, to_add)
  #               leaves = self.get_subtree(node)
@@ -466,8 +458,8 @@ class Refiner(object):
  #                       new_hanging_vertex_elements[leaf.right_vertex].append(to_add)
 
 #            next_element_rays = []
-#            for i in six.moves.range(len(element_rays)):
-#                for j in six.moves.range(i+1, len(element_rays)):
+#            for i in range(len(element_rays)):
+#                for j in range(i+1, len(element_rays)):
 #                    if element_rays[i].midpoint is not None and element_rays[j].midpoint is not None:
 #                        min_midpoint = min(element_rays[i].midpoint, element_rays[j].midpoint)
 #                        max_midpoint = max(element_rays[i].midpoint, element_rays[j].midpoint)
@@ -503,10 +495,10 @@ class Refiner(object):
         def check_adjacent_elements(groups, new_hanging_vertex_elements, nelements_in_grp):
             for grp in groups:
                 iel_base = 0
-                for iel_grp in six.moves.range(nelements_in_grp):
+                for iel_grp in range(nelements_in_grp):
                     vertex_indices = grp[iel_grp]
-                    for i in six.moves.range(len(vertex_indices)):
-                        for j in six.moves.range(i+1, len(vertex_indices)):
+                    for i in range(len(vertex_indices)):
+                        for j in range(i+1, len(vertex_indices)):
                             min_index = min(vertex_indices[i], vertex_indices[j])
                             max_index = max(vertex_indices[i], vertex_indices[j])
                             cur_node = self.pair_map[(min_index, max_index)]
@@ -519,16 +511,16 @@ class Refiner(object):
                             assert((iel_base+iel_grp) in new_hanging_vertex_elements[cur_node.left_vertex])
                             assert((iel_base+iel_grp) in new_hanging_vertex_elements[cur_node.right_vertex])
 
-        for i in six.moves.range(len(self.last_mesh.vertices)):
-            for j in six.moves.range(len(self.last_mesh.vertices[i])):
+        for i in range(len(self.last_mesh.vertices)):
+            for j in range(len(self.last_mesh.vertices[i])):
                 vertices[i,j] = self.last_mesh.vertices[i,j]
                 import copy
                 if i == 0:
                     new_hanging_vertex_element[j] = copy.deepcopy(self.hanging_vertex_element[j])
         grpn = 0
         for grp in self.last_mesh.groups:
-            for iel_grp in six.moves.range(grp.nelements):
-                for i in six.moves.range(len(grp.vertex_indices[iel_grp])):
+            for iel_grp in range(grp.nelements):
+                for i in range(len(grp.vertex_indices[iel_grp])):
                     groups[grpn][iel_grp][i] = grp.vertex_indices[iel_grp][i]
             grpn += 1
 
@@ -537,15 +529,15 @@ class Refiner(object):
         nelements_in_grp = grp.nelements
         for grp in self.last_mesh.groups:
             iel_base = grp.element_nr_base
-            for iel_grp in six.moves.range(grp.nelements):
+            for iel_grp in range(grp.nelements):
                 if refine_flags[iel_base+iel_grp]:
                     midpoint_vertices = []
                     midpoint_tuples = []
                     vertex_indices = grp.vertex_indices[iel_grp]
                     #if simplex
                     if len(grp.vertex_indices[iel_grp]) == len(self.last_mesh.vertices)+1:
-                        for i in six.moves.range(len(vertex_indices)):
-                            for j in six.moves.range(i+1, len(vertex_indices)):
+                        for i in range(len(vertex_indices)):
+                            for j in range(i+1, len(vertex_indices)):
                                 min_index = min(vertex_indices[i], vertex_indices[j])
                                 max_index = max(vertex_indices[i], vertex_indices[j])
                                 cur_node = self.pair_map[(min_index, max_index)]
@@ -562,7 +554,7 @@ class Refiner(object):
                                     vertex_pair2 = (max_index, vertices_index)
                                     self.pair_map[vertex_pair1] = cur_node.left
                                     self.pair_map[vertex_pair2] = cur_node.right
-                                    for k in six.moves.range(len(self.last_mesh.vertices)):
+                                    for k in range(len(self.last_mesh.vertices)):
                                         vertices[k, vertices_index] = \
                                         (self.last_mesh.vertices[k, vertex_indices[i]] +
                                         self.last_mesh.vertices[k, vertex_indices[j]]) / 2.0
@@ -575,8 +567,8 @@ class Refiner(object):
 
                         #generate new rays
                         cur_dim = len(grp.vertex_indices[0])-1
-                        for i in six.moves.range(len(midpoint_vertices)):
-                            for j in six.moves.range(i+1, len(midpoint_vertices)):
+                        for i in range(len(midpoint_vertices)):
+                            for j in range(i+1, len(midpoint_vertices)):
                                 min_index = min(midpoint_vertices[i], midpoint_vertices[j])
                                 max_index = max(midpoint_vertices[i], midpoint_vertices[j])
                                 vertex_pair = (min_index, max_index)
@@ -588,8 +580,8 @@ class Refiner(object):
                             node_tuple_to_coord[node_tuple] = grp.vertex_indices[iel_grp][node_index]
                         for midpoint_index, midpoint_tuple in enumerate(self.index_to_midpoint_tuple[cur_dim]):
                             node_tuple_to_coord[midpoint_tuple] = midpoint_vertices[midpoint_index]
-                        for i in six.moves.range(len(self.simplex_result[cur_dim])):
-                            for j in six.moves.range(len(self.simplex_result[cur_dim][i])):
+                        for i in range(len(self.simplex_result[cur_dim])):
+                            for j in range(len(self.simplex_result[cur_dim][i])):
                                 if i == 0:
                                     groups[grpn][iel_grp][j] = \
                                             node_tuple_to_coord[self.simplex_node_tuples[cur_dim][self.simplex_result[cur_dim][i][j]]]
@@ -605,14 +597,14 @@ class Refiner(object):
 #                            node_tuple_to_coord[node_tuple] = grp.vertex_indices[iel_grp][node_index]
 #                        def generate_all_tuples(cur_list):
 #                            if len(cur_list[len(cur_list)-1])
-                                
+
 
         #clear connectivity data
         for grp in self.last_mesh.groups:
             iel_base = grp.element_nr_base
-            for iel_grp in six.moves.range(grp.nelements):
-                for i in six.moves.range(len(grp.vertex_indices[iel_grp])):
-                    for j in six.moves.range(i+1, len(grp.vertex_indices[iel_grp])):
+            for iel_grp in range(grp.nelements):
+                for i in range(len(grp.vertex_indices[iel_grp])):
+                    for j in range(i+1, len(grp.vertex_indices[iel_grp])):
                         min_vert = min(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])
                         max_vert = max(grp.vertex_indices[iel_grp][i], grp.vertex_indices[iel_grp][j])
                         vertex_pair = (min_vert, max_vert)
@@ -629,9 +621,9 @@ class Refiner(object):
 
         nelements_in_grp = grp.nelements
         for grp in groups:
-            for iel_grp in six.moves.range(len(grp)):
+            for iel_grp in range(len(grp)):
                 add_verts = []
-                for i in six.moves.range(len(grp[iel_grp])):
+                for i in range(len(grp[iel_grp])):
                     add_verts.append(grp[iel_grp][i])
                 add_element_to_connectivity(add_verts, new_hanging_vertex_element, iel_base+iel_grp)
         #assert ray connectivity
@@ -652,60 +644,55 @@ class Refiner(object):
         return self.last_mesh
 
     def print_rays(self, ind):
-        import six
-        for i in six.moves.range(len(self.last_mesh.groups[0].vertex_indices[ind])):
-            for j in six.moves.range(i+1, len(self.last_mesh.groups[0].vertex_indices[ind])):
+        for i in range(len(self.last_mesh.groups[0].vertex_indices[ind])):
+            for j in range(i+1, len(self.last_mesh.groups[0].vertex_indices[ind])):
                 mn = min(self.last_mesh.groups[0].vertex_indices[ind][i],
                         self.last_mesh.groups[0].vertex_indices[ind][j])
                 mx = max(self.last_mesh.groups[0].vertex_indices[ind][j],
                         self.last_mesh.groups[0].vertex_indices[ind][i])
                 vertex_pair = (mn, mx)
-                print 'LEFT VERTEX:', self.pair_map[vertex_pair].left_vertex
-                print 'RIGHT VERTEX:', self.pair_map[vertex_pair].right_vertex
-                print 'ADJACENT:'
+                print('LEFT VERTEX:', self.pair_map[vertex_pair].left_vertex)
+                print('RIGHT VERTEX:', self.pair_map[vertex_pair].right_vertex)
+                print('ADJACENT:')
                 rays = self.get_leaves(self.pair_map[vertex_pair])
                 for k in rays:
-                    print k.adjacent_elements
+                    print(k.adjacent_elements)
     '''
     def print_rays(self, groups, ind):
-        import six
-        for i in six.moves.range(len(groups[0][ind])):
-            for j in six.moves.range(i+1, len(groups[0][ind])):
+        for i in range(len(groups[0][ind])):
+            for j in range(i+1, len(groups[0][ind])):
                 mn = min(groups[0][ind][i], groups[0][ind][j])
                 mx = max(groups[0][ind][i], groups[0][ind][j])
                 vertex_pair = (mn, mx)
-                print 'LEFT VERTEX:', self.pair_map[vertex_pair].left_vertex
-                print 'RIGHT VERTEX:', self.pair_map[vertex_pair].right_vertex
-                print 'ADJACENT:'
+                print('LEFT VERTEX:', self.pair_map[vertex_pair].left_vertex)
+                print('RIGHT VERTEX:', self.pair_map[vertex_pair].right_vertex)
+                print('ADJACENT:')
                 rays = self.get_leaves(self.pair_map[vertex_pair])
                 for k in rays:
-                    print k.adjacent_elements
+                    print(k.adjacent_elements)
     '''
 
- 
     def print_hanging_elements(self, ind):
-        import six
         for i in self.last_mesh.groups[0].vertex_indices[ind]:
-            print "IND:", i, self.hanging_vertex_element[i]
+            print("IND:", i, self.hanging_vertex_element[i])
 
     def generate_connectivity(self, nelements, nvertices, groups):
         # medium-term FIXME: make this an incremental update
         # rather than build-from-scratch
-        import six
-        vertex_to_element = [[] for i in xrange(nvertices)]
+        vertex_to_element = [[] for i in range(nvertices)]
         element_index = 0
         for grp in groups:
-            for iel_grp in xrange(len(grp)):
+            for iel_grp in range(len(grp)):
                 for ivertex in grp[iel_grp]:
                     vertex_to_element[ivertex].append(element_index)
                 element_index += 1
-        element_to_element = [set() for i in xrange(nelements)]
+        element_to_element = [set() for i in range(nelements)]
         element_index = 0
         if self.lazy:
             for grp in groups:
-                for iel_grp in six.moves.range(len(grp)):
-                    for i in six.moves.range(len(grp[iel_grp])):
-                        for j in six.moves.range(i+1, len(grp[iel_grp])):
+                for iel_grp in range(len(grp)):
+                    for i in range(len(grp[iel_grp])):
+                        for j in range(i+1, len(grp[iel_grp])):
                             vertex_pair = (min(grp[iel_grp][i], grp[iel_grp][j]), max(grp[iel_grp][i], grp[iel_grp][j]))
                             #print 'iel:', iel_grp, 'pair:', vertex_pair
                             if vertex_pair not in self.seen_tuple:
@@ -714,7 +701,7 @@ class Refiner(object):
 
         else:
             for grp in groups:
-                for iel_grp in xrange(len(grp)):
+                for iel_grp in range(len(grp)):
                     for ivertex in grp[iel_grp]:
                         element_to_element[element_index].update(
                                 vertex_to_element[ivertex])
@@ -723,8 +710,8 @@ class Refiner(object):
                                 if element_index != hanging_element:
                                     element_to_element[element_index].update([hanging_element])
                                     element_to_element[hanging_element].update([element_index])
-                    for i in six.moves.range(len(grp[iel_grp])):
-                        for j in six.moves.range(i+1, len(grp[iel_grp])):
+                    for i in range(len(grp[iel_grp])):
+                        for j in range(i+1, len(grp[iel_grp])):
                             vertex_pair = (min(grp[iel_grp][i], grp[iel_grp][j]),
                                     max(grp[iel_grp][i], grp[iel_grp][j]))
                             #element_to_element[element_index].update(
@@ -746,11 +733,11 @@ class Refiner(object):
                             element_to_element[self.hanging_vertex_element[ivertex][0]].update([element_index])
                             '''
                     element_index += 1
-        print len(element_to_element)
+        print(len(element_to_element))
         for iel, neighbors in enumerate(element_to_element):
             if iel in neighbors:
                 neighbors.remove(iel)
-        #print self.ray_elements
+        #print(self.ray_elements)
         '''
         for ray in self.rays:
             curnode = ray.first

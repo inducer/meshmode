@@ -1,6 +1,4 @@
-from __future__ import division
-from __future__ import absolute_import
-from six.moves import range
+from __future__ import division, absolute_import
 
 __copyright__ = "Copyright (C) 2013 Andreas Kloeckner"
 
@@ -24,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from six.moves import range
 
 import numpy as np
 import numpy.linalg as la
@@ -59,6 +58,7 @@ Volumes
 
 .. autofunction:: generate_box_mesh
 .. autofunction:: generate_regular_rect_mesh
+.. autofunction:: generate_warped_rect_mesh
 
 """
 
@@ -212,8 +212,10 @@ def make_curve_mesh(curve_f, element_boundaries, order):
             nodes=nodes,
             unit_nodes=unodes)
 
-    return Mesh(vertices=vertices, groups=[egroup],
-            element_connectivity=None)
+    return Mesh(
+            vertices=vertices, groups=[egroup],
+            nodal_adjacency=None,
+            facial_adjacency_groups=None)
 
 # }}}
 
@@ -232,7 +234,11 @@ def make_group_from_vertices(vertices, vertex_indices, order):
     dim = nspan_vectors
 
     # dim, nunit_nodes
-    unit_nodes = mp.warp_and_blend_nodes(dim, order)
+    if dim <= 3:
+        unit_nodes = mp.warp_and_blend_nodes(dim, order)
+    else:
+        unit_nodes = mp.equidistant_nodes(dim, order)
+
     unit_nodes_01 = 0.5 + 0.5*unit_nodes
 
     nodes = np.einsum(
@@ -285,8 +291,10 @@ def generate_icosahedron(r, order):
     grp = make_group_from_vertices(vertices, vertex_indices, order)
 
     from meshmode.mesh import Mesh
-    return Mesh(vertices, [grp],
-            element_connectivity=None)
+    return Mesh(
+            vertices, [grp],
+            nodal_adjacency=None,
+            facial_adjacency_groups=None)
 
 # }}}
 
@@ -302,8 +310,10 @@ def generate_icosphere(r, order):
             nodes=grp.nodes * r / np.sqrt(np.sum(grp.nodes**2, axis=0)))
 
     from meshmode.mesh import Mesh
-    return Mesh(mesh.vertices, [grp],
-            element_connectivity=None)
+    return Mesh(
+            mesh.vertices, [grp],
+            nodal_adjacency=None,
+            facial_adjacency_groups=None)
 
 # }}}
 
@@ -365,7 +375,11 @@ def generate_torus_and_cycle_vertices(r_outer, r_inner,
     nodes[2] = b*np.sin(minor_theta)
 
     from meshmode.mesh import Mesh
-    return (Mesh(vertices, [grp.copy(nodes=nodes)], element_connectivity=None),
+    return (
+            Mesh(
+                vertices, [grp.copy(nodes=nodes)],
+                nodal_adjacency=None,
+                facial_adjacency_groups=None),
             [idx(i, 0) for i in range(n_outer)],
             [idx(0, j) for j in range(n_inner)])
 
@@ -470,7 +484,8 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64):
 
     from meshmode.mesh import Mesh
     return Mesh(vertices, [grp],
-            element_connectivity=None)
+            nodal_adjacency=None,
+            facial_adjacency_groups=None)
 
 # }}}
 
@@ -494,5 +509,36 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1):
     return generate_box_mesh(axis_coords, order=order)
 
 # }}}
+
+
+# {{{ generate_warped_rect_mesh
+
+def generate_warped_rect_mesh(dim, order, n):
+    """Generate a mesh of a warped line/square/cube. Mainly useful for testing
+    functionality with curvilinear meshes.
+    """
+
+    assert dim in [1, 2, 3]
+    mesh = generate_regular_rect_mesh(
+            a=(-0.5,)*dim, b=(0.5,)*dim,
+            n=(n,)*dim, order=order)
+
+    def m(x):
+        result = np.empty_like(x)
+        result[0] = (
+                1.5*x[0] + np.cos(x[0])
+                + 0.1*np.sin(10*x[1]))
+        result[1] = (
+                0.05*np.cos(10*x[0])
+                + 1.3*x[1] + np.sin(x[1]))
+        if len(x) == 3:
+            result[2] = x[2] + np.sin(x[0])
+        return result
+
+    from meshmode.mesh.processing import map_mesh
+    return map_mesh(mesh, m)
+
+# }}}
+
 
 # vim: fdm=marker

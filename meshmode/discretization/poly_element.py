@@ -38,6 +38,7 @@ Group types
 .. autoclass:: InterpolatoryQuadratureSimplexElementGroup
 .. autoclass:: QuadratureSimplexElementGroup
 .. autoclass:: PolynomialWarpAndBlendElementGroup
+.. autoclass:: PolynomialEquidistantElementGroup
 
 Group factories
 ^^^^^^^^^^^^^^^
@@ -45,6 +46,7 @@ Group factories
 .. autoclass:: InterpolatoryQuadratureSimplexGroupFactory
 .. autoclass:: QuadratureSimplexGroupFactory
 .. autoclass:: PolynomialWarpAndBlendGroupFactory
+.. autoclass:: PolynomialEquidistantGroupFactory
 """
 
 # FIXME Most of the loopy kernels will break as soon as we start using multiple
@@ -63,13 +65,16 @@ from meshmode.discretization import ElementGroupBase
 
 class PolynomialSimplexElementGroupBase(ElementGroupBase):
     def basis(self):
-        return mp.simplex_onb(self.dim, self.order)
+        return mp.simplex_best_available_basis(self.dim, self.order)
+
+    def grad_basis(self):
+        return mp.grad_simplex_best_available_basis(self.dim, self.order)
 
     @memoize_method
     def from_mesh_interp_matrix(self):
         meg = self.mesh_el_group
         return mp.resampling_matrix(
-                mp.simplex_onb(meg.dim, meg.order),
+                mp.simplex_best_available_basis(meg.dim, meg.order),
                 self.unit_nodes,
                 meg.unit_nodes)
 
@@ -77,20 +82,13 @@ class PolynomialSimplexElementGroupBase(ElementGroupBase):
     def diff_matrices(self):
         result = mp.differentiation_matrices(
                 self.basis(),
-                mp.grad_simplex_onb(self.dim, self.order),
+                self.grad_basis(),
                 self.unit_nodes)
 
         if not isinstance(result, tuple):
             return (result,)
         else:
             return result
-
-    @memoize_method
-    def resampling_matrix(self):
-        meg = self.mesh_el_group
-        return mp.resampling_matrix(
-                mp.simplex_onb(self.dim, meg.order),
-                self.unit_nodes, meg.unit_nodes)
 
 
 class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
@@ -154,11 +152,20 @@ class QuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
         return self._quadrature_rule().weights
 
 
-class PolynomialWarpAndBlendElementGroup(PolynomialSimplexElementGroupBase):
+class _MassMatrixQuadratureElementGroup(PolynomialSimplexElementGroupBase):
+    @property
+    @memoize_method
+    def weights(self):
+        return np.dot(
+                mp.mass_matrix(self.basis(), self.unit_nodes),
+                np.ones(len(self.basis())))
+
+
+class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
     """Elemental discretization with a number of nodes matching the number of
     polynomials in :math:`P^k`, hence usable for differentiation and
-    interpolation. Interpolation nodes are present on the boundary of the
-    simplex.
+    interpolation. Interpolation nodes edge-clustered for avoidance of Runge
+    phenomena. Nodes are present on the boundary of the simplex.
     """
     @property
     @memoize_method
@@ -170,12 +177,24 @@ class PolynomialWarpAndBlendElementGroup(PolynomialSimplexElementGroupBase):
         assert dim2 == dim
         return result
 
+
+class PolynomialEquidistantElementGroup(_MassMatrixQuadratureElementGroup):
+    """Elemental discretization with a number of nodes matching the number of
+    polynomials in :math:`P^k`, hence usable for differentiation and
+    interpolation. Interpolation nodes are present on the boundary of the
+    simplex.
+
+    .. versionadded:: 2016.1
+    """
     @property
     @memoize_method
-    def weights(self):
-        return np.dot(
-                mp.mass_matrix(self.basis(), self.unit_nodes),
-                np.ones(len(self.basis())))
+    def unit_nodes(self):
+        dim = self.mesh_el_group.dim
+        result = mp.equidistant_nodes(dim, self.order)
+
+        dim2, nunit_nodes = result.shape
+        assert dim2 == dim
+        return result
 
 # }}}
 
@@ -211,6 +230,15 @@ class QuadratureSimplexGroupFactory(OrderBasedGroupFactory):
 class PolynomialWarpAndBlendGroupFactory(OrderBasedGroupFactory):
     mesh_group_class = _MeshSimplexElementGroup
     group_class = PolynomialWarpAndBlendElementGroup
+
+
+class PolynomialEquidistantGroupFactory(OrderBasedGroupFactory):
+    """
+    .. versionadded:: 2016.1
+    """
+
+    mesh_group_class = _MeshSimplexElementGroup
+    group_class = PolynomialEquidistantElementGroup
 
 # }}}
 
