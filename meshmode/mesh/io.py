@@ -27,13 +27,15 @@ from six.moves import range, zip
 import numpy as np
 
 from meshpy.gmsh_reader import (  # noqa
-        GmshMeshReceiverBase, FileSource, LiteralSource)
+        GmshMeshReceiverBase, ScriptSource, FileSource, LiteralSource,
+        ScriptWithFilesSource)
 
 
 __doc__ = """
 
+.. autoclass:: ScriptSource
 .. autoclass:: FileSource
-.. autoclass:: LiteralSource
+.. autoclass:: ScriptWithFilesSource
 
 .. autofunction:: read_gmsh
 .. autofunction:: generate_gmsh
@@ -95,6 +97,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         el_type_hist = {}
         for el_type in self.element_types:
             el_type_hist[el_type] = el_type_hist.get(el_type, 0) + 1
+
+        if not el_type_hist:
+            raise RuntimeError("empty mesh in gmsh input")
 
         groups = self.groups = []
 
@@ -195,8 +200,9 @@ def read_gmsh(filename, force_ambient_dim=None):
     return recv.get_mesh()
 
 
-def generate_gmsh(source, dimensions, order=None, other_options=[],
-        extension="geo", gmsh_executable="gmsh", force_ambient_dim=None):
+def generate_gmsh(source, dimensions=None, order=None, other_options=[],
+        extension="geo", gmsh_executable="gmsh", force_ambient_dim=None,
+        output_file_name="output.msh"):
     """Run :command:`gmsh` on the input given by *source*, and return a
     :class:`meshmode.mesh.Mesh` based on the result.
 
