@@ -70,4 +70,5 @@ def tesselatetet():
         try_add_tet(current, (1, 0, 0), (0, 1, 0), (1, 0, 1), (1, 1, 0))
         try_add_tet(current, (0, 1, 1), (0, 1, 0), (1, 1, 0), (1, 0, 1))
         try_add_tet(current, (0, 1, 1), (1, 1, 1), (1, 0, 1), (1, 1, 0))
-        return [node_tuples, result]
+
+    return [node_tuples, result]
