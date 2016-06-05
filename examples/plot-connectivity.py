@@ -325,8 +325,10 @@ def refine_and_generate_chart_function(mesh, filename, function):
 
     import matplotlib.pyplot as plt
     import matplotlib.pyplot as pt
+    pt.xlabel('Number of elements being refined')
+    pt.ylabel('Time taken')
     pt.plot(num_elements, time_t, "o")
-    pt.savefig(filename)
+    pt.savefig(filename, format='pdf')
     pt.clf()
     print 'DONE REFINING'
     '''
@@ -382,7 +384,7 @@ def main2():
     #mesh =  generate_box_mesh(3*(np.linspace(0, 3, 5),))
     #mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),))
     mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
-    refine_and_generate_chart_function(mesh, "plot", sine_func)
+    refine_and_generate_chart_function(mesh, "plot.pdf", sine_func)
 
 def all_refine(num_mesh, depth, fname):
     import six
