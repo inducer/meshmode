@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function
 
 import numpy as np  # noqa
 import pyopencl as cl
@@ -17,15 +17,15 @@ def main():
     #mesh = generate_icosphere(1, order=order)
     #mesh = generate_icosahedron(1, order=order)
     #mesh = generate_torus(3, 1, order=order)
-    mesh =  generate_box_mesh(3*(np.linspace(0, 1, 5),))
+    mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
     from meshmode.mesh.refinement import Refiner
     r = Refiner(mesh)
     #mesh = r.refine(0)
     from meshmode.discretization.poly_element import \
             PolynomialWarpAndBlendGroupFactory
 
-    discr = Discretization(cl_ctx, mesh, PolynomialWarpAndBlendGroupFactory(order)) 
-    from meshmode.discretization.visualization import make_visualizer 
+    discr = Discretization(cl_ctx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+    from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(queue, discr, order)
     os.remove("geometry.vtu")
     os.remove("connectivity.vtu")
@@ -39,12 +39,14 @@ def main():
     write_mesh_connectivity_vtk_file("connectivity.vtu",
             mesh)
 
+
 #construct vertex vertex_index
 def get_vertex(mesh, vertex_index):
     vertex = np.empty([len(mesh.vertices)])
     for i_cur_dim, cur_dim_coords in enumerate(mesh.vertices):
         vertex[i_cur_dim] = cur_dim_coords[vertex_index]
     return vertex
+
 
 def test_refiner_connectivity(mesh):
     def group_and_iel_to_global_iel(igrp, iel):
@@ -60,9 +62,11 @@ def test_refiner_connectivity(mesh):
     cnx = mesh.element_connectivity
     nvertices_per_element = len(mesh.groups[0].vertex_indices[0])
     #stores connectivity obtained from geometry using barycentric coordinates
-    connected_to_element_geometry = np.zeros([mesh.nelements, mesh.nelements], dtype=bool)
+    connected_to_element_geometry = np.zeros(
+            (mesh.nelements, mesh.nelements), dtype=bool)
     #store connectivity obtained from mesh's connectivity
-    connected_to_element_connectivity = np.zeros([mesh.nelements, mesh.nelements], dtype=bool) 
+    connected_to_element_connectivity = np.zeros(
+            (mesh.nelements, mesh.nelements), dtype=bool)
 
     import six
     for igrp, grp in enumerate(mesh.groups):
@@ -74,7 +78,7 @@ def test_refiner_connectivity(mesh):
             for nb_iel_g in cnx.neighbors[nb_starts[iel_g]:nb_starts[iel_g+1]]:
                 connected_to_element_connectivity[nb_iel_g, iel_g] = True
                 connected_to_element_connectivity[iel_g, nb_iel_g] = True
-                
+
             for vertex_index in grp.vertex_indices[iel_grp]:
                 vertex = get_vertex(mesh, vertex_index)
                 #check which elements touch this vertex
@@ -83,12 +87,12 @@ def test_refiner_connectivity(mesh):
                         continue
                     bounding_grp = mesh.groups[bounding_igrp]
 
-                    last_bounding_vertex = get_vertex(mesh, \
+                    last_bounding_vertex = get_vertex(mesh,
                             bounding_grp.vertex_indices[bounding_iel][nvertices_per_element-1])
                     transformation = np.empty([len(mesh.vertices), nvertices_per_element-1])
                     vertex_transformed = vertex - last_bounding_vertex
-                    for ibounding_vertex_index, bounding_vertex_index in \
-                        enumerate(bounding_grp.vertex_indices[bounding_iel][:nvertices_per_element-1]):
+                    for ibounding_vertex_index, bounding_vertex_index in enumerate(
+                            bounding_grp.vertex_indices[bounding_iel][:nvertices_per_element-1]):
                         bounding_vertex = get_vertex(mesh, bounding_vertex_index)
                         transformation[:,ibounding_vertex_index] = bounding_vertex - last_bounding_vertex
                     barycentric_coordinates = np.linalg.solve(transformation, vertex_transformed)
@@ -101,24 +105,30 @@ def test_refiner_connectivity(mesh):
                     if sum_of_coords > 1:
                         is_connected = False
                     if is_connected:
-                        connected_to_element_geometry[group_and_iel_to_global_iel(bounding_igrp, bounding_iel),\
+                        connected_to_element_geometry[group_and_iel_to_global_iel(bounding_igrp, bounding_iel),
                                 group_and_iel_to_global_iel(igrp, iel_grp)] = True
-                        connected_to_element_geometry[group_and_iel_to_global_iel(igrp, iel_grp),\
+                        connected_to_element_geometry[group_and_iel_to_global_iel(igrp, iel_grp),
                                 group_and_iel_to_global_iel(bounding_igrp, bounding_iel)] = True
-    print "GEOMETRY: "
-    print connected_to_element_geometry 
-    print "CONNECTIVITY: "
-    print connected_to_element_connectivity
+    print("GEOMETRY: ")
+    print(connected_to_element_geometry)
+    print("CONNECTIVITY: ")
+    print(connected_to_element_connectivity)
     cmpmatrix = (connected_to_element_geometry == connected_to_element_connectivity)
-    print cmpmatrix
-    print np.where(cmpmatrix == False)
+    print(cmpmatrix)
+    print(np.where(cmpmatrix == False))  # noqa
     if not (connected_to_element_geometry == connected_to_element_connectivity).all():
         cmpmatrix = connected_to_element_connectivity == connected_to_element_geometry
         for ii, i in enumerate(cmpmatrix):
             for ij, j in enumerate(i):
-                if j == False:
-                    print ii, ij, "GEOMETRY: ", connected_to_element_geometry[ii][ij], "CONNECTIVITY: ", connected_to_element_connectivity[ii][ij]
+                if not j:
+                    print(
+                            ii, ij,
+                            "GEOMETRY: ",
+                            connected_to_element_geometry[ii][ij],
+                            "CONNECTIVITY: ",
+                            connected_to_element_connectivity[ii][ij])
     assert (connected_to_element_geometry == connected_to_element_connectivity).all()
+
 
 def test_refiner_connectivity_efficient(mesh):
     def group_and_iel_to_global_iel(igrp, iel):
@@ -136,7 +146,7 @@ def test_refiner_connectivity_efficient(mesh):
     #stores connectivity obtained from geometry using barycentric coordinates
     #connected_to_element_geometry = np.zeros([mesh.nelements, mesh.nelements], dtype=bool)
     #store connectivity obtained from mesh's connectivity
-    #connected_to_element_connectivity = np.zeros([mesh.nelements, mesh.nelements], dtype=bool) 
+    #connected_to_element_connectivity = np.zeros([mesh.nelements, mesh.nelements], dtype=bool)
     connected_to_element_geometry = []
     connected_to_element_connectivity = []
     import six
@@ -157,7 +167,7 @@ def test_refiner_connectivity_efficient(mesh):
                     connected_to_element_connectivity[iel_g].append(nb_iel_g)
                 #connected_to_element_connectivity[nb_iel_g, iel_g] = True
                 #connected_to_element_connectivity[iel_g, nb_iel_g] = True
-                
+
             for vertex_index in grp.vertex_indices[iel_grp]:
                 vertex = get_vertex(mesh, vertex_index)
                 #check which elements touch this vertex
@@ -190,9 +200,12 @@ def test_refiner_connectivity_efficient(mesh):
                             connected_to_element_geometry[el1].append(el2)
                         if el1 not in connected_to_element_geometry[el2]:
                             connected_to_element_geometry[el2].append(el1)
+
     from collections import Counter
     for i in six.moves.range(mesh.nelements):
-        assert(Counter(connected_to_element_connectivity[i]) == Counter(connected_to_element_geometry[i]))
+        assert Counter(connected_to_element_connectivity[i]) \
+                == Counter(connected_to_element_geometry[i])
+
 
 def linear_func(vert):
     csum = 0
@@ -200,6 +213,7 @@ def linear_func(vert):
         csum += i
         #print csum
     return csum
+
 
 def sine_func(vert):
     #print vert
@@ -210,11 +224,14 @@ def sine_func(vert):
     #print res
     return abs(res) * 0.2 + 0.2
 
+
 def quadratic_func(vert):
     csum = 0
     for i in vert:
         csum += i * i
     return csum * 1.5
+
+
 def get_function_flags(mesh, function):
     import six
     from math import sqrt
@@ -228,13 +245,17 @@ def get_function_flags(mesh, function):
                 for j in six.moves.range(i+1, len(vertex_indices)):
                     edge_len = 0
                     for k in six.moves.range(len(mesh.vertices)):
-                        edge_len += (mesh.vertices[k,vertex_indices[i]] - mesh.vertices[k,vertex_indices[j]]) * (mesh.vertices[k,vertex_indices[i]] - mesh.vertices[k,vertex_indices[j]])
-                    edge_len = sqrt(edge_len) 
+                        edge_len += (
+                                (mesh.vertices[k, vertex_indices[i]]
+                                    - mesh.vertices[k, vertex_indices[j]])
+                                * (mesh.vertices[k, vertex_indices[i]]
+                                    - mesh.vertices[k, vertex_indices[j]]))
+                    edge_len = sqrt(edge_len)
                     max_edge_len = max(max_edge_len, edge_len)
-                #print edge_lens[0], mesh.vertices[0, vertex_indices[i]], mesh.vertices[1, vertex_indices[i]], mesh.vertices[2, vertex_indices[i]]
+                #print(edge_lens[0], mesh.vertices[0, vertex_indices[i]], mesh.vertices[1, vertex_indices[i]], mesh.vertices[2, vertex_indices[i]])  # noqa
                 centroid = [0] * len(mesh.vertices)
                 for j in six.moves.range(len(mesh.vertices)):
-                    centroid[j] += mesh.vertices[j,vertex_indices[i]]
+                    centroid[j] += mesh.vertices[j, vertex_indices[i]]
             for i in six.moves.range(len(mesh.vertices)):
                 centroid[i] /= len(vertex_indices)
             yes = False
@@ -242,6 +263,7 @@ def get_function_flags(mesh, function):
             if max_edge_len > val:
                 flags[iel_grp] = True
     return flags
+
 
 def get_corner_flags(mesh):
     import six
@@ -254,32 +276,35 @@ def get_corner_flags(mesh):
             for i in six.moves.range(len(vertex_indices)):
                 cur_vertex_corner = True
                 for j in six.moves.range(len(mesh.vertices)):
-                    print iel_grp, i, mesh.vertices[j, vertex_indices[i]]
+                    print(iel_grp, i, mesh.vertices[j, vertex_indices[i]])
                     if mesh.vertices[j, vertex_indices[i]] != 0.0:
                         cur_vertex_corner = False
                 if cur_vertex_corner:
                     is_corner_el = True
                     break
             if is_corner_el:
-                print iel_grp
+                print(iel_grp)
                 flags[iel_grp] = True
     return flags
+
 
 def get_random_flags(mesh):
     flags = np.zeros(len(mesh.groups[0].vertex_indices))
     for i in xrange(0, len(flags)):
             flags[i] = random.randint(0, 1)
     return flags
+
+
 def refine_and_generate_chart_function(mesh, filename, function):
     import six
     from time import clock
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    print "NELEMENTS: ", mesh.nelements
+    print("NELEMENTS: ", mesh.nelements)
     #print mesh
     for i in six.moves.range(len(mesh.groups[0].vertex_indices[0])):
         for k in six.moves.range(len(mesh.vertices)):
-            print mesh.vertices[k, i]
+            print(mesh.vertices[k, i])
 
     #test_refiner_connectivity(mesh);
     from meshmode.mesh.refinement import Refiner
@@ -291,8 +316,7 @@ def refine_and_generate_chart_function(mesh, filename, function):
     time_t = []
     #nelements = mesh.nelements
     while True:
-    #while True:
-        print "NELS:", mesh.nelements
+        print("NELS:", mesh.nelements)
         #flags = get_corner_flags(mesh)
         flags = get_function_flags(mesh, function)
         nels = 0
@@ -301,7 +325,7 @@ def refine_and_generate_chart_function(mesh, filename, function):
                 nels += 1
         if nels == 0:
             break
-        print "LKJASLFKJALKASF:", nels
+        print("LKJASLFKJALKASF:", nels)
         num_elements.append(nels)
         #flags = get_corner_flags(mesh)
         beg = clock()
@@ -330,7 +354,7 @@ def refine_and_generate_chart_function(mesh, filename, function):
     pt.plot(num_elements, time_t, "o")
     pt.savefig(filename, format='pdf')
     pt.clf()
-    print 'DONE REFINING'
+    print('DONE REFINING')
     '''
     flags = np.zeros(len(mesh.groups[0].vertex_indices))
     flags[0] = 1
@@ -371,7 +395,8 @@ def refine_and_generate_chart_function(mesh, filename, function):
 
     write_mesh_connectivity_vtk_file("connectivity2.vtu",
             mesh)
-    
+
+
 def main2():
     from meshmode.mesh.generation import (  # noqa
             generate_icosphere, generate_icosahedron,
@@ -385,6 +410,7 @@ def main2():
     #mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),))
     mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
     refine_and_generate_chart_function(mesh, "plot.pdf", sine_func)
+
 
 def all_refine(num_mesh, depth, fname):
     import six
@@ -415,6 +441,7 @@ def all_refine(num_mesh, depth, fname):
     pt.savefig(fname)
     pt.clf()
     #pt.show()
+
 
 def uniform_refine(num_mesh, fract, depth, fname):
     import six
@@ -460,9 +487,11 @@ def uniform_refine(num_mesh, fract, depth, fname):
     pt.plot(nelements, runtimes, "o")
     pt.savefig(fname)
     pt.clf()
+
+
 if __name__ == "__main__":
-    print "HEREERERE"
+    print("HEREERERE")
     #all_refine(3, 2, 'all_a.pdf')
     #all_refine(3, 3, 'all_b.pdf')
-    #uniform_refine(3, 0.2, 3, 'uniform_a.pdf') 
+    #uniform_refine(3, 0.2, 3, 'uniform_a.pdf')
     main2()

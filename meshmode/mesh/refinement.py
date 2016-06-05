@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -20,9 +20,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+
 import numpy as np
 
-class TreeRayNode:
+
+class TreeRayNode(object):
     """Describes a ray as a tree, this class represents each node in this tree
     .. attribute:: left
         Left child.
