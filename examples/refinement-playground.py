@@ -16,6 +16,17 @@ def get_vertex(mesh, vertex_index):
     return vertex
 
 
+def remove_if_exists(name):
+    from errno import ENOENT
+    try:
+        os.remove(name)
+    except OSError as e:
+        if e.errno == ENOENT:
+            pass
+        else:
+            raise
+
+
 def test_refiner_connectivity(mesh):
     def group_and_iel_to_global_iel(igrp, iel):
         return mesh.groups[igrp].element_nr_base + iel
@@ -340,16 +351,16 @@ def refine_and_generate_chart_function(mesh, filename, function):
             cl_ctx, mesh, PolynomialWarpAndBlendGroupFactory(order))
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(queue, discr, order)
-    os.remove("connectivity2.vtu")
-    os.remove("geometry2.vtu")
+    remove_if_exists("connectivity2.vtu")
+    remove_if_exists("geometry2.vtu")
     vis.write_vtk_file("geometry2.vtu", [
         ("f", discr.nodes()[0]),
         ])
 
     from meshmode.discretization.visualization import \
-            write_mesh_connectivity_vtk_file
+            write_nodal_adjacency_vtk_file
 
-    write_mesh_connectivity_vtk_file("connectivity2.vtu",
+    write_nodal_adjacency_vtk_file("connectivity2.vtu",
             mesh)
 
 

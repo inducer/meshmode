@@ -769,8 +769,7 @@ class Refiner(object):
         lengths = [len(el_list) for el_list in element_to_element]
         neighbors_starts = np.cumsum(
                 np.array([0] + lengths, dtype=self.last_mesh.element_id_dtype),
-                # cumsum seems to silently widen integer types
-                # https://github.com/numpy/numpy/issues/7708
+                # cumsum silently widens integer types
                 dtype=self.last_mesh.element_id_dtype)
         from pytools import flatten
         neighbors = np.array(
