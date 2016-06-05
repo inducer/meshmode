@@ -25,6 +25,8 @@ import numpy as np
 import itertools
 from six.moves import range
 
+from meshmode.mesh.generation import make_group_from_vertices
+
 
 class TreeRayNode(object):
     """Describes a ray as a tree, this class represents each node in this tree
@@ -189,7 +191,7 @@ class Refiner(object):
     def get_current_mesh(self):
 
         from meshmode.mesh import Mesh
-        #return Mesh(vertices, [grp], element_connectivity=self.generate_connectivity(len(self.last_mesh.groups[group].vertex_indices) \
+        #return Mesh(vertices, [grp], nodal_adjacency=self.generate_nodal_adjacency(len(self.last_mesh.groups[group].vertex_indices) \
         #            + count*3))
         groups = []
         grpn = 0
@@ -202,15 +204,17 @@ class Refiner(object):
             grpn += 1
         grp = []
 
-        from meshmode.mesh.generation import make_group_from_vertices
         for grpn in range(0, len(groups)):
             grp.append(make_group_from_vertices(self.last_mesh.vertices, groups[grpn], 4))
-        self.last_mesh = Mesh(self.last_mesh.vertices, grp,\
-                element_connectivity=self.generate_connectivity(len(self.last_mesh.groups[0].vertex_indices),\
-                    len(self.last_mesh.vertices[0])))
+        self.last_mesh = Mesh(
+                self.last_mesh.vertices, grp,
+                nodal_adjacency=self.generate_nodal_adjacency(
+                    len(self.last_mesh.groups[0].vertex_indices),
+                    len(self.last_mesh.vertices[0])),
+                vertex_id_dtype=self.last_mesh.vertex_id_dtype,
+                element_id_dtype=self.last_mesh.element_id_dtype)
 
         return self.last_mesh
-
 
     def get_leaves(self, cur_node):
         queue = [cur_node]
@@ -532,7 +536,6 @@ class Refiner(object):
             for iel_grp in range(grp.nelements):
                 if refine_flags[iel_base+iel_grp]:
                     midpoint_vertices = []
-                    midpoint_tuples = []
                     vertex_indices = grp.vertex_indices[iel_grp]
                     #if simplex
                     if len(grp.vertex_indices[iel_grp]) == len(self.last_mesh.vertices)+1:
@@ -629,18 +632,19 @@ class Refiner(object):
         #assert ray connectivity
         #check_adjacent_elements(groups, new_hanging_vertex_element, nelements_in_grp)
 
-
-
         self.hanging_vertex_element = new_hanging_vertex_element
-        from meshmode.mesh.generation import make_group_from_vertices
         grp = []
         for grpn in range(0, len(groups)):
             grp.append(make_group_from_vertices(vertices, groups[grpn], 4))
 
         from meshmode.mesh import Mesh
 
-        self.last_mesh = Mesh(vertices, grp, element_connectivity=self.generate_connectivity(
-            totalnelements, nvertices, groups))
+        self.last_mesh = Mesh(
+                vertices, grp,
+                nodal_adjacency=self.generate_nodal_adjacency(
+                    totalnelements, nvertices, groups),
+                vertex_id_dtype=self.last_mesh.vertex_id_dtype,
+                element_id_dtype=self.last_mesh.element_id_dtype)
         return self.last_mesh
 
     def print_rays(self, ind):
@@ -676,7 +680,7 @@ class Refiner(object):
         for i in self.last_mesh.groups[0].vertex_indices[ind]:
             print("IND:", i, self.hanging_vertex_element[i])
 
-    def generate_connectivity(self, nelements, nvertices, groups):
+    def generate_nodal_adjacency(self, nelements, nvertices, groups):
         # medium-term FIXME: make this an incremental update
         # rather than build-from-scratch
         vertex_to_element = [[] for i in range(nvertices)]
@@ -764,22 +768,19 @@ class Refiner(object):
         #print element_to_element
         lengths = [len(el_list) for el_list in element_to_element]
         neighbors_starts = np.cumsum(
-                np.array([0] + lengths, dtype=self.last_mesh.element_id_dtype))
+                np.array([0] + lengths, dtype=self.last_mesh.element_id_dtype),
+                # cumsum seems to silently widen integer types
+                # https://github.com/numpy/numpy/issues/7708
+                dtype=self.last_mesh.element_id_dtype)
         from pytools import flatten
         neighbors = np.array(
                 list(flatten(element_to_element)),
                 dtype=self.last_mesh.element_id_dtype)
 
         assert neighbors_starts[-1] == len(neighbors)
-        result = []
-        result.append(neighbors_starts)
-        result.append(neighbors)
-        return result
 
-
-
-
-
+        from meshmode.mesh import NodalAdjacency
+        return NodalAdjacency(neighbor_starts=neighbors_starts, neighbors=neighbors)
 
 
 # vim: foldmethod=marker
