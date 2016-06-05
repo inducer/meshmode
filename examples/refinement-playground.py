@@ -37,7 +37,7 @@ def test_refiner_connectivity(mesh):
     from meshmode.mesh.processing import find_bounding_box
     bbox_min, bbox_max = find_bounding_box(mesh)
 
-    cnx = mesh.element_connectivity
+    nadj = mesh.nodal_adjacency
     nvertices_per_element = len(mesh.groups[0].vertex_indices[0])
     #stores connectivity obtained from geometry using barycentric coordinates
     connected_to_element_geometry = np.zeros(
@@ -49,8 +49,8 @@ def test_refiner_connectivity(mesh):
     for igrp, grp in enumerate(mesh.groups):
         for iel_grp in range(grp.nelements):
             iel_g = group_and_iel_to_global_iel(igrp, iel_grp)
-            nb_starts = cnx.neighbors_starts
-            for nb_iel_g in cnx.neighbors[nb_starts[iel_g]:nb_starts[iel_g+1]]:
+            nb_starts = nadj.neighbor_starts
+            for nb_iel_g in nadj.neighbors[nb_starts[iel_g]:nb_starts[iel_g+1]]:
                 connected_to_element_connectivity[nb_iel_g, iel_g] = True
                 connected_to_element_connectivity[iel_g, nb_iel_g] = True
 
@@ -116,7 +116,7 @@ def test_refiner_connectivity_efficient(mesh):
     from meshmode.mesh.processing import find_bounding_box
     bbox_min, bbox_max = find_bounding_box(mesh)
 
-    cnx = mesh.element_connectivity
+    nadj = mesh.nodal_adjacency
     nvertices_per_element = len(mesh.groups[0].vertex_indices[0])
     #stores connectivity obtained from geometry using barycentric coordinates
     #connected_to_element_geometry = np.zeros([mesh.nelements, mesh.nelements], dtype=bool)
@@ -133,8 +133,8 @@ def test_refiner_connectivity_efficient(mesh):
         for iel_grp in range(grp.nelements):
 
             iel_g = group_and_iel_to_global_iel(igrp, iel_grp)
-            nb_starts = cnx.neighbors_starts
-            for nb_iel_g in cnx.neighbors[nb_starts[iel_g]:nb_starts[iel_g+1]]:
+            nb_starts = nadj.neighbor_starts
+            for nb_iel_g in nadj.neighbors[nb_starts[iel_g]:nb_starts[iel_g+1]]:
                 if iel_g not in connected_to_element_connectivity[nb_iel_g]:
                     connected_to_element_connectivity[nb_iel_g].append(iel_g)
                 if nb_iel_g not in connected_to_element_connectivity[iel_g]:
@@ -421,7 +421,7 @@ def uniform_refine(num_mesh, fract, depth, fname):
         mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
         from meshmode.mesh.refinement import Refiner
         r = Refiner(mesh)
-        all_els = range(mesh.nelements)
+        all_els = list(range(mesh.nelements))
         for time in range(depth):
             flags = np.zeros(mesh.nelements)
             from random import shuffle
