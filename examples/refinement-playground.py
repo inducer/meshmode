@@ -1,21 +1,17 @@
 from __future__ import division, print_function
 
+from meshmode.mesh.refinement.utils import test_nodal_adj_against_geometry
+
 from six.moves import range
 import numpy as np  # noqa
 import pyopencl as cl
 import random
 import os
+import logging
 order = 1
 
 
 #construct vertex vertex_index
-def get_vertex(mesh, vertex_index):
-    vertex = np.empty([len(mesh.vertices)])
-    for i_cur_dim, cur_dim_coords in enumerate(mesh.vertices):
-        vertex[i_cur_dim] = cur_dim_coords[vertex_index]
-    return vertex
-
-
 def remove_if_exists(name):
     from errno import ENOENT
     try:
@@ -25,160 +21,6 @@ def remove_if_exists(name):
             pass
         else:
             raise
-
-
-def test_refiner_connectivity(mesh):
-    def group_and_iel_to_global_iel(igrp, iel):
-        return mesh.groups[igrp].element_nr_base + iel
-
-    from meshmode.mesh.tools import make_element_lookup_tree
-    tree = make_element_lookup_tree(mesh)
-
-    from meshmode.mesh.processing import find_bounding_box
-    bbox_min, bbox_max = find_bounding_box(mesh)
-
-    nadj = mesh.nodal_adjacency
-    nvertices_per_element = len(mesh.groups[0].vertex_indices[0])
-    #stores connectivity obtained from geometry using barycentric coordinates
-    connected_to_element_geometry = np.zeros(
-            (mesh.nelements, mesh.nelements), dtype=bool)
-    #store connectivity obtained from mesh's connectivity
-    connected_to_element_connectivity = np.zeros(
-            (mesh.nelements, mesh.nelements), dtype=bool)
-
-    for igrp, grp in enumerate(mesh.groups):
-        for iel_grp in range(grp.nelements):
-            iel_g = group_and_iel_to_global_iel(igrp, iel_grp)
-            nb_starts = nadj.neighbor_starts
-            for nb_iel_g in nadj.neighbors[nb_starts[iel_g]:nb_starts[iel_g+1]]:
-                connected_to_element_connectivity[nb_iel_g, iel_g] = True
-                connected_to_element_connectivity[iel_g, nb_iel_g] = True
-
-            for vertex_index in grp.vertex_indices[iel_grp]:
-                vertex = get_vertex(mesh, vertex_index)
-                #check which elements touch this vertex
-                for bounding_igrp, bounding_iel in tree.generate_matches(vertex):
-                    if bounding_igrp == igrp and bounding_iel == iel_grp:
-                        continue
-                    bounding_grp = mesh.groups[bounding_igrp]
-
-                    last_bounding_vertex = get_vertex(mesh,
-                            bounding_grp.vertex_indices[bounding_iel][nvertices_per_element-1])
-                    transformation = np.empty([len(mesh.vertices), nvertices_per_element-1])
-                    vertex_transformed = vertex - last_bounding_vertex
-                    for ibounding_vertex_index, bounding_vertex_index in enumerate(
-                            bounding_grp.vertex_indices[bounding_iel][:nvertices_per_element-1]):
-                        bounding_vertex = get_vertex(mesh, bounding_vertex_index)
-                        transformation[:,ibounding_vertex_index] = bounding_vertex - last_bounding_vertex
-                    barycentric_coordinates = np.linalg.solve(transformation, vertex_transformed)
-                    is_connected = True
-                    sum_of_coords = 0.0
-                    for coord in barycentric_coordinates:
-                        if coord < 0:
-                            is_connected = False
-                        sum_of_coords += coord
-                    if sum_of_coords > 1:
-                        is_connected = False
-                    if is_connected:
-                        connected_to_element_geometry[group_and_iel_to_global_iel(bounding_igrp, bounding_iel),
-                                group_and_iel_to_global_iel(igrp, iel_grp)] = True
-                        connected_to_element_geometry[group_and_iel_to_global_iel(igrp, iel_grp),
-                                group_and_iel_to_global_iel(bounding_igrp, bounding_iel)] = True
-    print("GEOMETRY: ")
-    print(connected_to_element_geometry)
-    print("CONNECTIVITY: ")
-    print(connected_to_element_connectivity)
-    cmpmatrix = (connected_to_element_geometry == connected_to_element_connectivity)
-    print(cmpmatrix)
-    print(np.where(cmpmatrix == False))  # noqa
-
-    if not (connected_to_element_geometry == connected_to_element_connectivity).all():
-        cmpmatrix = connected_to_element_connectivity == connected_to_element_geometry
-        for ii, i in enumerate(cmpmatrix):
-            for ij, j in enumerate(i):
-                if not j:
-                    print(
-                            ii, ij,
-                            "GEOMETRY: ",
-                            connected_to_element_geometry[ii][ij],
-                            "CONNECTIVITY: ",
-                            connected_to_element_connectivity[ii][ij])
-    assert (connected_to_element_geometry == connected_to_element_connectivity).all()
-
-
-def test_refiner_connectivity_efficient(mesh):
-    def group_and_iel_to_global_iel(igrp, iel):
-        return mesh.groups[igrp].element_nr_base + iel
-
-    from meshmode.mesh.tools import make_element_lookup_tree
-    tree = make_element_lookup_tree(mesh)
-
-    from meshmode.mesh.processing import find_bounding_box
-    bbox_min, bbox_max = find_bounding_box(mesh)
-
-    nadj = mesh.nodal_adjacency
-    nvertices_per_element = len(mesh.groups[0].vertex_indices[0])
-    #stores connectivity obtained from geometry using barycentric coordinates
-    #connected_to_element_geometry = np.zeros([mesh.nelements, mesh.nelements], dtype=bool)
-    #store connectivity obtained from mesh's connectivity
-    #connected_to_element_connectivity = np.zeros([mesh.nelements, mesh.nelements], dtype=bool)
-    connected_to_element_geometry = []
-    connected_to_element_connectivity = []
-
-    for i in range(mesh.nelements):
-        connected_to_element_geometry.append([])
-        connected_to_element_connectivity.append([])
-
-    for igrp, grp in enumerate(mesh.groups):
-        for iel_grp in range(grp.nelements):
-
-            iel_g = group_and_iel_to_global_iel(igrp, iel_grp)
-            nb_starts = nadj.neighbor_starts
-            for nb_iel_g in nadj.neighbors[nb_starts[iel_g]:nb_starts[iel_g+1]]:
-                if iel_g not in connected_to_element_connectivity[nb_iel_g]:
-                    connected_to_element_connectivity[nb_iel_g].append(iel_g)
-                if nb_iel_g not in connected_to_element_connectivity[iel_g]:
-                    connected_to_element_connectivity[iel_g].append(nb_iel_g)
-                #connected_to_element_connectivity[nb_iel_g, iel_g] = True
-                #connected_to_element_connectivity[iel_g, nb_iel_g] = True
-
-            for vertex_index in grp.vertex_indices[iel_grp]:
-                vertex = get_vertex(mesh, vertex_index)
-                #check which elements touch this vertex
-                for bounding_igrp, bounding_iel in tree.generate_matches(vertex):
-                    if bounding_igrp == igrp and bounding_iel == iel_grp:
-                        continue
-                    bounding_grp = mesh.groups[bounding_igrp]
-
-                    last_bounding_vertex = get_vertex(mesh, \
-                            bounding_grp.vertex_indices[bounding_iel][nvertices_per_element-1])
-                    transformation = np.empty([len(mesh.vertices), nvertices_per_element-1])
-                    vertex_transformed = vertex - last_bounding_vertex
-                    for ibounding_vertex_index, bounding_vertex_index in \
-                        enumerate(bounding_grp.vertex_indices[bounding_iel][:nvertices_per_element-1]):
-                        bounding_vertex = get_vertex(mesh, bounding_vertex_index)
-                        transformation[:,ibounding_vertex_index] = bounding_vertex - last_bounding_vertex
-                    barycentric_coordinates = np.linalg.solve(transformation, vertex_transformed)
-                    is_connected = True
-                    sum_of_coords = 0.0
-                    for coord in barycentric_coordinates:
-                        if coord < 0:
-                            is_connected = False
-                        sum_of_coords += coord
-                    if sum_of_coords > 1:
-                        is_connected = False
-                    if is_connected:
-                        el1 = group_and_iel_to_global_iel(bounding_igrp, bounding_iel)
-                        el2 = group_and_iel_to_global_iel(igrp, iel_grp)
-                        if el2 not in connected_to_element_geometry[el1]:
-                            connected_to_element_geometry[el1].append(el2)
-                        if el1 not in connected_to_element_geometry[el2]:
-                            connected_to_element_geometry[el2].append(el1)
-
-    from collections import Counter
-    for i in range(mesh.nelements):
-        assert Counter(connected_to_element_connectivity[i]) \
-                == Counter(connected_to_element_geometry[i])
 
 
 def linear_func(vert):
@@ -274,7 +116,7 @@ def refine_and_generate_chart_function(mesh, filename, function):
         for k in range(len(mesh.vertices)):
             print(mesh.vertices[k, i])
 
-    #test_refiner_connectivity(mesh);
+    #test_nodal_adj_against_geometry(mesh);
     from meshmode.mesh.refinement import Refiner
     r = Refiner(mesh)
     #random.seed(0)
@@ -333,7 +175,7 @@ def refine_and_generate_chart_function(mesh, filename, function):
     flags[2] = 1
     mesh = r.refine(flags)
     '''
-    #test_refiner_connectivity_efficient(mesh)
+    #test_nodal_adj_against_geometry(mesh)
     #r.print_rays(70)
     #r.print_rays(117)
     #r.print_hanging_elements(10)
@@ -401,7 +243,7 @@ def all_refine(num_mesh, depth, fname):
                 stop = timeit.default_timer()
                 nelements.append(mesh.nelements)
                 runtimes.append(stop-start)
-        #test_refiner_connectivity_efficient(mesh)
+        test_nodal_adj_against_geometry(mesh)
     import matplotlib.pyplot as pt
     pt.plot(nelements, runtimes, "o")
     pt.savefig(fname)
@@ -423,8 +265,10 @@ def uniform_refine(num_mesh, fract, depth, fname):
         r = Refiner(mesh)
         all_els = list(range(mesh.nelements))
         for time in range(depth):
+            print("EL_FACT", el_fact, "TIME", time)
             flags = np.zeros(mesh.nelements)
-            from random import shuffle
+            from random import shuffle, seed
+            seed(1)
             shuffle(all_els)
             nels_this_round = 0
             for i in range(len(all_els)):
@@ -447,7 +291,8 @@ def uniform_refine(num_mesh, fract, depth, fname):
                     all_els.append(i)
             for i in range(len(flags), mesh.nelements):
                 all_els.append(i)
-        test_refiner_connectivity(mesh)
+            test_nodal_adj_against_geometry(mesh)
+
     import matplotlib.pyplot as pt
     pt.plot(nelements, runtimes, "o")
     pt.savefig(fname)
@@ -455,8 +300,9 @@ def uniform_refine(num_mesh, fract, depth, fname):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level="DEBUG")
     print("HEREERERE")
     #all_refine(3, 2, 'all_a.pdf')
-    #all_refine(3, 3, 'all_b.pdf')
+    all_refine(3, 3, 'all_b.pdf')
     #uniform_refine(3, 0.2, 3, 'uniform_a.pdf')
-    main2()
+    #main2()
