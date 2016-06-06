@@ -1,6 +1,6 @@
 from __future__ import division, print_function
 
-__copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
+__copyright__ = "Copyright (C) 2014-6 Shivam Gupta"
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -56,6 +56,9 @@ class TreeRayNode(object):
 
 
 class Refiner(object):
+
+    # {{{ constructor
+
     def __init__(self, mesh):
         from meshmode.mesh.tesselate import tesselatetet, tesselatetri
         self.lazy = False
@@ -176,6 +179,10 @@ class Refiner(object):
                             break
             ind += 1
         '''
+
+    # }}}
+
+    # {{{ helper routines
 
     def get_refine_base_index(self):
         if self.last_split_elements is None:
@@ -312,9 +319,16 @@ class Refiner(object):
                 if to_add not in new_hanging_vertex_elements[node.right_vertex]:
                     new_hanging_vertex_elements[node.right_vertex].append(to_add)
 
-    #refine_flag tells you which elements to split as a numpy array of bools
+    # }}}
+
+    # {{{ refinement
+
     def refine(self, refine_flags):
-        import numpy as np
+        """
+        :arg refine_flags: a :class:`numpy.ndarray` of dtype bool of length ``mesh.nelements``
+            indicating which elements should be split.
+        """
+
         #vertices and groups for next generation
         nvertices = len(self.last_mesh.vertices[0])
 
@@ -647,6 +661,8 @@ class Refiner(object):
                 element_id_dtype=self.last_mesh.element_id_dtype)
         return self.last_mesh
 
+    # }}}
+
     def print_rays(self, ind):
         for i in range(len(self.last_mesh.groups[0].vertex_indices[ind])):
             for j in range(i+1, len(self.last_mesh.groups[0].vertex_indices[ind])):
@@ -679,6 +695,8 @@ class Refiner(object):
     def print_hanging_elements(self, ind):
         for i in self.last_mesh.groups[0].vertex_indices[ind]:
             print("IND:", i, self.hanging_vertex_element[i])
+
+    # {{{ generate adjacency
 
     def generate_nodal_adjacency(self, nelements, nvertices, groups):
         # medium-term FIXME: make this an incremental update
@@ -780,6 +798,8 @@ class Refiner(object):
 
         from meshmode.mesh import NodalAdjacency
         return NodalAdjacency(neighbor_starts=neighbors_starts, neighbors=neighbors)
+
+    # }}}
 
 
 # vim: foldmethod=marker
