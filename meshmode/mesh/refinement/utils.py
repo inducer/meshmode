@@ -43,7 +43,7 @@ def is_symmetric(relation, debug=False):
     return True
 
 
-def test_nodal_adj_against_geometry(mesh, tol=1e-12):
+def check_nodal_adj_against_geometry(mesh, tol=1e-12):
     def group_and_iel_to_global_iel(igrp, iel):
         return mesh.groups[igrp].element_nr_base + iel
 

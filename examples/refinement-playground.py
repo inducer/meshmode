@@ -1,7 +1,5 @@
 from __future__ import division, print_function
 
-from meshmode.mesh.refinement.utils import test_nodal_adj_against_geometry
-
 from six.moves import range
 import numpy as np  # noqa
 import pyopencl as cl
@@ -9,6 +7,9 @@ import random
 import os
 import logging
 order = 1
+
+from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
+from meshmode.mesh.refinement import Refiner
 
 
 #construct vertex vertex_index
@@ -116,11 +117,9 @@ def refine_and_generate_chart_function(mesh, filename, function):
         for k in range(len(mesh.vertices)):
             print(mesh.vertices[k, i])
 
-    #test_nodal_adj_against_geometry(mesh);
-    from meshmode.mesh.refinement import Refiner
+    #check_nodal_adj_against_geometry(mesh);
     r = Refiner(mesh)
     #random.seed(0)
-    poss_flags = np.ones(len(mesh.groups[0].vertex_indices))
     #times = 3
     num_elements = []
     time_t = []
@@ -175,7 +174,7 @@ def refine_and_generate_chart_function(mesh, filename, function):
     flags[2] = 1
     mesh = r.refine(flags)
     '''
-    #test_nodal_adj_against_geometry(mesh)
+    #check_nodal_adj_against_geometry(mesh)
     #r.print_rays(70)
     #r.print_rays(117)
     #r.print_hanging_elements(10)
@@ -231,7 +230,6 @@ def all_refine(num_mesh, depth, fname):
     runtimes = []
     for el_fact in range(2, num_mesh+2):
         mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
-        from meshmode.mesh.refinement import Refiner
         r = Refiner(mesh)
         for time in range(depth):
             flags = np.ones(len(mesh.groups[0].vertex_indices))
@@ -243,7 +241,7 @@ def all_refine(num_mesh, depth, fname):
                 stop = timeit.default_timer()
                 nelements.append(mesh.nelements)
                 runtimes.append(stop-start)
-        test_nodal_adj_against_geometry(mesh)
+        check_nodal_adj_against_geometry(mesh)
     import matplotlib.pyplot as pt
     pt.plot(nelements, runtimes, "o")
     pt.savefig(fname)
@@ -261,7 +259,6 @@ def uniform_refine(num_mesh, fract, depth, fname):
     runtimes = []
     for el_fact in range(2, num_mesh+2):
         mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
-        from meshmode.mesh.refinement import Refiner
         r = Refiner(mesh)
         all_els = list(range(mesh.nelements))
         for time in range(depth):
@@ -291,7 +288,7 @@ def uniform_refine(num_mesh, fract, depth, fname):
                     all_els.append(i)
             for i in range(len(flags), mesh.nelements):
                 all_els.append(i)
-            test_nodal_adj_against_geometry(mesh)
+            check_nodal_adj_against_geometry(mesh)
 
     import matplotlib.pyplot as pt
     pt.plot(nelements, runtimes, "o")
