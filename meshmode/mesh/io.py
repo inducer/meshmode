@@ -27,13 +27,17 @@ from six.moves import range, zip
 import numpy as np
 
 from meshpy.gmsh_reader import (  # noqa
-        GmshMeshReceiverBase, FileSource, LiteralSource)
+        GmshMeshReceiverBase, ScriptSource, FileSource, LiteralSource,
+        ScriptWithFilesSource,
+        GmshSimplexElementBase,
+        GmshTensorProductElementBase)
 
 
 __doc__ = """
 
+.. autoclass:: ScriptSource
 .. autoclass:: FileSource
-.. autoclass:: LiteralSource
+.. autoclass:: ScriptWithFilesSource
 
 .. autofunction:: read_gmsh
 .. autofunction:: generate_gmsh
@@ -96,6 +100,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         for el_type in self.element_types:
             el_type_hist[el_type] = el_type_hist.get(el_type, 0) + 1
 
+        if not el_type_hist:
+            raise RuntimeError("empty mesh in gmsh input")
+
         groups = self.groups = []
 
         ambient_dim = self.points.shape[-1]
@@ -126,7 +133,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         # }}}
 
-        from meshmode.mesh import SimplexElementGroup, Mesh
+        from meshmode.mesh import (Mesh,
+                SimplexElementGroup, TensorProductElementGroup)
 
         for group_el_type, ngroup_elements in six.iteritems(el_type_hist):
             if group_el_type.dimensions != mesh_bulk_dim:
@@ -154,20 +162,32 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             unit_nodes = (np.array(group_el_type.lexicographic_node_tuples(),
                     dtype=np.float64).T/group_el_type.order)*2 - 1
 
-            group = SimplexElementGroup(
-                group_el_type.order,
-                vertex_indices,
-                nodes,
-                unit_nodes=unit_nodes
-                )
+            if isinstance(group_el_type, GmshSimplexElementBase):
+                group = SimplexElementGroup(
+                    group_el_type.order,
+                    vertex_indices,
+                    nodes,
+                    unit_nodes=unit_nodes
+                    )
+
+                if group.dim == 2:
+                    from meshmode.mesh.processing import flip_simplex_element_group
+                    group = flip_simplex_element_group(vertices, group,
+                            np.ones(ngroup_elements, np.bool))
+
+            elif isinstance(group_el_type, GmshTensorProductElementBase):
+                group = TensorProductElementGroup(
+                    group_el_type.order,
+                    vertex_indices,
+                    nodes,
+                    unit_nodes=unit_nodes
+                    )
+            else:
+                raise NotImplementedError("gmsh element type: %s"
+                        % type(group_el_type).__name__)
 
             # Gmsh seems to produce elements in the opposite orientation
             # of what we like. Flip them all.
-
-            if group.dim == 2:
-                from meshmode.mesh.processing import flip_simplex_element_group
-                group = flip_simplex_element_group(vertices, group,
-                        np.ones(ngroup_elements, np.bool))
 
             groups.append(group)
 
@@ -195,8 +215,9 @@ def read_gmsh(filename, force_ambient_dim=None):
     return recv.get_mesh()
 
 
-def generate_gmsh(source, dimensions, order=None, other_options=[],
-        extension="geo", gmsh_executable="gmsh", force_ambient_dim=None):
+def generate_gmsh(source, dimensions=None, order=None, other_options=[],
+        extension="geo", gmsh_executable="gmsh", force_ambient_dim=None,
+        output_file_name="output.msh"):
     """Run :command:`gmsh` on the input given by *source*, and return a
     :class:`meshmode.mesh.Mesh` based on the result.
 
