@@ -28,7 +28,9 @@ import numpy as np
 
 from meshpy.gmsh_reader import (  # noqa
         GmshMeshReceiverBase, ScriptSource, FileSource, LiteralSource,
-        ScriptWithFilesSource)
+        ScriptWithFilesSource,
+        GmshSimplexElementBase,
+        GmshTensorProductElementBase)
 
 
 __doc__ = """
@@ -131,7 +133,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         # }}}
 
-        from meshmode.mesh import SimplexElementGroup, Mesh
+        from meshmode.mesh import (Mesh,
+                SimplexElementGroup, TensorProductElementGroup)
 
         for group_el_type, ngroup_elements in six.iteritems(el_type_hist):
             if group_el_type.dimensions != mesh_bulk_dim:
@@ -159,20 +162,32 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             unit_nodes = (np.array(group_el_type.lexicographic_node_tuples(),
                     dtype=np.float64).T/group_el_type.order)*2 - 1
 
-            group = SimplexElementGroup(
-                group_el_type.order,
-                vertex_indices,
-                nodes,
-                unit_nodes=unit_nodes
-                )
+            if isinstance(group_el_type, GmshSimplexElementBase):
+                group = SimplexElementGroup(
+                    group_el_type.order,
+                    vertex_indices,
+                    nodes,
+                    unit_nodes=unit_nodes
+                    )
+
+                if group.dim == 2:
+                    from meshmode.mesh.processing import flip_simplex_element_group
+                    group = flip_simplex_element_group(vertices, group,
+                            np.ones(ngroup_elements, np.bool))
+
+            elif isinstance(group_el_type, GmshTensorProductElementBase):
+                group = TensorProductElementGroup(
+                    group_el_type.order,
+                    vertex_indices,
+                    nodes,
+                    unit_nodes=unit_nodes
+                    )
+            else:
+                raise NotImplementedError("gmsh element type: %s"
+                        % type(group_el_type).__name__)
 
             # Gmsh seems to produce elements in the opposite orientation
             # of what we like. Flip them all.
-
-            if group.dim == 2:
-                from meshmode.mesh.processing import flip_simplex_element_group
-                group = flip_simplex_element_group(vertices, group,
-                        np.ones(ngroup_elements, np.bool))
 
             groups.append(group)
 
