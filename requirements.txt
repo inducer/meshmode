@@ -1,11 +1,11 @@
 numpy
-https+git://github.com/inducer/meshpy.git
-https+git://github.com/inducer/modepy.git
-https+git://github.com/pyopencl/pyopencl.git
-https+git://github.com/inducer/islpy.git
-https+git://github.com/inducer/loopy.git
+git+https://github.com/inducer/meshpy.git
+git+https://github.com/inducer/modepy.git
+git+https://github.com/pyopencl/pyopencl.git
+git+https://github.com/inducer/islpy.git
+git+https://github.com/inducer/loopy.git
 
 # required by pytential, which is in turn needed for some tests
-https+git://github.com/inducer/boxtree.git
-https+git://github.com/inducer/sumpy.git
-https+git://github.com/inducer/pytential.git
+git+https://github.com/inducer/boxtree.git
+git+https://github.com/inducer/sumpy.git
+git+https://github.com/inducer/pytential.git
