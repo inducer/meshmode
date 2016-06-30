@@ -311,7 +311,7 @@ class Discretization(object):
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             knl = lp.tag_inames(knl, dict(k="g.0"))
-            knl = lp.tag_data_axes(knl, "result",
+            knl = lp.tag_array_axes(knl, "result",
                     "stride:auto,stride:auto,stride:auto")
             return knl
 
