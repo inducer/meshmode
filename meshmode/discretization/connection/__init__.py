@@ -103,7 +103,7 @@ class InterpolationBatch(object):
     .. attribute:: result_unit_nodes
 
         A :class:`numpy.ndarray` of shape
-        ``(from_group.dim,to_group.nelements,to_group.nunit_nodes)``
+        ``(from_group.dim,to_group.nunit_nodes)``
         storing the coordinates of the nodes (in unit coordinates
         of the *from* reference element) from which the node
         locations of this element should be interpolated.
