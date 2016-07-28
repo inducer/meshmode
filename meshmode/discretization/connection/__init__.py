@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import division, print_function, absolute_import
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
@@ -436,8 +437,151 @@ def check_connection(connection):
 
 # {{{ refinement connection
 
-def make_refinement_connection(refiner, coarse_discr):
-    pass
+
+def _map_unit_nodes_to_children(unit_nodes, tesselation):
+    """
+    Given a collection of unit nodes, return the coordinates of the
+    unit nodes mapped onto each of the children of the reference
+    element.
+
+    The tesselation should follow the format of
+    :func:`meshmode.mesh.tesselate.tesselatetri()` or
+    :func:`meshmode.mesh.tesselate.tesselatetet()`.
+
+    `unit_nodes` should be relative to the unit simplex coordinates in
+    :module:`modepy`.
+
+    :arg unit_nodes: shaped `(dim, nunit_nodes)`
+    :arg tesselation: With attributes `ref_vertices`, `children`
+    """
+    ref_vertices = np.array(tesselation.ref_vertices, dtype=np.float)
+
+    for child_element in tesselation.children:
+        center = np.vstack(ref_vertices[child_element[0]])
+        # Scale by 1/2 since sides in the tesselation have length 2.
+        aff_mat = (ref_vertices.T[:, child_element[1:]] - center) / 2
+        # (-1, -1, ...) in unit_nodes = (0, 0, ...) in ref_vertices.
+        # Hence the translation by +/- 1.
+        yield aff_mat.dot(unit_nodes + 1) + center - 1
+
+
+def _build_interpolation_batches_for_group(
+        queue, group_idx, coarse_discr_group, fine_discr_group, record):
+    """
+    To map between discretizations, we sort each of the fine mesh
+    elements into an interpolation batch.  Which batch they go
+    into is determined by where the refined unit nodes live
+    relative to the coarse reference element.
+
+    For instance, consider the following refinement:
+
+     ______      ______
+    |\     |    |\    e|
+    | \    |    |d\    |
+    |  \   |    |__\   |
+    |   \  | => |\c|\  |
+    |    \ |    |a\|b\ |
+    |     \|    |  |  \|
+     ‾‾‾‾‾‾      ‾‾‾‾‾‾
+
+    Here, the discretization unit nodes for elements a,b,c,d,e
+    will each have different positions relative to the reference
+    element, so each element gets its own batch. On the other
+    hand, for
+
+     ______      ______
+    |\     |    |\ f|\e|
+    | \    |    |d\ |g\|
+    |  \   |    |__\|__|
+    |   \  | => |\c|\  |
+    |    \ |    |a\|b\h|
+    |     \|    |  |  \|
+     ‾‾‾‾‾‾      ‾‾‾‾‾‾
+
+    the pairs {a,e}, {b,f}, {c,g}, {d,h} can share interpolation
+    batches because their unit nodes are mapped from the same part
+    of the reference element.
+    """
+    num_children = len(record.tesselation.children) \
+                   if record.tesselation else 0
+    from_bins = [[] for i in range(1 + num_children)]
+    to_bins = [[] for i in range(1 + num_children)]
+    for elt_idx, refinement_result in enumerate(record.element_mapping):
+        if len(refinement_result) == 1:
+            # Not refined -> interpolates to self
+            from_bins[0].append(elt_idx)
+            to_bins[0].append(refinement_result[0])
+        else:
+            assert len(refinement_result) == num_children
+            # Refined -> interpolates to children
+            for from_bin, to_bin, child_idx in zip(
+                    from_bins[1:], to_bins[1:], refinement_result):
+                from_bin.append(elt_idx)
+                to_bin.append(child_idx)
+
+    fine_unit_nodes = fine_discr_group.unit_nodes
+    mapped_unit_nodes = _map_unit_nodes_to_children(
+        fine_unit_nodes, record.tesselation)
+
+    from itertools import chain
+    for from_bin, to_bin, unit_nodes in zip(
+            from_bins, to_bins,
+            chain([fine_unit_nodes], mapped_unit_nodes)):
+        if not from_bin:
+            continue
+        yield InterpolationBatch(
+            from_group_index=group_idx,
+            from_element_indices=cl.array.to_device(queue, np.asarray(from_bin)),
+            to_element_indices=cl.array.to_device(queue, np.asarray(to_bin)),
+            result_unit_nodes=unit_nodes,
+            to_element_face=None)
+
+
+def make_refinement_connection(refiner, coarse_discr, group_factory):
+    """
+    :arg refiner: An instance of :class:`meshmode.mesh.refinement.Refiner`
+
+    :arg coarse_discr: An instance of
+        :class:`meshmode.mesh.discretization.Discretization`
+
+    :arg group_factory: An instance of
+        :class:`meshmode.mesh.discretization.ElementGroupFactory`. Used for
+        discretizing the fine mesh.
+
+    :return: A :class:`DiscretizationConnection` mapping `coarse_discr` to a
+        discretization on the fine mesh
+    """
+    coarse_mesh = refiner.get_previous_mesh()
+    fine_mesh = refiner.last_mesh
+    assert coarse_discr.mesh is coarse_mesh
+
+    from meshmode.discretization import Discretization
+    fine_discr = Discretization(
+        coarse_discr.cl_context,
+        fine_mesh,
+        group_factory,
+        real_dtype=coarse_discr.real_dtype)
+
+    logger.info("building refinement connection: start")
+
+    groups = []
+    with cl.CommandQueue(fine_discr.cl_context) as queue:
+        for group_idx, (coarse_discr_group, fine_discr_group, record) in \
+                enumerate(zip(coarse_discr.groups, fine_discr.groups,
+                              refiner.group_refinement_records)):
+            groups.append(
+                DiscretizationConnectionElementGroup(
+                    list(_build_interpolation_batches_for_group(
+                            queue, group_idx, coarse_discr_group,
+                            fine_discr_group, record))))
+
+    logger.info("building refinement connection: done")
+
+    return DiscretizationConnection(
+        from_discr=coarse_discr,
+        to_discr=fine_discr,
+        groups=groups,
+        is_surjective=True)
 
 # }}}
 
