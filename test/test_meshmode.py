@@ -751,7 +751,7 @@ def test_as_python():
 # }}}
 
 
-# {{{ lookup tree for element finding
+# {{{ test lookup tree for element finding
 
 def test_lookup_tree(do_plot=False):
     from meshmode.mesh.generation import make_curve_mesh, cloverleaf

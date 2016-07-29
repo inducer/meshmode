@@ -36,6 +36,9 @@ from meshmode.discretization.connection.face import (
         make_face_restriction, make_face_to_all_faces_embedding)
 from meshmode.discretization.connection.opposite_face import \
         make_opposite_face_connection
+from meshmode.discretization.connection.refinement import \
+        make_refinement_connection
+
 
 import logging
 logger = logging.getLogger(__name__)
@@ -47,7 +50,8 @@ __all__ = [
         "FRESTR_INTERIOR_FACES", "FRESTR_ALL_FACES",
         "make_face_restriction",
         "make_face_to_all_faces_embedding",
-        "make_opposite_face_connection"
+        "make_opposite_face_connection",
+        "make_refinement_connection"
         ]
 
 __doc__ = """
@@ -61,6 +65,8 @@ __doc__ = """
 .. autofunction:: make_face_to_all_faces_embedding
 
 .. autofunction:: make_opposite_face_connection
+
+.. autofunction:: make_refinement_connection
 
 Implementation details
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -103,7 +109,7 @@ class InterpolationBatch(object):
     .. attribute:: result_unit_nodes
 
         A :class:`numpy.ndarray` of shape
-        ``(from_group.dim,to_group.nelements,to_group.nunit_nodes)``
+        ``(from_group.dim,to_group.nunit_nodes)``
         storing the coordinates of the nodes (in unit coordinates
         of the *from* reference element) from which the node
         locations of this element should be interpolated.
@@ -433,12 +439,5 @@ def check_connection(connection):
 
 # }}}
 
-
-# {{{ refinement connection
-
-def make_refinement_connection(refiner, coarse_discr):
-    pass
-
-# }}}
 
 # vim: foldmethod=marker
