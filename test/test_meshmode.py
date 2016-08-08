@@ -802,6 +802,29 @@ def test_nd_quad_submesh(dims):
 # }}}
 
 
+# {{{ test_quad_mesh
+
+def test_quad_mesh():
+    from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
+    print("BEGIN GEN")
+    mesh = generate_gmsh(
+            ScriptWithFilesSource(
+                """
+                Merge "blob-2d.step";
+                Mesh.CharacteristicLengthMax = 0.05;
+                Recombine Surface "*" = 0.0001;
+                Mesh 2;
+                Save "output.msh";
+                """,
+                ["blob-2d.step"]),
+            force_ambient_dim=2,
+            )
+    print("END GEN")
+    print(mesh.nelements)
+
+# }}}
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:

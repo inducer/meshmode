@@ -292,6 +292,42 @@ class SimplexElementGroup(MeshElementGroup):
         from modepy.tools import unit_vertices
         return unit_vertices(self.dim)
 
+
+class TensorProductElementGroup(MeshElementGroup):
+    def __init__(self, order, vertex_indices, nodes,
+            element_nr_base=None, node_nr_base=None,
+            unit_nodes=None):
+        """
+        :arg order: the mamximum total degree used for interpolation.
+        :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
+            The nodes are assumed to be mapped versions of *unit_nodes*.
+        :arg unit_nodes: ``[dim, nunit_nodes]``
+            The unit nodes of which *nodes* is a mapped
+            version.
+
+        Do not supply *element_nr_base* and *node_nr_base*, they will be
+        automatically assigned.
+        """
+
+        if not issubclass(vertex_indices.dtype.type, np.integer):
+            raise TypeError("vertex_indices must be integral")
+
+        dims = unit_nodes.shape[0]
+
+        if vertex_indices.shape[-1] != 2**dims:
+            raise ValueError("vertex_indices has wrong number of vertices per "
+                    "element. expected: %d, got: %d" % (dims+1,
+                        vertex_indices.shape[-1]))
+
+        super(TensorProductElementGroup, self).__init__(order, vertex_indices, nodes,
+                element_nr_base, node_nr_base, unit_nodes)
+
+    def face_vertex_indices(self):
+        raise NotImplementedError()
+
+    def vertex_unit_coordinates(self):
+        raise NotImplementedError()
+
 # }}}
 
 
