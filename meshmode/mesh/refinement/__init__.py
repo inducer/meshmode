@@ -797,7 +797,7 @@ class Refiner(object):
         assert neighbors_starts[-1] == len(neighbors)
 
         from meshmode.mesh import NodalAdjacency
-        return NodalAdjacency(neighbor_starts=neighbors_starts, neighbors=neighbors)
+        return NodalAdjacency(neighbors_starts=neighbors_starts, neighbors=neighbors)
 
     # }}}
 
