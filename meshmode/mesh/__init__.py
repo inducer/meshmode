@@ -581,10 +581,10 @@ class Mesh(Record):
                 assert g.vertex_indices.dtype == self.vertex_id_dtype
 
             if nodal_adjacency:
-                assert nodal_adjacency.neighbor_starts.shape == (self.nelements+1,)
+                assert nodal_adjacency.neighbors_starts.shape == (self.nelements+1,)
                 assert len(nodal_adjacency.neighbors.shape) == 1
 
-                assert nodal_adjacency.neighbor_starts.dtype == self.element_id_dtype
+                assert nodal_adjacency.neighbors_starts.dtype == self.element_id_dtype
                 assert nodal_adjacency.neighbors.dtype == self.element_id_dtype
 
             if facial_adjacency_groups:
