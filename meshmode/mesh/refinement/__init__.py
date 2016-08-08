@@ -24,6 +24,7 @@ THE SOFTWARE.
 import numpy as np
 import itertools
 from six.moves import range
+from pytools import RecordWithoutPickling
 
 from meshmode.mesh.generation import make_group_from_vertices
 
@@ -57,18 +58,31 @@ class TreeRayNode(object):
 
 class Refiner(object):
 
+    class _Tesselation(RecordWithoutPickling):
+
+        def __init__(self, children, ref_vertices):
+            RecordWithoutPickling.__init__(self,
+                ref_vertices=ref_vertices, children=children)
+
+    class _GroupRefinementRecord(RecordWithoutPickling):
+
+        def __init__(self, tesselation, element_mapping):
+            RecordWithoutPickling.__init__(self,
+                tesselation=tesselation, element_mapping=element_mapping)
+
     # {{{ constructor
 
     def __init__(self, mesh):
         from meshmode.mesh.tesselate import tesselatetet, tesselatetri
         self.lazy = False
         self.seen_tuple = {}
+        self.group_refinement_records = []
         tri_node_tuples, tri_result = tesselatetri()
         tet_node_tuples, tet_result = tesselatetet()
-        print(tri_node_tuples, tri_result)
         #quadrilateral_node_tuples = [
         #print tri_result, tet_result
         self.simplex_node_tuples = [None, None, tri_node_tuples, tet_node_tuples]
+        # Dimension-parameterized tesselations for refinement
         self.simplex_result = [None, None, tri_result, tet_result]
         #print tri_node_tuples, tri_result
         #self.simplex_node_tuples, self.simplex_result = tesselatetet()
@@ -89,6 +103,8 @@ class Refiner(object):
         for i in range(nvertices):
             self.hanging_vertex_element.append([])
 
+        # Fill pair_map.
+        # Add adjacency information to each TreeRayNode.
         for grp in mesh.groups:
             iel_base = grp.element_nr_base
             for iel_grp in range(grp.nelements):
@@ -194,6 +210,9 @@ class Refiner(object):
         return np.zeros(
                 self.last_mesh.nelements - self.get_refine_base_index(),
                 np.bool)
+
+    def get_previous_mesh(self):
+        return self.previous_mesh
 
     def get_current_mesh(self):
 
@@ -417,6 +436,8 @@ class Refiner(object):
 #                for next_vertices in next_vertices_list:
 #                    remove_element_from_connectivity(next_vertices, new_hanging_vertex_elements, to_remove)
 
+        # {{{ Add element to connectivity
+
         def add_element_to_connectivity(vertices, new_hanging_vertex_elements, to_add):
             if len(vertices) == 2:
                 min_vertex = min(vertices[0], vertices[1])
@@ -502,13 +523,21 @@ class Refiner(object):
 #                        return
 #            add_element_to_connectivity(next_element_rays, new_hanging_vertex_elements, to_add)
 
+        # }}}
+
+        # {{{ Add hanging vertex element
+
         def add_hanging_vertex_el(v_index, el):
             assert not (v_index == 37 and el == 48)
 
             new_hanging_vertex_element[v_index].append(el)
 
+        # }}}
+
 #        def remove_ray_el(ray, el):
 #            ray.remove(el)
+
+        # {{{ Check adjacent elements
 
         def check_adjacent_elements(groups, new_hanging_vertex_elements, nelements_in_grp):
             for grp in groups:
@@ -529,6 +558,8 @@ class Refiner(object):
                             assert((iel_base+iel_grp) in new_hanging_vertex_elements[cur_node.left_vertex])
                             assert((iel_base+iel_grp) in new_hanging_vertex_elements[cur_node.right_vertex])
 
+        # }}}
+
         for i in range(len(self.last_mesh.vertices)):
             for j in range(len(self.last_mesh.vertices[i])):
                 vertices[i,j] = self.last_mesh.vertices[i,j]
@@ -545,14 +576,24 @@ class Refiner(object):
         grpn = 0
         vertices_index = len(self.last_mesh.vertices[0])
         nelements_in_grp = grp.nelements
-        for grp in self.last_mesh.groups:
+        del self.group_refinement_records[:]
+
+        for grp_idx, grp in enumerate(self.last_mesh.groups):
             iel_base = grp.element_nr_base
+            # List of lists mapping element number to new element number(s).
+            element_mapping = []
+            tesselation = None
+
             for iel_grp in range(grp.nelements):
+                element_mapping.append([iel_grp])
                 if refine_flags[iel_base+iel_grp]:
                     midpoint_vertices = []
                     vertex_indices = grp.vertex_indices[iel_grp]
                     #if simplex
                     if len(grp.vertex_indices[iel_grp]) == len(self.last_mesh.vertices)+1:
+
+                        # {{{ Get midpoints for all pairs of vertices
+
                         for i in range(len(vertex_indices)):
                             for j in range(i+1, len(vertex_indices)):
                                 min_index = min(vertex_indices[i], vertex_indices[j])
@@ -581,6 +622,7 @@ class Refiner(object):
                                     cur_midpoint = cur_node.midpoint
                                     midpoint_vertices.append(cur_midpoint)
 
+                        # }}}
 
                         #generate new rays
                         cur_dim = len(grp.vertex_indices[0])-1
@@ -598,13 +640,16 @@ class Refiner(object):
                         for midpoint_index, midpoint_tuple in enumerate(self.index_to_midpoint_tuple[cur_dim]):
                             node_tuple_to_coord[midpoint_tuple] = midpoint_vertices[midpoint_index]
                         for i in range(len(self.simplex_result[cur_dim])):
+                            if i == 0:
+                                iel = iel_grp
+                            else:
+                                iel = nelements_in_grp + i - 1
+                                element_mapping[-1].append(iel)
                             for j in range(len(self.simplex_result[cur_dim][i])):
-                                if i == 0:
-                                    groups[grpn][iel_grp][j] = \
-                                            node_tuple_to_coord[self.simplex_node_tuples[cur_dim][self.simplex_result[cur_dim][i][j]]]
-                                else:
-                                    groups[grpn][nelements_in_grp+i-1][j] = \
-                                            node_tuple_to_coord[self.simplex_node_tuples[cur_dim][self.simplex_result[cur_dim][i][j]]]
+                                groups[grpn][iel][j] = \
+                                    node_tuple_to_coord[self.simplex_node_tuples[cur_dim][self.simplex_result[cur_dim][i][j]]]
+                        tesselation = self._Tesselation(
+                            self.simplex_result[cur_dim], self.simplex_node_tuples[cur_dim])
                         nelements_in_grp += len(self.simplex_result[cur_dim])-1
                     #assuming quad otherwise
                     #else:
@@ -615,6 +660,8 @@ class Refiner(object):
 #                        def generate_all_tuples(cur_list):
 #                            if len(cur_list[len(cur_list)-1])
 
+            self.group_refinement_records.append(
+                self._GroupRefinementRecord(tesselation, element_mapping))
 
         #clear connectivity data
         for grp in self.last_mesh.groups:
@@ -653,6 +700,7 @@ class Refiner(object):
 
         from meshmode.mesh import Mesh
 
+        self.previous_mesh = self.last_mesh
         self.last_mesh = Mesh(
                 vertices, grp,
                 nodal_adjacency=self.generate_nodal_adjacency(
