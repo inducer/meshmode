@@ -43,6 +43,7 @@ __doc__ = """
 .. autofunction:: generate_gmsh
 .. autofunction:: from_meshpy
 .. autofunction:: from_vertices_and_simplices
+.. autofunction:: to_json
 
 """
 
@@ -310,6 +311,59 @@ def from_vertices_and_simplices(vertices, simplices, order=1, fix_orientation=Fa
             vertices=vertices, groups=[grp],
             nodal_adjacency=None,
             facial_adjacency_groups=None)
+
+# }}}
+
+
+# {{{ to_json
+
+def to_json(mesh):
+    """Return a JSON-able Python data structure for *mesh*. The structure directly
+    reflects the :class:`Mesh` data structure."""
+
+    def btag_to_json(btag):
+        if isinstance(btag, str):
+            return btag
+        else:
+            return btag.__name__
+
+    def group_to_json(group):
+        return {
+            "type": type(group).__name__,
+            "order": group.order,
+            "vertex_indices": group.vertex_indices.tolist(),
+            "nodes": group.nodes.tolist(),
+            "unit_nodes": group.unit_nodes.tolist(),
+            "element_nr_base": group.element_nr_base,
+            "node_nr_base": group.node_nr_base,
+            "dim": group.dim,
+            }
+
+    from meshmode import DataUnavailable
+
+    def nodal_adjacency_to_json(mesh):
+        try:
+            na = mesh.nodal_adjacency
+        except DataUnavailable:
+            return None
+
+        return {
+            "neighbors_starts": na.neighbors_starts.tolist(),
+            "neighbors": na.neighbors.tolist(),
+            }
+
+    return {
+        "version": 0,
+        "vertices": mesh.vertices.tolist(),
+        "groups": [group_to_json(group) for group in mesh.groups],
+        "nodal_adjacency": nodal_adjacency_to_json(mesh),
+        # not yet implemented
+        "facial_adjacency_groups": None,
+        "boundary_tags": [btag_to_json(btag) for btag in mesh.boundary_tags],
+        "btag_to_index": dict(
+            (btag_to_json(btag), value)
+            for btag, value in six.iteritems(mesh.btag_to_index)),
+        }
 
 # }}}
 
