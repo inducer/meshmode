@@ -348,6 +348,10 @@ class Refiner(object):
             indicating which elements should be split.
         """
 
+        if len(refine_flags) != self.last_mesh.nelements:
+            raise ValueError("length of refine_flags does not match "
+                    "element count of last generated mesh")
+
         #vertices and groups for next generation
         nvertices = len(self.last_mesh.vertices[0])
 
