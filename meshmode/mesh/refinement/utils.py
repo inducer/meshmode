@@ -64,7 +64,7 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
     for igrp, grp in enumerate(mesh.groups):
         for iel_grp in range(grp.nelements):
             iel_g = group_and_iel_to_global_iel(igrp, iel_grp)
-            nb_starts = nadj.neighbor_starts
+            nb_starts = nadj.neighbors_starts
             for nb_iel_g in nadj.neighbors[nb_starts[iel_g]:nb_starts[iel_g+1]]:
                 connected_to_element_connectivity[iel_g].add(nb_iel_g)
 

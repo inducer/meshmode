@@ -348,6 +348,10 @@ class Refiner(object):
             indicating which elements should be split.
         """
 
+        if len(refine_flags) != self.last_mesh.nelements:
+            raise ValueError("length of refine_flags does not match "
+                    "element count of last generated mesh")
+
         #vertices and groups for next generation
         nvertices = len(self.last_mesh.vertices[0])
 
@@ -845,7 +849,7 @@ class Refiner(object):
         assert neighbors_starts[-1] == len(neighbors)
 
         from meshmode.mesh import NodalAdjacency
-        return NodalAdjacency(neighbor_starts=neighbors_starts, neighbors=neighbors)
+        return NodalAdjacency(neighbors_starts=neighbors_starts, neighbors=neighbors)
 
     # }}}
 

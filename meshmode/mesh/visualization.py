@@ -1,6 +1,4 @@
-from __future__ import division
-from __future__ import absolute_import
-from six.moves import range
+from __future__ import division, absolute_import
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -25,6 +23,7 @@ THE SOFTWARE.
 """
 
 import numpy as np
+from six.moves import range
 
 
 # {{{ draw_2d_mesh

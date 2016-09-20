@@ -291,7 +291,7 @@ def write_nodal_adjacency_vtk_file(file_name, mesh, compressor=None,):
     nconnections = len(adj.neighbors)
     connections = np.empty((nconnections, 2), dtype=np.int32)
 
-    nb_starts = adj.neighbor_starts
+    nb_starts = adj.neighbors_starts
     for iel in range(mesh.nelements):
         connections[nb_starts[iel]:nb_starts[iel+1], 0] = iel
 

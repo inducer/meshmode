@@ -8,6 +8,7 @@ Contents:
 
    mesh
    discretization
+   misc
 
 Indices and tables
 ==================

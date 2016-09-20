@@ -490,6 +490,7 @@ class Mesh(Record):
     face_id_dtype = np.int8
 
     def __init__(self, vertices, groups, skip_tests=False,
+            node_vertex_consistency_tolerance=None,
             nodal_adjacency=False,
             facial_adjacency_groups=False,
             boundary_tags=None,
@@ -500,6 +501,9 @@ class Mesh(Record):
 
         :arg skip_tests: Skip mesh tests, in case you want to load a broken
             mesh anyhow and then fix it inside of this data structure.
+        :arg node_vertex_consistency_tolerance: If *False*, do not check
+            for consistency between vertex and nodal data. If *None*, use
+            the (small, near FP-epsilon) tolerance.
         :arg nodal_adjacency: One of three options:
             *None*, in which case this information
             will be deduced from vertex adjacency. *False*, in which case
@@ -576,15 +580,16 @@ class Mesh(Record):
                 )
 
         if not skip_tests:
-            assert _test_node_vertex_consistency(self)
+            assert _test_node_vertex_consistency(
+                    self, node_vertex_consistency_tolerance)
             for g in self.groups:
                 assert g.vertex_indices.dtype == self.vertex_id_dtype
 
             if nodal_adjacency:
-                assert nodal_adjacency.neighbor_starts.shape == (self.nelements+1,)
+                assert nodal_adjacency.neighbors_starts.shape == (self.nelements+1,)
                 assert len(nodal_adjacency.neighbors.shape) == 1
 
-                assert nodal_adjacency.neighbor_starts.dtype == self.element_id_dtype
+                assert nodal_adjacency.neighbors_starts.dtype == self.element_id_dtype
                 assert nodal_adjacency.neighbors.dtype == self.element_id_dtype
 
             if facial_adjacency_groups:
@@ -691,7 +696,7 @@ class Mesh(Record):
 
 # {{{ node-vertex consistency test
 
-def _test_node_vertex_consistency_simplex(mesh, mgrp):
+def _test_node_vertex_consistency_simplex(mesh, mgrp, tol):
     if mgrp.nelements == 0:
         return True
 
@@ -710,7 +715,8 @@ def _test_node_vertex_consistency_simplex(mesh, mgrp):
             np.sum((map_vertices - grp_vertices)**2, axis=0),
             axis=-1))
 
-    tol = 1e3 * np.finfo(per_element_vertex_errors.dtype).eps
+    if tol is None:
+        tol = 1e3 * np.finfo(per_element_vertex_errors.dtype).eps
 
     from meshmode.mesh.processing import find_bounding_box
 
@@ -723,14 +729,17 @@ def _test_node_vertex_consistency_simplex(mesh, mgrp):
     return True
 
 
-def _test_node_vertex_consistency(mesh):
+def _test_node_vertex_consistency(mesh, tol):
     """Ensure that order of by-index vertices matches that of mapped
     unit vertices.
     """
 
+    if tol is False:
+        return
+
     for mgrp in mesh.groups:
         if isinstance(mgrp, SimplexElementGroup):
-            assert _test_node_vertex_consistency_simplex(mesh, mgrp)
+            assert _test_node_vertex_consistency_simplex(mesh, mgrp, tol)
         else:
             from warnings import warn
             warn("not implemented: node-vertex consistency check for '%s'"

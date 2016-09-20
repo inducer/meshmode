@@ -13,3 +13,5 @@ distribute*egg
 distribute*tar.gz
 a.out
 *.vtu
+
+.cache

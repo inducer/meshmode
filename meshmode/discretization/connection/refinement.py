@@ -161,7 +161,9 @@ def make_refinement_connection(refiner, coarse_discr, group_factory):
 
     coarse_mesh = refiner.get_previous_mesh()
     fine_mesh = refiner.last_mesh
-    assert coarse_discr.mesh is coarse_mesh
+    if coarse_discr.mesh != coarse_mesh:
+        raise ValueError(
+            "course_discr must live on the same mesh given to the refiner!")
 
     from meshmode.discretization import Discretization
     fine_discr = Discretization(
