@@ -84,8 +84,8 @@ def uniform_refine_flags(mesh):
         partial(
             make_curve_mesh,
             partial(ellipse, 3),
-            np.linspace(0, 1, 20),
-            order=2),
+            np.linspace(0, 1, 21),
+            order=1),
         uniform_refine_flags,
         4),
 
