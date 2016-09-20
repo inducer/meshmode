@@ -73,17 +73,19 @@ class Refiner(object):
     # {{{ constructor
 
     def __init__(self, mesh):
-        from meshmode.mesh.tesselate import tesselatetet, tesselatetri
+        from meshmode.mesh.tesselate import tesselateseg, tesselatetet, tesselatetri
         self.lazy = False
         self.seen_tuple = {}
         self.group_refinement_records = []
+        seg_node_tuples, seg_result = tesselateseg()
         tri_node_tuples, tri_result = tesselatetri()
         tet_node_tuples, tet_result = tesselatetet()
         #quadrilateral_node_tuples = [
         #print tri_result, tet_result
-        self.simplex_node_tuples = [None, None, tri_node_tuples, tet_node_tuples]
+        self.simplex_node_tuples = [
+                None, seg_node_tuples, tri_node_tuples, tet_node_tuples]
         # Dimension-parameterized tesselations for refinement
-        self.simplex_result = [None, None, tri_result, tet_result]
+        self.simplex_result = [None, seg_result, tri_result, tet_result]
         #print tri_node_tuples, tri_result
         #self.simplex_node_tuples, self.simplex_result = tesselatetet()
         self.last_mesh = mesh
@@ -594,8 +596,7 @@ class Refiner(object):
                     midpoint_vertices = []
                     vertex_indices = grp.vertex_indices[iel_grp]
                     #if simplex
-                    if len(grp.vertex_indices[iel_grp]) == len(self.last_mesh.vertices)+1:
-
+                    if len(vertex_indices) == grp.dim + 1:
                         # {{{ Get midpoints for all pairs of vertices
 
                         for i in range(len(vertex_indices)):

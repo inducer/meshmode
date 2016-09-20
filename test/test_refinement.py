@@ -31,7 +31,7 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 from meshmode.mesh.generation import (  # noqa
-        generate_icosahedron, generate_box_mesh)
+        generate_icosahedron, generate_box_mesh, make_curve_mesh, ellipse)
 from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
 from meshmode.mesh.refinement import Refiner
 
@@ -79,6 +79,15 @@ def uniform_refine_flags(mesh):
     #     partial(generate_icosahedron, 1, order=1),
     #     partial(random_refine_flags, 0.4),
     #     3),
+
+    ("3_to_1_ellipse_unif",
+        partial(
+            make_curve_mesh,
+            partial(ellipse, 3),
+            np.linspace(0, 1, 20),
+            order=2),
+        uniform_refine_flags,
+        4),
 
     ("rect2d_rand",
         partial(generate_box_mesh, (
@@ -138,6 +147,7 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
     PolynomialEquidistantGroupFactory
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
+    ("circle", 1, [20, 30, 40]),
     ("blob", 2, [1e-1, 8e-2, 5e-2]),
     ("warp", 2, [4, 5, 6]),
     ("warp", 3, [4, 5, 6]),
@@ -171,7 +181,12 @@ def test_refinement_connection(
     for mesh_par in mesh_pars:
         # {{{ get mesh
 
-        if mesh_name == "blob":
+        if mesh_name == "circle":
+            assert dim == 1
+            h = 1 / mesh_par
+            mesh = make_curve_mesh(
+                partial(ellipse, 1), np.linspace(0, 1, mesh_par + 1), order=1)
+        elif mesh_name == "blob":
             assert dim == 2
             h = mesh_par
             mesh = gen_blob_mesh(h)

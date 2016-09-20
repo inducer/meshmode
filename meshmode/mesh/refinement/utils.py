@@ -80,7 +80,7 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                     nearby_origin_vertex = mesh.vertices[
                             :, nearby_grp.vertex_indices[nearby_iel][0]]  # noqa
                     transformation = np.empty(
-                            (len(mesh.vertices), nvertices_per_element-1))
+                            (mesh.ambient_dim, mesh.ambient_dim))
                     vertex_transformed = vertex - nearby_origin_vertex
 
                     for inearby_vertex_index, nearby_vertex_index in enumerate(
