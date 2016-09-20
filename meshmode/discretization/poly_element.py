@@ -144,7 +144,13 @@ class QuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
     @property
     @memoize_method
     def unit_nodes(self):
-        return self._quadrature_rule().nodes
+        result = self._quadrature_rule().nodes
+        if len(result.shape) == 1:
+            result = np.array([result])
+
+        dim2, nunit_nodes = result.shape
+        assert dim2 == self.mesh_el_group.dim
+        return result
 
     @property
     @memoize_method
