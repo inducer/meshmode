@@ -51,6 +51,8 @@ def _map_unit_nodes_to_children(unit_nodes, tesselation):
     """
     ref_vertices = np.array(tesselation.ref_vertices, dtype=np.float)
 
+    assert len(unit_nodes.shape) == 2
+
     for child_element in tesselation.children:
         center = np.vstack(ref_vertices[child_element[0]])
         # Scale by 1/2 since sides in the tesselation have length 2.

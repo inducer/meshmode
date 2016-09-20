@@ -6,6 +6,12 @@ def add_tuples(a, b):
     return tuple(ac+bc for ac, bc in zip(a, b))
 
 
+def tesselateseg():
+    node_tuples = [(0,), (1,), (2,)]
+    result = [(0, 1), (1, 2)]
+    return [node_tuples, result]
+
+
 def tesselatetri():
     result = []
 

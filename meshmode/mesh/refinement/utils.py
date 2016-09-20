@@ -88,10 +88,18 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                         nearby_vertex = mesh.vertices[:, nearby_vertex_index]
                         transformation[:, inearby_vertex_index] = \
                                 nearby_vertex - nearby_origin_vertex
-                    bary_coord = np.linalg.solve(transformation, vertex_transformed)
+                    bary_coord, residual = \
+                            np.linalg.lstsq(transformation, vertex_transformed)[0:2]
+
+                    is_in_element_span = (
+                            residual.size == 0 or
+                            np.linalg.norm(vertex_transformed) == 0 or
+                            (np.linalg.norm(residual) /
+                                np.linalg.norm(vertex_transformed)) <= tol)
 
                     is_connected = (
-                            np.sum(bary_coord) <= 1+tol
+                            is_in_element_span
+                            and np.sum(bary_coord) <= 1+tol
                             and (bary_coord >= -tol).all())
                     el1 = group_and_iel_to_global_iel(nearby_igrp, nearby_iel)
                     el2 = group_and_iel_to_global_iel(igrp, iel_grp)
