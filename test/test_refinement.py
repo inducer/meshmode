@@ -192,7 +192,7 @@ def test_refinement_connection(
                 order=mesh_order)
         elif mesh_name == "blob":
             if mesh_order == 5:
-                pytest.xfail("")
+                pytest.xfail("https://gitlab.tiker.net/inducer/meshmode/issues/2")
             assert dim == 2
             h = mesh_par
             mesh = gen_blob_mesh(h, mesh_order)
@@ -231,7 +231,6 @@ def test_refinement_connection(
             import matplotlib.cm as cm
             cmap = cm.ScalarMappable(cmap=cm.jet)
             cmap.set_array(err)
-            #norm = plt.matplotlib.colors.Normalize(vmin=min(err), vmax=max(err))
             plt.scatter(x[0], x[1], c=cmap.to_rgba(err), s=20, cmap=cmap)
             plt.colorbar(cmap)
             plt.show()
