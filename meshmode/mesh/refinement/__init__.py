@@ -619,7 +619,7 @@ class Refiner(object):
                                     self.pair_map[vertex_pair2] = cur_node.right
                                     midpoint_idx = midpoint_order[(i, j)]
                                     vertices[:, vertices_index] = \
-                                            midpoints[iel_grp][:,midpoint_idx]
+                                            midpoints[iel_grp][:, midpoint_idx]
                                     midpoint_vertices.append(vertices_index)
                                     vertices_index += 1
                                 else:
@@ -731,8 +731,8 @@ class Refiner(object):
             for elem, mapped_elems in enumerate(element_mapping):
                 if len(mapped_elems) == 1:
                     # No resampling required, just copy over
-                    nodes[:,mapped_elems[0]] = prev_group.nodes[:, elem]
-                    n = nodes[:,mapped_elems[0]]
+                    nodes[:, mapped_elems[0]] = prev_group.nodes[:, elem]
+                    n = nodes[:, mapped_elems[0]]
                 else:
                     nodes[:, mapped_elems] = new_nodes[elem]
 
