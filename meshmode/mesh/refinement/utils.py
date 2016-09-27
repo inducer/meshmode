@@ -29,7 +29,41 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# {{{ map unit nodes to children
+
+
+def map_unit_nodes_to_children(unit_nodes, tesselation):
+    """
+    Given a collection of unit nodes, return the coordinates of the
+    unit nodes mapped onto each of the children of the reference
+    element.
+
+    The tesselation should follow the format of
+    :func:`meshmode.mesh.tesselate.tesselatetri()` or
+    :func:`meshmode.mesh.tesselate.tesselatetet()`.
+
+    `unit_nodes` should be relative to the unit simplex coordinates in
+    :module:`modepy`.
+
+    :arg unit_nodes: shaped `(dim, nunit_nodes)`
+    :arg tesselation: With attributes `ref_vertices`, `children`
+    """
+    ref_vertices = np.array(tesselation.ref_vertices, dtype=np.float)
+
+    assert len(unit_nodes.shape) == 2
+
+    for child_element in tesselation.children:
+        center = np.vstack(ref_vertices[child_element[0]])
+        # Scale by 1/2 since sides in the tesselation have length 2.
+        aff_mat = (ref_vertices.T[:, child_element[1:]] - center) / 2
+        # (-1, -1, ...) in unit_nodes = (0, 0, ...) in ref_vertices.
+        # Hence the translation by +/- 1.
+        yield aff_mat.dot(unit_nodes + 1) + center - 1
+
+# }}}
+
 # {{{ test nodal adjacency against geometry
+
 
 def is_symmetric(relation, debug=False):
     for a, other_list in enumerate(relation):
