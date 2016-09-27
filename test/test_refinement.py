@@ -147,9 +147,9 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
     PolynomialEquidistantGroupFactory
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
-    ("circle", 1, [10, 20, 30]),
+    ("circle", 1, [20, 30, 40]),
     ("blob", 2, [1e-1, 8e-2, 5e-2]),
-    ("warp", 2, [7, 8, 9]),
+    ("warp", 2, [4, 5, 6]),
     ("warp", 3, [4, 5, 6]),
 ])
 @pytest.mark.parametrize("mesh_order", [1, 5])
