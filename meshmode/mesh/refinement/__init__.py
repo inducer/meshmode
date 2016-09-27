@@ -26,8 +26,6 @@ import itertools
 from six.moves import range
 from pytools import RecordWithoutPickling
 
-from meshmode.mesh.generation import make_group_from_vertices
-
 
 class TreeRayNode(object):
     """Describes a ray as a tree, this class represents each node in this tree
@@ -217,31 +215,6 @@ class Refiner(object):
         return self.previous_mesh
 
     def get_current_mesh(self):
-
-        from meshmode.mesh import Mesh
-        #return Mesh(vertices, [grp], nodal_adjacency=self.generate_nodal_adjacency(len(self.last_mesh.groups[group].vertex_indices) \
-        #            + count*3))
-        groups = []
-        grpn = 0
-        for grp in self.last_mesh.groups:
-            groups.append(np.empty([len(grp.vertex_indices),
-                len(self.last_mesh.groups[grpn].vertex_indices[0])], dtype=np.int32))
-            for iel_grp in range(grp.nelements):
-                for i in range(0, len(grp.vertex_indices[iel_grp])):
-                    groups[grpn][iel_grp][i] = grp.vertex_indices[iel_grp][i]
-            grpn += 1
-        grp = []
-
-        for grpn in range(0, len(groups)):
-            grp.append(make_group_from_vertices(self.last_mesh.vertices, groups[grpn], 4))
-        self.last_mesh = Mesh(
-                self.last_mesh.vertices, grp,
-                nodal_adjacency=self.generate_nodal_adjacency(
-                    len(self.last_mesh.groups[0].vertex_indices),
-                    len(self.last_mesh.vertices[0])),
-                vertex_id_dtype=self.last_mesh.vertex_id_dtype,
-                element_id_dtype=self.last_mesh.element_id_dtype)
-
         return self.last_mesh
 
     def get_leaves(self, cur_node):
@@ -590,15 +563,42 @@ class Refiner(object):
             element_mapping = []
             tesselation = None
 
+            # {{{ get midpoint coordinates for vertices
+
+            midpoints_to_find = []
+            resampler = None
+            for iel_grp in range(grp.nelements):
+                if refine_flags[iel_base + iel_grp]:
+                    # if simplex
+                    if len(grp.vertex_indices[iel_grp]) == grp.dim + 1:
+                        midpoints_to_find.append(iel_grp)
+                        if not resampler:
+                            from meshmode.mesh.refinement.resampler import (
+                                SimplexResampler)
+                            resampler = SimplexResampler()
+                            tesselation = self._Tesselation(
+                                self.simplex_result[grp.dim],
+                                self.simplex_node_tuples[grp.dim])
+                    else:
+                        raise NotImplementedError("unimplemented: midpoint finding"
+                                                  "for non simplex elements")
+
+            if midpoints_to_find:
+                midpoints = resampler.get_midpoints(
+                        grp, tesselation, midpoints_to_find)
+                midpoint_order = resampler.get_vertex_pair_to_midpoint_order(grp.dim)
+
+            del midpoints_to_find
+
+            # }}}
+
             for iel_grp in range(grp.nelements):
                 element_mapping.append([iel_grp])
                 if refine_flags[iel_base+iel_grp]:
                     midpoint_vertices = []
                     vertex_indices = grp.vertex_indices[iel_grp]
-                    #if simplex
+                    # if simplex
                     if len(vertex_indices) == grp.dim + 1:
-                        # {{{ Get midpoints for all pairs of vertices
-
                         for i in range(len(vertex_indices)):
                             for j in range(i+1, len(vertex_indices)):
                                 min_index = min(vertex_indices[i], vertex_indices[j])
@@ -617,17 +617,14 @@ class Refiner(object):
                                     vertex_pair2 = (max_index, vertices_index)
                                     self.pair_map[vertex_pair1] = cur_node.left
                                     self.pair_map[vertex_pair2] = cur_node.right
-                                    for k in range(len(self.last_mesh.vertices)):
-                                        vertices[k, vertices_index] = \
-                                        (self.last_mesh.vertices[k, vertex_indices[i]] +
-                                        self.last_mesh.vertices[k, vertex_indices[j]]) / 2.0
+                                    midpoint_idx = midpoint_order[(i, j)]
+                                    vertices[:, vertices_index] = \
+                                            midpoints[iel_grp][:,midpoint_idx]
                                     midpoint_vertices.append(vertices_index)
                                     vertices_index += 1
                                 else:
                                     cur_midpoint = cur_node.midpoint
                                     midpoint_vertices.append(cur_midpoint)
-
-                        # }}}
 
                         #generate new rays
                         cur_dim = len(grp.vertex_indices[0])-1
@@ -653,12 +650,12 @@ class Refiner(object):
                             for j in range(len(self.simplex_result[cur_dim][i])):
                                 groups[grpn][iel][j] = \
                                     node_tuple_to_coord[self.simplex_node_tuples[cur_dim][self.simplex_result[cur_dim][i][j]]]
-                        tesselation = self._Tesselation(
-                            self.simplex_result[cur_dim], self.simplex_node_tuples[cur_dim])
                         nelements_in_grp += len(self.simplex_result[cur_dim])-1
                     #assuming quad otherwise
-                    #else:
+                    else:
                         #quadrilateral
+                        raise NotImplementedError("unimplemented: "
+                                                  "support for quad elements")
 #                        node_tuple_to_coord = {}
 #                        for node_index, node_tuple in enumerate(self.index_to_node_tuple[cur_dim]):
 #                            node_tuple_to_coord[node_tuple] = grp.vertex_indices[iel_grp][node_index]
@@ -699,15 +696,64 @@ class Refiner(object):
         #check_adjacent_elements(groups, new_hanging_vertex_element, nelements_in_grp)
 
         self.hanging_vertex_element = new_hanging_vertex_element
-        grp = []
-        for grpn in range(0, len(groups)):
-            grp.append(make_group_from_vertices(vertices, groups[grpn], 4))
+
+        # {{{ make new groups
+
+        new_mesh_el_groups = []
+
+        for refinement_record, group, prev_group in zip(
+                self.group_refinement_records, groups, self.last_mesh.groups):
+            is_simplex = len(prev_group.vertex_indices[0]) == prev_group.dim + 1
+            ambient_dim = len(prev_group.nodes)
+            nelements = len(group)
+            nunit_nodes = len(prev_group.unit_nodes[0])
+
+            nodes = np.empty(
+                (ambient_dim, nelements, nunit_nodes),
+                dtype=prev_group.nodes.dtype)
+
+            element_mapping = refinement_record.element_mapping
+
+            to_resample = [elem for elem in range(len(element_mapping))
+                           if len(element_mapping[elem]) > 1]
+
+            if to_resample:
+                # if simplex
+                if is_simplex:
+                    from meshmode.mesh.refinement.resampler import SimplexResampler
+                    resampler = SimplexResampler()
+                    new_nodes = resampler.get_tesselated_nodes(
+                        prev_group, refinement_record.tesselation, to_resample)
+                else:
+                    raise NotImplementedError(
+                        "unimplemented: node resampling for non simplex elements")
+
+            for elem, mapped_elems in enumerate(element_mapping):
+                if len(mapped_elems) == 1:
+                    # No resampling required, just copy over
+                    nodes[:,mapped_elems[0]] = prev_group.nodes[:, elem]
+                    n = nodes[:,mapped_elems[0]]
+                else:
+                    nodes[:, mapped_elems] = new_nodes[elem]
+
+            if is_simplex:
+                new_mesh_el_groups.append(
+                    type(prev_group)(
+                        order=prev_group.order,
+                        vertex_indices=group,
+                        nodes=nodes,
+                        unit_nodes=prev_group.unit_nodes))
+            else:
+                raise NotImplementedError("unimplemented: support for creating"
+                                          "non simplex element groups")
+
+        # }}}
 
         from meshmode.mesh import Mesh
 
         self.previous_mesh = self.last_mesh
         self.last_mesh = Mesh(
-                vertices, grp,
+                vertices, new_mesh_el_groups,
                 nodal_adjacency=self.generate_nodal_adjacency(
                     totalnelements, nvertices, groups),
                 vertex_id_dtype=self.last_mesh.vertex_id_dtype,
