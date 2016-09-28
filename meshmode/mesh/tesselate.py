@@ -27,8 +27,8 @@ def tesselatetri():
     if len(result) > 0:
         return [node_tuples, result]
     for current in node_tuples:
-        # this is a tesselation of a cube into six tets.
-        # subtets that fall outside of the master tet are simply not added.
+        # this is a tesselation of a square into two triangles.
+        # subtriangles that fall outside of the master tet are simply not added.
 
         # positively oriented
         try_add_tri(current, (0, 0), (1, 0), (0, 1))
