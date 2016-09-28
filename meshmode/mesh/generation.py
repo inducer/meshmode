@@ -547,7 +547,7 @@ def generate_warped_rect_mesh(dim, order, n):
                 0.05*np.cos(10*x[0])
                 + 1.3*x[1] + np.sin(x[1]))
         if len(x) == 3:
-            result[2] = x[2] + np.sin(x[0])
+            result[2] = x[2] + np.sin(x[0] / 2) / 2
         return result
 
     from meshmode.mesh.processing import map_mesh
