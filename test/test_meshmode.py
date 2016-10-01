@@ -802,9 +802,9 @@ def test_nd_quad_submesh(dims):
 # }}}
 
 
-# {{{ test_quad_mesh
+# {{{ test_quad_mesh_2d
 
-def test_quad_mesh():
+def test_quad_mesh_2d():
     from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
     print("BEGIN GEN")
     mesh = generate_gmsh(
@@ -818,6 +818,38 @@ def test_quad_mesh():
                 """,
                 ["blob-2d.step"]),
             force_ambient_dim=2,
+            )
+    print("END GEN")
+    print(mesh.nelements)
+
+# }}}
+
+
+# {{{ test_quad_mesh_3d
+
+# This currently (gmsh 2.13.2) crashes gmsh. A massaged version of this using
+# 'cube.step' succeeded in generating 'hybrid-cube.msh' and 'cubed-cube.msh'.
+def no_test_quad_mesh_3d():
+    from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
+    print("BEGIN GEN")
+    mesh = generate_gmsh(
+            ScriptWithFilesSource(
+                """
+                Merge "ball-radius-1.step";
+                // Mesh.CharacteristicLengthMax = 0.1;
+
+                Mesh.RecombineAll=1;
+                Mesh.Recombine3DAll=1;
+                Mesh.Algorithm = 8;
+                Mesh.Algorithm3D = 9;
+                // Mesh.Smoothing = 0;
+
+                // Mesh.ElementOrder = 3;
+
+                Mesh 3;
+                Save "output.msh";
+                """,
+                ["ball-radius-1.step"]),
             )
     print("END GEN")
     print(mesh.nelements)
