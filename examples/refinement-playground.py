@@ -225,14 +225,16 @@ def all_refine(num_mesh, depth, fname):
             generate_icosphere, generate_icosahedron,
             generate_torus, generate_regular_rect_mesh,
             generate_box_mesh)
+    #mesh = generate_regular_rect_mesh()
+    mesh =  generate_box_mesh(3*(np.linspace(0, 3, 5),))
     import timeit
     nelements = []
     runtimes = []
-    for el_fact in range(2, num_mesh+2):
-        mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
+    for el_fact in range(3):
+        #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
         r = Refiner(mesh)
         for time in range(depth):
-            flags = np.ones(len(mesh.groups[0].vertex_indices))
+            flags = get_random_flags(mesh)
             if time < depth-1:
                 mesh = r.refine(flags)
             else:
@@ -242,6 +244,10 @@ def all_refine(num_mesh, depth, fname):
                 nelements.append(mesh.nelements)
                 runtimes.append(stop-start)
         check_nodal_adj_against_geometry(mesh)
+        from meshmode.mesh.visualization import draw_2d_mesh
+        draw_2d_mesh(mesh, False, False, False, fill=None)
+        import matplotlib.pyplot as pt
+        pt.show()
     import matplotlib.pyplot as pt
     pt.plot(nelements, runtimes, "o")
     pt.savefig(fname)

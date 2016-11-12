@@ -1,10 +1,12 @@
 from pytools import generate_nonnegative_integer_tuples_summing_to_at_most \
     as gnitstam
-
+from pytools import generate_nonnegative_integer_tuples_below as gnitb
 
 def add_tuples(a, b):
     return tuple(ac+bc for ac, bc in zip(a, b))
 
+def tesselatesegment():
+    return [[(0,), (1,), (2,)], [(0, 1), (1, 2)]]
 
 def tesselatetri():
     result = []
@@ -72,3 +74,52 @@ def tesselatetet():
         try_add_tet(current, (0, 1, 1), (1, 1, 1), (1, 0, 1), (1, 1, 0))
 
     return [node_tuples, result]
+
+def tesselatesquare():
+    node_tuples = list(gnitb(3, 2))
+
+    node_dict = dict(
+            (ituple, idx)
+            for idx, ituple in enumerate(node_tuples))
+
+    def try_add_square(current, d1, d2, d3, d4):
+        try:
+            result.append((
+                node_dict[add_tuples(current, d1)],
+                node_dict[add_tuples(current, d2)],
+                node_dict[add_tuples(current, d3)],
+                node_dict[add_tuples(current, d4)],
+                ))
+        except KeyError:
+            pass
+
+    result = []
+    
+    for current in node_tuples:
+        try_add_square(current, (0, 0), (1, 0), (1, 1), (0, 1))
+
+    return [node_tuples, result]
+
+def tesselatecube():
+    node_tuples = list(gnitb(3, 3))
+
+    node_dict = dict(
+            (ituple, idx)
+            for idx, ituple in enumerate(node_tuples))
+
+    def try_add_cube(current, d1, d2, d3, d4, d5, d6):
+        try:
+            result.append((
+                node_dict[add_tuples(current, d1)],
+                node_dict[add_tuples(current, d2)],
+                node_dict[add_tuples(current, d3)],
+                node_dict[add_tuples(current, d4)],
+                node_dict[add_tuples(current, d5)],
+                node_dict[add_tuples(current, d6)],
+                ))
+        except KeyError:
+            pass
+
+    return [[], []]
+    
+
