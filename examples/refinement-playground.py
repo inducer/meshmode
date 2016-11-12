@@ -29,7 +29,7 @@ def linear_func(vert):
     for i in vert:
         csum += i
         #print csum
-    return csum
+    return csum + 0.1
 
 
 def sine_func(vert):
@@ -215,9 +215,10 @@ def main2():
     #mesh = generate_torus(3, 1, order=order)
     #mesh = generate_regular_rect_mesh()
     #mesh =  generate_box_mesh(3*(np.linspace(0, 3, 5),))
-    #mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),))
-    mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
-    refine_and_generate_chart_function(mesh, "plot.pdf", sine_func)
+    mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),))
+    #mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
+    refine_and_generate_chart_function(mesh, "plot.pdf", linear_func)
+    #refine_and_generate_chart_function(mesh, "plot.pdf", sine_func)
 
 
 def all_refine(num_mesh, depth, fname):
