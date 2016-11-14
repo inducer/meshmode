@@ -8,6 +8,12 @@ def add_tuples(a, b):
 def tesselatesegment():
     return [[(0,), (1,), (2,)], [(0, 1), (1, 2)]]
 
+def tesselateseg():
+    node_tuples = [(0,), (1,), (2,)]
+    result = [(0, 1), (1, 2)]
+    return [node_tuples, result]
+
+
 def tesselatetri():
     result = []
 
@@ -29,8 +35,8 @@ def tesselatetri():
     if len(result) > 0:
         return [node_tuples, result]
     for current in node_tuples:
-        # this is a tesselation of a cube into six tets.
-        # subtets that fall outside of the master tet are simply not added.
+        # this is a tesselation of a square into two triangles.
+        # subtriangles that fall outside of the master tet are simply not added.
 
         # positively oriented
         try_add_tri(current, (0, 0), (1, 0), (0, 1))

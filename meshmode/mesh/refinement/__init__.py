@@ -121,31 +121,6 @@ class Refiner(object):
         return self.previous_mesh
 
     def get_current_mesh(self):
-
-        from meshmode.mesh import Mesh
-        #return Mesh(vertices, [grp], nodal_adjacency=self.generate_nodal_adjacency(len(self.last_mesh.groups[group].vertex_indices) \
-        #            + count*3))
-        groups = []
-        grpn = 0
-        for grp in self.last_mesh.groups:
-            groups.append(np.empty([len(grp.vertex_indices),
-                len(self.last_mesh.groups[grpn].vertex_indices[0])], dtype=np.int32))
-            for iel_grp in range(grp.nelements):
-                for i in range(0, len(grp.vertex_indices[iel_grp])):
-                    groups[grpn][iel_grp][i] = grp.vertex_indices[iel_grp][i]
-            grpn += 1
-        grp = []
-
-        for grpn in range(0, len(groups)):
-            grp.append(make_group_from_vertices(self.last_mesh.vertices, groups[grpn], 4))
-        self.last_mesh = Mesh(
-                self.last_mesh.vertices, grp,
-                nodal_adjacency=self.generate_nodal_adjacency(
-                    len(self.last_mesh.groups[0].vertex_indices),
-                    len(self.last_mesh.vertices[0])),
-                vertex_id_dtype=self.last_mesh.vertex_id_dtype,
-                element_id_dtype=self.last_mesh.element_id_dtype)
-
         return self.last_mesh
 
 
@@ -394,6 +369,11 @@ class Refiner(object):
         :arg refine_flags: a :class:`numpy.ndarray` of dtype bool of length ``mesh.nelements``
             indicating which elements should be split.
         """
+
+        if len(refine_flags) != self.last_mesh.nelements:
+            raise ValueError("length of refine_flags does not match "
+                    "element count of last generated mesh")
+
         #vertices and groups for next generation
         nvertices = len(self.last_mesh.vertices[0])
 
@@ -445,7 +425,7 @@ class Refiner(object):
         for grp_index, grp in enumerate(self.last_mesh.groups):
             element_mapping = []
             tesselation = None
-            iel_base = grp.element_nr_base
+	    iel_base = grp.element_nr_base
             nelements_in_grp = grp.nelements
             for iel_grp in range(grp.nelements):
                 if refine_flags[iel_base + iel_grp]:
