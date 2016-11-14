@@ -226,29 +226,53 @@ def all_refine(num_mesh, depth, fname):
             generate_icosphere, generate_icosahedron,
             generate_torus, generate_regular_rect_mesh,
             generate_box_mesh)
+    cl_ctx = cl.create_some_context()
+    queue = cl.CommandQueue(cl_ctx)
     #mesh = generate_regular_rect_mesh()
-    mesh =  generate_box_mesh(3*(np.linspace(0, 3, 5),))
+    mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),))
     import timeit
     nelements = []
     runtimes = []
-    for el_fact in range(3):
+    for el_fact in range(1):
         #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
         r = Refiner(mesh)
-        for time in range(depth):
+        for time in range(3):
             flags = get_random_flags(mesh)
-            if time < depth-1:
-                mesh = r.refine(flags)
-            else:
-                start = timeit.default_timer()
-                mesh = r.refine(flags)
-                stop = timeit.default_timer()
-                nelements.append(mesh.nelements)
-                runtimes.append(stop-start)
+            mesh = r.refine(flags)
+            #flags = np.zeros(mesh.nelements)
+            #flags[0] = 1
+            #if time < depth-1:
+            #    mesh = r.refine(flags)
+            #else:
+            #    start = timeit.default_timer()
+            #    mesh = r.refine(flags)
+            #    stop = timeit.default_timer()
+            #    nelements.append(mesh.nelements)
+            #    runtimes.append(stop-start)
+            #print(r.groups)
         check_nodal_adj_against_geometry(mesh)
-        from meshmode.mesh.visualization import draw_2d_mesh
-        draw_2d_mesh(mesh, False, False, False, fill=None)
-        import matplotlib.pyplot as pt
-        pt.show()
+        #from meshmode.mesh.visualization import draw_2d_mesh
+        #draw_2d_mesh(mesh, False, True, True, fill=None)
+        #import matplotlib.pyplot as pt
+        #pt.show()
+        #from meshmode.discretization import Discretization
+        #from meshmode.discretization.poly_element import \
+        #        PolynomialWarpAndBlendGroupFactory
+        #discr = Discretization(
+        #        cl_ctx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+        #from meshmode.discretization.visualization import make_visualizer
+        #vis = make_visualizer(queue, discr, order)
+        #remove_if_exists("connectivity2.vtu")
+        #remove_if_exists("geometry2.vtu")
+        #vis.write_vtk_file("geometry2.vtu", [
+        #    ("f", discr.nodes()[0]),
+        #    ])
+
+        #from meshmode.discretization.visualization import \
+        #        write_nodal_adjacency_vtk_file
+
+        #write_nodal_adjacency_vtk_file("connectivity2.vtu",
+        #        mesh)
     import matplotlib.pyplot as pt
     pt.plot(nelements, runtimes, "o")
     pt.savefig(fname)

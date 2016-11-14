@@ -113,7 +113,9 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
     #
     # Element A will see element B (its vertices are near B) but not the other
     # way around.
-
+    #for i in range(len(connected_to_element_geometry)):
+    #    if connected_to_element_geometry[i] != connected_to_element_connectivity[i]:
+    #        print (i, connected_to_element_connectivity[i], connected_to_element_geometry[i])
     assert connected_to_element_geometry == connected_to_element_connectivity
 
 # }}}

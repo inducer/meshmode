@@ -107,7 +107,7 @@ def tesselatecube():
             (ituple, idx)
             for idx, ituple in enumerate(node_tuples))
 
-    def try_add_cube(current, d1, d2, d3, d4, d5, d6):
+    def try_add_cube(current, d1, d2, d3, d4, d5, d6, d7, d8):
         try:
             result.append((
                 node_dict[add_tuples(current, d1)],
@@ -116,10 +116,16 @@ def tesselatecube():
                 node_dict[add_tuples(current, d4)],
                 node_dict[add_tuples(current, d5)],
                 node_dict[add_tuples(current, d6)],
+                node_dict[add_tuples(current, d7)],
+                node_dict[add_tuples(current, d8)],
                 ))
         except KeyError:
             pass
 
-    return [[], []]
+    result = []
+    for current in node_tuples:
+        try_add_cube(current, (0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 1, 1), (0, 0, 1), (1, 0, 1), (1, 1, 1))
+
+    return [node_tuples, result]
     
 
