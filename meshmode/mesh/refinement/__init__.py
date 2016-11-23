@@ -442,7 +442,7 @@ class Refiner(object):
         for grp_index, grp in enumerate(self.last_mesh.groups):
             element_mapping = []
             tesselation = None
-	    iel_base = grp.element_nr_base
+            iel_base = grp.element_nr_base
             nelements_in_grp = grp.nelements
             for iel_grp in range(grp.nelements):
                 if refine_flags[iel_base + iel_grp]:
