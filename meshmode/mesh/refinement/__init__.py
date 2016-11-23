@@ -44,9 +44,25 @@ class Refiner(object):
 
     # {{{ constructor
 
+    #reorder node tuples array so that only one coordinate changes between adjacent indices
+    def reorder(self, arr):
+        from six.moves import range
+        res = []
+        res.append(arr.pop(0))
+        while len(arr) > 0:
+            for i in range(len(arr)):
+                count = 0
+                for j in range(len(arr[i])):
+                    if res[len(res)-1][j] != arr[i][j]:
+                        count += 1
+                if count == 1:
+                    res.append(arr.pop(i))
+                    break
+        return res
+
     def __init__(self, mesh):
         from six.moves import range
-        from meshmode.mesh.tesselate import tesselatetet, tesselatetri, tesselatesquare, tesselatesegment, tesselatecube
+        from meshmode.mesh.tesselate import tesselatetet, tesselatetri, tesselatesquare, tesselatesegment, tesselatepoint, tesselatecube
         self.pair_map = {}
         self.groups = []
         self.group_refinement_records = []
@@ -55,13 +71,13 @@ class Refiner(object):
         segment_node_tuples, segment_result = tesselatesegment()
         square_node_tuples, square_result = tesselatesquare()
         cube_node_tuples, cube_result = tesselatecube()
-        self.simplex_node_tuples = [None, segment_node_tuples, tri_node_tuples, tet_node_tuples]
+        point_node_tuples, point_result = tesselatepoint()
+        self.simplex_node_tuples = [point_node_tuples, segment_node_tuples, tri_node_tuples, tet_node_tuples]
         # Dimension-parameterized tesselations for refinement
-        self.simplex_result = [None, segment_result, tri_result, tet_result]
-        self.quad_node_tuples = [None, segment_node_tuples, square_node_tuples, cube_node_tuples]
-        self.quad_result = [None, segment_result, square_result, cube_result]
+        self.simplex_result = [point_result, segment_result, tri_result, tet_result]
+        self.quad_node_tuples = [point_node_tuples, segment_node_tuples, square_node_tuples, cube_node_tuples]
+        self.quad_result = [point_result, segment_result, square_result, cube_result]
         self.last_mesh = mesh
-        print(self.quad_node_tuples, self.quad_result)
 
         nvertices = len(mesh.vertices[0])
         self.adjacent_set = [set() for _ in range(nvertices)]
@@ -101,6 +117,8 @@ class Refiner(object):
             self.simplex_index_to_midpoint_tuple.append(cur_simplex_index_to_midpiont_tuple)
             self.quad_index_to_node_tuple.append(cur_quad_index_to_node_tuple)
             self.quad_index_to_midpoint_tuple.append(cur_quad_index_to_midpoint_tuple)
+        for i in range(len(self.quad_index_to_node_tuple)):
+            self.quad_index_to_node_tuple[i] = self.reorder(self.quad_index_to_node_tuple[i])
 
     # }}}
 
@@ -183,7 +201,7 @@ class Refiner(object):
                 result_vertices.append(current_subelement_vertices)
             return (result_vertices, dimension)
         #move to lower dimension
-        result_vertices = list(combinations(vertices, len(vertices)-1))
+        result_vertices = list(combinations(vertices, len(index_to_node_tuple[dimension-1])))
         return (result_vertices, dimension-1)
 
     def remove_from_adjacent_set(self, element_index, vertices, dimension, result_tuples, node_tuples, index_to_node_tuple):
@@ -376,7 +394,6 @@ class Refiner(object):
 
         #vertices and groups for next generation
         nvertices = len(self.last_mesh.vertices[0])
-
         self.groups = []
 
         midpoint_already = set()
@@ -406,8 +423,8 @@ class Refiner(object):
                                 index_tuple not in self.pair_map and \
                                 midpoint_tuple not in midpoint_tuple_to_index:
                                         nvertices += 1
-                                        midpoint_already.add(index_tuple)
-                                        midpoint_tuple_to_index[midpoint_tuple] = index_tuple
+                            midpoint_already.add(index_tuple)
+                            midpoint_tuple_to_index[midpoint_tuple] = index_tuple
             self.groups.append(np.empty([nelements, len(grp.vertex_indices[iel_grp])], dtype=np.int32))
             grpn += 1
             totalnelements += nelements

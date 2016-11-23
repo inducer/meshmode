@@ -5,6 +5,8 @@ from pytools import generate_nonnegative_integer_tuples_below as gnitb
 def add_tuples(a, b):
     return tuple(ac+bc for ac, bc in zip(a, b))
 
+def tesselatepoint():
+    return [[(0,)], [(0,)]]
 def tesselatesegment():
     return [[(0,), (1,), (2,)], [(0, 1), (1, 2)]]
 
