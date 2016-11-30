@@ -96,7 +96,7 @@ class Refiner(object):
         self.quad_index_to_node_tuple = []
         self.quad_index_to_midpoint_tuple = []
         #put tuples that don't have a 1 in index_to_node_tuple, and put those that do in index_to_midpoint_tuple
-        for d in range(len(vert_indices)):
+        for d in range(4):
             cur_simplex_index_to_node_tuple = []
             cur_simplex_index_to_midpiont_tuple = []
             cur_quad_index_to_node_tuple = []
@@ -147,20 +147,15 @@ class Refiner(object):
     # {{{ refinement
 
     def nelements_after_refining(self, group_index, iel_grp):
+        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
         grp = self.last_mesh.groups[group_index]
         element_vertices = grp.vertex_indices[iel_grp]
-        dimension = len(self.last_mesh.vertices)
-        #triangle
-        if len(element_vertices) == 3 and dimension == 2:
+        dimension = self.last_mesh.groups[group_index].dim
+        #simplex
+        if isinstance(self.last_mesh.groups[group_index], SimplexElementGroup):
             return (len(self.simplex_result[dimension]))
-        #tet
-        if len(element_vertices) == 4 and dimension == 3:
-            return (len(self.simplex_result[dimension]))
-        #square:
-        if len(element_vertices) == 4 and dimension == 2:
-            return len(self.quad_result[dimension])
-        #cube
-        if len(element_vertices) == 8 and dimension == 3:
+        #quad
+        elif isinstance(self.last_mesh.groups[group_index], TensorProductElementGroup):
             return len(self.quad_result[dimension])
 
     def midpoint_of_node_tuples(self, tupa, tupb):
@@ -223,9 +218,9 @@ class Refiner(object):
                 self.add_to_adjacent_set(element_index, cur_vertices, next_dimension, result_tuples, node_tuples, index_to_node_tuple)
 
     #creates midpoints in result_vertices and updates adjacent_set with midpoint vertices
-    def create_midpoints(self, element_vertices, nvertices, index_to_node_tuple):
+    def create_midpoints(self, group_index, element_vertices, nvertices, index_to_node_tuple):
         from six.moves import range
-        dimension = len(self.last_mesh.vertices)
+        dimension = self.last_mesh.groups[group_index].dim
         midpoint_tuple_to_index = {}
         for i in range(len(element_vertices)):
             for j in range(i+1, len(element_vertices)):
@@ -269,6 +264,7 @@ class Refiner(object):
             if subelement_index == 0:
                 result_vertices = []
                 for i, index in enumerate(subelement):
+                    
                     cur_node_tuple = node_tuples[dimension][index]
                     self.groups[group_index][element_index][i] = node_tuple_to_vertex_index[cur_node_tuple]
                     result_vertices.append(node_tuple_to_vertex_index[cur_node_tuple])
@@ -290,9 +286,9 @@ class Refiner(object):
         grp = self.last_mesh.groups[group_index]
         iel_base = grp.element_nr_base
         element_vertices = grp.vertex_indices[iel_grp]
-        dimension = len(self.last_mesh.vertices)
+        dimension = self.last_mesh.groups[group_index].dim
         self.remove_from_adjacent_set(iel_base + iel_grp, element_vertices, dimension, result_tuples, node_tuples, index_to_node_tuple)
-        nvertices = self.create_midpoints(element_vertices, nvertices, index_to_node_tuple)
+        nvertices = self.create_midpoints(group_index, element_vertices, nvertices, index_to_node_tuple)
         element_mapping.append([])
         (subelement_indices_and_vertices, nelements_in_grp, element_mapping) = self.create_elements(iel_grp, 
                 element_vertices, dimension, group_index, nelements_in_grp, element_mapping,
@@ -314,35 +310,21 @@ class Refiner(object):
         return result
     
     def perform_refinement(self, group_index, iel_grp, nelements_in_grp, nvertices, element_mapping, tesselation):
+        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+        #SimplexElementGroup and TensorProduct in meshmode.mesh
         grp = self.last_mesh.groups[group_index]
         element_vertices = grp.vertex_indices[iel_grp]
-        dimension = len(self.last_mesh.vertices)
-        #triangle
-        if len(element_vertices) == 3 and dimension == 2:
+        dimension = self.last_mesh.groups[group_index].dim
+        #simplex
+        if isinstance(self.last_mesh.groups[group_index], SimplexElementGroup):
             tesselation = self._Tesselation(
                 self.simplex_result[dimension], self.simplex_node_tuples[dimension])
             return self.refinement(group_index, iel_grp, nelements_in_grp, nvertices, element_mapping, 
                     self.simplex_result, self.simplex_node_tuples,
                     self.simplex_index_to_node_tuple
                     ) + (tesselation,)
-        #tet
-        elif len(element_vertices) == 4 and dimension == 3:
-            tesselation = self._Tesselation(
-                self.simplex_result[dimension], self.simplex_node_tuples[dimension])
-            return self.refinement(group_index, iel_grp, nelements_in_grp, nvertices, element_mapping, 
-                    self.simplex_result, self.simplex_node_tuples,
-                    self.simplex_index_to_node_tuple
-                    ) + (tesselation,)
-        #square
-        elif len(element_vertices) == 4 and dimension == 2:
-            tesselation = self._Tesselation(
-                self.quad_result[dimension], self.quad_node_tuples[dimension])
-            return self.refinement(group_index, iel_grp, nelements_in_grp, nvertices, element_mapping, 
-                    self.quad_result, self.quad_node_tuples,
-                    self.quad_index_to_node_tuple
-                    ) + (tesselation,)
-        #cube
-        elif len(element_vertices) == 8 and dimension == 3:
+        #quad
+        elif isinstance(self.last_mesh.groups[group_index], TensorProductElementGroup):
             tesselation = self._Tesselation(
                 self.quad_result[dimension], self.quad_node_tuples[dimension])
             return self.refinement(group_index, iel_grp, nelements_in_grp, nvertices, element_mapping, 
@@ -352,36 +334,30 @@ class Refiner(object):
 
     def get_elements_connected_to(self, result_groups, group_index, iel_base, iel_grp): 
         import copy
+        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
         grp = result_groups[group_index]
         element_vertices = copy.deepcopy(grp[iel_grp])
-        dimension = len(self.last_mesh.vertices)
-        #triangle
-        if len(element_vertices) == 3 and dimension == 2:
+        dimension = self.last_mesh.groups[group_index].dim
+        #simplex
+        if isinstance(self.last_mesh.groups[group_index], SimplexElementGroup):
             return self.elements_connected_to(iel_base+iel_grp, element_vertices, dimension,
                     self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
-        #tet
-        if len(element_vertices) == 4 and dimension == 3:
-            return self.elements_connected_to(iel_base+iel_grp, element_vertices, dimension,
-                    self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
-        #square
-        if len(element_vertices) == 4 and dimension == 2:
-            return self.elements_connected_to(iel_base+iel_grp, element_vertices, dimension,
-                    self.quad_result, self.quad_node_tuples, self.quad_index_to_node_tuple)
-        if len(element_vertices) == 8 and dimension == 3:
+        #quad
+        elif isinstance(self.last_mesh.groups[group_index], TensorProductElementGroup):
             return self.elements_connected_to(iel_base+iel_grp, element_vertices, dimension,
                     self.quad_result, self.quad_node_tuples, self.quad_index_to_node_tuple)
 
-    def element_index_to_node_tuple(self, num_vertices, dimension):
-        if num_vertices == 3 and dimension == 2:
+    def element_index_to_node_tuple(self, grp):
+        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+        #simplex
+        if isinstance(grp, SimplexElementGroup):
             return self.simplex_index_to_node_tuple
-        if num_vertices == 4 and dimension == 3:
-            return self.simplex_index_to_node_tuple
-        if num_vertices == 4 and dimension == 2:
-            return self.quad_index_to_node_tuple
-        if num_vertices == 8 and dimension == 3:
+        #quad
+        elif isinstance(grp, TensorProductElementGroup):
             return self.quad_index_to_node_tuple
 
     def refine(self, refine_flags):
+        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
         from six.moves import range
         """
         :arg refine_flags: a :class:`numpy.ndarray` of dtype bool of length ``mesh.nelements``
@@ -403,11 +379,12 @@ class Refiner(object):
         for grp_index, grp in enumerate(self.last_mesh.groups):
             iel_base = grp.element_nr_base
             nelements = 0
+            resampler = None
             for iel_grp in range(grp.nelements):
                 nelements += 1
                 vertex_indices = grp.vertex_indices[iel_grp]
-                dimension = len(self.last_mesh.vertices)
-                index_to_node_tuple = self.element_index_to_node_tuple(len(vertex_indices), dimension)
+                dimension = self.last_mesh.groups[grp_index].dim
+                index_to_node_tuple = self.element_index_to_node_tuple(grp)
                 midpoint_tuple_to_index = {}
                 if refine_flags[iel_base+iel_grp]:
                     cur_dim = len(grp.vertex_indices[iel_grp])-1
@@ -456,9 +433,28 @@ class Refiner(object):
                 self._GroupRefinementRecord(tesselation, element_mapping))
 
         grp = []
-        for grpn in range(0, len(self.groups)):
-            grp.append(make_group_from_vertices(self.vertices, self.groups[grpn], 4))
+        #for grpn in range(0, len(self.groups)):
+        #    grp.append(make_group_from_vertices(self.vertices, self.groups[grpn], 4))
 
+        for refinement_record, group, prev_group in zip(
+                self.group_refinement_records, self.groups, self.last_mesh.groups):
+            is_simplex = isinstance(prev_group, SimplexElementGroup)
+            ambient_dim = self.last_mesh.ambient_dim
+            nelements = len(self.groups)
+            nunit_nodes = len(prev_group.unit_nodes[0])
+
+            nodes = np.empty(
+                    (ambient_dim, nelements, nunit_nodes),
+                    dtype=prev_group.nodes.dtype)
+            
+            element_mapping = refinement_record.element_mapping
+
+            to_resample = [elem for elem in range(len(element_mapping))
+                    if len(element_mapping[elem]) > 1]
+            
+            if to_resample:
+                if is_simplex:
+                    from meshmode.mesh.refinement
         from meshmode.mesh import Mesh
 
         self.previous_mesh = self.last_mesh
