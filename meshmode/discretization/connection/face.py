@@ -36,7 +36,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class FRESTR_INTERIOR_FACES:
+class FRESTR_INTERIOR_FACES:  # noqa
     """A special value to pass to
     :func:`meshmode.discretization.connection.make_face_restriction`
     to produce a discretization consisting of all interior faces
@@ -44,7 +44,7 @@ class FRESTR_INTERIOR_FACES:
     """
 
 
-class FRESTR_ALL_FACES:
+class FRESTR_ALL_FACES:  # noqa
     """A special value to pass to
     :func:`meshmode.discretization.connection.make_face_restriction`
     to produce a discretization consisting of all faces (interior and boundary)

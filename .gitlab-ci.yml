@@ -10,6 +10,7 @@ Python 2.7 AMD CPU:
   - amd-cl-cpu
   except:
   - tags
+
 Python 2.7 POCL:
   script:
   - export PY_EXE=python2.7
@@ -22,6 +23,7 @@ Python 2.7 POCL:
   - pocl
   except:
   - tags
+
 Python 3.5 POCL:
   script:
   - export PY_EXE=python3.5
@@ -34,6 +36,7 @@ Python 3.5 POCL:
   - pocl
   except:
   - tags
+
 Documentation:
   script:
   - EXTRA_INSTALL="numpy"
@@ -43,3 +46,12 @@ Documentation:
   - python3.5
   only:
   - master
+
+Flake8:
+  script:
+  - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-flake8.sh
+  - ". ./prepare-and-run-flake8.sh meshmode test"
+  tags:
+  - python3.5
+  except:
+  - tags
