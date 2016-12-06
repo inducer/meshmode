@@ -59,12 +59,12 @@ Predefined Boundary tags
 
 # {{{ element tags
 
-class BTAG_NONE(object):
+class BTAG_NONE(object):  # noqa
     """A boundary tag representing an empty boundary or volume."""
     pass
 
 
-class BTAG_ALL(object):
+class BTAG_ALL(object):  # noqa
     """A boundary tag representing the entire boundary or volume.
 
     In the case of the boundary, TAG_ALL does not include rank boundaries,
@@ -72,7 +72,7 @@ class BTAG_ALL(object):
     pass
 
 
-class BTAG_REALLY_ALL(object):
+class BTAG_REALLY_ALL(object):  # noqa
     """A boundary tag representing the entire boundary.
 
     Unlike :class:`TAG_ALL`, this includes rank boundaries,
@@ -80,7 +80,7 @@ class BTAG_REALLY_ALL(object):
     pass
 
 
-class BTAG_NO_BOUNDARY(object):
+class BTAG_NO_BOUNDARY(object):  # noqa
     """A boundary tag indicating that this edge should not fall under
     :class:`TAG_ALL`. Among other things, this is used to keep rank boundaries
     out of :class:`BTAG_ALL`.
@@ -589,7 +589,8 @@ class Mesh(Record):
                 assert nodal_adjacency.neighbors_starts.shape == (self.nelements+1,)
                 assert len(nodal_adjacency.neighbors.shape) == 1
 
-                assert nodal_adjacency.neighbors_starts.dtype == self.element_id_dtype
+                assert (nodal_adjacency.neighbors_starts.dtype
+                        == self.element_id_dtype)
                 assert nodal_adjacency.neighbors.dtype == self.element_id_dtype
 
             if facial_adjacency_groups:
