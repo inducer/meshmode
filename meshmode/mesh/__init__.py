@@ -95,6 +95,8 @@ SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY])
 
 # {{{ element group
 
+# {{{ base class
+
 class MeshElementGroup(Record):
     """A group of elements sharing a common reference element.
 
@@ -221,6 +223,10 @@ class MeshElementGroup(Record):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+# }}}
+
+
+# {{{ simplex
 
 class SimplexElementGroup(MeshElementGroup):
     def __init__(self, order, vertex_indices, nodes,
@@ -292,6 +298,10 @@ class SimplexElementGroup(MeshElementGroup):
         from modepy.tools import unit_vertices
         return unit_vertices(self.dim)
 
+# }}}
+
+
+# {{{ tensor-product
 
 class TensorProductElementGroup(MeshElementGroup):
     def __init__(self, order, vertex_indices, nodes,
@@ -327,6 +337,8 @@ class TensorProductElementGroup(MeshElementGroup):
 
     def vertex_unit_coordinates(self):
         raise NotImplementedError()
+
+# }}}
 
 # }}}
 
