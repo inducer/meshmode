@@ -75,10 +75,10 @@ def uniform_refine_flags(mesh):
 
 @pytest.mark.parametrize(("case_name", "mesh_gen", "flag_gen", "num_generations"), [
     # Fails?
-    # ("icosahedron",
-    #     partial(generate_icosahedron, 1, order=1),
-    #     partial(random_refine_flags, 0.4),
-    #     3),
+     #("icosahedron",
+     #    partial(generate_icosahedron, 1, order=1),
+     #    partial(random_refine_flags, 0.4),
+     #    3),
 
     ("3_to_1_ellipse_unif",
         partial(
@@ -125,6 +125,7 @@ def uniform_refine_flags(mesh):
             np.linspace(0, 1, 2)), order=1),
         uniform_refine_flags,
         3),
+    #add quad test
     ])
 def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
     from random import seed

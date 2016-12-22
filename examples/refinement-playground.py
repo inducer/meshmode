@@ -229,21 +229,21 @@ def all_refine(num_mesh, depth, fname):
     from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    print("BEGIN GEN")
-    mesh = generate_gmsh(
-            ScriptWithFilesSource(
-                """
-                Merge "../test/blob-2d.step";
-                Mesh.CharacteristicLengthMax = 0.05;
-                Recombine Surface "*" = 0.0001;
-                Mesh 2;
-                Save "output.msh";
-                """,
-                ["blob-2d.step"]),
-            force_ambient_dim=2,
-            )
-    print("END GEN")
-    #mesh = generate_regular_rect_mesh()
+    #print("BEGIN GEN")
+    #mesh = generate_gmsh(
+    #        ScriptWithFilesSource(
+    #            """
+    #            Merge "../test/blob-2d.step";
+    #            Mesh.CharacteristicLengthMax = 0.05;
+    #            Recombine Surface "*" = 0.0001;
+    #            Mesh 2;
+    #            Save "output.msh";
+    #            """,
+    #            ["blob-2d.step"]),
+    #        force_ambient_dim=2,
+    #        )
+    #print("END GEN")
+    mesh = generate_regular_rect_mesh()
     #mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),))
     import timeit
     nelements = []
