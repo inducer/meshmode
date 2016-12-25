@@ -478,13 +478,12 @@ class Refiner(object):
                 self._GroupRefinementRecord(tesselation, element_mapping))
 
         grp = []
-        #is_quad = isinstance(prev_group, TensorProductElementGroup)
-        #if is_quad:
-        #    for grpn in range(0, len(self.groups)):
-        #        grp.append(make_group_from_vertices(self.vertices, self.groups[grpn], 4))
-        #else:
         for refinement_record, group, prev_group in zip(
                 self.group_refinement_records, self.groups, self.last_mesh.groups):
+            is_quad = isinstance(prev_group, TensorProductElementGroup)
+            if is_quad:
+                grp.append(make_group_from_vertices(self.vertices, group, 4))
+                continue
             is_simplex = isinstance(prev_group, SimplexElementGroup)
             ambient_dim = self.last_mesh.ambient_dim
             nelements = len(group)
