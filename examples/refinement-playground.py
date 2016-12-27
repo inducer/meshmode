@@ -248,28 +248,45 @@ def all_refine(num_mesh, depth, fname):
     import timeit
     nelements = []
     runtimes = []
-    for el_fact in range(1):
-        #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
-        r = Refiner(mesh)
-        for time in range(3):
-            flags = get_random_flags(mesh)
-            mesh = r.refine(flags)
-            #flags = np.zeros(mesh.nelements)
-            #flags[0] = 1
-            #if time < depth-1:
-            #    mesh = r.refine(flags)
-            #else:
-            #    start = timeit.default_timer()
-            #    mesh = r.refine(flags)
-            #    stop = timeit.default_timer()
-            #    nelements.append(mesh.nelements)
-            #    runtimes.append(stop-start)
-            #print(r.groups)
-        check_nodal_adj_against_geometry(mesh)
-        #from meshmode.mesh.visualization import draw_2d_mesh
-        #draw_2d_mesh(mesh, False, True, True, fill=None)
-        #import matplotlib.pyplot as pt
-        #pt.show()
+    r = Refiner(mesh)
+    nels = mesh.nelements
+    print(nels)
+    flags = get_random_flags(mesh)
+    mesh = r.refine(flags)
+    from meshmode.mesh.visualization import draw_2d_mesh
+    draw_2d_mesh(mesh, True, True, True, fill=None)
+    import matplotlib.pyplot as pt
+    pt.show()
+    check_nodal_adj_against_geometry(mesh)
+    to_coarsen = []
+    for ind, i in enumerate(flags):
+        if i:
+            to_coarsen.append([ind, nels, nels + 1, nels + 2])
+            nels += 3
+    mesh = r.coarsen(to_coarsen)
+    check_nodal_adj_against_geometry(mesh)
+#    for el_fact in range(1):
+#        #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
+#        r = Refiner(mesh)
+#        for time in range(3):
+#            print('refining')
+#            flags = get_random_flags(mesh)
+#            mesh = r.refine(flags)
+#            #flags = np.zeros(mesh.nelements)
+#            #flags[0] = 1
+#            #if time < depth-1:
+#            #    mesh = r.refine(flags)
+#            #else:
+#            #    start = timeit.default_timer()
+#            #    mesh = r.refine(flags)
+#            #    stop = timeit.default_timer()
+#            #    nelements.append(mesh.nelements)
+#            #    runtimes.append(stop-start)
+#            #print(r.groups)
+    from meshmode.mesh.visualization import draw_2d_mesh
+    draw_2d_mesh(mesh, False, True, True, fill=None)
+    import matplotlib.pyplot as pt
+    pt.show()
         #from meshmode.discretization import Discretization
         #from meshmode.discretization.poly_element import \
         #        PolynomialWarpAndBlendGroupFactory

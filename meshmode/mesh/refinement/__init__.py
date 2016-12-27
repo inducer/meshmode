@@ -355,6 +355,138 @@ class Refiner(object):
         elif isinstance(grp, TensorProductElementGroup):
             return self.quad_index_to_node_tuple
 
+    def group_index(self, el):
+        for grp_index, grp in enumerate(self.last_mesh.groups):
+            iel_base = grp.element_nr_base
+            if iel_base > el:
+                return grp_index - 1
+        return len(self.last_mesh.groups)-1
+
+    def update_coarsen_connectivity(self, coarsen_el, new_el_index, old_vertices, new_vertices, dimension, result, node_tuples, index_to_node_tuple):
+        from six.moves import range
+        for el_index, el in enumerate(coarsen_el):
+            self.remove_from_adjacent_set(el, old_vertices[el_index], dimension, result, node_tuples, index_to_node_tuple)
+        #remove midpoints from pair_map
+        for i in range(len(new_vertices)):
+            for j in range(i+1, len(new_vertices)):
+                indices_pair = (i, j) if i < j else (i, j)
+                if indices_pair in self.pair_map:
+                    del self.pair_map[indices_pair]
+        self.add_to_adjacent_set(new_el_index, new_vertices, dimension, result, node_tuples, index_to_node_tuple)
+
+    def coarsen(self, coarsen_els):
+        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+        from six.moves import range
+        import copy
+        nvertices = len(self.last_mesh.vertices[0])
+        grp_nelements_to_remove = {}
+        self.groups = []
+        midpoints = set()
+        for to_coarsen in coarsen_els:
+            vertices_seen = {}
+            grp_index = self.group_index(to_coarsen[0])
+            grp = self.last_mesh.groups[grp_index]
+            if grp_index not in grp_nelements_to_remove:
+                grp_nelements_to_remove[grp_index] = 0
+            if isinstance(grp, SimplexElementGroup):
+                grp_nelements_to_remove[grp_index] += len(self.simplex_result[grp.dim]) - 1
+            elif isinstance(grp, TensorProductElementGroup):
+                grp_nelements_to_remove[grp_index] += len(self.quad_result[grp.dim]) - 1
+            for el in to_coarsen:
+                vertex_indices = grp.vertex_indices[el]
+                for i in vertex_indices:
+                    if i not in vertices_seen:
+                        vertices_seen[i] = 0
+                    vertices_seen[i] += 1
+            for vertex in vertices_seen:
+                if vertices_seen[vertex] > 1:
+                    midpoints.add(vertex)
+        nvertices -= len(midpoints)
+        self.vertices = np.empty([len(self.last_mesh.vertices), nvertices])
+        to_coarsen_groups = []
+        totalnelements = 0
+        for grp_index, grp in enumerate(self.last_mesh.groups):
+            nelements = grp.nelements
+            to_coarsen_groups.append(np.zeros([nelements], dtype=np.int32))
+            if grp_index in grp_nelements_to_remove:
+                nelements -= grp_nelements_to_remove[grp_index]
+            self.groups.append(np.empty([nelements, len(grp.vertex_indices[0])], dtype=np.int32))
+            for el in range(nelements):
+                for ind in range(grp.dim):
+                    to_coarsen_groups[grp_index][el] = -1
+            totalnelements += nelements
+        for to_coarsen_index, to_coarsen in enumerate(coarsen_els):
+            grp_index = self.group_index(to_coarsen[0])
+            grp = self.last_mesh.groups[grp_index]
+            iel_base = grp.element_nr_base
+            for el in to_coarsen:
+                to_coarsen_groups[grp_index][el-iel_base] = to_coarsen_index
+        vertex_mapping = {}
+        for i in range(len(self.last_mesh.vertices)):
+            count = 0
+            for j in range(len(self.last_mesh.vertices[i])):
+                if j in midpoints:
+                    count += 1
+                else:
+                    self.vertices[i, j-count] = self.last_mesh.vertices[i, j]
+                    vertex_mapping[j] = j-count
+
+        coarsen_el_vertices = {}
+        coarsen_el_new_index = {}
+        for grp_index, grp in enumerate(self.last_mesh.groups):
+            cur_index = 0
+            seen_coarsen = set()
+            for el in range(grp.nelements):
+                coarsen_index = to_coarsen_groups[grp_index][el]
+                if coarsen_index == -1:
+                    self.groups[grp_index][cur_index] = copy.deepcopy(grp.vertex_indices[el])
+                    cur_index += 1
+                elif coarsen_index not in seen_coarsen:
+                    seen_coarsen.add(coarsen_index)
+                    coarsen_el_new_index[coarsen_index] = cur_index
+                    coarsen_el_vertices[coarsen_index] = []
+                    vertices = []
+                    for coarsen_el in coarsen_els[coarsen_index]:
+                        for i in grp.vertex_indices[coarsen_el]:
+                            vertices.append(i)
+                    cur_vertex_index = 0
+                    for vertex in vertices:
+                        if vertex not in midpoints:
+                            coarsen_el_vertices[coarsen_index].append(vertex)
+                            self.groups[grp_index][cur_index][cur_vertex_index] = vertex_mapping[vertex]
+                            cur_vertex_index += 1
+                    cur_index += 1
+        for coarsen_index, to_coarsen in enumerate(coarsen_els):
+            grp_index = self.group_index(to_coarsen[0])
+            coarsen_vertex_indices = []
+            grp = self.last_mesh.groups[grp_index]
+            for el in to_coarsen:
+                coarsen_vertex_indices.append(copy.deepcopy(grp.vertex_indices[el]))
+            if isinstance(grp, SimplexElementGroup):
+                self.update_coarsen_connectivity(to_coarsen, coarsen_el_new_index[coarsen_index], coarsen_vertex_indices,
+                        coarsen_el_vertices[coarsen_index], grp.dim, self.simplex_result, 
+                        self.simplex_node_tuples, self.simplex_index_to_node_tuple)
+            elif isinstance(grp, TensorProductElementGroup):
+                self.update_coarsen_connectivity(to_coarsen, coarsen_el_new_index[coarsen_index], coarsen_vertex_indices,
+                        coarsen_el_vertices[coarsen_index], grp.dim, self.quad_result, 
+                        self.quad_node_tuples, self.quad_index_to_node_tuple)
+
+        grp = []
+        for group in self.groups:
+            grp.append(make_group_from_vertices(self.vertices, group, 4))
+
+        from meshmode.mesh import Mesh
+
+        self.previous_mesh = self.last_mesh
+        self.last_mesh = Mesh(
+                self.vertices, grp,
+                nodal_adjacency=self.generate_nodal_adjacency(
+                    totalnelements, nvertices, self.groups),
+                vertex_id_dtype=self.last_mesh.vertex_id_dtype,
+                element_id_dtype=self.last_mesh.element_id_dtype)
+        return self.last_mesh
+        
+
     def refine(self, refine_flags):
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
         from six.moves import range
@@ -373,7 +505,6 @@ class Refiner(object):
 
         midpoints_to_find = []
         midpoint_already = set()
-        grpn = 0
         totalnelements = 0
         for grp_index, grp in enumerate(self.last_mesh.groups):
             iel_base = grp.element_nr_base
@@ -402,7 +533,6 @@ class Refiner(object):
                             midpoint_already.add(index_tuple)
                             midpoint_tuple_to_index[midpoint_tuple] = index_tuple
             self.groups.append(np.empty([nelements, len(grp.vertex_indices[iel_grp])], dtype=np.int32))
-            grpn += 1
             totalnelements += nelements
         self.vertices = np.empty([len(self.last_mesh.vertices), nvertices])
         #copy vertices
@@ -433,14 +563,12 @@ class Refiner(object):
                 tesselation = self._Tesselation(
                     self.quad_result[dimension], self.quad_node_tuples[dimension])
                 #replace with resampler
-                print(tesselation.ref_vertices)
                 num_midpoints = 0
                 for vertex in tesselation.ref_vertices:
                     if 1 in vertex:
                         num_midpoints += 1
                 midpoints = np.zeros((len(midpoints_to_find), len(self.last_mesh.vertices), 
                     num_midpoints))
-                print(midpoints)
                 midpoint_order = {}
                 cur_el = 0
                 for iel_grp in range(grp.nelements):
@@ -463,8 +591,6 @@ class Refiner(object):
                                     cur += 1
                         cur_el += 1
                 midpoints = dict(zip(midpoints_to_find, midpoints))
-                print("here")
-                print(midpoints)
             for iel_grp in range(grp.nelements):
                 if refine_flags[iel_base + iel_grp]:
                     (nelements_in_grp, nvertices, element_mapping) = \
@@ -509,7 +635,6 @@ class Refiner(object):
                             "unimplemented: node resampling for non simplex and non quad elements")
             for elem, mapped_elems in enumerate(element_mapping):
                 if len(mapped_elems) == 1:
-                    print(mapped_elems)
                     nodes[:, mapped_elems[0]] = prev_group.nodes[:, elem]
                     n = nodes[:, mapped_elems[0]]
                 else:
