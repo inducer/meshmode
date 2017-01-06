@@ -237,7 +237,8 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 
 # {{{ make_group_from_vertices
 
-def make_group_from_vertices(vertices, vertex_indices, order):
+from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+def make_group_from_vertices(vertices, vertex_indices, order, group_type=SimplexElementGroup):
     print(vertex_indices)
     el_vertices = vertices[:, vertex_indices]
 
@@ -264,8 +265,7 @@ def make_group_from_vertices(vertices, vertex_indices, order):
     # make contiguous
     nodes = nodes.copy()
 
-    from meshmode.mesh import SimplexElementGroup
-    return SimplexElementGroup(
+    return group_type(
             order, vertex_indices, nodes,
             unit_nodes=unit_nodes)
 

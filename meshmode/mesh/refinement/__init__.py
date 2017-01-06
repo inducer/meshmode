@@ -543,8 +543,11 @@ class Refiner(object):
         #                self.quad_node_tuples, self.quad_index_to_node_tuple)
 
         grp = []
-        for group in self.groups:
-            grp.append(make_group_from_vertices(self.vertices, group, 4))
+        for grp_index, group in enumerate(self.groups):
+            if isinstance(self.last_mesh.groups[grp_index], SimplexElementGroup):
+                grp.append(make_group_from_vertices(self.vertices, group, 4, SimplexElementGroup))
+            elif isinstance(self.last_mesh.groups[grp_index], TensorProductElementGroup):
+                grp.append(make_group_from_vertices(self.vertices, group, 4, TensorProductElementGroup))
 
         from meshmode.mesh import Mesh
 
@@ -678,7 +681,7 @@ class Refiner(object):
                 self.group_refinement_records, self.groups, self.last_mesh.groups):
             is_quad = isinstance(prev_group, TensorProductElementGroup)
             if is_quad:
-                grp.append(make_group_from_vertices(self.vertices, group, 4))
+                grp.append(make_group_from_vertices(self.vertices, group, 4, TensorProductElementGroup))
                 continue
             is_simplex = isinstance(prev_group, SimplexElementGroup)
             ambient_dim = self.last_mesh.ambient_dim

@@ -269,6 +269,8 @@ def all_refine(num_mesh, depth, fname):
             count += 1
     print(to_coarsen)
     mesh = r.coarsen(to_coarsen)
+    flags = get_random_flags(mesh)
+    mesh = r.refine(flags)
     check_nodal_adj_against_geometry(mesh)
 #    for el_fact in range(1):
 #        #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
