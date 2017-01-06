@@ -238,6 +238,7 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 # {{{ make_group_from_vertices
 
 def make_group_from_vertices(vertices, vertex_indices, order):
+    print(vertex_indices)
     el_vertices = vertices[:, vertex_indices]
 
     el_origins = el_vertices[:, :, 0][:, :, np.newaxis]

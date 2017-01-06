@@ -249,6 +249,8 @@ def all_refine(num_mesh, depth, fname):
     nelements = []
     runtimes = []
     r = Refiner(mesh)
+    flags = get_random_flags(mesh)
+    mesh = r.refine(flags)
     nels = mesh.nelements
     print(nels)
     flags = get_random_flags(mesh)
@@ -259,10 +261,13 @@ def all_refine(num_mesh, depth, fname):
     pt.show()
     check_nodal_adj_against_geometry(mesh)
     to_coarsen = []
+    count = 0
     for ind, i in enumerate(flags):
-        if i:
+        if i and count < 10:
             to_coarsen.append([ind, nels, nels + 1, nels + 2])
             nels += 3
+            count += 1
+    print(to_coarsen)
     mesh = r.coarsen(to_coarsen)
     check_nodal_adj_against_geometry(mesh)
 #    for el_fact in range(1):
