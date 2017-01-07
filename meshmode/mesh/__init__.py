@@ -326,7 +326,7 @@ class TensorProductElementGroup(MeshElementGroup):
 
         if vertex_indices.shape[-1] != 2**dims:
             raise ValueError("vertex_indices has wrong number of vertices per "
-                    "element. expected: %d, got: %d" % (dims+1,
+                    "element. expected: %d, got: %d" % (2**dims,
                         vertex_indices.shape[-1]))
 
         super(TensorProductElementGroup, self).__init__(order, vertex_indices, nodes,
