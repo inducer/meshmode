@@ -62,7 +62,7 @@ def _build_boundary_connection(queue, vol_discr, bdry_discr, connection_data,
         per_face_groups):
     from meshmode.discretization.connection import (
             InterpolationBatch, DiscretizationConnectionElementGroup,
-            DiscretizationConnection)
+            DirectDiscretizationConnection)
 
     ibdry_grp = 0
     batches = []
@@ -105,7 +105,7 @@ def _build_boundary_connection(queue, vol_discr, bdry_discr, connection_data,
 
     assert ibdry_grp == len(bdry_discr.groups)
 
-    return DiscretizationConnection(
+    return DirectDiscretizationConnection(
             vol_discr, bdry_discr, connection_groups,
             is_surjective=True)
 
@@ -180,10 +180,11 @@ def make_face_restriction(discr, group_factory, boundary_tag,
         each other one-to-one, and an interpolation batch is created
         per face.
 
-    :return: a :class:`meshmode.discretization.connection.DiscretizationConnection`
+    :return: a
+        :class:`meshmode.discretization.connection.DirectDiscretizationConnection`
         representing the new connection. The new boundary discretization can be
         obtained from the
-        :attr:`meshmode.discretization.connection.DiscretizationConnection.to_discr`
+        :attr:`meshmode.discretization.connection.DirectDiscretizationConnection.to_discr`
         attribute of the return value, and the corresponding new boundary mesh
         from that.
 
@@ -415,7 +416,7 @@ def make_face_to_all_faces_embedding(faces_connection, all_faces_discr):
                 "same number of groups")
 
     from meshmode.discretization.connection import (
-            DiscretizationConnection,
+            DirectDiscretizationConnection,
             DiscretizationConnectionElementGroup,
             InterpolationBatch)
 
@@ -477,7 +478,7 @@ def make_face_to_all_faces_embedding(faces_connection, all_faces_discr):
 
                     i_faces_grp += 1
 
-    return DiscretizationConnection(
+    return DirectDiscretizationConnection(
             faces_connection.to_discr,
             all_faces_discr,
             groups,
