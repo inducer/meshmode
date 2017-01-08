@@ -32,7 +32,7 @@ import pyopencl.array  # noqa
 def make_same_mesh_connection(to_discr, from_discr):
     from meshmode.discretization.connection import (
             InterpolationBatch, DiscretizationConnectionElementGroup,
-            DiscretizationConnection)
+            DirectDiscretizationConnection)
 
     if from_discr.mesh is not to_discr.mesh:
         raise ValueError("from_discr and to_discr must be based on "
@@ -56,7 +56,7 @@ def make_same_mesh_connection(to_discr, from_discr):
             groups.append(
                     DiscretizationConnectionElementGroup([ibatch]))
 
-    return DiscretizationConnection(
+    return DirectDiscretizationConnection(
             from_discr, to_discr, groups,
             is_surjective=True)
 

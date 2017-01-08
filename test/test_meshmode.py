@@ -505,7 +505,7 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
     # }}}
 
     from pytential import bind, sym
-    bdry_normals = bind(bdry_discr, sym.normal())(queue).as_vector(dtype=object)
+    bdry_normals = bind(bdry_discr, sym.normal(dim))(queue).as_vector(dtype=object)
 
     if visualize:
         bdry_vis.write_vtk_file("boundary.vtu", [
@@ -514,9 +514,9 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
 
     from pytential import bind, sym
     normal_outward_check = bind(bdry_discr,
-            sym.normal()
+            sym.normal(dim)
             |
-            (sym.Nodes() + 0.5*sym.ones_vec(dim)),
+            (sym.nodes(dim) + 0.5*sym.ones_vec(dim)),
             )(queue).as_scalar() > 0
 
     assert normal_outward_check.get().all(), normal_outward_check.get()
@@ -671,7 +671,7 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
         # {{{ check normals point outward
 
         normal_outward_check = bind(bdry_discr,
-                sym.normal() | sym.Nodes(),
+                sym.normal(mesh.ambient_dim) | sym.nodes(mesh.ambient_dim),
                 )(queue).as_scalar() > 0
 
         assert normal_outward_check.get().all(), normal_outward_check.get()

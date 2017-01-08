@@ -127,7 +127,8 @@ def make_refinement_connection(refiner, coarse_discr, group_factory):
         discretizing the fine mesh.
     """
     from meshmode.discretization.connection import (
-        DiscretizationConnectionElementGroup, DiscretizationConnection)
+        DiscretizationConnectionElementGroup,
+        DirectDiscretizationConnection)
 
     coarse_mesh = refiner.get_previous_mesh()
     fine_mesh = refiner.last_mesh
@@ -157,7 +158,7 @@ def make_refinement_connection(refiner, coarse_discr, group_factory):
 
     logger.info("building refinement connection: done")
 
-    return DiscretizationConnection(
+    return DirectDiscretizationConnection(
         from_discr=coarse_discr,
         to_discr=fine_discr,
         groups=groups,

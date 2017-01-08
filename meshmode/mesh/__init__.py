@@ -1,6 +1,4 @@
-from __future__ import division
-from __future__ import absolute_import
-from six.moves import range
+from __future__ import division, absolute_import
 
 __copyright__ = "Copyright (C) 2010,2012,2013 Andreas Kloeckner, Michael Tom"
 
@@ -24,7 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from six.moves import range
 import six
+
 import numpy as np
 import modepy as mp
 import numpy.linalg as la
@@ -59,12 +59,12 @@ Predefined Boundary tags
 
 # {{{ element tags
 
-class BTAG_NONE(object):
+class BTAG_NONE(object):  # noqa
     """A boundary tag representing an empty boundary or volume."""
     pass
 
 
-class BTAG_ALL(object):
+class BTAG_ALL(object):  # noqa
     """A boundary tag representing the entire boundary or volume.
 
     In the case of the boundary, TAG_ALL does not include rank boundaries,
@@ -72,7 +72,7 @@ class BTAG_ALL(object):
     pass
 
 
-class BTAG_REALLY_ALL(object):
+class BTAG_REALLY_ALL(object):  # noqa
     """A boundary tag representing the entire boundary.
 
     Unlike :class:`TAG_ALL`, this includes rank boundaries,
@@ -80,7 +80,7 @@ class BTAG_REALLY_ALL(object):
     pass
 
 
-class BTAG_NO_BOUNDARY(object):
+class BTAG_NO_BOUNDARY(object):  # noqa
     """A boundary tag indicating that this edge should not fall under
     :class:`TAG_ALL`. Among other things, this is used to keep rank boundaries
     out of :class:`BTAG_ALL`.
@@ -94,6 +94,8 @@ SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY])
 
 
 # {{{ element group
+
+# {{{ base class
 
 class MeshElementGroup(Record):
     """A group of elements sharing a common reference element.
@@ -221,6 +223,10 @@ class MeshElementGroup(Record):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+# }}}
+
+
+# {{{ simplex
 
 class SimplexElementGroup(MeshElementGroup):
     def __init__(self, order, vertex_indices, nodes,
@@ -292,6 +298,10 @@ class SimplexElementGroup(MeshElementGroup):
         from modepy.tools import unit_vertices
         return unit_vertices(self.dim)
 
+# }}}
+
+
+# {{{ tensor-product
 
 class TensorProductElementGroup(MeshElementGroup):
     def __init__(self, order, vertex_indices, nodes,
@@ -316,7 +326,7 @@ class TensorProductElementGroup(MeshElementGroup):
 
         if vertex_indices.shape[-1] != 2**dims:
             raise ValueError("vertex_indices has wrong number of vertices per "
-                    "element. expected: %d, got: %d" % (dims+1,
+                    "element. expected: %d, got: %d" % (2**dims,
                         vertex_indices.shape[-1]))
 
         super(TensorProductElementGroup, self).__init__(order, vertex_indices, nodes,
@@ -327,6 +337,8 @@ class TensorProductElementGroup(MeshElementGroup):
 
     def vertex_unit_coordinates(self):
         raise NotImplementedError()
+
+# }}}
 
 # }}}
 
@@ -589,7 +601,8 @@ class Mesh(Record):
                 assert nodal_adjacency.neighbors_starts.shape == (self.nelements+1,)
                 assert len(nodal_adjacency.neighbors.shape) == 1
 
-                assert nodal_adjacency.neighbors_starts.dtype == self.element_id_dtype
+                assert (nodal_adjacency.neighbors_starts.dtype
+                        == self.element_id_dtype)
                 assert nodal_adjacency.neighbors.dtype == self.element_id_dtype
 
             if facial_adjacency_groups:
