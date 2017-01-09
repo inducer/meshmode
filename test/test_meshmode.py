@@ -857,6 +857,50 @@ def no_test_quad_mesh_3d():
 # }}}
 
 
+def test_quad_single_element():
+    from meshmode.mesh.generation import make_group_from_vertices
+    from meshmode.mesh import Mesh, TensorProductElementGroup
+
+    vertices = np.array([
+                [0.91, 1.10],
+                [2.64, 1.27],
+                [0.97, 2.56],
+                [3.00, 3.41],
+                ]).T
+    mg = make_group_from_vertices(
+            vertices,
+            np.array([[0, 1, 2, 3]], dtype=np.int32),
+            30, group_factory=TensorProductElementGroup)
+
+    Mesh(vertices, [mg], nodal_adjacency=None, facial_adjacency_groups=None)
+    if 0:
+        import matplotlib.pyplot as plt
+        plt.plot(
+                mg.nodes[0].reshape(-1),
+                mg.nodes[1].reshape(-1), "o")
+        plt.show()
+
+
+def test_quad_multi_element():
+    from meshmode.mesh.generation import generate_box_mesh
+    from meshmode.mesh import TensorProductElementGroup
+    mesh = generate_box_mesh(
+            (
+                np.linspace(3, 8, 4),
+                np.linspace(3, 8, 4),
+                np.linspace(3, 8, 4),
+                ),
+            10, group_factory=TensorProductElementGroup)
+
+    if 0:
+        import matplotlib.pyplot as plt
+        mg = mesh.groups[0]
+        plt.plot(
+                mg.nodes[0].reshape(-1),
+                mg.nodes[1].reshape(-1), "o")
+        plt.show()
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
