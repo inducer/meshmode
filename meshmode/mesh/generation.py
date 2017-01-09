@@ -237,34 +237,88 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 
 # {{{ make_group_from_vertices
 
-def make_group_from_vertices(vertices, vertex_indices, order):
+def make_group_from_vertices(vertices, vertex_indices, order,
+        group_factory=None):
+    # shape: (dim, nelements, nvertices)
     el_vertices = vertices[:, vertex_indices]
 
-    el_origins = el_vertices[:, :, 0][:, :, np.newaxis]
-    # ambient_dim, nelements, nspan_vectors
-    spanning_vectors = (
-            el_vertices[:, :, 1:] - el_origins)
+    from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
-    nspan_vectors = spanning_vectors.shape[-1]
-    dim = nspan_vectors
+    if group_factory is None:
+        group_factory = SimplexElementGroup
 
-    # dim, nunit_nodes
-    if dim <= 3:
-        unit_nodes = mp.warp_and_blend_nodes(dim, order)
+    if issubclass(group_factory, SimplexElementGroup):
+        el_origins = el_vertices[:, :, 0][:, :, np.newaxis]
+        # ambient_dim, nelements, nspan_vectors
+        spanning_vectors = (
+                el_vertices[:, :, 1:] - el_origins)
+
+        nspan_vectors = spanning_vectors.shape[-1]
+        dim = nspan_vectors
+
+        # dim, nunit_nodes
+        if dim <= 3:
+            unit_nodes = mp.warp_and_blend_nodes(dim, order)
+        else:
+            unit_nodes = mp.equidistant_nodes(dim, order)
+
+        unit_nodes_01 = 0.5 + 0.5*unit_nodes
+
+        nodes = np.einsum(
+                "si,des->dei",
+                unit_nodes_01, spanning_vectors) + el_origins
+
+    elif issubclass(group_factory, TensorProductElementGroup):
+        nelements, nvertices = vertex_indices.shape
+
+        dim = 0
+        while True:
+            if nvertices == 2**dim:
+                break
+            if nvertices < 2**dim:
+                raise ValueError("invalid number of vertices for tensor-product "
+                        "elements, must be power of two")
+            dim += 1
+
+        from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
+        from modepy.nodes import tensor_product_nodes
+        unit_nodes = tensor_product_nodes(dim, legendre_gauss_lobatto_nodes(order))
+        # shape: (dim, nnodes)
+        unit_nodes_01 = 0.5 + 0.5*unit_nodes
+
+        _, nnodes = unit_nodes.shape
+
+        from pytools import generate_nonnegative_integer_tuples_below as gnitb
+        id_tuples = list(gnitb(2, dim))
+        assert len(id_tuples) == nvertices
+
+        vdm = np.empty((nvertices, nvertices))
+        for i, vertex_tuple in enumerate(id_tuples):
+            for j, func_tuple in enumerate(id_tuples):
+                vertex_ref = np.array(vertex_tuple, dtype=np.float64)
+                vdm[i, j] = np.prod(vertex_ref**func_tuple)
+
+        # shape: (dim, nelements, nvertices)
+        coeffs = np.empty((dim, nelements, nvertices))
+        for d in range(dim):
+            coeffs[d] = la.solve(vdm, el_vertices[d].T).T
+
+        vdm_nodes = np.zeros((nnodes, nvertices))
+        for j, func_tuple in enumerate(id_tuples):
+            vdm_nodes[:, j] = np.prod(
+                    unit_nodes_01 ** np.array(func_tuple).reshape(-1, 1),
+                    axis=0)
+
+        nodes = np.einsum("ij,dej->dei", vdm_nodes, coeffs)
+
     else:
-        unit_nodes = mp.equidistant_nodes(dim, order)
-
-    unit_nodes_01 = 0.5 + 0.5*unit_nodes
-
-    nodes = np.einsum(
-            "si,des->dei",
-            unit_nodes_01, spanning_vectors) + el_origins
+        raise ValueError("unsupported value for 'group_factory': %s"
+                % group_factory)
 
     # make contiguous
     nodes = nodes.copy()
 
-    from meshmode.mesh import SimplexElementGroup
-    return SimplexElementGroup(
+    return group_factory(
             order, vertex_indices, nodes,
             unit_nodes=unit_nodes)
 
