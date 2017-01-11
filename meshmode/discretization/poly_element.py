@@ -80,6 +80,14 @@ class PolynomialSimplexElementGroupBase(ElementGroupBase):
 
     @memoize_method
     def diff_matrices(self):
+        if len(self.basis()) != self.unit_nodes.shape[1]:
+            from meshmode.discretization import NoninterpolatoryElementGroupError
+            raise NoninterpolatoryElementGroupError(
+                    "%s does not support interpolation because it is not "
+                    "unisolvent (its unit node count does not match its "
+                    "number of basis functions). Differentiation requires "
+                    "the ability to interpolate." % type(self).__name__)
+
         result = mp.differentiation_matrices(
                 self.basis(),
                 self.grad_basis(),

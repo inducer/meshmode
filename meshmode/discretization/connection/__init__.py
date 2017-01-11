@@ -156,7 +156,7 @@ class DiscretizationConnectionElementGroup(object):
 # }}}
 
 
-# {{{ connection class
+# {{{ connection classes
 
 class DiscretizationConnection(object):
     """Abstract interface for transporting a DOF vector from one
@@ -265,6 +265,14 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         import modepy as mp
         ibatch = self.groups[to_group_index].batches[ibatch_index]
         from_grp = self.from_discr.groups[ibatch.from_group_index]
+
+        if len(from_grp.basis()) != from_grp.unit_nodes.shape[1]:
+            from meshmode.discretization import NoninterpolatoryElementGroupError
+            raise NoninterpolatoryElementGroupError(
+                    "%s does not support interpolation because it is not "
+                    "unisolvent (its unit node count does not match its "
+                    "number of basis functions). Using connections requires "
+                    "the ability to interpolate." % type(from_grp).__name__)
 
         result = mp.resampling_matrix(
                 from_grp.basis(),

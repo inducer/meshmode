@@ -37,6 +37,10 @@ __doc__ = """
 
 # {{{ element group base
 
+class NoninterpolatoryElementGroupError(TypeError):
+    pass
+
+
 class ElementGroupBase(object):
     """Container for the :class:`Discretization` data corresponding to
     one :class:`meshmode.mesh.MeshElementGroup`.
