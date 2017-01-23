@@ -149,40 +149,71 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                             node_tuples = list(gnitb(2, 2))
                         elif nearby_grp.dim == 3:
                             node_tuples = list(gnitb(2, 3))
+
+                        # TODO: Shifting everything by nearby_origin_vertex should not be necessary
                         nearby_origin_vertex = mesh.vertices[
                                 :, nearby_grp.vertex_indices[nearby_iel][0]]  # noqa
+
                         vertex_transformed = vertex - nearby_origin_vertex
                         all_coeffs = np.ones((nearby_grp.dim, len(node_tuples)))
                         for cur_dim in range(nearby_grp.dim):
-                            coefficient_matrix = np.ones(
+                            vandermonde = np.ones(
                                     (len(node_tuples), len(node_tuples)))
+
+                            # i: row of vandermonde, what node
                             for i in range(len(node_tuples)):
+                                # j: column of vandermonde, what function
                                 for j in range(len(node_tuples)):
                                     for k in range(len(node_tuples[j])):
                                         if node_tuples[j][k] == 1:
-                                            coefficient_matrix[i][j] *= node_tuples[i][k]
+                                            vandermonde[i, j] *= node_tuples[i][k]
+
                             b = np.ones(len(node_tuples))
                             for inearby_vertex_index, nearby_vertex_index in enumerate(
-                                    nearby_grp.vertex_indices[nearby_iel][:]):
+                                    nearby_grp.vertex_indices[nearby_iel, :]):
                                 b[inearby_vertex_index] = mesh.vertices[cur_dim, nearby_vertex_index] - nearby_origin_vertex[cur_dim]
-                            coefficients = np.linalg.lstsq(coefficient_matrix, b)[0]
+
+                            coefficients = np.linalg.solve(vandermonde, b)
                             all_coeffs[cur_dim] = coefficients
+
+                        # {{{ Newton's method to find rst coordinates corresponding
+                        # to 'vertex_transformed'
+
+                        # current rst guess
                         cur_coords = np.zeros(nearby_grp.dim)
+
                         niterations = 3
                         for it in range(niterations):
                             jacobian = np.zeros((nearby_grp.dim, nearby_grp.dim))
-                            # i: row of the jacobian
+                            # i: row of the jacobian (xyz output component of the mapping)
                             for i in range(nearby_grp.dim):
-                                # j: column of the jacobian
+                                # j: column of the jacobian (rst input component)
                                 for j in range(nearby_grp.dim):
                                     for k in range(len(node_tuples)):
-                                        cur = 0
-                                        if node_tuples[k][j] == 1:
+                                        my_rst_powers = node_tuples[k]
+                                        # node_tuples[k] represents powers of rst
+                                        if my_rst_powers[j] == 1:
                                             cur = all_coeffs[i][k]
-                                            for l in range(len(node_tuples[k])):
-                                                if l != j and node_tuples[k][l] == 1:
+                                            for l in range(len(my_rst_powers)):
+                                                if l != j and my_rst_powers[l] == 1:
                                                     cur *= cur_coords[l]
-                                        jacobian[i][j] += cur
+                                            jacobian[i][j] += cur
+                            if np.linalg.norm(jacobian[:, 1]) < 1e-14:
+                                pu.db
+                                jacobian = np.zeros((nearby_grp.dim, nearby_grp.dim))
+                                # i: row of the jacobian (xyz output component of the mapping)
+                                for i in range(nearby_grp.dim):
+                                    # j: column of the jacobian (rst input component)
+                                    for j in range(nearby_grp.dim):
+                                        for k in range(len(node_tuples)):
+                                            my_rst_powers = node_tuples[k]
+                                            # node_tuples[k] represents powers of rst
+                                            if my_rst_powers[j] == 1:
+                                                cur = all_coeffs[i][k]
+                                                for l in range(len(my_rst_powers)):
+                                                    if l != j and my_rst_powers[l] == 1:
+                                                        cur *= cur_coords[l]
+                                                jacobian[i][j] += cur
                             print(jacobian)
                             jacobian_inv = np.linalg.inv(jacobian)
                             f = np.zeros(nearby_grp.dim)
@@ -195,6 +226,9 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                                             cur *= cur_coords[k]
                                     f[i] -= cur
                             cur_coords = cur_coords - jacobian_inv.dot(f)
+
+                        # }}}
+
                         is_connected = (
                                 np.sum(cur_coords) <= 1+tol
                                 and (cur_coords>= -tol).all())
