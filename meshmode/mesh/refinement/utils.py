@@ -78,6 +78,8 @@ def is_symmetric(relation, debug=False):
 
 
 def check_nodal_adj_against_geometry(mesh, tol=1e-12):
+    from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+    from pytools import generate_nonnegative_integer_tuples_below as gnitb
     def group_and_iel_to_global_iel(igrp, iel):
         return mesh.groups[igrp].element_nr_base + iel
 
@@ -110,37 +112,98 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                     if nearby_igrp == igrp and nearby_iel == iel_grp:
                         continue
                     nearby_grp = mesh.groups[nearby_igrp]
+                    if isinstance(nearby_grp, SimplexElementGroup):
+                        nearby_origin_vertex = mesh.vertices[
+                                :, nearby_grp.vertex_indices[nearby_iel][0]]  # noqa
+                        transformation = np.empty(
+                                (len(mesh.vertices), nvertices_per_element-1))
+                        vertex_transformed = vertex - nearby_origin_vertex
 
-                    nearby_origin_vertex = mesh.vertices[
-                            :, nearby_grp.vertex_indices[nearby_iel][0]]  # noqa
-                    transformation = np.empty(
-                            (len(mesh.vertices), nvertices_per_element-1))
-                    vertex_transformed = vertex - nearby_origin_vertex
+                        for inearby_vertex_index, nearby_vertex_index in enumerate(
+                                nearby_grp.vertex_indices[nearby_iel][1:]):
+                            nearby_vertex = mesh.vertices[:, nearby_vertex_index]
+                            transformation[:, inearby_vertex_index] = \
+                                    nearby_vertex - nearby_origin_vertex
+                        bary_coord, residual = \
+                                np.linalg.lstsq(transformation, vertex_transformed)[0:2]
 
-                    for inearby_vertex_index, nearby_vertex_index in enumerate(
-                            nearby_grp.vertex_indices[nearby_iel][1:]):
-                        nearby_vertex = mesh.vertices[:, nearby_vertex_index]
-                        transformation[:, inearby_vertex_index] = \
-                                nearby_vertex - nearby_origin_vertex
-                    bary_coord, residual = \
-                            np.linalg.lstsq(transformation, vertex_transformed)[0:2]
+                        is_in_element_span = (
+                                residual.size == 0 or
+                                np.linalg.norm(vertex_transformed) == 0 or
+                                (np.linalg.norm(residual) /
+                                    np.linalg.norm(vertex_transformed)) <= tol)
 
-                    is_in_element_span = (
-                            residual.size == 0 or
-                            np.linalg.norm(vertex_transformed) == 0 or
-                            (np.linalg.norm(residual) /
-                                np.linalg.norm(vertex_transformed)) <= tol)
+                        is_connected = (
+                                is_in_element_span
+                                and np.sum(bary_coord) <= 1+tol
+                                and (bary_coord >= -tol).all())
+                        el1 = group_and_iel_to_global_iel(nearby_igrp, nearby_iel)
+                        el2 = group_and_iel_to_global_iel(igrp, iel_grp)
 
-                    is_connected = (
-                            is_in_element_span
-                            and np.sum(bary_coord) <= 1+tol
-                            and (bary_coord >= -tol).all())
-                    el1 = group_and_iel_to_global_iel(nearby_igrp, nearby_iel)
-                    el2 = group_and_iel_to_global_iel(igrp, iel_grp)
+                        if is_connected:
+                            connected_to_element_geometry[el1].add(el2)
+                            connected_to_element_geometry[el2].add(el1)
+                    elif isinstance(nearby_grp, TensorProductElementGroup):
+                        from meshmode.mesh.tesselate import tesselatesquare, tesselatecube
+                        if nearby_grp.dim == 2:
+                            node_tuples = list(gnitb(2, 2))
+                        elif nearby_grp.dim == 3:
+                            node_tuples = list(gnitb(2, 3))
+                        nearby_origin_vertex = mesh.vertices[
+                                :, nearby_grp.vertex_indices[nearby_iel][0]]  # noqa
+                        vertex_transformed = vertex - nearby_origin_vertex
+                        all_coeffs = np.ones((nearby_grp.dim, len(node_tuples)))
+                        for cur_dim in range(nearby_grp.dim):
+                            coefficient_matrix = np.ones(
+                                    (len(node_tuples), len(node_tuples)))
+                            for i in range(len(node_tuples)):
+                                for j in range(len(node_tuples)):
+                                    for k in range(len(node_tuples[j])):
+                                        if node_tuples[j][k] == 1:
+                                            coefficient_matrix[i][j] *= node_tuples[i][k]
+                            b = np.ones(len(node_tuples))
+                            for inearby_vertex_index, nearby_vertex_index in enumerate(
+                                    nearby_grp.vertex_indices[nearby_iel][:]):
+                                b[inearby_vertex_index] = mesh.vertices[cur_dim, nearby_vertex_index] - nearby_origin_vertex[cur_dim]
+                            coefficients = np.linalg.lstsq(coefficient_matrix, b)[0]
+                            all_coeffs[cur_dim] = coefficients
+                        cur_coords = np.zeros(nearby_grp.dim)
+                        niterations = 3
+                        for it in range(niterations):
+                            jacobian = np.zeros((nearby_grp.dim, nearby_grp.dim))
+                            # i: row of the jacobian
+                            for i in range(nearby_grp.dim):
+                                # j: column of the jacobian
+                                for j in range(nearby_grp.dim):
+                                    for k in range(len(node_tuples)):
+                                        cur = 0
+                                        if node_tuples[k][j] == 1:
+                                            cur = all_coeffs[i][k]
+                                            for l in range(len(node_tuples[k])):
+                                                if l != j and node_tuples[k][l] == 1:
+                                                    cur *= cur_coords[l]
+                                        jacobian[i][j] += cur
+                            print(jacobian)
+                            jacobian_inv = np.linalg.inv(jacobian)
+                            f = np.zeros(nearby_grp.dim)
+                            for i in range(nearby_grp.dim):
+                                f[i] = vertex_transformed[i]
+                                for j in range(len(node_tuples)):
+                                    cur = all_coeffs[i][j]
+                                    for k in range(len(node_tuples[j])):
+                                        if node_tuples[j][k] == 1:
+                                            cur *= cur_coords[k]
+                                    f[i] -= cur
+                            cur_coords = cur_coords - jacobian_inv.dot(f)
+                        is_connected = (
+                                np.sum(cur_coords) <= 1+tol
+                                and (cur_coords>= -tol).all())
+                        el1 = group_and_iel_to_global_iel(nearby_igrp, nearby_iel)
+                        el2 = group_and_iel_to_global_iel(igrp, iel_grp)
 
-                    if is_connected:
-                        connected_to_element_geometry[el1].add(el2)
-                        connected_to_element_geometry[el2].add(el1)
+                        if is_connected:
+                            connected_to_element_geometry[el1].add(el2)
+                            connected_to_element_geometry[el2].add(el1)
 
     assert is_symmetric(connected_to_element_connectivity, debug=True)
 

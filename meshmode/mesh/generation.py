@@ -237,35 +237,87 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 
 # {{{ make_group_from_vertices
 
-from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-def make_group_from_vertices(vertices, vertex_indices, order, group_type=SimplexElementGroup):
-    print(vertex_indices)
+def make_group_from_vertices(vertices, vertex_indices, order,
+        group_factory=None):
     el_vertices = vertices[:, vertex_indices]
 
-    el_origins = el_vertices[:, :, 0][:, :, np.newaxis]
-    # ambient_dim, nelements, nspan_vectors
-    spanning_vectors = (
-            el_vertices[:, :, 1:] - el_origins)
+    from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
-    nspan_vectors = spanning_vectors.shape[-1]
-    dim = nspan_vectors
+    if group_factory is None:
+        group_factory = SimplexElementGroup
 
-    # dim, nunit_nodes
-    if dim <= 3:
-        unit_nodes = mp.warp_and_blend_nodes(dim, order)
+    if issubclass(group_factory, SimplexElementGroup):
+        el_origins = el_vertices[:, :, 0][:, :, np.newaxis]
+        # ambient_dim, nelements, nspan_vectors
+        spanning_vectors = (
+                el_vertices[:, :, 1:] - el_origins)
+
+        nspan_vectors = spanning_vectors.shape[-1]
+        dim = nspan_vectors
+
+        # dim, nunit_nodes
+        if dim <= 3:
+            unit_nodes = mp.warp_and_blend_nodes(dim, order)
+        else:
+            unit_nodes = mp.equidistant_nodes(dim, order)
+
+        unit_nodes_01 = 0.5 + 0.5*unit_nodes
+
+        nodes = np.einsum(
+                "si,des->dei",
+                unit_nodes_01, spanning_vectors) + el_origins
+
+    elif issubclass(group_factory, TensorProductElementGroup):
+        nelements, nvertices = vertex_indices.shape
+
+        dim = 0
+        while True:
+            if nvertices == 2**dim:
+                break
+            if nvertices < 2**dim:
+                raise ValueError("invalid number of vertices for tensor-product "
+                        "elements, must be power of two")
+            dim += 1
+
+        from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
+        from modepy.nodes import tensor_product_nodes
+        unit_nodes = tensor_product_nodes(dim, legendre_gauss_lobatto_nodes(order))
+        # shape: (dim, nnodes)
+        unit_nodes_01 = 0.5 + 0.5*unit_nodes
+
+        _, nnodes = unit_nodes.shape
+
+        from pytools import generate_nonnegative_integer_tuples_below as gnitb
+        id_tuples = list(gnitb(2, dim))
+        assert len(id_tuples) == nvertices
+
+        vdm = np.empty((nvertices, nvertices))
+        for i, vertex_tuple in enumerate(id_tuples):
+            for j, func_tuple in enumerate(id_tuples):
+                vertex_ref = np.array(vertex_tuple, dtype=np.float64)
+                vdm[i, j] = np.prod(vertex_ref**func_tuple)
+
+        # shape: (dim, nelements, nvertices)
+        coeffs = np.empty((dim, nelements, nvertices))
+        for d in range(dim):
+            coeffs[d] = la.solve(vdm, el_vertices[d].T).T
+
+        vdm_nodes = np.zeros((nnodes, nvertices))
+        for j, func_tuple in enumerate(id_tuples):
+            vdm_nodes[:, j] = np.prod(
+                    unit_nodes_01 ** np.array(func_tuple).reshape(-1, 1),
+                    axis=0)
+
+        nodes = np.einsum("ij,dej->dei", vdm_nodes, coeffs)
+
     else:
-        unit_nodes = mp.equidistant_nodes(dim, order)
-
-    unit_nodes_01 = 0.5 + 0.5*unit_nodes
-
-    nodes = np.einsum(
-            "si,des->dei",
-            unit_nodes_01, spanning_vectors) + el_origins
+        raise ValueError("unsupported value for 'group_factory': %s"
+                % group_factory)
 
     # make contiguous
     nodes = nodes.copy()
 
-    return group_type(
+    return group_factory(
             order, vertex_indices, nodes,
             unit_nodes=unit_nodes)
 
@@ -410,12 +462,19 @@ def generate_torus(r_outer, r_inner, n_outer=20, n_inner=10, order=1):
 
 # {{{ generate_box_mesh
 
-def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64):
+def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
+        group_factory=None):
     """Create a semi-structured mesh.
 
     :param axis_coords: a tuple with a number of entries corresponding
         to the number of dimensions, with each entry a numpy array
         specifying the coordinates to be used along that axis.
+    :param group_factory: One of :class:`meshmode.mesh.SimplexElementGroup`
+        or :class:`meshmode.mesh.TensorProductElementGroup`.
+
+    .. versionchanged:: 2017.1
+
+        *group_factory* parameter added.
     """
 
     for iaxis, axc in enumerate(axis_coords):
@@ -438,6 +497,18 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64):
         vertices[idim] = axis_coords[idim].reshape(*vshape)
 
     vertices = vertices.reshape(dim, -1)
+
+    from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+    if group_factory is None:
+        group_factory = SimplexElementGroup
+
+    if issubclass(group_factory, SimplexElementGroup):
+        is_tp = False
+    elif issubclass(group_factory, TensorProductElementGroup):
+        is_tp = True
+    else:
+        raise ValueError("unsupported value for 'group_factory': %s"
+                % group_factory)
 
     el_vertices = []
 
@@ -463,8 +534,11 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64):
                 c = vertex_indices[i, j+1]
                 d = vertex_indices[i+1, j+1]
 
-                el_vertices.append((a, b, c))
-                el_vertices.append((d, c, b))
+                if is_tp:
+                    el_vertices.append((a, b, c, d))
+                else:
+                    el_vertices.append((a, b, c))
+                    el_vertices.append((d, c, b))
 
     elif dim == 3:
         for i in range(shape[0]-1):
@@ -481,13 +555,19 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64):
                     a110 = vertex_indices[i+1, j+1, k]
                     a111 = vertex_indices[i+1, j+1, k+1]
 
-                    el_vertices.append((a000, a100, a010, a001))
-                    el_vertices.append((a101, a100, a001, a010))
-                    el_vertices.append((a101, a011, a010, a001))
+                    if is_tp:
+                        el_vertices.append(
+                                (a000, a001, a010, a011,
+                                    a100, a101, a110, a111))
 
-                    el_vertices.append((a100, a010, a101, a110))
-                    el_vertices.append((a011, a010, a110, a101))
-                    el_vertices.append((a011, a111, a101, a110))
+                    else:
+                        el_vertices.append((a000, a100, a010, a001))
+                        el_vertices.append((a101, a100, a001, a010))
+                        el_vertices.append((a101, a011, a010, a001))
+
+                        el_vertices.append((a100, a010, a101, a110))
+                        el_vertices.append((a011, a010, a110, a101))
+                        el_vertices.append((a011, a111, a101, a110))
 
     else:
         raise NotImplementedError("box meshes of dimension %d"
@@ -496,7 +576,8 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64):
     el_vertices = np.array(el_vertices, dtype=np.int32)
 
     grp = make_group_from_vertices(
-            vertices.reshape(dim, -1), el_vertices, order)
+            vertices.reshape(dim, -1), el_vertices, order,
+            group_factory=group_factory)
 
     from meshmode.mesh import Mesh
     return Mesh(vertices, [grp],
