@@ -105,6 +105,8 @@ def tesselatesquare():
     
     for current in node_tuples:
         try_add_square(current, (0, 0), (1, 0), (1, 1), (0, 1))
+        # README: Replace with
+        # try_add_square(current, *tuple(gnitb(2, 2)))
 
     return [node_tuples, result]
 
@@ -133,6 +135,8 @@ def tesselatecube():
     result = []
     for current in node_tuples:
         try_add_cube(current, (0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 1, 1), (0, 0, 1), (1, 0, 1), (1, 1, 1))
+        # FIXME: Replace with
+        # try_add_cube(current, *tuple(gnitb(2, 3)))
 
     return [node_tuples, result]
     
