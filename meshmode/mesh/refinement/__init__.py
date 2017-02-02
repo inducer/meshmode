@@ -78,6 +78,7 @@ class Refiner(object):
         # Dimension-parameterized tesselations for refinement
         self.simplex_result = [point_result, segment_result, tri_result, tet_result]
         self.quad_node_tuples = [point_node_tuples, segment_node_tuples, square_node_tuples, cube_node_tuples]
+        #print(self.quad_node_tuples)
         self.quad_result = [point_result, segment_result, square_result, cube_result]
         self.last_mesh = mesh
 
@@ -92,7 +93,8 @@ class Refiner(object):
                 for i in range(len(vert_indices)):
                     self.adjacent_set[vert_indices[i]].add(iel_base+iel_grp)
         # }}}
-
+        for i in mesh.groups[0].vertex_indices[0]:
+            print(self.adjacent_set[i])
         self.simplex_index_to_node_tuple = []
         self.simplex_index_to_midpoint_tuple = []
         self.quad_index_to_node_tuple = []
@@ -100,7 +102,7 @@ class Refiner(object):
         #put tuples that don't have a 1 in index_to_node_tuple, and put those that do in index_to_midpoint_tuple
         for d in range(4):
             cur_simplex_index_to_node_tuple = []
-            cur_simplex_index_to_midpiont_tuple = []
+            cur_simplex_index_to_midpoint_tuple = []
             cur_quad_index_to_node_tuple = []
             cur_quad_index_to_midpoint_tuple = []
             if self.simplex_node_tuples[d] is not None:
@@ -108,7 +110,7 @@ class Refiner(object):
                     if 1 not in self.simplex_node_tuples[d][i]:
                         cur_simplex_index_to_node_tuple.append(self.simplex_node_tuples[d][i])
                     else:
-                        cur_simplex_index_to_midpiont_tuple.append(self.simplex_node_tuples[d][i])
+                        cur_simplex_index_to_midpoint_tuple.append(self.simplex_node_tuples[d][i])
             if self.quad_node_tuples[d] is not None:
                 for i in range(len(self.quad_node_tuples[d])):
                     if 1 not in self.quad_node_tuples[d][i]:
@@ -116,11 +118,11 @@ class Refiner(object):
                     else:
                         cur_quad_index_to_midpoint_tuple.append(self.quad_node_tuples[d][i])
             self.simplex_index_to_node_tuple.append(cur_simplex_index_to_node_tuple)
-            self.simplex_index_to_midpoint_tuple.append(cur_simplex_index_to_midpiont_tuple)
+            self.simplex_index_to_midpoint_tuple.append(cur_simplex_index_to_midpoint_tuple)
             self.quad_index_to_node_tuple.append(cur_quad_index_to_node_tuple)
             self.quad_index_to_midpoint_tuple.append(cur_quad_index_to_midpoint_tuple)
-        for i in range(len(self.quad_index_to_node_tuple)):
-            self.quad_index_to_node_tuple[i] = self.reorder(self.quad_index_to_node_tuple[i])
+        #for i in range(len(self.quad_index_to_node_tuple)):
+            #self.quad_index_to_node_tuple[i] = self.reorder(self.quad_index_to_node_tuple[i])
 
     # }}}
 
@@ -497,7 +499,6 @@ class Refiner(object):
                 if coarsen_index != -1:
                     element_mapping[iel_base + el] = coarsen_el_new_index[coarsen_index]
         new_pair_map = {}
-        print(element_mapping)
         for (v1, v2) in self.pair_map:
             v3 = self.pair_map[(v1, v2)]
             assert (v1 in vertex_mapping) and (v2 in vertex_mapping) and (v3 in vertex_mapping)
@@ -561,6 +562,7 @@ class Refiner(object):
         return self.last_mesh
 
     def refine(self, refine_flags):
+        print(refine_flags)
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
         from six.moves import range
         """
@@ -745,6 +747,8 @@ class Refiner(object):
         for group_index, grp in enumerate(groups):
             for iel_grp in range(len(grp)):
                 element_to_element.append(self.get_elements_connected_to(groups, group_index, iel_base, iel_grp))
+                if iel_grp == 0:
+                    print(element_to_element)
             iel_base += len(grp)
         for iel, neighbors in enumerate(element_to_element):
             if iel in neighbors:
