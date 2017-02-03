@@ -24,6 +24,7 @@ THE SOFTWARE.
 
 
 import numpy as np
+import numpy.linalg as la
 
 import logging
 logger = logging.getLogger(__name__)
@@ -75,6 +76,20 @@ def is_symmetric(relation, debug=False):
                 return False
 
     return True
+
+
+def _mesh_mapping(dim, node_tuples, all_coeffs, rst):
+    xyz = np.zeros(dim)
+
+    for i in range(dim):
+        for j in range(len(node_tuples)):
+            cur = all_coeffs[i][j]
+            for k in range(len(node_tuples[j])):
+                if node_tuples[j][k] == 1:
+                    cur *= rst[k]
+            xyz[i] += cur
+
+    return xyz
 
 
 def check_nodal_adj_against_geometry(mesh, tol=1e-12):
@@ -184,8 +199,8 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                         # current rst guess
                         cur_coords = np.zeros(nearby_grp.dim)
 
-                        niterations = 3
-                        for it in range(niterations):
+                        niterations = 15
+                        while True:
                             jacobian = np.zeros((nearby_grp.dim, nearby_grp.dim))
                             # i: row of the jacobian (xyz output component of the mapping)
                             for i in range(nearby_grp.dim):
@@ -200,33 +215,37 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                                                 if l != j and my_rst_powers[l] == 1:
                                                     cur *= cur_coords[l]
                                             jacobian[i][j] += cur
-                            if np.linalg.norm(jacobian[:, 1]) < 1e-14:
-                                jacobian = np.zeros((nearby_grp.dim, nearby_grp.dim))
-                                # i: row of the jacobian (xyz output component of the mapping)
-                                for i in range(nearby_grp.dim):
-                                    # j: column of the jacobian (rst input component)
-                                    for j in range(nearby_grp.dim):
-                                        for k in range(len(node_tuples)):
-                                            my_rst_powers = node_tuples[k]
-                                            # node_tuples[k] represents powers of rst
-                                            if my_rst_powers[j] == 1:
-                                                cur = all_coeffs[i][k]
-                                                for l in range(len(my_rst_powers)):
-                                                    if l != j and my_rst_powers[l] == 1:
-                                                        cur *= cur_coords[l]
-                                                jacobian[i][j] += cur
+
+                            def f(rst):
+                                return (
+                                        _mesh_mapping(nearby_grp.dim, node_tuples, all_coeffs, rst)
+                                        - vertex_transformed)
+
+                            f_value = f(cur_coords)
+
                             #print(jacobian)
                             jacobian_inv = np.linalg.inv(jacobian)
-                            f = np.zeros(nearby_grp.dim)
-                            for i in range(nearby_grp.dim):
-                                f[i] = vertex_transformed[i]
-                                for j in range(len(node_tuples)):
-                                    cur = all_coeffs[i][j]
-                                    for k in range(len(node_tuples[j])):
-                                        if node_tuples[j][k] == 1:
-                                            cur *= cur_coords[k]
-                                    f[i] -= cur
-                            cur_coords = cur_coords - jacobian_inv.dot(f)
+                            cur_coords = cur_coords - jacobian_inv.dot(f_value)
+
+                            # FIXME: Should be check relative to element size
+                            print (niterations, la.norm(f_value, 2))
+                            if la.norm(f_value, 2) < tol/2:
+                                break
+
+                            niterations -= 1
+                            if niterations == 0:
+                                pu.db
+                                diff_h = 1e-5
+                                eps = np.array([diff_h, 0])
+                                jeps = jacobian@eps
+                                print(jeps)
+                                print(f(cur_coords + eps) - f(cur_coords))
+                                pu.db
+
+                                print("YOINK")
+                                # raise RuntimeError("Newton's method in in-element "
+                                #         "test did not converge within iteration "
+                                #         "limit")
 
                         # }}}
 
@@ -239,6 +258,9 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                         if is_connected:
                             connected_to_element_geometry[el1].add(el2)
                             connected_to_element_geometry[el2].add(el1)
+                    else:
+                        raise TypeError("unexpected el group type: %s"
+                                % type(nearby_grp).__name__)
 
     assert is_symmetric(connected_to_element_connectivity, debug=True)
 
