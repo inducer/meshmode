@@ -316,11 +316,11 @@ def all_refine(num_mesh, depth, fname):
     import timeit
     nelements = []
     runtimes = []
-    r = Refiner(mesh)
-    flags = np.zeros(len(mesh.groups[0].vertex_indices))
-    #flags[0] = 1
-    print(flags, 'here')
-    mesh = r.refine(flags)
+    # r = Refiner(mesh)
+    # flags = np.zeros(len(mesh.groups[0].vertex_indices))
+    # #flags[0] = 1
+    # print(flags, 'here')
+    # mesh = r.refine(flags)
         #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
     #r = Refiner(mesh)
     #for time in range(1):
@@ -361,7 +361,10 @@ def all_refine(num_mesh, depth, fname):
         #write_nodal_adjacency_vtk_file("connectivity2.vtu",
         #        mesh)
     from meshmode.mesh.visualization import draw_2d_mesh
-    draw_2d_mesh(mesh, False, False, False, fill=None)
+    draw_2d_mesh(mesh,
+            draw_vertex_numbers=True,
+            draw_element_numbers=True,
+            draw_nodal_adjacency=False, fill=None)
     import matplotlib.pyplot as pt
     pt.show()
     #import matplotlib.pyplot as pt
