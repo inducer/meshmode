@@ -41,6 +41,11 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
         for iel, el in enumerate(grp.vertex_indices):
             elverts = mesh.vertices[:, el]
 
+            from meshmode.mesh import TensorProductElementGroup
+            if isinstance(grp, TensorProductElementGroup) and grp.dim == 2:
+                elverts = elverts[:,
+                        np.array([0, 1, 3, 2])]
+
             pathdata = [
                 (Path.MOVETO, (elverts[0, 0], elverts[1, 0])),
                 ]
