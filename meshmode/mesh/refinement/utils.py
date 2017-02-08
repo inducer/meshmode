@@ -307,7 +307,8 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
     for i in range(len(connected_to_element_geometry)):
         if connected_to_element_geometry[i] != connected_to_element_connectivity[i]:
             print (i, connected_to_element_connectivity[i], connected_to_element_geometry[i])
-    #assert connected_to_element_geometry == connected_to_element_connectivity
+
+    assert connected_to_element_geometry == connected_to_element_connectivity
 
 # }}}
 
