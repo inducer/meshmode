@@ -295,37 +295,43 @@ def all_refine(num_mesh, depth, fname):
             generate_torus, generate_regular_rect_mesh,
             generate_box_mesh)
     from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
+    from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
     print("BEGIN GEN")
-    mesh = generate_gmsh(
-            ScriptWithFilesSource(
-                """
-                Merge "blob-2d.step";
-                Mesh.CharacteristicLengthMax = 0.05;
-                Recombine Surface "*" = 0.0001;
-                Mesh 2;
-                Save "output.msh";
-                """,
-                ["blob-2d.step"]),
-            force_ambient_dim=2,
-            )
+    if 0:
+        mesh = generate_gmsh(
+                ScriptWithFilesSource(
+                    """
+                    Merge "blob-2d.step";
+                    Mesh.CharacteristicLengthMax = 0.05;
+                    Recombine Surface "*" = 0.0001;
+                    Mesh 2;
+                    Save "output.msh";
+                    """,
+                    ["blob-2d.step"]),
+                force_ambient_dim=2,
+                )
+    elif 0:
+        mesh = generate_regular_rect_mesh()
+    else:
+        mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),),
+                group_factory=TensorProductElementGroup)
+
     #print("END GEN")
-    #mesh = generate_regular_rect_mesh()
-    #mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),))
     import timeit
     nelements = []
     runtimes = []
-    # r = Refiner(mesh)
-    # flags = np.zeros(len(mesh.groups[0].vertex_indices))
+    r = Refiner(mesh)
+    flags = np.zeros(len(mesh.groups[0].vertex_indices))
     # #flags[0] = 1
     # print(flags, 'here')
     # mesh = r.refine(flags)
         #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
     #r = Refiner(mesh)
-    #for time in range(1):
-        #flags = get_random_flags(mesh)
-        #mesh = r.refine(flags)
+    for time in range(2):
+        flags = get_random_flags(mesh)
+        mesh = r.refine(flags)
             #flags = np.zeros(mesh.nelements)
             #flags[0] = 1
             #if time < depth-1:
@@ -338,35 +344,40 @@ def all_refine(num_mesh, depth, fname):
             #    runtimes.append(stop-start)
             #print(r.groups)
     check_nodal_adj_against_geometry(mesh)
+
+    print("checker done")
         #from meshmode.mesh.visualization import draw_2d_mesh
         #draw_2d_mesh(mesh, False, True, True, fill=None)
         #import matplotlib.pyplot as pt
         #pt.show()
-        #from meshmode.discretization import Discretization
-        #from meshmode.discretization.poly_element import \
-        #        PolynomialWarpAndBlendGroupFactory
-        #discr = Discretization(
-        #        cl_ctx, mesh, PolynomialWarpAndBlendGroupFactory(order))
-        #from meshmode.discretization.visualization import make_visualizer
-        #vis = make_visualizer(queue, discr, order)
-        #remove_if_exists("connectivity2.vtu")
-        #remove_if_exists("geometry2.vtu")
-        #vis.write_vtk_file("geometry2.vtu", [
-        #    ("f", discr.nodes()[0]),
-        #    ])
 
-        #from meshmode.discretization.visualization import \
-        #        write_nodal_adjacency_vtk_file
+    if mesh.dim == 3:
+        from meshmode.discretization import Discretization
+        from meshmode.discretization.poly_element import \
+                PolynomialWarpAndBlendGroupFactory
+        discr = Discretization(
+                cl_ctx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+        from meshmode.discretization.visualization import make_visualizer
+        vis = make_visualizer(queue, discr, order)
+        remove_if_exists("connectivity2.vtu")
+        remove_if_exists("geometry2.vtu")
+        vis.write_vtk_file("geometry2.vtu", [
+            ("f", discr.nodes()[0]),
+            ])
 
-        #write_nodal_adjacency_vtk_file("connectivity2.vtu",
-        #        mesh)
-    from meshmode.mesh.visualization import draw_2d_mesh
-    draw_2d_mesh(mesh,
-            draw_vertex_numbers=True,
-            draw_element_numbers=True,
-            draw_nodal_adjacency=False, fill=None)
-    import matplotlib.pyplot as pt
-    pt.show()
+        from meshmode.discretization.visualization import \
+                write_nodal_adjacency_vtk_file
+
+        write_nodal_adjacency_vtk_file("connectivity2.vtu",
+                mesh)
+    elif mesh.dim == 2:
+        from meshmode.mesh.visualization import draw_2d_mesh
+        draw_2d_mesh(mesh,
+                draw_vertex_numbers=True,
+                draw_element_numbers=True,
+                draw_nodal_adjacency=False, fill=None)
+        import matplotlib.pyplot as pt
+        pt.show()
     #import matplotlib.pyplot as pt
     #pt.plot(nelements, runtimes, "o")
     #pt.savefig(fname)
