@@ -81,15 +81,36 @@ def is_symmetric(relation, debug=False):
 def _mesh_mapping(dim, node_tuples, all_coeffs, rst):
     xyz = np.zeros(dim)
 
-    for i in range(dim):
-        for j in range(len(node_tuples)):
-            cur = all_coeffs[i][j]
-            for k in range(len(node_tuples[j])):
-                if node_tuples[j][k] == 1:
-                    cur *= rst[k]
-            xyz[i] += cur
+    for ixyz_axis in range(dim):
+        for icoeff in range(len(node_tuples)):
+            cur = all_coeffs[ixyz_axis][icoeff]
+            for irst_axis in range(len(node_tuples[icoeff])):
+                if node_tuples[icoeff][irst_axis] == 1:
+                    cur *= rst[irst_axis]
+            xyz[ixyz_axis] += cur
 
     return xyz
+
+
+def _mesh_mapping_jacobian(dim, node_tuples, all_coeffs, rst):
+    jacobian = np.zeros((dim, dim))
+
+    for ixyz_axis in range(dim):
+        for irst_axis in range(dim):
+
+            for icoeff, node_tuple in enumerate(node_tuples):
+                cur = all_coeffs[ixyz_axis][icoeff]
+                for irst_axis_term, power in enumerate(node_tuple):
+                    if irst_axis_term == irst_axis:
+                        # differentiating by that one, do not multiply
+                        if power == 0:
+                            cur = 0
+                    else:
+                        cur *= rst[irst_axis_term]**power
+
+                jacobian[ixyz_axis, irst_axis] += cur
+
+    return jacobian
 
 
 def check_nodal_adj_against_geometry(mesh, tol=1e-12):
@@ -120,19 +141,20 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                 connected_to_element_connectivity[iel_g].add(nb_iel_g)
 
             for vertex_index in grp.vertex_indices[iel_grp]:
-                vertex = mesh.vertices[:, vertex_index]
+                other_vertex = mesh.vertices[:, vertex_index]
 
-                # check which elements touch this vertex
-                for nearby_igrp, nearby_iel in tree.generate_matches(vertex):
+                # check which elements touch this other_vertex
+                for nearby_igrp, nearby_iel in tree.generate_matches(other_vertex):
                     if nearby_igrp == igrp and nearby_iel == iel_grp:
                         continue
+
                     nearby_grp = mesh.groups[nearby_igrp]
                     if isinstance(nearby_grp, SimplexElementGroup):
                         nearby_origin_vertex = mesh.vertices[
                                 :, nearby_grp.vertex_indices[nearby_iel][0]]  # noqa
                         transformation = np.empty(
                                 (len(mesh.vertices), nvertices_per_element-1))
-                        vertex_transformed = vertex - nearby_origin_vertex
+                        vertex_transformed = other_vertex - nearby_origin_vertex
 
                         for inearby_vertex_index, nearby_vertex_index in enumerate(
                                 nearby_grp.vertex_indices[nearby_iel][1:]):
@@ -169,8 +191,18 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                         #nearby_origin_vertex = mesh.vertices[
                                 #:, nearby_grp.vertex_indices[nearby_iel][0]]  # noqa
 
-                        #vertex_transformed = vertex - nearby_origin_vertex
-                        vertex_transformed = vertex
+                        my_vertices = mesh.vertices[:, nearby_grp.vertex_indices[nearby_iel, :]]
+                        min_vert = np.min(my_vertices, axis=1)
+                        max_vert = np.max(my_vertices, axis=1)
+
+                        if (
+                                (other_vertex < min_vert - tol).any()
+                                or (max_vert + tol < other_vertex).any()):
+                            # other_vertex not nearby_iel's bounding box, don't even
+                            # attempt Newton (no, really, don't!)
+                            continue
+
+                        #vertex_transformed = other_vertex - nearby_origin_vertex
                         all_coeffs = np.ones((nearby_grp.dim, len(node_tuples)))
                         for cur_dim in range(nearby_grp.dim):
                             vandermonde = np.ones(
@@ -194,10 +226,12 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                             all_coeffs[cur_dim] = coefficients
 
                         # {{{ Newton's method to find rst coordinates corresponding
-                        # to 'vertex_transformed'
+                        # to 'other_vertex'
 
                         # current rst guess
                         cur_coords = np.zeros(nearby_grp.dim)
+
+                        rsts = []
 
                         niterations = 15
                         while True:
@@ -210,47 +244,90 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                                         my_rst_powers = node_tuples[k]
                                         # node_tuples[k] represents powers of rst
                                         if my_rst_powers[j] == 1:
-                                            cur = all_coeffs[i][k]
+                                            cur = all_coeffs[i, k]
                                             for l in range(len(my_rst_powers)):
                                                 if l != j and my_rst_powers[l] == 1:
                                                     cur *= cur_coords[l]
-                                            jacobian[i][j] += cur
+                                            jacobian[i, j] += cur
 
+                            def fmap(rst):
+                                return (
+                                        _mesh_mapping(nearby_grp.dim, node_tuples, all_coeffs, rst)
+                                        )
                             def f(rst):
                                 return (
                                         _mesh_mapping(nearby_grp.dim, node_tuples, all_coeffs, rst)
-                                        - vertex_transformed)
+                                        - other_vertex)
 
+                            def f_jacobian(rst):
+                                return (
+                                        _mesh_mapping_jacobian(nearby_grp.dim, node_tuples, all_coeffs, rst))
                             f_value = f(cur_coords)
+                            f_jacobian_value = f_jacobian(cur_coords)
 
                             #print(jacobian)
-                            jacobian_inv = np.linalg.inv(jacobian)
-                            cur_coords = cur_coords - jacobian_inv.dot(f_value)
+                            rsts.append(cur_coords)
+                            cur_coords = cur_coords - la.solve(f_jacobian_value, f_value)
 
                             # FIXME: Should be check relative to element size
-                            print (niterations, la.norm(f_value, 2))
                             if la.norm(f_value, 2) < tol/2:
                                 break
 
                             niterations -= 1
                             if niterations == 0:
-                                pu.db
-                                diff_h = 1e-5
-                                eps = np.array([diff_h, 0])
-                                jeps = jacobian@eps
-                                print(jeps)
-                                print(f(cur_coords + eps) - f(cur_coords))
+                                rsts.append(cur_coords)
+                                import matplotlib.pyplot as plt
+                                rst_grid = np.mgrid[0:1:20j, 0:1:20j].reshape(2, -1)
+                                ext = 10
+                                big_rst_grid = np.mgrid[-ext:1+ext:20j, -ext:1+ext:20j].reshape(2, -1)
+
+                                plt.plot(rst_grid[0], rst_grid[1], "o")
+                                rsts = np.array(rsts).T
+                                plt.plot(rsts[0], rsts[1], "o-")
+                                plt.axis("equal")
+
+                                plt.figure()
+                                xyz_grid = np.empty_like(rst_grid)
+                                for i in range(rst_grid.shape[1]):
+                                    xyz_grid[:, i] = fmap(rst_grid[:, i])
+
+                                big_xyz_grid = np.empty_like(big_rst_grid)
+                                for i in range(rst_grid.shape[1]):
+                                    big_xyz_grid[:, i] = fmap(big_rst_grid[:, i])
+
+                                xyzs = np.empty_like(rsts)
+                                for i in range(rsts.shape[1]):
+                                    xyzs[:, i] = fmap(rsts[:, i])
+
+                                plt.plot(xyz_grid[0], xyz_grid[1], "o")
+                                plt.plot(big_xyz_grid[0], big_xyz_grid[1], "x")
+                                plt.plot(xyzs[0], xyzs[1], "o-")
+                                plt.plot(other_vertex[0], other_vertex[1], "v")
+                                plt.axis("equal")
+                                plt.show()
+
                                 pu.db
 
-                                print("YOINK")
-                                # raise RuntimeError("Newton's method in in-element "
-                                #         "test did not converge within iteration "
-                                #         "limit")
+                                if 0:
+                                    pu.db
+                                    diff_h = 1e-5
+                                    eps = np.array([diff_h, 0])
+                                    jeps = jacobian@eps
+                                    j2eps = f_jacobian(cur_coords)@eps
+                                    fdiff = f(cur_coords + eps) - f(cur_coords)
+                                    print(jeps)
+                                    print(j2eps)
+                                    print(fdiff)
+                                    pu.db
+
+                                raise RuntimeError("Newton's method in in-element "
+                                        "test did not converge within iteration "
+                                        "limit")
 
                         # }}}
 
                         is_connected = (
-                                np.sum(cur_coords) <= 1+tol
+                                (cur_coords <= 1+tol).all()
                                 and (cur_coords>= -tol).all())
                         el1 = group_and_iel_to_global_iel(nearby_igrp, nearby_iel)
                         el2 = group_and_iel_to_global_iel(igrp, iel_grp)
