@@ -231,8 +231,6 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                         # current rst guess
                         cur_coords = np.zeros(nearby_grp.dim)
 
-                        rsts = []
-
                         niterations = 15
                         while True:
                             jacobian = np.zeros((nearby_grp.dim, nearby_grp.dim))
@@ -265,8 +263,6 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                             f_value = f(cur_coords)
                             f_jacobian_value = f_jacobian(cur_coords)
 
-                            #print(jacobian)
-                            rsts.append(cur_coords)
                             cur_coords = cur_coords - la.solve(f_jacobian_value, f_value)
 
                             # FIXME: Should be check relative to element size
@@ -275,50 +271,6 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
 
                             niterations -= 1
                             if niterations == 0:
-                                rsts.append(cur_coords)
-                                import matplotlib.pyplot as plt
-                                rst_grid = np.mgrid[0:1:20j, 0:1:20j].reshape(2, -1)
-                                ext = 10
-                                big_rst_grid = np.mgrid[-ext:1+ext:20j, -ext:1+ext:20j].reshape(2, -1)
-
-                                plt.plot(rst_grid[0], rst_grid[1], "o")
-                                rsts = np.array(rsts).T
-                                plt.plot(rsts[0], rsts[1], "o-")
-                                plt.axis("equal")
-
-                                plt.figure()
-                                xyz_grid = np.empty_like(rst_grid)
-                                for i in range(rst_grid.shape[1]):
-                                    xyz_grid[:, i] = fmap(rst_grid[:, i])
-
-                                big_xyz_grid = np.empty_like(big_rst_grid)
-                                for i in range(rst_grid.shape[1]):
-                                    big_xyz_grid[:, i] = fmap(big_rst_grid[:, i])
-
-                                xyzs = np.empty_like(rsts)
-                                for i in range(rsts.shape[1]):
-                                    xyzs[:, i] = fmap(rsts[:, i])
-
-                                plt.plot(xyz_grid[0], xyz_grid[1], "o")
-                                plt.plot(big_xyz_grid[0], big_xyz_grid[1], "x")
-                                plt.plot(xyzs[0], xyzs[1], "o-")
-                                plt.plot(other_vertex[0], other_vertex[1], "v")
-                                plt.axis("equal")
-                                plt.show()
-
-                                pu.db
-
-                                if 0:
-                                    pu.db
-                                    diff_h = 1e-5
-                                    eps = np.array([diff_h, 0])
-                                    jeps = jacobian@eps
-                                    j2eps = f_jacobian(cur_coords)@eps
-                                    fdiff = f(cur_coords + eps) - f(cur_coords)
-                                    print(jeps)
-                                    print(j2eps)
-                                    print(fdiff)
-                                    pu.db
 
                                 raise RuntimeError("Newton's method in in-element "
                                         "test did not converge within iteration "
