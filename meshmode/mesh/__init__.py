@@ -175,7 +175,9 @@ class MeshElementGroup(Record):
     def join_mesh(self, element_nr_base, node_nr_base):
         if self.element_nr_base is not None:
             raise RuntimeError("this element group has already joined a mesh, "
-                    "cannot join another")
+                    "cannot join another (The element group's element_nr_base "
+                    "is already assigned, and that typically happens when a "
+                    "group joins a Mesh instance.)")
 
         return self.copy(
                 element_nr_base=element_nr_base,
