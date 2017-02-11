@@ -47,6 +47,29 @@ import pytest
 import logging
 logger = logging.getLogger(__name__)
 
+# {{{ partition_mesh
+
+@pytest.mark.parametrize("mesh_type", ["cloverleaf", "starfish"])
+@pytest.mark.parametrize("npoints", [10, 1000])
+def test_partition_mesh(mesh_type, npoints):
+    from meshmode.mesh.generation import make_curve_mesh, cloverleaf, starfish
+
+    if mesh_type == "cloverleaf":
+        mesh = make_curve_mesh(cloverleaf, np.linspace(0, 1, npoints), order=3)
+    elif mesh_type == "starfish":
+        mesh = make_curve_mesh(starfish, np.linspace(0, 1, npoints), order=3)
+
+    #TODO: Create an actuall adjacency list from the mesh.
+    adjacency_list = mesh.nodal_adjacency
+
+    from pymetis import part_graph
+    part_per_element = np.array(part_graph(3, adjacency=adjacency_list))
+
+    from meshmode.mesh.processing import partition_mesh
+    (part_mesh, part_to_global) = partition_mesh(mesh, part_per_element, 0)
+
+# }}}
+
 
 # {{{ circle mesh
 
