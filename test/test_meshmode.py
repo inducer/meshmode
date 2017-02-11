@@ -51,8 +51,19 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.parametrize("mesh_type", ["cloverleaf", "starfish"])
 @pytest.mark.parametrize("npoints", [10, 1000])
-def test_partition_mesh(mesh_type, npoints):
-    from meshmode.mesh.generation import make_curve_mesh, cloverleaf, starfish
+def test_partition_mesh(mesh_type=None, npoints=None):
+    from meshmode.mesh.generation import generate_torus
+
+    my_mesh = generate_torus(2, 1, n_outer=2, n_inner=2)
+
+    part_per_element = np.array([0, 1, 2, 1, 1, 2, 1, 0])
+
+    print(my_mesh.nelements, my_mesh.groups[0].nelements)
+
+    #(part_mesh, part_to_global) = partition_mesh(my_mesh, part_per_element, 1)
+    from meshmode.mesh.processing import partition_mesh
+    partition_mesh(my_mesh, part_per_element, 1)
+    """from meshmode.mesh.generation import make_curve_mesh, cloverleaf, starfish
 
     if mesh_type == "cloverleaf":
         mesh = make_curve_mesh(cloverleaf, np.linspace(0, 1, npoints), order=3)
@@ -67,7 +78,7 @@ def test_partition_mesh(mesh_type, npoints):
 
     from meshmode.mesh.processing import partition_mesh
     (part_mesh, part_to_global) = partition_mesh(mesh, part_per_element, 0)
-
+"""
 # }}}
 
 
