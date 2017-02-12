@@ -47,38 +47,44 @@ import pytest
 import logging
 logger = logging.getLogger(__name__)
 
+
 # {{{ partition_mesh
 
-@pytest.mark.parametrize("mesh_type", ["cloverleaf", "starfish"])
-@pytest.mark.parametrize("npoints", [10, 1000])
-def test_partition_mesh(mesh_type=None, npoints=None):
+#@pytest.mark.parametrize("mesh_type", ["cloverleaf", "starfish"])
+#@pytest.mark.parametrize("npoints", [10, 1000])
+def test_partition_mesh(mesh_type, npoints):
     from meshmode.mesh.generation import generate_torus
-
     my_mesh = generate_torus(2, 1, n_outer=2, n_inner=2)
 
     part_per_element = np.array([0, 1, 2, 1, 1, 2, 1, 0])
 
-    print(my_mesh.nelements, my_mesh.groups[0].nelements)
-
-    #(part_mesh, part_to_global) = partition_mesh(my_mesh, part_per_element, 1)
     from meshmode.mesh.processing import partition_mesh
-    partition_mesh(my_mesh, part_per_element, 1)
-    """from meshmode.mesh.generation import make_curve_mesh, cloverleaf, starfish
+    (part_mesh, part_to_global) = partition_mesh(my_mesh, part_per_element, 1)
+
+
+    """
+    from meshmode.mesh.generation import make_curve_mesh, cloverleaf, starfish
 
     if mesh_type == "cloverleaf":
         mesh = make_curve_mesh(cloverleaf, np.linspace(0, 1, npoints), order=3)
     elif mesh_type == "starfish":
         mesh = make_curve_mesh(starfish, np.linspace(0, 1, npoints), order=3)
 
+    #from meshmode.mesh.visualization import draw_2d_mesh
+    #draw_2d_mesh(mesh)
+    #import matplotlib.pyplot as pt
+    #pt.show()
+
     #TODO: Create an actuall adjacency list from the mesh.
-    adjacency_list = mesh.nodal_adjacency
+    adjacency_list = mesh.facial_adjacency_groups
+    print(adjacency_list)
 
     from pymetis import part_graph
     part_per_element = np.array(part_graph(3, adjacency=adjacency_list))
 
     from meshmode.mesh.processing import partition_mesh
     (part_mesh, part_to_global) = partition_mesh(mesh, part_per_element, 0)
-"""
+    """
 # }}}
 
 
