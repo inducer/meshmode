@@ -54,7 +54,8 @@ def partition_mesh(mesh, part_per_element, part_nr):
         *part_to_global* is a :class:`numpy.ndarray` mapping element
         numbers on *part_mesh* to ones in *mesh*.
     """
-    assert len(part_per_element) == mesh.nelements, "part_per_element must have shape (mesh.nelements,)"
+    assert len(part_per_element) == mesh.nelements, (
+        "part_per_element must have shape (mesh.nelements,)")
 
     # Contains the indices of the elements requested.
     queried_elems = np.where(np.array(part_per_element) == part_nr)[0]
