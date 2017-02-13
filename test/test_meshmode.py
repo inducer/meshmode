@@ -50,41 +50,46 @@ logger = logging.getLogger(__name__)
 
 # {{{ partition_mesh
 
-#@pytest.mark.parametrize("mesh_type", ["cloverleaf", "starfish"])
-#@pytest.mark.parametrize("npoints", [10, 1000])
-def test_partition_mesh(mesh_type, npoints):
-    from meshmode.mesh.generation import generate_torus
-    my_mesh = generate_torus(2, 1, n_outer=2, n_inner=2)
+@pytest.mark.parameterize("mesh_type", ["torus", "box"])
+def test_partition_mesh(mesh_type):
+    if mesh_type == "torus":
+        from meshmode.mesh.generation import generate_torus
+        my_mesh = generate_torus(2, 1, n_outer=2, n_inner=2)
 
-    part_per_element = np.array([0, 1, 2, 1, 1, 2, 1, 0])
+        part_per_element = np.array([0, 1, 2, 1, 1, 2, 1, 0])
 
-    from meshmode.mesh.processing import partition_mesh
-    (part_mesh, part_to_global) = partition_mesh(my_mesh, part_per_element, 1)
+        from meshmode.mesh.processing import partition_mesh
+        (part_mesh, part_to_global) = partition_mesh(my_mesh, part_per_element, 0)
+        assert part_mesh.nelements == 2
 
+        (part_mesh, part_to_global) = partition_mesh(my_mesh, part_per_element, 1)
+        assert part_mesh.nelements == 4
 
-    """
-    from meshmode.mesh.generation import make_curve_mesh, cloverleaf, starfish
+        (part_mesh, part_to_global) = partition_mesh(my_mesh, part_per_element, 2)
+        assert part_mesh.nelements == 2
+    elif mesh_type == "box":
+        from meshmode.mesh.generation import generate_box_mesh
+        seg = np.linspace(0, 1, 10)
+        axis_coords = (seg, seg, seg)
+        mesh = generate_box_mesh(axis_coords)
 
-    if mesh_type == "cloverleaf":
-        mesh = make_curve_mesh(cloverleaf, np.linspace(0, 1, npoints), order=3)
-    elif mesh_type == "starfish":
-        mesh = make_curve_mesh(starfish, np.linspace(0, 1, npoints), order=3)
+        adjacency_list = np.zeros((mesh.nelements,), dtype=set)
+        for elem in range(mesh.nelements):
+            adjacency_list[elem] = set()
+            for n in range(mesh.nodal_adjacency.neighbors_starts[elem], mesh.nodal_adjacency.neighbors_starts[elem + 1]):
+                adjacency_list[elem].add(mesh.nodal_adjacency.neighbors[n])
 
-    #from meshmode.mesh.visualization import draw_2d_mesh
-    #draw_2d_mesh(mesh)
-    #import matplotlib.pyplot as pt
-    #pt.show()
+        from pymetis import part_graph
+        (_, part_per_element) = part_graph(3, adjacency=adjacency_list)
 
-    #TODO: Create an actuall adjacency list from the mesh.
-    adjacency_list = mesh.facial_adjacency_groups
-    print(adjacency_list)
+        from meshmode.mesh.processing import partition_mesh
+        (part_mesh0, _) = partition_mesh(mesh, np.array(part_per_element), 0)
+        (part_mesh1, _) = partition_mesh(mesh, np.array(part_per_element), 1)
+        (part_mesh2, _) = partition_mesh(mesh, np.array(part_per_element), 2)
 
-    from pymetis import part_graph
-    part_per_element = np.array(part_graph(3, adjacency=adjacency_list))
+        assert mesh.nelements == (part_mesh0.nelements
+            + part_mesh1.nelements + part_mesh2.nelements)
 
-    from meshmode.mesh.processing import partition_mesh
-    (part_mesh, part_to_global) = partition_mesh(mesh, part_per_element, 0)
-    """
 # }}}
 
 

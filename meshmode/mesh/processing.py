@@ -54,7 +54,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
         *part_to_global* is a :class:`numpy.ndarray` mapping element
         numbers on *part_mesh* to ones in *mesh*.
     """
-    assert len(part_per_element) == mesh.nelements
+    assert len(part_per_element) == mesh.nelements, "part_per_element must have shape (mesh.nelements,)"
 
     # Contains the indices of the elements requested.
     queried_elems = np.where(np.array(part_per_element) == part_nr)[0]
@@ -106,23 +106,13 @@ def partition_mesh(mesh, part_per_element, part_nr):
                 new_indices[group_nr][i, j] = np.where(
                     required_indices == original_index)[0]
 
-    """
-    print("mesh vertices: ", mesh.vertices)
-    print("mesh indices: ", mesh.groups[0].vertex_indices)
-    print("mesh nodes: ", mesh.groups[0].nodes)
-    print("queried_elems: ", queried_elems)
-    print("indices: ", new_indices[0])
-    print("nodes: ", new_nodes[0])
-    print("vertices: ", new_vertices)
-    """
-
-    from meshmode.mesh import MeshElementGroup, Mesh
+    from meshmode.mesh import SimplexElementGroup, Mesh
 
     new_mesh_groups = []
     for group_nr in range(num_groups):
         mesh_group = mesh.groups[group_nr]
         new_mesh_groups.append(
-            MeshElementGroup(mesh_group.order, new_indices[group_nr],
+            SimplexElementGroup(mesh_group.order, new_indices[group_nr],
                 new_nodes[group_nr], unit_nodes=mesh_group.unit_nodes))
 
     part_mesh = Mesh(new_vertices, new_mesh_groups)
