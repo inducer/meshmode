@@ -66,30 +66,39 @@ def partition_mesh(mesh, part_per_element, part_nr):
 
     # The set of vertex indices we need.
     index_set = set()
-
+    skip_groups = []
+    num_prev_elems = 0
     start_idx = 0
     for group_nr in range(num_groups):
         mesh_group = mesh.groups[group_nr]
 
         # Find the index of first element in the next group
         end_idx = len(queried_elems)
-        for idx in range(len(queried_elems)):
-            if queried_elems[idx] - start_idx > mesh_group.nelements:
+        for idx in range(start_idx, len(queried_elems)):
+            if queried_elems[idx] - num_prev_elems >= mesh_group.nelements:
                 end_idx = idx
                 break
 
-        elems = queried_elems[start_idx:end_idx]
+        if start_idx == end_idx:
+            skip_groups.append(group_nr)
+            new_indices.append(np.array([]))
+            new_nodes.append(np.array([]))
+            num_prev_elems += mesh_group.nelements
+            continue
+
+        elems = queried_elems[start_idx:end_idx] - num_prev_elems
         new_indices.append(mesh_group.vertex_indices[elems])
 
         new_nodes.append(
-            np.zeros((mesh.ambient_dim, len(queried_elems), mesh_group.nunit_nodes)))
+            np.zeros((mesh.ambient_dim, end_idx - start_idx, mesh_group.nunit_nodes)))
         for i in range(mesh.ambient_dim):
             for j in range(start_idx, end_idx):
-                elems = queried_elems[j]
-                new_nodes[group_nr][i, j, :] = mesh_group.nodes[i, elems, :]
+                elems = queried_elems[j] - num_prev_elems
+                new_nodes[group_nr][i, j - start_idx, :] = mesh_group.nodes[i, elems, :]
 
         index_set |= set(new_indices[group_nr].ravel())
 
+        num_prev_elems += mesh_group.nelements
         start_idx = end_idx
 
     # A sorted np.array of vertex indices we need (without duplicates).
@@ -99,22 +108,24 @@ def partition_mesh(mesh, part_per_element, part_nr):
     for dim in range(mesh.ambient_dim):
         new_vertices[dim] = mesh.vertices[dim][required_indices]
 
-    # Our indices need to be in range [0, len(mesh_group.nelements)].
+    # Our indices need to be in range [0, len(mesh.nelements)].
     for group_nr in range(num_groups):
-        for i in range(len(new_indices[group_nr])):
-            for j in range(len(new_indices[group_nr][0])):
-                original_index = new_indices[group_nr][i, j]
-                new_indices[group_nr][i, j] = np.where(
-                    required_indices == original_index)[0]
+        if not group_nr in skip_groups:
+            for i in range(len(new_indices[group_nr])):
+                for j in range(len(new_indices[group_nr][0])):
+                    original_index = new_indices[group_nr][i, j]
+                    new_indices[group_nr][i, j] = np.where(
+                        required_indices == original_index)[0]
 
     from meshmode.mesh import SimplexElementGroup, Mesh
 
     new_mesh_groups = []
     for group_nr in range(num_groups):
-        mesh_group = mesh.groups[group_nr]
-        new_mesh_groups.append(
-            SimplexElementGroup(mesh_group.order, new_indices[group_nr],
-                new_nodes[group_nr], unit_nodes=mesh_group.unit_nodes))
+        if not group_nr in skip_groups:
+            mesh_group = mesh.groups[group_nr]
+            new_mesh_groups.append(
+                SimplexElementGroup(mesh_group.order, new_indices[group_nr],
+                    new_nodes[group_nr], unit_nodes=mesh_group.unit_nodes))
 
     part_mesh = Mesh(new_vertices, new_mesh_groups)
 
