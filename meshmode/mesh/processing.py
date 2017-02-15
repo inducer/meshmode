@@ -90,11 +90,13 @@ def partition_mesh(mesh, part_per_element, part_nr):
         new_indices.append(mesh_group.vertex_indices[elems])
 
         new_nodes.append(
-            np.zeros((mesh.ambient_dim, end_idx - start_idx, mesh_group.nunit_nodes)))
+            np.zeros(
+                (mesh.ambient_dim, end_idx - start_idx, mesh_group.nunit_nodes)))
         for i in range(mesh.ambient_dim):
             for j in range(start_idx, end_idx):
                 elems = queried_elems[j] - num_prev_elems
-                new_nodes[group_nr][i, j - start_idx, :] = mesh_group.nodes[i, elems, :]
+                new_idx = j - start_idx
+                new_nodes[group_nr][i, new_idx, :] = mesh_group.nodes[i, elems, :]
 
         index_set |= set(new_indices[group_nr].ravel())
 
@@ -110,7 +112,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
 
     # Our indices need to be in range [0, len(mesh.nelements)].
     for group_nr in range(num_groups):
-        if not group_nr in skip_groups:
+        if group_nr not in skip_groups:
             for i in range(len(new_indices[group_nr])):
                 for j in range(len(new_indices[group_nr][0])):
                     original_index = new_indices[group_nr][i, j]
@@ -121,7 +123,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
 
     new_mesh_groups = []
     for group_nr in range(num_groups):
-        if not group_nr in skip_groups:
+        if group_nr not in skip_groups:
             mesh_group = mesh.groups[group_nr]
             new_mesh_groups.append(
                 SimplexElementGroup(mesh_group.order, new_indices[group_nr],
