@@ -67,9 +67,11 @@ def test_partition_torus_mesh():
 
 
 def test_partition_boxes_mesh():
+    n = 5
+    num_parts = 7
     from meshmode.mesh.generation import generate_regular_rect_mesh
-    mesh1 = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(5, 5, 5))
-    mesh2 = generate_regular_rect_mesh(a=(2, 2, 2), b=(3, 3, 3), n=(5, 5, 5))
+    mesh1 = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(n, n, n))
+    mesh2 = generate_regular_rect_mesh(a=(2, 2, 2), b=(3, 3, 3), n=(n, n, n))
 
     from meshmode.mesh.processing import merge_disjoint_meshes
     mesh = merge_disjoint_meshes([mesh1, mesh2])
@@ -82,16 +84,15 @@ def test_partition_boxes_mesh():
             adjacency_list[elem].add(mesh.nodal_adjacency.neighbors[n])
 
     from pymetis import part_graph
-    (_, p) = part_graph(3, adjacency=adjacency_list)
+    (_, p) = part_graph(num_parts, adjacency=adjacency_list)
     part_per_element = np.array(p)
 
     from meshmode.mesh.processing import partition_mesh
-    (part_mesh0, _) = partition_mesh(mesh, part_per_element, 0)
-    (part_mesh1, _) = partition_mesh(mesh, part_per_element, 1)
-    (part_mesh2, _) = partition_mesh(mesh, part_per_element, 2)
+    new_meshes = [
+        partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
 
-    assert mesh.nelements == (part_mesh0.nelements
-        + part_mesh1.nelements + part_mesh2.nelements)
+    assert mesh.nelements == np.sum(
+        [new_meshes[i].nelements for i in range(num_parts)])
 
 # }}}
 
