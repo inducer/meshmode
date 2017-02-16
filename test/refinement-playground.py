@@ -209,6 +209,7 @@ def refine_and_generate_chart_function(mesh, filename, function):
 def generate_hybrid_mesh(mesh, flags):
     from meshmode.mesh.generation import make_group_from_vertices
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+    from meshmode.mesh import Mesh
     nsplit = 0
     for cur in flags:
         if cur:
@@ -228,10 +229,11 @@ def generate_hybrid_mesh(mesh, flags):
                 cur_quad_ind += 1
             else:
                 if len(grp.vertex_indices[0]) == 4:
+                    print('here')
                     node_tuples_to_index = {(0, 0): 0, (1, 0): 1, (1, 1): 2, (0, 1): 3}
                     groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 0)]]
                     groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0)]]
-                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 1)]]
+                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1)]]
                     cur_simplex_ind += 1
                     groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0)]]
                     groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 1)]]
@@ -270,8 +272,11 @@ def generate_hybrid_mesh(mesh, flags):
                     groups[1][cur_simplex_ind][3] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 1, 0)]]
                     cur_simplex_ind += 1
     grp = []
-    grp.append(make_group_from_vertices(mesh.vertices, group[0], 4, SimplexElementGroup))
-    grp.append(make_group_from_vertices(mesh.vertices, group[1], 4, TensorProductElementGroup))
+    grp.append(make_group_from_vertices(mesh.vertices, groups[0], 4, TensorProductElementGroup))
+    grp.append(make_group_from_vertices(mesh.vertices, groups[1], 4, SimplexElementGroup))
+    res_mesh = Mesh(
+            mesh.vertices, grp)
+    return res_mesh
 
 def main2():
     from meshmode.mesh.generation import (  # noqa
@@ -317,6 +322,8 @@ def all_refine(num_mesh, depth, fname):
     else:
         mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),),
                 group_factory=TensorProductElementGroup)
+    flags = get_random_flags(mesh)
+    generate_hybrid_mesh(mesh, flags)
 
     #print("END GEN")
     import timeit
@@ -329,9 +336,21 @@ def all_refine(num_mesh, depth, fname):
     # mesh = r.refine(flags)
         #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
     #r = Refiner(mesh)
-    for time in range(2):
-        flags = get_random_flags(mesh)
-        mesh = r.refine(flags)
+    #coarsen_flags = []
+    #for time in range(2):
+    #    flags = get_random_flags(mesh)
+    #    if time == 1:
+    #        curnels = mesh.nelements
+    #        for ind, i in enumerate(flags):
+    #            if i:
+    #                coarsen_flags.append([ind, curnels, curnels + 1, curnels + 2, curnels + 3, curnels + 4, curnels + 5, curnels + 6])
+    #                curnels += 7
+    #    mesh = r.refine(flags)
+    #mesh = r.coarsen(coarsen_flags)
+    #flags = get_random_flags(mesh)
+    #mesh = r.refine(flags)
+
+                     
             #flags = np.zeros(mesh.nelements)
             #flags[0] = 1
             #if time < depth-1:
@@ -373,7 +392,7 @@ def all_refine(num_mesh, depth, fname):
     elif mesh.dim == 2:
         from meshmode.mesh.visualization import draw_2d_mesh
         draw_2d_mesh(mesh,
-                draw_vertex_numbers=True,
+                draw_vertex_numbers=False,
                 draw_element_numbers=True,
                 draw_nodal_adjacency=False, fill=None)
         import matplotlib.pyplot as pt
