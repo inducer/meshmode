@@ -50,49 +50,48 @@ logger = logging.getLogger(__name__)
 
 # {{{ partition_mesh
 
-@pytest.mark.parametrize("mesh_type", ["torus", "boxes"])
-def test_partition_mesh(mesh_type):
-    if mesh_type == "torus":
-        from meshmode.mesh.generation import generate_torus
-        my_mesh = generate_torus(2, 1, n_outer=2, n_inner=2)
+def test_partition_torus_mesh():
+    from meshmode.mesh.generation import generate_torus
+    my_mesh = generate_torus(2, 1, n_outer=2, n_inner=2)
 
-        part_per_element = np.array([0, 1, 2, 1, 1, 2, 1, 0])
+    part_per_element = np.array([0, 1, 2, 1, 1, 2, 1, 0])
 
-        from meshmode.mesh.processing import partition_mesh
-        (part_mesh0, _) = partition_mesh(my_mesh, part_per_element, 0)
-        (part_mesh1, _) = partition_mesh(my_mesh, part_per_element, 1)
-        (part_mesh2, _) = partition_mesh(my_mesh, part_per_element, 2)
+    from meshmode.mesh.processing import partition_mesh
+    (part_mesh0, _) = partition_mesh(my_mesh, part_per_element, 0)
+    (part_mesh1, _) = partition_mesh(my_mesh, part_per_element, 1)
+    (part_mesh2, _) = partition_mesh(my_mesh, part_per_element, 2)
 
-        assert part_mesh0.nelements == 2
-        assert part_mesh1.nelements == 4
-        assert part_mesh2.nelements == 2
+    assert part_mesh0.nelements == 2
+    assert part_mesh1.nelements == 4
+    assert part_mesh2.nelements == 2
 
-    elif mesh_type == "boxes":
-        from meshmode.mesh.generation import generate_regular_rect_mesh
-        mesh1 = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(5, 5, 5))
-        mesh2 = generate_regular_rect_mesh(a=(2, 2, 2), b=(3, 3, 3), n=(5, 5, 5))
 
-        from meshmode.mesh.processing import merge_disjoint_meshes
-        mesh = merge_disjoint_meshes([mesh1, mesh2])
+def test_partition_boxes_mesh():
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh1 = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(5, 5, 5))
+    mesh2 = generate_regular_rect_mesh(a=(2, 2, 2), b=(3, 3, 3), n=(5, 5, 5))
 
-        adjacency_list = np.zeros((mesh.nelements,), dtype=set)
-        for elem in range(mesh.nelements):
-            adjacency_list[elem] = set()
-            starts = mesh.nodal_adjacency.neighbors_starts
-            for n in range(starts[elem], starts[elem + 1]):
-                adjacency_list[elem].add(mesh.nodal_adjacency.neighbors[n])
+    from meshmode.mesh.processing import merge_disjoint_meshes
+    mesh = merge_disjoint_meshes([mesh1, mesh2])
 
-        from pymetis import part_graph
-        (_, p) = part_graph(3, adjacency=adjacency_list)
-        part_per_element = np.array(p)
+    adjacency_list = np.zeros((mesh.nelements,), dtype=set)
+    for elem in range(mesh.nelements):
+        adjacency_list[elem] = set()
+        starts = mesh.nodal_adjacency.neighbors_starts
+        for n in range(starts[elem], starts[elem + 1]):
+            adjacency_list[elem].add(mesh.nodal_adjacency.neighbors[n])
 
-        from meshmode.mesh.processing import partition_mesh
-        (part_mesh0, _) = partition_mesh(mesh, part_per_element, 0)
-        (part_mesh1, _) = partition_mesh(mesh, part_per_element, 1)
-        (part_mesh2, _) = partition_mesh(mesh, part_per_element, 2)
+    from pymetis import part_graph
+    (_, p) = part_graph(3, adjacency=adjacency_list)
+    part_per_element = np.array(p)
 
-        assert mesh.nelements == (part_mesh0.nelements
-            + part_mesh1.nelements + part_mesh2.nelements)
+    from meshmode.mesh.processing import partition_mesh
+    (part_mesh0, _) = partition_mesh(mesh, part_per_element, 0)
+    (part_mesh1, _) = partition_mesh(mesh, part_per_element, 1)
+    (part_mesh2, _) = partition_mesh(mesh, part_per_element, 2)
+
+    assert mesh.nelements == (part_mesh0.nelements
+        + part_mesh1.nelements + part_mesh2.nelements)
 
 # }}}
 
