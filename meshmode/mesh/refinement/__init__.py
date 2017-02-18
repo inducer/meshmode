@@ -203,6 +203,24 @@ class Refiner(object):
         result_vertices = list(combinations(vertices, len(index_to_node_tuple[dimension-1])))
         return (result_vertices, dimension-1)
 
+    def split_rect_into_triangles(self, vertices, dimension):
+        #can split
+        if dimension == 2 and len(vertices) == 4:
+            result_vertices = []
+            node_tuples_to_index = {(0, 0): 0, (1, 0): 1, (1, 1): 2, (0, 1): 3}
+            first = []
+            first.append(vertices[node_tuples_to_index[(0, 0)]])
+            first.append(vertices[node_tuples_to_index[(1, 0)]])
+            first.append(vertices[node_tuples_to_index[(0, 1)]])
+            result_vertices.append(first)
+            second = []
+            second.append(vertices[node_tuples_to_index[(1, 0)]])
+            second.append(vertices[node_tuples_to_index[(1, 1)]])
+            second.append(vertices[node_tuples_to_index[(0, 1)]])
+            result_vertices.append(second)
+            return (result_vertices, dimension)
+        return ([], dimension)
+
     def remove_from_adjacent_set(self, element_index, vertices, dimension, result_tuples, node_tuples, index_to_node_tuple):
         if len(vertices) == 1:
             if element_index in self.adjacent_set[vertices[0]]:
@@ -211,6 +229,9 @@ class Refiner(object):
             (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, result_tuples, node_tuples, index_to_node_tuple)
             for cur_vertices in next_vertices:
                 self.remove_from_adjacent_set(element_index, cur_vertices, next_dimension, result_tuples, node_tuples, index_to_node_tuple)
+            #(simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
+            #for cur_vertices in simplex_vertices:
+            #    self.remove_from_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
 
     def add_to_adjacent_set(self, element_index, vertices, dimension, result_tuples, node_tuples, index_to_node_tuple):
         if len(vertices) == 1:
@@ -220,6 +241,9 @@ class Refiner(object):
             (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, result_tuples, node_tuples, index_to_node_tuple)
             for cur_vertices in next_vertices:
                 self.add_to_adjacent_set(element_index, cur_vertices, next_dimension, result_tuples, node_tuples, index_to_node_tuple)
+            #(simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
+            #for cur_vertices in simplex_vertices:
+            #    self.add_to_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
 
     #creates midpoints in result_vertices and updates adjacent_set with midpoint vertices
     def create_midpoints(self, group_index, iel_grp, element_vertices, nvertices, index_to_node_tuple, midpoints, midpoint_order):
@@ -312,6 +336,9 @@ class Refiner(object):
             (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, result_tuples, node_tuples, index_to_node_tuple)
             for cur_vertices in next_vertices:
                 result = result.union(self.elements_connected_to(element_index, cur_vertices, next_dimension, result_tuples, node_tuples, index_to_node_tuple))
+            #(simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
+            #for cur_vertices in simplex_vertices:
+            #    result = result.union(self.elements_connected_to(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple))
         return result
     
     def perform_refinement(self, group_index, iel_grp, nelements_in_grp, nvertices, element_mapping,
@@ -628,6 +655,7 @@ class Refiner(object):
             nelements_in_grp = grp.nelements
             midpoints_to_find = [iel_grp for iel_grp in range(grp.nelements) if
                     refine_flags[iel_base+iel_grp]]
+            index_to_node_tuple = self.element_index_to_node_tuple(grp)
             if isinstance(grp, SimplexElementGroup):
                 tesselation = self._Tesselation(
                     self.simplex_result[grp.dim], self.simplex_node_tuples[grp.dim])
@@ -652,6 +680,10 @@ class Refiner(object):
                         midpoint_tuple_to_index = set()
                         for i in range(len(grp.vertex_indices[iel_grp])):
                             for j in range(i+1, len(grp.vertex_indices[iel_grp])):
+                                print(index_to_node_tuple)
+                                print(dimension, i, j)
+                                print(index_to_node_tuple[dimension][i])
+                                print(index_to_node_tuple[dimension][j])
                                 midpoint_tuple = self.midpoint_of_node_tuples(
                                         index_to_node_tuple[dimension][i],
                                         index_to_node_tuple[dimension][j])

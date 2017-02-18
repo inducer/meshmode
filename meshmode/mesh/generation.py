@@ -535,7 +535,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
                 d = vertex_indices[i+1, j+1]
 
                 if is_tp:
-                    el_vertices.append((a, b, c, d))
+                    el_vertices.append((a, c, b, d))
                 else:
                     el_vertices.append((a, b, c))
                     el_vertices.append((d, c, b))
