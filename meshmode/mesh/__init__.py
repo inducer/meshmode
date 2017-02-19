@@ -389,6 +389,12 @@ class FacialAdjacencyGroup(Record):
     :class:`MeshElementGroup`, i.e. information about elements that share (part
     of) a face.
 
+    .. image:: images/facial-adjacency-group.png
+
+    Represents (for example) *one* of the (colored) interfaces between
+    :class:`MeshElementGroup` instances. (Note that element groups are not
+    necessarily contiguous as the imagee may suggest.)
+
     .. attribute:: igroup
 
     .. attribute:: ineighbor_group
@@ -482,6 +488,22 @@ class Mesh(Record):
 
         Referencing this attribute may raise
         :exc:`meshmode.DataUnavailable`.
+
+        .. image:: images/facial-adjacency-group.png
+
+        For example for the mesh in the figure, the following data structure
+        would be present::
+
+            [
+                {...},  # connectivity for group 0
+                {...},  # connectivity for group 1
+                {...},  # connectivity for group 2
+                {       # connectivity for group 3
+                    1: FacialAdjacencyGroup(...)  # towards group 1, green
+                    2: FacialAdjacencyGroup(...)  # towards group 2, pink
+                    None: FacialAdjacencyGroup(...)  # towards the boundary
+                }
+            ]
 
     .. attribute:: boundary_tags
 
