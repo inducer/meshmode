@@ -64,11 +64,29 @@ from meshmode.discretization import ElementGroupBase
 # {{{ concrete element groups
 
 class PolynomialSimplexElementGroupBase(ElementGroupBase):
+    def is_orthogonal_basis(self):
+        return self.dim <= 3
+
     def basis(self):
-        return mp.simplex_best_available_basis(self.dim, self.order)
+        if self.dim <= 3:
+            return mp.simplex_onb(self.dim, self.order)
+        else:
+            return mp.simplex_monomial_basis(self.dim, self.order)
 
     def grad_basis(self):
-        return mp.grad_simplex_best_available_basis(self.dim, self.order)
+        if self.dim <= 3:
+            return mp.grad_simplex_onb(self.dim, self.order)
+        else:
+            return mp.grad_simplex_monomial_basis(self.dim, self.order)
+
+    @memoize_method
+    def mass_matrix(self):
+        assert self.is_orthogonal_basis()
+
+        import modepy as mp
+        return mp.mass_matrix(
+                self.basis(),
+                self.unit_nodes)
 
     @memoize_method
     def from_mesh_interp_matrix(self):
