@@ -48,6 +48,55 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# {{{ partition_mesh
+
+def test_partition_torus_mesh():
+    from meshmode.mesh.generation import generate_torus
+    my_mesh = generate_torus(2, 1, n_outer=2, n_inner=2)
+
+    part_per_element = np.array([0, 1, 2, 1, 1, 2, 1, 0])
+
+    from meshmode.mesh.processing import partition_mesh
+    (part_mesh0, _) = partition_mesh(my_mesh, part_per_element, 0)
+    (part_mesh1, _) = partition_mesh(my_mesh, part_per_element, 1)
+    (part_mesh2, _) = partition_mesh(my_mesh, part_per_element, 2)
+
+    assert part_mesh0.nelements == 2
+    assert part_mesh1.nelements == 4
+    assert part_mesh2.nelements == 2
+
+
+def test_partition_boxes_mesh():
+    n = 5
+    num_parts = 7
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh1 = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(n, n, n))
+    mesh2 = generate_regular_rect_mesh(a=(2, 2, 2), b=(3, 3, 3), n=(n, n, n))
+
+    from meshmode.mesh.processing import merge_disjoint_meshes
+    mesh = merge_disjoint_meshes([mesh1, mesh2])
+
+    adjacency_list = np.zeros((mesh.nelements,), dtype=set)
+    for elem in range(mesh.nelements):
+        adjacency_list[elem] = set()
+        starts = mesh.nodal_adjacency.neighbors_starts
+        for n in range(starts[elem], starts[elem + 1]):
+            adjacency_list[elem].add(mesh.nodal_adjacency.neighbors[n])
+
+    from pymetis import part_graph
+    (_, p) = part_graph(num_parts, adjacency=adjacency_list)
+    part_per_element = np.array(p)
+
+    from meshmode.mesh.processing import partition_mesh
+    new_meshes = [
+        partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
+
+    assert mesh.nelements == np.sum(
+        [new_meshes[i].nelements for i in range(num_parts)])
+
+# }}}
+
+
 # {{{ circle mesh
 
 def test_circle_mesh(do_plot=False):

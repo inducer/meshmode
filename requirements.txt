@@ -9,3 +9,6 @@ git+https://github.com/inducer/loopy.git
 git+https://github.com/inducer/boxtree.git
 git+https://github.com/inducer/sumpy.git
 git+https://github.com/inducer/pytential.git
+
+# requires pymetis for tests for partition_mesh
+git+https://github.com/inducer/pymetis.git
