@@ -241,7 +241,7 @@ def generate_hybrid_mesh(mesh, flags):
                     groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1)]]
                     cur_simplex_ind += 1
                 elif len(grp.vertex_indices[0]) == 8:
-                    node_tuples_to_index = {(0, 0, 0): 0, (1, 0, 0): 1, (1, 1, 0): 2, (0, 1, 0): 3, (0, 1, 1): 4, (0, 0, 1): 5, (1, 0, 1): 6, (1, 1, 1): 7}
+                    node_tuples_to_index = {(0, 0, 0): 0, (0, 0, 1): 1, (0, 1, 0): 2, (0, 1, 1): 3, (1, 0, 0): 4, (1, 0, 1): 5, (1, 1, 0): 6, (1, 1, 1): 7}
                     groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 0, 0)]]
                     groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 0)]]
                     groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 0)]]
@@ -305,7 +305,7 @@ def all_refine(num_mesh, depth, fname):
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    if 1:
+    if 0:
         mesh = generate_gmsh(
                 ScriptWithFilesSource(
                     """
@@ -322,6 +322,9 @@ def all_refine(num_mesh, depth, fname):
         mesh = generate_regular_rect_mesh()
     elif 0:
         mesh =  generate_box_mesh(2*(np.linspace(0, 1, 5),))
+    elif 1:
+        mesh =  generate_box_mesh(3*(np.linspace(0, 1, 5),),
+                group_factory=TensorProductElementGroup)
     else:
         mesh =  generate_box_mesh(2*(np.linspace(0, 1, 3),),
                 group_factory=TensorProductElementGroup)
@@ -342,15 +345,15 @@ def all_refine(num_mesh, depth, fname):
         #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
     r = Refiner(mesh)
     #coarsen_flags = []
-    for time in range(3):
-        flags = get_random_flags(mesh)
+    #for time in range(3):
+    #    flags = get_random_flags(mesh)
         #if time == 1:
         #    curnels = mesh.nelements
         #    for ind, i in enumerate(flags):
         #        if i:
         #            coarsen_flags.append([ind, curnels, curnels + 1, curnels + 2, curnels + 3, curnels + 4, curnels + 5, curnels + 6])
         #            curnels += 7
-        mesh = r.refine(flags)
+        #mesh = r.refine(flags)
     #mesh = r.coarsen(coarsen_flags)
     #flags = get_random_flags(mesh)
     #mesh = r.refine(flags)
@@ -373,7 +376,7 @@ def all_refine(num_mesh, depth, fname):
         #import matplotlib.pyplot as pt
         #pt.show()
 
-    if mesh.dim == 3:
+    if mesh.dim == 3 and isinstance(mesh, SimplexElementGroup):
         from meshmode.discretization import Discretization
         from meshmode.discretization.poly_element import \
                 PolynomialWarpAndBlendGroupFactory
@@ -398,9 +401,9 @@ def all_refine(num_mesh, depth, fname):
                 draw_vertex_numbers=False,
                 draw_element_numbers=True,
                 draw_nodal_adjacency=False, fill=None)
+        import matplotlib.pyplot as pt
+        pt.show()
     check_nodal_adj_against_geometry(mesh)
-    import matplotlib.pyplot as pt
-    pt.show()
 
     #import matplotlib.pyplot as pt
     #pt.plot(nelements, runtimes, "o")
