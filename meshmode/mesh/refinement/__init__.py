@@ -86,15 +86,13 @@ class Refiner(object):
         self.adjacent_set = [set() for _ in range(nvertices)]
         # {{{ initialization
 
-        for grp in mesh.groups:
+        for grp_index, grp in enumerate(mesh.groups):
             iel_base = grp.element_nr_base
             for iel_grp in range(grp.nelements):
                 vert_indices = grp.vertex_indices[iel_grp]
                 for i in range(len(vert_indices)):
-                    self.adjacent_set[vert_indices[i]].add(iel_base+iel_grp)
+                    self.adjacent_set[vert_indices[i]].add((grp_index, iel_grp))
         # }}}
-        for i in mesh.groups[0].vertex_indices[0]:
-            print(self.adjacent_set[i])
         self.simplex_index_to_node_tuple = []
         self.simplex_index_to_midpoint_tuple = []
         self.quad_index_to_node_tuple = []
@@ -298,7 +296,7 @@ class Refiner(object):
                     self.groups[group_index][element_index][i] = node_tuple_to_vertex_index[cur_node_tuple]
                     result_vertices.append(node_tuple_to_vertex_index[cur_node_tuple])
                 element_mapping[-1].append(element_index)
-                result.append((element_index, result_vertices))
+                result.append(((group_index, element_index), result_vertices))
             else:
                 result_vertices = []
                 for i, index in enumerate(subelement):
@@ -306,17 +304,18 @@ class Refiner(object):
                     self.groups[group_index][nelements_in_grp][i] = node_tuple_to_vertex_index[cur_node_tuple]
                     result_vertices.append(node_tuple_to_vertex_index[cur_node_tuple])
                 element_mapping[-1].append(nelements_in_grp)
-                result.append((nelements_in_grp, result_vertices))
+                result.append(((group_index, nelements_in_grp), result_vertices))
                 nelements_in_grp += 1
         return (result, nelements_in_grp, element_mapping)
 
     def refine_element(self, group_index, iel_grp, nelements_in_grp, nvertices, element_mapping, result_tuples, node_tuples, index_to_node_tuple, midpoints, midpoint_order):
         from six.moves import range
         grp = self.last_mesh.groups[group_index]
+        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
         iel_base = grp.element_nr_base
         element_vertices = grp.vertex_indices[iel_grp]
         dimension = self.last_mesh.groups[group_index].dim
-        self.remove_from_adjacent_set(iel_base + iel_grp, element_vertices, dimension, result_tuples, node_tuples, index_to_node_tuple)
+        self.remove_from_adjacent_set((group_index, iel_grp), element_vertices, dimension, result_tuples, node_tuples, index_to_node_tuple)
         nvertices = self.create_midpoints(group_index, iel_grp, element_vertices, nvertices, index_to_node_tuple, midpoints, midpoint_order)
         element_mapping.append([])
         (subelement_indices_and_vertices, nelements_in_grp, element_mapping) = self.create_elements(iel_grp, 
@@ -368,11 +367,11 @@ class Refiner(object):
         dimension = self.last_mesh.groups[group_index].dim
         #simplex
         if isinstance(self.last_mesh.groups[group_index], SimplexElementGroup):
-            return self.elements_connected_to(iel_base+iel_grp, element_vertices, dimension,
+            return self.elements_connected_to((group_index, iel_grp), element_vertices, dimension,
                     self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
         #quad
         elif isinstance(self.last_mesh.groups[group_index], TensorProductElementGroup):
-            return self.elements_connected_to(iel_base+iel_grp, element_vertices, dimension,
+            return self.elements_connected_to((group_index, iel_grp), element_vertices, dimension,
                     self.quad_result, self.quad_node_tuples, self.quad_index_to_node_tuple)
 
     def element_index_to_node_tuple(self, grp):
@@ -589,7 +588,6 @@ class Refiner(object):
         return self.last_mesh
 
     def refine(self, refine_flags):
-        print(refine_flags)
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
         from six.moves import range
         """
@@ -634,7 +632,7 @@ class Refiner(object):
                                         nvertices += 1
                             midpoint_already.add(index_tuple)
                             midpoint_tuple_to_index[midpoint_tuple] = index_tuple
-            self.groups.append(np.empty([nelements, len(grp.vertex_indices[iel_grp])], dtype=np.int32))
+            self.groups.append(np.empty([nelements, len(grp.vertex_indices[0])], dtype=np.int32))
             totalnelements += nelements
         self.vertices = np.empty([len(self.last_mesh.vertices), nvertices])
         #copy vertices
@@ -680,10 +678,6 @@ class Refiner(object):
                         midpoint_tuple_to_index = set()
                         for i in range(len(grp.vertex_indices[iel_grp])):
                             for j in range(i+1, len(grp.vertex_indices[iel_grp])):
-                                print(index_to_node_tuple)
-                                print(dimension, i, j)
-                                print(index_to_node_tuple[dimension][i])
-                                print(index_to_node_tuple[dimension][j])
                                 midpoint_tuple = self.midpoint_of_node_tuples(
                                         index_to_node_tuple[dimension][i],
                                         index_to_node_tuple[dimension][j])
@@ -698,6 +692,7 @@ class Refiner(object):
                                     cur += 1
                         cur_el += 1
                 midpoints = dict(zip(midpoints_to_find, midpoints))
+
             for iel_grp in range(grp.nelements):
                 if refine_flags[iel_base + iel_grp]:
                     (nelements_in_grp, nvertices, element_mapping) = \
@@ -775,13 +770,20 @@ class Refiner(object):
         # medium-term FIXME: make this an incremental update
         # rather than build-from-scratch
         element_to_element = []
-        iel_base = 0
+
+        iel_base_for_group = []
+        cur_iel_base = 0
+        for group_index, grp in enumerate(groups):
+            iel_base_for_group.append(cur_iel_base);
+            cur_iel_base += len(grp)
+
         for group_index, grp in enumerate(groups):
             for iel_grp in range(len(grp)):
-                element_to_element.append(self.get_elements_connected_to(groups, group_index, iel_base, iel_grp))
-                if iel_grp == 0:
-                    print(element_to_element)
-            iel_base += len(grp)
+                elements_connected_to = self.get_elements_connected_to(groups, group_index, iel_base_for_group[group_index], iel_grp)
+                global_elements_connected_to = set()
+                for el in elements_connected_to:
+                    global_elements_connected_to.add(iel_base_for_group[el[0]] + el[1])
+                element_to_element.append(global_elements_connected_to)
         for iel, neighbors in enumerate(element_to_element):
             if iel in neighbors:
                 neighbors.remove(iel)
