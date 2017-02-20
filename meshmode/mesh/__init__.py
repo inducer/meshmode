@@ -392,8 +392,9 @@ class FacialAdjacencyGroup(Record):
     .. image:: images/facial-adjacency-group.png
 
     Represents (for example) *one* of the (colored) interfaces between
-    :class:`MeshElementGroup` instances. (Note that element groups are not
-    necessarily contiguous as the imagee may suggest.)
+    :class:`MeshElementGroup` instances, or an interface between
+    :class:`MeshElementGroup` and a boundary. (Note that element groups are not
+    necessarily contiguous like the figure may suggest.)
 
     .. attribute:: igroup
 
@@ -501,9 +502,12 @@ class Mesh(Record):
                 {       # connectivity for group 3
                     1: FacialAdjacencyGroup(...)  # towards group 1, green
                     2: FacialAdjacencyGroup(...)  # towards group 2, pink
-                    None: FacialAdjacencyGroup(...)  # towards the boundary
+                    None: FacialAdjacencyGroup(...)  # towards the boundary, orange
                 }
             ]
+
+        (Note that element groups are not necessarily contiguous like the figure
+        may suggest.)
 
     .. attribute:: boundary_tags
 
