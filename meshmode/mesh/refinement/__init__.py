@@ -205,7 +205,7 @@ class Refiner(object):
         #can split
         if dimension == 2 and len(vertices) == 4:
             result_vertices = []
-            node_tuples_to_index = {(0, 0): 0, (1, 0): 1, (1, 1): 2, (0, 1): 3}
+            node_tuples_to_index = {(0, 0): 0, (0, 1): 1, (1, 0): 2, (1, 1): 3}
             first = []
             first.append(vertices[node_tuples_to_index[(0, 0)]])
             first.append(vertices[node_tuples_to_index[(1, 0)]])
@@ -216,6 +216,16 @@ class Refiner(object):
             second.append(vertices[node_tuples_to_index[(1, 1)]])
             second.append(vertices[node_tuples_to_index[(0, 1)]])
             result_vertices.append(second)
+            third = []
+            third.append(vertices[node_tuples_to_index[(0, 0)]])
+            third.append(vertices[node_tuples_to_index[(1, 0)]])
+            third.append(vertices[node_tuples_to_index[(1, 1)]])
+            result_vertices.append(third)
+            fourth = []
+            fourth.append(vertices[node_tuples_to_index[(0, 0)]])
+            fourth.append(vertices[node_tuples_to_index[(1, 1)]])
+            fourth.append(vertices[node_tuples_to_index[(0, 1)]])
+            result_vertices.append(fourth)
             return (result_vertices, dimension)
         return ([], dimension)
 
@@ -227,9 +237,9 @@ class Refiner(object):
             (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, result_tuples, node_tuples, index_to_node_tuple)
             for cur_vertices in next_vertices:
                 self.remove_from_adjacent_set(element_index, cur_vertices, next_dimension, result_tuples, node_tuples, index_to_node_tuple)
-            #(simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
-            #for cur_vertices in simplex_vertices:
-            #    self.remove_from_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
+            (simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
+            for cur_vertices in simplex_vertices:
+                self.remove_from_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
 
     def add_to_adjacent_set(self, element_index, vertices, dimension, result_tuples, node_tuples, index_to_node_tuple):
         if len(vertices) == 1:
@@ -239,9 +249,9 @@ class Refiner(object):
             (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, result_tuples, node_tuples, index_to_node_tuple)
             for cur_vertices in next_vertices:
                 self.add_to_adjacent_set(element_index, cur_vertices, next_dimension, result_tuples, node_tuples, index_to_node_tuple)
-            #(simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
-            #for cur_vertices in simplex_vertices:
-            #    self.add_to_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
+            (simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
+            for cur_vertices in simplex_vertices:
+                self.add_to_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
 
     #creates midpoints in result_vertices and updates adjacent_set with midpoint vertices
     def create_midpoints(self, group_index, iel_grp, element_vertices, nvertices, index_to_node_tuple, midpoints, midpoint_order):
@@ -335,9 +345,9 @@ class Refiner(object):
             (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, result_tuples, node_tuples, index_to_node_tuple)
             for cur_vertices in next_vertices:
                 result = result.union(self.elements_connected_to(element_index, cur_vertices, next_dimension, result_tuples, node_tuples, index_to_node_tuple))
-            #(simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
-            #for cur_vertices in simplex_vertices:
-            #    result = result.union(self.elements_connected_to(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple))
+            (simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
+            for cur_vertices in simplex_vertices:
+                result = result.union(self.elements_connected_to(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple))
         return result
     
     def perform_refinement(self, group_index, iel_grp, nelements_in_grp, nvertices, element_mapping,
