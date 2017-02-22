@@ -36,7 +36,7 @@ from pyopencl.tools import (  # noqa
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
         PolynomialWarpAndBlendGroupFactory,
-        PolynomialEquidistantGroupFactory,
+        PolynomialEquidistantSimplexGroupFactory,
         )
 from meshmode.mesh import BTAG_ALL
 from meshmode.discretization.connection import \
@@ -595,9 +595,9 @@ def test_sanity_qhull_nd(ctx_getter, dim, order):
 
     from meshmode.discretization import Discretization
     low_discr = Discretization(ctx, mesh,
-            PolynomialEquidistantGroupFactory(order))
+            PolynomialEquidistantSimplexGroupFactory(order))
     high_discr = Discretization(ctx, mesh,
-            PolynomialEquidistantGroupFactory(order+1))
+            PolynomialEquidistantSimplexGroupFactory(order+1))
 
     from meshmode.discretization.connection import make_same_mesh_connection
     cnx = make_same_mesh_connection(high_discr, low_discr)
