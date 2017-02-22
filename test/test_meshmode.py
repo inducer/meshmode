@@ -496,7 +496,7 @@ def test_merge_and_map(ctx_getter, visualize=False):
         discr = Discretization(cl_ctx, mesh3, discr_grp_factory)
 
         from meshmode.discretization.visualization import make_visualizer
-        vis = make_visualizer(queue, discr, 3)
+        vis = make_visualizer(queue, discr, 3, element_shrink_factor=0.8)
         vis.write_vtk_file("merged.vtu", [])
 
 # }}}

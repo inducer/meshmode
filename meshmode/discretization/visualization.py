@@ -104,10 +104,15 @@ class Visualizer(object):
     .. automethod:: write_vtk_file
     """
 
-    def __init__(self, connection):
+    def __init__(self, connection, element_shrink_factor=None):
         self.connection = connection
         self.discr = connection.from_discr
         self.vis_discr = connection.to_discr
+
+        if element_shrink_factor is None:
+            element_shrink_factor = 1
+
+        self.element_shrink_factor = element_shrink_factor
 
     def _resample_and_get(self, queue, vec):
         from pytools.obj_array import with_object_array_or_scalar
@@ -116,6 +121,8 @@ class Visualizer(object):
             return self.connection(queue, fld).get(queue=queue)
 
         return with_object_array_or_scalar(resample_and_get_one, vec)
+
+    # {{{ vis sub-element connectivity
 
     @memoize_method
     def _vis_connectivity(self):
@@ -207,6 +214,10 @@ class Visualizer(object):
 
         return result
 
+    # }}}
+
+    # {{{ mayavi
+
     def show_scalar_in_mayavi(self, field, **kwargs):
         import mayavi.mlab as mlab
 
@@ -256,6 +267,10 @@ class Visualizer(object):
         if do_show:
             mlab.show()
 
+    # }}}
+
+    # {{{ vtk
+
     def write_vtk_file(self, file_name, names_and_fields, compressor=None,
             real_only=False):
 
@@ -287,6 +302,16 @@ class Visualizer(object):
 
         # }}}
 
+        nodes = nodes
+        if self.element_shrink_factor != 1:
+            for vgrp in self.vis_discr.groups:
+                nodes_view = vgrp.view(nodes)
+                el_centers = np.mean(nodes_view, axis=-1)
+                nodes_view[:] = (
+                        (self.element_shrink_factor * nodes_view)
+                        + (1-self.element_shrink_factor)
+                        * el_centers[:, :, np.newaxis])
+
         grid = UnstructuredGrid(
                 (self.vis_discr.nnodes,
                     DataArray("points",
@@ -314,7 +339,7 @@ class Visualizer(object):
             AppendedDataXMLGenerator(compressor)(grid).write(outf)
 
 
-def make_visualizer(queue, discr, vis_order):
+def make_visualizer(queue, discr, vis_order, element_shrink_factor=None):
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import (
             PolynomialWarpAndBlendElementGroup,
@@ -331,7 +356,9 @@ def make_visualizer(queue, discr, vis_order):
     from meshmode.discretization.connection import \
             make_same_mesh_connection
 
-    return Visualizer(make_same_mesh_connection(vis_discr, discr))
+    return Visualizer(
+            make_same_mesh_connection(vis_discr, discr),
+            element_shrink_factor=element_shrink_factor)
 
 # }}}
 
