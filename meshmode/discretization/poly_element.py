@@ -102,7 +102,7 @@ class PolynomialElementGroupBase(ElementGroupBase):
 
 # {{{ concrete element groups for simplices
 
-class PolynomialSimplexElementGroupBase(ElementGroupBase):
+class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase):
     def is_orthogonal_basis(self):
         return self.dim <= 3
 
