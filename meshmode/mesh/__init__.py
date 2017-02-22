@@ -660,6 +660,24 @@ class Mesh(Record):
                 assert test_volume_mesh_element_orientations(self), \
                         "negatively oriented elements found"
 
+    def get_copy_kwargs(self, **kwargs):
+        def set_if_not_present(name, from_name=None):
+            if from_name is None:
+                from_name = name
+            if name not in kwargs:
+                kwargs[name] = getattr(self, from_name)
+
+        set_if_not_present("vertices")
+        if "groups" not in kwargs:
+            kwargs["groups"] = [group.copy() for group in self.groups]
+        set_if_not_present("boundary_tags")
+        set_if_not_present("nodal_adjacency", "_nodal_adjacency")
+        set_if_not_present("facial_adjacency_groups", "_facial_adjacency_groups")
+        set_if_not_present("vertex_id_dtype")
+        set_if_not_present("element_id_dtype")
+
+        return kwargs
+
     @property
     def ambient_dim(self):
         return self.vertices.shape[0]

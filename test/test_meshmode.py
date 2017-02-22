@@ -793,6 +793,12 @@ def test_box_mesh(ctx_getter, visualize=False):
 # }}}
 
 
+def test_mesh_copy():
+    from meshmode.mesh.generation import generate_box_mesh
+    mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
+    mesh.copy()
+
+
 # {{{ as_python stringification
 
 def test_as_python():
