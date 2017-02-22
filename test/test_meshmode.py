@@ -454,32 +454,49 @@ def test_element_orientation():
 
 def test_merge_and_map(ctx_getter, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
+    from meshmode.mesh.generation import generate_box_mesh
+    from meshmode.mesh import TensorProductElementGroup
+    from meshmode.discretization.poly_element import (
+            PolynomialWarpAndBlendGroupFactory,
+            LegendreGaussLobattoTensorProductGroupFactory)
 
     mesh_order = 3
 
-    mesh = generate_gmsh(
-            FileSource("blob-2d.step"), 2, order=mesh_order,
-            force_ambient_dim=2,
-            other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"]
-            )
+    if 1:
+        mesh = generate_gmsh(
+                FileSource("blob-2d.step"), 2, order=mesh_order,
+                force_ambient_dim=2,
+                other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"]
+                )
+
+        discr_grp_factory = PolynomialWarpAndBlendGroupFactory(3)
+    else:
+        mesh = generate_box_mesh(
+                (
+                    np.linspace(0, 1, 4),
+                    np.linspace(0, 1, 4),
+                    np.linspace(0, 1, 4),
+                    ),
+                10, group_factory=TensorProductElementGroup)
+
+        discr_grp_factory = LegendreGaussLobattoTensorProductGroupFactory(3)
 
     from meshmode.mesh.processing import merge_disjoint_meshes, affine_map
-    mesh2 = affine_map(mesh, A=np.eye(2), b=np.array([5, 0]))
+    mesh2 = affine_map(mesh,
+            A=np.eye(mesh.ambient_dim),
+            b=np.array([5, 0, 0])[:mesh.ambient_dim])
 
     mesh3 = merge_disjoint_meshes((mesh2, mesh))
 
     if visualize:
         from meshmode.discretization import Discretization
-        from meshmode.discretization.poly_element import \
-                PolynomialWarpAndBlendGroupFactory
         cl_ctx = ctx_getter()
         queue = cl.CommandQueue(cl_ctx)
 
-        discr = Discretization(cl_ctx, mesh3,
-                PolynomialWarpAndBlendGroupFactory(3))
+        discr = Discretization(cl_ctx, mesh3, discr_grp_factory)
 
         from meshmode.discretization.visualization import make_visualizer
-        vis = make_visualizer(queue, discr, 1)
+        vis = make_visualizer(queue, discr, 3)
         vis.write_vtk_file("merged.vtu", [])
 
 # }}}

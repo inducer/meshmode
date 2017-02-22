@@ -124,8 +124,9 @@ class Visualizer(object):
         """
         # Assume that we're using modepy's default node ordering.
 
-        from pytools import generate_nonnegative_integer_tuples_summing_to_at_most \
-                as gnitstam, single_valued
+        from pytools import (
+                generate_nonnegative_integer_tuples_summing_to_at_most as gnitstam,
+                generate_nonnegative_integer_tuples_below as gnitb)
         from meshmode.mesh import TensorProductElementGroup, SimplexElementGroup
 
         result = []
@@ -138,9 +139,7 @@ class Visualizer(object):
 
         for group in self.vis_discr.groups:
             if isinstance(group.mesh_el_group, SimplexElementGroup):
-                vis_order = single_valued(
-                        group.order for group in self.vis_discr.groups)
-                node_tuples = list(gnitstam(vis_order, self.vis_discr.dim))
+                node_tuples = list(gnitstam(group.order, group.dim))
 
                 from modepy.tools import submesh
                 el_connectivity = np.array(
@@ -153,7 +152,33 @@ class Visualizer(object):
                         }[group.dim]
 
             elif isinstance(group.mesh_el_group, TensorProductElementGroup):
-                raise NotImplementedError()
+                node_tuples = list(gnitb(group.order+1, group.dim))
+                node_tuple_to_index = dict(
+                        (nt, i) for i, nt in enumerate(node_tuples))
+
+                def add_tuple(a, b):
+                    return tuple(ai+bi for ai, bi in zip(a, b))
+
+                el_offsets = {
+                        1: [(0,), (1,)],
+                        2: [(0, 0), (1, 0), (1, 1), (0, 1)],
+                        3: [
+                            (0, 0, 0),
+                            (1, 0, 0),
+                            (1, 1, 0),
+                            (0, 1, 0),
+                            (0, 0, 1),
+                            (1, 0, 1),
+                            (1, 1, 1),
+                            (0, 1, 1),
+                            ]
+                        }[group.dim]
+
+                el_connectivity = np.array([
+                        [
+                            node_tuple_to_index[add_tuple(origin, offset)]
+                            for offset in el_offsets]
+                        for origin in gnitb(group.order, group.dim)])
 
                 vtk_cell_type = {
                         1: VTK_LINE,
@@ -291,11 +316,17 @@ class Visualizer(object):
 
 def make_visualizer(queue, discr, vis_order):
     from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlendGroupFactory
+    from meshmode.discretization.poly_element import (
+            PolynomialWarpAndBlendElementGroup,
+            LegendreGaussLobattoTensorProductElementGroup,
+            OrderAndTypeBasedGroupFactory)
     vis_discr = Discretization(
             discr.cl_context, discr.mesh,
-            PolynomialWarpAndBlendGroupFactory(vis_order),
+            OrderAndTypeBasedGroupFactory(
+                vis_order,
+                simplex_group_class=PolynomialWarpAndBlendElementGroup,
+                tensor_product_group_class=(
+                    LegendreGaussLobattoTensorProductElementGroup)),
             real_dtype=discr.real_dtype)
     from meshmode.discretization.connection import \
             make_same_mesh_connection
