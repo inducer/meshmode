@@ -141,11 +141,21 @@ def partition_mesh(mesh, part_per_element, part_nr):
                     new_nodes[group_nr], unit_nodes=mesh_group.unit_nodes))
 
     from meshmode.mesh import Mesh
-    part_mesh = Mesh(new_vertices, new_mesh_groups)
+    part_mesh = Mesh(new_vertices, new_mesh_groups, facial_adjacency_groups=None)
 
     return part_mesh, queried_elems
 
 # }}}
+
+
+def set_rank_boundaries(part_mesh, mesh, part_to_global):
+    """
+    Looks through facial_adjacency_groups in part_mesh.
+    If a boundary is found, then it is possible that it
+    used to be connected to other faces from mesh.
+    If this is the case, then part_mesh will have special
+    boundary_tags where faces used to be connected.
+    """
 
 
 # {{{ orientations
