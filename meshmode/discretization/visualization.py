@@ -1,6 +1,4 @@
-from __future__ import division
-from __future__ import absolute_import
-from six.moves import range
+from __future__ import division, absolute_import
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -24,8 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from six.moves import range
 import numpy as np
-from pytools import memoize_method
+from pytools import memoize_method, Record
 import pyopencl as cl
 
 __doc__ = """
@@ -71,16 +70,49 @@ def separate_by_real_and_imag(data, real_only):
                 yield (name, field)
 
 
+class _VisConnectivityGroup(Record):
+    """
+    .. attribute:: vis_connectivity
+
+        an array of shape ``(group.nelements,nsubelements,primitive_element_size)``
+
+    .. attribute:: vtk_cell_type
+
+    .. attribute:: subelement_nr_base
+    """
+
+    @property
+    def nsubelements(self):
+        return self.nelements * self.nsubelements_per_element
+
+    @property
+    def nelements(self):
+        return self.vis_connectivity.shape[0]
+
+    @property
+    def nsubelements_per_element(self):
+        return self.vis_connectivity.shape[1]
+
+    @property
+    def primitive_element_size(self):
+        return self.vis_connectivity.shape[2]
+
+
 class Visualizer(object):
     """
     .. automethod:: show_scalar_in_mayavi
     .. automethod:: write_vtk_file
     """
 
-    def __init__(self, connection):
+    def __init__(self, connection, element_shrink_factor=None):
         self.connection = connection
         self.discr = connection.from_discr
         self.vis_discr = connection.to_discr
+
+        if element_shrink_factor is None:
+            element_shrink_factor = 1
+
+        self.element_shrink_factor = element_shrink_factor
 
     def _resample_and_get(self, queue, vec):
         from pytools.obj_array import with_object_array_or_scalar
@@ -90,42 +122,101 @@ class Visualizer(object):
 
         return with_object_array_or_scalar(resample_and_get_one, vec)
 
+    # {{{ vis sub-element connectivity
+
     @memoize_method
     def _vis_connectivity(self):
         """
-        :return: an array of shape
-            ``(vis_discr.nelements,nsubelements,primitive_element_size)``
+        :return: a list of :class:`_VisConnectivityGroup` instances.
         """
         # Assume that we're using modepy's default node ordering.
 
-        from pytools import generate_nonnegative_integer_tuples_summing_to_at_most \
-                as gnitstam, single_valued
-        vis_order = single_valued(
-                group.order for group in self.vis_discr.groups)
-        node_tuples = list(gnitstam(vis_order, self.vis_discr.dim))
+        from pytools import (
+                generate_nonnegative_integer_tuples_summing_to_at_most as gnitstam,
+                generate_nonnegative_integer_tuples_below as gnitb)
+        from meshmode.mesh import TensorProductElementGroup, SimplexElementGroup
 
-        from modepy.tools import submesh
-        el_connectivity = np.array(
-                submesh(node_tuples),
-                dtype=np.intp)
+        result = []
 
-        nelements = sum(group.nelements for group in self.vis_discr.groups)
-        vis_connectivity = np.empty(
-                (nelements,) + el_connectivity.shape, dtype=np.intp)
+        from pyvisfile.vtk import (
+                VTK_LINE, VTK_TRIANGLE, VTK_TETRA,
+                VTK_QUAD, VTK_HEXAHEDRON)
 
-        el_nr_base = 0
+        subel_nr_base = 0
+
         for group in self.vis_discr.groups:
-            assert len(node_tuples) == group.nunit_nodes
-            vis_connectivity[el_nr_base:el_nr_base+group.nelements] = (
-                    np.arange(
-                        el_nr_base*group.nunit_nodes,
-                        (el_nr_base+group.nelements)*group.nunit_nodes,
-                        group.nunit_nodes
-                        )[:, np.newaxis, np.newaxis]
-                    + el_connectivity)
-            el_nr_base += group.nelements
+            if isinstance(group.mesh_el_group, SimplexElementGroup):
+                node_tuples = list(gnitstam(group.order, group.dim))
 
-        return vis_connectivity
+                from modepy.tools import submesh
+                el_connectivity = np.array(
+                        submesh(node_tuples),
+                        dtype=np.intp)
+                vtk_cell_type = {
+                        1: VTK_LINE,
+                        2: VTK_TRIANGLE,
+                        3: VTK_TETRA,
+                        }[group.dim]
+
+            elif isinstance(group.mesh_el_group, TensorProductElementGroup):
+                node_tuples = list(gnitb(group.order+1, group.dim))
+                node_tuple_to_index = dict(
+                        (nt, i) for i, nt in enumerate(node_tuples))
+
+                def add_tuple(a, b):
+                    return tuple(ai+bi for ai, bi in zip(a, b))
+
+                el_offsets = {
+                        1: [(0,), (1,)],
+                        2: [(0, 0), (1, 0), (1, 1), (0, 1)],
+                        3: [
+                            (0, 0, 0),
+                            (1, 0, 0),
+                            (1, 1, 0),
+                            (0, 1, 0),
+                            (0, 0, 1),
+                            (1, 0, 1),
+                            (1, 1, 1),
+                            (0, 1, 1),
+                            ]
+                        }[group.dim]
+
+                el_connectivity = np.array([
+                        [
+                            node_tuple_to_index[add_tuple(origin, offset)]
+                            for offset in el_offsets]
+                        for origin in gnitb(group.order, group.dim)])
+
+                vtk_cell_type = {
+                        1: VTK_LINE,
+                        2: VTK_QUAD,
+                        3: VTK_HEXAHEDRON,
+                        }[group.dim]
+
+            else:
+                raise NotImplementedError("visualization for element groups "
+                        "of type '%s'" % type(group.mesh_el_group).__name__)
+
+            assert len(node_tuples) == group.nunit_nodes
+            vis_connectivity = (
+                    group.node_nr_base + np.arange(
+                        0, group.nelements*group.nunit_nodes, group.nunit_nodes
+                        )[:, np.newaxis, np.newaxis]
+                    + el_connectivity).astype(np.intp)
+
+            vgrp = _VisConnectivityGroup(
+                vis_connectivity=vis_connectivity,
+                vtk_cell_type=vtk_cell_type,
+                subelement_nr_base=subel_nr_base)
+            result.append(vgrp)
+
+            subel_nr_base += vgrp.nsubelements
+
+        return result
+
+    # }}}
+
+    # {{{ mayavi
 
     def show_scalar_in_mayavi(self, field, **kwargs):
         import mayavi.mlab as mlab
@@ -140,7 +231,7 @@ class Visualizer(object):
         assert nodes.shape[0] == self.vis_discr.ambient_dim
         #mlab.points3d(nodes[0], nodes[1], 0*nodes[0])
 
-        vis_connectivity = self._vis_connectivity()
+        vis_connectivity, = self._vis_connectivity()
 
         if self.vis_discr.dim == 1:
             nodes = list(nodes)
@@ -153,6 +244,7 @@ class Visualizer(object):
 
             # http://docs.enthought.com/mayavi/mayavi/auto/example_plotting_many_lines.html  # noqa
             src = mlab.pipeline.scalar_scatter(*args)
+
             src.mlab_source.dataset.lines = vis_connectivity.reshape(-1, 2)
             lines = mlab.pipeline.stripper(src)
             mlab.pipeline.surface(lines, **kwargs)
@@ -175,21 +267,17 @@ class Visualizer(object):
         if do_show:
             mlab.show()
 
+    # }}}
+
+    # {{{ vtk
+
     def write_vtk_file(self, file_name, names_and_fields, compressor=None,
             real_only=False):
 
         from pyvisfile.vtk import (
                 UnstructuredGrid, DataArray,
                 AppendedDataXMLGenerator,
-                VTK_LINE, VTK_TRIANGLE, VTK_TETRA,
                 VF_LIST_OF_COMPONENTS)
-        el_types = {
-                1: VTK_LINE,
-                2: VTK_TRIANGLE,
-                3: VTK_TETRA,
-                }
-
-        el_type = el_types[self.vis_discr.dim]
 
         with cl.CommandQueue(self.vis_discr.cl_context) as queue:
             nodes = self.vis_discr.nodes().with_queue(queue).get()
@@ -198,20 +286,41 @@ class Visualizer(object):
                     (name, self._resample_and_get(queue, fld))
                     for name, fld in names_and_fields]
 
-        connectivity = self._vis_connectivity()
+        vc_groups = self._vis_connectivity()
 
-        nprimitive_elements = (
-                connectivity.shape[0]
-                * connectivity.shape[1])
+        # {{{ create cell_types
+
+        nsubelements = sum(vgrp.nsubelements for vgrp in vc_groups)
+        cell_types = np.empty(nsubelements, dtype=np.uint8)
+        cell_types.fill(255)
+        for vgrp in vc_groups:
+            cell_types[
+                    vgrp.subelement_nr_base:
+                    vgrp.subelement_nr_base + vgrp.nsubelements] = \
+                            vgrp.vtk_cell_type
+        assert (cell_types < 255).all()
+
+        # }}}
+
+        nodes = nodes
+        if self.element_shrink_factor != 1:
+            for vgrp in self.vis_discr.groups:
+                nodes_view = vgrp.view(nodes)
+                el_centers = np.mean(nodes_view, axis=-1)
+                nodes_view[:] = (
+                        (self.element_shrink_factor * nodes_view)
+                        + (1-self.element_shrink_factor)
+                        * el_centers[:, :, np.newaxis])
 
         grid = UnstructuredGrid(
                 (self.vis_discr.nnodes,
                     DataArray("points",
                         nodes.reshape(self.vis_discr.ambient_dim, -1),
                         vector_format=VF_LIST_OF_COMPONENTS)),
-                cells=connectivity.reshape(-1),
-                cell_types=np.asarray([el_type] * nprimitive_elements,
-                    dtype=np.uint8))
+                cells=np.hstack([
+                    vgrp.vis_connectivity.reshape(-1)
+                    for vgrp in vc_groups]),
+                cell_types=cell_types)
 
         # for name, field in separate_by_real_and_imag(cell_data, real_only):
         #     grid.add_celldata(DataArray(name, field,
@@ -230,18 +339,26 @@ class Visualizer(object):
             AppendedDataXMLGenerator(compressor)(grid).write(outf)
 
 
-def make_visualizer(queue, discr, vis_order):
+def make_visualizer(queue, discr, vis_order, element_shrink_factor=None):
     from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlendGroupFactory
+    from meshmode.discretization.poly_element import (
+            PolynomialWarpAndBlendElementGroup,
+            LegendreGaussLobattoTensorProductElementGroup,
+            OrderAndTypeBasedGroupFactory)
     vis_discr = Discretization(
             discr.cl_context, discr.mesh,
-            PolynomialWarpAndBlendGroupFactory(vis_order),
+            OrderAndTypeBasedGroupFactory(
+                vis_order,
+                simplex_group_class=PolynomialWarpAndBlendElementGroup,
+                tensor_product_group_class=(
+                    LegendreGaussLobattoTensorProductElementGroup)),
             real_dtype=discr.real_dtype)
     from meshmode.discretization.connection import \
             make_same_mesh_connection
 
-    return Visualizer(make_same_mesh_connection(vis_discr, discr))
+    return Visualizer(
+            make_same_mesh_connection(vis_discr, discr),
+            element_shrink_factor=element_shrink_factor)
 
 # }}}
 
