@@ -413,7 +413,7 @@ class FacialAdjacencyGroup(Record):
 
         ``face_id_t [nfagrp_elements]``. ``element_faces[i]``
         indicate what face index of the opposite element indicated in
-        ``neighbors[iel_grp][iface]`` touches face number *iface* of element
+        ``neighbors[iface]`` touches face number *iface* of element
         number *iel_grp* in this element group.
 
     .. attribute:: neighbors
