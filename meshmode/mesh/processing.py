@@ -141,17 +141,30 @@ def partition_mesh(mesh, part_per_element, part_nr):
     from meshmode.mesh import Mesh
     part_mesh = Mesh(new_vertices, new_mesh_groups, facial_adjacency_groups=None)
 
+    from meshmode.mesh import BTAG_ALL
+
+    for igrp in range(num_groups):
+        f_group = part_mesh.facial_adjacency_groups[igrp][None]
+        grp_elems = f_group.elements
+        grp_faces = f_group.element_faces
+        for elem_idx in range(len(grp_elems)):
+            elem = grp_elems[elem_idx]
+            face = grp_faces[elem_idx]
+            tag = -f_group.neighbors[elem_idx]
+            parent_elem = queried_elems[elem]
+            parent_group = 0
+            while parent_elem >= mesh.groups[parent_group].nelements:
+                parent_elem -= mesh.groups[parent_group].nelements
+                parent_group += 1
+            assert parent_group < num_groups, "oops..."
+            parent_facial_group = mesh.facial_adjacency_groups[parent_group][None]
+            idxs = np.where(parent_facial_group.elements == parent_elem)[0]
+            for parent_face in parent_facial_group.element_faces[idxs]:
+                if face == parent_face:
+                    f_group.neighbors[elem_idx] = -(tag ^ part_mesh.boundary_tag_bit(BTAG_ALL))
+                    #print("Boundary face", face, "of element", elem, "should be connected to", parent_elem, "in parent mesh.")
+
     return (part_mesh, queried_elems)
-
-
-def set_rank_boundaries(part_mesh, mesh, part_to_global):
-    """
-    Looks through facial_adjacency_groups in part_mesh.
-    If a boundary is found, then it is possible that it
-    used to be connected to other faces from mesh.
-    If this is the case, then part_mesh will have special
-    boundary_tags where faces used to be connected.
-    """
 
 
 # {{{ orientations
