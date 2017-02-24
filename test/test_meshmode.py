@@ -36,7 +36,7 @@ from pyopencl.tools import (  # noqa
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
         PolynomialWarpAndBlendGroupFactory,
-        PolynomialEquidistantGroupFactory,
+        PolynomialEquidistantSimplexGroupFactory,
         )
 from meshmode.mesh import BTAG_ALL
 from meshmode.discretization.connection import \
@@ -46,6 +46,55 @@ import pytest
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+# {{{ partition_mesh
+
+def test_partition_torus_mesh():
+    from meshmode.mesh.generation import generate_torus
+    my_mesh = generate_torus(2, 1, n_outer=2, n_inner=2)
+
+    part_per_element = np.array([0, 1, 2, 1, 1, 2, 1, 0])
+
+    from meshmode.mesh.processing import partition_mesh
+    (part_mesh0, _) = partition_mesh(my_mesh, part_per_element, 0)
+    (part_mesh1, _) = partition_mesh(my_mesh, part_per_element, 1)
+    (part_mesh2, _) = partition_mesh(my_mesh, part_per_element, 2)
+
+    assert part_mesh0.nelements == 2
+    assert part_mesh1.nelements == 4
+    assert part_mesh2.nelements == 2
+
+
+def test_partition_boxes_mesh():
+    n = 5
+    num_parts = 7
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh1 = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(n, n, n))
+    mesh2 = generate_regular_rect_mesh(a=(2, 2, 2), b=(3, 3, 3), n=(n, n, n))
+
+    from meshmode.mesh.processing import merge_disjoint_meshes
+    mesh = merge_disjoint_meshes([mesh1, mesh2])
+
+    adjacency_list = np.zeros((mesh.nelements,), dtype=set)
+    for elem in range(mesh.nelements):
+        adjacency_list[elem] = set()
+        starts = mesh.nodal_adjacency.neighbors_starts
+        for n in range(starts[elem], starts[elem + 1]):
+            adjacency_list[elem].add(mesh.nodal_adjacency.neighbors[n])
+
+    from pymetis import part_graph
+    (_, p) = part_graph(num_parts, adjacency=adjacency_list)
+    part_per_element = np.array(p)
+
+    from meshmode.mesh.processing import partition_mesh
+    new_meshes = [
+        partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
+
+    assert mesh.nelements == np.sum(
+        [new_meshes[i].nelements for i in range(num_parts)])
+
+# }}}
 
 
 # {{{ circle mesh
@@ -405,32 +454,49 @@ def test_element_orientation():
 
 def test_merge_and_map(ctx_getter, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
+    from meshmode.mesh.generation import generate_box_mesh
+    from meshmode.mesh import TensorProductElementGroup
+    from meshmode.discretization.poly_element import (
+            PolynomialWarpAndBlendGroupFactory,
+            LegendreGaussLobattoTensorProductGroupFactory)
 
     mesh_order = 3
 
-    mesh = generate_gmsh(
-            FileSource("blob-2d.step"), 2, order=mesh_order,
-            force_ambient_dim=2,
-            other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"]
-            )
+    if 1:
+        mesh = generate_gmsh(
+                FileSource("blob-2d.step"), 2, order=mesh_order,
+                force_ambient_dim=2,
+                other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"]
+                )
+
+        discr_grp_factory = PolynomialWarpAndBlendGroupFactory(3)
+    else:
+        mesh = generate_box_mesh(
+                (
+                    np.linspace(0, 1, 4),
+                    np.linspace(0, 1, 4),
+                    np.linspace(0, 1, 4),
+                    ),
+                10, group_factory=TensorProductElementGroup)
+
+        discr_grp_factory = LegendreGaussLobattoTensorProductGroupFactory(3)
 
     from meshmode.mesh.processing import merge_disjoint_meshes, affine_map
-    mesh2 = affine_map(mesh, A=np.eye(2), b=np.array([5, 0]))
+    mesh2 = affine_map(mesh,
+            A=np.eye(mesh.ambient_dim),
+            b=np.array([5, 0, 0])[:mesh.ambient_dim])
 
     mesh3 = merge_disjoint_meshes((mesh2, mesh))
 
     if visualize:
         from meshmode.discretization import Discretization
-        from meshmode.discretization.poly_element import \
-                PolynomialWarpAndBlendGroupFactory
         cl_ctx = ctx_getter()
         queue = cl.CommandQueue(cl_ctx)
 
-        discr = Discretization(cl_ctx, mesh3,
-                PolynomialWarpAndBlendGroupFactory(3))
+        discr = Discretization(cl_ctx, mesh3, discr_grp_factory)
 
         from meshmode.discretization.visualization import make_visualizer
-        vis = make_visualizer(queue, discr, 1)
+        vis = make_visualizer(queue, discr, 3, element_shrink_factor=0.8)
         vis.write_vtk_file("merged.vtu", [])
 
 # }}}
@@ -546,9 +612,9 @@ def test_sanity_qhull_nd(ctx_getter, dim, order):
 
     from meshmode.discretization import Discretization
     low_discr = Discretization(ctx, mesh,
-            PolynomialEquidistantGroupFactory(order))
+            PolynomialEquidistantSimplexGroupFactory(order))
     high_discr = Discretization(ctx, mesh,
-            PolynomialEquidistantGroupFactory(order+1))
+            PolynomialEquidistantSimplexGroupFactory(order+1))
 
     from meshmode.discretization.connection import make_same_mesh_connection
     cnx = make_same_mesh_connection(high_discr, low_discr)
@@ -725,6 +791,12 @@ def test_box_mesh(ctx_getter, visualize=False):
         vis.write_vtk_file("box.vtu", [])
 
 # }}}
+
+
+def test_mesh_copy():
+    from meshmode.mesh.generation import generate_box_mesh
+    mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
+    mesh.copy()
 
 
 # {{{ as_python stringification

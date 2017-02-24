@@ -175,7 +175,9 @@ class MeshElementGroup(Record):
     def join_mesh(self, element_nr_base, node_nr_base):
         if self.element_nr_base is not None:
             raise RuntimeError("this element group has already joined a mesh, "
-                    "cannot join another")
+                    "cannot join another (The element group's element_nr_base "
+                    "is already assigned, and that typically happens when a "
+                    "group joins a Mesh instance.)")
 
         return self.copy(
                 element_nr_base=element_nr_base,
@@ -387,6 +389,13 @@ class FacialAdjacencyGroup(Record):
     :class:`MeshElementGroup`, i.e. information about elements that share (part
     of) a face.
 
+    .. image:: images/facial-adjacency-group.png
+
+    Represents (for example) *one* of the (colored) interfaces between
+    :class:`MeshElementGroup` instances, or an interface between
+    :class:`MeshElementGroup` and a boundary. (Note that element groups are not
+    necessarily contiguous like the figure may suggest.)
+
     .. attribute:: igroup
 
     .. attribute:: ineighbor_group
@@ -404,7 +413,7 @@ class FacialAdjacencyGroup(Record):
 
         ``face_id_t [nfagrp_elements]``. ``element_faces[i]``
         indicate what face index of the opposite element indicated in
-        ``neighbors[iel_grp][iface]`` touches face number *iface* of element
+        ``neighbors[iface]`` touches face number *iface* of element
         number *iel_grp* in this element group.
 
     .. attribute:: neighbors
@@ -480,6 +489,25 @@ class Mesh(Record):
 
         Referencing this attribute may raise
         :exc:`meshmode.DataUnavailable`.
+
+        .. image:: images/facial-adjacency-group.png
+
+        For example for the mesh in the figure, the following data structure
+        would be present::
+
+            [
+                {...},  # connectivity for group 0
+                {...},  # connectivity for group 1
+                {...},  # connectivity for group 2
+                {       # connectivity for group 3
+                    1: FacialAdjacencyGroup(...)  # towards group 1, green
+                    2: FacialAdjacencyGroup(...)  # towards group 2, pink
+                    None: FacialAdjacencyGroup(...)  # towards the boundary, orange
+                }
+            ]
+
+        (Note that element groups are not necessarily contiguous like the figure
+        may suggest.)
 
     .. attribute:: boundary_tags
 
@@ -631,6 +659,24 @@ class Mesh(Record):
                 # only for volume meshes, for now
                 assert test_volume_mesh_element_orientations(self), \
                         "negatively oriented elements found"
+
+    def get_copy_kwargs(self, **kwargs):
+        def set_if_not_present(name, from_name=None):
+            if from_name is None:
+                from_name = name
+            if name not in kwargs:
+                kwargs[name] = getattr(self, from_name)
+
+        set_if_not_present("vertices")
+        if "groups" not in kwargs:
+            kwargs["groups"] = [group.copy() for group in self.groups]
+        set_if_not_present("boundary_tags")
+        set_if_not_present("nodal_adjacency", "_nodal_adjacency")
+        set_if_not_present("facial_adjacency_groups", "_facial_adjacency_groups")
+        set_if_not_present("vertex_id_dtype")
+        set_if_not_present("element_id_dtype")
+
+        return kwargs
 
     @property
     def ambient_dim(self):

@@ -31,6 +31,7 @@ import modepy as mp
 
 
 __doc__ = """
+.. autofunction:: partition_mesh
 .. autofunction:: find_volume_mesh_element_orientations
 .. autofunction:: perform_flips
 .. autofunction:: find_bounding_box
@@ -38,6 +39,109 @@ __doc__ = """
 .. autofunction:: map_mesh
 .. autofunction:: affine_map
 """
+
+
+def partition_mesh(mesh, part_per_element, part_nr):
+    """
+    :arg mesh: A :class:`meshmode.mesh.Mesh` to be partitioned.
+    :arg part_per_element: A :class:`numpy.ndarray` containing one
+        integer per element of *mesh* indicating which part of the
+        partitioned mesh the element is to become a part of.
+    :arg part_nr: The part number of the mesh to return.
+
+    :returns: A tuple ``(part_mesh, part_to_global)``, where *part_mesh*
+        is a :class:`meshmode.mesh.Mesh` that is a partition of mesh, and
+        *part_to_global* is a :class:`numpy.ndarray` mapping element
+        numbers on *part_mesh* to ones in *mesh*.
+
+    .. versionadded:: 2017.1
+
+    .. warning:: Interface is not final. Connectivity between elements
+        across groups needs to be added.
+    """
+    assert len(part_per_element) == mesh.nelements, (
+        "part_per_element must have shape (mesh.nelements,)")
+
+    # Contains the indices of the elements requested.
+    queried_elems = np.where(np.array(part_per_element) == part_nr)[0]
+
+    num_groups = len(mesh.groups)
+    new_indices = []
+    new_nodes = []
+
+    # The set of vertex indices we need.
+    # NOTE: There are two methods for producing required_indices.
+    #   Optimizations may come from further exploring these options.
+    #index_set = np.array([], dtype=int)
+    index_sets = np.array([], dtype=set)
+
+    skip_groups = []
+    num_prev_elems = 0
+    start_idx = 0
+    for group_nr in range(num_groups):
+        mesh_group = mesh.groups[group_nr]
+
+        # Find the index of first element in the next group
+        end_idx = len(queried_elems)
+        for idx in range(start_idx, len(queried_elems)):
+            if queried_elems[idx] - num_prev_elems >= mesh_group.nelements:
+                end_idx = idx
+                break
+
+        if start_idx == end_idx:
+            skip_groups.append(group_nr)
+            new_indices.append(np.array([]))
+            new_nodes.append(np.array([]))
+            num_prev_elems += mesh_group.nelements
+            continue
+
+        elems = queried_elems[start_idx:end_idx] - num_prev_elems
+        new_indices.append(mesh_group.vertex_indices[elems])
+
+        new_nodes.append(
+            np.zeros(
+                (mesh.ambient_dim, end_idx - start_idx, mesh_group.nunit_nodes)))
+        for i in range(mesh.ambient_dim):
+            for j in range(start_idx, end_idx):
+                elems = queried_elems[j] - num_prev_elems
+                new_idx = j - start_idx
+                new_nodes[group_nr][i, new_idx, :] = mesh_group.nodes[i, elems, :]
+
+        #index_set = np.append(index_set, new_indices[group_nr].ravel())
+        index_sets = np.append(index_sets, set(new_indices[group_nr].ravel()))
+
+        num_prev_elems += mesh_group.nelements
+        start_idx = end_idx
+
+    # A sorted np.array of vertex indices we need (without duplicates).
+    #required_indices = np.unique(np.sort(index_set))
+    required_indices = np.array(list(set.union(*index_sets)))
+
+    new_vertices = np.zeros((mesh.ambient_dim, len(required_indices)))
+    for dim in range(mesh.ambient_dim):
+        new_vertices[dim] = mesh.vertices[dim][required_indices]
+
+    # Our indices need to be in range [0, len(mesh.nelements)].
+    for group_nr in range(num_groups):
+        if group_nr not in skip_groups:
+            for i in range(len(new_indices[group_nr])):
+                for j in range(len(new_indices[group_nr][0])):
+                    original_index = new_indices[group_nr][i, j]
+                    new_indices[group_nr][i, j] = np.where(
+                        required_indices == original_index)[0]
+
+    new_mesh_groups = []
+    for group_nr in range(num_groups):
+        if group_nr not in skip_groups:
+            mesh_group = mesh.groups[group_nr]
+            new_mesh_groups.append(
+                type(mesh_group)(mesh_group.order, new_indices[group_nr],
+                    new_nodes[group_nr], unit_nodes=mesh_group.unit_nodes))
+
+    from meshmode.mesh import Mesh
+    part_mesh = Mesh(new_vertices, new_mesh_groups)
+
+    return (part_mesh, queried_elems)
 
 
 # {{{ orientations

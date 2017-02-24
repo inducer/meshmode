@@ -38,7 +38,7 @@ from meshmode.mesh.refinement import Refiner
 from meshmode.discretization.poly_element import (
     InterpolatoryQuadratureSimplexGroupFactory,
     PolynomialWarpAndBlendGroupFactory,
-    PolynomialEquidistantGroupFactory,
+    PolynomialEquidistantSimplexGroupFactory,
 )
 
 import logging
@@ -145,7 +145,7 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
     PolynomialWarpAndBlendGroupFactory,
-    PolynomialEquidistantGroupFactory
+    PolynomialEquidistantSimplexGroupFactory
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
     ("circle", 1, [20, 30, 40]),
