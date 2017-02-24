@@ -600,6 +600,7 @@ class Refiner(object):
     def refine(self, refine_flags):
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
         from six.moves import range
+        print(self.last_mesh.groups[0].vertex_indices[0])
         """
         :arg refine_flags: a :class:`numpy.ndarray` of dtype bool of length ``mesh.nelements``
             indicating which elements should be split.

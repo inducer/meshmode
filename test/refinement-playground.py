@@ -323,14 +323,18 @@ def all_refine(num_mesh, depth, fname):
     elif 0:
         mesh =  generate_box_mesh(2*(np.linspace(0, 1, 5),))
     elif 1:
-        mesh =  generate_box_mesh(3*(np.linspace(0, 1, 5),),
+        mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),),
                 group_factory=TensorProductElementGroup)
     else:
         mesh =  generate_box_mesh(2*(np.linspace(0, 1, 3),),
                 group_factory=TensorProductElementGroup)
         from meshmode.mesh.processing import affine_map
         mesh = affine_map(mesh, A=np.array([[1.2, 0.3], [0.15, 0.9]]))
+    print('nelements', mesh.nelements)
     flags = get_random_flags(mesh)
+    #flags = np.zeros(mesh.nelements)
+    #flags[1] = 1
+    #flags[2] = 1
     mesh = generate_hybrid_mesh(mesh, flags)
 
     #print("END GEN")
@@ -344,16 +348,19 @@ def all_refine(num_mesh, depth, fname):
     # mesh = r.refine(flags)
         #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
     r = Refiner(mesh)
+    flags = np.zeros(mesh.nelements)
+    flags[0] = 1
+    mesh = r.refine(flags)
     #coarsen_flags = []
-    #for time in range(3):
-    #    flags = get_random_flags(mesh)
+    for time in range(1):
+        #flags = get_random_flags(mesh)
         #if time == 1:
         #    curnels = mesh.nelements
         #    for ind, i in enumerate(flags):
         #        if i:
         #            coarsen_flags.append([ind, curnels, curnels + 1, curnels + 2, curnels + 3, curnels + 4, curnels + 5, curnels + 6])
         #            curnels += 7
-        #mesh = r.refine(flags)
+        mesh = r.refine(flags)
     #mesh = r.coarsen(coarsen_flags)
     #flags = get_random_flags(mesh)
     #mesh = r.refine(flags)
