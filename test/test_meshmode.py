@@ -71,11 +71,11 @@ def test_partition_boxes_mesh():
     n = 5
     num_parts = 7
     from meshmode.mesh.generation import generate_regular_rect_mesh
-    mesh1 = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(n, n, n))
-    mesh2 = generate_regular_rect_mesh(a=(2, 2, 2), b=(3, 3, 3), n=(n, n, n))
+    mesh = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(n, n, n))
+    #mesh2 = generate_regular_rect_mesh(a=(2, 2, 2), b=(3, 3, 3), n=(n, n, n))
 
-    from meshmode.mesh.processing import merge_disjoint_meshes
-    mesh = merge_disjoint_meshes([mesh1, mesh2])
+    #from meshmode.mesh.processing import merge_disjoint_meshes
+    #mesh = merge_disjoint_meshes([mesh1, mesh2])
 
     adjacency_list = np.zeros((mesh.nelements,), dtype=set)
     for elem in range(mesh.nelements):
@@ -93,7 +93,24 @@ def test_partition_boxes_mesh():
         partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
 
     assert mesh.nelements == np.sum(
-        [new_meshes[i].nelements for i in range(num_parts)])
+        [new_meshes[i].nelements for i in range(num_parts)]), \
+        "part_mesh has the wrong number of elements"
+
+    print(count_BTAG_ALL(mesh))
+    print(np.sum([count_BTAG_ALL(new_meshes[i]) for i in range(num_parts)]))
+    assert count_BTAG_ALL(mesh) == np.sum(
+        [count_BTAG_ALL(new_meshes[i]) for i in range(num_parts)]), \
+        "part_mesh has the wrong number of BTAG_ALL boundaries"
+
+
+def count_BTAG_ALL(mesh):
+    num_bnds = 0
+    for adj_groups in mesh.facial_adjacency_groups:
+        bdry_group = adj_groups[None]
+        for mesh_tag in -bdry_group.neighbors:
+            if mesh_tag & mesh.boundary_tag_bit(BTAG_ALL) != 0:
+                num_bnds += 1
+    return num_bnds
 
 # }}}
 
