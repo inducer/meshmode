@@ -331,8 +331,9 @@ def all_refine(num_mesh, depth, fname):
         from meshmode.mesh.processing import affine_map
         mesh = affine_map(mesh, A=np.array([[1.2, 0.3], [0.15, 0.9]]))
     print('nelements', mesh.nelements)
-    flags = get_random_flags(mesh)
-    #flags = np.zeros(mesh.nelements)
+    #flags = get_random_flags(mesh)
+    flags = np.zeros(mesh.nelements)
+    flags[0] = 1
     #flags[1] = 1
     #flags[2] = 1
     mesh = generate_hybrid_mesh(mesh, flags)
@@ -342,17 +343,17 @@ def all_refine(num_mesh, depth, fname):
     nelements = []
     runtimes = []
     #r = Refiner(mesh)
-    #flags = np.zeros(len(mesh.groups[0].vertex_indices))
-    # #flags[0] = 1
+    #flags = np.zeros(mesh.nelements)
+    #flags[0] = 1
     # print(flags, 'here')
-    # mesh = r.refine(flags)
+    #mesh = r.refine(flags)
         #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
-    r = Refiner(mesh)
-    flags = np.zeros(mesh.nelements)
-    flags[0] = 1
-    mesh = r.refine(flags)
+    #r = Refiner(mesh)
+    #flags = np.zeros(mesh.nelements)
+    #flags[0] = 1
+    #mesh = r.refine(flags)
     #coarsen_flags = []
-    for time in range(1):
+    #for time in range(1):
         #flags = get_random_flags(mesh)
         #if time == 1:
         #    curnels = mesh.nelements
@@ -360,7 +361,7 @@ def all_refine(num_mesh, depth, fname):
         #        if i:
         #            coarsen_flags.append([ind, curnels, curnels + 1, curnels + 2, curnels + 3, curnels + 4, curnels + 5, curnels + 6])
         #            curnels += 7
-        mesh = r.refine(flags)
+        #mesh = r.refine(flags)
     #mesh = r.coarsen(coarsen_flags)
     #flags = get_random_flags(mesh)
     #mesh = r.refine(flags)
@@ -383,12 +384,13 @@ def all_refine(num_mesh, depth, fname):
         #import matplotlib.pyplot as pt
         #pt.show()
 
-    if mesh.dim == 3 and isinstance(mesh, SimplexElementGroup):
+    if mesh.dim == 3:
         from meshmode.discretization import Discretization
-        from meshmode.discretization.poly_element import \
-                PolynomialWarpAndBlendGroupFactory
+        from meshmode.discretization.poly_element import (PolynomialWarpAndBlendElementGroup, 
+                OrderAndTypeBasedGroupFactory, LegendreGaussLobattoTensorProductElementGroup)
         discr = Discretization(
-                cl_ctx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+                cl_ctx, mesh, OrderAndTypeBasedGroupFactory(order, PolynomialWarpAndBlendElementGroup, 
+                    LegendreGaussLobattoTensorProductElementGroup))
         from meshmode.discretization.visualization import make_visualizer
         vis = make_visualizer(queue, discr, order)
         remove_if_exists("connectivity2.vtu")
