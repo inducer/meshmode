@@ -167,12 +167,18 @@ def partition_mesh(mesh, part_per_element, part_nr):
                     if parent_facial_group.neighbors[idx] >= 0:
                         if face == parent_facial_group.element_faces[idx]:
                             rank_neighbor = parent_facial_group.neighbors[idx]
-                            # TODO: With mulitple groups, rank_neighbors will be wrong.
-                            neighbor_part_num = part_per_element[rank_neighbor]
+                            grp_start_elem = 0
+                            for grp in range(parent_group):
+                                grp_start_elem += mesh.groups[grp].nelements
+                            neighbor_part_num = part_per_element[
+                                rank_neighbor + grp_start_elem]
                             tag = tag & ~part_mesh.boundary_tag_bit(BTAG_ALL)
-                            tag = tag | part_mesh.boundary_tag_bit(neighbor_part_num)
+                            tag = tag | part_mesh.boundary_tag_bit(
+                                            neighbor_part_num)
                             f_group.neighbors[elem_idx] = -tag
-                            #print("Boundary face", face, "of element", elem, "should be connected to element", parent_elem, "in parent group", parent_group)
+                            #print("Boundary face", face, "of element", elem,
+                            #    "should be connected to element", rank_neighbor,
+                            #    "in partition", neighbor_part_num)
 
     return (part_mesh, queried_elems)
 
