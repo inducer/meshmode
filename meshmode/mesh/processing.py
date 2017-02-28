@@ -159,12 +159,13 @@ def partition_mesh(mesh, part_per_element, part_nr):
                 parent_elem -= mesh.groups[parent_group].nelements
                 parent_group += 1
             assert parent_group < num_groups, "oops..."
-            parent_facial_group = mesh.facial_adjacency_groups[parent_group][None]
-            idxs = np.where(parent_facial_group.elements == parent_elem)[0]
-            for parent_face in parent_facial_group.element_faces[idxs]:
-                if face == parent_face:
-                    f_group.neighbors[elem_idx] = -(tag ^ part_mesh.boundary_tag_bit(BTAG_ALL))
-                    #print("Boundary face", face, "of element", elem, "should be connected to", parent_elem, "in parent mesh.")
+            parent_f_group = mesh.facial_adjacency_groups[parent_group]
+            for _, parent_facial_group in parent_f_group.items():
+                for idx in np.where(parent_facial_group.elements == parent_elem)[0]:
+                    if parent_facial_group.neighbors[idx] >= 0:
+                        if face == parent_facial_group.element_faces[idx]:
+                            f_group.neighbors[elem_idx] = -(tag & ~part_mesh.boundary_tag_bit(BTAG_ALL))
+                            #print("Boundary face", face, "of element", elem, "should be connected to element", parent_elem, "in parent group", parent_group)
 
     return (part_mesh, queried_elems)
 
