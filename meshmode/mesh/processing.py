@@ -172,7 +172,8 @@ def partition_mesh(mesh, part_per_element, part_nr):
                     if parent_facial_group.neighbors[idx] >= 0:
                         if face == parent_facial_group.element_faces[idx]:
                             rank_neighbor = parent_facial_group.neighbors[idx]
-                            rank_neighbor_face = parent_facial_group.neighbor_faces[idx]
+                            rank_neighbor_face = \
+                                parent_facial_group.neighbor_faces[idx]
                             mgrp_start_elem = 0
                             pgrp_start_elem = 0
                             for grp in range(parent_group):
