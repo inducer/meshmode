@@ -144,10 +144,15 @@ def partition_mesh(mesh, part_per_element, part_nr):
     boundary_tags = list(range(num_parts))
 
     from meshmode.mesh import Mesh
-    part_mesh = Mesh(new_vertices, new_mesh_groups, \
+    part_mesh = Mesh(new_vertices, new_mesh_groups,
         facial_adjacency_groups=None, boundary_tags=boundary_tags)
 
     from meshmode.mesh import BTAG_ALL
+
+    from meshmode.mesh import InterPartitionAdjacency
+    tags_to_part_adj = dict()
+    for tag in range(np.max(part_per_element) + 1):
+        tags_to_part_adj[tag] = InterPartitionAdjacency()
 
     for igrp in range(num_groups):
         f_group = part_mesh.facial_adjacency_groups[igrp][None]
@@ -169,11 +174,15 @@ def partition_mesh(mesh, part_per_element, part_nr):
                     if parent_facial_group.neighbors[idx] >= 0:
                         if face == parent_facial_group.element_faces[idx]:
                             rank_neighbor = parent_facial_group.neighbors[idx]
-                            grp_start_elem = 0
+                            rank_neighbor_face = parent_facial_group.neighbor_faces[idx]
+                            mgrp_start_elem = 0
+                            pgrp_start_elem = 0
                             for grp in range(parent_group):
-                                grp_start_elem += mesh.groups[grp].nelements
+                                mgrp_start_elem += mesh.groups[grp].nelements
+                            for grp in range(num_groups):
+                                pgrp_start_elem += part_mesh.groups[grp].nelements
                             neighbor_part_num = part_per_element[
-                                rank_neighbor + grp_start_elem]
+                                rank_neighbor + mgrp_start_elem]
                             tag = tag & ~part_mesh.boundary_tag_bit(BTAG_ALL)
                             tag = tag | part_mesh.boundary_tag_bit(
                                             neighbor_part_num)
@@ -181,6 +190,9 @@ def partition_mesh(mesh, part_per_element, part_nr):
                             #print("Boundary face", face, "of element", elem,
                             #    "should be connected to element", rank_neighbor,
                             #    "in partition", neighbor_part_num)
+                            tags_to_part_adj[neighbor_part_num].add_connection(
+                                elem + pgrp_start_elem, face,
+                                rank_neighbor + mgrp_start_elem, rank_neighbor_face)
 
     return (part_mesh, queried_elems)
 

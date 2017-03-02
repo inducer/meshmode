@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 # {{{ partition_mesh
 '''
-#TODO facial_adjacency_groups is not available in torus.
+#TODO facial_adjacency_groups is not available in generate_torus.
 def test_partition_torus_mesh():
     from meshmode.mesh.generation import generate_torus
     my_mesh = generate_torus(2, 1, n_outer=2, n_inner=2)
@@ -67,6 +67,7 @@ def test_partition_torus_mesh():
     assert part_mesh1.nelements == 4
     assert part_mesh2.nelements == 2
 '''
+
 
 def test_partition_boxes_mesh():
     n = 5
