@@ -381,6 +381,27 @@ class NodalAdjacency(Record):
 
 # }}}
 
+# {{{ partition adjacency
+
+class InterPartitionAdjacency():
+    """
+    Describes adjacency information of elements between partitions.
+    """
+
+    def __init__(self):
+        self.elements = []
+        self.element_faces = []
+        self.neighbors = []
+        self.neighbor_faces = []
+
+    def add_connection(self, elem, face, neighbor, neighbor_face):
+        self.elements.append(elem)
+        self.element_faces.append(face)
+        self.neighbors.append(neighbor)
+        self.neighbor_faces.append(neighbor_face)
+
+# }}}
+
 
 # {{{ facial adjacency
 
