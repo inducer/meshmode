@@ -381,6 +381,7 @@ class NodalAdjacency(Record):
 
 # }}}
 
+
 # {{{ partition adjacency
 
 class InterPartitionAdjacency():
