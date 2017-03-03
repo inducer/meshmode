@@ -392,15 +392,38 @@ class InterPartitionAdjacency():
     def __init__(self):
         self.elements = []
         self.element_faces = []
-        self.neighbors = []
+        self.neighbor_elems = []
         self.neighbor_faces = []
+        self.neighbor_groups = []
 
-    def add_connection(self, elem, face, neighbor, neighbor_face):
-        self.elements.append(elem)
-        self.element_faces.append(face)
-        self.neighbors.append(neighbor)
+    def add_connection(self, elem, face, neighbor_group, neighbor_elem, neighbor_face):
+        self.elems.append(elem)
+        self.elem_faces.append(face)
+        self.neighbor_groups.append(neighbor_group)
+        self.neighbor_elems.append(neighbor_elem)
         self.neighbor_faces.append(neighbor_face)
 
+    def get_neighbor(self, elem, face):
+        for idx in range(len(self.elements)):
+            if elem == self.elements[idx] and face == self.element_faces[idx]:
+                return (self.neighbor_groups[idx], 
+                        self.neighbor_elem[idx], 
+                        self.neighbor_faces[idx])
+        
+        
+class OtherPossibility():
+    """
+    """
+    
+    def __init__(self):
+        self.adjacent = dict()
+        
+    def add_connection(self, tag, elem, face, neighbor_group, neighbor_elem, neighbor_face):
+        self.adjacent[(tag, elem, face)] = (neighbor_group, neighbor_elem, neighbor_face)
+
+    def get_neighbor(self, tag, elem, face):
+        return self.adjacent((tag, elem, face))
+    
 # }}}
 
 
