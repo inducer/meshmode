@@ -396,7 +396,8 @@ class InterPartitionAdjacency():
         self.neighbor_faces = []
         self.neighbor_groups = []
 
-    def add_connection(self, elem, face, neighbor_group, neighbor_elem, neighbor_face):
+    def add_connection(self, elem, face, 
+                        neighbor_group, neighbor_elem, neighbor_face):
         self.elems.append(elem)
         self.elem_faces.append(face)
         self.neighbor_groups.append(neighbor_group)
