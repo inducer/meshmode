@@ -101,6 +101,18 @@ def test_partition_boxes_mesh():
     assert count_btag_all(mesh) == np.sum(
         [count_btag_all(new_meshes[i]) for i in range(num_parts)]), \
         "part_mesh has the wrong number of BTAG_ALL boundaries"
+        
+    for part_num in range(num_parts):
+        for f_groups in new_meshes[part_num].facial_adjacency_groups:
+            f_grp = f_groups[None]
+            for idx in range(len(f_grp.elements)):
+                tag = -f_grp.neighbors[idx]
+                if tag >= 0:
+                    elem = f_grp.elements[idx]
+                    face = f_grp.element_faces[idx]
+                    (n_part, n_elem, n_face) = ...get_neighbor(tag, elem, face)
+                    assert (part_num, elem, face) = ...get_neighbor(n_part, n_elem, n_face)
+        
 
 
 def count_btag_all(mesh):
@@ -111,7 +123,7 @@ def count_btag_all(mesh):
                 if neighbors < 0:
                     if -neighbors & mesh.boundary_tag_bit(BTAG_ALL) != 0:
                         num_bnds += 1
-    return num_bnds
+    return num_bnds 
 
 # }}}
 
