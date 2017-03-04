@@ -425,7 +425,7 @@ class OtherPossibility():
                             (neighbor_group, neighbor_elem, neighbor_face)
 
     def get_neighbor(self, tag, elem, face):
-        return self.adjacent((tag, elem, face))
+        return self.adjacent[(tag, elem, face)]
     
 # }}}
 
