@@ -419,8 +419,10 @@ class OtherPossibility():
     def __init__(self):
         self.adjacent = dict()
         
-    def add_connection(self, tag, elem, face, neighbor_group, neighbor_elem, neighbor_face):
-        self.adjacent[(tag, elem, face)] = (neighbor_group, neighbor_elem, neighbor_face)
+    def add_connection(self, tag, elem, face, 
+                            neighbor_group, neighbor_elem, neighbor_face):
+        self.adjacent[(tag, elem, face)] = \
+                            (neighbor_group, neighbor_elem, neighbor_face)
 
     def get_neighbor(self, tag, elem, face):
         return self.adjacent((tag, elem, face))
