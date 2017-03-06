@@ -113,8 +113,8 @@ def test_partition_boxes_mesh():
                 elem = f_grp.elements[idx]
                 face = f_grp.element_faces[idx]
                 for n_part_nr in range(num_parts):
-                    if tag >= 0 and \
-                    tag & new_meshes[part_nr].boundary_tag_bit(n_part_nr) != 0:
+                    # Is tag >= 0 always true?
+                    if tag & new_meshes[part_nr].boundary_tag_bit(n_part_nr) != 0:
                         # Is this the best way to probe the tag?
                         # Can one tag have multiple partition neighbors?
                         (n_elem, n_face) = new_meshes[part_nr].\
