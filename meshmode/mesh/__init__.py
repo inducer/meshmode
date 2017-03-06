@@ -382,22 +382,22 @@ class NodalAdjacency(Record):
 # }}}
 
 
-# {{{ partition adjacency   
-        
+# {{{ partition adjacency
+
 class InterPartitionAdj():
     """
     Interface is not final.
     """
-    
+
     def __init__(self):
         self.adjacent = dict()
-        
+    
     def add_connection(self, elem, face, neighbor_elem, neighbor_face):
         self.adjacent[(elem, face)] = (neighbor_elem, neighbor_face)
 
     def get_neighbor(self, elem, face):
         return self.adjacent[(elem, face)]
-    
+
 # }}}
 
 
@@ -556,7 +556,7 @@ class Mesh(Record):
             will result in exceptions. Lastly, a data structure as described in
             :attr:`facial_adjacency_groups` may be passed.
         """
-        
+
         el_nr = 0
         node_nr = 0
 
