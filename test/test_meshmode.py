@@ -71,7 +71,7 @@ def test_partition_torus_mesh():
 
 def test_partition_boxes_mesh():
     n = 5
-    num_parts = 3
+    num_parts = 7
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(n, n, n))
     #TODO facial_adjacency_groups is not available from merge_disjoint_meshes.
@@ -103,18 +103,26 @@ def test_partition_boxes_mesh():
         [count_btag_all(new_meshes[i]) for i in range(num_parts)]), \
         "part_mesh has the wrong number of BTAG_ALL boundaries"
         
-    for part_num in range(num_parts):
-        for f_groups in new_meshes[part_num].facial_adjacency_groups:
+    for part_nr in range(num_parts):
+        for f_groups in new_meshes[part_nr].facial_adjacency_groups:
             f_grp = f_groups[None]
             for idx in range(len(f_grp.elements)):
+                # Are all f_grp.neighbors guaranteed to be negative 
+                # since I'm taking the boundary facial group?
                 tag = -f_grp.neighbors[idx]
-                if tag >= 0:
-                    elem = f_grp.elements[idx]
-                    face = f_grp.element_faces[idx]
-                    (n_part, n_elem, n_face) = ...get_neighbor(tag, elem, face)
-                    assert (part_num, elem, face) = ...get_neighbor(n_part, n_elem, n_face)
+                elem = f_grp.elements[idx]
+                face = f_grp.element_faces[idx]
+                for n_part_nr in range(num_parts):
+                    if tag >= 0 and \
+                        tag & new_meshes[part_nr].boundary_tag_bit(n_part_nr) != 0:
+                        # Is this the best way to probe the tag?
+                        # Can one tag have multiple partition neighbors?
+                        (n_elem, n_face) = new_meshes[part_nr].\
+                                interpartition_adj.get_neighbor(elem, face)
+                        assert (elem, face) == new_meshes[n_part_nr].\
+                                interpartition_adj.get_neighbor(n_elem, n_face),\
+                                "InterpartitionAdj is not consistent"
         
-
 
 def count_btag_all(mesh):
     num_bnds = 0
