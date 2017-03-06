@@ -391,7 +391,7 @@ class InterPartitionAdj():
 
     def __init__(self):
         self.adjacent = dict()
-    
+
     def add_connection(self, elem, face, neighbor_elem, neighbor_face):
         self.adjacent[(elem, face)] = (neighbor_elem, neighbor_face)
 
