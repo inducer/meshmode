@@ -130,7 +130,7 @@ def test_partition_boxes_mesh():
                         while p_elem >= mesh.groups[p_grp_nr].nelements:
                             p_elem -= mesh.groups[p_grp_nr].nelements
                             p_grp_nr += 1
-                        p_elem_base = mesh.groups[p_grp_nr].element_nr_base
+                        #p_elem_base = mesh.groups[p_grp_nr].element_nr_base
                         f_groups = mesh.facial_adjacency_groups[p_grp_nr]
                         for _, p_bnd_adj in f_groups.items():
                             for idx in range(len(p_bnd_adj.elements)):
@@ -147,6 +147,7 @@ def test_partition_boxes_mesh():
             tag_sum += count_tags(mesh, BTAG_PARTITION(tag_nr))
         assert num_tags[tag_nr] == tag_sum,\
                 "part_mesh has the wrong number of BTAG_PARTITION boundaries"
+
 
 def count_tags(mesh, tag):
     num_bnds = 0

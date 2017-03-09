@@ -54,6 +54,7 @@ Predefined Boundary tags
 .. autoclass:: BTAG_ALL
 .. autoclass:: BTAG_REALLY_ALL
 .. autoclass:: BTAG_NO_BOUNDARY
+.. autoclass:: BTAG_PARTITION
 """
 
 
@@ -88,12 +89,12 @@ class BTAG_NO_BOUNDARY(object):  # noqa
     pass
 
 
-class BTAG_PARTITION(object):
+class BTAG_PARTITION(object):  # noqa
     """
     A boundary tag indicating that this edge is adjacent to an element of
     another :class:`Mesh`. The partition number of the adjacent mesh
     is given by ``part_nr``.
-    
+
     .. attribute:: part_nr
 
     .. versionadded:: 2017.1
@@ -416,27 +417,27 @@ class NodalAdjacency(Record):
 class InterPartitionAdj():
     """
     Describes facial adjacency information of elements in one :class:`Mesh` to
-    elements in another :class:`Mesh`. The element's boundary tag gives the 
+    elements in another :class:`Mesh`. The element's boundary tag gives the
     partition that it is connected to.
 
     .. attribute:: elements
 
         `:class:Mesh`-local element numbers that have neighbors.
-    
+
     .. attribute:: element_faces
 
         ``element_faces[i]`` is the face of ``elements[i]`` that has a neighbor.
 
     .. attribute:: neighbors
 
-        ``neighbors[i]`` gives the element number within the neighboring partiton 
+        ``neighbors[i]`` gives the element number within the neighboring partiton
         of the element connected to ``elements[i]``.
 
     .. attribute:: neighbor_faces
 
         ``neighbor_faces[i]`` gives face index within the neighboring partition
         of the face connected to ``elements[i]``
-    
+
     .. automethod:: add_connection
     .. automethod:: get_neighbor
 
@@ -451,7 +452,7 @@ class InterPartitionAdj():
 
     def add_connection(self, elem, face, neighbor_elem, neighbor_face):
         """
-        Adds a connection from ``elem`` and ``face`` within :class:`Mesh` to 
+        Adds a connection from ``elem`` and ``face`` within :class:`Mesh` to
         ``neighbor_elem`` and ``neighbor_face`` of another neighboring partion
         of type :class:`Mesh`.
         :arg elem
