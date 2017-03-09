@@ -179,7 +179,8 @@ def partition_mesh(mesh, part_per_element, part_nr):
 
                         n_part_nr = part_per_element[rank_neighbor]
                         tags = tags & ~part_mesh.boundary_tag_bit(BTAG_ALL)
-                        tags = tags | part_mesh.boundary_tag_bit(BTAG_PARTITION(n_part_nr))
+                        tags = tags | part_mesh.boundary_tag_bit(
+                                                    BTAG_PARTITION(n_part_nr))
                         boundary_adj.neighbors[elem_idx] = -tags
 
                         # Find the neighbor element from the other partition

@@ -54,6 +54,7 @@ Predefined Boundary tags
 .. autoclass:: BTAG_ALL
 .. autoclass:: BTAG_REALLY_ALL
 .. autoclass:: BTAG_NO_BOUNDARY
+.. autoclass:: BTAG_PARTITION
 """
 
 
@@ -88,7 +89,7 @@ class BTAG_NO_BOUNDARY(object):  # noqa
     pass
 
 
-class BTAG_PARTITION(object):
+class BTAG_PARTITION(object):  # noqa
     """
     A boundary tag indicating that this edge is adjacent to an element of
     another :class:`Mesh`. The partition number of the adjacent mesh
