@@ -93,44 +93,69 @@ def test_partition_boxes_mesh():
 
     from meshmode.mesh.processing import partition_mesh
     new_meshes = [
-        partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
+        partition_mesh(mesh, part_per_element, i) for i in range(num_parts)]
 
     assert mesh.nelements == np.sum(
-        [new_meshes[i].nelements for i in range(num_parts)]), \
+        [new_meshes[i][0].nelements for i in range(num_parts)]), \
         "part_mesh has the wrong number of elements"
 
-    assert count_btag_all(mesh) == np.sum(
-        [count_btag_all(new_meshes[i]) for i in range(num_parts)]), \
+    assert count_tags(mesh, BTAG_ALL) == np.sum(
+        [count_tags(new_meshes[i][0], BTAG_ALL) for i in range(num_parts)]), \
         "part_mesh has the wrong number of BTAG_ALL boundaries"
 
+    from meshmode.mesh import BTAG_PARTITION
+    num_tags = np.zeros((num_parts,))
+
     for part_nr in range(num_parts):
-        for f_groups in new_meshes[part_nr].facial_adjacency_groups:
+        (part, part_to_global) = new_meshes[part_nr]
+        for f_groups in part.facial_adjacency_groups:
             f_grp = f_groups[None]
             for idx in range(len(f_grp.elements)):
-                # Are all f_grp.neighbors guaranteed to be negative
-                # since I'm taking the boundary facial group?
                 tag = -f_grp.neighbors[idx]
+                assert tag >= 0
                 elem = f_grp.elements[idx]
                 face = f_grp.element_faces[idx]
                 for n_part_nr in range(num_parts):
-                    # Is tag >= 0 always true?
-                    if tag & new_meshes[part_nr].boundary_tag_bit(n_part_nr) != 0:
-                        # Is this the best way to probe the tag?
-                        # Can one tag have multiple partition neighbors?
-                        (n_elem, n_face) = new_meshes[part_nr].\
-                                interpartition_adj.get_neighbor(elem, face)
-                        assert (elem, face) == new_meshes[n_part_nr].\
-                                interpartition_adj.get_neighbor(n_elem, n_face),\
-                                "InterpartitionAdj is not consistent"
+                    (n_part, n_part_to_global) = new_meshes[n_part_nr]
+                    if tag & part.boundary_tag_bit(BTAG_PARTITION(n_part_nr)) != 0:
+                        num_tags[n_part_nr] += 1
+                        (n_elem, n_face) = part.interpartition_adj.\
+                                            get_neighbor(elem, face)
+                        assert (elem, face) == n_part.interpartition_adj.\
+                                            get_neighbor(n_elem, n_face),\
+                                            "InterpartitionAdj is not consistent"
+                        p_elem = part_to_global[elem]
+                        n_part_to_global = new_meshes[n_part_nr][1]
+                        p_n_elem = n_part_to_global[n_elem]
+                        p_grp_nr = 0
+                        while p_elem >= mesh.groups[p_grp_nr].nelements:
+                            p_elem -= mesh.groups[p_grp_nr].nelements
+                            p_grp_nr += 1
+                        p_elem_base = mesh.groups[p_grp_nr].element_nr_base
+                        f_groups = mesh.facial_adjacency_groups[p_grp_nr]
+                        for _, p_bnd_adj in f_groups.items():
+                            for idx in range(len(p_bnd_adj.elements)):
+                                if (p_elem == p_bnd_adj.elements[idx] and
+                                         face == p_bnd_adj.element_faces[idx]):
+                                    assert p_n_elem == p_bnd_adj.neighbors[idx],\
+                                            "Tag does not give correct neighbor"
+                                    assert n_face == p_bnd_adj.neighbor_faces[idx],\
+                                            "Tag does not give correct neighbor"
 
+    for tag_nr in range(num_parts):
+        tag_sum = 0
+        for mesh, _ in new_meshes:
+            tag_sum += count_tags(mesh, BTAG_PARTITION(tag_nr))
+        assert num_tags[tag_nr] == tag_sum,\
+                "part_mesh has the wrong number of BTAG_PARTITION boundaries"
 
-def count_btag_all(mesh):
+def count_tags(mesh, tag):
     num_bnds = 0
     for adj_dict in mesh.facial_adjacency_groups:
         for _, bdry_group in adj_dict.items():
             for neighbors in bdry_group.neighbors:
                 if neighbors < 0:
-                    if -neighbors & mesh.boundary_tag_bit(BTAG_ALL) != 0:
+                    if -neighbors & mesh.boundary_tag_bit(tag) != 0:
                         num_bnds += 1
     return num_bnds
 

@@ -140,21 +140,19 @@ def partition_mesh(mesh, part_per_element, part_nr):
                 type(mesh_group)(mesh_group.order, new_indices[group_nr],
                     new_nodes[group_nr], unit_nodes=mesh_group.unit_nodes))
 
-    num_parts = np.max(part_per_element)
-    boundary_tags = list(range(num_parts))
+    from meshmode.mesh import BTAG_ALL, BTAG_PARTITION
+    boundary_tags = [BTAG_PARTITION(n) for n in range(np.max(part_per_element))]
 
     from meshmode.mesh import Mesh
     part_mesh = Mesh(new_vertices, new_mesh_groups,
         facial_adjacency_groups=None, boundary_tags=boundary_tags)
 
-    from meshmode.mesh import BTAG_ALL
-
-    #TODO This should probably be in the Mesh class.
+    # FIXME I get errors when I try to copy part_mesh.
     from meshmode.mesh import InterPartitionAdj
     part_mesh.interpartition_adj = InterPartitionAdj()
 
     for igrp in range(num_groups):
-        part_group = part_mesh.groups[igrp]
+        elem_base = part_mesh.groups[igrp].element_nr_base
         boundary_adj = part_mesh.facial_adjacency_groups[igrp][None]
         boundary_elems = boundary_adj.elements
         boundary_faces = boundary_adj.element_faces
@@ -162,7 +160,6 @@ def partition_mesh(mesh, part_per_element, part_nr):
             elem = boundary_elems[elem_idx]
             face = boundary_faces[elem_idx]
             tags = -boundary_adj.neighbors[elem_idx]
-            # Is is reasonable to expect this assertation?
             assert tags >= 0, "Expected boundary tag in adjacency group."
             parent_elem = queried_elems[elem]
             parent_group_num = 0
@@ -171,8 +168,8 @@ def partition_mesh(mesh, part_per_element, part_nr):
                 parent_group_num += 1
             assert parent_group_num < num_groups, "Unable to find neighbor."
             parent_grp_elem_base = mesh.groups[parent_group_num].element_nr_base
-            parent_boundary_adj = mesh.facial_adjacency_groups[parent_group_num]
-            for _, parent_facial_group in parent_boundary_adj.items():
+            parent_adj = mesh.facial_adjacency_groups[parent_group_num]
+            for _, parent_facial_group in parent_adj.items():
                 for idx in np.where(parent_facial_group.elements == parent_elem)[0]:
                     if parent_facial_group.neighbors[idx] >= 0 and \
                             parent_facial_group.element_faces[idx] == face:
@@ -182,7 +179,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
 
                         n_part_nr = part_per_element[rank_neighbor]
                         tags = tags & ~part_mesh.boundary_tag_bit(BTAG_ALL)
-                        tags = tags | part_mesh.boundary_tag_bit(n_part_nr)
+                        tags = tags | part_mesh.boundary_tag_bit(BTAG_PARTITION(n_part_nr))
                         boundary_adj.neighbors[elem_idx] = -tags
 
                         # Find the neighbor element from the other partition
@@ -192,7 +189,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
                         # TODO Test if this works with multiple groups
                         # Do I need to add the element number base?
                         part_mesh.interpartition_adj.add_connection(
-                            elem + part_group.element_nr_base,
+                            elem + elem_base,
                             face,
                             n_elem,
                             rank_neighbor_face)
@@ -435,6 +432,8 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
         grp_cls = None
         order = None
         unit_nodes = None
+        nodal_adjacency = None
+        facial_adjacency_groups = None
 
         for mesh in meshes:
             if mesh._nodal_adjacency is not None:
@@ -466,6 +465,8 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
 
     else:
         new_groups = []
+        nodal_adjacency = None
+        facial_adjacency_groups = None
 
         for mesh, vert_base in zip(meshes, vert_bases):
             if mesh._nodal_adjacency is not None:

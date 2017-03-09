@@ -88,6 +88,35 @@ class BTAG_NO_BOUNDARY(object):  # noqa
     pass
 
 
+class BTAG_PARTITION(object):
+    """
+    A boundary tag indicating that this edge is adjacent to an element of
+    another :class:`Mesh`. The partition number of the adjacent mesh
+    is given by ``part_nr``.
+
+    .. attribute:: part_nr
+
+    .. versionadded:: 2017.1
+    """
+    def __init__(self, part_nr):
+        self.part_nr = int(part_nr)
+
+    # TODO is this acceptable?
+    # __eq__ is also defined so maybe the hash value isn't too important
+    # for dictionaries.
+    def __hash__(self):
+        return self.part_nr
+
+    def __eq__(self, other):
+        if isinstance(other, BTAG_PARTITION):
+            return self.part_nr == other.part_nr
+        else:
+            return False
+
+    def __nq__(self, other):
+        return not self.__eq__(other)
+
+
 SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY])
 
 # }}}
@@ -386,17 +415,66 @@ class NodalAdjacency(Record):
 
 class InterPartitionAdj():
     """
-    Interface is not final.
+    Describes facial adjacency information of elements in one :class:`Mesh` to
+    elements in another :class:`Mesh`. The element's boundary tag gives the
+    partition that it is connected to.
+
+    .. attribute:: elements
+
+        `:class:Mesh`-local element numbers that have neighbors.
+
+    .. attribute:: element_faces
+
+        ``element_faces[i]`` is the face of ``elements[i]`` that has a neighbor.
+
+    .. attribute:: neighbors
+
+        ``neighbors[i]`` gives the element number within the neighboring partiton
+        of the element connected to ``elements[i]``.
+
+    .. attribute:: neighbor_faces
+
+        ``neighbor_faces[i]`` gives face index within the neighboring partition
+        of the face connected to ``elements[i]``
+
+    .. automethod:: add_connection
+    .. automethod:: get_neighbor
+
+    .. versionadded:: 2017.1
     """
 
     def __init__(self):
-        self.adjacent = dict()
+        self.elements = []
+        self.element_faces = []
+        self.neighbors = []
+        self.neighbor_faces = []
 
     def add_connection(self, elem, face, neighbor_elem, neighbor_face):
-        self.adjacent[(elem, face)] = (neighbor_elem, neighbor_face)
+        """
+        Adds a connection from ``elem`` and ``face`` within :class:`Mesh` to
+        ``neighbor_elem`` and ``neighbor_face`` of another neighboring partion
+        of type :class:`Mesh`.
+        :arg elem
+        :arg face
+        :arg neighbor_elem
+        :arg neighbor_face
+        """
+        self.elements.append(elem)
+        self.element_faces.append(face)
+        self.neighbors.append(neighbor_elem)
+        self.neighbor_faces.append(neighbor_face)
 
     def get_neighbor(self, elem, face):
-        return self.adjacent[(elem, face)]
+        """
+        :arg elem
+        :arg face
+        :returns: A tuple ``(neighbor_elem, neighbor_face)`` of neighboring
+                elements within another :class:`Mesh`.
+        """
+        for idx in range(len(self.elements)):
+            if elem == self.elements[idx] and face == self.element_faces[idx]:
+                return (self.neighbors[idx], self.neighbor_faces[idx])
+        raise RuntimeError("This face does not have a neighbor")
 
 # }}}
 
@@ -552,6 +630,7 @@ class Mesh(Record):
             node_vertex_consistency_tolerance=None,
             nodal_adjacency=False,
             facial_adjacency_groups=False,
+            interpartition_adj=False,
             boundary_tags=None,
             vertex_id_dtype=np.int32,
             element_id_dtype=np.int32):
@@ -633,6 +712,7 @@ class Mesh(Record):
                 self, vertices=vertices, groups=new_groups,
                 _nodal_adjacency=nodal_adjacency,
                 _facial_adjacency_groups=facial_adjacency_groups,
+                interpartition_adj=interpartition_adj,
                 boundary_tags=boundary_tags,
                 btag_to_index=btag_to_index,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),
@@ -762,6 +842,7 @@ class Mesh(Record):
                         == other._nodal_adjacency)
                 and (self._facial_adjacency_groups
                         == other._facial_adjacency_groups)
+                and self.interpartition_adj == other.interpartition_adj
                 and self.boundary_tags == other.boundary_tags)
 
     def __ne__(self, other):
