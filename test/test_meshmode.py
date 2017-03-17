@@ -79,10 +79,17 @@ def test_partition_interpolation(ctx_getter):
     vol_discrs = [Discretization(cl_ctx, part_meshes[i], group_factory) 
                     for i in range(num_parts)]
 
-    from meshmode.discretization.connection import (make_face_restriction,
-            check_connection)
+    from meshmode.discretization.connection import make_face_restriction
     bdry_connections = [make_face_restriction(vol_discrs[i], group_factory, 
                             FRESTR_INTERIOR_FACES) for i in range(num_parts)]
+
+    from meshmode.discretization.connection import \
+                            make_opposite_partition_connection
+    opp_faces = make_opposite_partition_connection(bdry_connections)
+
+    from meshmode.discretization.connection import check_connection
+    for opp_face in opp_faces:
+        check_connection(opp_face)
 
 
 # {{{ partition_mesh

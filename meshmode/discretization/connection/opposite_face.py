@@ -392,4 +392,40 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 
 # }}}
 
+
+def make_opposite_partition_connection(vol_to_bdry_conns):
+    """
+    Given a list of boundary restriction connections *volume_to_bdry_conn*,
+    return a :class:`DirectDiscretizationConnection` that performs data
+    exchange across adjacent faces of different partitions.
+
+    :arg :vol_to_bdry_conns A list of *volume_to_bdry_conn* corresponding to 
+                                a partition of a parent mesh.
+    """
+
+    disc_conns = []
+    return disc_conns
+    nparts = len(vol_to_bdry_conns)
+    from meshmode.discretization.connection import (
+                DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
+    for part_idx in range(nparts):  
+        vol_discr = vol_to_bdry_conns[part_idx].from_discr
+        vol_mesh = vol_discr.mesh
+        bdry_discr = vol_to_bdry_conns[part_idx].to_discr
+
+        with cl.CommandQueue(vol_discr.cl_context) as queue:
+            # Create a list of batches. Each batch contains interpolation
+            #   data from one partition to another.
+            nop
+
+        disc_conns.append(DirectDiscretizationConnection(
+                            from_discr=bdry_discr,
+                            to_discr=bdry_discr,
+                            groups=[
+                                DiscretizationConnectionElementGroup(batches=batches)
+                                for batches in groups],
+                            is_surjective=True))
+
+    return disc_conns
+
 # vim: foldmethod=marker

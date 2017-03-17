@@ -35,7 +35,7 @@ from meshmode.discretization.connection.face import (
         FACE_RESTR_INTERIOR, FACE_RESTR_ALL,
         make_face_restriction, make_face_to_all_faces_embedding)
 from meshmode.discretization.connection.opposite_face import \
-        make_opposite_face_connection
+        make_opposite_face_connection, make_opposite_partition_connection
 from meshmode.discretization.connection.refinement import \
         make_refinement_connection
 
