@@ -41,15 +41,13 @@ __doc__ = """
 """
 
 
-# {{{ partition_mesh
-
-def partition_mesh(mesh, part_per_element, part_nr):
+def partition_mesh(mesh, part_per_element, part_num):
     """
     :arg mesh: A :class:`meshmode.mesh.Mesh` to be partitioned.
     :arg part_per_element: A :class:`numpy.ndarray` containing one
         integer per element of *mesh* indicating which part of the
         partitioned mesh the element is to become a part of.
-    :arg part_nr: The part number of the mesh to return.
+    :arg part_num: The part number of the mesh to return.
 
     :returns: A tuple ``(part_mesh, part_to_global)``, where *part_mesh*
         is a :class:`meshmode.mesh.Mesh` that is a partition of mesh, and
@@ -65,7 +63,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
         "part_per_element must have shape (mesh.nelements,)")
 
     # Contains the indices of the elements requested.
-    queried_elems = np.where(np.array(part_per_element) == part_nr)[0]
+    queried_elems = np.where(np.array(part_per_element) == part_num)[0]
 
     num_groups = len(mesh.groups)
     new_indices = []
@@ -80,8 +78,8 @@ def partition_mesh(mesh, part_per_element, part_nr):
     skip_groups = []
     num_prev_elems = 0
     start_idx = 0
-    for group_nr in range(num_groups):
-        mesh_group = mesh.groups[group_nr]
+    for group_num in range(num_groups):
+        mesh_group = mesh.groups[group_num]
 
         # Find the index of first element in the next group
         end_idx = len(queried_elems)
@@ -91,7 +89,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
                 break
 
         if start_idx == end_idx:
-            skip_groups.append(group_nr)
+            skip_groups.append(group_num)
             new_indices.append(np.array([]))
             new_nodes.append(np.array([]))
             num_prev_elems += mesh_group.nelements
@@ -107,10 +105,10 @@ def partition_mesh(mesh, part_per_element, part_nr):
             for j in range(start_idx, end_idx):
                 elems = queried_elems[j] - num_prev_elems
                 new_idx = j - start_idx
-                new_nodes[group_nr][i, new_idx, :] = mesh_group.nodes[i, elems, :]
+                new_nodes[group_num][i, new_idx, :] = mesh_group.nodes[i, elems, :]
 
-        #index_set = np.append(index_set, new_indices[group_nr].ravel())
-        index_sets = np.append(index_sets, set(new_indices[group_nr].ravel()))
+        #index_set = np.append(index_set, new_indices[group_num].ravel())
+        index_sets = np.append(index_sets, set(new_indices[group_num].ravel()))
 
         num_prev_elems += mesh_group.nelements
         start_idx = end_idx
@@ -124,21 +122,21 @@ def partition_mesh(mesh, part_per_element, part_nr):
         new_vertices[dim] = mesh.vertices[dim][required_indices]
 
     # Our indices need to be in range [0, len(mesh.nelements)].
-    for group_nr in range(num_groups):
-        if group_nr not in skip_groups:
-            for i in range(len(new_indices[group_nr])):
-                for j in range(len(new_indices[group_nr][0])):
-                    original_index = new_indices[group_nr][i, j]
-                    new_indices[group_nr][i, j] = np.where(
-                        required_indices == original_index)[0]
+    for group_num in range(num_groups):
+        if group_num not in skip_groups:
+            for i in range(len(new_indices[group_num])):
+                for j in range(len(new_indices[group_num][0])):
+                    original_index = new_indices[group_num][i, j]
+                    new_indices[group_num][i, j] = np.where(
+                            required_indices == original_index)[0]
 
     new_mesh_groups = []
-    for group_nr in range(num_groups):
-        if group_nr not in skip_groups:
-            mesh_group = mesh.groups[group_nr]
+    for group_num in range(num_groups):
+        if group_num not in skip_groups:
+            mesh_group = mesh.groups[group_num]
             new_mesh_groups.append(
-                type(mesh_group)(mesh_group.order, new_indices[group_nr],
-                    new_nodes[group_nr], unit_nodes=mesh_group.unit_nodes))
+                type(mesh_group)(mesh_group.order, new_indices[group_num],
+                    new_nodes[group_num], unit_nodes=mesh_group.unit_nodes))
 
     from meshmode.mesh import BTAG_ALL, BTAG_PARTITION
     boundary_tags = [BTAG_PARTITION(n) for n in range(np.max(part_per_element))]
@@ -149,7 +147,8 @@ def partition_mesh(mesh, part_per_element, part_nr):
 
     # FIXME I get errors when I try to copy part_mesh.
     from meshmode.mesh import InterPartitionAdj
-    part_mesh.interpartition_adj = InterPartitionAdj()
+    part_mesh.interpart_adj_groups = [
+                    InterPartitionAdj() for _ in range(num_groups)]
 
     for igrp in range(num_groups):
         elem_base = part_mesh.groups[igrp].element_nr_base
@@ -169,7 +168,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
             assert parent_group_num < num_groups, "Unable to find neighbor."
             parent_grp_elem_base = mesh.groups[parent_group_num].element_nr_base
             parent_adj = mesh.facial_adjacency_groups[parent_group_num]
-            for _, parent_facial_group in parent_adj.items():
+            for n_grp_num, parent_facial_group in parent_adj.items():
                 for idx in np.where(parent_facial_group.elements == parent_elem)[0]:
                     if parent_facial_group.neighbors[idx] >= 0 and \
                             parent_facial_group.element_faces[idx] == face:
@@ -177,22 +176,23 @@ def partition_mesh(mesh, part_per_element, part_nr):
                                          + parent_grp_elem_base)
                         rank_neighbor_face = parent_facial_group.neighbor_faces[idx]
 
-                        n_part_nr = part_per_element[rank_neighbor]
+                        n_part_num = part_per_element[rank_neighbor]
                         tags = tags & ~part_mesh.boundary_tag_bit(BTAG_ALL)
                         tags = tags | part_mesh.boundary_tag_bit(
-                                                    BTAG_PARTITION(n_part_nr))
+                                                    BTAG_PARTITION(n_part_num))
                         boundary_adj.neighbors[elem_idx] = -tags
 
                         # Find the neighbor element from the other partition
                         n_elem = np.count_nonzero(
-                                    part_per_element[:rank_neighbor] == n_part_nr)
+                                    part_per_element[:rank_neighbor] == n_part_num)
 
                         # TODO Test if this works with multiple groups
                         # Do I need to add the element number base?
-                        part_mesh.interpartition_adj.add_connection(
+                        part_mesh.interpart_adj_groups[igrp].add_connection(
                             elem + elem_base,
                             face,
-                            n_part_nr,
+                            n_part_num,
+                            n_grp_num,
                             n_elem,
                             rank_neighbor_face)
 
