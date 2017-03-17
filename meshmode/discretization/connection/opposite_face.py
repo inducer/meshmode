@@ -393,6 +393,9 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 # }}}
 
 
+def _make_cross_partition_batches():
+    return [42]
+
 def make_partition_connection(vol_to_bdry_conns):
     """
     Given a list of boundary restriction connections *volume_to_bdry_conn*,
@@ -416,19 +419,24 @@ def make_partition_connection(vol_to_bdry_conns):
         # Create a list of batches. Each batch contains interpolation
         #   data from one partition to another.
         for src_part_idx in range(nparts):
-            part_batches = [[] for _ in range(nparts)]
             src_vol_conn = vol_to_bdry_conns[src_part_idx]
             src_from_discr = src_vol_conn.from_discr
             src_to_discr = src_vol_conn.to_discr
             src_mesh = src_from_discr.mesh
-            adj = src_mesh.interpartition_adj
-            for elem_idx, elem in enumerate(adj.elements):
-                face = adj.element_faces[elem_idx]
-                (part_idx, n_elem, n_face) = adj.get_neighbor(elem, face)
+            ngroups = len(src_mesh.groups)
+            part_batches = [[] for _ in range(ngroups)]
+            for group_num, adj in enumerate(src_mesh.interpart_adj_groups):
+                for elem_idx, elem in enumerate(adj.elements):
+                    face = adj.element_faces[elem_idx]
+                    (part_idx, group_num, n_elem, n_face) =\
+                                        adj.get_neighbor(elem, face)
 
-                # Using the neighboring face and element, we need to create batches
-                # I'm not sure how I would do this. My guess is that it would look
-                # something like _make_cross_face_batches
+                    # We need to create batches using the 
+                    # neighboring face, element, and group
+                    # I'm not sure how I would do this.
+                    # My guess is that it would look
+                    # something like _make_cross_face_batches
+                    part_batches[group_num].extend(_make_cross_partition_batches())
 
             # Make one Discr connection for each partition.
             disc_conns.append(DirectDiscretizationConnection(

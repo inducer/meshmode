@@ -449,9 +449,10 @@ class InterPartitionAdj():
         self.element_faces = []
         self.neighbors = []
         self.neighbor_faces = []
+        self.neighbor_groups = []
         self.part_indices = []
 
-    def add_connection(self, elem, face, part_idx, neighbor_elem, neighbor_face):
+    def add_connection(self, elem, face, part_idx, neighbor_group, neighbor_elem, neighbor_face):
         """
         Adds a connection from ``elem`` and ``face`` within :class:`Mesh` to
         ``neighbor_elem`` and ``neighbor_face`` of another neighboring partion
@@ -466,18 +467,19 @@ class InterPartitionAdj():
         self.element_faces.append(face)
         self.part_indices.append(part_idx)
         self.neighbors.append(neighbor_elem)
+        self.neighbor_groups.append(neighbor_group)
         self.neighbor_faces.append(neighbor_face)
 
     def get_neighbor(self, elem, face):
         """
         :arg elem
         :arg face
-        :returns: A tuple ``(part_idx, neighbor_elem, neighbor_face)`` of 
+        :returns: A tuple ``(part_idx, neighbor_group, neighbor_elem, neighbor_face)`` of 
                     neighboring elements within another :class:`Mesh`.
         """
         for idx in range(len(self.elements)):
             if elem == self.elements[idx] and face == self.element_faces[idx]:
-                return (self.part_indices[idx],
+                return (self.part_indices[idx], self.neighbor_groups[idx],
                          self.neighbors[idx], self.neighbor_faces[idx])
         raise RuntimeError("This face does not have a neighbor")
 
@@ -609,7 +611,7 @@ class Mesh(Record):
             node_vertex_consistency_tolerance=None,
             nodal_adjacency=False,
             facial_adjacency_groups=False,
-            interpartition_adj=False,
+            interpart_adj_groups=False,
             boundary_tags=None,
             vertex_id_dtype=np.int32,
             element_id_dtype=np.int32):
@@ -691,7 +693,7 @@ class Mesh(Record):
                 self, vertices=vertices, groups=new_groups,
                 _nodal_adjacency=nodal_adjacency,
                 _facial_adjacency_groups=facial_adjacency_groups,
-                interpartition_adj=interpartition_adj,
+                interpart_adj_groups=interpart_adj_groups,
                 boundary_tags=boundary_tags,
                 btag_to_index=btag_to_index,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),
@@ -801,7 +803,7 @@ class Mesh(Record):
                         == other._nodal_adjacency)
                 and (self._facial_adjacency_groups
                         == other._facial_adjacency_groups)
-                and self.interpartition_adj == other.interpartition_adj
+                and self.interpart_adj_groups == other.interpart_adj_groups
                 and self.boundary_tags == other.boundary_tags)
 
     def __ne__(self, other):
