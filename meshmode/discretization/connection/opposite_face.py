@@ -393,7 +393,7 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 # }}}
 
 
-def make_opposite_partition_connection(vol_to_bdry_conns):
+def make_partition_connection(vol_to_bdry_conns):
     """
     Given a list of boundary restriction connections *volume_to_bdry_conn*,
     return a :class:`DirectDiscretizationConnection` that performs data
@@ -404,27 +404,40 @@ def make_opposite_partition_connection(vol_to_bdry_conns):
     """
 
     disc_conns = []
-    return disc_conns
     nparts = len(vol_to_bdry_conns)
     from meshmode.discretization.connection import (
-                DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
-    for part_idx in range(nparts):  
-        vol_discr = vol_to_bdry_conns[part_idx].from_discr
-        vol_mesh = vol_discr.mesh
-        bdry_discr = vol_to_bdry_conns[part_idx].to_discr
+            DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
+    
+    # My intuition tells me that this should not live inside a for loop.
+    # However, I need to grab a cl_context. I'll assume that each context from
+    # each partition is the same and I'll use the first one.
+    cl_context = vol_to_bdry_conns[0].from_discr.cl_context
+    with cl.CommandQueue(cl_context) as queue:
+        # Create a list of batches. Each batch contains interpolation
+        #   data from one partition to another.
+        for src_part_idx in range(nparts):
+            part_batches = [[] for _ in range(nparts)]
+            src_vol_conn = vol_to_bdry_conns[src_part_idx]
+            src_from_discr = src_vol_conn.from_discr
+            src_to_discr = src_vol_conn.to_discr
+            src_mesh = src_from_discr.mesh
+            adj = src_mesh.interpartition_adj
+            for elem_idx, elem in enumerate(adj.elements):
+                face = adj.element_faces[elem_idx]
+                (part_idx, n_elem, n_face) = adj.get_neighbor(elem, face)
 
-        with cl.CommandQueue(vol_discr.cl_context) as queue:
-            # Create a list of batches. Each batch contains interpolation
-            #   data from one partition to another.
-            nop
+                # Using the neighboring face and element, we need to create batches
+                # I'm not sure how I would do this. My guess is that it would look
+                # something like _make_cross_face_batches
 
-        disc_conns.append(DirectDiscretizationConnection(
-                            from_discr=bdry_discr,
-                            to_discr=bdry_discr,
-                            groups=[
-                                DiscretizationConnectionElementGroup(batches=batches)
-                                for batches in groups],
-                            is_surjective=True))
+            # Make one Discr connection for each partition.
+            disc_conns.append(DirectDiscretizationConnection(
+                    from_discr=src_from_discr,
+                    to_discr=src_to_discr,
+                    groups=[
+                        DiscretizationConnectionElementGroup(batches=batches)
+                        for batches in part_batches],
+                    is_surjective=True))
 
     return disc_conns
 
