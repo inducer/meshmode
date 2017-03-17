@@ -190,6 +190,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
                         part_mesh.interpartition_adj.add_connection(
                             elem + elem_base,
                             face,
+                            n_part_nr,
                             n_elem,
                             rank_neighbor_face)
 

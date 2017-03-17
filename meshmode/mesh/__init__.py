@@ -449,19 +449,22 @@ class InterPartitionAdj():
         self.element_faces = []
         self.neighbors = []
         self.neighbor_faces = []
+        self.part_indices = []
 
-    def add_connection(self, elem, face, neighbor_elem, neighbor_face):
+    def add_connection(self, elem, face, part_idx, neighbor_elem, neighbor_face):
         """
         Adds a connection from ``elem`` and ``face`` within :class:`Mesh` to
         ``neighbor_elem`` and ``neighbor_face`` of another neighboring partion
         of type :class:`Mesh`.
         :arg elem
         :arg face
+        :arg part_idx
         :arg neighbor_elem
         :arg neighbor_face
         """
         self.elements.append(elem)
         self.element_faces.append(face)
+        self.part_indices.append(part_idx)
         self.neighbors.append(neighbor_elem)
         self.neighbor_faces.append(neighbor_face)
 
@@ -469,12 +472,13 @@ class InterPartitionAdj():
         """
         :arg elem
         :arg face
-        :returns: A tuple ``(neighbor_elem, neighbor_face)`` of neighboring
-                elements within another :class:`Mesh`.
+        :returns: A tuple ``(part_idx, neighbor_elem, neighbor_face)`` of 
+                    neighboring elements within another :class:`Mesh`.
         """
         for idx in range(len(self.elements)):
             if elem == self.elements[idx] and face == self.element_faces[idx]:
-                return (self.neighbors[idx], self.neighbor_faces[idx])
+                return (self.part_indices[idx],
+                         self.neighbors[idx], self.neighbor_faces[idx])
         raise RuntimeError("This face does not have a neighbor")
 
 # }}}
