@@ -393,82 +393,96 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 # }}}
 
 
-def _make_cross_partition_batch(queue, vol_to_bdry_conns, adj, i_src_part, i_src_grp, from_elem, from_face):
+def _make_cross_partition_batch(queue, vol_to_bdry_conns, adj,
+                            i_tgt_part, i_tgt_grp, i_tgt_elem, i_tgt_face):
+    """
+    Creates a batch that transfers data to a face from a face of another partition.
 
-    (i_tgt_part, i_tgt_grp, bdry_elem, bdry_face) = adj.get_neighbor(from_elem, from_face)
+    :arg queue:
+    :arg vol_to_bdry_conns: A list of :class:`Direct` for each partition.
+    :arg adj: :class:`InterPartitionAdj` of partition `i_tgt_part`.
+    :arg i_tgt_part: The target partition number.
+    :arg i_tgt_grp:
+    :arg i_tgt_elem:
+    :arg i_tgt_face:
 
-    src_bdry_discr = vol_to_bdry_conns[i_tgt_part].to_discr
-    tgt_bdry_discr = vol_to_bdry_conns[i_scr_part].to_discr
+    :returns: ???
+    """
 
-    to_bdry_nodes = (
+    (i_src_part, i_src_grp, i_src_elem, i_src_face) =\
+                        adj.get_neighbor(i_tgt_elem, i_tgt_face)
+
+    src_bdry_discr = vol_to_bdry_conns[i_src_part].to_discr
+    tgt_bdry_discr = vol_to_bdry_conns[i_tgt_part].to_discr
+
+    tgt_bdry_nodes = (
             # FIXME: This should view-then-transfer (but PyOpenCL doesn't do
             # non-contiguous transfers for now).
             tgt_bdry_discr.groups[i_tgt_grp].view(
                 tgt_bdry_discr.nodes().get(queue=queue))
-            [:, to_bdry_element_indices])
+            [:, i_tgt_elem])
 
-    tol = 1e4 * np.finfo(to_bdry_nodes.dtype).eps
-
-    # TODO: Should this use vol_discr?
-    from_mesh_grp = src_bdry_discr.mesh.groups[i_src_grp]
-    from_grp = src_bdry_discr.groups[i_src_grp]
-
-    dim = from_grp.dim
-    ambient_dim, nelements, nto_unit_nodes = to_bdry_nodes.shape
-
-    initial_guess = np.mean(from_mesh_grp.vertex_unit_coordinates(), axis=0)
-
-    from_unit_nodes = np.empty((dim, nelements, nto_unit_nodes))
-    from_unit_nodes[:] = initial_guess.reshape(-1, 1, 1)
-
-    import modepy as mp
-    from_vdm = mp.vandermonde(from_grp.basis(), from_grp.unit_nodes)
-    from_inv_t_vdm = la.inv(from_vdm.T)
-    from_nfuncs = len(from_grp.basis())
+    ambient_dim, nelements, n_tgt_unit_nodes = tgt_bdry_nodes.shape
 
     # (ambient_dim, nelements, nfrom_unit_nodes)
-    from_bdry_nodes = (
+    src_bdry_nodes = (
             # FIXME: This should view-then-transfer (but PyOpenCL doesn't do
             # non-contiguous transfers for now).
-            # TODO: Should this be vol_discr?
-            bdry_discr.groups[i_src_grp].view(
+            src_bdry_discr.groups[i_src_grp].view(
                 src_bdry_discr.nodes().get(queue=queue))
-            [:, from_bdry_element_indices])
+            [:, i_src_elem])
+
+    tol = 1e4 * np.finfo(tgt_bdry_nodes.dtype).eps
+
+    src_mesh_grp = src_bdry_discr.mesh.groups[i_src_grp]
+    src_grp = src_bdry_discr.groups[i_src_grp]
+
+    dim = src_grp.dim
+
+    initial_guess = np.mean(src_mesh_grp.vertex_unit_coordinates(), axis=0)
+
+    src_unit_nodes = np.empty((dim, nelements, n_tgt_unit_nodes))
+    src_unit_nodes[:] = initial_guess.reshape(-1, 1, 1)
+
+    import modepy as mp
+    src_vdm = mp.vandermonde(src_grp.basis(), src_grp.unit_nodes)
+    src_inv_t_vdm = la.inv(src_vdm.T)
+    src_nfuncs = len(src_grp.basis())
 
     def apply_map(unit_nodes):
         # unit_nodes: (dim, nelements, nto_unit_nodes)
         # basis_at_unit_nodes
-        basis_at_unit_nodes = np.empty((from_nfuncs, nelements, nto_unit_nodes))
-        for i, f in enumerate(from_grp.basis()):
+        basis_at_unit_nodes = np.empty((src_nfuncs, nelements, n_tgt_unit_nodes))
+        for i, f in enumerate(src_grp.basis()):
             basis_at_unit_nodes[i] = (
                     f(unit_nodes.reshape(dim, -1))
-                    .reshape(nelements, nto_unit_nodes))
-        intp_coeffs = np.einsum("fj,jet->fet", from_inv_t_vdm, basis_at_unit_nodes)
+                    .reshape(nelements, n_tgt_unit_nodes))
+        intp_coeffs = np.einsum("fj,jet->fet", src_inv_t_vdm, basis_at_unit_nodes)
         # If we're interpolating 1, we had better get 1 back.
         one_deviation = np.abs(np.sum(intp_coeffs, axis=0) - 1)
         assert (one_deviation < tol).all(), np.max(one_deviation)
-        return np.einsum("fet,aef->aet", intp_coeffs, from_bdry_nodes)
+        return np.einsum("fet,aef->aet", intp_coeffs, src_bdry_nodes)
 
     def get_map_jacobian(unit_nodes):
         # unit_nodes: (dim, nelements, nto_unit_nodes)
         # basis_at_unit_nodes
         dbasis_at_unit_nodes = np.empty(
-                (dim, from_nfuncs, nelements, nto_unit_nodes))
-        for i, df in enumerate(from_grp.grad_basis()):
+                (dim, src_nfuncs, nelements, n_tgt_unit_nodes))
+        for i, df in enumerate(src_grp.grad_basis()):
             df_result = df(unit_nodes.reshape(dim, -1))
             for rst_axis, df_r in enumerate(df_result):
                 dbasis_at_unit_nodes[rst_axis, i] = (
-                        df_r.reshape(nelements, nto_unit_nodes))
+                        df_r.reshape(nelements, n_tgt_unit_nodes))
         dintp_coeffs = np.einsum(
-                "fj,rjet->rfet", from_inv_t_vdm, dbasis_at_unit_nodes)
-        return np.einsum("rfet,aef->raet", dintp_coeffs, from_bdry_nodes)
+                "fj,rjet->rfet", src_inv_t_vdm, dbasis_at_unit_nodes)
+        return np.einsum("rfet,aef->raet", dintp_coeffs, src_bdry_nodes)
 
-    logger.info("make_opposite_face_connection: begin gauss-newton")
+    logger.info("make_partition_connection: begin gauss-newton")
     niter = 0
     while True:
-        resid = apply_map(from_unit_nodes) - to_bdry_nodes
-        df = get_map_jacobian(from_unit_nodes)
-        df_inv_resid = np.empty_like(from_unit_nodes)
+        resid = apply_map(src_unit_nodes) - tgt_bdry_nodes
+        df = get_map_jacobian(src_unit_nodes)
+        df_inv_resid = np.empty_like(src_unit_nodes)
         # For the 1D/2D accelerated versions, we'll use the normal
         # equations and Cramer's rule. If you're looking for high-end
         # numerics, look no further than meshmode.
@@ -482,7 +496,7 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, adj, i_src_part, i_src
             ata = np.einsum("iket,jket->ijet", df, df)
             atb = np.einsum("iket,ket->iet", df, resid)
             det = ata[0, 0]*ata[1, 1] - ata[0, 1]*ata[1, 0]
-            df_inv_resid = np.empty_like(from_unit_nodes)
+            df_inv_resid = np.empty_like(src_unit_nodes)
             df_inv_resid[0] = 1/det * (ata[1, 1] * atb[0] - ata[1, 0]*atb[1])
             df_inv_resid[1] = 1/det * (-ata[0, 1] * atb[0] + ata[0, 0]*atb[1])
         else:
@@ -493,21 +507,21 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, adj, i_src_part, i_src
             # But we'll only hit it for boundaries of 4+D meshes, in which
             # case... good luck. :)
             for e in range(nelements):
-                for t in range(nto_unit_nodes):
+                for t in range(n_tgt_unit_nodes):
                     df_inv_resid[:, e, t], _, _, _ = \
                             la.lstsq(df[:, :, e, t].T, resid[:, e, t])
-        from_unit_nodes = from_unit_nodes - df_inv_resid
+        src_unit_nodes = src_unit_nodes - df_inv_resid
         max_resid = np.max(np.abs(resid))
         logger.debug("gauss-newton residual: %g" % max_resid)
         if max_resid < tol:
-            logger.info("make_opposite_face_connection: gauss-newton: done, "
+            logger.info("make_partition_connection: gauss-newton: done, "
                     "final residual: %g" % max_resid)
             break
         niter += 1
         if niter > 10:
-            raise RuntimeError("Gauss-Newton (for finding opposite-face reference "
-                    "coordinates) did not converge")
-  
+            raise RuntimeError("Gauss-Newton (for finding partition_connection "
+                    "reference coordinates) did not converge")
+
     def to_dev(ary):
         return cl.array.to_device(queue, ary, array_queue=None)
 
@@ -518,16 +532,16 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, adj, i_src_part, i_src
         todo_elements, = np.where(~done_elements)
         if not len(todo_elements):
             return
-        template_unit_nodes = from_unit_nodes[:, todo_elements[0], :]
+        template_unit_nodes = src_unit_nodes[:, todo_elements[0], :]
         unit_node_dist = np.max(np.max(np.abs(
-                from_unit_nodes[:, todo_elements, :]
+                src_unit_nodes[:, todo_elements, :]
                 -
                 template_unit_nodes.reshape(dim, 1, -1)),
                 axis=2), axis=0)
         close_els = todo_elements[unit_node_dist < tol]
         done_elements[close_els] = True
         unit_node_dist = np.max(np.max(np.abs(
-                from_unit_nodes[:, todo_elements, :]
+                src_unit_nodes[:, todo_elements, :]
                 -
                 template_unit_nodes.reshape(dim, 1, -1)),
                 axis=2), axis=0)
@@ -547,15 +561,17 @@ def make_partition_connection(vol_to_bdry_conns):
     return a :class:`DirectDiscretizationConnection` that performs data
     exchange across adjacent faces of different partitions.
 
-    :arg :vol_to_bdry_conns A list of *volume_to_bdry_conn* corresponding to 
+    :arg vol_to_bdry_conns: A list of *volume_to_bdry_conn* corresponding to
                                 a partition of a parent mesh.
+
+    :returns: A list of :class:`DirectDiscretizationConnection` corresponding to
+                each partition.
     """
 
     disc_conns = []
-    nparts = len(vol_to_bdry_conns)
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
-    
+
     # My intuition tells me that this should not live inside a for loop.
     # However, I need to grab a cl_context. I'll assume that each context from
     # each partition is the same and I'll use the first one.
@@ -563,33 +579,34 @@ def make_partition_connection(vol_to_bdry_conns):
     with cl.CommandQueue(cl_context) as queue:
         # Create a list of batches. Each batch contains interpolation
         #   data from one partition to another.
-        for i_src_part, src_vol_conn in enumerate(vol_to_bdry_conns):
-            src_mesh = src_from_discr.mesh
-            ngroups = len(src_mesh.groups)
+        for i_tgt_part, tgt_vol_conn in enumerate(vol_to_bdry_conns):
+            bdry_discr = tgt_vol_conn.to_discr
+            tgt_mesh = tgt_vol_conn.to_discr.mesh
+            ngroups = len(tgt_mesh.groups)
             part_batches = [[] for _ in range(ngroups)]
-            for group_num, adj in enumerate(src_mesh.interpart_adj_groups):
-                for elem_idx, elem in enumerate(adj.elements):
-                    face = adj.element_faces[elem_idx]
+            for tgt_group_num, adj in enumerate(tgt_mesh.interpart_adj_groups):
+                for idx, tgt_elem in enumerate(adj.elements):
+                    tgt_face = adj.element_faces[idx]
 
-                    # We need to create a batch using the 
+                    # We need to create a batch using the
                     # neighboring face, element, and group
                     # I'm not sure how I would do this.
                     # My guess is that it would look
                     # something like _make_cross_face_batches
-                    part_batches[group_num].append(
+                    part_batches[tgt_group_num].append(
                             _make_cross_partition_batch(
                                 queue,
                                 vol_to_bdry_conns,
                                 adj,
-                                i_src_part,
-                                group_num,
-                                elem,
-                                face))
+                                i_tgt_part,
+                                tgt_group_num,
+                                tgt_elem,
+                                tgt_face))
 
             # Make one Discr connection for each partition.
             disc_conns.append(DirectDiscretizationConnection(
-                    from_discr=src_from_discr,
-                    to_discr=src_to_discr,
+                    from_discr=bdry_discr,
+                    to_discr=bdry_discr,
                     groups=[
                         DiscretizationConnectionElementGroup(batches=batches)
                         for batches in part_batches],

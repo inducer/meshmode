@@ -50,7 +50,6 @@ logger = logging.getLogger(__name__)
 
 def test_partition_interpolation(ctx_getter):
     cl_ctx = ctx_getter()
-    queue = cl.CommandQueue(cl_ctx)
     order = 4
     group_factory = PolynomialWarpAndBlendGroupFactory(order)
     n = 3
@@ -75,11 +74,11 @@ def test_partition_interpolation(ctx_getter):
         partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
 
     from meshmode.discretization import Discretization
-    vol_discrs = [Discretization(cl_ctx, part_meshes[i], group_factory) 
+    vol_discrs = [Discretization(cl_ctx, part_meshes[i], group_factory)
                     for i in range(num_parts)]
 
     from meshmode.discretization.connection import make_face_restriction
-    bdry_connections = [make_face_restriction(vol_discrs[i], group_factory, 
+    bdry_connections = [make_face_restriction(vol_discrs[i], group_factory,
                             FRESTR_INTERIOR_FACES) for i in range(num_parts)]
 
     from meshmode.discretization.connection import make_partition_connection
