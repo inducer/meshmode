@@ -41,6 +41,8 @@ __doc__ = """
 """
 
 
+# {{{ partition_mesh
+
 def partition_mesh(mesh, part_per_element, part_nr):
     """
     :arg mesh: A :class:`meshmode.mesh.Mesh` to be partitioned.
@@ -141,7 +143,9 @@ def partition_mesh(mesh, part_per_element, part_nr):
     from meshmode.mesh import Mesh
     part_mesh = Mesh(new_vertices, new_mesh_groups)
 
-    return (part_mesh, queried_elems)
+    return part_mesh, queried_elems
+
+# }}}
 
 
 # {{{ orientations
@@ -366,15 +370,19 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
 
     # {{{ assemble new groups list
 
+    nodal_adjacency = None
+    facial_adjacency_groups = None
+
     if single_group:
         grp_cls = None
         order = None
         unit_nodes = None
-        nodal_adjacency = None
 
         for mesh in meshes:
             if mesh._nodal_adjacency is not None:
                 nodal_adjacency = False
+            if mesh._facial_adjacency_groups is not None:
+                facial_adjacency_groups = False
 
             for group in mesh.groups:
                 if grp_cls is None:
@@ -400,11 +408,12 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
 
     else:
         new_groups = []
-        nodal_adjacency = None
 
         for mesh, vert_base in zip(meshes, vert_bases):
             if mesh._nodal_adjacency is not None:
                 nodal_adjacency = False
+            if mesh._facial_adjacency_groups is not None:
+                facial_adjacency_groups = False
 
             for group in mesh.groups:
                 new_vertex_indices = group.vertex_indices + vert_base
@@ -415,7 +424,8 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
 
     from meshmode.mesh import Mesh
     return Mesh(vertices, new_groups, skip_tests=skip_tests,
-            nodal_adjacency=nodal_adjacency)
+            nodal_adjacency=nodal_adjacency,
+            facial_adjacency_groups=facial_adjacency_groups)
 
 # }}}
 
