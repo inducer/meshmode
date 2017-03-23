@@ -487,6 +487,9 @@ def test_merge_and_map(ctx_getter, visualize=False):
             b=np.array([5, 0, 0])[:mesh.ambient_dim])
 
     mesh3 = merge_disjoint_meshes((mesh2, mesh))
+    mesh3.facial_adjacency_groups
+
+    mesh3.copy()
 
     if visualize:
         from meshmode.discretization import Discretization
