@@ -51,6 +51,7 @@ __all__ = [
         "make_face_restriction",
         "make_face_to_all_faces_embedding",
         "make_opposite_face_connection",
+        "make_partition_connection",
         "make_refinement_connection"
         ]
 
@@ -67,6 +68,7 @@ __doc__ = """
 .. autofunction:: make_face_to_all_faces_embedding
 
 .. autofunction:: make_opposite_face_connection
+.. autofunction:: make_partition_connection
 
 .. autofunction:: make_refinement_connection
 
