@@ -434,7 +434,10 @@ class InterPartitionAdj():
     .. attribute:: neighbors
 
         ``neighbors[i]`` gives the element number within the neighboring partiton
-        of the element connected to ``elements[i]``.
+        of the element connected to ``elements[i]``. This gives a mesh-wide element
+        numbering. Use ``Mesh.find_igrp()`` to find the group that the element
+        belongs to, then subtract ``element_nr_base`` to find the element of the
+        group.
 
     .. attribute:: neighbor_faces
 
@@ -477,13 +480,15 @@ class InterPartitionAdj():
         :arg face
         :returns: A tuple ``(part_idx, neighbor_elem, neighbor_face)`` of
                     neighboring elements within another :class:`Mesh`.
+                    Or (-1, -1, -1) if the face does not have a neighbor.
         """
         for idx in range(len(self.elements)):
             if elem == self.elements[idx] and face == self.element_faces[idx]:
                 return (self.part_indices[idx],
                         self.neighbors[idx],
                         self.neighbor_faces[idx])
-        raise RuntimeError("This face does not have a neighbor")
+        #raise RuntimeError("This face does not have a neighbor")
+        return (-1, -1, -1)
 
 # }}}
 
