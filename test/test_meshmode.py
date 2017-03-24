@@ -49,6 +49,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# {{{ partition_interpolation
+
 def test_partition_interpolation(ctx_getter):
     cl_ctx = ctx_getter()
     order = 4
@@ -57,7 +59,11 @@ def test_partition_interpolation(ctx_getter):
     dim = 2
     num_parts = 7
     from meshmode.mesh.generation import generate_warped_rect_mesh
-    mesh = generate_warped_rect_mesh(dim, order=order, n=n)
+    mesh1 = generate_warped_rect_mesh(dim, order=order, n=n)
+    mesh2 = generate_warped_rect_mesh(dim, order=order, n=n)
+
+    from meshmode.mesh.processing import merge_disjoint_meshes
+    mesh = merge_disjoint_meshes([mesh1, mesh2])
 
     adjacency_list = np.zeros((mesh.nelements,), dtype=set)
     for elem in range(mesh.nelements):
@@ -74,6 +80,9 @@ def test_partition_interpolation(ctx_getter):
     part_meshes = [
         partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
 
+    # Hack, I get InterPartitionAdj here instead of from vol_discrs.
+    adj_parts = [part_meshes[i].interpart_adj_groups for i in range(num_parts)]
+
     from meshmode.discretization import Discretization
     vol_discrs = [Discretization(cl_ctx, part_meshes[i], group_factory)
                     for i in range(num_parts)]
@@ -83,11 +92,13 @@ def test_partition_interpolation(ctx_getter):
                             FRESTR_INTERIOR_FACES) for i in range(num_parts)]
 
     from meshmode.discretization.connection import make_partition_connection
-    connections = make_partition_connection(bdry_connections)
+    connections = make_partition_connection(bdry_connections, adj_parts)
 
     from meshmode.discretization.connection import check_connection
     for conn in connections:
         check_connection(conn)
+
+# }}}
 
 
 # {{{ partition_mesh
