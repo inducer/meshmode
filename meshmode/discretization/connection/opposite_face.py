@@ -393,6 +393,8 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 # }}}
 
 
+# {{{ partition_connection
+
 def _make_cross_partition_batch(queue, vol_to_bdry_conns, adj,
                             i_tgt_part, i_tgt_grp, i_tgt_elem, i_tgt_face):
     """
@@ -555,7 +557,7 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, adj,
                 to_element_face=None)
 
 
-def make_partition_connection(vol_to_bdry_conns):
+def make_partition_connection(vol_to_bdry_conns, adj_parts):
     """
     Given a list of boundary restriction connections *volume_to_bdry_conn*,
     return a :class:`DirectDiscretizationConnection` that performs data
@@ -572,27 +574,24 @@ def make_partition_connection(vol_to_bdry_conns):
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
 
-    # My intuition tells me that this should not live inside a for loop.
-    # However, I need to grab a cl_context. I'll assume that each context from
-    # each partition is the same and I'll use the first one.
-    cl_context = vol_to_bdry_conns[0].from_discr.cl_context
-    with cl.CommandQueue(cl_context) as queue:
-        # Create a list of batches. Each batch contains interpolation
-        #   data from one partition to another.
-        for i_tgt_part, tgt_vol_conn in enumerate(vol_to_bdry_conns):
+    # Create a list of batches. Each batch contains interpolation
+    #   data from one partition to another.
+    for i_tgt_part, tgt_vol_conn in enumerate(vol_to_bdry_conns):
+
+        # Is this ok in a for loop?
+        cl_context = tgt_vol_conn.from_discr.cl_context
+        with cl.CommandQueue(cl_context) as queue:
+
             bdry_discr = tgt_vol_conn.to_discr
-            tgt_mesh = tgt_vol_conn.to_discr.mesh
+            tgt_mesh = bdry_discr.mesh
             ngroups = len(tgt_mesh.groups)
             part_batches = [[] for _ in range(ngroups)]
-            for tgt_group_num, adj in enumerate(tgt_mesh.interpart_adj_groups):
+            # Hack, I need to get InterPartitionAdj so I'll receive it directly
+            # as an argument.
+            for tgt_group_num, adj in enumerate(adj_parts[i_tgt_part]):
                 for idx, tgt_elem in enumerate(adj.elements):
                     tgt_face = adj.element_faces[idx]
 
-                    # We need to create a batch using the
-                    # neighboring face, element, and group
-                    # I'm not sure how I would do this.
-                    # My guess is that it would look
-                    # something like _make_cross_face_batches
                     part_batches[tgt_group_num].append(
                             _make_cross_partition_batch(
                                 queue,
@@ -613,5 +612,8 @@ def make_partition_connection(vol_to_bdry_conns):
                     is_surjective=True))
 
     return disc_conns
+
+# }}}
+
 
 # vim: foldmethod=marker
