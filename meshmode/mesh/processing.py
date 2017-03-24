@@ -139,64 +139,61 @@ def partition_mesh(mesh, part_per_element, part_num):
                     new_nodes[group_num], unit_nodes=mesh_group.unit_nodes))
 
     from meshmode.mesh import BTAG_ALL, BTAG_PARTITION
-    boundary_tags = [BTAG_PARTITION(n) for n in range(np.max(part_per_element))]
+    boundary_tags = [BTAG_PARTITION(n) for n in np.unique(part_per_element)]
 
     from meshmode.mesh import Mesh
     part_mesh = Mesh(new_vertices, new_mesh_groups,
         facial_adjacency_groups=None, boundary_tags=boundary_tags)
 
-    # FIXME I get errors when I try to copy part_mesh.
     from meshmode.mesh import InterPartitionAdj
-    part_mesh.interpart_adj_groups = [
-                    InterPartitionAdj() for _ in range(num_groups)]
+    interpart_grps = [InterPartitionAdj() for _ in range(len(part_mesh.groups))]
 
-    for igrp in range(num_groups):
-        elem_base = part_mesh.groups[igrp].element_nr_base
+    for igrp, grp in enumerate(part_mesh.groups):
+        elem_base = grp.element_nr_base
         boundary_adj = part_mesh.facial_adjacency_groups[igrp][None]
         boundary_elems = boundary_adj.elements
         boundary_faces = boundary_adj.element_faces
-        for elem_idx in range(len(boundary_elems)):
-            elem = boundary_elems[elem_idx]
-            face = boundary_faces[elem_idx]
-            tags = -boundary_adj.neighbors[elem_idx]
+        for adj_idx, elem in enumerate(boundary_elems):
+            face = boundary_faces[adj_idx]
+            tags = -boundary_adj.neighbors[adj_idx]
             assert tags >= 0, "Expected boundary tag in adjacency group."
-            parent_elem = queried_elems[elem]
-            parent_group_num = 0
-            while parent_elem >= mesh.groups[parent_group_num].nelements:
-                parent_elem -= mesh.groups[parent_group_num].nelements
-                parent_group_num += 1
-            assert parent_group_num < num_groups, "Unable to find neighbor."
-            parent_grp_elem_base = mesh.groups[parent_group_num].element_nr_base
-            parent_adj = mesh.facial_adjacency_groups[parent_group_num]
-            for n_grp_num, parent_facial_group in parent_adj.items():
+
+            parent_igrp = mesh.find_igrp(queried_elems[elem + elem_base])
+            parent_elem_base = mesh.groups[parent_igrp].element_nr_base
+            parent_elem = queried_elems[elem + elem_base] - parent_elem_base
+
+            parent_adj = mesh.facial_adjacency_groups[parent_igrp]
+
+            for parent_facial_group in parent_adj.values():
                 for idx in np.where(parent_facial_group.elements == parent_elem)[0]:
                     if parent_facial_group.neighbors[idx] >= 0 and \
-                            parent_facial_group.element_faces[idx] == face:
+                               parent_facial_group.element_faces[idx] == face:
                         rank_neighbor = (parent_facial_group.neighbors[idx]
-                                         + parent_grp_elem_base)
+                                            + parent_elem_base)
                         rank_neighbor_face = parent_facial_group.neighbor_faces[idx]
 
                         n_part_num = part_per_element[rank_neighbor]
                         tags = tags & ~part_mesh.boundary_tag_bit(BTAG_ALL)
                         tags = tags | part_mesh.boundary_tag_bit(
                                                     BTAG_PARTITION(n_part_num))
-                        boundary_adj.neighbors[elem_idx] = -tags
+                        boundary_adj.neighbors[adj_idx] = -tags
 
                         # Find the neighbor element from the other partition
                         n_elem = np.count_nonzero(
                                     part_per_element[:rank_neighbor] == n_part_num)
 
-                        # TODO Test if this works with multiple groups
-                        # Do I need to add the element number base?
-                        part_mesh.interpart_adj_groups[igrp].add_connection(
+                        interpart_grps[igrp].add_connection(
                             elem + elem_base,
                             face,
                             n_part_num,
-                            n_grp_num,
                             n_elem,
                             rank_neighbor_face)
 
-    return (part_mesh, queried_elems)
+    mesh = part_mesh.copy()
+    mesh.interpart_adj_groups = interpart_grps
+    return mesh, queried_elems
+
+# }}}
 
 
 # {{{ orientations
