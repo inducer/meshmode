@@ -636,6 +636,7 @@ class Mesh(Record):
 
     .. automethod:: __eq__
     .. automethod:: __ne__
+    .. automethod:: find_igrp
     """
 
     face_id_dtype = np.int8
@@ -864,7 +865,7 @@ class Mesh(Record):
 
     def find_igrp(self, elem):
         """
-        :arg elem: An element of the mesh.
+        :arg elem: A mesh-wise element. Think of it as ``elem + element_nr_base``.
         :returns: The index of the group that `elem` belongs to.
         """
         for igrp, grp in enumerate(self.groups):
