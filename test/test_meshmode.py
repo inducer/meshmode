@@ -95,10 +95,13 @@ def test_partition_interpolation(ctx_getter):
 def test_partition_mesh():
     n = 5
     num_parts = 7
-    from meshmode.mesh.generation import generate_regular_rect_mesh
+    order = 4
+    dim = 3
+    from meshmode.mesh.generation import (generate_regular_rect_mesh,
+                                          generate_warped_rect_mesh)
     mesh1 = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(n, n, n))
     mesh2 = generate_regular_rect_mesh(a=(2, 2, 2), b=(3, 3, 3), n=(n, n, n))
-    mesh3 = generate_regular_rect_mesh(a=(1, 2, 2), b=(2, 3, 3), n=(n, n, n))
+    mesh3 = generate_warped_rect_mesh(dim, order=order, n=n)
 
     from meshmode.mesh.processing import merge_disjoint_meshes
     mesh = merge_disjoint_meshes([mesh1, mesh2, mesh3])
@@ -132,28 +135,31 @@ def test_partition_mesh():
     for part_num in range(num_parts):
         part, part_to_global = new_meshes[part_num]
         for grp_num, f_groups in enumerate(part.facial_adjacency_groups):
+            adj = part.interpart_adj_groups[grp_num]
             f_grp = f_groups[None]
-            for idx in range(len(f_grp.elements)):
+            elem_base = part.groups[grp_num].element_nr_base
+            for idx, elem in enumerate(f_grp.elements):
                 tag = -f_grp.neighbors[idx]
                 assert tag >= 0
-                elem = f_grp.elements[idx] + part.groups[grp_num].element_nr_base
                 face = f_grp.element_faces[idx]
                 for n_part_num in range(num_parts):
                     n_part, n_part_to_global = new_meshes[n_part_num]
                     if tag & part.boundary_tag_bit(BTAG_PARTITION(n_part_num)) != 0:
                         num_tags[n_part_num] += 1
-                        (i, n_elem, n_face) = part.\
-                            interpart_adj_groups[grp_num].get_neighbor(elem, face)
+
+                        (i, n_elem, n_face) = adj.get_neighbor(elem, face)
                         assert i == n_part_num
                         n_grp_num = n_part.find_igrp(n_elem)
-                        assert (part_num, elem, face) == n_part.\
-                                            interpart_adj_groups[n_grp_num].\
-                                            get_neighbor(n_elem, n_face),\
+                        n_adj = n_part.interpart_adj_groups[n_grp_num]
+                        n_elem_base = n_part.groups[n_grp_num].element_nr_base
+                        n_elem = n_elem - n_elem_base
+                        assert (part_num, elem + elem_base, face) ==\
+                                            n_adj.get_neighbor(n_elem, n_face),\
                                             "InterpartitionAdj is not consistent"
 
                         n_part_to_global = new_meshes[n_part_num][1]
-                        p_elem = part_to_global[elem]
-                        p_n_elem = n_part_to_global[n_elem]
+                        p_elem = part_to_global[elem + elem_base]
+                        p_n_elem = n_part_to_global[n_elem + n_elem_base]
 
                         p_grp_num = mesh.find_igrp(p_elem)
                         p_n_grp_num = mesh.find_igrp(p_n_elem)
@@ -164,7 +170,7 @@ def test_partition_mesh():
                         p_n_elem -= p_n_elem_base
 
                         f_groups = mesh.facial_adjacency_groups[p_grp_num]
-                        for _, p_bnd_adj in f_groups.items():
+                        for p_bnd_adj in f_groups.values():
                             for idx in range(len(p_bnd_adj.elements)):
                                 if (p_elem == p_bnd_adj.elements[idx] and
                                          face == p_bnd_adj.element_faces[idx]):

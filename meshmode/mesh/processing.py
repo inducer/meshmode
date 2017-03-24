@@ -146,7 +146,7 @@ def partition_mesh(mesh, part_per_element, part_num):
         facial_adjacency_groups=None, boundary_tags=boundary_tags)
 
     from meshmode.mesh import InterPartitionAdj
-    interpart_grps = [InterPartitionAdj() for _ in range(len(part_mesh.groups))]
+    adj_grps = [InterPartitionAdj() for _ in range(len(part_mesh.groups))]
 
     for igrp, grp in enumerate(part_mesh.groups):
         elem_base = grp.element_nr_base
@@ -158,9 +158,10 @@ def partition_mesh(mesh, part_per_element, part_num):
             tags = -boundary_adj.neighbors[adj_idx]
             assert tags >= 0, "Expected boundary tag in adjacency group."
 
-            parent_igrp = mesh.find_igrp(queried_elems[elem + elem_base])
+            p_meshwide_elem = queried_elems[elem + elem_base]
+            parent_igrp = mesh.find_igrp(p_meshwide_elem)
             parent_elem_base = mesh.groups[parent_igrp].element_nr_base
-            parent_elem = queried_elems[elem + elem_base] - parent_elem_base
+            parent_elem = p_meshwide_elem - parent_elem_base
 
             parent_adj = mesh.facial_adjacency_groups[parent_igrp]
 
@@ -182,16 +183,16 @@ def partition_mesh(mesh, part_per_element, part_num):
                         n_elem = np.count_nonzero(
                                     part_per_element[:rank_neighbor] == n_part_num)
 
-                        interpart_grps[igrp].add_connection(
-                            elem + elem_base,
-                            face,
-                            n_part_num,
-                            n_elem,
-                            rank_neighbor_face)
+                        adj_grps[igrp].add_connection(
+                                            elem,
+                                            face,
+                                            n_part_num,
+                                            n_elem,
+                                            rank_neighbor_face)
 
-    mesh = part_mesh.copy()
-    mesh.interpart_adj_groups = interpart_grps
-    return mesh, queried_elems
+    connected_mesh = part_mesh.copy()
+    connected_mesh.interpart_adj_groups = adj_grps
+    return connected_mesh, queried_elems
 
 # }}}
 
