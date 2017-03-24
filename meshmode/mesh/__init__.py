@@ -54,6 +54,7 @@ Predefined Boundary tags
 .. autoclass:: BTAG_ALL
 .. autoclass:: BTAG_REALLY_ALL
 .. autoclass:: BTAG_NO_BOUNDARY
+.. autoclass:: BTAG_PARTITION
 """
 
 
@@ -86,6 +87,35 @@ class BTAG_NO_BOUNDARY(object):  # noqa
     out of :class:`BTAG_ALL`.
     """
     pass
+
+
+class BTAG_PARTITION(object):  # noqa
+    """
+    A boundary tag indicating that this edge is adjacent to an element of
+    another :class:`Mesh`. The partition number of the adjacent mesh
+    is given by ``part_nr``.
+
+    .. attribute:: part_nr
+
+    .. versionadded:: 2017.1
+    """
+    def __init__(self, part_nr):
+        self.part_nr = int(part_nr)
+
+    # TODO is this acceptable?
+    # __eq__ is also defined so maybe the hash value isn't too important
+    # for dictionaries.
+    def __hash__(self):
+        return self.part_nr
+
+    def __eq__(self, other):
+        if isinstance(other, BTAG_PARTITION):
+            return self.part_nr == other.part_nr
+        else:
+            return False
+
+    def __nq__(self, other):
+        return not self.__eq__(other)
 
 
 SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY])
@@ -382,6 +412,80 @@ class NodalAdjacency(Record):
 # }}}
 
 
+# {{{ partition adjacency
+
+class InterPartitionAdj():
+    """
+    Describes facial adjacency information of elements in one :class:`Mesh` to
+    elements in another :class:`Mesh`. The element's boundary tag gives the
+    partition that it is connected to.
+
+    .. attribute:: elements
+
+        `:class:Mesh`-local element numbers that have neighbors.
+
+    .. attribute:: element_faces
+
+        ``element_faces[i]`` is the face of ``elements[i]`` that has a neighbor.
+
+    .. attribute:: neighbors
+
+        ``neighbors[i]`` gives the element number within the neighboring partiton
+        of the element connected to ``elements[i]``.
+
+    .. attribute:: neighbor_faces
+
+        ``neighbor_faces[i]`` gives face index within the neighboring partition
+        of the face connected to ``elements[i]``
+
+    .. automethod:: add_connection
+    .. automethod:: get_neighbor
+
+    .. versionadded:: 2017.1
+    """
+
+    def __init__(self):
+        self.elements = []
+        self.element_faces = []
+        self.neighbors = []
+        self.neighbor_faces = []
+        self.neighbor_groups = []
+        self.part_indices = []
+
+    def add_connection(self, elem, face, part_idx, neighbor_group, neighbor_elem, neighbor_face):
+        """
+        Adds a connection from ``elem`` and ``face`` within :class:`Mesh` to
+        ``neighbor_elem`` and ``neighbor_face`` of another neighboring partion
+        of type :class:`Mesh`.
+        :arg elem
+        :arg face
+        :arg part_idx
+        :arg neighbor_elem
+        :arg neighbor_face
+        """
+        self.elements.append(elem)
+        self.element_faces.append(face)
+        self.part_indices.append(part_idx)
+        self.neighbors.append(neighbor_elem)
+        self.neighbor_groups.append(neighbor_group)
+        self.neighbor_faces.append(neighbor_face)
+
+    def get_neighbor(self, elem, face):
+        """
+        :arg elem
+        :arg face
+        :returns: A tuple ``(part_idx, neighbor_group, neighbor_elem, neighbor_face)`` of 
+                    neighboring elements within another :class:`Mesh`.
+        """
+        for idx in range(len(self.elements)):
+            if elem == self.elements[idx] and face == self.element_faces[idx]:
+                return (self.part_indices[idx], self.neighbor_groups[idx],
+                         self.neighbors[idx], self.neighbor_faces[idx])
+        raise RuntimeError("This face does not have a neighbor")
+
+# }}}
+
+
 # {{{ facial adjacency
 
 class FacialAdjacencyGroup(Record):
@@ -533,6 +637,7 @@ class Mesh(Record):
             node_vertex_consistency_tolerance=None,
             nodal_adjacency=False,
             facial_adjacency_groups=False,
+            interpart_adj_groups=False,
             boundary_tags=None,
             vertex_id_dtype=np.int32,
             element_id_dtype=np.int32):
@@ -563,6 +668,7 @@ class Mesh(Record):
             will result in exceptions. Lastly, a data structure as described in
             :attr:`facial_adjacency_groups` may be passed.
         """
+
         el_nr = 0
         node_nr = 0
 
@@ -613,6 +719,7 @@ class Mesh(Record):
                 self, vertices=vertices, groups=new_groups,
                 _nodal_adjacency=nodal_adjacency,
                 _facial_adjacency_groups=facial_adjacency_groups,
+                interpart_adj_groups=interpart_adj_groups,
                 boundary_tags=boundary_tags,
                 btag_to_index=btag_to_index,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),
@@ -742,6 +849,7 @@ class Mesh(Record):
                         == other._nodal_adjacency)
                 and (self._facial_adjacency_groups
                         == other._facial_adjacency_groups)
+                and self.interpart_adj_groups == other.interpart_adj_groups
                 and self.boundary_tags == other.boundary_tags)
 
     def __ne__(self, other):
@@ -922,6 +1030,7 @@ def _compute_facial_adjacency_from_vertices(mesh):
 
         for ineighbor_group in range(len(mesh.groups)):
             nb_count = group_count.get((igroup, ineighbor_group))
+            # FIXME nb_count is None sometimes when it maybe shouldn't be.
             if nb_count is not None:
                 elements = np.empty(nb_count, dtype=mesh.element_id_dtype)
                 element_faces = np.empty(nb_count, dtype=mesh.face_id_dtype)
