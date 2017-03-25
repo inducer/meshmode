@@ -162,7 +162,7 @@ def test_partition_mesh():
                         n_grp_num = n_part.find_igrp(n_elem)
                         n_adj = n_part.interpart_adj_groups[n_grp_num]
                         n_elem_base = n_part.groups[n_grp_num].element_nr_base
-                        n_elem = n_elem - n_elem_base
+                        n_elem -= n_elem_base
                         assert (part_num, elem + elem_base, face) ==\
                                             n_adj.get_neighbor(n_elem, n_face),\
                                             "InterpartitionAdj is not consistent"

@@ -418,7 +418,7 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, i_src_part, i_src_grp,
             # non-contiguous transfers for now).
             tgt_bdry_discr.groups[i_tgt_grp].view(
                 tgt_bdry_discr.nodes().get(queue=queue))
-            [:, i_tgt_elem])
+            [:, i_tgt_elem, :])
 
     ambient_dim, n_tgt_unit_nodes = tgt_bdry_nodes.shape
     nelements = 1
@@ -429,7 +429,7 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, i_src_part, i_src_grp,
             # non-contiguous transfers for now).
             src_bdry_discr.groups[i_src_grp].view(
                 src_bdry_discr.nodes().get(queue=queue))
-            [:, i_src_elem])
+            )
 
     tol = 1e4 * np.finfo(tgt_bdry_nodes.dtype).eps
 
@@ -575,7 +575,7 @@ def make_partition_connection(vol_to_bdry_conns, part_meshes):
     #   data from one partition to another.
     for i_tgt_part, tgt_vol_conn in enumerate(vol_to_bdry_conns):
 
-        # Is this ok in a for loop?
+        # Is this ok in a loop?
         cl_context = tgt_vol_conn.from_discr.cl_context
         with cl.CommandQueue(cl_context) as queue:
 
@@ -583,8 +583,16 @@ def make_partition_connection(vol_to_bdry_conns, part_meshes):
             #tgt_mesh = bdry_discr.mesh
             tgt_mesh = part_meshes[i_tgt_part]
             ngroups = len(tgt_mesh.groups)
-            part_batches = [[] for _ in range(ngroups)]
+            #part_batches = [[] for _ in range(ngroups)]
+            part_batches = []
             for i_tgt_grp, adj in enumerate(tgt_mesh.interpart_adj_groups):
+                part_batches.append(_make_cross_partition_batches(
+                                        queue,
+                                        vol_to_bdry_conns,
+                                        adj,
+                                        tgt_mesh,
+                                        i_tgt_grp))
+                '''
                 for idx, i_tgt_elem in enumerate(adj.elements):
                     i_tgt_face = adj.element_faces[idx]
                     i_src_part = adj.part_indices[idx]
@@ -605,9 +613,11 @@ def make_partition_connection(vol_to_bdry_conns, part_meshes):
                                 i_tgt_part,
                                 i_tgt_grp,
                                 i_tgt_elem))
+                '''
 
             # Make one Discr connection for each partition.
             disc_conns.append(DirectDiscretizationConnection(
+                    # Is this ok?
                     from_discr=bdry_discr,
                     to_discr=bdry_discr,
                     groups=[
