@@ -148,7 +148,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
         facial_adjacency_groups=None, boundary_tags=boundary_tags)
 
     from meshmode.mesh import InterPartitionAdj
-    adj_grps = [InterPartitionAdj() for _ in range(len(part_mesh.groups))]
+    adj_grps = [{} for _ in range(len(part_mesh.groups))]
 
     for igrp, grp in enumerate(part_mesh.groups):
         elem_base = grp.element_nr_base
@@ -173,7 +173,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
                                parent_facial_group.element_faces[idx] == face:
                         rank_neighbor = (parent_facial_group.neighbors[idx]
                                             + parent_elem_base)
-                        rank_neighbor_face = parent_facial_group.neighbor_faces[idx]
+                        n_face = parent_facial_group.neighbor_faces[idx]
 
                         n_part_num = part_per_element[rank_neighbor]
                         tags = tags & ~part_mesh.boundary_tag_bit(BTAG_ALL)
@@ -185,14 +185,15 @@ def partition_mesh(mesh, part_per_element, part_nr):
                         n_elem = np.count_nonzero(
                                     part_per_element[:rank_neighbor] == n_part_num)
 
+                        if n_part_num not in adj_grps[igrp]:
+                            adj_grps[igrp][n_part_num] = InterPartitionAdj()
+
                         # I cannot compute the group because the other
-                        # partitions have not been built yet.
-                        adj_grps[igrp].add_connection(
-                                            elem,
-                                            face,
-                                            n_part_num,
-                                            n_elem,
-                                            rank_neighbor_face)
+                        # partitions may not have been built yet.
+                        adj_grps[igrp][n_part_num].elements.append(elem)
+                        adj_grps[igrp][n_part_num].element_faces.append(face)
+                        adj_grps[igrp][n_part_num].neighbors.append(n_elem)
+                        adj_grps[igrp][n_part_num].neighbor_faces.append(n_face)
 
     connected_mesh = part_mesh.copy()
     connected_mesh.interpart_adj_groups = adj_grps

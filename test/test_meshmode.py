@@ -145,27 +145,25 @@ def test_partition_mesh():
     for part_num in range(num_parts):
         part, part_to_global = new_meshes[part_num]
         for grp_num, f_groups in enumerate(part.facial_adjacency_groups):
-            adj = part.interpart_adj_groups[grp_num]
             f_grp = f_groups[None]
             elem_base = part.groups[grp_num].element_nr_base
             for idx, elem in enumerate(f_grp.elements):
                 tag = -f_grp.neighbors[idx]
                 assert tag >= 0
                 face = f_grp.element_faces[idx]
-                for n_part_num in range(num_parts):
+                for n_part_num, adj in part.interpart_adj_groups[grp_num].items():
                     n_part, n_part_to_global = new_meshes[n_part_num]
                     if tag & part.boundary_tag_bit(BTAG_PARTITION(n_part_num)) != 0:
                         num_tags[n_part_num] += 1
 
-                        (i, n_elem, n_face) = adj.get_neighbor(elem, face)
-                        assert i == n_part_num
+                        (n_elem, n_face) = adj.get_neighbor(elem, face)
                         n_grp_num = n_part.find_igrp(n_elem)
-                        n_adj = n_part.interpart_adj_groups[n_grp_num]
+                        n_adj = n_part.interpart_adj_groups[n_grp_num][part_num]
                         n_elem_base = n_part.groups[n_grp_num].element_nr_base
                         n_elem -= n_elem_base
-                        assert (part_num, elem + elem_base, face) ==\
+                        assert (elem + elem_base, face) ==\
                                             n_adj.get_neighbor(n_elem, n_face),\
-                                            "InterpartitionAdj is not consistent"
+                                            "InterPartitionAdj is not consistent"
 
                         n_part_to_global = new_meshes[n_part_num][1]
                         p_elem = part_to_global[elem + elem_base]

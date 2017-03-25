@@ -428,9 +428,6 @@ class InterPartitionAdj():
 
         ``element_faces[i]`` is the face of ``elements[i]`` that has a neighbor.
 
-    .. attribute:: part_indices
-        ``part_indices[i]`` gives the partition index of the neighboring face.
-
     .. attribute:: neighbors
 
         ``neighbors[i]`` gives the element number within the neighboring partiton
@@ -444,7 +441,6 @@ class InterPartitionAdj():
         ``neighbor_faces[i]`` gives face index within the neighboring partition
         of the face connected to ``elements[i]``
 
-    .. automethod:: add_connection
     .. automethod:: get_neighbor
 
     .. versionadded:: 2017.1
@@ -455,40 +451,21 @@ class InterPartitionAdj():
         self.element_faces = []
         self.neighbors = []
         self.neighbor_faces = []
-        self.part_indices = []
-
-    def add_connection(self, elem, face, part_idx, neighbor_elem, neighbor_face):
-        """
-        Adds a connection from ``elem`` and ``face`` within :class:`Mesh` to
-        ``neighbor_elem`` and ``neighbor_face`` of the neighboring partion
-        of type :class:`Mesh` given by `part_idx`.
-        :arg elem:
-        :arg face:
-        :arg part_idx:
-        :arg neighbor_elem:
-        :arg neighbor_face:
-        """
-        self.elements.append(elem)
-        self.element_faces.append(face)
-        self.part_indices.append(part_idx)
-        self.neighbors.append(neighbor_elem)
-        self.neighbor_faces.append(neighbor_face)
 
     def get_neighbor(self, elem, face):
         """
         :arg elem
         :arg face
-        :returns: A tuple ``(part_idx, neighbor_elem, neighbor_face)`` of
+        :returns: A tuple ``(neighbor_elem, neighbor_face)`` of
                     neighboring elements within another :class:`Mesh`.
-                    Or (-1, -1, -1) if the face does not have a neighbor.
+                    Or (-1, -1) if the face does not have a neighbor.
         """
         for idx in range(len(self.elements)):
             if elem == self.elements[idx] and face == self.element_faces[idx]:
-                return (self.part_indices[idx],
-                        self.neighbors[idx],
+                return (self.neighbors[idx],
                         self.neighbor_faces[idx])
         #raise RuntimeError("This face does not have a neighbor")
-        return (-1, -1, -1)
+        return (-1, -1)
 
 # }}}
 
@@ -619,6 +596,15 @@ class Mesh(Record):
 
         (Note that element groups are not necessarily contiguous like the figure
         may suggest.)
+
+    .. attribute:: interpart_adj_groups
+
+        A list of mappings from neighbor partition numbers to instances of
+        :class:`InterPartitionAdj`.
+
+        ``interpart_adj_gorups[igrp][ineighbor_part]`` gives
+        the set of facial adjacency relations between group *igrp*
+        and partition *ineighbor_part*.
 
     .. attribute:: boundary_tags
 
@@ -872,7 +858,7 @@ class Mesh(Record):
             if elem < grp.nelements:
                 return igrp
             elem -= grp.nelements
-        raise RuntimeError("Could not find group with element %d" % elem)
+        raise RuntimeError("Could not find group with element %d." % elem)
 
     # Design experience: Try not to add too many global data structures to the
     # mesh. Let the element groups be responsible for that at the mesh level.
