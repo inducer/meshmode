@@ -185,6 +185,8 @@ def partition_mesh(mesh, part_per_element, part_nr):
                         n_elem = np.count_nonzero(
                                     part_per_element[:rank_neighbor] == n_part_num)
 
+                        # I cannot compute the group because the other
+                        # partitions have not been built yet.
                         adj_grps[igrp].add_connection(
                                             elem,
                                             face,
