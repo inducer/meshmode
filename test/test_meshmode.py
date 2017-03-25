@@ -79,9 +79,6 @@ def test_partition_interpolation(ctx_getter):
     part_meshes = [
         partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
 
-    # Hack, I get InterPartitionAdj here instead of from vol_discrs.
-    adj_parts = [part_meshes[i].interpart_adj_groups for i in range(num_parts)]
-
     from meshmode.discretization import Discretization
     vol_discrs = [Discretization(cl_ctx, part_meshes[i], group_factory)
                     for i in range(num_parts)]
@@ -90,11 +87,14 @@ def test_partition_interpolation(ctx_getter):
     bdry_connections = [make_face_restriction(vol_discrs[i], group_factory,
                             FRESTR_INTERIOR_FACES) for i in range(num_parts)]
 
+    # Hack, I probably shouldn't pass part_meshes directly. This is probably
+    # temporary.
     from meshmode.discretization.connection import make_partition_connection
-    connections = make_partition_connection(bdry_connections, adj_parts)
+    connections = make_partition_connection(bdry_connections, part_meshes)
 
     from meshmode.discretization.connection import check_connection
     for conn in connections:
+        print(conn)
         check_connection(conn)
 
 # }}}
