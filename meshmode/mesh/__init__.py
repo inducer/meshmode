@@ -872,7 +872,7 @@ class Mesh(Record):
             if elem < grp.nelements:
                 return igrp
             elem -= grp.nelements
-        raise RuntimeError("Could not find group with element ", elem)
+        raise RuntimeError("Could not find group with element %d" % elem)
 
     # Design experience: Try not to add too many global data structures to the
     # mesh. Let the element groups be responsible for that at the mesh level.
