@@ -395,8 +395,7 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 
 # {{{ partition_connection
 
-def _make_cross_partition_batch(queue, vol_to_bdry_conns, adj,
-                            i_tgt_part, i_tgt_grp, i_tgt_elem, i_tgt_face):
+def _make_cross_partition_batch(queue, vol_to_bdry_conns, i_src_part, i_src_grp, i_src_elem, i_tgt_part, i_tgt_grp, i_tgt_elem):
     """
     Creates a batch that transfers data to a face from a face of another partition.
 
@@ -411,9 +410,6 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, adj,
     :returns: ???
     """
 
-    (i_src_part, i_src_grp, i_src_elem, i_src_face) =\
-                        adj.get_neighbor(i_tgt_elem, i_tgt_face)
-
     src_bdry_discr = vol_to_bdry_conns[i_src_part].to_discr
     tgt_bdry_discr = vol_to_bdry_conns[i_tgt_part].to_discr
 
@@ -424,7 +420,8 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, adj,
                 tgt_bdry_discr.nodes().get(queue=queue))
             [:, i_tgt_elem])
 
-    ambient_dim, nelements, n_tgt_unit_nodes = tgt_bdry_nodes.shape
+    ambient_dim, n_tgt_unit_nodes = tgt_bdry_nodes.shape
+    nelements = 1
 
     # (ambient_dim, nelements, nfrom_unit_nodes)
     src_bdry_nodes = (
@@ -557,7 +554,7 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, adj,
                 to_element_face=None)
 
 
-def make_partition_connection(vol_to_bdry_conns, adj_parts):
+def make_partition_connection(vol_to_bdry_conns, part_meshes):
     """
     Given a list of boundary restriction connections *volume_to_bdry_conn*,
     return a :class:`DirectDiscretizationConnection` that performs data
@@ -583,24 +580,31 @@ def make_partition_connection(vol_to_bdry_conns, adj_parts):
         with cl.CommandQueue(cl_context) as queue:
 
             bdry_discr = tgt_vol_conn.to_discr
-            tgt_mesh = bdry_discr.mesh
+            #tgt_mesh = bdry_discr.mesh
+            tgt_mesh = part_meshes[i_tgt_part]
             ngroups = len(tgt_mesh.groups)
             part_batches = [[] for _ in range(ngroups)]
-            # Hack, I need to get InterPartitionAdj so I'll receive it directly
-            # as an argument.
-            for tgt_group_num, adj in enumerate(adj_parts[i_tgt_part]):
-                for idx, tgt_elem in enumerate(adj.elements):
-                    tgt_face = adj.element_faces[idx]
+            for i_tgt_grp, adj in enumerate(tgt_mesh.interpart_adj_groups):
+                for idx, i_tgt_elem in enumerate(adj.elements):
+                    i_tgt_face = adj.element_faces[idx]
+                    i_src_part = adj.part_indices[idx]
+                    i_src_elem = adj.neighbors[idx]
+                    i_src_face = adj.neighbor_faces[idx]
+                    #src_mesh = vol_to_bdry_conns[i_src_part].to_discr.mesh
+                    src_mesh = part_meshes[i_src_part]
+                    i_src_grp = src_mesh.find_igrp(i_src_elem)
+                    i_src_elem -= src_mesh.groups[i_src_grp].element_nr_base
 
-                    part_batches[tgt_group_num].append(
+                    part_batches[i_tgt_grp].extend(
                             _make_cross_partition_batch(
                                 queue,
                                 vol_to_bdry_conns,
-                                adj,
+                                i_src_part,
+                                i_src_grp,
+                                i_src_elem,
                                 i_tgt_part,
-                                tgt_group_num,
-                                tgt_elem,
-                                tgt_face))
+                                i_tgt_grp,
+                                i_tgt_elem))
 
             # Make one Discr connection for each partition.
             disc_conns.append(DirectDiscretizationConnection(
