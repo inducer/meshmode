@@ -395,7 +395,7 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 
 # {{{ partition_connection
 
-def _make_cross_partition_batch(queue, vol_to_bdry_conns, part_meshes,
+def _make_cross_partition_batch(queue, vol_to_bdry_conns,
                                     i_tgt_part, i_tgt_grp, i_tgt_elem, i_tgt_face,
                                     i_src_part, i_src_grp, i_src_elem, i_src_face):
     """
@@ -408,16 +408,22 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, part_meshes,
     :returns: ???
     """
 
-    src_mesh = part_meshes[i_src_part]
-    tgt_mesh = part_meshes[i_tgt_part]
-
-    adj = tgt_mesh.interpart_adj_groups[i_tgt_grp][i_src_part]
-
     tgt_bdry_discr = vol_to_bdry_conns[i_tgt_part].to_discr
     src_bdry_discr = vol_to_bdry_conns[i_src_part].to_discr
 
-    tgt_bdry_nodes = tgt_mesh.groups[i_tgt_grp].nodes[:, i_tgt_elem, :]
-    src_bdry_nodes = src_mesh.groups[i_src_grp].nodes[:, i_src_elem, :]
+    tgt_bdry_nodes = (
+            # FIXME: This should view-then-transfer (but PyOpenCL doesn't do
+            # non-contiguous transfers for now).
+            tgt_bdry_discr.groups[i_tgt_grp].view(
+                tgt_bdry_discr.nodes().get(queue=queue))
+            [:, i_tgt_elem])
+
+    src_bdry_nodes = (
+            # FIXME: This should view-then-transfer (but PyOpenCL doesn't do
+            # non-contiguous transfers for now).
+            src_bdry_discr.groups[i_src_grp].view(
+                src_bdry_discr.nodes().get(queue=queue))
+            [:, i_src_elem])
 
     ambient_dim, n_tgt_unit_nodes = tgt_bdry_nodes.shape
 
@@ -445,11 +451,13 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, part_meshes,
             basis_at_unit_nodes[i] = (
                     f(unit_nodes.reshape(dim, -1))
                     .reshape(n_tgt_unit_nodes))
-        intp_coeffs = np.einsum("fj,jt->ft", src_inv_t_vdm, basis_at_unit_nodes)
+        #intp_coeffs = src_inv_t_vdm @ basis_at_unit_nodes
+        intp_coeffs = np.einsum("ij,jk->ik", src_inv_t_vdm, basis_at_unit_nodes)
         # If we're interpolating 1, we had better get 1 back.
-        #one_deviation = np.abs(np.sum(intp_coeffs, axis=0) - 1)
-        #assert (one_deviation < tol).all(), np.max(one_deviation)
-        return np.einsum("ft,af->at", intp_coeffs, src_bdry_nodes)
+        one_deviation = np.abs(np.sum(intp_coeffs, axis=0) - 1)
+        assert (one_deviation < tol).all(), np.max(one_deviation)
+        return np.einsum("ij,jk->ik", src_bdry_nodes, intp_coeffs)
+        #return src_bdry_nodes @ intp_coeffs.T
 
     def get_map_jacobian(unit_nodes):
         # unit_nodes: (dim, nto_unit_nodes)
@@ -462,8 +470,8 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, part_meshes,
                 dbasis_at_unit_nodes[rst_axis, i] = (
                         df_r.reshape(n_tgt_unit_nodes))
         dintp_coeffs = np.einsum(
-                "fj,rjet->rfet", src_inv_t_vdm, dbasis_at_unit_nodes)
-        return np.einsum("rfet,aef->raet", dintp_coeffs, src_bdry_nodes)
+                "ij,rjk->rik", src_inv_t_vdm, dbasis_at_unit_nodes)
+        return np.einsum("ij,rjk->rik", src_bdry_nodes, dintp_coeffs)
 
     logger.info("make_partition_connection: begin gauss-newton")
     niter = 0
@@ -477,13 +485,13 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, part_meshes,
         if dim == 1:
             # TODO: Needs testing.
             # A is df.T
-            ata = np.einsum("iket,jket->ijet", df, df)
-            atb = np.einsum("iket,ket->iet", df, resid)
+            ata = np.einsum("ikt,jkt->ijt", df, df)
+            atb = np.einsum("ikt,kt->it", df, resid)
             df_inv_resid = atb / ata[0, 0]
         elif dim == 2:
             # A is df.T
-            ata = np.einsum("iket,jket->ijet", df, df)
-            atb = np.einsum("iket,ket->iet", df, resid)
+            ata = np.einsum("ikt,jkt->ijt", df, df)
+            atb = np.einsum("ikt,kt->it", df, resid)
             det = ata[0, 0]*ata[1, 1] - ata[0, 1]*ata[1, 0]
             df_inv_resid = np.empty_like(src_unit_nodes)
             df_inv_resid[0] = 1/det * (ata[1, 1] * atb[0] - ata[1, 0]*atb[1])
@@ -514,10 +522,12 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns, part_meshes,
     def to_dev(ary):
         return cl.array.to_device(queue, ary, array_queue=None)
 
+    from meshmode.discretization.connection import InterpolationBatch
     return InterpolationBatch(
+                # This is not right. Need partition number information.
                 from_group_index=i_src_grp,
-                from_element_indices=to_dev(from_bdry_element_indices[close_els]),
-                to_element_indices=to_dev(to_bdry_element_indices[close_els]),
+                from_element_indices=to_dev(np.array([i_src_elem])),
+                to_element_indices=to_dev(np.array([i_tgt_elem])),
                 result_unit_nodes=src_unit_nodes,
                 to_element_face=None)
 
@@ -557,14 +567,14 @@ def make_partition_connection(vol_to_bdry_conns, part_meshes):
 
                     src_mesh = part_meshes[i_src_part]
 
+                    i_tgt_elems = adj.elements
+                    i_tgt_faces = adj.element_faces
+
                     i_src_elems = adj.neighbors
                     i_src_faces = adj.neighbor_faces
                     i_src_grps = [src_mesh.find_igrp(e) for e in i_src_elems]
                     for i in range(len(i_src_elems)):
                         i_src_elems[i] -= src_mesh.groups[i_src_grps[i]].element_nr_base
-
-                    i_tgt_elems = adj.elements
-                    i_tgt_faces = adj.element_faces
 
                     for idx, i_tgt_elem in enumerate(i_tgt_elems):
                         i_tgt_face = i_tgt_faces[idx]
@@ -574,7 +584,7 @@ def make_partition_connection(vol_to_bdry_conns, part_meshes):
 
                         part_batches[i_tgt_grp].append(
                                 _make_cross_partition_batch(queue,
-                                    vol_to_bdry_conns, part_meshes,
+                                    vol_to_bdry_conns,
                                     i_tgt_part, i_tgt_grp, i_tgt_elem, i_tgt_face,
                                     i_src_part, i_src_grp, i_src_elem, i_src_face))
 
