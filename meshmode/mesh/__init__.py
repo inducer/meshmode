@@ -623,6 +623,7 @@ class Mesh(Record):
     .. automethod:: __eq__
     .. automethod:: __ne__
     .. automethod:: find_igrp
+    .. automethos:: adjacency_list
     """
 
     face_id_dtype = np.int8
@@ -859,6 +860,21 @@ class Mesh(Record):
                 return igrp
             elem -= grp.nelements
         raise RuntimeError("Could not find group with element %d." % elem)
+
+    def adjacency_list(self):
+        """
+        :returns: An :class:`np.array` with dtype `set`. `adjacency[i]` is the set
+            of all elements that are adjacent to element `i`.
+            Useful for `pymetis.part_graph`.
+        """
+        adjacency_list = np.zeros((self.nelements,), dtype=set)
+        nodal_adj = self.nodal_adjacency
+        for elem in range(self.nelements):
+            adjacency_list[elem] = set()
+            starts = nodal_adj.neighbors_starts
+            for n in range(starts[elem], starts[elem + 1]):
+                adjacency_list[elem].add(nodal_adj.neighbors[n])
+        return adjacency_list
 
     # Design experience: Try not to add too many global data structures to the
     # mesh. Let the element groups be responsible for that at the mesh level.
