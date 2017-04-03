@@ -451,13 +451,13 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns,
             basis_at_unit_nodes[i] = (
                     f(unit_nodes.reshape(dim, -1))
                     .reshape(n_tgt_unit_nodes))
-        #intp_coeffs = src_inv_t_vdm @ basis_at_unit_nodes
-        intp_coeffs = np.einsum("ij,jk->ik", src_inv_t_vdm, basis_at_unit_nodes)
+        intp_coeffs = src_inv_t_vdm @ basis_at_unit_nodes
+        #intp_coeffs = np.einsum("ij,jk->ik", src_inv_t_vdm, basis_at_unit_nodes)
         # If we're interpolating 1, we had better get 1 back.
         one_deviation = np.abs(np.sum(intp_coeffs, axis=0) - 1)
         assert (one_deviation < tol).all(), np.max(one_deviation)
-        return np.einsum("ij,jk->ik", src_bdry_nodes, intp_coeffs)
-        #return src_bdry_nodes @ intp_coeffs.T
+        #return np.einsum("ij,jk,ik", src_bdry_nodes, intp_coeffs)
+        return src_bdry_nodes @ intp_coeffs
 
     def get_map_jacobian(unit_nodes):
         # unit_nodes: (dim, nto_unit_nodes)
@@ -549,8 +549,6 @@ def make_partition_connection(vol_to_bdry_conns, part_meshes):
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
 
-    # Create a list of batches. Each batch contains interpolation
-    #   data from one partition to another.
     for i_tgt_part, tgt_vol_conn in enumerate(vol_to_bdry_conns):
 
         # Is this ok in a loop?

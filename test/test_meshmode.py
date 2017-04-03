@@ -61,7 +61,7 @@ def test_partition_interpolation(ctx_getter):
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(n, n, n))
     #from meshmode.mesh.generation import generate_warped_rect_mesh
-    #mesh = generate_warped_rect_mesh(dim, order=order, n=n)
+    #mesh1 = generate_warped_rect_mesh(dim, order=order, n=n)
     #mesh2 = generate_warped_rect_mesh(dim, order=order, n=n)
 
     #from meshmode.mesh.processing import merge_disjoint_meshes
@@ -96,8 +96,8 @@ def test_partition_interpolation(ctx_getter):
     connections = make_partition_connection(bdry_connections, part_meshes)
 
     from meshmode.discretization.connection import check_connection
-    #for conn in connections:
-        #check_connection(conn)
+    for conn in connections:
+        check_connection(conn)
 
 # }}}
 
