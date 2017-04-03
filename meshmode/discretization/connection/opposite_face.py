@@ -439,39 +439,62 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns,
     src_unit_nodes[:] = initial_guess.reshape(-1, 1)
 
     import modepy as mp
-    src_vdm = mp.vandermonde(src_grp.basis(), src_grp.unit_nodes)
-    src_inv_t_vdm = la.inv(src_vdm.T)
-    src_nfuncs = len(src_grp.basis())
+    vdm = mp.vandermonde(src_grp.basis(), src_grp.unit_nodes)
+    inv_t_vdm = la.inv(vdm.T)
+    n_src_funcs = len(src_grp.basis())
 
     def apply_map(unit_nodes):
-        # unit_nodes: (dim, nto_unit_nodes)
-        # basis_at_unit_nodes
-        basis_at_unit_nodes = np.empty((src_nfuncs, n_tgt_unit_nodes))
-        for i, f in enumerate(src_grp.basis()):
-            basis_at_unit_nodes[i] = (
-                    f(unit_nodes.reshape(dim, -1))
-                    .reshape(n_tgt_unit_nodes))
-        intp_coeffs = src_inv_t_vdm @ basis_at_unit_nodes
-        #intp_coeffs = np.einsum("ij,jk->ik", src_inv_t_vdm, basis_at_unit_nodes)
-        # If we're interpolating 1, we had better get 1 back.
-        one_deviation = np.abs(np.sum(intp_coeffs, axis=0) - 1)
-        assert (one_deviation < tol).all(), np.max(one_deviation)
-        #return np.einsum("ij,jk,ik", src_bdry_nodes, intp_coeffs)
-        return src_bdry_nodes @ intp_coeffs
+        basis_at_unit_nodes = np.array([f(unit_nodes) for f in src_grp.basis()])
+
+        return src_bdry_nodes @ inv_t_vdm @ basis_at_unit_nodes
 
     def get_map_jacobian(unit_nodes):
-        # unit_nodes: (dim, nto_unit_nodes)
-        # basis_at_unit_nodes
-        dbasis_at_unit_nodes = np.empty(
-                (dim, src_nfuncs, n_tgt_unit_nodes))
+        dbasis_at_unit_nodes = np.empty((dim, n_src_funcs, n_tgt_unit_nodes))
+
         for i, df in enumerate(src_grp.grad_basis()):
             df_result = df(unit_nodes.reshape(dim, -1))
             for rst_axis, df_r in enumerate(df_result):
                 dbasis_at_unit_nodes[rst_axis, i] = (
                         df_r.reshape(n_tgt_unit_nodes))
+        #dbasis_at_unit_nodes = np.array([df(unit_nodes) for df in src_grp.grad_basis()])
         dintp_coeffs = np.einsum(
-                "ij,rjk->rik", src_inv_t_vdm, dbasis_at_unit_nodes)
+                "ij,rjk->rik", inv_t_vdm, dbasis_at_unit_nodes)
         return np.einsum("ij,rjk->rik", src_bdry_nodes, dintp_coeffs)
+
+    # {{{ test map applier and jacobian
+    if 0:
+        u = src_unit_nodes
+        f = apply_map(u)
+        for h in [1e-1, 1e-2]:
+            du = h*np.random.randn(*u.shape)
+
+            f_2 = apply_map(u+du)
+
+            jf = get_map_jacobian(u)
+
+            f2_2 = f + np.einsum("rat,rt->at", jf, du)
+
+            print(h, la.norm((f_2-f2_2).ravel()))
+    # }}}
+
+    # {{{ visualize initial guess
+
+    if 0:
+        import matplotlib.pyplot as pt
+        guess = apply_map(src_unit_nodes)
+        goals = tgt_bdry_nodes
+
+        from meshmode.discretization.visualization import draw_curve
+        draw_curve(src_bdry_discr)
+
+        pt.plot(guess[0].reshape(-1), guess[1].reshape(-1), "or")
+        pt.plot(goals[0].reshape(-1), goals[1].reshape(-1), "og")
+        pt.plot(src_bdry_nodes[0].reshape(-1), src_bdry_nodes[1].reshape(-1), "o",
+                color="purple")
+        pt.show()
+
+    # }}}
+
 
     logger.info("make_partition_connection: begin gauss-newton")
     niter = 0
@@ -507,8 +530,26 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns,
             for t in range(n_tgt_unit_nodes):
                 df_inv_resid[:, t], _, _, _ = \
                         la.lstsq(df[:, :, t].T, resid[:, t])
+
+        # {{{ visualize next guess
+        if 0:
+            import matplotlib.pyplot as pt
+            guess = apply_map(src_unit_nodes)
+            goals = tgt_bdry_nodes
+
+            from meshmode.discretization.visualization import draw_curve
+
+            pt.plot(guess[0].reshape(-1), guess[2].reshape(-1), "r^")
+            pt.plot(goals[0].reshape(-1), goals[2].reshape(-1), "xg")
+            pt.plot(src_bdry_nodes[0].reshape(-1), src_bdry_nodes[2].reshape(-1), "o", 
+                        color="purple")
+            #pt.plot(src_unit_nodes[0].reshape(-1), src_unit_nodes[1].reshape(-1), "ob")
+            pt.show()
+        # }}}
+
         src_unit_nodes = src_unit_nodes - df_inv_resid
         max_resid = np.max(np.abs(resid))
+        #print(resid[0, :])
         logger.debug("gauss-newton residual: %g" % max_resid)
         if max_resid < tol:
             logger.info("make_partition_connection: gauss-newton: done, "
