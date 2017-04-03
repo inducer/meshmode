@@ -456,7 +456,8 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns,
             for rst_axis, df_r in enumerate(df_result):
                 dbasis_at_unit_nodes[rst_axis, i] = (
                         df_r.reshape(n_tgt_unit_nodes))
-        #dbasis_at_unit_nodes = np.array([df(unit_nodes) for df in src_grp.grad_basis()])
+        #dbasis_at_unit_nodes = np.array(
+        #            [df(unit_nodes) for df in src_grp.grad_basis()])
         dintp_coeffs = np.einsum(
                 "ij,rjk->rik", inv_t_vdm, dbasis_at_unit_nodes)
         return np.einsum("ij,rjk->rik", src_bdry_nodes, dintp_coeffs)
@@ -495,7 +496,6 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns,
 
     # }}}
 
-
     logger.info("make_partition_connection: begin gauss-newton")
     niter = 0
     while True:
@@ -532,18 +532,17 @@ def _make_cross_partition_batch(queue, vol_to_bdry_conns,
                         la.lstsq(df[:, :, t].T, resid[:, t])
 
         # {{{ visualize next guess
-        if 0:
+        if 1:
             import matplotlib.pyplot as pt
             guess = apply_map(src_unit_nodes)
             goals = tgt_bdry_nodes
 
             from meshmode.discretization.visualization import draw_curve
 
-            pt.plot(guess[0].reshape(-1), guess[2].reshape(-1), "r^")
-            pt.plot(goals[0].reshape(-1), goals[2].reshape(-1), "xg")
-            pt.plot(src_bdry_nodes[0].reshape(-1), src_bdry_nodes[2].reshape(-1), "o", 
-                        color="purple")
-            #pt.plot(src_unit_nodes[0].reshape(-1), src_unit_nodes[1].reshape(-1), "ob")
+            pt.plot(guess[0], guess[1], "r^")
+            pt.plot(goals[0], goals[1], "xg")
+            pt.plot(src_bdry_nodes[0], src_bdry_nodes[1], "o", color="purple")
+            pt.plot(src_unit_nodes[0], src_unit_nodes[1], "ob")
             pt.show()
         # }}}
 
@@ -613,7 +612,8 @@ def make_partition_connection(vol_to_bdry_conns, part_meshes):
                     i_src_faces = adj.neighbor_faces
                     i_src_grps = [src_mesh.find_igrp(e) for e in i_src_elems]
                     for i in range(len(i_src_elems)):
-                        i_src_elems[i] -= src_mesh.groups[i_src_grps[i]].element_nr_base
+                        elem_base = src_mesh.groups[i_src_grps[i]].element_nr_base
+                        i_src_elems[i] -= elem_base
 
                     for idx, i_tgt_elem in enumerate(i_tgt_elems):
                         i_tgt_face = i_tgt_faces[idx]
