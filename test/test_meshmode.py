@@ -52,15 +52,14 @@ logger = logging.getLogger(__name__)
 
 def test_partition_interpolation(ctx_getter):
     cl_ctx = ctx_getter()
-    order = 4
+    order = 2
     group_factory = PolynomialWarpAndBlendGroupFactory(order)
-    n = 3
+    #group_factory = InterpolatoryQuadratureSimplexGroupFactory(order)
+    n = 5
     dim = 2
-    num_parts = 3
-    from meshmode.mesh.generation import generate_regular_rect_mesh
-    mesh = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(n, n, n))
-    #from meshmode.mesh.generation import generate_warped_rect_mesh
-    #mesh = generate_warped_rect_mesh(dim, order=order, n=n)
+    num_parts = 2
+    from meshmode.mesh.generation import generate_warped_rect_mesh
+    mesh = generate_warped_rect_mesh(dim, order=order, n=n)
     #mesh2 = generate_warped_rect_mesh(dim, order=order, n=n)
 
     #from meshmode.mesh.processing import merge_disjoint_meshes
@@ -97,15 +96,15 @@ def test_partition_interpolation(ctx_getter):
 
 # {{{ partition_mesh
 
-def test_partition_mesh():
+@pytest.mark.parametrize("dim", [2, 3])
+@pytest.mark.parametrize("num_parts", [1, 2, 7])
+def test_partition_mesh(num_parts, dim):
     n = 5
-    num_parts = 7
     order = 4
-    dim = 3
     from meshmode.mesh.generation import (generate_regular_rect_mesh,
                                           generate_warped_rect_mesh)
-    mesh1 = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(n, n, n))
-    mesh2 = generate_regular_rect_mesh(a=(2, 2, 2), b=(3, 3, 3), n=(n, n, n))
+    mesh1 = generate_regular_rect_mesh(a=(0,) * dim, b=(1,) * dim, n=(n,) * dim)
+    mesh2 = generate_regular_rect_mesh(a=(2,) * dim, b=(3,) * dim, n=(n,) * dim)
     mesh3 = generate_warped_rect_mesh(dim, order=order, n=n)
 
     from meshmode.mesh.processing import merge_disjoint_meshes

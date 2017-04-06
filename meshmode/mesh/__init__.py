@@ -447,10 +447,10 @@ class InterPartitionAdj():
     """
 
     def __init__(self):
-        self.elements = []
-        self.element_faces = []
-        self.neighbors = []
-        self.neighbor_faces = []
+        self.elements = np.array([], dtype=int)
+        self.element_faces = np.array([], dtype=int)
+        self.neighbors = np.array([], dtype=int)
+        self.neighbor_faces = np.array([], dtype=int)
 
     def get_neighbor(self, elem, face):
         """
