@@ -177,9 +177,20 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                             np.ones(ngroup_elements, np.bool))
 
             elif isinstance(group_el_type, GmshTensorProductElementBase):
+                gmsh_vertex_tuples = type(group_el_type)(order=1).gmsh_node_tuples()
+                gmsh_vertex_tuples_loc_dict = dict(
+                        (gvt, i)
+                        for i, gvt in enumerate(gmsh_vertex_tuples))
+
+                from pytools import (
+                        generate_nonnegative_integer_tuples_below as gnitb)
+                vertex_shuffle = np.array([
+                    gmsh_vertex_tuples_loc_dict[vt]
+                    for vt in gnitb(2, group_el_type.dimensions)])
+
                 group = TensorProductElementGroup(
                     group_el_type.order,
-                    vertex_indices,
+                    vertex_indices[:, vertex_shuffle],
                     nodes,
                     unit_nodes=unit_nodes
                     )

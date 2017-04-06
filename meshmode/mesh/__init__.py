@@ -1,6 +1,4 @@
-from __future__ import division
-from __future__ import absolute_import
-from six.moves import range
+from __future__ import division, absolute_import
 
 __copyright__ = "Copyright (C) 2010,2012,2013 Andreas Kloeckner, Michael Tom"
 
@@ -24,7 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from six.moves import range
 import six
+
 import numpy as np
 import modepy as mp
 import numpy.linalg as la
@@ -175,7 +175,9 @@ class MeshElementGroup(Record):
     def join_mesh(self, element_nr_base, node_nr_base):
         if self.element_nr_base is not None:
             raise RuntimeError("this element group has already joined a mesh, "
-                    "cannot join another")
+                    "cannot join another (The element group's element_nr_base "
+                    "is already assigned, and that typically happens when a "
+                    "group joins a Mesh instance.)")
 
         return self.copy(
                 element_nr_base=element_nr_base,
@@ -326,7 +328,7 @@ class TensorProductElementGroup(MeshElementGroup):
 
         if vertex_indices.shape[-1] != 2**dims:
             raise ValueError("vertex_indices has wrong number of vertices per "
-                    "element. expected: %d, got: %d" % (dims+1,
+                    "element. expected: %d, got: %d" % (2**dims,
                         vertex_indices.shape[-1]))
 
         super(TensorProductElementGroup, self).__init__(order, vertex_indices, nodes,
@@ -387,6 +389,13 @@ class FacialAdjacencyGroup(Record):
     :class:`MeshElementGroup`, i.e. information about elements that share (part
     of) a face.
 
+    .. image:: images/facial-adjacency-group.png
+
+    Represents (for example) *one* of the (colored) interfaces between
+    :class:`MeshElementGroup` instances, or an interface between
+    :class:`MeshElementGroup` and a boundary. (Note that element groups are not
+    necessarily contiguous like the figure may suggest.)
+
     .. attribute:: igroup
 
     .. attribute:: ineighbor_group
@@ -404,7 +413,7 @@ class FacialAdjacencyGroup(Record):
 
         ``face_id_t [nfagrp_elements]``. ``element_faces[i]``
         indicate what face index of the opposite element indicated in
-        ``neighbors[iel_grp][iface]`` touches face number *iface* of element
+        ``neighbors[iface]`` touches face number *iface* of element
         number *iel_grp* in this element group.
 
     .. attribute:: neighbors
@@ -480,6 +489,25 @@ class Mesh(Record):
 
         Referencing this attribute may raise
         :exc:`meshmode.DataUnavailable`.
+
+        .. image:: images/facial-adjacency-group.png
+
+        For example for the mesh in the figure, the following data structure
+        would be present::
+
+            [
+                {...},  # connectivity for group 0
+                {...},  # connectivity for group 1
+                {...},  # connectivity for group 2
+                {       # connectivity for group 3
+                    1: FacialAdjacencyGroup(...)  # towards group 1, green
+                    2: FacialAdjacencyGroup(...)  # towards group 2, pink
+                    None: FacialAdjacencyGroup(...)  # towards the boundary, orange
+                }
+            ]
+
+        (Note that element groups are not necessarily contiguous like the figure
+        may suggest.)
 
     .. attribute:: boundary_tags
 
@@ -609,19 +637,21 @@ class Mesh(Record):
                 assert len(facial_adjacency_groups) == len(self.groups)
                 for fagrp_map in facial_adjacency_groups:
                     for fagrp in six.itervalues(fagrp_map):
-                        grp = self.groups[fagrp.igroup]
+                        nfagrp_elements, = fagrp.elements.shape
 
-                        fvi = grp.face_vertex_indices()
+                        assert fagrp.element_faces.dtype == self.face_id_dtype
+                        assert fagrp.element_faces.shape == (nfagrp_elements,)
+
                         assert fagrp.neighbors.dtype == self.element_id_dtype
-                        assert fagrp.neighbors.shape == (
-                                grp.nelements, len(fvi))
-                        assert fagrp.neighbors.dtype == self.face_id_dtype
-                        assert fagrp.neighbor_faces.shape == (
-                                grp.nelements, len(fvi))
+                        assert fagrp.neighbors.shape == (nfagrp_elements,)
 
-                        is_bdry = fagrp.neighbors < 0
-                        assert ((1 << btag_to_index[BTAG_REALLY_ALL])
-                                & fagrp.neighbors[is_bdry]).all(), \
+                        assert fagrp.neighbor_faces.dtype == self.face_id_dtype
+                        assert fagrp.neighbor_faces.shape == (nfagrp_elements,)
+
+                        if fagrp.ineighbor_group is None:
+                            is_bdry = fagrp.neighbors < 0
+                            assert ((1 << btag_to_index[BTAG_REALLY_ALL])
+                                    & -fagrp.neighbors[is_bdry]).all(), \
                                     "boundary faces without BTAG_REALLY_ALL found"
 
             from meshmode.mesh.processing import \
@@ -631,6 +661,24 @@ class Mesh(Record):
                 # only for volume meshes, for now
                 assert test_volume_mesh_element_orientations(self), \
                         "negatively oriented elements found"
+
+    def get_copy_kwargs(self, **kwargs):
+        def set_if_not_present(name, from_name=None):
+            if from_name is None:
+                from_name = name
+            if name not in kwargs:
+                kwargs[name] = getattr(self, from_name)
+
+        set_if_not_present("vertices")
+        if "groups" not in kwargs:
+            kwargs["groups"] = [group.copy() for group in self.groups]
+        set_if_not_present("boundary_tags")
+        set_if_not_present("nodal_adjacency", "_nodal_adjacency")
+        set_if_not_present("facial_adjacency_groups", "_facial_adjacency_groups")
+        set_if_not_present("vertex_id_dtype")
+        set_if_not_present("element_id_dtype")
+
+        return kwargs
 
     @property
     def ambient_dim(self):
@@ -822,6 +870,9 @@ def _compute_facial_adjacency_from_vertices(mesh):
                 face_map.setdefault(
                         frozenset(fvi), []).append((igrp, iel_grp, fid))
 
+    del igrp
+    del grp
+
     # maps tuples (igrp, ineighbor_group) to number of elements
     group_count = {}
     for face_tuples in six.itervalues(face_map):
@@ -834,6 +885,9 @@ def _compute_facial_adjacency_from_vertices(mesh):
             group_count[igrp, None] = group_count.get((igrp, None), 0) + 1
         else:
             raise RuntimeError("unexpected number of adjacent faces")
+
+    del face_tuples
+    del igrp
 
     # {{{ build facial_adjacency_groups data structure, still empty
 
@@ -848,6 +902,11 @@ def _compute_facial_adjacency_from_vertices(mesh):
             element_faces = np.empty(bdry_count, dtype=mesh.face_id_dtype)
             neighbors = np.empty(bdry_count, dtype=mesh.element_id_dtype)
             neighbor_faces = np.zeros(bdry_count, dtype=mesh.face_id_dtype)
+
+            # Ensure uninitialized entries get noticed
+            elements.fill(-1)
+            element_faces.fill(-1)
+            neighbor_faces.fill(-1)
 
             neighbors.fill(-(
                     mesh.boundary_tag_bit(BTAG_ALL)
@@ -869,6 +928,12 @@ def _compute_facial_adjacency_from_vertices(mesh):
                 neighbors = np.empty(nb_count, dtype=mesh.element_id_dtype)
                 neighbor_faces = np.empty(nb_count, dtype=mesh.face_id_dtype)
 
+                # Ensure uninitialized entries get noticed
+                elements.fill(-1)
+                element_faces.fill(-1)
+                neighbors.fill(-1)
+                neighbor_faces.fill(-1)
+
                 grp_map[ineighbor_group] = FacialAdjacencyGroup(
                         igroup=igroup,
                         ineighbor_group=ineighbor_group,
@@ -877,20 +942,24 @@ def _compute_facial_adjacency_from_vertices(mesh):
                         neighbors=neighbors,
                         neighbor_faces=neighbor_faces)
 
+    del igroup
+    del ineighbor_group
+    del grp_map
+
     # }}}
 
     # maps tuples (igrp, ineighbor_group) to number of elements filled in group
     fill_count = {}
     for face_tuples in six.itervalues(face_map):
         if len(face_tuples) == 2:
-            for (igroup, iel, iface), (inb_group, inb_el, inb_face) in [
+            for (igroup, iel, iface), (ineighbor_group, inb_el, inb_face) in [
                     (face_tuples[0], face_tuples[1]),
                     (face_tuples[1], face_tuples[0]),
                     ]:
-                idx = fill_count.get((igrp, inb_grp), 0)
-                fill_count[igrp, inb_grp] = idx + 1
+                idx = fill_count.get((igroup, ineighbor_group), 0)
+                fill_count[igroup, ineighbor_group] = idx + 1
 
-                fagrp = facial_adjacency_groups[igroup][inb_grp]
+                fagrp = facial_adjacency_groups[igroup][ineighbor_group]
                 fagrp.elements[idx] = iel
                 fagrp.element_faces[idx] = iface
                 fagrp.neighbors[idx] = inb_el
@@ -899,8 +968,8 @@ def _compute_facial_adjacency_from_vertices(mesh):
         elif len(face_tuples) == 1:
             (igroup, iel, iface), = face_tuples
 
-            idx = fill_count.get((igrp, None), 0)
-            fill_count[igrp, None] = idx + 1
+            idx = fill_count.get((igroup, None), 0)
+            fill_count[igroup, None] = idx + 1
 
             fagrp = facial_adjacency_groups[igroup][None]
             fagrp.elements[idx] = iel

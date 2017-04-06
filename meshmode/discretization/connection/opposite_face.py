@@ -334,7 +334,7 @@ def _make_el_lookup_table(queue, connection, igrp):
 
 def make_opposite_face_connection(volume_to_bdry_conn):
     """Given a boundary restriction connection *volume_to_bdry_conn*,
-    return a :class:`DiscretizationConnection` that performs data
+    return a :class:`DirectDiscretizationConnection` that performs data
     exchange across opposite faces.
     """
 
@@ -381,8 +381,8 @@ def make_opposite_face_connection(volume_to_bdry_conn):
                             vbc_tgt_grp_face_batch, src_grp_el_lookup))
 
     from meshmode.discretization.connection import (
-            DiscretizationConnection, DiscretizationConnectionElementGroup)
-    return DiscretizationConnection(
+            DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
+    return DirectDiscretizationConnection(
             from_discr=bdry_discr,
             to_discr=bdry_discr,
             groups=[

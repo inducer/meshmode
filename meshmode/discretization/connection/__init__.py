@@ -56,6 +56,7 @@ __all__ = [
 
 __doc__ = """
 .. autoclass:: DiscretizationConnection
+.. autoclass:: DirectDiscretizationConnection
 
 .. autofunction:: make_same_mesh_connection
 
@@ -155,17 +156,82 @@ class DiscretizationConnectionElementGroup(object):
 # }}}
 
 
-# {{{ connection class
+# {{{ connection classes
 
 class DiscretizationConnection(object):
-    """Data supporting an interpolation-like operation that takes in data on
-    one discretization and returns it on another. Implemented applications
-    include:
+    """Abstract interface for transporting a DOF vector from one
+    :class:`meshmode.discretization.Discretization` to another.
+    Possible applications include:
 
     *   upsampling/downsampling on the same mesh
     *   restricition to the boundary
     *   interpolation to a refined/coarsened mesh
     *   interpolation onto opposing faces
+
+    .. attribute:: from_discr
+
+    .. attribute:: to_discr
+
+    .. attribute:: is_surjective
+
+        A :class:`bool` indicating whether every output degree
+        of freedom is set by the connection.
+
+    .. automethod:: __call__
+    """
+    def __init__(self, from_discr, to_discr, is_surjective):
+        if from_discr.cl_context != to_discr.cl_context:
+            raise ValueError("from_discr and to_discr must live in the "
+                    "same OpenCL context")
+
+        self.cl_context = from_discr.cl_context
+
+        if from_discr.mesh.vertex_id_dtype != to_discr.mesh.vertex_id_dtype:
+            raise ValueError("from_discr and to_discr must agree on the "
+                    "vertex_id_dtype")
+
+        if from_discr.mesh.element_id_dtype != to_discr.mesh.element_id_dtype:
+            raise ValueError("from_discr and to_discr must agree on the "
+                    "element_id_dtype")
+
+        self.from_discr = from_discr
+        self.to_discr = to_discr
+
+        self.is_surjective = is_surjective
+
+    def __call__(self, queue, vec):
+        raise NotImplementedError()
+
+
+class ChainedDiscretizationConnection(DiscretizationConnection):
+    """Aggregates multiple :class:`DiscretizationConnection` instances
+    into a single one.
+
+    .. attribute:: connections
+    """
+
+    def __init__(self, connections):
+        if not connections:
+            raise ValueError("connections may not be empty")
+
+        super(DirectDiscretizationConnection, self).__init__(
+                connections[0].from_discr,
+                connections[-1].to_discr,
+                is_surjective=all(
+                    cnx.is_surjective for cnx in connections))
+
+        self.connections = connections
+
+    def __call__(self, queue, vec):
+        for cnx in self.connections:
+            vec = cnx(queue, vec)
+
+        return vec
+
+
+class DirectDiscretizationConnection(DiscretizationConnection):
+    """A concrete :class:`DiscretizationConnection` supported by interpolation
+    data.
 
     .. attribute:: from_discr
 
@@ -189,33 +255,24 @@ class DiscretizationConnection(object):
     """
 
     def __init__(self, from_discr, to_discr, groups, is_surjective):
-        if from_discr.cl_context != to_discr.cl_context:
-            raise ValueError("from_discr and to_discr must live in the "
-                    "same OpenCL context")
+        super(DirectDiscretizationConnection, self).__init__(
+                from_discr, to_discr, is_surjective)
 
-        self.cl_context = from_discr.cl_context
-
-        if from_discr.mesh.vertex_id_dtype != to_discr.mesh.vertex_id_dtype:
-            raise ValueError("from_discr and to_discr must agree on the "
-                    "vertex_id_dtype")
-
-        if from_discr.mesh.element_id_dtype != to_discr.mesh.element_id_dtype:
-            raise ValueError("from_discr and to_discr must agree on the "
-                    "element_id_dtype")
-
-        self.cl_context = from_discr.cl_context
-
-        self.from_discr = from_discr
-        self.to_discr = to_discr
         self.groups = groups
-
-        self.is_surjective = is_surjective
 
     @memoize_method
     def _resample_matrix(self, to_group_index, ibatch_index):
         import modepy as mp
         ibatch = self.groups[to_group_index].batches[ibatch_index]
         from_grp = self.from_discr.groups[ibatch.from_group_index]
+
+        if len(from_grp.basis()) != from_grp.unit_nodes.shape[1]:
+            from meshmode.discretization import NoninterpolatoryElementGroupError
+            raise NoninterpolatoryElementGroupError(
+                    "%s does not support interpolation because it is not "
+                    "unisolvent (its unit node count does not match its "
+                    "number of basis functions). Using connections requires "
+                    "the ability to interpolate." % type(from_grp).__name__)
 
         result = mp.resampling_matrix(
                 from_grp.basis(),
