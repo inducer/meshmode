@@ -186,12 +186,13 @@ def partition_mesh(mesh, part_per_element, part_num):
                         if n_part_num not in adj_grps[igrp]:
                             adj_grps[igrp][n_part_num] = InterPartitionAdj()
 
-                        # I cannot compute the group because the other
+                        # I cannot compute the neighbor group because the other
                         # partitions may not have been built yet.
-                        adj_grps[igrp][n_part_num].elements.append(elem)
-                        adj_grps[igrp][n_part_num].element_faces.append(face)
-                        adj_grps[igrp][n_part_num].neighbors.append(n_elem)
-                        adj_grps[igrp][n_part_num].neighbor_faces.append(n_face)
+                        adj = adj_grps[igrp][n_part_num]
+                        adj.elements = np.append(adj.elements, elem)
+                        adj.element_faces = np.append(adj.element_faces, face)
+                        adj.neighbors = np.append(adj.neighbors, n_elem)
+                        adj.neighbor_faces = np.append(adj.neighbor_faces, n_face)
 
     connected_mesh = part_mesh.copy()
     connected_mesh.interpart_adj_groups = adj_grps

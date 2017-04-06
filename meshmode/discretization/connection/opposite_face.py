@@ -35,143 +35,82 @@ logger = logging.getLogger(__name__)
 
 # {{{ opposite-face connection
 
-def _make_cross_face_batches(
-        queue, vol_discr, bdry_discr,
-        i_tgt_grp, i_src_grp,
-        i_face_tgt,
-        adj_grp,
-        vbc_tgt_grp_face_batch, src_grp_el_lookup):
+def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
+                                    i_tgt_grp, i_src_grp,
+                                    tgt_bdry_element_indices,
+                                    src_bdry_element_indices):
 
-    # {{{ index wrangling
+    # FIXME: This should view-then-transfer
+    # (but PyOpenCL doesn't do non-contiguous transfers for now).
+    tgt_bdry_nodes = (tgt_bdry_discr.groups[i_tgt_grp].view(tgt_bdry_discr.nodes().
+                        get(queue=queue))[:, tgt_bdry_element_indices])
 
-    # Assert that the adjacency group and the restriction
-    # interpolation batch and the adjacency group have the same
-    # element ordering.
+    # FIXME: This should view-then-transfer
+    # (but PyOpenCL doesn't do non-contiguous transfers for now).
+    src_bdry_nodes = (tgt_bdry_discr.groups[i_src_grp].view(tgt_bdry_discr.nodes().
+                        get(queue=queue))[:, src_bdry_element_indices])
 
-    adj_grp_tgt_flags = adj_grp.element_faces == i_face_tgt
+    tol = 1e4 * np.finfo(tgt_bdry_nodes.dtype).eps
 
-    assert (
-            np.array_equal(
-                adj_grp.elements[adj_grp_tgt_flags],
-                vbc_tgt_grp_face_batch.from_element_indices
-                .get(queue=queue)))
+    src_mesh_grp = src_bdry_discr.mesh.groups[i_src_grp]
+    src_grp = src_bdry_discr.groups[i_src_grp]
 
-    # find to_element_indices
-
-    to_bdry_element_indices = (
-            vbc_tgt_grp_face_batch.to_element_indices
-            .get(queue=queue))
-
-    # find from_element_indices
-
-    from_vol_element_indices = adj_grp.neighbors[adj_grp_tgt_flags]
-    from_element_faces = adj_grp.neighbor_faces[adj_grp_tgt_flags]
-
-    from_bdry_element_indices = src_grp_el_lookup[
-            from_vol_element_indices, from_element_faces]
-
-    # }}}
-
-    # {{{ visualization (for debugging)
-
-    if 0:
-        print("TVE", adj_grp.elements[adj_grp_tgt_flags])
-        print("TBE", to_bdry_element_indices)
-        print("FVE", from_vol_element_indices)
-        from meshmode.mesh.visualization import draw_2d_mesh
-        import matplotlib.pyplot as pt
-        draw_2d_mesh(vol_discr.mesh, draw_element_numbers=True,
-                set_bounding_box=True,
-                draw_vertex_numbers=False,
-                draw_face_numbers=True,
-                fill=None)
-        pt.figure()
-
-        draw_2d_mesh(bdry_discr.mesh, draw_element_numbers=True,
-                set_bounding_box=True,
-                draw_vertex_numbers=False,
-                draw_face_numbers=True,
-                fill=None)
-
-        pt.show()
-    # }}}
+    dim = src_grp.dim
+    ambient_dim, nelements, ntgt_unit_nodes = tgt_bdry_nodes.shape
 
     # {{{ invert face map (using Gauss-Newton)
 
-    to_bdry_nodes = (
-            # FIXME: This should view-then-transfer (but PyOpenCL doesn't do
-            # non-contiguous transfers for now).
-            bdry_discr.groups[i_tgt_grp].view(
-                bdry_discr.nodes().get(queue=queue))
-            [:, to_bdry_element_indices])
-
-    tol = 1e4 * np.finfo(to_bdry_nodes.dtype).eps
-
-    from_mesh_grp = bdry_discr.mesh.groups[i_src_grp]
-    from_grp = bdry_discr.groups[i_src_grp]
-
-    dim = from_grp.dim
-    ambient_dim, nelements, nto_unit_nodes = to_bdry_nodes.shape
-
-    initial_guess = np.mean(from_mesh_grp.vertex_unit_coordinates(), axis=0)
-    from_unit_nodes = np.empty((dim, nelements, nto_unit_nodes))
-    from_unit_nodes[:] = initial_guess.reshape(-1, 1, 1)
+    initial_guess = np.mean(src_mesh_grp.vertex_unit_coordinates(), axis=0)
+    src_unit_nodes = np.empty((dim, nelements, ntgt_unit_nodes))
+    src_unit_nodes[:] = initial_guess.reshape(-1, 1, 1)
 
     import modepy as mp
-    from_vdm = mp.vandermonde(from_grp.basis(), from_grp.unit_nodes)
-    from_inv_t_vdm = la.inv(from_vdm.T)
-    from_nfuncs = len(from_grp.basis())
-
-    # (ambient_dim, nelements, nfrom_unit_nodes)
-    from_bdry_nodes = (
-            # FIXME: This should view-then-transfer (but PyOpenCL doesn't do
-            # non-contiguous transfers for now).
-            bdry_discr.groups[i_src_grp].view(
-                bdry_discr.nodes().get(queue=queue))
-            [:, from_bdry_element_indices])
+    vdm = mp.vandermonde(src_grp.basis(), src_grp.unit_nodes)
+    inv_t_vdm = la.inv(vdm.T)
+    nsrc_funcs = len(src_grp.basis())
 
     def apply_map(unit_nodes):
-        # unit_nodes: (dim, nelements, nto_unit_nodes)
+        # unit_nodes: (dim, nelements, ntgt_unit_nodes)
 
         # basis_at_unit_nodes
-        basis_at_unit_nodes = np.empty((from_nfuncs, nelements, nto_unit_nodes))
+        basis_at_unit_nodes = np.empty((nsrc_funcs, nelements, ntgt_unit_nodes))
 
-        for i, f in enumerate(from_grp.basis()):
+        for i, f in enumerate(src_grp.basis()):
             basis_at_unit_nodes[i] = (
                     f(unit_nodes.reshape(dim, -1))
-                    .reshape(nelements, nto_unit_nodes))
+                    .reshape(nelements, ntgt_unit_nodes))
 
-        intp_coeffs = np.einsum("fj,jet->fet", from_inv_t_vdm, basis_at_unit_nodes)
+        intp_coeffs = np.einsum("fj,jet->fet", inv_t_vdm, basis_at_unit_nodes)
 
         # If we're interpolating 1, we had better get 1 back.
         one_deviation = np.abs(np.sum(intp_coeffs, axis=0) - 1)
         assert (one_deviation < tol).all(), np.max(one_deviation)
 
-        return np.einsum("fet,aef->aet", intp_coeffs, from_bdry_nodes)
+        return np.einsum("fet,aef->aet", intp_coeffs, src_bdry_nodes)
 
     def get_map_jacobian(unit_nodes):
-        # unit_nodes: (dim, nelements, nto_unit_nodes)
+        # unit_nodes: (dim, nelements, ntgt_unit_nodes)
 
         # basis_at_unit_nodes
         dbasis_at_unit_nodes = np.empty(
-                (dim, from_nfuncs, nelements, nto_unit_nodes))
+                (dim, nsrc_funcs, nelements, ntgt_unit_nodes))
 
-        for i, df in enumerate(from_grp.grad_basis()):
+        for i, df in enumerate(src_grp.grad_basis()):
             df_result = df(unit_nodes.reshape(dim, -1))
 
             for rst_axis, df_r in enumerate(df_result):
                 dbasis_at_unit_nodes[rst_axis, i] = (
-                        df_r.reshape(nelements, nto_unit_nodes))
+                        df_r.reshape(nelements, ntgt_unit_nodes))
 
         dintp_coeffs = np.einsum(
-                "fj,rjet->rfet", from_inv_t_vdm, dbasis_at_unit_nodes)
+                "fj,rjet->rfet", inv_t_vdm, dbasis_at_unit_nodes)
 
-        return np.einsum("rfet,aef->raet", dintp_coeffs, from_bdry_nodes)
+        return np.einsum("rfet,aef->raet", dintp_coeffs, src_bdry_nodes)
 
     # {{{ test map applier and jacobian
 
     if 0:
-        u = from_unit_nodes
+        u = src_unit_nodes
         f = apply_map(u)
         for h in [1e-1, 1e-2]:
             du = h*np.random.randn(*u.shape)
@@ -190,16 +129,16 @@ def _make_cross_face_batches(
 
     if 0:
         import matplotlib.pyplot as pt
-        guess = apply_map(from_unit_nodes)
-        goals = to_bdry_nodes
+        guess = apply_map(src_unit_nodes)
+        goals = tgt_bdry_nodes
 
         from meshmode.discretization.visualization import draw_curve
-        draw_curve(bdry_discr)
+        draw_curve(tgt_bdry_discr)
+        draw_curve(src_bdry_discr)
 
         pt.plot(guess[0].reshape(-1), guess[1].reshape(-1), "or")
         pt.plot(goals[0].reshape(-1), goals[1].reshape(-1), "og")
-        pt.plot(from_bdry_nodes[0].reshape(-1), from_bdry_nodes[1].reshape(-1), "o",
-                color="purple")
+        pt.plot(src_bdry_nodes[0].reshape(-1), src_bdry_nodes[1].reshape(-1), "xb")
         pt.show()
 
     # }}}
@@ -208,10 +147,10 @@ def _make_cross_face_batches(
 
     niter = 0
     while True:
-        resid = apply_map(from_unit_nodes) - to_bdry_nodes
+        resid = apply_map(src_unit_nodes) - tgt_bdry_nodes
 
-        df = get_map_jacobian(from_unit_nodes)
-        df_inv_resid = np.empty_like(from_unit_nodes)
+        df = get_map_jacobian(src_unit_nodes)
+        df_inv_resid = np.empty_like(src_unit_nodes)
 
         # For the 1D/2D accelerated versions, we'll use the normal
         # equations and Cramer's rule. If you're looking for high-end
@@ -231,7 +170,7 @@ def _make_cross_face_batches(
 
             det = ata[0, 0]*ata[1, 1] - ata[0, 1]*ata[1, 0]
 
-            df_inv_resid = np.empty_like(from_unit_nodes)
+            df_inv_resid = np.empty_like(src_unit_nodes)
             df_inv_resid[0] = 1/det * (ata[1, 1] * atb[0] - ata[1, 0]*atb[1])
             df_inv_resid[1] = 1/det * (-ata[0, 1] * atb[0] + ata[0, 0]*atb[1])
 
@@ -243,11 +182,11 @@ def _make_cross_face_batches(
             # But we'll only hit it for boundaries of 4+D meshes, in which
             # case... good luck. :)
             for e in range(nelements):
-                for t in range(nto_unit_nodes):
+                for t in range(ntgt_unit_nodes):
                     df_inv_resid[:, e, t], _, _, _ = \
                             la.lstsq(df[:, :, e, t].T, resid[:, e, t])
 
-        from_unit_nodes = from_unit_nodes - df_inv_resid
+        src_unit_nodes = src_unit_nodes - df_inv_resid
 
         max_resid = np.max(np.abs(resid))
         logger.debug("gauss-newton residual: %g" % max_resid)
@@ -264,7 +203,7 @@ def _make_cross_face_batches(
 
     # }}}
 
-    # {{{ find groups of from_unit_nodes
+    # {{{ find groups of src_unit_nodes
 
     def to_dev(ary):
         return cl.array.to_device(queue, ary, array_queue=None)
@@ -275,10 +214,10 @@ def _make_cross_face_batches(
         if not len(todo_elements):
             return
 
-        template_unit_nodes = from_unit_nodes[:, todo_elements[0], :]
+        template_unit_nodes = src_unit_nodes[:, todo_elements[0], :]
 
         unit_node_dist = np.max(np.max(np.abs(
-                from_unit_nodes[:, todo_elements, :]
+                src_unit_nodes[:, todo_elements, :]
                 -
                 template_unit_nodes.reshape(dim, 1, -1)),
                 axis=2), axis=0)
@@ -287,7 +226,7 @@ def _make_cross_face_batches(
         done_elements[close_els] = True
 
         unit_node_dist = np.max(np.max(np.abs(
-                from_unit_nodes[:, todo_elements, :]
+                src_unit_nodes[:, todo_elements, :]
                 -
                 template_unit_nodes.reshape(dim, 1, -1)),
                 axis=2), axis=0)
@@ -295,8 +234,8 @@ def _make_cross_face_batches(
         from meshmode.discretization.connection import InterpolationBatch
         yield InterpolationBatch(
                 from_group_index=i_src_grp,
-                from_element_indices=to_dev(from_bdry_element_indices[close_els]),
-                to_element_indices=to_dev(to_bdry_element_indices[close_els]),
+                from_element_indices=to_dev(src_bdry_element_indices[close_els]),
+                to_element_indices=to_dev(tgt_bdry_element_indices[close_els]),
                 result_unit_nodes=template_unit_nodes,
                 to_element_face=None)
 
@@ -366,19 +305,71 @@ def make_opposite_face_connection(volume_to_bdry_conn):
             for i_tgt_grp in range(ngrps):
                 vbc_tgt_grp_batches = volume_to_bdry_conn.groups[i_tgt_grp].batches
 
-                adj_grp = vol_mesh.facial_adjacency_groups[i_tgt_grp][i_src_grp]
+                adj = vol_mesh.facial_adjacency_groups[i_tgt_grp][i_src_grp]
 
                 for i_face_tgt in range(vol_mesh.groups[i_tgt_grp].nfaces):
                     vbc_tgt_grp_face_batch = _find_ibatch_for_face(
                             vbc_tgt_grp_batches, i_face_tgt)
 
-                    groups[i_tgt_grp].extend(
-                        _make_cross_face_batches(
-                            queue, vol_discr, bdry_discr,
+                    # {{{ index wrangling
+
+                    # Assert that the adjacency group and the restriction
+                    # interpolation batch and the adjacency group have the same
+                    # element ordering.
+
+                    adj_tgt_flags = adj.element_faces == i_face_tgt
+
+                    assert (np.array_equal(
+                                adj.elements[adj_tgt_flags],
+                                vbc_tgt_grp_face_batch.from_element_indices
+                                .get(queue=queue)))
+
+                    # find to_element_indices
+
+                    tgt_bdry_element_indices = (
+                            vbc_tgt_grp_face_batch.to_element_indices
+                            .get(queue=queue))
+
+                    # find from_element_indices
+
+                    src_vol_element_indices = adj.neighbors[adj_tgt_flags]
+                    src_element_faces = adj.neighbor_faces[adj_tgt_flags]
+
+                    src_bdry_element_indices = src_grp_el_lookup[
+                            src_vol_element_indices, src_element_faces]
+
+                    # }}}
+
+                    # {{{ visualization (for debugging)
+
+                    if 0:
+                        print("TVE", adj.elements[adj_tgt_flags])
+                        print("TBE", tgt_bdry_element_indices)
+                        print("FVE", src_vol_element_indices)
+                        from meshmode.mesh.visualization import draw_2d_mesh
+                        import matplotlib.pyplot as pt
+                        draw_2d_mesh(vol_discr.mesh, draw_element_numbers=True,
+                                set_bounding_box=True,
+                                draw_vertex_numbers=False,
+                                draw_face_numbers=True,
+                                fill=None)
+                        pt.figure()
+
+                        draw_2d_mesh(bdry_discr.mesh, draw_element_numbers=True,
+                                set_bounding_box=True,
+                                draw_vertex_numbers=False,
+                                draw_face_numbers=True,
+                                fill=None)
+
+                        pt.show()
+
+                    # }}}
+
+                    groups[i_tgt_grp].extend(_make_cross_face_batches(queue,
+                            bdry_discr, bdry_discr,
                             i_tgt_grp, i_src_grp,
-                            i_face_tgt,
-                            adj_grp,
-                            vbc_tgt_grp_face_batch, src_grp_el_lookup))
+                            tgt_bdry_element_indices,
+                            src_bdry_element_indices))
 
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
@@ -394,183 +385,6 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 
 
 # {{{ partition_connection
-
-def _make_cross_partition_batch(queue, vol_to_bdry_conns,
-                                    i_tgt_part, i_tgt_grp, i_tgt_elem, i_tgt_face,
-                                    i_src_part, i_src_grp, i_src_elem, i_src_face):
-    """
-    Creates a batch that transfers data to a face from a face of another partition.
-
-    :arg queue:
-    :arg vol_to_bdry_conns: A list of :class:`DirectDiscretizationConnection`
-                for each partition.
-
-    :returns: ???
-    """
-
-    tgt_bdry_discr = vol_to_bdry_conns[i_tgt_part].to_discr
-    src_bdry_discr = vol_to_bdry_conns[i_src_part].to_discr
-
-    tgt_bdry_nodes = (
-            # FIXME: This should view-then-transfer (but PyOpenCL doesn't do
-            # non-contiguous transfers for now).
-            tgt_bdry_discr.groups[i_tgt_grp].view(
-                tgt_bdry_discr.nodes().get(queue=queue))
-            [:, i_tgt_elem])
-
-    src_bdry_nodes = (
-            # FIXME: This should view-then-transfer (but PyOpenCL doesn't do
-            # non-contiguous transfers for now).
-            src_bdry_discr.groups[i_src_grp].view(
-                src_bdry_discr.nodes().get(queue=queue))
-            [:, i_src_elem])
-
-    ambient_dim, n_tgt_unit_nodes = tgt_bdry_nodes.shape
-
-    tol = 1e4 * np.finfo(tgt_bdry_nodes.dtype).eps
-
-    src_mesh_grp = src_bdry_discr.mesh.groups[i_src_grp]
-    src_grp = src_bdry_discr.groups[i_src_grp]
-
-    dim = src_grp.dim
-
-    initial_guess = np.mean(src_mesh_grp.vertex_unit_coordinates(), axis=0)
-    src_unit_nodes = np.empty((dim, n_tgt_unit_nodes))
-    src_unit_nodes[:] = initial_guess.reshape(-1, 1)
-
-    import modepy as mp
-    vdm = mp.vandermonde(src_grp.basis(), src_grp.unit_nodes)
-    inv_t_vdm = la.inv(vdm.T)
-    n_src_funcs = len(src_grp.basis())
-
-    def apply_map(unit_nodes):
-        basis_at_unit_nodes = np.array([f(unit_nodes) for f in src_grp.basis()])
-
-        return src_bdry_nodes @ inv_t_vdm @ basis_at_unit_nodes
-
-    def get_map_jacobian(unit_nodes):
-        dbasis_at_unit_nodes = np.empty((dim, n_src_funcs, n_tgt_unit_nodes))
-
-        for i, df in enumerate(src_grp.grad_basis()):
-            df_result = df(unit_nodes.reshape(dim, -1))
-            for rst_axis, df_r in enumerate(df_result):
-                dbasis_at_unit_nodes[rst_axis, i] = (
-                        df_r.reshape(n_tgt_unit_nodes))
-        #dbasis_at_unit_nodes = np.array(
-        #            [df(unit_nodes) for df in src_grp.grad_basis()])
-        dintp_coeffs = np.einsum(
-                "ij,rjk->rik", inv_t_vdm, dbasis_at_unit_nodes)
-        return np.einsum("ij,rjk->rik", src_bdry_nodes, dintp_coeffs)
-
-    # {{{ test map applier and jacobian
-    if 0:
-        u = src_unit_nodes
-        f = apply_map(u)
-        for h in [1e-1, 1e-2]:
-            du = h*np.random.randn(*u.shape)
-
-            f_2 = apply_map(u+du)
-
-            jf = get_map_jacobian(u)
-
-            f2_2 = f + np.einsum("rat,rt->at", jf, du)
-
-            print(h, la.norm((f_2-f2_2).ravel()))
-    # }}}
-
-    # {{{ visualize initial guess
-
-    if 0:
-        import matplotlib.pyplot as pt
-        guess = apply_map(src_unit_nodes)
-        goals = tgt_bdry_nodes
-
-        from meshmode.discretization.visualization import draw_curve
-        draw_curve(src_bdry_discr)
-
-        pt.plot(guess[0].reshape(-1), guess[1].reshape(-1), "or")
-        pt.plot(goals[0].reshape(-1), goals[1].reshape(-1), "og")
-        pt.plot(src_bdry_nodes[0].reshape(-1), src_bdry_nodes[1].reshape(-1), "o",
-                color="purple")
-        pt.show()
-
-    # }}}
-
-    logger.info("make_partition_connection: begin gauss-newton")
-    niter = 0
-    while True:
-        resid = apply_map(src_unit_nodes) - tgt_bdry_nodes
-        df = get_map_jacobian(src_unit_nodes)
-        df_inv_resid = np.empty_like(src_unit_nodes)
-        # For the 1D/2D accelerated versions, we'll use the normal
-        # equations and Cramer's rule. If you're looking for high-end
-        # numerics, look no further than meshmode.
-        if dim == 1:
-            # TODO: Needs testing.
-            # A is df.T
-            ata = np.einsum("ikt,jkt->ijt", df, df)
-            atb = np.einsum("ikt,kt->it", df, resid)
-            df_inv_resid = atb / ata[0, 0]
-        elif dim == 2:
-            # A is df.T
-            ata = np.einsum("ikt,jkt->ijt", df, df)
-            atb = np.einsum("ikt,kt->it", df, resid)
-            det = ata[0, 0]*ata[1, 1] - ata[0, 1]*ata[1, 0]
-            df_inv_resid = np.empty_like(src_unit_nodes)
-            df_inv_resid[0] = 1/det * (ata[1, 1] * atb[0] - ata[1, 0]*atb[1])
-            df_inv_resid[1] = 1/det * (-ata[0, 1] * atb[0] + ata[0, 0]*atb[1])
-        else:
-            # The boundary of a 3D mesh is 2D, so that's the
-            # highest-dimensional case we genuinely care about.
-            #
-            # This stinks, performance-wise, because it's not vectorized.
-            # But we'll only hit it for boundaries of 4+D meshes, in which
-            # case... good luck. :)
-            # TODO: Needs testing.
-            for t in range(n_tgt_unit_nodes):
-                df_inv_resid[:, t], _, _, _ = \
-                        la.lstsq(df[:, :, t].T, resid[:, t])
-
-        # {{{ visualize next guess
-        if 1:
-            import matplotlib.pyplot as pt
-            guess = apply_map(src_unit_nodes)
-            goals = tgt_bdry_nodes
-
-            from meshmode.discretization.visualization import draw_curve
-
-            pt.plot(guess[0], guess[1], "r^")
-            pt.plot(goals[0], goals[1], "xg")
-            pt.plot(src_bdry_nodes[0], src_bdry_nodes[1], "o", color="purple")
-            pt.plot(src_unit_nodes[0], src_unit_nodes[1], "ob")
-            pt.show()
-        # }}}
-
-        src_unit_nodes = src_unit_nodes - df_inv_resid
-        max_resid = np.max(np.abs(resid))
-        #print(resid[0, :])
-        logger.debug("gauss-newton residual: %g" % max_resid)
-        if max_resid < tol:
-            logger.info("make_partition_connection: gauss-newton: done, "
-                    "final residual: %g" % max_resid)
-            break
-        niter += 1
-        if niter > 10:
-            raise RuntimeError("Gauss-Newton (for finding partition_connection "
-                    "reference coordinates) did not converge")
-
-    def to_dev(ary):
-        return cl.array.to_device(queue, ary, array_queue=None)
-
-    from meshmode.discretization.connection import InterpolationBatch
-    return InterpolationBatch(
-                # This is not right. Need partition number information.
-                from_group_index=i_src_grp,
-                from_element_indices=to_dev(np.array([i_src_elem])),
-                to_element_indices=to_dev(np.array([i_tgt_elem])),
-                result_unit_nodes=src_unit_nodes,
-                to_element_face=None)
-
 
 def make_partition_connection(vol_to_bdry_conns, part_meshes):
     """
@@ -595,7 +409,7 @@ def make_partition_connection(vol_to_bdry_conns, part_meshes):
         cl_context = tgt_vol_conn.from_discr.cl_context
         with cl.CommandQueue(cl_context) as queue:
 
-            bdry_discr = tgt_vol_conn.to_discr
+            tgt_bdry_discr = tgt_vol_conn.to_discr
             #tgt_mesh = bdry_discr.mesh
             tgt_mesh = part_meshes[i_tgt_part]
             ngroups = len(tgt_mesh.groups)
@@ -603,35 +417,55 @@ def make_partition_connection(vol_to_bdry_conns, part_meshes):
             for i_tgt_grp, adj_parts in enumerate(tgt_mesh.interpart_adj_groups):
                 for i_src_part, adj in adj_parts.items():
 
+                    src_bdry_discr = vol_to_bdry_conns[i_src_part].to_discr
+
                     src_mesh = part_meshes[i_src_part]
 
-                    i_tgt_elems = adj.elements
-                    i_tgt_faces = adj.element_faces
-
                     i_src_elems = adj.neighbors
-                    i_src_faces = adj.neighbor_faces
-                    i_src_grps = [src_mesh.find_igrp(e) for e in i_src_elems]
+                    i_src_grps = np.array([src_mesh.find_igrp(e)
+                                                for e in i_src_elems])
                     for i in range(len(i_src_elems)):
                         elem_base = src_mesh.groups[i_src_grps[i]].element_nr_base
                         i_src_elems[i] -= elem_base
 
-                    for idx, i_tgt_elem in enumerate(i_tgt_elems):
-                        i_tgt_face = i_tgt_faces[idx]
-                        i_src_elem = i_src_elems[idx]
-                        i_src_face = i_src_faces[idx]
-                        i_src_grp = i_src_grps[idx]
+                    for i_src_grp in range(ngroups):
 
-                        part_batches[i_tgt_grp].append(
-                                _make_cross_partition_batch(queue,
-                                    vol_to_bdry_conns,
-                                    i_tgt_part, i_tgt_grp, i_tgt_elem, i_tgt_face,
-                                    i_src_part, i_src_grp, i_src_elem, i_src_face))
+                        src_grp_el_lookup = _make_el_lookup_table(queue,
+                                vol_to_bdry_conns[i_src_part], i_src_grp)
+
+                        for i_tgt_face in adj.element_faces:
+
+                            index_flags = np.logical_and((i_src_grps == i_src_grp),
+                                           (adj.element_faces == i_tgt_face))
+
+                            vbc_tgt_grp_face_batch = _find_ibatch_for_face(
+                                tgt_vol_conn.groups[i_tgt_grp].batches, i_tgt_face)
+
+                            tgt_bdry_element_indices = vbc_tgt_grp_face_batch.\
+                                    to_element_indices.get(queue=queue)
+
+                            i_src_elems = adj.neighbors[index_flags]
+                            i_src_faces = adj.neighbor_faces[index_flags]
+                            src_bdry_element_indices =\
+                                    src_grp_el_lookup[i_src_elems, i_src_faces]
+                            src_bdry_element_indices = i_src_elems
+
+                            print(index_flags)
+                            print(tgt_bdry_element_indices)
+                            print(src_bdry_element_indices)
+
+                            part_batches[i_tgt_grp].extend(
+                                    _make_cross_face_batches(queue,
+                                        tgt_bdry_discr, src_bdry_discr,
+                                        i_tgt_grp, i_src_grp,
+                                        tgt_bdry_element_indices,
+                                        src_bdry_element_indices))
 
             # Make one Discr connection for each partition.
             disc_conns.append(DirectDiscretizationConnection(
                     # Is this ok?
-                    from_discr=bdry_discr,
-                    to_discr=bdry_discr,
+                    from_discr=src_bdry_discr,
+                    to_discr=tgt_bdry_discr,
                     groups=[
                         DiscretizationConnectionElementGroup(batches=batches)
                         for batches in part_batches],
