@@ -27,6 +27,10 @@ from six.moves import range
 from pytools import RecordWithoutPickling
 
 
+import logging
+logger = logging.getLogger(__name__)
+
+
 class TreeRayNode(object):
     """Describes a ray as a tree, this class represents each node in this tree
     .. attribute:: left
@@ -854,7 +858,7 @@ class Refiner(object):
                             element_to_element[self.hanging_vertex_element[ivertex][0]].update([element_index])
                             '''
                     element_index += 1
-        print(len(element_to_element))
+        logger.debug("number of new elements: %d" % len(element_to_element))
         for iel, neighbors in enumerate(element_to_element):
             if iel in neighbors:
                 neighbors.remove(iel)
