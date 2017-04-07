@@ -50,20 +50,24 @@ logger = logging.getLogger(__name__)
 
 # {{{ partition_interpolation
 
-def test_partition_interpolation(ctx_getter):
+@pytest.mark.parametrize("group_factory", [
+                            PolynomialWarpAndBlendGroupFactory,
+                            InterpolatoryQuadratureSimplexGroupFactory
+                            ])
+@pytest.mark.parametrize(("num_parts"), [2, 4])
+#@pytest.mark.parametrize("dim", [2, 3, 4])
+def test_partition_interpolation(ctx_getter, group_factory, num_parts):
     cl_ctx = ctx_getter()
-    order = 2
-    group_factory = PolynomialWarpAndBlendGroupFactory(order)
-    #group_factory = InterpolatoryQuadratureSimplexGroupFactory(order)
-    n = 5
+    order = 4
     dim = 2
-    num_parts = 2
-    from meshmode.mesh.generation import generate_warped_rect_mesh
-    mesh = generate_warped_rect_mesh(dim, order=order, n=n)
-    #mesh2 = generate_warped_rect_mesh(dim, order=order, n=n)
+    n = 5
 
-    #from meshmode.mesh.processing import merge_disjoint_meshes
-    #mesh = merge_disjoint_meshes([mesh1, mesh2])
+    from meshmode.mesh.generation import generate_warped_rect_mesh
+    mesh1 = generate_warped_rect_mesh(dim, order=order, n=n)
+    mesh2 = generate_warped_rect_mesh(dim, order=order, n=n)
+
+    from meshmode.mesh.processing import merge_disjoint_meshes
+    mesh = merge_disjoint_meshes([mesh1, mesh2])
 
     from pymetis import part_graph
     (_, p) = part_graph(num_parts, adjacency=mesh.adjacency_list())
@@ -74,22 +78,25 @@ def test_partition_interpolation(ctx_getter):
         partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
 
     from meshmode.discretization import Discretization
-    vol_discrs = [Discretization(cl_ctx, part_meshes[i], group_factory)
+    vol_discrs = [Discretization(cl_ctx, part_meshes[i], group_factory(order))
                     for i in range(num_parts)]
 
     from meshmode.discretization.connection import make_face_restriction
-    bdry_connections = [make_face_restriction(vol_discrs[i], group_factory,
-                            FRESTR_INTERIOR_FACES) for i in range(num_parts)]
+    from meshmode.mesh import BTAG_PARTITION
+    bdry_conns = [[make_face_restriction(vol_discrs[tgt], group_factory(order),
+                        BTAG_PARTITION(src))
+                        for src in range(num_parts)]
+                        for tgt in range(num_parts)]
 
     # Hack, I probably shouldn't pass part_meshes directly. This is probably
     # temporary.
     from meshmode.discretization.connection import make_partition_connection
-    connections = make_partition_connection(bdry_connections, part_meshes)
+    connections = make_partition_connection(bdry_conns, part_meshes)
 
     # We can't use check_connection because I don't think it works with partitions.
-    #from meshmode.discretization.connection import check_connection
-    #for conn in connections:
-    #    check_connection(conn)
+    from meshmode.discretization.connection import check_connection
+    for conn in connections:
+        check_connection(conn)
 
 # }}}
 
