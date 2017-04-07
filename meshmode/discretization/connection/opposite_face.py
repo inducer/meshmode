@@ -47,7 +47,7 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
 
     # FIXME: This should view-then-transfer
     # (but PyOpenCL doesn't do non-contiguous transfers for now).
-    src_bdry_nodes = (tgt_bdry_discr.groups[i_src_grp].view(tgt_bdry_discr.nodes().
+    src_bdry_nodes = (src_bdry_discr.groups[i_src_grp].view(tgt_bdry_discr.nodes().
                         get(queue=queue))[:, src_bdry_element_indices])
 
     tol = 1e4 * np.finfo(tgt_bdry_nodes.dtype).eps
@@ -57,6 +57,7 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
 
     dim = src_grp.dim
     ambient_dim, nelements, ntgt_unit_nodes = tgt_bdry_nodes.shape
+    #assert tgt_bdry_nodes.shape == src_bdry_nodes.shape
 
     # {{{ invert face map (using Gauss-Newton)
 
@@ -132,9 +133,9 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
         guess = apply_map(src_unit_nodes)
         goals = tgt_bdry_nodes
 
-        from meshmode.discretization.visualization import draw_curve
-        draw_curve(tgt_bdry_discr)
-        draw_curve(src_bdry_discr)
+        #from meshmode.discretization.visualization import draw_curve
+        #draw_curve(tgt_bdry_discr)
+        #draw_curve(src_bdry_discr)
 
         pt.plot(guess[0].reshape(-1), guess[1].reshape(-1), "or")
         pt.plot(goals[0].reshape(-1), goals[1].reshape(-1), "og")
@@ -187,6 +188,19 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
                             la.lstsq(df[:, :, e, t].T, resid[:, e, t])
 
         src_unit_nodes = src_unit_nodes - df_inv_resid
+
+        # {{{ visualize next guess
+
+        if 0:
+            import matplotlib.pyplot as pt
+            guess = apply_map(src_unit_nodes)
+            goals = tgt_bdry_nodes
+
+            pt.plot(guess[0].reshape(-1), guess[1].reshape(-1), "rx")
+            pt.plot(goals[0].reshape(-1), goals[1].reshape(-1), "go")
+            pt.show()
+
+        # }}}
 
         max_resid = np.max(np.abs(resid))
         logger.debug("gauss-newton residual: %g" % max_resid)
@@ -386,7 +400,7 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 
 # {{{ partition_connection
 
-def make_partition_connection(vol_to_bdry_conns, part_meshes):
+def make_partition_connection(bdry_conns, part_meshes):
     """
     Given a list of boundary restriction connections *volume_to_bdry_conn*,
     return a :class:`DirectDiscretizationConnection` that performs data
@@ -403,60 +417,80 @@ def make_partition_connection(vol_to_bdry_conns, part_meshes):
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
 
-    for i_tgt_part, tgt_vol_conn in enumerate(vol_to_bdry_conns):
+    nparts = len(bdry_conns)
+    for i_tgt_part in range(nparts):
+        for i_src_part in range(nparts):
 
-        # Is this ok in a loop?
-        cl_context = tgt_vol_conn.from_discr.cl_context
-        with cl.CommandQueue(cl_context) as queue:
+            tgt_conn = bdry_conns[i_tgt_part][i_src_part]
+            src_conn = bdry_conns[i_src_part][i_tgt_part]
+            tgt_vol = tgt_conn.from_discr
+            src_vol = src_conn.from_discr
+            tgt_bdry = tgt_conn.to_discr
+            src_bdry = src_conn.to_discr
+            tgt_mesh = tgt_vol.mesh
+            src_mesh = src_vol.mesh
+            #tgt_mesh = part_meshes[i_tgt_part]
+            #src_mesh = part_meshes[i_src_part]
 
-            tgt_bdry_discr = tgt_vol_conn.to_discr
-            #tgt_mesh = bdry_discr.mesh
-            tgt_mesh = part_meshes[i_tgt_part]
-            ngroups = len(tgt_mesh.groups)
-            part_batches = [[] for _ in range(ngroups)]
-            for i_tgt_grp, adj_parts in enumerate(tgt_mesh.interpart_adj_groups):
-                for i_src_part, adj in adj_parts.items():
+            # Is this ok in a loop?
+            cl_context = tgt_vol.cl_context
+            with cl.CommandQueue(cl_context) as queue:
 
-                    src_bdry_discr = vol_to_bdry_conns[i_src_part].to_discr
+                adj_grps = part_meshes[i_tgt_part].interpart_adj_groups
 
-                    src_mesh = part_meshes[i_src_part]
+                ntgt_groups = len(tgt_mesh.groups)
+                nsrc_groups = len(src_mesh.groups)
+                part_batches = ntgt_groups * [[]]
+                for i_tgt_grp, adj_parts in enumerate(adj_grps):
+                    if i_src_part not in adj_parts:
+                        continue
 
+                    adj = adj_parts[i_src_part]
+
+                    i_tgt_faces = adj.element_faces
                     i_src_elems = adj.neighbors
+                    i_src_faces = adj.neighbor_faces
                     i_src_grps = np.array([src_mesh.find_igrp(e)
                                                 for e in i_src_elems])
                     for i in range(len(i_src_elems)):
+                        #elem_base = part_meshes[i_src_part].groups[i_src_grps[i]].element_nr_base
                         elem_base = src_mesh.groups[i_src_grps[i]].element_nr_base
                         i_src_elems[i] -= elem_base
 
-                    for i_src_grp in range(ngroups):
+                    for i_src_grp in range(nsrc_groups):
 
-                        src_grp_el_lookup = _make_el_lookup_table(queue,
-                                vol_to_bdry_conns[i_src_part], i_src_grp)
+                        src_el_lookup = _make_el_lookup_table(queue,
+                                src_conn, i_src_grp)
 
-                        for i_tgt_face in adj.element_faces:
+                        for i_tgt_face in i_tgt_faces:
 
-                            index_flags = np.logical_and((i_src_grps == i_src_grp),
-                                           (adj.element_faces == i_tgt_face))
+                            index_flags = np.logical_and(i_src_grps == i_src_grp,
+                                                         i_tgt_faces == i_tgt_face)
+
+                            if True not in index_flags:
+                                continue
 
                             vbc_tgt_grp_face_batch = _find_ibatch_for_face(
-                                tgt_vol_conn.groups[i_tgt_grp].batches, i_tgt_face)
+                                tgt_conn.groups[i_tgt_grp].batches, i_tgt_face)
 
                             tgt_bdry_element_indices = vbc_tgt_grp_face_batch.\
                                     to_element_indices.get(queue=queue)
 
-                            i_src_elems = adj.neighbors[index_flags]
-                            i_src_faces = adj.neighbor_faces[index_flags]
-                            src_bdry_element_indices =\
-                                    src_grp_el_lookup[i_src_elems, i_src_faces]
-                            src_bdry_element_indices = i_src_elems
+                            src_bdry_element_indices = src_el_lookup[
+                                                i_src_elems[index_flags],
+                                                i_src_faces[index_flags]]
 
-                            print(index_flags)
-                            print(tgt_bdry_element_indices)
-                            print(src_bdry_element_indices)
+                            # FIXME: I honestly have no idea why this helps.
+                            src_bdry_element_indices =\
+                                            np.sort(src_bdry_element_indices)
+
+                            print("tgt", i_tgt_part, tgt_bdry_element_indices)
+                            print("src", i_src_part, src_bdry_element_indices)
+                            print("-------------------")
 
                             part_batches[i_tgt_grp].extend(
                                     _make_cross_face_batches(queue,
-                                        tgt_bdry_discr, src_bdry_discr,
+                                        tgt_bdry, src_bdry,
                                         i_tgt_grp, i_src_grp,
                                         tgt_bdry_element_indices,
                                         src_bdry_element_indices))
@@ -464,8 +498,8 @@ def make_partition_connection(vol_to_bdry_conns, part_meshes):
             # Make one Discr connection for each partition.
             disc_conns.append(DirectDiscretizationConnection(
                     # Is this ok?
-                    from_discr=src_bdry_discr,
-                    to_discr=tgt_bdry_discr,
+                    from_discr=src_bdry,
+                    to_discr=tgt_bdry,
                     groups=[
                         DiscretizationConnectionElementGroup(batches=batches)
                         for batches in part_batches],
