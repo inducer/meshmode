@@ -57,6 +57,7 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
 
     dim = src_grp.dim
     ambient_dim, nelements, ntgt_unit_nodes = tgt_bdry_nodes.shape
+    # FIXME: Not sure if this is a valid assertion.
     #assert tgt_bdry_nodes.shape == src_bdry_nodes.shape
 
     # {{{ invert face map (using Gauss-Newton)
@@ -400,112 +401,99 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 
 # {{{ partition_connection
 
-def make_partition_connection(bdry_conns, part_meshes):
+def make_partition_connection(tgt_conn, src_conn, i_src_part):
     """
-    Given a list of boundary restriction connections *volume_to_bdry_conn*,
+    Given a two boundary restriction connections *tgt_conn* and *src_conn*,
     return a :class:`DirectDiscretizationConnection` that performs data
     exchange across adjacent faces of different partitions.
 
-    :arg vol_to_bdry_conns: A list of *volume_to_bdry_conn* corresponding to
-                                a partition of a parent mesh.
+    :arg tgt_conn: A :class:`Discretization` for the target partition.
+    :arg src_conn: A :class:`Discretization` for the source partition.
+    :arg i_src_part: The partition number corresponding to *src_conn*.
 
-    :returns: A list of :class:`DirectDiscretizationConnection` corresponding to
-                each partition.
+    :returns: A :class:`DirectDiscretizationConnection` that performs data
+                exchange across faces in different partitions.
+
+    .. versionadded:: 2017.1
+
+    .. warning:: Interface is not final. Doesn't even work yet...........:(
     """
 
-    disc_conns = []
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
 
-    nparts = len(bdry_conns)
-    for i_tgt_part in range(nparts):
-        for i_src_part in range(nparts):
+    tgt_vol = tgt_conn.from_discr
+    src_vol = src_conn.from_discr
+    tgt_bdry = tgt_conn.to_discr
+    src_bdry = src_conn.to_discr
+    tgt_mesh = tgt_vol.mesh
+    src_mesh = src_vol.mesh
 
-            tgt_conn = bdry_conns[i_tgt_part][i_src_part]
-            src_conn = bdry_conns[i_src_part][i_tgt_part]
-            tgt_vol = tgt_conn.from_discr
-            src_vol = src_conn.from_discr
-            tgt_bdry = tgt_conn.to_discr
-            src_bdry = src_conn.to_discr
-            tgt_mesh = tgt_vol.mesh
-            src_mesh = src_vol.mesh
-            #tgt_mesh = part_meshes[i_tgt_part]
-            #src_mesh = part_meshes[i_src_part]
+    adj_grps = tgt_mesh.interpart_adj_groups
 
-            # Is this ok in a loop?
-            cl_context = tgt_vol.cl_context
-            with cl.CommandQueue(cl_context) as queue:
+    ntgt_groups = len(tgt_mesh.groups)
+    nsrc_groups = len(src_mesh.groups)
+    part_batches = ntgt_groups * [[]]
 
-                adj_grps = part_meshes[i_tgt_part].interpart_adj_groups
+    with cl.CommandQueue(tgt_vol.cl_context) as queue:
 
-                ntgt_groups = len(tgt_mesh.groups)
-                nsrc_groups = len(src_mesh.groups)
-                part_batches = ntgt_groups * [[]]
-                for i_tgt_grp, adj_parts in enumerate(adj_grps):
-                    if i_src_part not in adj_parts:
+        for i_tgt_grp, adj_parts in enumerate(adj_grps):
+            if i_src_part not in adj_parts:
+                # Skip because i_tgt_grp is not connected to i_src_part.
+                continue
+
+            adj = adj_parts[i_src_part]
+
+            i_tgt_faces = adj.element_faces
+            i_src_elems = adj.neighbors
+            i_src_faces = adj.neighbor_faces
+            i_src_grps = np.array([src_mesh.find_igrp(e)
+                                        for e in i_src_elems])
+            for i in range(len(i_src_elems)):
+                elem_base = src_mesh.groups[i_src_grps[i]].element_nr_base
+                i_src_elems[i] -= elem_base
+
+            for i_src_grp in range(nsrc_groups):
+
+                src_el_lookup = _make_el_lookup_table(queue, src_conn, i_src_grp)
+
+                for i_tgt_face in i_tgt_faces:
+
+                    index_flags = np.logical_and(i_src_grps == i_src_grp,
+                                                 i_tgt_faces == i_tgt_face)
+
+                    if True not in index_flags:
                         continue
 
-                    adj = adj_parts[i_src_part]
+                    vbc_tgt_grp_face_batch = _find_ibatch_for_face(
+                        tgt_conn.groups[i_tgt_grp].batches, i_tgt_face)
 
-                    i_tgt_faces = adj.element_faces
-                    i_src_elems = adj.neighbors
-                    i_src_faces = adj.neighbor_faces
-                    i_src_grps = np.array([src_mesh.find_igrp(e)
-                                                for e in i_src_elems])
-                    for i in range(len(i_src_elems)):
-                        #elem_base = part_meshes[i_src_part].groups[i_src_grps[i]].element_nr_base
-                        elem_base = src_mesh.groups[i_src_grps[i]].element_nr_base
-                        i_src_elems[i] -= elem_base
+                    tgt_bdry_element_indices = vbc_tgt_grp_face_batch.\
+                            to_element_indices.get(queue=queue)
 
-                    for i_src_grp in range(nsrc_groups):
-
-                        src_el_lookup = _make_el_lookup_table(queue,
-                                src_conn, i_src_grp)
-
-                        for i_tgt_face in i_tgt_faces:
-
-                            index_flags = np.logical_and(i_src_grps == i_src_grp,
-                                                         i_tgt_faces == i_tgt_face)
-
-                            if True not in index_flags:
-                                continue
-
-                            vbc_tgt_grp_face_batch = _find_ibatch_for_face(
-                                tgt_conn.groups[i_tgt_grp].batches, i_tgt_face)
-
-                            tgt_bdry_element_indices = vbc_tgt_grp_face_batch.\
-                                    to_element_indices.get(queue=queue)
-
-                            src_bdry_element_indices = src_el_lookup[
+                    src_bdry_element_indices = src_el_lookup[
                                                 i_src_elems[index_flags],
                                                 i_src_faces[index_flags]]
 
-                            # FIXME: I honestly have no idea why this helps.
-                            src_bdry_element_indices =\
-                                            np.sort(src_bdry_element_indices)
+                    # FIXME: I honestly have no idea why this helps.
+                    src_bdry_element_indices = np.sort(src_bdry_element_indices)
 
-                            print("tgt", i_tgt_part, tgt_bdry_element_indices)
-                            print("src", i_src_part, src_bdry_element_indices)
-                            print("-------------------")
+                    print("Attempting to connect elements")
+                    print(tgt_bdry_element_indices)
+                    print(src_bdry_element_indices)
 
-                            part_batches[i_tgt_grp].extend(
-                                    _make_cross_face_batches(queue,
-                                        tgt_bdry, src_bdry,
-                                        i_tgt_grp, i_src_grp,
-                                        tgt_bdry_element_indices,
-                                        src_bdry_element_indices))
+                    part_batches[i_tgt_grp].extend(_make_cross_face_batches(queue,
+                                                        tgt_bdry, src_bdry,
+                                                        i_tgt_grp, i_src_grp,
+                                                        tgt_bdry_element_indices,
+                                                        src_bdry_element_indices))
 
-            # Make one Discr connection for each partition.
-            disc_conns.append(DirectDiscretizationConnection(
-                    # Is this ok?
-                    from_discr=src_bdry,
-                    to_discr=tgt_bdry,
-                    groups=[
-                        DiscretizationConnectionElementGroup(batches=batches)
+    return DirectDiscretizationConnection(
+            from_discr=src_bdry,
+            to_discr=tgt_bdry,
+            groups=[DiscretizationConnectionElementGroup(batches=batches)
                         for batches in part_batches],
-                    is_surjective=True))
-
-    return disc_conns
+            is_surjective=True)
 
 # }}}
 
