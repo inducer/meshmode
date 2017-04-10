@@ -292,7 +292,7 @@ class Refiner(object):
                 nelements_in_grp += 1
         return (result, nelements_in_grp, element_mapping)
 
-    def refine_element(self, group_index, iel_grp, nelements_in_grp, nvertices, element_mapping, result_tuples, node_tuples, index_to_node_tuple, midpoints, midpoint_order):
+    def refine_element(self, group_index, iel_grp, nelements_in_grp, nvertices, element_mapping, tesselations, vertex_and_midpoint_tuples, midpoints, midpoint_order):
         from six.moves import range
         grp = self.last_mesh.groups[group_index]
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
@@ -330,18 +330,10 @@ class Refiner(object):
         grp = self.last_mesh.groups[group_index]
         element_vertices = grp.vertex_indices[iel_grp]
         dimension = self.last_mesh.groups[group_index].dim
-        #simplex
-        if isinstance(self.last_mesh.groups[group_index], SimplexElementGroup):
-            return self.refine_element(group_index, iel_grp, nelements_in_grp, nvertices,
-                    element_mapping, self.simplex_result, self.simplex_node_tuples,
-                    self.simplex_index_to_node_tuple, midpoints, midpoint_order
-                    )
-        #quad
-        elif isinstance(self.last_mesh.groups[group_index], TensorProductElementGroup):
-            return self.refine_element(group_index, iel_grp, nelements_in_grp, nvertices,
-                    element_mapping, self.quad_result, self.quad_node_tuples,
-                    self.quad_index_to_node_tuple, midpoints, midpoint_order
-                    )
+        return self.refine_element(group_index, iel_grp, nelements_in_grp, nvertices,
+                element_mapping, self.get_tesselations(grp),
+                self.get_vertex_and_midpoint_tuples(grp), midpoints, midpoint_order
+                )
 
     def get_elements_connected_to(self, result_groups, group_index, iel_base, iel_grp): 
         import copy
@@ -367,6 +359,17 @@ class Refiner(object):
         #quad
         elif isinstance(grp, TensorProductElementGroup):
             return self.quad_vertex_and_midpoint_tuples
+
+    def get_tesselations(self, grp):
+        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+        tesselation = None
+        if isinstance(grp, SimplexElementGroup):
+            tesselation = self._Tesselation(self.simplex_tesselations[grp.dim][1],
+                    self.simplex_tesselations[grp.dim][0])
+        elif isinstance(grp, TensorProductElementGroup):
+            tesselation = self._Tesselation(self.quad_tesselations[grp.dim][1],
+                    self.quad_tesselations[grp.dim][0])
+        return tesselation
 
 #TODO: erase below if not needed
 #    def update_coarsen_connectivity(self, coarsen_el, new_el_index, old_vertices, new_vertices, dimension, result, node_tuples, index_to_node_tuple):
@@ -647,15 +650,6 @@ class Refiner(object):
             return (grp.nelements + np.sum(refine_flags[iel_base:iel_base+grp.nelements]) *
                     (self.nelements_after_refining_element_in_grp(grp) - 1))
 
-        def get_tesselation(grp):
-            tesselation = None
-            if isinstance(grp, SimplexElementGroup):
-                tesselation = self._Tesselation(self.simplex_tesselations[grp.dim][1],
-                        self.simplex_tesselations[grp.dim][0])
-            elif isinstance(grp, TensorProductElementGroup):
-                tesselation = self._Tesselation(self.quad_tesselations[grp.dim][1],
-                        self.quad_tesselations[grp.dim][0])
-            return tesselation
         
         def get_midpoints_and_midpoint_order(grp, tesselation, midpoints_to_find):
             midpoints = None
@@ -720,7 +714,7 @@ class Refiner(object):
             nelements_in_grp = grp.nelements
             midpoints_to_find = [iel_grp for iel_grp in range(grp.nelements) if
                     refine_flags[iel_base+iel_grp]]
-            tesselation = get_tesselation(grp)
+            tesselation = self.get_tesselations(grp)
             (midpoints, midpoint_order) = get_midpoints_and_midpoint_order(grp, tesselation, midpoints_to_find)
             for iel_grp in range(grp.nelements):
                 if refine_flags[iel_base + iel_grp]:
