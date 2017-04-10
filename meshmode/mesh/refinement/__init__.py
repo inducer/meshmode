@@ -144,35 +144,38 @@ class Refiner(object):
 
     def node_tuple_to_vertex_index(self, vertices, dimension, vertex_and_midpoint_tuples):
         from six.moves import range
+        vertex_tuples = vertex_and_midpoint_tuples[dimension][0]
         node_tuple_to_vertex_index = {}
         for i in range(len(vertices)):
-            node_tuple_to_vertex_index[vertex_and_midpoint_tuples[dimension][0][i]] = vertices[i]
+            node_tuple_to_vertex_index[vertex_tuples[i]] = vertices[i]
         for i in range(len(vertices)):
             for j in range(i+1, len(vertices)):
                 vertex_i = vertices[i]
                 vertex_j = vertices[j]
-                indices_pair = (vertex_i, vertex_j) if vertex_i < vertex_j else (vertex_j, vertex_i)
-                if indices_pair in self.vertex_pair_to_midpoint: 
-                    midpoint_tuple = self.midpoint_of_node_tuples(index_to_node_tuple[dimension][i], 
-                            index_to_node_tuple[dimension][j])
-                    node_tuple_to_vertex_index[midpoint_tuple] = self.pair_map[indices_pair]
+                vertex_pair = (vertex_i, vertex_j) if vertex_i < vertex_j else (vertex_j, vertex_i)
+                if vertex_pair in self.vertex_pair_to_midpoint: 
+                    midpoint_tuple = self.midpoint_of_node_tuples(vertex_tuples[i], 
+                            vertex_tuples[j])
+                    node_tuple_to_vertex_index[midpoint_tuple] = self.vertex_pair_to_midpoint[vertex_pair]
         return node_tuple_to_vertex_index
     
     def next_vertices_and_dimension(self, vertices, dimension, tesselations, vertex_and_midpoint_tuples):
         from six.moves import range
         from itertools import combinations
+        node_tuples = tesselations[dimension][0]
+        result_tuples = tesselations[dimension][1]
         node_tuple_to_vertex_index = self.node_tuple_to_vertex_index(vertices, dimension, vertex_and_midpoint_tuples)
         #can tesselate current element
-        if len(node_tuple_to_vertex_index) == len(tesselations[dimension][0]):
+        if len(node_tuple_to_vertex_index) == len(node_tuples):
             result_vertices = []
             for subelement in result_tuples[dimension]:
                 current_subelement_vertices = []
                 for index in subelement:
-                    current_subelement_vertices.append(node_tuple_to_vertex_index[node_tuples[dimension][index]])
+                    current_subelement_vertices.append(node_tuple_to_vertex_index[node_tuples[index]])
                 result_vertices.append(current_subelement_vertices)
             return (result_vertices, dimension)
         #move to lower dimension
-        result_vertices = list(combinations(vertices, len(index_to_node_tuple[dimension-1])))
+        result_vertices = list(combinations(vertices, len(vertex_and_midpoint_tuples[dimension-1][0])))
         return (result_vertices, dimension-1)
 
     def split_rect_into_triangles(self, vertices, dimension):
@@ -210,10 +213,10 @@ class Refiner(object):
         else:
             (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, tesselations, vertex_and_midpoint_tuples)
             for cur_vertices in next_vertices:
-                self.remove_from_adjacent_set(element_index, cur_vertices, next_dimension, result_tuples, node_tuples, index_to_node_tuple)
+                self.remove_from_adjacent_set(element_index, cur_vertices, next_dimension, tesselations, vertex_and_midpoint_tuples)
             (simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
             for cur_vertices in simplex_vertices:
-                self.remove_from_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
+                self.remove_from_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_tesselations, self.simplex_vertex_and_midpoint_tuples)
 
     def add_to_adjacent_set(self, element_index, vertices, dimension, result_tuples, node_tuples, index_to_node_tuple):
         if len(vertices) == 1:
@@ -228,41 +231,42 @@ class Refiner(object):
                 self.add_to_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
 
     #creates midpoints in result_vertices and updates adjacent_set with midpoint vertices
-    def create_midpoints(self, group_index, iel_grp, element_vertices, nvertices, index_to_node_tuple, midpoints, midpoint_order):
+    def create_midpoints(self, group_index, iel_grp, element_vertices, nvertices, vertex_and_midpoint_tuples, midpoints, midpoint_order):
         from six.moves import range
         dimension = self.last_mesh.groups[group_index].dim
+        node_tuples = vertex_and_midpoint_tuples[dimension][0]
         midpoint_tuple_to_index = {}
         for i in range(len(element_vertices)):
             for j in range(i+1, len(element_vertices)):
-                index_i = element_vertices[i]
-                index_j = element_vertices[j]
-                indices_pair = (index_i, index_j) if index_i < index_j else (index_j, index_i)
-                if indices_pair in self.pair_map:
-                    midpoint_tuple = self.midpoint_of_node_tuples(index_to_node_tuple[dimension][i], 
-                            index_to_node_tuple[dimension][j])
+                vertex_i = element_vertices[i]
+                vertex_j = element_vertices[j]
+                vertex_pair = (vertex_i, vertex_j) if vertex_i < vertex_j else (vertex_j, vertex_i)
+                if vertex_pair in self.vertex_pair_to_midpoint:
+                    midpoint_tuple = self.midpoint_of_node_tuples(node_tuples[i], 
+                            node_tuples[j])
                     midpoint_tuple_to_index[midpoint_tuple] = self.pair_map[indices_pair]
 
         for i in range(len(element_vertices)):
             for j in range(i+1, len(element_vertices)):
-                index_i = element_vertices[i]
-                index_j = element_vertices[j]
-                indices_pair = (index_i, index_j) if index_i < index_j else (index_j, index_i)
-                midpoint_tuple = self.midpoint_of_node_tuples(index_to_node_tuple[dimension][i], 
-                        index_to_node_tuple[dimension][j])
-                if indices_pair not in self.pair_map:
+                midpoint_tuple = self.midpoint_of_node_tuples(node_tuples[i], 
+                        node_tuples[j])
+                vertex_i = element_vertices[i]
+                vertex_j = element_vertices[j]
+                vertex_pair = (vertex_i, vertex_j) if vertex_i < vertex_j else (vertex_j, vertex_i)
+                if vertex_pair not in self.vertex_pair_to_midpoint:
                     if midpoint_tuple not in midpoint_tuple_to_index and (i, j) in midpoint_order:
-                        self.pair_map[indices_pair] = nvertices
+                        self.vertex_pair_to_midpoint[vertex_pair] = nvertices
                         for k in range(len(self.last_mesh.vertices)):
                             self.vertices[k, nvertices] = \
                                     midpoints[iel_grp][k][midpoint_order[(i, j)]]
-                            (self.last_mesh.vertices[k, index_i] +
-                            self.last_mesh.vertices[k, index_j]) / 2.0
-                        #update adjacent_set
-                        self.adjacent_set.append(self.adjacent_set[index_i].intersection(self.adjacent_set[index_j]))
+                            (self.last_mesh.vertices[k, vertex_i] +
+                            self.last_mesh.vertices[k, vertex_j]) / 2.0
+                        # Update adjacent_set
+                        self.adjacent_set.append(self.adjacent_set[vertex_i].intersection(self.adjacent_set[vertex_j]))
                         nvertices += 1
                     else:
-                        self.pair_map[indices_pair] = midpoint_tuple_to_index[midpoint_tuple]
-                midpoint_tuple_to_index[midpoint_tuple] = self.pair_map[indices_pair]
+                        self.vertex_pair_to_midpoint[vertex_pair] = midpoint_tuple_to_index[midpoint_tuple]
+                midpoint_tuple_to_index[midpoint_tuple] = self.vertex_pair_to_midpoint[vertex_pair]
                     
         return nvertices
 
@@ -300,7 +304,7 @@ class Refiner(object):
         element_vertices = grp.vertex_indices[iel_grp]
         dimension = self.last_mesh.groups[group_index].dim
         self.remove_from_adjacent_set((group_index, iel_grp), element_vertices, dimension, tesselations, vertex_and_midpoint_tuples)
-        nvertices = self.create_midpoints(group_index, iel_grp, element_vertices, nvertices, index_to_node_tuple, midpoints, midpoint_order)
+        nvertices = self.create_midpoints(group_index, iel_grp, element_vertices, nvertices, vertex_and_midpoint_tuples, midpoints, midpoint_order)
         element_mapping.append([])
         (subelement_indices_and_vertices, nelements_in_grp, element_mapping) = self.create_elements(iel_grp, 
                 element_vertices, dimension, group_index, nelements_in_grp, element_mapping,
