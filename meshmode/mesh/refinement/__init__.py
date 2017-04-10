@@ -80,7 +80,7 @@ class Refiner(object):
 
         # Initialize adjacent_set to list of sets, one set for each vertex
         # so that each set contains all the elements that share that vertex
-        def initialize_adjacent_set()
+        def initialize_adjacent_set():
             self.adjacent_set = [set() for _ in range(mesh.nvertices)]
             for grp_index, grp in enumerate(mesh.groups):
                 for iel_grp in range(grp.nelements):
@@ -411,8 +411,8 @@ class Refiner(object):
                                 "group corresponding to group_index of last generated mesh")
                     for el in to_coarsen:
                         if el >= grp.nelements:
-                            raise ValueError("element index in coarsen_els is greater than or
-                                        equal to number of elements in group")
+                            raise ValueError("element index in coarsen_els is greater than or "
+                                        "equal to number of elements in group")
 
         # Generate list corresponding to each group, where each entry corresponding to an element is set to -1
         # if it shouldn't be coarsened, and a non-negative index (corresponding to each group to be coarsened together)
@@ -434,7 +434,7 @@ class Refiner(object):
                 if isinstance(grp, SimplexElementGroup):
                     nelements_in_grp = grp.nelements - len(coarsen_els[grp_index]) * (len(self.simplex_tesselations[grp.dim]) + 1)
                 elif isinstance(grp, TensorProductElementGroup):
-                    nelements_in_grp = grp.nelements - len(coarsen_els[grp_index]) * (len(self.quad_tesselations[grp.dim] + 1)
+                    nelements_in_grp = grp.nelements - len(coarsen_els[grp_index]) * (len(self.quad_tesselations[grp.dim] + 1))
                 groups.append(np.empty([nelements_in_grp, grp.vertex_indices.shape(-1)]), dtype=np.int32)
             return groups
 
