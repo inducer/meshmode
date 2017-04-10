@@ -59,18 +59,22 @@ logger = logging.getLogger(__name__)
 # FIXME: Mostly fails for dim = 3.
 @pytest.mark.parametrize("dim", [2])
 # FIXME: Mostly fails for multiple groups.
-@pytest.mark.parametrize("num_meshes", [1])
+@pytest.mark.parametrize("num_groups", [1])
 def test_partition_interpolation(ctx_getter, group_factory, dim,
-                                    num_parts, num_meshes):
+                                    num_parts, num_groups):
     cl_ctx = ctx_getter()
+    queue = cl.CommandQueue(cl_ctx)
     order = 4
     n = 5
 
+    def f(x):
+        return 0.1*cl.clmath.sin(30*x)
+
     from meshmode.mesh.generation import generate_warped_rect_mesh
     meshes = [generate_warped_rect_mesh(dim, order=order, n=n)
-                            for _ in range(num_meshes)]
+                            for _ in range(num_groups)]
 
-    if num_meshes > 1:
+    if num_groups > 1:
         from meshmode.mesh.processing import merge_disjoint_meshes
         mesh = merge_disjoint_meshes(meshes)
     else:
@@ -110,6 +114,15 @@ def test_partition_interpolation(ctx_getter, group_factory, dim,
 
             check_connection(connection)
 
+            bdry_x = src_conn.to_discr.nodes()[0].with_queue(queue)
+            if bdry_x.size != 0:
+                bdry_f = f(bdry_x)
+
+                bdry_f_2 = connection(queue, bdry_f)
+
+                err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
+                print(err)
+                assert err < 1e-13
 # }}}
 
 
