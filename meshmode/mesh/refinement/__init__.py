@@ -324,7 +324,7 @@ class Refiner(object):
                 result = result.union(self.elements_connected_to(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple))
         return result
     
-    def perform_refinement(self, group_index, iel_grp, nelements_in_grp, nvertices, element_mapping,
+    def do_refinement(self, group_index, iel_grp, nelements_in_grp, nvertices, element_mapping,
             midpoints, midpoint_order):
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
         grp = self.last_mesh.groups[group_index]
@@ -647,6 +647,57 @@ class Refiner(object):
             return (grp.nelements + np.sum(refine_flags[iel_base:iel_base+grp.nelements]) *
                     (self.nelements_after_refining_element_in_grp(grp) - 1))
 
+        def get_tesselation(grp):
+            tesselation = None
+            if isinstance(grp, SimplexElementGroup):
+                tesselation = self._Tesselation(self.simplex_tesselations[grp.dim][1],
+                        self.simplex_tesselations[grp.dim][0])
+            elif isinstance(grp, TensorProductElementGroup):
+                tesselation = self._Tesselation(self.quad_tesselations[grp.dim][1],
+                        self.quad_tesselations[grp.dim][0])
+            return tesselation
+        
+        def get_midpoints_and_midpoint_order(grp, tesselation, midpoints_to_find):
+            midpoints = None
+            midpoint_order = None
+            if isinstance(grp, SimplexElementGroup):
+                midpoints = self.simplex_resampler.get_midpoints(
+                        grp, tesselation, midpoints_to_find)
+                midpoint_order = self.simplex_resampler.get_vertex_pair_to_midpoint_order(grp.dim)
+            elif isinstance(grp, TensorProductElementGroup):
+                # TODO: Replace with resampler
+                num_midpoints = 0
+                for vertex in tesselation.ref_vertices:
+                    if 1 in vertex:
+                        num_midpoints += 1
+                midpoints = np.zeros((len(midpoints_to_find), len(self.last_mesh.vertices), 
+                    num_midpoints))
+                vertex_tuples = self.get_vertex_and_midpoint_tuples(grp)[grp.dim][0]
+                midpoint_order = {}
+                cur_el = 0
+                for iel_grp in range(grp.nelements):
+                    if refine_flags[iel_base+iel_grp]:
+                        cur = 0
+                        midpoint_tuple_to_index = set()
+                        for i in range(len(grp.vertex_indices[iel_grp])):
+                            for j in range(i+1, len(grp.vertex_indices[iel_grp])):
+                                midpoint_tuple = self.midpoint_of_node_tuples(
+                                        vertex_tuples[i],
+                                        vertex_tuples[j])
+                                if midpoint_tuple not in midpoint_tuple_to_index:
+                                    midpoint_tuple_to_index.add(midpoint_tuple)
+                                    for k in range(len(self.last_mesh.vertices)):
+                                        midpoints[cur_el,k,cur] = (self.last_mesh.vertices[
+                                            k, grp.vertex_indices[iel_grp][i]] + 
+                                            self.last_mesh.vertices[
+                                                k, grp.vertex_indices[iel_grp][j]]) / 2.0
+                                        midpoint_order[(i, j)] = cur
+                                    cur += 1
+                        cur_el += 1
+                midpoints = dict(zip(midpoints_to_find, midpoints))
+
+            return (midpoints, midpoint_order)
+
         # Create next generation vertices and groups arrays
         self.vertices = np.empty([len(self.last_mesh.vertices), get_next_gen_nvertices()])
         self.groups = []
@@ -665,56 +716,16 @@ class Refiner(object):
         # Do actual refinement
         for grp_index, grp in enumerate(self.last_mesh.groups):
             element_mapping = []
-            tesselation = None
-            midpoints = None
             iel_base = grp.element_nr_base
             nelements_in_grp = grp.nelements
             midpoints_to_find = [iel_grp for iel_grp in range(grp.nelements) if
                     refine_flags[iel_base+iel_grp]]
-            index_to_node_tuple = self.element_index_to_node_tuple(grp)
-            if isinstance(grp, SimplexElementGroup):
-                tesselation = self._Tesselation(
-                    self.simplex_result[grp.dim], self.simplex_node_tuples[grp.dim])
-                midpoints = self.simplex_resampler.get_midpoints(
-                        grp, tesselation, midpoints_to_find)
-                midpoint_order = self.simplex_resampler.get_vertex_pair_to_midpoint_order(grp.dim)
-            elif isinstance(grp, TensorProductElementGroup):
-                tesselation = self._Tesselation(
-                    self.quad_result[dimension], self.quad_node_tuples[dimension])
-                # TODO: Replace with resampler
-                num_midpoints = 0
-                for vertex in tesselation.ref_vertices:
-                    if 1 in vertex:
-                        num_midpoints += 1
-                midpoints = np.zeros((len(midpoints_to_find), len(self.last_mesh.vertices), 
-                    num_midpoints))
-                midpoint_order = {}
-                cur_el = 0
-                for iel_grp in range(grp.nelements):
-                    if refine_flags[iel_base+iel_grp]:
-                        cur = 0
-                        midpoint_tuple_to_index = set()
-                        for i in range(len(grp.vertex_indices[iel_grp])):
-                            for j in range(i+1, len(grp.vertex_indices[iel_grp])):
-                                midpoint_tuple = self.midpoint_of_node_tuples(
-                                        index_to_node_tuple[dimension][i],
-                                        index_to_node_tuple[dimension][j])
-                                if midpoint_tuple not in midpoint_tuple_to_index:
-                                    midpoint_tuple_to_index.add(midpoint_tuple)
-                                    for k in range(len(self.last_mesh.vertices)):
-                                        midpoints[cur_el,k,cur] = (self.last_mesh.vertices[
-                                            k, grp.vertex_indices[iel_grp][i]] + 
-                                            self.last_mesh.vertices[
-                                                k, grp.vertex_indices[iel_grp][j]]) / 2.0
-                                        midpoint_order[(i, j)] = cur
-                                    cur += 1
-                        cur_el += 1
-                midpoints = dict(zip(midpoints_to_find, midpoints))
-
+            tesselation = get_tesselation(grp)
+            (midpoints, midpoint_order) = get_midpoints_and_midpoint_order(grp, tesselation, midpoints_to_find)
             for iel_grp in range(grp.nelements):
                 if refine_flags[iel_base + iel_grp]:
                     (nelements_in_grp, nvertices, element_mapping) = \
-                    self.perform_refinement(grp_index, iel_grp, nelements_in_grp, 
+                    self.do_refinement(grp_index, iel_grp, nelements_in_grp, 
                             nvertices, element_mapping, midpoints, midpoint_order)
                 else:
                     for i in range(len(grp.vertex_indices[iel_grp])):
