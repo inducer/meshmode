@@ -168,7 +168,7 @@ class Refiner(object):
         #can tesselate current element
         if len(node_tuple_to_vertex_index) == len(node_tuples):
             result_vertices = []
-            for subelement in result_tuples[dimension]:
+            for subelement in result_tuples:
                 current_subelement_vertices = []
                 for index in subelement:
                     current_subelement_vertices.append(node_tuple_to_vertex_index[node_tuples[index]])
@@ -218,17 +218,17 @@ class Refiner(object):
             for cur_vertices in simplex_vertices:
                 self.remove_from_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_tesselations, self.simplex_vertex_and_midpoint_tuples)
 
-    def add_to_adjacent_set(self, element_index, vertices, dimension, result_tuples, node_tuples, index_to_node_tuple):
+    def add_to_adjacent_set(self, element_index, vertices, dimension, tesselations, vertex_and_midpoint_tuples):
         if len(vertices) == 1:
             if element_index not in self.adjacent_set[vertices[0]]:
                 self.adjacent_set[vertices[0]].add(element_index)
         else:
-            (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, result_tuples, node_tuples, index_to_node_tuple)
+            (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, tesselations, vertex_and_midpoint_tuples)
             for cur_vertices in next_vertices:
-                self.add_to_adjacent_set(element_index, cur_vertices, next_dimension, result_tuples, node_tuples, index_to_node_tuple)
+                self.add_to_adjacent_set(element_index, cur_vertices, next_dimension, tesselations, vertex_and_midpoint_tuples)
             (simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
             for cur_vertices in simplex_vertices:
-                self.add_to_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
+                self.add_to_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_tesselations, self.simplex_vertex_and_midpoint_tuples)
 
     #creates midpoints in result_vertices and updates adjacent_set with midpoint vertices
     def create_midpoints(self, group_index, iel_grp, element_vertices, nvertices, vertex_and_midpoint_tuples, midpoints, midpoint_order):
@@ -272,15 +272,16 @@ class Refiner(object):
 
     #returns element indices and vertices
     def create_elements(self, element_index, element_vertices, dimension, group_index, nelements_in_grp, 
-            element_mapping, result_tuples, node_tuples, index_to_node_tuple):
+            element_mapping, tesselations, vertex_and_midpoint_tuples):
+        (node_tuples, result_tuples) = tesselations[dimension]
         result = []
-        node_tuple_to_vertex_index = self.node_tuple_to_vertex_index(element_vertices, dimension, index_to_node_tuple)
-        for subelement_index, subelement in enumerate(result_tuples[dimension]):
+        node_tuple_to_vertex_index = self.node_tuple_to_vertex_index(element_vertices, dimension, vertex_and_midpoint_tuples)
+        for subelement_index, subelement in enumerate(result_tuples):
             if subelement_index == 0:
                 result_vertices = []
                 for i, index in enumerate(subelement):
                     
-                    cur_node_tuple = node_tuples[dimension][index]
+                    cur_node_tuple = node_tuples[index]
                     self.groups[group_index][element_index][i] = node_tuple_to_vertex_index[cur_node_tuple]
                     result_vertices.append(node_tuple_to_vertex_index[cur_node_tuple])
                 element_mapping[-1].append(element_index)
@@ -288,7 +289,7 @@ class Refiner(object):
             else:
                 result_vertices = []
                 for i, index in enumerate(subelement):
-                    cur_node_tuple = node_tuples[dimension][index]
+                    cur_node_tuple = node_tuples[index]
                     self.groups[group_index][nelements_in_grp][i] = node_tuple_to_vertex_index[cur_node_tuple]
                     result_vertices.append(node_tuple_to_vertex_index[cur_node_tuple])
                 element_mapping[-1].append(nelements_in_grp)
@@ -308,24 +309,25 @@ class Refiner(object):
         element_mapping.append([])
         (subelement_indices_and_vertices, nelements_in_grp, element_mapping) = self.create_elements(iel_grp, 
                 element_vertices, dimension, group_index, nelements_in_grp, element_mapping,
-                result_tuples, node_tuples, index_to_node_tuple)
+                tesselations, vertex_and_midpoint_tuples)
         for (index, vertices) in subelement_indices_and_vertices:
-            self.add_to_adjacent_set(index, vertices, dimension, result_tuples, node_tuples, index_to_node_tuple)
+            self.add_to_adjacent_set(index, vertices, dimension, tesselations, vertex_and_midpoint_tuples)
         return (nelements_in_grp, nvertices, element_mapping)
 
-    def elements_connected_to(self, element_index, vertices, dimension, result_tuples, node_tuples, index_to_node_tuple):
+    def elements_connected_to(self, element_index, vertices, dimension, tesselations, vertex_and_midpoint_tuples):
         from six.moves import range
         result = set()
         if len(vertices) == 1:
             if element_index in self.adjacent_set[vertices[0]]:
                 result = result.union(self.adjacent_set[vertices[0]])
         else:
-            (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, result_tuples, node_tuples, index_to_node_tuple)
+            (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, tesselations, vertex_and_midpoint_tuples)
             for cur_vertices in next_vertices:
-                result = result.union(self.elements_connected_to(element_index, cur_vertices, next_dimension, result_tuples, node_tuples, index_to_node_tuple))
+                result = result.union(self.elements_connected_to(element_index, cur_vertices, next_dimension, tesselations, vertex_and_midpoint_tuples))
             (simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
             for cur_vertices in simplex_vertices:
-                result = result.union(self.elements_connected_to(element_index, cur_vertices, simplex_dimension, self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple))
+                result = result.union(self.elements_connected_to(element_index, cur_vertices, 
+                    simplex_dimension, self.simplex_tesselations, self.simplex_vertex_and_midpoint_tuples))
         return result
     
     def do_refinement(self, group_index, iel_grp, nelements_in_grp, nvertices, element_mapping,
@@ -345,14 +347,9 @@ class Refiner(object):
         grp = result_groups[group_index]
         element_vertices = copy.deepcopy(grp[iel_grp])
         dimension = self.last_mesh.groups[group_index].dim
-        #simplex
-        if isinstance(self.last_mesh.groups[group_index], SimplexElementGroup):
-            return self.elements_connected_to((group_index, iel_grp), element_vertices, dimension,
-                    self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
-        #quad
-        elif isinstance(self.last_mesh.groups[group_index], TensorProductElementGroup):
-            return self.elements_connected_to((group_index, iel_grp), element_vertices, dimension,
-                    self.quad_result, self.quad_node_tuples, self.quad_index_to_node_tuple)
+        return self.elements_connected_to((group_index, iel_grp), element_vertices, dimension,
+                self.get_tesselations(self.last_mesh.groups[group_index]), 
+                self.get_vertex_and_midpoint_tuples(self.last_mesh.groups[group_index]))
 
     # Get vertex and midpoint tuples for a group
     def get_vertex_and_midpoint_tuples(self, grp):
@@ -366,7 +363,7 @@ class Refiner(object):
 
     def get_tesselations(self, grp):
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-        tesselation = None
+        tesselations = None
         if isinstance(grp, SimplexElementGroup):
             tesselations = self.simplex_tesselations
         elif isinstance(grp, TensorProductElementGroup):
