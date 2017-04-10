@@ -44,83 +44,59 @@ class Refiner(object):
 
     # {{{ constructor
 
-    #reorder node tuples array so that only one coordinate changes between adjacent indices
-    def reorder(self, arr):
-        from six.moves import range
-        res = []
-        res.append(arr.pop(0))
-        while len(arr) > 0:
-            for i in range(len(arr)):
-                count = 0
-                for j in range(len(arr[i])):
-                    if res[len(res)-1][j] != arr[i][j]:
-                        count += 1
-                if count == 1:
-                    res.append(arr.pop(i))
-                    break
-        return res
-
     def __init__(self, mesh):
-        from six.moves import range
-        from meshmode.mesh.tesselate import tesselatetet, tesselatetri, tesselatesquare, tesselatesegment, tesselatepoint, tesselatecube
         from meshmode.mesh.refinement.resampler import SimplexResampler
+
+        # Generate dimension-parameterized tesselations for refinement
+        def generate_tesselations():
+            from meshmode.mesh.tesselate import (
+                    tesselatetet, tesselatetri, 
+                    tesselatesquare, tesselatesegment, 
+                    tesselatepoint, tesselatecube)
+
+            # Generate lists of tuples corresponding to original vertices and
+            # corresponding to midpoints for a given list of tesselations
+            def generate_vertex_and_midpoint_tuples_for_tesselation(tesselations):
+                vertex_and_midpoint_tuples = []
+                for (node_tuples, _) in tesselations:
+                    vertex_tuples = [node_tuple for node_tuple in node_tuples
+                            if 1 not in node_tuple]
+                    midpoint_tuples = [node_tuple for node_tuple in node_tuples
+                            if 1 in node_tuple]
+                    vertex_and_midpoint_tuples.append((vertex_tuples, midpoint_tuples))
+                return vertex_and_midpoint_tuples
+
+                self.simplex_tesselations = [
+                        tesselatepoint(), tesselatesegment(), 
+                        tesselatetri(),tesselatetet()]
+                self.quad_tesselations = [
+                        tesselatepoint(), tesselatesegment(),
+                        tesselatesquare(), tesselatecube()]
+
+                self.simplex_vertex_and_midpoint_tuples = generate_vertex_and_midpoint_tuples_for_tesselation(
+                        self.simplex_tesselations)
+                self.quad_vertex_and_midpoint_tuples = generate_vertex_and_midpoint_tuples_for_tesselation(
+                        self.quad_tesselations)
+
+        # Initialize adjacent_set to list of sets, one set for each vertex
+        # so that each set contains all the elements that share that vertex
+        def initialize_adjacent_set()
+            self.adjacent_set = [set() for _ in range(mesh.nvertices)]
+            for grp_index, grp in enumerate(mesh.groups):
+                for iel_grp in range(grp.nelements):
+                    vertex_indices = grp.vertex_indices[iel_grp]
+                    for vertex in vertex_indices:
+                        self.adjacent_set[vertex].add((grp_index, iel_grp))
+             
+        generate_tesselations()
         self.simplex_resampler = SimplexResampler()
-        self.pair_map = {}
+        self.vertex_pair_to_midpoint = {}
         self.groups = []
         self.group_refinement_records = []
-        tri_node_tuples, tri_result = tesselatetri()
-        tet_node_tuples, tet_result = tesselatetet()
-        segment_node_tuples, segment_result = tesselatesegment()
-        square_node_tuples, square_result = tesselatesquare()
-        cube_node_tuples, cube_result = tesselatecube()
-        point_node_tuples, point_result = tesselatepoint()
-        self.simplex_node_tuples = [point_node_tuples, segment_node_tuples, tri_node_tuples, tet_node_tuples]
-        # Dimension-parameterized tesselations for refinement
-        self.simplex_result = [point_result, segment_result, tri_result, tet_result]
-        self.quad_node_tuples = [point_node_tuples, segment_node_tuples, square_node_tuples, cube_node_tuples]
-        #print(self.quad_node_tuples)
-        self.quad_result = [point_result, segment_result, square_result, cube_result]
+
         self.last_mesh = mesh
+        initialize_adjacent_set()
 
-        nvertices = len(mesh.vertices[0])
-        self.adjacent_set = [set() for _ in range(nvertices)]
-        # {{{ initialization
-
-        for grp_index, grp in enumerate(mesh.groups):
-            iel_base = grp.element_nr_base
-            for iel_grp in range(grp.nelements):
-                vert_indices = grp.vertex_indices[iel_grp]
-                for i in range(len(vert_indices)):
-                    self.adjacent_set[vert_indices[i]].add((grp_index, iel_grp))
-        # }}}
-        self.simplex_index_to_node_tuple = []
-        self.simplex_index_to_midpoint_tuple = []
-        self.quad_index_to_node_tuple = []
-        self.quad_index_to_midpoint_tuple = []
-        #put tuples that don't have a 1 in index_to_node_tuple, and put those that do in index_to_midpoint_tuple
-        for d in range(4):
-            cur_simplex_index_to_node_tuple = []
-            cur_simplex_index_to_midpoint_tuple = []
-            cur_quad_index_to_node_tuple = []
-            cur_quad_index_to_midpoint_tuple = []
-            if self.simplex_node_tuples[d] is not None:
-                for i in range(len(self.simplex_node_tuples[d])):
-                    if 1 not in self.simplex_node_tuples[d][i]:
-                        cur_simplex_index_to_node_tuple.append(self.simplex_node_tuples[d][i])
-                    else:
-                        cur_simplex_index_to_midpoint_tuple.append(self.simplex_node_tuples[d][i])
-            if self.quad_node_tuples[d] is not None:
-                for i in range(len(self.quad_node_tuples[d])):
-                    if 1 not in self.quad_node_tuples[d][i]:
-                        cur_quad_index_to_node_tuple.append(self.quad_node_tuples[d][i])
-                    else:
-                        cur_quad_index_to_midpoint_tuple.append(self.quad_node_tuples[d][i])
-            self.simplex_index_to_node_tuple.append(cur_simplex_index_to_node_tuple)
-            self.simplex_index_to_midpoint_tuple.append(cur_simplex_index_to_midpoint_tuple)
-            self.quad_index_to_node_tuple.append(cur_quad_index_to_node_tuple)
-            self.quad_index_to_midpoint_tuple.append(cur_quad_index_to_midpoint_tuple)
-        #for i in range(len(self.quad_index_to_node_tuple)):
-            #self.quad_index_to_node_tuple[i] = self.reorder(self.quad_index_to_node_tuple[i])
 
     # }}}
 
@@ -393,191 +369,215 @@ class Refiner(object):
         elif isinstance(grp, TensorProductElementGroup):
             return self.quad_index_to_node_tuple
 
-    def group_index(self, el):
-        for grp_index, grp in enumerate(self.last_mesh.groups):
-            iel_base = grp.element_nr_base
-            if iel_base > el:
-                return grp_index - 1
-        return len(self.last_mesh.groups)-1
+#TODO: erase below if not needed
+#    def update_coarsen_connectivity(self, coarsen_el, new_el_index, old_vertices, new_vertices, dimension, result, node_tuples, index_to_node_tuple):
+#        from six.moves import range
+#        for el_index, el in enumerate(coarsen_el):
+#            self.remove_from_adjacent_set(el, old_vertices[el_index], dimension, result, node_tuples, index_to_node_tuple)
+#        #remove midpoints from pair_map
+#        for i in range(len(new_vertices)):
+#            for j in range(i+1, len(new_vertices)):
+#                vi = new_vertices[i]
+#                vj = new_vertices[j]
+#                indices_pair = (vi, vj) if vi < vj else (vj, vi)
+#                if indices_pair in self.pair_map:
+#                    del self.pair_map[indices_pair]
+#        self.add_to_adjacent_set(new_el_index, new_vertices, dimension, result, node_tuples, index_to_node_tuple)
+#
+#    def update_not_to_coarsen_connectivity(self, old_index, new_index, old_vertices, new_vertices, dimension, result, node_tuples, index_to_node_tuple):
+#        self.remove_from_adjacent_set(old_index, old_vertices, dimension, result, node_tuples, index_to_node_tuple)
+#        self.add_to_adjacent_set(new_index, new_vertices, dimension, result, node_tuples, index_to_node_tuple)
+#
 
-    def update_coarsen_connectivity(self, coarsen_el, new_el_index, old_vertices, new_vertices, dimension, result, node_tuples, index_to_node_tuple):
-        from six.moves import range
-        for el_index, el in enumerate(coarsen_el):
-            self.remove_from_adjacent_set(el, old_vertices[el_index], dimension, result, node_tuples, index_to_node_tuple)
-        #remove midpoints from pair_map
-        for i in range(len(new_vertices)):
-            for j in range(i+1, len(new_vertices)):
-                vi = new_vertices[i]
-                vj = new_vertices[j]
-                indices_pair = (vi, vj) if vi < vj else (vj, vi)
-                if indices_pair in self.pair_map:
-                    del self.pair_map[indices_pair]
-        self.add_to_adjacent_set(new_el_index, new_vertices, dimension, result, node_tuples, index_to_node_tuple)
-
-    def update_not_to_coarsen_connectivity(self, old_index, new_index, old_vertices, new_vertices, dimension, result, node_tuples, index_to_node_tuple):
-        self.remove_from_adjacent_set(old_index, old_vertices, dimension, result, node_tuples, index_to_node_tuple)
-        self.add_to_adjacent_set(new_index, new_vertices, dimension, result, node_tuples, index_to_node_tuple)
-
+    # coarsen_els[group_index][i] is a list of elements to be coarsened together, where the element indices are
+    # local to the element group
     def coarsen(self, coarsen_els):
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-        from six.moves import range
         import copy
-        grp_nelements_to_remove = {}
-        self.groups = []
-        new_vertices = set()
-        for to_coarsen in coarsen_els:
-            vertices_seen = {}
-            grp_index = self.group_index(to_coarsen[0])
-            grp = self.last_mesh.groups[grp_index]
-            if grp_index not in grp_nelements_to_remove:
-                grp_nelements_to_remove[grp_index] = 0
-            if isinstance(grp, SimplexElementGroup):
-                grp_nelements_to_remove[grp_index] += len(self.simplex_result[grp.dim]) - 1
-            elif isinstance(grp, TensorProductElementGroup):
-                grp_nelements_to_remove[grp_index] += len(self.quad_result[grp.dim]) - 1
-            for el in to_coarsen:
-                vertex_indices = grp.vertex_indices[el]
-                for i in vertex_indices:
-                    if i not in vertices_seen:
-                        vertices_seen[i] = 0
-                    vertices_seen[i] += 1
-            for vertex in vertices_seen:
-                if vertices_seen[vertex] == 1:
-                    new_vertices.add(vertex)
-        to_coarsen_groups = []
-        totalnelements = 0
-        for grp_index, grp in enumerate(self.last_mesh.groups):
-            nelements = grp.nelements
-            to_coarsen_groups.append(np.zeros([nelements], dtype=np.int32))
-            for el in range(nelements):
-                to_coarsen_groups[grp_index][el] = -1
-            if grp_index in grp_nelements_to_remove:
-                nelements -= grp_nelements_to_remove[grp_index]
-            self.groups.append(np.empty([nelements, len(grp.vertex_indices[0])], dtype=np.int32))
-            totalnelements += nelements
-        for to_coarsen_index, to_coarsen in enumerate(coarsen_els):
-            grp_index = self.group_index(to_coarsen[0])
-            grp = self.last_mesh.groups[grp_index]
-            iel_base = grp.element_nr_base
-            for el in to_coarsen:
-                to_coarsen_groups[grp_index][el-iel_base] = to_coarsen_index
-        for grp_index, grp in enumerate(self.last_mesh.groups):
-            for i in range(len(grp.vertex_indices)):
-                if to_coarsen_groups[grp_index][i] == -1:
-                    for vertex in grp.vertex_indices[i]:
-                        new_vertices.add(vertex)
-        nvertices = len(new_vertices)
-        self.vertices = np.empty([len(self.last_mesh.vertices), nvertices])
-        vertex_mapping = {}
-        for i in range(len(self.last_mesh.vertices)):
-            count = 0
-            for j in range(len(self.last_mesh.vertices[i])):
-                if j not in new_vertices:
-                    count += 1
+
+        def check_coarsen_els_format():
+            if len(coarsen_els) != len(self.last_mesh.groups):
+                raise ValueError("length of coarsen_els does not match "
+                        "group count of last generated mesh")
+
+            for grp_index, grp in enumerate(self.last_mesh.groups):
+                for to_coarsen in coarsen_els[grp_index]:
+                    if (isinstance(grp, SimplexElementGroup) and \
+                            len(to_coarsen) != len(self.simplex_tesselations[grp.dim][1]))\
+                    or (isinstance(grp, TensorProductElementGroup) and \
+                            len(to_coarsen) != len(self.quad_tesselations[grp.dim][1])):
+                        raise ValueError("length of coarsen_els[group_index][i] does not match "
+                                "number of elements resulting from a split of an element in the "
+                                "group corresponding to group_index of last generated mesh")
+                    for el in to_coarsen:
+                        if el >= grp.nelements:
+                            raise ValueError("element index in coarsen_els is greater than or
+                                        equal to number of elements in group")
+
+        # Generate list corresponding to each group, where each entry corresponding to an element is set to -1
+        # if it shouldn't be coarsened, and a non-negative index (corresponding to each group to be coarsened together)
+        # if it should be coarsened
+        def generate_to_coarsen_groups():
+            to_coarsen_groups = []
+            for grp_index, grp in enumerate(self.last_mesh.groups):
+                to_coarsen_group = np.empty([grp.nelements], dtype=np.int32)
+                to_coarsen_group.fill(-1)
+                for to_coarsen_index, to_coarsen in enumerate(coarsen_els[grp_index]):
+                    for el in to_coarsen:
+                        to_coarsen_group[el] = to_coarsen_index
+                to_coarsen_groups.append(to_coarsen_group)
+            return to_coarsen_groups
+
+        def generate_empty_groups():
+            groups = []
+            for grp_index, grp in enumerate(self.last_mesh.groups):
+                if isinstance(grp, SimplexElementGroup):
+                    nelements_in_grp = grp.nelements - len(coarsen_els[grp_index]) * (len(self.simplex_tesselations[grp.dim]) + 1)
+                elif isinstance(grp, TensorProductElementGroup):
+                    nelements_in_grp = grp.nelements - len(coarsen_els[grp_index]) * (len(self.quad_tesselations[grp.dim] + 1)
+                groups.append(np.empty([nelements_in_grp, grp.vertex_indices.shape(-1)]), dtype=np.int32)
+            return groups
+
+        # Generate set containing only the vertex indices of the vertices in the new coarsened mesh
+        # and ignore vertices that will not appear in coarsened mesh
+        def generate_vertex_indices_after_coarsening(to_coarsen_groups):
+            vertex_indices_after_coarsening = set()
+            # Add vertices of elements resulting from coarsening,
+            # i.e., vertices that only appear once in the group of elements
+            # to be coarsened together
+            for grp_index, grp in enumerate(self.last_mesh.groups):
+                for to_coarsen in coarsen_group[grp_index]:
+                    for el in to_coarsen:
+                        times_vertex_seen = {}
+                        for vertex in grp.vertex_indices[el]:
+                            if vertex not in times_vertex_seen:
+                                times_vertex_seen[vertex] = 0
+                            times_vertex_seen[vertex] += 1
+                        for vertex in times_vertex_seen:
+                            if times_vertex_seen[vertex] == 1:
+                                vertex_indices_after_coarsening.add(vertex)
+
+            # Add vertices of elements not being coarsened
+            for grp_index, grp in enumerate(self.last_mesh.groups):
+                for el in range(len(grp.nelements)):
+                    if to_coarsen_groups[grp_index][el] == -1:
+                        for vertex in grp.vertex_indices[el]:
+                            vertex_indices_after_coarsening.add(vertex)
+            return vertex_indices_after_coarsening
+
+        # Generate vertices array with vertices copied from last mesh, and
+        # create a mapping from the vertex index in the last mesh to the new
+        # vertex index after coarsening
+        def generate_vertices_and_vertex_mapping(vertex_indices_after_coarsening):
+            self.vertices = np.empty([len(self.last_mesh.vertices), 
+                len(vertex_indices_after_coarsening)])
+            vertex_mapping = {}
+            nvertices_to_ignore = 0
+            for vertex_index in range(self.last_mesh.nvertices):
+                if vertex_index not in vertex_indices_after_coarsening:
+                    nvertices_to_ignore += 1
                 else:
-                    self.vertices[i, j-count] = self.last_mesh.vertices[i, j]
-                vertex_mapping[j] = j-count
-        coarsen_el_vertices = {}
-        coarsen_el_new_index = {}
+                    self.vertices[:, vertex_index-nvertices_to_ignore] = self.last_mesh.vertices[:, vertex_index]
+                    vertex_mapping[vertex_index] = vertex_index-nvertices_to_ignore
+            return vertex_mapping
+            
+        check_coarsen_els_format()
+        to_coarsen_groups = generate_to_coarsen_groups()
+        self.groups = generate_empty_groups()
+        vertex_indices_after_coarsening = generate_vertex_indices_after_coarsening(to_coarsen_groups)
+        vertex_mapping = generate_vertices_and_vertex_mapping(vertex_indices_after_coarsening)
+        coarsen_el_mapping = {}
         element_mapping = {}
-        global_cur_index = 0
+
         for grp_index, grp in enumerate(self.last_mesh.groups):
+
             iel_base = grp.element_nr_base
-            cur_index = 0
+            new_iel_grp = 0
             seen_coarsen = set()
-            for el in range(grp.nelements):
-                coarsen_index = to_coarsen_groups[grp_index][el]
+
+            for iel_grp in range(grp.nelements):
+
+                coarsen_index = to_coarsen_groups[grp_index][iel_grp]
+
+                # If element is not to be coarsened, copy it to new position (grp_index, new_iel_grp)
                 if coarsen_index == -1:
-                    element_mapping[iel_base+el] = global_cur_index
-                    for vertex_index, vertex in enumerate(grp.vertex_indices[el]):
-                        self.groups[grp_index][cur_index][vertex_index] = vertex_mapping[vertex]
-                    #if isinstance(grp, SimplexElementGroup):
-                    #    self.update_not_to_coarsen_connectivity(iel_base+el, global_cur_index, grp.vertex_indices[el], 
-                    #            self.groups[grp_index][cur_index], grp.dim, self.simplex_result, 
-                    #            self.simplex_node_tuples, self.simplex_index_to_node_tuple)
-                    #elif isinstance(grp, TensorProductElementGroup):
-                    #    self.update_not_to_coarsen_connectivity(iel_base+el, global_cur_index, grp.vertex_indices[el], 
-                    #            self.groups[grp_index][cur_index], grp.dim, self.quad_result, 
-                    #            self.quad_node_tuples, self.quad_index_to_node_tuple)
-                    cur_index += 1
-                    global_cur_index += 1
+                    element_mapping[(grp_index, iel_grp)] = (grp_index, new_iel_grp)
+                    for vertex_index, vertex in enumerate(grp.vertex_indices[iel_grp]):
+                        self.groups[grp_index][new_iel_grp][vertex_index] = vertex_mapping[vertex]
+                    new_iel_grp += 1
+
+                # If this is the first seen element of a collection of elements to be coarsened together, coarsen it
+                # and put resulting element into position (grp_index, new_iel_grp)
                 elif coarsen_index not in seen_coarsen:
                     seen_coarsen.add(coarsen_index)
-                    coarsen_el_new_index[coarsen_index] = global_cur_index
-                    coarsen_el_vertices[coarsen_index] = []
-                    vertices = {}
+                    coarsen_el_mapping[(grp_index, coarsen_index)] = (grp_index, new_iel_grp)
+
+                    # Maintain vertex index local to element, and count of vertex
+                    # Have to maintain order of vertices to maintain orientation
+                    vertex_to_index_and_count = {}
                     cur_vertex_index = 0
-                    for coarsen_el in coarsen_els[coarsen_index]:
-                        for i in grp.vertex_indices[coarsen_el]:
-                            if i not in vertices:
-                                vertices[i] = [cur_vertex_index, 0]
+                    for coarsen_el in coarsen_els[grp_index][coarsen_index]:
+                        for vertex in grp.vertex_indices[coarsen_el]:
+                            if vertex not in vertex_to_index_and_count:
+                                vertex_to_index_and_count[vertex] = [cur_vertex_index, 0]
                                 cur_vertex_index += 1
-                            vertices[i][1] += 1
-                    new_el_vertices = []
-                    for vertex in vertices:
-                        if vertices[vertex][1] == 1:
-                            new_el_vertices.append((vertices[vertex][0], vertex)) 
+                            vertex_to_index_and_count[vertex][1] += 1
+                    new_el_vertices = [(vertex_to_index_and_count[vertex][0], vertex) for
+                            vertex in vertex_to_index_and_count if vertices[vertex][1] == 1]
+
+                    # Retrieve original order
                     new_el_vertices.sort()
-                    cur_vertex_index = 0
-                    for i in range(len(new_el_vertices)):
-                        for j in range(i+1, len(new_el_vertices)):
-                            vi = new_el_vertices[i][1]
-                            vj = new_el_vertices[j][1]
-                            indices_pair = (vi, vj) if vi < vj else (vj, vi)
-                            if indices_pair in self.pair_map and (self.pair_map[indices_pair] not in new_vertices):
-                                del self.pair_map[indices_pair]
-                    for (index, vertex) in new_el_vertices:
-                        coarsen_el_vertices[coarsen_index].append(vertex)
-                        self.groups[grp_index][cur_index][cur_vertex_index] = vertex_mapping[vertex]
-                        cur_vertex_index += 1
-                    cur_index += 1
-                    global_cur_index += 1
+
+                    # Add element to new groups
+                    for index_of_vertex, (_, vertex) in enumerate(new_el_vertices):
+                        self.groups[grp_index][new_iel_grp][index_of_vertex] = vertex_mapping[vertex]
+
+                    #TODO: below is probably unnecessary
+                    # Remove vertices that don't appear in new mesh from vertex_pair_to_midpoint
+                    #for i in range(len(new_el_vertices)):
+                    #    for j in range(i+1, len(new_el_vertices)):
+                    #        vertex_i = new_el_vertices[i][1]
+                    #        vertex_j = new_el_vertices[j][1]
+                    #        vertex_pair = (vertex_i, vertex_j) if vertex_i < vertex_j else (vertex_j, vertex_i)
+
+                    #        # Midpoint of resulting vertices of element after coarsening should be in vertex_pair_to_midpoint
+                    #        assert(vertex_pair in self.vertex_pair_to_midpoint)
+
+                    #        if (vertex_pair in self.vertex_pair_to_midpoint) and (
+                    #                self.vertex_pair_to_midpoint[vertex_pair] in vertex_indices_after_coarsening):
+                    #            del self.vertex_pair_to_midpoint[vertex_pair]
+
+                    new_iel_grp += 1
+
                 if coarsen_index != -1:
-                    element_mapping[iel_base + el] = coarsen_el_new_index[coarsen_index]
-        new_pair_map = {}
-        for (v1, v2) in self.pair_map:
-            v3 = self.pair_map[(v1, v2)]
-            assert (v1 in vertex_mapping) and (v2 in vertex_mapping) and (v3 in vertex_mapping)
-            nv1 = vertex_mapping[v1]
-            nv2 = vertex_mapping[v2]
-            nv3 = vertex_mapping[self.pair_map[(v1, v2)]]
-            new_pair_map[(nv1, nv2)] = nv3
-        self.pair_map = new_pair_map
+                    element_mapping[(grp_index, iel_grp)] = coarsen_el_mapping[(grp_index, coarsen_index)]
+
+        # Generate updated vertex_pair_to_midpoint
+        new_vertex_pair_to_midpoint = {}
+        for (vertex_1, vertex_2) in self.vertex_pair_to_midpoint:
+            midpoint = self.vertex_pair_to_midpoint[(vertex_1, vertex_2)]
+
+            assert (vertex_1 in vertex_mapping) and (
+                    vertex_2 in vertex_mapping) and (midpoint in vertex_mapping)
+
+            new_vertex_1 = vertex_mapping[vertex_1]
+            new_vertex_2 = vertex_mapping[vertex_2]
+            new_midpoint = vertex_mapping[midpoint]
+
+            if (midpoint in vertex_indices_after_coarsening):
+                new_vertex_pair_to_midpoint[(new_vertex_1, new_vertex_2)] = new_midpoint
+
+        self.vertex_pair_to_midpoint = new_vertex_pair_to_midpoint
+
+        nvertices = len(vertex_indices_after_coarsening)
+
+        # Generate updated adjacent_set
         new_adjacent_set = [set() for _ in range(nvertices)]
-        for i in range(len(self.adjacent_set)):
-            if i in new_vertices:
-                cur_set = set()
-                for el in self.adjacent_set[i]:
-                    cur_set.add(element_mapping[el])
-                new_adjacent_set[vertex_mapping[i]] = cur_set
+        for vertex, adjacent in enumerate(self.adjacent_set):
+            if vertex in vertex_indices_after_coarsening:
+                for (grp_index, iel_grp) in adjacent:
+                    new_adjacent_set[vertex_mapping[vertex]].add((grp_index, element_mapping[el]))
         self.adjacent_set = new_adjacent_set
-        #global_index = 0
-#        for grp_index in range(len(self.groups)):
-#            for el in range(len(self.groups[grp_index])):
-#                cur_vertices = copy.deepcopy(self.groups[grp_index][el])
-#                print('verts', cur_vertices)
-#                if isinstance(self.last_mesh.groups[grp_index], SimplexElementGroup):
-#                    self.add_to_adjacent_set(global_index, cur_vertices, self.last_mesh.groups[grp_index].dim,
-#                            self.simplex_result, self.simplex_node_tuples, self.simplex_index_to_node_tuple)
-#                elif isinstance(self.last_mesh.groups[grp_index], TensorProductElementGroup):
-#                    self.add_to_adjacent_set(global_index, cur_vertices, self.last_mesh.groups[grp_index].dim,
-#                            self.quad_result, self.quad_node_tuples, self.quad_index_to_node_tuple)
-#                global_index += 1
-#
-        #for coarsen_index, to_coarsen in enumerate(coarsen_els):
-        #    grp_index = self.group_index(to_coarsen[0])
-        #    coarsen_vertex_indices = []
-        #    grp = self.last_mesh.groups[grp_index]
-        #    for el in to_coarsen:
-        #        coarsen_vertex_indices.append(copy.deepcopy(grp.vertex_indices[el]))
-        #    if isinstance(grp, SimplexElementGroup):
-        #        self.update_coarsen_connectivity(to_coarsen, coarsen_el_new_index[coarsen_index], coarsen_vertex_indices,
-        #                coarsen_el_vertices[coarsen_index], grp.dim, self.simplex_result, 
-        #                self.simplex_node_tuples, self.simplex_index_to_node_tuple)
-        #    elif isinstance(grp, TensorProductElementGroup):
-        #        self.update_coarsen_connectivity(to_coarsen, coarsen_el_new_index[coarsen_index], coarsen_vertex_indices,
-        #                coarsen_el_vertices[coarsen_index], grp.dim, self.quad_result, 
-        #                self.quad_node_tuples, self.quad_index_to_node_tuple)
 
         grp = []
         for grp_index, group in enumerate(self.groups):
@@ -592,15 +592,13 @@ class Refiner(object):
         self.last_mesh = Mesh(
                 self.vertices, grp,
                 nodal_adjacency=self.generate_nodal_adjacency(
-                    totalnelements, nvertices, self.groups),
+                    nvertices, self.groups),
                 vertex_id_dtype=self.last_mesh.vertex_id_dtype,
                 element_id_dtype=self.last_mesh.element_id_dtype)
         return self.last_mesh
 
     def refine(self, refine_flags):
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-        from six.moves import range
-        print(self.last_mesh.groups[0].vertex_indices[0])
         """
         :arg refine_flags: a :class:`numpy.ndarray` of dtype bool of length ``mesh.nelements``
             indicating which elements should be split.
@@ -611,7 +609,7 @@ class Refiner(object):
                     "element count of last generated mesh")
 
         #vertices and groups for next generation
-        nvertices = len(self.last_mesh.vertices[0])
+        nvertices = self.last_mesh.nvertices
         self.groups = []
 
         midpoints_to_find = []
@@ -769,7 +767,7 @@ class Refiner(object):
         self.last_mesh = Mesh(
                 self.vertices, grp,
                 nodal_adjacency=self.generate_nodal_adjacency(
-                    totalnelements, nvertices, self.groups),
+                    nvertices, self.groups),
                 vertex_id_dtype=self.last_mesh.vertex_id_dtype,
                 element_id_dtype=self.last_mesh.element_id_dtype)
         return self.last_mesh
@@ -777,7 +775,7 @@ class Refiner(object):
 
     # {{{ generate adjacency
 
-    def generate_nodal_adjacency(self, nelements, nvertices, groups):
+    def generate_nodal_adjacency(self, nvertices, groups):
         # medium-term FIXME: make this an incremental update
         # rather than build-from-scratch
         element_to_element = []

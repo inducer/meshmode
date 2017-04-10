@@ -8,8 +8,8 @@ import os
 import logging
 order = 1
 
-from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
-from meshmode.mesh.refinement import Refiner
+#from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
+#from meshmode.mesh.refinement import Refiner
 
 
 #construct vertex vertex_index
@@ -339,9 +339,9 @@ def all_refine(num_mesh, depth, fname):
     mesh = generate_hybrid_mesh(mesh, flags)
 
     #print("END GEN")
-    import timeit
-    nelements = []
-    runtimes = []
+    #import timeit
+    #nelements = []
+    #runtimes = []
     #r = Refiner(mesh)
     #flags = np.zeros(mesh.nelements)
     #flags[0] = 1
@@ -395,8 +395,9 @@ def all_refine(num_mesh, depth, fname):
         vis = make_visualizer(queue, discr, order)
         remove_if_exists("connectivity2.vtu")
         remove_if_exists("geometry2.vtu")
+        xx = discr.nodes()[0]
         vis.write_vtk_file("geometry2.vtu", [
-            ("f", discr.nodes()[0]),
+            ("f", xx),
             ])
 
         from meshmode.discretization.visualization import \
@@ -412,7 +413,7 @@ def all_refine(num_mesh, depth, fname):
                 draw_nodal_adjacency=False, fill=None)
         import matplotlib.pyplot as pt
         pt.show()
-    check_nodal_adj_against_geometry(mesh)
+    #check_nodal_adj_against_geometry(mesh)
 
     #import matplotlib.pyplot as pt
     #pt.plot(nelements, runtimes, "o")
