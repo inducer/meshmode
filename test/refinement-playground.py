@@ -332,11 +332,11 @@ def all_refine(num_mesh, depth, fname):
         mesh = affine_map(mesh, A=np.array([[1.2, 0.3], [0.15, 0.9]]))
     print('nelements', mesh.nelements)
     #flags = get_random_flags(mesh)
-    #flags = np.zeros(mesh.nelements)
-    #flags[0] = 1
+    flags = np.zeros(mesh.nelements)
+    flags[0] = 1
     #flags[1] = 1
     #flags[2] = 1
-    #mesh = generate_hybrid_mesh(mesh, flags)
+    mesh = generate_hybrid_mesh(mesh, flags)
 
     #print("END GEN")
     #import timeit
