@@ -331,8 +331,8 @@ def all_refine(num_mesh, depth, fname):
         from meshmode.mesh.processing import affine_map
         mesh = affine_map(mesh, A=np.array([[1.2, 0.3], [0.15, 0.9]]))
     print('nelements', mesh.nelements)
-    #flags = get_random_flags(mesh)
-    flags = np.zeros(mesh.nelements)
+    flags = get_random_flags(mesh)
+    #flags = np.zeros(mesh.nelements)
     flags[0] = 1
     #flags[1] = 1
     #flags[2] = 1
@@ -344,7 +344,8 @@ def all_refine(num_mesh, depth, fname):
     #runtimes = []
     r = Refiner(mesh)
     flags = np.zeros(mesh.nelements)
-    flags[0] = 1
+    flags = get_random_flags(mesh)
+    #flags[0] = 1
     # print(flags, 'here')
     mesh = r.refine(flags)
         #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))

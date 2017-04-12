@@ -244,7 +244,7 @@ class Refiner(object):
                 if vertex_pair in self.vertex_pair_to_midpoint:
                     midpoint_tuple = self.midpoint_of_node_tuples(node_tuples[i], 
                             node_tuples[j])
-                    midpoint_tuple_to_index[midpoint_tuple] = self.pair_map[indices_pair]
+                    midpoint_tuple_to_index[midpoint_tuple] = self.vertex_pair_to_midpoint[vertex_pair]
 
         for i in range(len(element_vertices)):
             for j in range(i+1, len(element_vertices)):
