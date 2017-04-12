@@ -104,23 +104,24 @@ def test_partition_interpolation(ctx_getter, group_factory, dim,
             if i_tgt_part == i_src_part:
                 continue
 
-            # Connections within i_tgt_part to i_src_part
-            tgt_conn = make_face_restriction(vol_discrs[i_tgt_part],
-                                             group_factory(order),
-                                             BTAG_PARTITION(i_src_part))
+            # Connections within tgt_mesh to src_mesh
+            tgt_to_src_conn = make_face_restriction(vol_discrs[i_tgt_part],
+                                                    group_factory(order),
+                                                    BTAG_PARTITION(i_src_part))
 
-            # Connections within i_src_part to i_tgt_part
-            src_conn = make_face_restriction(vol_discrs[i_src_part],
-                                             group_factory(order),
-                                             BTAG_PARTITION(i_tgt_part))
+            # Connections within src_mesh to tgt_mesh
+            src_to_tgt_conn = make_face_restriction(vol_discrs[i_src_part],
+                                                    group_factory(order),
+                                                    BTAG_PARTITION(i_tgt_part))
 
-            # Connect tgt_conn to src_conn
-            connection = make_partition_connection(tgt_conn, src_conn, i_src_part)
+            # Connect tgt_mesh to src_mesh
+            connection = make_partition_connection(tgt_to_src_conn,
+                                                   src_to_tgt_conn, i_src_part)
 
             check_connection(connection)
 
-            # Should this be src_conn?
-            bdry_x = tgt_conn.to_discr.nodes()[0].with_queue(queue)
+            # Should this be src_to_tgt_conn?
+            bdry_x = tgt_to_src_conn.to_discr.nodes()[0].with_queue(queue)
             if bdry_x.size != 0:
                 bdry_f = f(bdry_x)
 

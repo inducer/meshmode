@@ -58,7 +58,7 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
     dim = src_grp.dim
     ambient_dim, nelements, ntgt_unit_nodes = tgt_bdry_nodes.shape
     # FIXME: Not sure if this is a valid assertion.
-    #assert tgt_bdry_nodes.shape == src_bdry_nodes.shape
+    assert tgt_bdry_nodes.shape == src_bdry_nodes.shape
 
     # {{{ invert face map (using Gauss-Newton)
 
@@ -130,6 +130,9 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
     # {{{ visualize initial guess
 
     if 0:
+        # FIXME: When dim=3 it looks like sometimes src_bdry_nodes
+        #           have the wrong coordinate system. They need to
+        #           be reflected about some plane.
         import matplotlib.pyplot as pt
         guess = apply_map(src_unit_nodes)
         goals = tgt_bdry_nodes
@@ -401,7 +404,7 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 
 # {{{ partition_connection
 
-def make_partition_connection(tgt_conn, src_conn, i_src_part):
+def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
     """
     Given a two boundary restriction connections *tgt_conn* and *src_conn*,
     return a :class:`DirectDiscretizationConnection` that performs data
@@ -416,16 +419,16 @@ def make_partition_connection(tgt_conn, src_conn, i_src_part):
 
     .. versionadded:: 2017.1
 
-    .. warning:: Interface is not final. Doesn't even work yet...:(
+    .. warning:: Interface is not final. It doesn't even work yet...:(
     """
 
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
 
-    tgt_vol = tgt_conn.from_discr
-    src_vol = src_conn.from_discr
-    tgt_bdry = tgt_conn.to_discr
-    src_bdry = src_conn.to_discr
+    tgt_vol = tgt_to_src_conn.from_discr
+    src_vol = src_to_tgt_conn.from_discr
+    tgt_bdry = tgt_to_src_conn.to_discr
+    src_bdry = src_to_tgt_conn.to_discr
     tgt_mesh = tgt_vol.mesh
     src_mesh = src_vol.mesh
 
@@ -455,7 +458,8 @@ def make_partition_connection(tgt_conn, src_conn, i_src_part):
 
             for i_src_grp in range(nsrc_groups):
 
-                src_el_lookup = _make_el_lookup_table(queue, src_conn, i_src_grp)
+                src_el_lookup =\
+                        _make_el_lookup_table(queue, src_to_tgt_conn, i_src_grp)
 
                 for i_tgt_face in i_tgt_faces:
 
@@ -466,7 +470,7 @@ def make_partition_connection(tgt_conn, src_conn, i_src_part):
                         continue
 
                     vbc_tgt_grp_face_batch = _find_ibatch_for_face(
-                        tgt_conn.groups[i_tgt_grp].batches, i_tgt_face)
+                        tgt_to_src_conn.groups[i_tgt_grp].batches, i_tgt_face)
 
                     tgt_bdry_element_indices = vbc_tgt_grp_face_batch.\
                             to_element_indices.get(queue=queue)
