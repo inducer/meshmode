@@ -65,13 +65,15 @@ def test_partition_interpolation(ctx_getter, group_factory, dim,
     cl_ctx = ctx_getter()
     queue = cl.CommandQueue(cl_ctx)
     order = 4
-    n = 5
+
+    from pytools.convergence import EOCRecorder
+    eoc_rec = EOCRecorder()
 
     def f(x):
         return 0.1*cl.clmath.sin(30*x)
 
     from meshmode.mesh.generation import generate_warped_rect_mesh
-    meshes = [generate_warped_rect_mesh(dim, order=order, n=n)
+    meshes = [generate_warped_rect_mesh(dim, order=order, n=5)
                             for _ in range(num_groups)]
 
     if num_groups > 1:
@@ -102,27 +104,36 @@ def test_partition_interpolation(ctx_getter, group_factory, dim,
             if i_tgt_part == i_src_part:
                 continue
 
+            # Connections within i_tgt_part to i_src_part
             tgt_conn = make_face_restriction(vol_discrs[i_tgt_part],
-                                              group_factory(order),
-                                              BTAG_PARTITION(i_src_part))
+                                             group_factory(order),
+                                             BTAG_PARTITION(i_src_part))
 
+            # Connections within i_src_part to i_tgt_part
             src_conn = make_face_restriction(vol_discrs[i_src_part],
-                                              group_factory(order),
-                                              BTAG_PARTITION(i_tgt_part))
+                                             group_factory(order),
+                                             BTAG_PARTITION(i_tgt_part))
 
+            # Connect tgt_conn to src_conn
             connection = make_partition_connection(tgt_conn, src_conn, i_src_part)
 
             check_connection(connection)
 
-            bdry_x = src_conn.to_discr.nodes()[0].with_queue(queue)
+            # Should this be src_conn?
+            bdry_x = tgt_conn.to_discr.nodes()[0].with_queue(queue)
             if bdry_x.size != 0:
                 bdry_f = f(bdry_x)
 
                 bdry_f_2 = connection(queue, bdry_f)
 
                 err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
-                print(err)
-                assert err < 1e-13
+                abscissa = i_tgt_part + num_parts * i_src_part
+                eoc_rec.add_data_point(abscissa, err)
+
+    print(eoc_rec)
+    assert (eoc_rec.order_estimate() >= order-0.5
+            or eoc_rec.max_error() < 1e-13)
+
 # }}}
 
 
@@ -130,7 +141,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim,
 
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("num_parts", [4, 5, 7])
-@pytest.mark.parametrize("num_meshes", [2, 3])
+@pytest.mark.parametrize("num_meshes", [2, 7])
 def test_partition_mesh(num_parts, num_meshes, dim):
     n = (5,) * dim
     from meshmode.mesh.generation import generate_regular_rect_mesh

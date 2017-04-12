@@ -416,7 +416,7 @@ def make_partition_connection(tgt_conn, src_conn, i_src_part):
 
     .. versionadded:: 2017.1
 
-    .. warning:: Interface is not final. Doesn't even work yet...........:(
+    .. warning:: Interface is not final. Doesn't even work yet...:(
     """
 
     from meshmode.discretization.connection import (
@@ -478,9 +478,9 @@ def make_partition_connection(tgt_conn, src_conn, i_src_part):
                     # FIXME: I honestly have no idea why this helps.
                     src_bdry_element_indices = np.sort(src_bdry_element_indices)
 
-                    print("Attempting to connect elements")
-                    print(tgt_bdry_element_indices)
-                    print(src_bdry_element_indices)
+                    #print("Attempting to connect elements")
+                    #print(tgt_bdry_element_indices)
+                    #print(src_bdry_element_indices)
 
                     part_batches[i_tgt_grp].extend(_make_cross_face_batches(queue,
                                                         tgt_bdry, src_bdry,
@@ -489,7 +489,7 @@ def make_partition_connection(tgt_conn, src_conn, i_src_part):
                                                         src_bdry_element_indices))
 
     return DirectDiscretizationConnection(
-            from_discr=src_bdry,
+            from_discr=src_bdry,  # Is this right?
             to_discr=tgt_bdry,
             groups=[DiscretizationConnectionElementGroup(batches=batches)
                         for batches in part_batches],
