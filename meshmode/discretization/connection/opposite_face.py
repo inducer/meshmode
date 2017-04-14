@@ -47,7 +47,7 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
 
     # FIXME: This should view-then-transfer
     # (but PyOpenCL doesn't do non-contiguous transfers for now).
-    src_bdry_nodes = (src_bdry_discr.groups[i_src_grp].view(tgt_bdry_discr.nodes().
+    src_bdry_nodes = (src_bdry_discr.groups[i_src_grp].view(src_bdry_discr.nodes().
                         get(queue=queue))[:, src_bdry_element_indices])
 
     tol = 1e4 * np.finfo(tgt_bdry_nodes.dtype).eps
@@ -130,16 +130,16 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
     # {{{ visualize initial guess
 
     if 0:
-        # FIXME: When dim=3 it looks like sometimes src_bdry_nodes
-        #           have the wrong coordinate system. They need to
-        #           be reflected about some plane.
         import matplotlib.pyplot as pt
         guess = apply_map(src_unit_nodes)
         goals = tgt_bdry_nodes
 
-        #from meshmode.discretization.visualization import draw_curve
-        #draw_curve(tgt_bdry_discr)
-        #draw_curve(src_bdry_discr)
+        from meshmode.discretization.visualization import draw_curve
+        pt.figure(0)
+        draw_curve(tgt_bdry_discr)
+        pt.figure(1)
+        draw_curve(src_bdry_discr)
+        pt.figure(2)
 
         pt.plot(guess[0].reshape(-1), guess[1].reshape(-1), "or")
         pt.plot(goals[0].reshape(-1), goals[1].reshape(-1), "og")
@@ -435,7 +435,6 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
     adj_grps = tgt_mesh.interpart_adj_groups
 
     ntgt_groups = len(tgt_mesh.groups)
-    nsrc_groups = len(src_mesh.groups)
     part_batches = ntgt_groups * [[]]
 
     with cl.CommandQueue(tgt_vol.cl_context) as queue:
@@ -450,13 +449,13 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
             i_tgt_faces = adj.element_faces
             i_src_elems = adj.neighbors
             i_src_faces = adj.neighbor_faces
-            i_src_grps = np.array([src_mesh.find_igrp(e)
-                                        for e in i_src_elems])
-            for i in range(len(i_src_elems)):
-                elem_base = src_mesh.groups[i_src_grps[i]].element_nr_base
+            i_src_grps = np.array([src_mesh.find_igrp(e) for e in i_src_elems])
+
+            for i, i_grp in enumerate(i_src_grps):
+                elem_base = src_mesh.groups[i_grp].element_nr_base
                 i_src_elems[i] -= elem_base
 
-            for i_src_grp in range(nsrc_groups):
+            for i_src_grp in np.unique(i_src_grps):
 
                 src_el_lookup =\
                         _make_el_lookup_table(queue, src_to_tgt_conn, i_src_grp)
@@ -478,13 +477,6 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
                     src_bdry_element_indices = src_el_lookup[
                                                 i_src_elems[index_flags],
                                                 i_src_faces[index_flags]]
-
-                    # FIXME: I honestly have no idea why this helps.
-                    src_bdry_element_indices = np.sort(src_bdry_element_indices)
-
-                    #print("Attempting to connect elements")
-                    #print(tgt_bdry_element_indices)
-                    #print(src_bdry_element_indices)
 
                     part_batches[i_tgt_grp].extend(_make_cross_face_batches(queue,
                                                         tgt_bdry, src_bdry,
