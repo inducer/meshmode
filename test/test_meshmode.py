@@ -65,7 +65,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     num_parts, num_groups):
     cl_ctx = ctx_getter()
     queue = cl.CommandQueue(cl_ctx)
-    order = 3
+    order = 5
 
     from pytools.convergence import EOCRecorder
     eoc_rec = EOCRecorder()
@@ -477,12 +477,12 @@ def test_all_faces_interpolation(ctx_getter, mesh_name, dim, mesh_pars,
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    #PolynomialWarpAndBlendGroupFactory
+    PolynomialWarpAndBlendGroupFactory
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
-    #("blob", 2, [1e-1, 8e-2, 5e-2]),
+    ("blob", 2, [1e-1, 8e-2, 5e-2]),
     ("warp", 2, [3, 5, 7]),
-    #("warp", 3, [3, 5]),
+    ("warp", 3, [3, 5]),
     ])
 def test_opposite_face_interpolation(ctx_getter, group_factory,
         mesh_name, dim, mesh_pars):
