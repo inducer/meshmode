@@ -53,13 +53,13 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.parametrize("group_factory", [
                             PolynomialWarpAndBlendGroupFactory,
-                            InterpolatoryQuadratureSimplexGroupFactory
+                            #InterpolatoryQuadratureSimplexGroupFactory
                             ])
-@pytest.mark.parametrize("num_parts", [2, 3])
+@pytest.mark.parametrize("num_parts", [3])#, 3])
 # FIXME: Mostly fails for multiple groups.
 @pytest.mark.parametrize("num_groups", [1])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
-         (2, [3, 5, 7]),
+         #(2, [3, 5, 7]),
          (3, [3, 5])
         ])
 def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
