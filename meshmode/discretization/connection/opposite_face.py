@@ -437,6 +437,7 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
     ntgt_groups = len(tgt_mesh.groups)
     part_batches = ntgt_groups * [[]]
 
+    # FIXME: Is this an ok way to grab a queue?
     with cl.CommandQueue(tgt_vol.cl_context) as queue:
 
         for i_tgt_grp, adj_parts in enumerate(adj_grps):
