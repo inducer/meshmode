@@ -265,8 +265,12 @@ class Refiner(object):
                         self.adjacent_set.append(self.adjacent_set[vertex_i].intersection(self.adjacent_set[vertex_j]))
                         print('nvertices and len of adjacent_set', nvertices, len(self.adjacent_set))
                         nvertices += 1
+
+                        assert len(self.adjacent_set) == nvertices
                     else:
                         self.vertex_pair_to_midpoint[vertex_pair] = midpoint_tuple_to_index[midpoint_tuple]
+
+                        assert len(self.adjacent_set) == nvertices
                 midpoint_tuple_to_index[midpoint_tuple] = self.vertex_pair_to_midpoint[vertex_pair]
                 print(self.vertex_pair_to_midpoint[vertex_pair], nvertices, len(self.adjacent_set))
                 self.adjacent_set[self.vertex_pair_to_midpoint[vertex_pair]] = self.adjacent_set[self.vertex_pair_to_midpoint[vertex_pair]].union(
@@ -746,6 +750,8 @@ class Refiner(object):
                     element_mapping.append([iel_grp])
             self.group_refinement_records.append(
                 self._GroupRefinementRecord(tesselation_record, element_mapping))
+
+        assert len(self.vertices[0]) == nvertices
 
         grp = []
         for refinement_record, group, prev_group in zip(
