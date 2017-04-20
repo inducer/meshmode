@@ -303,6 +303,7 @@ def all_refine(num_mesh, depth, fname):
             generate_box_mesh)
     from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+    random.seed(0)
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
     if 0:
@@ -342,27 +343,27 @@ def all_refine(num_mesh, depth, fname):
     #import timeit
     #nelements = []
     #runtimes = []
-    r = Refiner(mesh)
-    flags = np.zeros(mesh.nelements)
-    flags = get_random_flags(mesh)
+    #r = Refiner(mesh)
+    #flags = np.zeros(mesh.nelements)
+    #flags = get_random_flags(mesh)
     #flags[0] = 1
     # print(flags, 'here')
-    mesh = r.refine(flags)
+    #mesh = r.refine(flags)
         #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
-    #r = Refiner(mesh)
+    r = Refiner(mesh)
     #flags = np.zeros(mesh.nelements)
     #flags[0] = 1
     #mesh = r.refine(flags)
     #coarsen_flags = []
-    #for time in range(1):
-        #flags = get_random_flags(mesh)
+    for time in range(3):
+        flags = get_random_flags(mesh)
         #if time == 1:
         #    curnels = mesh.nelements
         #    for ind, i in enumerate(flags):
         #        if i:
         #            coarsen_flags.append([ind, curnels, curnels + 1, curnels + 2, curnels + 3, curnels + 4, curnels + 5, curnels + 6])
         #            curnels += 7
-        #mesh = r.refine(flags)
+        mesh = r.refine(flags)
     #mesh = r.coarsen(coarsen_flags)
     #flags = get_random_flags(mesh)
     #mesh = r.refine(flags)

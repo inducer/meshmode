@@ -263,13 +263,14 @@ class Refiner(object):
                             self.last_mesh.vertices[k, vertex_j]) / 2.0
                         # Update adjacent_set
                         self.adjacent_set.append(self.adjacent_set[vertex_i].intersection(self.adjacent_set[vertex_j]))
+                        print('nvertices and len of adjacent_set', nvertices, len(self.adjacent_set))
                         nvertices += 1
                     else:
                         self.vertex_pair_to_midpoint[vertex_pair] = midpoint_tuple_to_index[midpoint_tuple]
                 midpoint_tuple_to_index[midpoint_tuple] = self.vertex_pair_to_midpoint[vertex_pair]
+                print(self.vertex_pair_to_midpoint[vertex_pair], nvertices, len(self.adjacent_set))
                 self.adjacent_set[self.vertex_pair_to_midpoint[vertex_pair]] = self.adjacent_set[self.vertex_pair_to_midpoint[vertex_pair]].union(
                     self.adjacent_set[vertex_i].intersection(self.adjacent_set[vertex_j]))
-                print(vertex_i, vertex_j, self.vertex_pair_to_midpoint[vertex_pair], self.adjacent_set[vertex_i], self.adjacent_set[vertex_j], self.adjacent_set[self.vertex_pair_to_midpoint[vertex_pair]])
                     
         return nvertices
 
@@ -308,13 +309,17 @@ class Refiner(object):
         element_vertices = grp.vertex_indices[iel_grp]
         dimension = self.last_mesh.groups[group_index].dim
         self.remove_from_adjacent_set((group_index, iel_grp), element_vertices, dimension, tesselations, vertex_and_midpoint_tuples)
+        print('refining, b, nvertices:', nvertices)
         nvertices = self.create_midpoints(group_index, iel_grp, element_vertices, nvertices, vertex_and_midpoint_tuples, midpoints, midpoint_order)
+        print('refining, nvertices:', nvertices)
         element_mapping.append([])
         (subelement_indices_and_vertices, nelements_in_grp, element_mapping) = self.create_elements(iel_grp, 
                 element_vertices, dimension, group_index, nelements_in_grp, element_mapping,
                 tesselations, vertex_and_midpoint_tuples)
+        print('refining, after creating, nvertices:', nvertices)
         for (index, vertices) in subelement_indices_and_vertices:
             self.add_to_adjacent_set(index, vertices, dimension, tesselations, vertex_and_midpoint_tuples)
+        print('refining, after addin, nvertices:', nvertices)
         return (nelements_in_grp, nvertices, element_mapping)
 
     def elements_connected_to(self, element_index, vertices, dimension, tesselations, vertex_and_midpoint_tuples):
@@ -730,9 +735,11 @@ class Refiner(object):
             (midpoints, midpoint_order) = get_midpoints_and_midpoint_order(grp, tesselation_record, midpoints_to_find)
             for iel_grp in range(grp.nelements):
                 if refine_flags[iel_base + iel_grp]:
+                    print('nvertices before:', nvertices)
                     (nelements_in_grp, nvertices, element_mapping) = \
                     self.do_refinement(grp_index, iel_grp, nelements_in_grp, 
                             nvertices, element_mapping, midpoints, midpoint_order)
+                    print('nvertices after:', nvertices)
                 else:
                     for i in range(len(grp.vertex_indices[iel_grp])):
                         self.groups[grp_index][iel_grp][i] = grp.vertex_indices[iel_grp][i]
@@ -740,8 +747,6 @@ class Refiner(object):
             self.group_refinement_records.append(
                 self._GroupRefinementRecord(tesselation_record, element_mapping))
 
-        for vertex in self.groups[0][0]:
-            print(vertex, self.adjacent_set[vertex])
         grp = []
         for refinement_record, group, prev_group in zip(
                 self.group_refinement_records, self.groups, self.last_mesh.groups):
@@ -790,8 +795,6 @@ class Refiner(object):
                                           "non simplex and non quad groups")
                 
         from meshmode.mesh import Mesh
-        for vertex in self.groups[0][0]:
-            print(vertex, self.adjacent_set[vertex])
 
         self.previous_mesh = self.last_mesh
         self.last_mesh = Mesh(
@@ -821,12 +824,9 @@ class Refiner(object):
                 elements_connected_to = self.get_elements_connected_to(groups, group_index, iel_base_for_group[group_index], iel_grp)
                 global_elements_connected_to = set()
                 for el in elements_connected_to:
-                    print('els connected to:', group_index, iel_grp, el)
                     global_elements_connected_to.add(iel_base_for_group[el[0]] + el[1])
-                    print(global_elements_connected_to)
                 element_to_element.append(global_elements_connected_to)
 
-        print(element_to_element)
         for iel, neighbors in enumerate(element_to_element):
             if iel in neighbors:
                 neighbors.remove(iel)
