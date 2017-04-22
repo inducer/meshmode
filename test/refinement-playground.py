@@ -119,7 +119,6 @@ def refine_and_generate_chart_function(mesh, filename, function):
 
     #check_nodal_adj_against_geometry(mesh);
     r = Refiner(mesh)
-    random.seed(0)
     #times = 3
     num_elements = []
     time_t = []
@@ -303,7 +302,6 @@ def all_refine(num_mesh, depth, fname):
             generate_box_mesh)
     from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-    random.seed(0)
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
     if 0:
@@ -355,7 +353,7 @@ def all_refine(num_mesh, depth, fname):
     #flags[0] = 1
     #mesh = r.refine(flags)
     #coarsen_flags = []
-    for time in range(3):
+    for time in range(1):
         flags = get_random_flags(mesh)
         #if time == 1:
         #    curnels = mesh.nelements
@@ -379,7 +377,6 @@ def all_refine(num_mesh, depth, fname):
             #    stop = timeit.default_timer()
             #    nelements.append(mesh.nelements)
             #    runtimes.append(stop-start)
-            #print(r.groups)
 
         #from meshmode.mesh.visualization import draw_2d_mesh
         #draw_2d_mesh(mesh, False, True, True, fill=None)
@@ -440,7 +437,6 @@ def uniform_refine(num_mesh, fract, depth, fname):
             print("EL_FACT", el_fact, "TIME", time)
             flags = np.zeros(mesh.nelements)
             from random import shuffle, seed
-            seed(1)
             shuffle(all_els)
             nels_this_round = 0
             for i in range(len(all_els)):
