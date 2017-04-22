@@ -631,6 +631,18 @@ class Refiner(object):
                         vertex_tuples = self.get_vertex_and_midpoint_tuples(grp)[grp.dim][0]
                         # Maintain seen midpoint tuples for this element to avoid repitition (in case of quad meshes)
                         seen_midpoint_tuples = set()
+                        for i in range(len(vertex_indices)):
+                            for j in range(i+1, len(vertex_indices)):
+                                vertex_i = vertex_indices[i]
+                                vertex_j = vertex_indices[j]
+                                vertex_pair = (vertex_i, vertex_j) if vertex_i < vertex_j else (vertex_j, vertex_i)
+                                vertex_i_tuple = vertex_tuples[i]
+                                vertex_j_tuple = vertex_tuples[j]
+                                if vertex_pair in self.vertex_pair_to_midpoint:
+                                    midpoint_tuple = self.midpoint_of_node_tuples(vertex_i_tuple, vertex_j_tuple)
+                                    seen_midpoint_tuples.add(midpoint_tuple)
+                                
+
                         
                         # Any vertex pair that doesn't have a midpoint in the current mesh will be refined to create midpoints
                         for i in range(len(vertex_indices)):
@@ -648,6 +660,9 @@ class Refiner(object):
                                     next_gen_nvertices += 1
                                     next_gen_midpoint_ends.add(vertex_pair)
                                     seen_midpoint_tuples.add(midpoint_tuple)
+
+                                if vertex_pair not in next_gen_midpoint_ends:
+                                    next_gen_midpoint_ends.add(vertex_pair)
 
             return next_gen_nvertices
         

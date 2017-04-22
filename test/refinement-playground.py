@@ -119,7 +119,7 @@ def refine_and_generate_chart_function(mesh, filename, function):
 
     #check_nodal_adj_against_geometry(mesh);
     r = Refiner(mesh)
-    #random.seed(0)
+    random.seed(0)
     #times = 3
     num_elements = []
     time_t = []
