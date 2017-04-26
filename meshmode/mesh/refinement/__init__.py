@@ -434,15 +434,15 @@ class Refiner(object):
             # to be coarsened together
             for grp_index, grp in enumerate(self.last_mesh.groups):
                 for to_coarsen in coarsen_els[grp_index]:
+                    times_vertex_seen = {}
                     for el in to_coarsen:
-                        times_vertex_seen = {}
                         for vertex in grp.vertex_indices[el]:
                             if vertex not in times_vertex_seen:
                                 times_vertex_seen[vertex] = 0
                             times_vertex_seen[vertex] += 1
-                        for vertex in times_vertex_seen:
-                            if times_vertex_seen[vertex] == 1:
-                                vertex_indices_after_coarsening.add(vertex)
+                    for vertex in times_vertex_seen:
+                        if times_vertex_seen[vertex] == 1:
+                            vertex_indices_after_coarsening.add(vertex)
 
             # Add vertices of elements not being coarsened
             for grp_index, grp in enumerate(self.last_mesh.groups):
@@ -535,13 +535,12 @@ class Refiner(object):
             midpoint = self.vertex_pair_to_midpoint[(vertex_1, vertex_2)]
 
             assert (vertex_1 in vertex_mapping) and (
-                    vertex_2 in vertex_mapping) and (midpoint in vertex_mapping)
-
-            new_vertex_1 = vertex_mapping[vertex_1]
-            new_vertex_2 = vertex_mapping[vertex_2]
-            new_midpoint = vertex_mapping[midpoint]
+                    vertex_2 in vertex_mapping)
 
             if (midpoint in vertex_indices_after_coarsening):
+                new_vertex_1 = vertex_mapping[vertex_1]
+                new_vertex_2 = vertex_mapping[vertex_2]
+                new_midpoint = vertex_mapping[midpoint]
                 new_vertex_pair_to_midpoint[(new_vertex_1, new_vertex_2)] = new_midpoint
 
         self.vertex_pair_to_midpoint = new_vertex_pair_to_midpoint

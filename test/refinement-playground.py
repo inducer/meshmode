@@ -355,12 +355,12 @@ def all_refine(num_mesh, depth, fname):
     for time in range(3):
         flags = get_random_flags(mesh)
         coarsen_flags = []
-        if time == 0:
+        if time <= 1:
             for grp_index, grp in enumerate(mesh.groups):
                 curnels = grp.nelements
                 coarsen_flags.append([])
-                for ind, i in enumerate(flags[grp.element_nr_base : grp.nelements]):
-                    if i and random.randint(0, 1) == 0:
+                for ind, i in enumerate(flags[grp.element_nr_base : grp.element_nr_base + grp.nelements]):
+                    if i and random.randint(0, 1) == 1:
                         cur_coarsen = []
                         cur_coarsen.append(ind)
                         if isinstance(grp, TensorProductElementGroup):
@@ -375,7 +375,7 @@ def all_refine(num_mesh, depth, fname):
                     elif i:
                         curnels += 7
         mesh = r.refine(flags)
-        if time == 0:
+        if time <= 1:
             mesh = r.coarsen(coarsen_flags)
     #mesh = r.coarsen(coarsen_flags)
     #flags = get_random_flags(mesh)
