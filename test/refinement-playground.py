@@ -302,6 +302,7 @@ def all_refine(num_mesh, depth, fname):
             generate_box_mesh)
     from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+    random.seed(0)
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
     if 0:
@@ -329,10 +330,9 @@ def all_refine(num_mesh, depth, fname):
                 group_factory=TensorProductElementGroup)
         from meshmode.mesh.processing import affine_map
         mesh = affine_map(mesh, A=np.array([[1.2, 0.3], [0.15, 0.9]]))
-    print('nelements', mesh.nelements)
     flags = get_random_flags(mesh)
     #flags = np.zeros(mesh.nelements)
-    flags[0] = 1
+    #flags[0] = 1
     #flags[1] = 1
     #flags[2] = 1
     mesh = generate_hybrid_mesh(mesh, flags)
@@ -352,16 +352,31 @@ def all_refine(num_mesh, depth, fname):
     #flags = np.zeros(mesh.nelements)
     #flags[0] = 1
     #mesh = r.refine(flags)
-    #coarsen_flags = []
-    for time in range(1):
+    for time in range(3):
         flags = get_random_flags(mesh)
-        #if time == 1:
-        #    curnels = mesh.nelements
-        #    for ind, i in enumerate(flags):
-        #        if i:
-        #            coarsen_flags.append([ind, curnels, curnels + 1, curnels + 2, curnels + 3, curnels + 4, curnels + 5, curnels + 6])
-        #            curnels += 7
+        coarsen_flags = []
+        if time == 0:
+            for grp_index, grp in enumerate(mesh.groups):
+                curnels = grp.nelements
+                coarsen_flags.append([])
+                for ind, i in enumerate(flags[grp.element_nr_base : grp.nelements]):
+                    if i and random.randint(0, 1) == 0:
+                        cur_coarsen = []
+                        cur_coarsen.append(ind)
+                        if isinstance(grp, TensorProductElementGroup):
+                            for k in range(7):
+                                cur_coarsen.append(curnels)
+                                curnels += 1
+                        elif isinstance(grp, SimplexElementGroup):
+                            for k in range(7):
+                                cur_coarsen.append(curnels)
+                                curnels += 1
+                        coarsen_flags[grp_index].append(cur_coarsen)
+                    elif i:
+                        curnels += 7
         mesh = r.refine(flags)
+        if time == 0:
+            mesh = r.coarsen(coarsen_flags)
     #mesh = r.coarsen(coarsen_flags)
     #flags = get_random_flags(mesh)
     #mesh = r.refine(flags)
