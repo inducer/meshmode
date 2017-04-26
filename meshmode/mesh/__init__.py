@@ -637,19 +637,21 @@ class Mesh(Record):
                 assert len(facial_adjacency_groups) == len(self.groups)
                 for fagrp_map in facial_adjacency_groups:
                     for fagrp in six.itervalues(fagrp_map):
-                        grp = self.groups[fagrp.igroup]
+                        nfagrp_elements, = fagrp.elements.shape
 
-                        fvi = grp.face_vertex_indices()
+                        assert fagrp.element_faces.dtype == self.face_id_dtype
+                        assert fagrp.element_faces.shape == (nfagrp_elements,)
+
                         assert fagrp.neighbors.dtype == self.element_id_dtype
-                        assert fagrp.neighbors.shape == (
-                                grp.nelements, len(fvi))
-                        assert fagrp.neighbors.dtype == self.face_id_dtype
-                        assert fagrp.neighbor_faces.shape == (
-                                grp.nelements, len(fvi))
+                        assert fagrp.neighbors.shape == (nfagrp_elements,)
 
-                        is_bdry = fagrp.neighbors < 0
-                        assert ((1 << btag_to_index[BTAG_REALLY_ALL])
-                                & fagrp.neighbors[is_bdry]).all(), \
+                        assert fagrp.neighbor_faces.dtype == self.face_id_dtype
+                        assert fagrp.neighbor_faces.shape == (nfagrp_elements,)
+
+                        if fagrp.ineighbor_group is None:
+                            is_bdry = fagrp.neighbors < 0
+                            assert ((1 << btag_to_index[BTAG_REALLY_ALL])
+                                    & -fagrp.neighbors[is_bdry]).all(), \
                                     "boundary faces without BTAG_REALLY_ALL found"
 
             from meshmode.mesh.processing import \
@@ -868,6 +870,9 @@ def _compute_facial_adjacency_from_vertices(mesh):
                 face_map.setdefault(
                         frozenset(fvi), []).append((igrp, iel_grp, fid))
 
+    del igrp
+    del grp
+
     # maps tuples (igrp, ineighbor_group) to number of elements
     group_count = {}
     for face_tuples in six.itervalues(face_map):
@@ -880,6 +885,9 @@ def _compute_facial_adjacency_from_vertices(mesh):
             group_count[igrp, None] = group_count.get((igrp, None), 0) + 1
         else:
             raise RuntimeError("unexpected number of adjacent faces")
+
+    del face_tuples
+    del igrp
 
     # {{{ build facial_adjacency_groups data structure, still empty
 
@@ -894,6 +902,11 @@ def _compute_facial_adjacency_from_vertices(mesh):
             element_faces = np.empty(bdry_count, dtype=mesh.face_id_dtype)
             neighbors = np.empty(bdry_count, dtype=mesh.element_id_dtype)
             neighbor_faces = np.zeros(bdry_count, dtype=mesh.face_id_dtype)
+
+            # Ensure uninitialized entries get noticed
+            elements.fill(-1)
+            element_faces.fill(-1)
+            neighbor_faces.fill(-1)
 
             neighbors.fill(-(
                     mesh.boundary_tag_bit(BTAG_ALL)
@@ -915,6 +928,12 @@ def _compute_facial_adjacency_from_vertices(mesh):
                 neighbors = np.empty(nb_count, dtype=mesh.element_id_dtype)
                 neighbor_faces = np.empty(nb_count, dtype=mesh.face_id_dtype)
 
+                # Ensure uninitialized entries get noticed
+                elements.fill(-1)
+                element_faces.fill(-1)
+                neighbors.fill(-1)
+                neighbor_faces.fill(-1)
+
                 grp_map[ineighbor_group] = FacialAdjacencyGroup(
                         igroup=igroup,
                         ineighbor_group=ineighbor_group,
@@ -923,20 +942,24 @@ def _compute_facial_adjacency_from_vertices(mesh):
                         neighbors=neighbors,
                         neighbor_faces=neighbor_faces)
 
+    del igroup
+    del ineighbor_group
+    del grp_map
+
     # }}}
 
     # maps tuples (igrp, ineighbor_group) to number of elements filled in group
     fill_count = {}
     for face_tuples in six.itervalues(face_map):
         if len(face_tuples) == 2:
-            for (igroup, iel, iface), (inb_group, inb_el, inb_face) in [
+            for (igroup, iel, iface), (ineighbor_group, inb_el, inb_face) in [
                     (face_tuples[0], face_tuples[1]),
                     (face_tuples[1], face_tuples[0]),
                     ]:
-                idx = fill_count.get((igrp, inb_grp), 0)
-                fill_count[igrp, inb_grp] = idx + 1
+                idx = fill_count.get((igroup, ineighbor_group), 0)
+                fill_count[igroup, ineighbor_group] = idx + 1
 
-                fagrp = facial_adjacency_groups[igroup][inb_grp]
+                fagrp = facial_adjacency_groups[igroup][ineighbor_group]
                 fagrp.elements[idx] = iel
                 fagrp.element_faces[idx] = iface
                 fagrp.neighbors[idx] = inb_el
@@ -945,8 +968,8 @@ def _compute_facial_adjacency_from_vertices(mesh):
         elif len(face_tuples) == 1:
             (igroup, iel, iface), = face_tuples
 
-            idx = fill_count.get((igrp, None), 0)
-            fill_count[igrp, None] = idx + 1
+            idx = fill_count.get((igroup, None), 0)
+            fill_count[igroup, None] = idx + 1
 
             fagrp = facial_adjacency_groups[igroup][None]
             fagrp.elements[idx] = iel
