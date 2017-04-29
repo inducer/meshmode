@@ -80,7 +80,9 @@ def random_coarsen_els(fract, refine_flags, mesh):
 
     def get_nelements_split(grp_index):
         grp = mesh.groups[grp_index]
-        if isinstance(grp, SimplexElementGroup) and mesh.dim == 2:
+        if mesh.dim == 1:
+            return 2
+        elif isinstance(grp, SimplexElementGroup) and mesh.dim == 2:
             return 4
         elif isinstance(grp, SimplexElementGroup) and mesh.dim == 3:
             return 8
@@ -161,7 +163,7 @@ def uniform_refine_flags(mesh):
     ("rect3d_unif",
         partial(generate_box_mesh, (
             np.linspace(0, 1, 2),
-            np.linspace(0, 1, 3),
+            np.linspace(0, 1, 2),
             np.linspace(0, 1, 2),
             ), order=1),
         uniform_refine_flags,
@@ -170,8 +172,8 @@ def uniform_refine_flags(mesh):
     #quad mesh tests
     ("rect2d_rand",
         partial(generate_box_mesh, (
-            np.linspace(0, 1, 3),
-            np.linspace(0, 1, 3),
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 2),
             ), order=1, group_factory=TensorProductElementGroup),
         partial(random_refine_flags, 0.4),
         4),
@@ -187,7 +189,7 @@ def uniform_refine_flags(mesh):
     ("rect3d_rand",
         partial(generate_box_mesh, (
             np.linspace(0, 1, 2),
-            np.linspace(0, 1, 3),
+            np.linspace(0, 1, 2),
             np.linspace(0, 1, 2),
             ), order=1, group_factory=TensorProductElementGroup),
         partial(random_refine_flags, 0.4),
@@ -196,7 +198,7 @@ def uniform_refine_flags(mesh):
     ("rect3d_unif",
         partial(generate_box_mesh, (
             np.linspace(0, 1, 2),
-            np.linspace(0, 1, 3),
+            np.linspace(0, 1, 2),
             np.linspace(0, 1, 2),
             ), order=1, group_factory=TensorProductElementGroup),
         uniform_refine_flags,
@@ -206,8 +208,8 @@ def uniform_refine_flags(mesh):
     ("hybrid2d_rand",
         partial(generate_hybrid_mesh,
             partial(generate_box_mesh, (
-                np.linspace(0, 1, 3),
-                np.linspace(0, 1, 3),
+                np.linspace(0, 1, 2),
+                np.linspace(0, 1, 2),
                 ), order=1, group_factory=TensorProductElementGroup),
             partial(random_refine_flags, 0.4)),
         partial(random_refine_flags, 0.4),
@@ -216,8 +218,8 @@ def uniform_refine_flags(mesh):
     ("hybrid2d_unif",
         partial(generate_hybrid_mesh,
             partial(generate_box_mesh, (
-                np.linspace(0, 1, 3),
-                np.linspace(0, 1, 3),
+                np.linspace(0, 1, 2),
+                np.linspace(0, 1, 2),
                 ), order=1, group_factory=TensorProductElementGroup),
             partial(random_refine_flags, 0.4)),
         uniform_refine_flags,
@@ -226,9 +228,9 @@ def uniform_refine_flags(mesh):
     ("hybrid3d_rand",
         partial(generate_hybrid_mesh,
             partial(generate_box_mesh, (
-                np.linspace(0, 1, 3),
-                np.linspace(0, 1, 3),
-                np.linspace(0, 1, 3),
+                np.linspace(0, 1, 2),
+                np.linspace(0, 1, 2),
+                np.linspace(0, 1, 2),
                 ), order=1, group_factory=TensorProductElementGroup),
             partial(random_refine_flags, 0.4)),
         partial(random_refine_flags, 0.4),
@@ -238,7 +240,7 @@ def uniform_refine_flags(mesh):
         partial(generate_hybrid_mesh,
             partial(generate_box_mesh, (
                 np.linspace(0, 1, 2),
-                np.linspace(0, 1, 3),
+                np.linspace(0, 1, 2),
                 np.linspace(0, 1, 2),
                 ), order=1, group_factory=TensorProductElementGroup),
             partial(random_refine_flags, 0.4)),
