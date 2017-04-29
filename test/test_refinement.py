@@ -31,9 +31,10 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 from meshmode.mesh.generation import (  # noqa
-        generate_icosahedron, generate_box_mesh, make_curve_mesh, ellipse)
+        generate_icosahedron, generate_box_mesh, generate_hybrid_mesh, make_curve_mesh, ellipse)
 from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
 from meshmode.mesh.refinement import Refiner
+from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
 from meshmode.discretization.poly_element import (
     InterpolatoryQuadratureSimplexGroupFactory,
@@ -68,6 +69,44 @@ def random_refine_flags(fract, mesh):
 
     return flags
 
+def random_coarsen_els(fract, refine_flags, mesh):
+    import six
+    def get_group_index(el):
+        for grp_index, grp in mesh.groups:
+            if el < grp.element_nr_base + grp.nelements:
+                return grp_index
+        assert(False)
+        return None
+
+    def get_nelements_split(grp_index):
+        grp = mesh.groups[grp_index]
+        if isinstance(grp, SimplexElementGroup) and mesh.dim == 2:
+            return 4
+        elif isinstance(grp, SimplexElementGroup) and mesh.dim == 3:
+            return 8
+        elif isinstance(grp, TensorProductElementGroup) and mesh.dim == 2:
+            return 4
+        elif isinstance(grp, TensorProductElementGroup) and mesh.dim == 3:
+            return 8
+        assert(False)
+        return None
+    refined_els = list(enumerate([el for (el, flag) in enumerate(refine_flags) if flag]))
+
+    from random import shuffle
+    shuffle(refined_els)
+
+    coarsen_els = [[] for grp in mesh.groups]
+    for i in six.moves.range(int(len(refined_els) * fract)):
+        (index, el) = refined_els[i]
+        grp_index = get_group_index(el)
+        grp = mesh.groups[grp_index]
+        nelements_split = get_nelements_split(grp_index)
+        coarsen_el = [el - mesh.groups[grp_index].element_nr_base]
+
+        for j in six.moves.range(nelements_split - 1):
+            coarsen_el.append(grp.nelements + (nelements_split - 1) * index + j)
+        coarsen_els[grp_index].append(coarsen_el)
+    return coarsen_els
 
 def uniform_refine_flags(mesh):
     return np.ones(mesh.nelements)
@@ -122,11 +161,91 @@ def uniform_refine_flags(mesh):
     ("rect3d_unif",
         partial(generate_box_mesh, (
             np.linspace(0, 1, 2),
-            np.linspace(0, 1, 2)), order=1),
+            np.linspace(0, 1, 3),
+            np.linspace(0, 1, 2),
+            ), order=1),
         uniform_refine_flags,
         3),
-    #add quad test
+
+    #quad mesh tests
+    ("rect2d_rand",
+        partial(generate_box_mesh, (
+            np.linspace(0, 1, 3),
+            np.linspace(0, 1, 3),
+            ), order=1, group_factory=TensorProductElementGroup),
+        partial(random_refine_flags, 0.4),
+        4),
+
+    ("rect2d_unif",
+        partial(generate_box_mesh, (
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 2),
+            ), order=1, group_factory=TensorProductElementGroup),
+        uniform_refine_flags,
+        3),
+
+    ("rect3d_rand",
+        partial(generate_box_mesh, (
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 3),
+            np.linspace(0, 1, 2),
+            ), order=1, group_factory=TensorProductElementGroup),
+        partial(random_refine_flags, 0.4),
+        3),
+
+    ("rect3d_unif",
+        partial(generate_box_mesh, (
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 3),
+            np.linspace(0, 1, 2),
+            ), order=1, group_factory=TensorProductElementGroup),
+        uniform_refine_flags,
+        3),
+
+    #hybrid mesh tests
+    ("hybrid2d_rand",
+        partial(generate_hybrid_mesh,
+            partial(generate_box_mesh, (
+                np.linspace(0, 1, 3),
+                np.linspace(0, 1, 3),
+                ), order=1, group_factory=TensorProductElementGroup),
+            partial(random_refine_flags, 0.4)),
+        partial(random_refine_flags, 0.4),
+        4),
+
+    ("hybrid2d_unif",
+        partial(generate_hybrid_mesh,
+            partial(generate_box_mesh, (
+                np.linspace(0, 1, 3),
+                np.linspace(0, 1, 3),
+                ), order=1, group_factory=TensorProductElementGroup),
+            partial(random_refine_flags, 0.4)),
+        uniform_refine_flags,
+        4),
+
+    ("hybrid3d_rand",
+        partial(generate_hybrid_mesh,
+            partial(generate_box_mesh, (
+                np.linspace(0, 1, 3),
+                np.linspace(0, 1, 3),
+                np.linspace(0, 1, 3),
+                ), order=1, group_factory=TensorProductElementGroup),
+            partial(random_refine_flags, 0.4)),
+        partial(random_refine_flags, 0.4),
+        4),
+
+    ("hybrid3d_unif",
+        partial(generate_hybrid_mesh,
+            partial(generate_box_mesh, (
+                np.linspace(0, 1, 2),
+                np.linspace(0, 1, 3),
+                np.linspace(0, 1, 2),
+                ), order=1, group_factory=TensorProductElementGroup),
+            partial(random_refine_flags, 0.4)),
+        uniform_refine_flags,
+        3),
     ])
+
 def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
     from random import seed
     seed(13)
@@ -141,6 +260,45 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
 
         check_nodal_adj_against_geometry(mesh)
 
+@pytest.mark.parametrize(("case_name", "mesh_gen", "refine_flag_gen", "num_generations"), [
+    # Fails?
+     #("icosahedron",
+     #    partial(generate_icosahedron, 1, order=1),
+     #    partial(random_refine_flags, 0.4),
+     #    3),
+
+    ("3_to_1_ellipse_unif",
+        partial(
+            make_curve_mesh,
+            partial(ellipse, 3),
+            np.linspace(0, 1, 21),
+            order=1),
+        uniform_refine_flags,
+        4),
+    ])
+
+@pytest.mark.parametrize("coarsen_els_gen", [
+    partial(random_coarsen_els, 0.4)
+    ])
+
+def test_refinement_and_coarsen(case_name, mesh_gen, refine_flag_gen, coarsen_els_gen, num_generations):
+    from random import seed
+    seed(13)
+    
+    mesh = mesh_gen()
+
+    r = Refiner(mesh)
+
+    for igen in range(num_generations):
+        refine_flags = refine_flag_gen(mesh)
+        coarsen_els = coarsen_els_gen(refine_flags, mesh)
+
+        mesh = r.refine(refine_flags)
+        check_nodal_adj_against_geometry(mesh)
+
+        mesh = r.coarsen(coarsen_els)
+        check_nodal_adj_against_geometry(mesh)
+    
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,

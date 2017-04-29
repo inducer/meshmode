@@ -205,85 +205,85 @@ def refine_and_generate_chart_function(mesh, filename, function):
 
 #takes quad mesh and triangulates True elements in flags
 
-def generate_hybrid_mesh(mesh, flags):
-    from meshmode.mesh.generation import make_group_from_vertices
-    from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-    from meshmode.mesh import Mesh
-    nsplit = 0
-    for cur in flags:
-        if cur:
-            nsplit += 1
-    if nsplit == 0:
-        return mesh
-    groups = []
-    groups.append(np.empty([mesh.nelements - nsplit, len(mesh.groups[0].vertex_indices[0])], dtype=np.int32))
-    if len(mesh.groups[0].vertex_indices[0]) == 4:
-        groups.append(np.empty([nsplit * 2, 3], dtype=np.int32))
-    elif len(mesh.groups[0].vertex_indices[0]) == 8:
-        groups.append(np.empty([nsplit * 6, 4], dtype=np.int32))
-    cur_quad_ind = 0
-    cur_simplex_ind = 0
-    for grp_index, grp in enumerate(mesh.groups):
-        for iel_grp in range(grp.nelements):
-            if not flags[iel_grp]:
-                groups[0][cur_quad_ind] = grp.vertex_indices[iel_grp] 
-                cur_quad_ind += 1
-            else:
-                if len(grp.vertex_indices[0]) == 4:
-                    node_tuples_to_index = {(0, 0): 0, (0, 1): 1, (1, 0): 2, (1, 1): 3}
-                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 0)]]
-                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0)]]
-                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1)]]
-                    cur_simplex_ind += 1
-                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0)]]
-                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 1)]]
-                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1)]]
-                    cur_simplex_ind += 1
-                elif len(grp.vertex_indices[0]) == 8:
-                    node_tuples_to_index = {(0, 0, 0): 0, (0, 0, 1): 1, (0, 1, 0): 2, (0, 1, 1): 3, (1, 0, 0): 4, (1, 0, 1): 5, (1, 1, 0): 6, (1, 1, 1): 7}
-                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 0, 0)]]
-                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 0)]]
-                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 0)]]
-                    groups[1][cur_simplex_ind][3] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 0, 1)]]
-                    cur_simplex_ind += 1
-                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 1)]]
-                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 0)]]
-                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 0, 1)]]
-                    groups[1][cur_simplex_ind][3] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 0)]]
-                    cur_simplex_ind += 1
-                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 1)]]
-                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 1)]]
-                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 0)]]
-                    groups[1][cur_simplex_ind][3] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 0, 1)]]
-                    cur_simplex_ind += 1
-                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 0)]]
-                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 0)]]
-                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 1)]]
-                    groups[1][cur_simplex_ind][3] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 1, 0)]]
-                    cur_simplex_ind += 1
-                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 1)]]
-                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 0)]]
-                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 1, 0)]]
-                    groups[1][cur_simplex_ind][3] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 1)]]
-                    cur_simplex_ind += 1
-                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 1)]]
-                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 1, 1)]]
-                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 1)]]
-                    groups[1][cur_simplex_ind][3] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 1, 0)]]
-                    cur_simplex_ind += 1
-    grp = []
-    if nsplit != mesh.nelements:
-        grp.append(make_group_from_vertices(mesh.vertices, groups[0], 4, TensorProductElementGroup))
-    grp.append(make_group_from_vertices(mesh.vertices, groups[1], 4, SimplexElementGroup))
-    res_mesh = Mesh(
-            mesh.vertices, grp, nodal_adjacency=None, facial_adjacency_groups=None)
-    return res_mesh
+#def generate_hybrid_mesh(mesh, flags):
+#    from meshmode.mesh.generation import make_group_from_vertices
+#    from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+#    from meshmode.mesh import Mesh
+#    nsplit = 0
+#    for cur in flags:
+#        if cur:
+#            nsplit += 1
+#    if nsplit == 0:
+#        return mesh
+#    groups = []
+#    groups.append(np.empty([mesh.nelements - nsplit, len(mesh.groups[0].vertex_indices[0])], dtype=np.int32))
+#    if len(mesh.groups[0].vertex_indices[0]) == 4:
+#        groups.append(np.empty([nsplit * 2, 3], dtype=np.int32))
+#    elif len(mesh.groups[0].vertex_indices[0]) == 8:
+#        groups.append(np.empty([nsplit * 6, 4], dtype=np.int32))
+#    cur_quad_ind = 0
+#    cur_simplex_ind = 0
+#    for grp_index, grp in enumerate(mesh.groups):
+#        for iel_grp in range(grp.nelements):
+#            if not flags[iel_grp]:
+#                groups[0][cur_quad_ind] = grp.vertex_indices[iel_grp] 
+#                cur_quad_ind += 1
+#            else:
+#                if len(grp.vertex_indices[0]) == 4:
+#                    node_tuples_to_index = {(0, 0): 0, (0, 1): 1, (1, 0): 2, (1, 1): 3}
+#                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 0)]]
+#                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0)]]
+#                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1)]]
+#                    cur_simplex_ind += 1
+#                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0)]]
+#                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 1)]]
+#                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1)]]
+#                    cur_simplex_ind += 1
+#                elif len(grp.vertex_indices[0]) == 8:
+#                    node_tuples_to_index = {(0, 0, 0): 0, (0, 0, 1): 1, (0, 1, 0): 2, (0, 1, 1): 3, (1, 0, 0): 4, (1, 0, 1): 5, (1, 1, 0): 6, (1, 1, 1): 7}
+#                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 0, 0)]]
+#                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 0)]]
+#                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 0)]]
+#                    groups[1][cur_simplex_ind][3] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 0, 1)]]
+#                    cur_simplex_ind += 1
+#                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 1)]]
+#                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 0)]]
+#                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 0, 1)]]
+#                    groups[1][cur_simplex_ind][3] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 0)]]
+#                    cur_simplex_ind += 1
+#                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 1)]]
+#                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 1)]]
+#                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 0)]]
+#                    groups[1][cur_simplex_ind][3] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 0, 1)]]
+#                    cur_simplex_ind += 1
+#                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 0)]]
+#                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 0)]]
+#                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 1)]]
+#                    groups[1][cur_simplex_ind][3] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 1, 0)]]
+#                    cur_simplex_ind += 1
+#                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 1)]]
+#                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 0)]]
+#                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 1, 0)]]
+#                    groups[1][cur_simplex_ind][3] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 1)]]
+#                    cur_simplex_ind += 1
+#                    groups[1][cur_simplex_ind][0] = grp.vertex_indices[iel_grp][node_tuples_to_index[(0, 1, 1)]]
+#                    groups[1][cur_simplex_ind][1] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 1, 1)]]
+#                    groups[1][cur_simplex_ind][2] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 0, 1)]]
+#                    groups[1][cur_simplex_ind][3] = grp.vertex_indices[iel_grp][node_tuples_to_index[(1, 1, 0)]]
+#                    cur_simplex_ind += 1
+#    grp = []
+#    if nsplit != mesh.nelements:
+#        grp.append(make_group_from_vertices(mesh.vertices, groups[0], 4, TensorProductElementGroup))
+#    grp.append(make_group_from_vertices(mesh.vertices, groups[1], 4, SimplexElementGroup))
+#    res_mesh = Mesh(
+#            mesh.vertices, grp, nodal_adjacency=None, facial_adjacency_groups=None)
+#    return res_mesh
 
 def main2():
     from meshmode.mesh.generation import (  # noqa
             generate_icosphere, generate_icosahedron,
             generate_torus, generate_regular_rect_mesh,
-            generate_box_mesh)
+            generate_box_mesh, generate_hybrid_mesh)
 #    mesh = generate_icosphere(1, order=order)
     #mesh = generate_icosahedron(1, order=order)
     #mesh = generate_torus(3, 1, order=order)
@@ -294,15 +294,25 @@ def main2():
     refine_and_generate_chart_function(mesh, "plot.pdf", linear_func)
     #refine_and_generate_chart_function(mesh, "plot.pdf", sine_func)
 
+def random_refine_flags(fract, mesh):
+    all_els = list(range(mesh.nelements))
+
+    flags = np.zeros(mesh.nelements)
+    from random import shuffle
+    shuffle(all_els)
+    for i in range(int(mesh.nelements * fract)):
+        flags[all_els[i]] = 1
+
+    return flags
 
 def all_refine(num_mesh, depth, fname):
     from meshmode.mesh.generation import (  # noqa
             generate_icosphere, generate_icosahedron,
             generate_torus, generate_regular_rect_mesh,
-            generate_box_mesh)
+            generate_box_mesh, generate_hybrid_mesh)
+    from functools import partial
     from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-    random.seed(0)
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
     if 0:
@@ -335,7 +345,11 @@ def all_refine(num_mesh, depth, fname):
     #flags[0] = 1
     #flags[1] = 1
     #flags[2] = 1
-    mesh = generate_hybrid_mesh(mesh, flags)
+    mesh = generate_hybrid_mesh(partial(generate_box_mesh, (
+                np.linspace(0, 1, 3),
+                np.linspace(0, 1, 3),
+                ), group_factory=TensorProductElementGroup, order=1),
+            partial(random_refine_flags, 0.4))
 
     #print("END GEN")
     #import timeit
@@ -355,7 +369,7 @@ def all_refine(num_mesh, depth, fname):
     for time in range(3):
         flags = get_random_flags(mesh)
         coarsen_flags = []
-        if time <= 1:
+        if time <= 2:
             for grp_index, grp in enumerate(mesh.groups):
                 curnels = grp.nelements
                 coarsen_flags.append([])
@@ -375,7 +389,7 @@ def all_refine(num_mesh, depth, fname):
                     elif i:
                         curnels += 7
         mesh = r.refine(flags)
-        if time <= 1:
+        if time <= 2:
             mesh = r.coarsen(coarsen_flags)
     #mesh = r.coarsen(coarsen_flags)
     #flags = get_random_flags(mesh)
