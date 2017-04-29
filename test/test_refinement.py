@@ -277,6 +277,123 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
             order=1),
         uniform_refine_flags,
         4),
+
+    ("rect2d_rand",
+        partial(generate_box_mesh, (
+            np.linspace(0, 1, 3),
+            np.linspace(0, 1, 3),
+            ), order=1),
+        partial(random_refine_flags, 0.4),
+        4),
+
+    ("rect2d_unif",
+        partial(generate_box_mesh, (
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 2),
+            ), order=1),
+        uniform_refine_flags,
+        3),
+
+    ("blob2d_rand",
+        gen_blob_mesh,
+        partial(random_refine_flags, 0.4),
+        4),
+
+    ("rect3d_rand",
+        partial(generate_box_mesh, (
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 3),
+            np.linspace(0, 1, 2),
+            ), order=1),
+        partial(random_refine_flags, 0.4),
+        3),
+
+    ("rect3d_unif",
+        partial(generate_box_mesh, (
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 2),
+            ), order=1),
+        uniform_refine_flags,
+        3),
+
+    #quad mesh tests
+    ("rect2d_rand",
+        partial(generate_box_mesh, (
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 2),
+            ), order=1, group_factory=TensorProductElementGroup),
+        partial(random_refine_flags, 0.4),
+        4),
+
+    ("rect2d_unif",
+        partial(generate_box_mesh, (
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 2),
+            ), order=1, group_factory=TensorProductElementGroup),
+        uniform_refine_flags,
+        3),
+
+    ("rect3d_rand",
+        partial(generate_box_mesh, (
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 2),
+            ), order=1, group_factory=TensorProductElementGroup),
+        partial(random_refine_flags, 0.4),
+        3),
+
+    ("rect3d_unif",
+        partial(generate_box_mesh, (
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 2),
+            np.linspace(0, 1, 2),
+            ), order=1, group_factory=TensorProductElementGroup),
+        uniform_refine_flags,
+        3),
+
+    #hybrid mesh tests
+    ("hybrid2d_rand",
+        partial(generate_hybrid_mesh,
+            partial(generate_box_mesh, (
+                np.linspace(0, 1, 2),
+                np.linspace(0, 1, 2),
+                ), order=1, group_factory=TensorProductElementGroup),
+            partial(random_refine_flags, 0.4)),
+        partial(random_refine_flags, 0.4),
+        4),
+
+    ("hybrid2d_unif",
+        partial(generate_hybrid_mesh,
+            partial(generate_box_mesh, (
+                np.linspace(0, 1, 2),
+                np.linspace(0, 1, 2),
+                ), order=1, group_factory=TensorProductElementGroup),
+            partial(random_refine_flags, 0.4)),
+        uniform_refine_flags,
+        4),
+
+    ("hybrid3d_rand",
+        partial(generate_hybrid_mesh,
+            partial(generate_box_mesh, (
+                np.linspace(0, 1, 2),
+                np.linspace(0, 1, 2),
+                np.linspace(0, 1, 2),
+                ), order=1, group_factory=TensorProductElementGroup),
+            partial(random_refine_flags, 0.4)),
+        partial(random_refine_flags, 0.4),
+        4),
+
+    ("hybrid3d_unif",
+        partial(generate_hybrid_mesh,
+            partial(generate_box_mesh, (
+                np.linspace(0, 1, 2),
+                np.linspace(0, 1, 2),
+                np.linspace(0, 1, 2),
+                ), order=1, group_factory=TensorProductElementGroup),
+            partial(random_refine_flags, 0.4)),
+        uniform_refine_flags,
+        3),
     ])
 
 @pytest.mark.parametrize("coarsen_els_gen", [
