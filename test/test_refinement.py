@@ -72,7 +72,7 @@ def random_refine_flags(fract, mesh):
 def random_coarsen_els(fract, refine_flags, mesh):
     import six
     def get_group_index(el):
-        for grp_index, grp in mesh.groups:
+        for grp_index, grp in enumerate(mesh.groups):
             if el < grp.element_nr_base + grp.nelements:
                 return grp_index
         assert(False)
