@@ -214,7 +214,7 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
         if not connections:
             raise ValueError("connections may not be empty")
 
-        super(DirectDiscretizationConnection, self).__init__(
+        super(ChainedDiscretizationConnection, self).__init__(
                 connections[0].from_discr,
                 connections[-1].to_discr,
                 is_surjective=all(
