@@ -41,6 +41,7 @@ from meshmode.discretization.poly_element import (
 from meshmode.mesh import BTAG_ALL
 from meshmode.discretization.connection import \
         FRESTR_ALL_FACES, FRESTR_INTERIOR_FACES
+import meshmode.mesh.generation as mgen
 
 import pytest
 
@@ -450,6 +451,66 @@ def test_element_orientation():
 # }}}
 
 
+# {{{ element orientation: canned 3D meshes
+
+# python test_meshmode.py 'test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)'  # noqa
+@pytest.mark.parametrize(("what", "mesh_gen_func"), [
+    ("ball", lambda: mgen.generate_icosahedron(1, 1)),
+    ("torus", lambda: mgen.generate_torus(5, 1)),
+    ])
+def test_3d_orientation(ctx_getter, what, mesh_gen_func, visualize=False):
+    pytest.importorskip("pytential")
+
+    logging.basicConfig(level=logging.INFO)
+
+    ctx = ctx_getter()
+    queue = cl.CommandQueue(ctx)
+
+    mesh = mesh_gen_func()
+
+    logger.info("%d elements" % mesh.nelements)
+
+    from meshmode.discretization import Discretization
+    discr = Discretization(ctx, mesh,
+            PolynomialWarpAndBlendGroupFactory(1))
+
+    from pytential import bind, sym
+
+    # {{{ check normals point outward
+
+    if what == "torus":
+        nodes = sym.nodes(mesh.ambient_dim).as_vector()
+        angle = sym.atan2(nodes[1], nodes[0])
+        center_nodes = sym.make_obj_array([
+                5*sym.cos(angle),
+                5*sym.sin(angle),
+                0*angle])
+        normal_outward_expr = (
+                sym.normal(mesh.ambient_dim) | (nodes-center_nodes))
+
+    else:
+        normal_outward_expr = (
+                sym.normal(mesh.ambient_dim) | sym.nodes(mesh.ambient_dim))
+
+    normal_outward_check = bind(discr, normal_outward_expr)(queue).as_scalar() > 0
+
+    assert normal_outward_check.get().all(), normal_outward_check.get()
+
+    # }}}
+
+    normals = bind(discr, sym.normal(mesh.ambient_dim).xproject(1))(queue)
+
+    if visualize:
+        from meshmode.discretization.visualization import make_visualizer
+        vis = make_visualizer(queue, discr, 1)
+
+        vis.write_vtk_file("normals.vtu", [
+            ("normals", normals),
+            ])
+
+# }}}
+
+
 # {{{ merge and map
 
 def test_merge_and_map(ctx_getter, visualize=False):
@@ -581,7 +642,6 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
             ("bdry_normals", bdry_normals)
             ])
 
-    from pytential import bind, sym
     normal_outward_check = bind(bdry_discr,
             sym.normal(dim)
             |
