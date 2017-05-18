@@ -277,7 +277,7 @@ def make_face_restriction(discr, group_factory, boundary_tag,
                         if ibface_face == face_id],
                     dtype=np.intp)
 
-            # {{{ Preallocate arrays for mesh group
+            # {{{ preallocate arrays for mesh group
 
             nbatch_elements = len(batch_boundary_el_numbers_in_grp)
 
