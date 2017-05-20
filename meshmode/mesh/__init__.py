@@ -457,8 +457,10 @@ class InterPartitionAdj():
         :arg elem
         :arg face
         :returns: A tuple ``(neighbor_elem, neighbor_face)`` of
-                    neighboring elements within another :class:`Mesh`.
-                    Or (-1, -1) if the face does not have a neighbor.
+                    neighboring elements within another :class:`Mesh`
+                    or (-1, -1) if the face does not have a neighbor.
+                    Note that ``neighbor_elem`` is mesh-wide and includes
+                    its ``element_nr_base``.
         """
         for idx in range(len(self.elements)):
             if elem == self.elements[idx] and face == self.element_faces[idx]:
@@ -850,16 +852,16 @@ class Mesh(Record):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def find_igrp(self, elem):
+    def find_igrp(self, meshwide_elem):
         """
-        :arg elem: A mesh-wise element. Think of it as ``elem + element_nr_base``.
-        :returns: The index of the group that `elem` belongs to.
+        :arg meshwide_elem: Think of it as ``elem + element_nr_base``.
+        :returns: The index of the group that `meshwide_elem` belongs to.
         """
         for igrp, grp in enumerate(self.groups):
-            if elem < grp.nelements:
+            if meshwide_elem < grp.nelements:
                 return igrp
-            elem -= grp.nelements
-        raise RuntimeError("Could not find group with element %d." % elem)
+            meshwide_elem -= grp.nelements
+        raise RuntimeError("Could not find group with element %d." % meshwide_elem)
 
     def adjacency_list(self):
         """
