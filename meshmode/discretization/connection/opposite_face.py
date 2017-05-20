@@ -448,13 +448,15 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
             adj = adj_parts[i_src_part]
 
             i_tgt_faces = adj.element_faces
-            i_src_elems = adj.neighbors
+            i_src_meshwide_elems = adj.neighbors
             i_src_faces = adj.neighbor_faces
-            i_src_grps = np.array([src_mesh.find_igrp(e) for e in i_src_elems])
+            i_src_grps = np.array([src_mesh.find_igrp(e)
+                                        for e in i_src_meshwide_elems])
 
+            i_src_elems = np.empty_like(i_src_meshwide_elems)
             for i, i_grp in enumerate(i_src_grps):
                 elem_base = src_mesh.groups[i_grp].element_nr_base
-                i_src_elems[i] -= elem_base
+                i_src_elems[i] = i_src_meshwide_elems[i] - elem_base
 
             for i_src_grp in np.unique(i_src_grps):
 
