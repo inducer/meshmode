@@ -57,9 +57,6 @@ def partition_mesh(mesh, part_per_element, part_nr):
         numbers on *part_mesh* to ones in *mesh*.
 
     .. versionadded:: 2017.1
-
-    .. warning:: Interface is not final. Connectivity between elements
-        across groups needs to be added.
     """
     assert len(part_per_element) == mesh.nelements, (
         "part_per_element must have shape (mesh.nelements,)")
@@ -83,7 +80,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
     for group_num in range(num_groups):
         mesh_group = mesh.groups[group_num]
 
-        # Find the index of first element in the next group
+        # Find the index of first element in the next group.
         end_idx = len(queried_elems)
         for idx in range(start_idx, len(queried_elems)):
             if queried_elems[idx] - num_prev_elems >= mesh_group.nelements:
@@ -168,9 +165,10 @@ def partition_mesh(mesh, part_per_element, part_nr):
             parent_adj = mesh.facial_adjacency_groups[parent_igrp]
 
             for parent_facial_group in parent_adj.values():
-                for idx in np.where(parent_facial_group.elements == parent_elem)[0]:
-                    if parent_facial_group.neighbors[idx] >= 0 and \
-                               parent_facial_group.element_faces[idx] == face:
+                indices, = np.nonzero(parent_facial_group.elements == parent_elem)
+                for idx in indices:
+                    if (parent_facial_group.neighbors[idx] >= 0 and
+                               parent_facial_group.element_faces[idx] == face):
                         rank_neighbor = (parent_facial_group.neighbors[idx]
                                             + parent_elem_base)
                         n_face = parent_facial_group.neighbor_faces[idx]
@@ -181,19 +179,19 @@ def partition_mesh(mesh, part_per_element, part_nr):
                                                     BTAG_PARTITION(n_part_num))
                         boundary_adj.neighbors[adj_idx] = -tags
 
-                        # Find the neighbor element from the other partition
-                        n_elem = np.count_nonzero(
+                        # Find the neighbor element from the other partition.
+                        n_meshwide_elem = np.count_nonzero(
                                     part_per_element[:rank_neighbor] == n_part_num)
 
                         if n_part_num not in adj_grps[igrp]:
                             adj_grps[igrp][n_part_num] = InterPartitionAdj()
 
-                        # I cannot compute the neighbor group because the other
+                        # We cannot compute the neighbor group because the other
                         # partitions may not have been built yet.
                         adj = adj_grps[igrp][n_part_num]
                         adj.elements = np.append(adj.elements, elem)
                         adj.element_faces = np.append(adj.element_faces, face)
-                        adj.neighbors = np.append(adj.neighbors, n_elem)
+                        adj.neighbors = np.append(adj.neighbors, n_meshwide_elem)
                         adj.neighbor_faces = np.append(adj.neighbor_faces, n_face)
 
     connected_mesh = part_mesh.copy()

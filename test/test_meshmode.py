@@ -54,24 +54,30 @@ logger = logging.getLogger(__name__)
                             PolynomialWarpAndBlendGroupFactory,
                             #InterpolatoryQuadratureSimplexGroupFactory
                             ])
-@pytest.mark.parametrize("num_parts", [3])#, 3])
+@pytest.mark.parametrize("num_parts", [2])#, 3])
 # FIXME: Mostly fails for multiple groups.
 @pytest.mark.parametrize("num_groups", [1])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
-         #(2, [3, 5, 7]),
-         (3, [3, 5])
+         (2, [10, 20, 30]),
+         #(3, [3, 5])
         ])
 def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     num_parts, num_groups):
     cl_ctx = ctx_getter()
     queue = cl.CommandQueue(cl_ctx)
-    order = 5
+    order = 3
 
     from pytools.convergence import EOCRecorder
-    eoc_rec = EOCRecorder()
+    eoc_rec = dict()
+    for i in range(num_parts):
+        for j in range(num_parts):
+            if i == j:
+                continue
+            eoc_rec[(i, j)] = EOCRecorder()
 
     def f(x):
-        return 0.1*cl.clmath.sin(30*x)
+        return x
+        #return 0.1*cl.clmath.sin(30*x)
 
     for n in mesh_pars:
         from meshmode.mesh.generation import generate_warped_rect_mesh
@@ -130,11 +136,12 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                     bdry_f_2 = connection(queue, bdry_f)
 
                     err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
-                    eoc_rec.add_data_point(1./n, err)
+                    eoc_rec[(i_tgt_part, i_src_part)].add_data_point(1./n, err)
 
-    print(eoc_rec)
-    assert (eoc_rec.order_estimate() >= order-0.5
-            or eoc_rec.max_error() < 1e-13)
+    print(eoc_rec[(0, 1)])
+
+    assert (eoc_rec[(0, 1)].order_estimate() >= order-0.5
+            or eoc_rec[(0, 1)].max_error() < 1e-13)
 
 # }}}
 
@@ -188,26 +195,26 @@ def test_partition_mesh(num_parts, num_meshes, dim):
                     if tag & part.boundary_tag_bit(BTAG_PARTITION(n_part_num)) != 0:
                         num_tags[n_part_num] += 1
 
-                        (n_elem, n_face) = adj.get_neighbor(elem, face)
-                        n_grp_num = n_part.find_igrp(n_elem)
+                        (n_meshwide_elem, n_face) = adj.get_neighbor(elem, face)
+                        n_grp_num = n_part.find_igrp(n_meshwide_elem)
                         n_adj = n_part.interpart_adj_groups[n_grp_num][part_num]
                         n_elem_base = n_part.groups[n_grp_num].element_nr_base
-                        n_elem -= n_elem_base
+                        n_elem = n_meshwide_elem - n_elem_base
                         assert (elem + elem_base, face) ==\
                                             n_adj.get_neighbor(n_elem, n_face),\
                                             "InterPartitionAdj is not consistent"
 
                         n_part_to_global = new_meshes[n_part_num][1]
-                        p_elem = part_to_global[elem + elem_base]
-                        p_n_elem = n_part_to_global[n_elem + n_elem_base]
+                        p_meshwide_elem = part_to_global[elem + elem_base]
+                        p_meshwide_n_elem = n_part_to_global[n_elem + n_elem_base]
 
-                        p_grp_num = mesh.find_igrp(p_elem)
-                        p_n_grp_num = mesh.find_igrp(p_n_elem)
+                        p_grp_num = mesh.find_igrp(p_meshwide_elem)
+                        p_n_grp_num = mesh.find_igrp(p_meshwide_n_elem)
 
                         p_elem_base = mesh.groups[p_grp_num].element_nr_base
                         p_n_elem_base = mesh.groups[p_n_grp_num].element_nr_base
-                        p_elem -= p_elem_base
-                        p_n_elem -= p_n_elem_base
+                        p_elem = p_meshwide_elem - p_elem_base
+                        p_n_elem = p_meshwide_n_elem - p_n_elem_base
 
                         f_groups = mesh.facial_adjacency_groups[p_grp_num]
                         for p_bnd_adj in f_groups.values():
@@ -219,11 +226,11 @@ def test_partition_mesh(num_parts, num_meshes, dim):
                                     assert n_face == p_bnd_adj.neighbor_faces[idx],\
                                             "Tag does not give correct neighbor"
 
-    for tag_num in range(num_parts):
+    for i_tag in range(num_parts):
         tag_sum = 0
         for mesh, _ in new_meshes:
-            tag_sum += count_tags(mesh, BTAG_PARTITION(tag_num))
-        assert num_tags[tag_num] == tag_sum,\
+            tag_sum += count_tags(mesh, BTAG_PARTITION(i_tag))
+        assert num_tags[i_tag] == tag_sum,\
                 "part_mesh has the wrong number of BTAG_PARTITION boundaries"
 
 
