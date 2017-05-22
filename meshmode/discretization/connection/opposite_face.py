@@ -434,8 +434,7 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
 
     adj_grps = tgt_mesh.interpart_adj_groups
 
-    ntgt_groups = len(tgt_mesh.groups)
-    part_batches = ntgt_groups * [[]]
+    part_batches = dict()
 
     # FIXME: Is this an ok way to grab a queue?
     with cl.CommandQueue(tgt_vol.cl_context) as queue:
@@ -444,6 +443,8 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
             if i_src_part not in adj_parts:
                 # Skip because i_tgt_grp is not connected to i_src_part.
                 continue
+
+            part_batches[i_tgt_grp] = []
 
             adj = adj_parts[i_src_part]
 
@@ -491,7 +492,7 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
             from_discr=src_bdry,  # Is this right?
             to_discr=tgt_bdry,
             groups=[DiscretizationConnectionElementGroup(batches=batches)
-                        for batches in part_batches],
+                        for batches in part_batches.values()],
             is_surjective=True)
 
 # }}}
