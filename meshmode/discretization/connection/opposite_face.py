@@ -444,6 +444,8 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
                 # Skip because i_tgt_grp is not connected to i_src_part.
                 continue
 
+            # FIXME: Here we avoid creating empty batches. But now the
+            # number of batches does not match the number of groups.
             part_batches[i_tgt_grp] = []
 
             adj = adj_parts[i_src_part]

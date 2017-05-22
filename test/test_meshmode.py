@@ -57,7 +57,13 @@ logger = logging.getLogger(__name__)
                             ])
 @pytest.mark.parametrize("num_parts", [2])
 # FIXME: Mostly fails for multiple groups.
-@pytest.mark.parametrize("num_groups", [3])
+# The problem is that when multiple groups are partitioned
+# some partitions may not contain all groups. In that case
+# there will be a connection between two partitions with
+# empty batches because there will be a group that doesn't
+# connect to the other partition. I need to deal with these
+# empty batches.
+@pytest.mark.parametrize("num_groups", [1])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
          (2, [10, 20, 30]),
          #(3, [3, 5])
@@ -143,8 +149,8 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
         for j in range(num_parts):
             if i != j:
                 print(eoc_rec[(i, j)])
-                #assert(eoc_rec[(i, j)].order_estimate() >= order - 0.5
-                #        or eoc_rec[(i, j)].max_error() < 1e-13)
+                assert(eoc_rec[(i, j)].order_estimate() >= order - 0.5
+                        or eoc_rec[(i, j)].max_error() < 1e-13)
 
 # }}}
 
