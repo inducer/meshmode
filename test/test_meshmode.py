@@ -116,7 +116,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
         for i_tgt_part in range(num_parts):
             for i_src_part in range(num_parts):
                 if (i_tgt_part == i_src_part
-                        or eoc_rec[(i_tgt_part, i_src_part)] == None):
+                        or eoc_rec[(i_tgt_part, i_src_part)] is None):
                     eoc_rec[(i_tgt_part, i_src_part)] = None
                     continue
 
@@ -155,7 +155,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                 eoc_rec[(i_tgt_part, i_src_part)].add_data_point(1./n, err)
 
     for (i, j), e in eoc_rec.items():
-        if e != None:
+        if e is not None:
             print("Error of connection from part %i to part %i." % (i, j))
             print(e)
             assert(e.order_estimate() >= order - 0.5
