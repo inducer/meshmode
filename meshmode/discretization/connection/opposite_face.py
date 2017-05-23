@@ -434,19 +434,16 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
 
     adj_grps = tgt_mesh.interpart_adj_groups
 
-    part_batches = dict()
+    part_batches = []
 
     # FIXME: Is this an ok way to grab a queue?
     with cl.CommandQueue(tgt_vol.cl_context) as queue:
 
         for i_tgt_grp, adj_parts in enumerate(adj_grps):
+            part_batches.append([])
             if i_src_part not in adj_parts:
                 # Skip because i_tgt_grp is not connected to i_src_part.
                 continue
-
-            # FIXME: Here we avoid creating empty batches. But now the
-            # number of batches does not match the number of groups.
-            part_batches[i_tgt_grp] = []
 
             adj = adj_parts[i_src_part]
 
@@ -471,7 +468,7 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
                     index_flags = np.logical_and(i_src_grps == i_src_grp,
                                                  i_tgt_faces == i_tgt_face)
 
-                    if True not in index_flags:
+                    if not np.any(index_flags):
                         continue
 
                     vbc_tgt_grp_face_batch = _find_ibatch_for_face(
@@ -494,7 +491,7 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
             from_discr=src_bdry,  # Is this right?
             to_discr=tgt_bdry,
             groups=[DiscretizationConnectionElementGroup(batches=batches)
-                        for batches in part_batches.values()],
+                        for batches in part_batches],
             is_surjective=True)
 
 # }}}
