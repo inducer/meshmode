@@ -64,14 +64,14 @@ logger = logging.getLogger(__name__)
 # empty batches.
 @pytest.mark.parametrize("num_groups", [1])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
-         (2, [3, 5, 7]),
-         (3, [3, 5, 7])
+         (2, [10, 20, 30]),
+         (3, [3, 5])
         ])
 def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     num_parts, num_groups):
     cl_ctx = ctx_getter()
     queue = cl.CommandQueue(cl_ctx)
-    order = 5
+    order = 4
 
     from pytools.convergence import EOCRecorder
     eoc_rec = dict()
@@ -157,8 +157,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
         if e is not None:
             print("Error of connection from part %i to part %i." % (i, j))
             print(e)
-            assert(e.order_estimate() >= order - 0.5
-                or e.max_error() < 1e-12)
+            assert(e.order_estimate() >= order - 0.5 or e.max_error() < 1e-12)
 
 # }}}
 

@@ -57,7 +57,6 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
 
     dim = src_grp.dim
     ambient_dim, nelements, ntgt_unit_nodes = tgt_bdry_nodes.shape
-    # FIXME: Not sure if this is a valid assertion.
     assert tgt_bdry_nodes.shape == src_bdry_nodes.shape
 
     # {{{ invert face map (using Gauss-Newton)
@@ -419,7 +418,7 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
 
     .. versionadded:: 2017.1
 
-    .. warning:: Interface is not final. It doesn't even work yet...:(
+    .. warning:: Interface is not final.
     """
 
     from meshmode.discretization.connection import (
