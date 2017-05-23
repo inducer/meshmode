@@ -53,9 +53,9 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.parametrize("group_factory", [
                             PolynomialWarpAndBlendGroupFactory,
-                            #InterpolatoryQuadratureSimplexGroupFactory
+                            InterpolatoryQuadratureSimplexGroupFactory
                             ])
-@pytest.mark.parametrize("num_parts", [2])
+@pytest.mark.parametrize("num_parts", [2, 3, 4])
 # FIXME: Mostly fails for multiple groups.
 # The problem is that when multiple groups are partitioned
 # some partitions may not contain all groups. In that case
@@ -65,14 +65,14 @@ logger = logging.getLogger(__name__)
 # empty batches.
 @pytest.mark.parametrize("num_groups", [1])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
-         (2, [10, 20, 30]),
-         #(3, [3, 5])
+         (2, [3, 5, 7]),
+         (3, [3, 5, 7])
         ])
 def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     num_parts, num_groups):
     cl_ctx = ctx_getter()
     queue = cl.CommandQueue(cl_ctx)
-    order = 3
+    order = 5
 
     from pytools.convergence import EOCRecorder
     eoc_rec = dict()
@@ -83,8 +83,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
             eoc_rec[(i, j)] = EOCRecorder()
 
     def f(x):
-        return x
-        #return 0.1*cl.clmath.sin(30*x)
+        return 0.1*cl.clmath.sin(30*x)
 
     for n in mesh_pars:
         from meshmode.mesh.generation import generate_warped_rect_mesh
@@ -116,41 +115,51 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
 
         for i_tgt_part in range(num_parts):
             for i_src_part in range(num_parts):
-                if i_tgt_part == i_src_part:
+                if (i_tgt_part == i_src_part
+                        or eoc_rec[(i_tgt_part, i_src_part)] == None):
+                    eoc_rec[(i_tgt_part, i_src_part)] = None
                     continue
 
-                # Connections within tgt_mesh to src_mesh
+                # Mark faces within tgt_mesh that are connected to src_mesh
                 tgt_to_src_conn = make_face_restriction(vol_discrs[i_tgt_part],
                                                         group_factory(order),
                                                         BTAG_PARTITION(i_src_part))
 
-                # Connections within src_mesh to tgt_mesh
+                # If these parts are not connected, don't bother checking the error
+                bdry_nodes = tgt_to_src_conn.to_discr.nodes()[0].with_queue(queue)
+                if bdry_nodes.size == 0:
+                    eoc_rec[(i_tgt_part, i_src_part)] = None
+                    continue
+
+                # Mark faces within src_mesh that are connected to tgt_mesh
                 src_to_tgt_conn = make_face_restriction(vol_discrs[i_src_part],
                                                         group_factory(order),
                                                         BTAG_PARTITION(i_tgt_part))
 
                 # Connect tgt_mesh to src_mesh
-                connection = make_partition_connection(tgt_to_src_conn,
-                                                       src_to_tgt_conn, i_src_part)
+                tgt_conn = make_partition_connection(tgt_to_src_conn,
+                                                     src_to_tgt_conn, i_src_part)
 
-                check_connection(connection)
+                # Connect src_mesh to tgt_mesh
+                src_conn = make_partition_connection(src_to_tgt_conn,
+                                                     tgt_to_src_conn, i_tgt_part)
 
-                # Should this be src_to_tgt_conn?
-                bdry_x = tgt_to_src_conn.to_discr.nodes()[0].with_queue(queue)
-                if bdry_x.size != 0:
-                    bdry_f = f(bdry_x)
+                check_connection(tgt_conn)
+                check_connection(src_conn)
 
-                    bdry_f_2 = connection(queue, bdry_f)
+                bdry_t = f(tgt_conn.to_discr.nodes()[0].with_queue(queue))
+                bdry_s = tgt_conn(queue, bdry_t)
+                bdry_t_2 = src_conn(queue, bdry_s)
 
-                    err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
-                    eoc_rec[(i_tgt_part, i_src_part)].add_data_point(1./n, err)
+                err = la.norm((bdry_t - bdry_t_2).get(), np.inf)
+                eoc_rec[(i_tgt_part, i_src_part)].add_data_point(1./n, err)
 
-    for i in range(num_parts):
-        for j in range(num_parts):
-            if i != j:
-                print(eoc_rec[(i, j)])
-                assert(eoc_rec[(i, j)].order_estimate() >= order - 0.5
-                        or eoc_rec[(i, j)].max_error() < 1e-13)
+    for (i, j), e in eoc_rec.items():
+        if e != None:
+            print("Error of connection from part %i to part %i." % (i, j))
+            print(e)
+            assert(e.order_estimate() >= order - 0.5
+                or e.max_error() < 1e-12)
 
 # }}}
 
@@ -496,7 +505,7 @@ def test_all_faces_interpolation(ctx_getter, mesh_name, dim, mesh_pars,
     PolynomialWarpAndBlendGroupFactory
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
-    #("blob", 2, [1e-1, 8e-2, 5e-2]),
+    ("blob", 2, [1e-1, 8e-2, 5e-2]),
     ("warp", 2, [3, 5, 7]),
     ("warp", 3, [3, 5]),
     ])
