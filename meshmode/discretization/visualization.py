@@ -338,6 +338,8 @@ class Visualizer(object):
         with open(file_name, "w") as outf:
             AppendedDataXMLGenerator(compressor)(grid).write(outf)
 
+        # }}}
+
 
 def make_visualizer(queue, discr, vis_order, element_shrink_factor=None):
     from meshmode.discretization import Discretization
