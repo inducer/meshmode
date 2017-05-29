@@ -128,9 +128,8 @@ def partition_mesh(mesh, part_per_element, part_num):
                             required_indices == original_index)[0]
 
     new_mesh_groups = []
-    for group_num in range(num_groups):
+    for group_num, mesh_group in enumerate(mesh.groups):
         if group_num not in skip_groups:
-            mesh_group = mesh.groups[group_num]
             new_mesh_groups.append(
                 type(mesh_group)(mesh_group.order, new_indices[group_num],
                     new_nodes[group_num], unit_nodes=mesh_group.unit_nodes))
