@@ -132,11 +132,11 @@ def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None):
     st = np.sin(theta)
     ct = np.cos(theta)
 
-    R = np.array(((ct, st, 0), (-st, ct, 0), (0, 0, 1)))
+    R = np.array(((ct, st, 0), (-st, ct, 0), (0, 0, 1)))  # noqa: N806
 
     # Construct the rotation matrix  ( V Transpose(V) - I ) R.
 
-    M = (np.outer(V, V) - np.eye(3)).dot(R)
+    M = (np.outer(V, V) - np.eye(3)).dot(R)  # noqa: N806
     return M
 
 # }}}
