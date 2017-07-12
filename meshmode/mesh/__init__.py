@@ -318,10 +318,10 @@ class SimplexElementGroup(MeshElementGroup):
                 )
         elif self.dim == 3:
             return (
-                (0, 1, 2),
-                (0, 3, 1),
-                (0, 2, 3),
-                (1, 3, 2)
+                (0, 2, 1),
+                (0, 1, 3),
+                (0, 3, 2),
+                (1, 2, 3)
                 )
         else:
             raise NotImplementedError("dim=%d" % self.dim)

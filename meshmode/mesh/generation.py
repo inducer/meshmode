@@ -41,10 +41,11 @@ Curve parametrizations
 
 .. autofunction:: ellipse
 .. autofunction:: cloverleaf
-.. autofunction:: starfish
+.. data :: starfish
 .. autofunction:: drop
 .. autofunction:: n_gon
 .. autofunction:: qbx_peanut
+.. autoclass:: WobblyCircle
 
 Surfaces
 --------
@@ -94,23 +95,6 @@ def cloverleaf(t):
     return np.vstack([
         np.cos(t)+a*np.sin(b*t),
         np.sin(t)-a*np.cos(b*t)
-        ])
-
-
-def starfish(t):
-    """
-    :arg t: the parametrization, runs from [0,1)
-    :return: an array of shape *(2, npoints)*
-    """
-
-    ilength = 2*np.pi
-    t = t*ilength
-
-    wave = 1+0.25*np.sin(5*t)
-
-    return np.vstack([
-        np.cos(t)*wave,
-        np.sin(t)*wave,
         ])
 
 
@@ -169,6 +153,45 @@ def qbx_peanut(t):
         0.75*cos(t-0.25*pi)*(1+0.3*sin(2*t)),
         sin(t-0.25*pi)*(1+0.3*sin(2*t))
         ])
+
+
+class WobblyCircle(object):
+    """
+    .. automethod:: random
+    .. automethod:: __call__
+    """
+    def __init__(self, coeffs):
+        self.coeffs = coeffs
+
+    @staticmethod
+    def random(ncoeffs, seed):
+        rng = np.random.mtrand.RandomState(seed)
+        coeffs = rng.rand(ncoeffs)
+
+        coeffs = 0.95*coeffs/np.sum(np.abs(coeffs))
+
+        return WobblyCircle(coeffs)
+
+    def __call__(self, t):
+        """
+        :arg t: the parametrization, runs from [0,1)
+        :return: an array of shape *(2, npoints)*
+        """
+
+        ilength = 2*np.pi
+        t = t*ilength
+
+        wave = 1
+        for i, coeff in enumerate(self.coeffs):
+            wave = wave + coeff*np.sin((i+1)*t)
+
+        return np.vstack([
+            np.cos(t)*wave,
+            np.sin(t)*wave,
+            ])
+
+
+starfish = WobblyCircle(np.array([0, 0, 0, 0, 0.25]))
 
 # }}}
 

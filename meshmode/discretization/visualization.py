@@ -338,6 +338,8 @@ class Visualizer(object):
         with open(file_name, "w") as outf:
             AppendedDataXMLGenerator(compressor)(grid).write(outf)
 
+        # }}}
+
 
 def make_visualizer(queue, discr, vis_order, element_shrink_factor=None):
     from meshmode.discretization import Discretization
@@ -368,18 +370,20 @@ def make_visualizer(queue, discr, vis_order, element_shrink_factor=None):
 def draw_curve(discr):
     mesh = discr.mesh
 
-    import matplotlib.pyplot as pt
-    pt.plot(mesh.vertices[0], mesh.vertices[1], "o")
+    import matplotlib.pyplot as plt
+    plt.plot(mesh.vertices[0], mesh.vertices[1], "o")
 
-    color = pt.cm.rainbow(np.linspace(0, 1, len(discr.groups)))
+    color = plt.cm.rainbow(np.linspace(0, 1, len(discr.groups)))
     with cl.CommandQueue(discr.cl_context) as queue:
         for i, group in enumerate(discr.groups):
             group_nodes = group.view(discr.nodes()).get(queue=queue)
-            pt.plot(
+            artist_handles = plt.plot(
                     group_nodes[0].T,
                     group_nodes[1].T, "-x",
-                    label="Group %d" % i,
                     color=color[i])
+
+            if artist_handles:
+                artist_handles[0].set_label("Group %d" % i)
 
 # }}}
 

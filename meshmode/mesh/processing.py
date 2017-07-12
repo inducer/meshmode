@@ -347,6 +347,12 @@ def flip_simplex_element_group(vertices, grp, grp_flip_flags):
 
 
 def perform_flips(mesh, flip_flags, skip_tests=False):
+    """
+    :arg flip_flags: A :class:`numpy.ndarray` with *mesh.nelements* entries
+        indicating by their Boolean value whether the element is to be
+        flipped.
+    """
+
     flip_flags = flip_flags.astype(np.bool)
 
     from meshmode.mesh import Mesh
