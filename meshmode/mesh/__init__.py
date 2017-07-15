@@ -102,11 +102,8 @@ class BTAG_PARTITION(object):  # noqa
     def __init__(self, part_nr):
         self.part_nr = int(part_nr)
 
-    # TODO is this acceptable?
-    # __eq__ is also defined so maybe the hash value isn't too important
-    # for dictionaries.
     def __hash__(self):
-        return self.part_nr
+        return hash((type(self), self.part_nr))
 
     def __eq__(self, other):
         if isinstance(other, BTAG_PARTITION):
@@ -114,7 +111,7 @@ class BTAG_PARTITION(object):  # noqa
         else:
             return False
 
-    def __nq__(self, other):
+    def __ne__(self, other):
         return not self.__eq__(other)
 
 
