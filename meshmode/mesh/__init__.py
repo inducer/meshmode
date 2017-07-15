@@ -438,7 +438,13 @@ class InterPartitionAdj():
         ``neighbor_faces[i]`` gives face index within the neighboring partition
         of the face connected to ``elements[i]``
 
-    .. automethod:: get_neighbor
+    .. attribute:: neighbor_lookup_table
+
+        A dictionary that maps the tuple ``(element, face)`` to the tuple
+        ``(neighbor_element, neighbor_face)``. May be ``None`` if it has not
+        been generated.
+
+    .. automethod:: append_connection
 
     .. versionadded:: 2017.1
     """
@@ -449,22 +455,26 @@ class InterPartitionAdj():
         self.neighbors = np.array([], dtype=int)
         self.neighbor_faces = np.array([], dtype=int)
 
-    def get_neighbor(self, elem, face):
+    def append_connection(self, elem, face, nelem, nface):
         """
-        :arg elem
-        :arg face
-        :returns: A tuple ``(neighbor_elem, neighbor_face)`` of
-                    neighboring elements within another :class:`Mesh`
-                    or (-1, -1) if the face does not have a neighbor.
-                    Note that ``neighbor_elem`` is mesh-wide and includes
-                    its ``element_nr_base``.
+        :arg elem:
+        :arg face:
+        :arg nelem:
+        :arg nface:
+        Connects element ``elem`` with face ``face`` to its neighboring element
+        ``nelem`` with face ``nface``.
         """
-        for idx in range(len(self.elements)):
-            if elem == self.elements[idx] and face == self.element_faces[idx]:
-                return (self.neighbors[idx],
-                        self.neighbor_faces[idx])
-        #raise RuntimeError("This face does not have a neighbor")
-        return (-1, -1)
+        self.elements = np.append(self.elements, elem)
+        self.element_faces = np.append(self.element_faces, face)
+        self.neighbors = np.append(self.neighbors, nelem)
+        self.neighbor_faces = np.append(self.neighbor_faces, nface)
+
+    def _generate_neighbor_lookup_table(self):
+        self.neighbor_lookup_table = dict()
+        for idx, (elem, face) in enumerate(zip(self.elements, self.element_faces)):
+            nelem = self.neighbors[idx]
+            nface = self.neighbor_faces[idx]
+            self.neighbor_lookup_table[(elem, face)] = (nelem, nface)
 
 # }}}
 
@@ -862,14 +872,15 @@ class Mesh(Record):
 
     def adjacency_list(self):
         """
-        :returns: An :class:`np.array` with dtype `set`. `adjacency[i]` is the set
+        :returns: An list of sets. `adjacency[i]` is the set
             of all elements that are adjacent to element `i`.
             Useful for `pymetis.part_graph`.
         """
-        adjacency_list = np.zeros((self.nelements,), dtype=set)
+        adjacency_list = []
+        for _ in range(self.nelements):
+            adjacency_list.append(set())
         nodal_adj = self.nodal_adjacency
         for elem in range(self.nelements):
-            adjacency_list[elem] = set()
             starts = nodal_adj.neighbors_starts
             for n in range(starts[elem], starts[elem + 1]):
                 adjacency_list[elem].add(nodal_adj.neighbors[n])

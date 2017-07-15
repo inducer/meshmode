@@ -187,11 +187,12 @@ def partition_mesh(mesh, part_per_element, part_nr):
 
                         # We cannot compute the neighbor group because the other
                         # partitions may not have been built yet.
-                        adj = adj_grps[igrp][n_part_num]
-                        adj.elements = np.append(adj.elements, elem)
-                        adj.element_faces = np.append(adj.element_faces, face)
-                        adj.neighbors = np.append(adj.neighbors, n_meshwide_elem)
-                        adj.neighbor_faces = np.append(adj.neighbor_faces, n_face)
+                        adj_grps[igrp][n_part_num].\
+                            append_connection(elem, face, n_meshwide_elem, n_face)
+
+    for adj_dict in adj_grps:
+        for adj_grp in adj_dict.values():
+            adj_grp._generate_neighbor_lookup_table()
 
     connected_mesh = part_mesh.copy()
     connected_mesh.interpart_adj_groups = adj_grps

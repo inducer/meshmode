@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.parametrize("group_factory", [
                             PolynomialWarpAndBlendGroupFactory,
-                            InterpolatoryQuadratureSimplexGroupFactory
+                            #InterpolatoryQuadratureSimplexGroupFactory
                             ])
 @pytest.mark.parametrize("num_parts", [2, 3, 4])
 # FIXME: Mostly fails for multiple groups.
@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("num_groups", [1])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
          (2, [10, 20, 30]),
-         (3, [3, 5])
+         #(3, [3, 5])
         ])
 def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     num_parts, num_groups):
@@ -212,15 +212,15 @@ def test_partition_mesh(num_parts, num_meshes, dim):
                     if tag & part.boundary_tag_bit(BTAG_PARTITION(n_part_num)) != 0:
                         num_tags[n_part_num] += 1
 
-                        (n_meshwide_elem, n_face) = adj.get_neighbor(elem, face)
+                        (n_meshwide_elem, n_face) =\
+                                    adj.neighbor_lookup_table[(elem, face)]
                         n_grp_num = n_part.find_igrp(n_meshwide_elem)
                         n_adj = n_part.interpart_adj_groups[n_grp_num][part_num]
                         n_elem_base = n_part.groups[n_grp_num].element_nr_base
                         n_elem = n_meshwide_elem - n_elem_base
                         assert (elem + elem_base, face) ==\
-                                            n_adj.get_neighbor(n_elem, n_face),\
-                                            "InterPartitionAdj is not consistent"
-
+                                n_adj.neighbor_lookup_table[(n_elem, n_face)],\
+                                "InterPartitionAdj is not consistent"
                         n_part_to_global = new_meshes[n_part_num][1]
                         p_meshwide_elem = part_to_global[elem + elem_base]
                         p_meshwide_n_elem = n_part_to_global[n_elem + n_elem_base]
