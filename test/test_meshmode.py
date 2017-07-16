@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
                             PolynomialWarpAndBlendGroupFactory,
                             #InterpolatoryQuadratureSimplexGroupFactory
                             ])
-@pytest.mark.parametrize("num_parts", [2, 3, 4])
+@pytest.mark.parametrize("num_parts", [2, 3])
 # FIXME: Mostly fails for multiple groups.
 # The problem is that when multiple groups are partitioned
 # some partitions may not contain all groups. In that case
@@ -65,8 +65,8 @@ logger = logging.getLogger(__name__)
 # empty batches.
 @pytest.mark.parametrize("num_groups", [1])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
-         (2, [10, 20, 30]),
-         #(3, [3, 5])
+         (2, [3, 5, 10]),
+         (3, [3, 5])
         ])
 def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     num_parts, num_groups):
@@ -99,6 +99,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
         from pymetis import part_graph
         (_, p) = part_graph(num_parts, adjacency=mesh.adjacency_list())
         part_per_element = np.array(p)
+        #part_per_element = np.random.randint(num_parts, size=mesh.nelements)
 
         from meshmode.mesh.processing import partition_mesh
         part_meshes = [
@@ -177,9 +178,10 @@ def test_partition_mesh(num_parts, num_meshes, dim):
     from meshmode.mesh.processing import merge_disjoint_meshes
     mesh = merge_disjoint_meshes(meshes)
 
-    from pymetis import part_graph
-    (_, p) = part_graph(num_parts, adjacency=mesh.adjacency_list())
-    part_per_element = np.array(p)
+    #from pymetis import part_graph
+    #(_, p) = part_graph(num_parts, adjacency=mesh.adjacency_list())
+    #part_per_element = np.array(p)
+    part_per_element = np.random.randint(num_parts, size=mesh.nelements)
 
     from meshmode.mesh.processing import partition_mesh
     # TODO: The same part_per_element array must be used to partition each mesh.
