@@ -88,8 +88,7 @@ def _build_boundary_connection(queue, vol_discr, bdry_discr, connection_data,
                     from_group_index=igrp,
                     from_element_indices=cl.array.to_device(
                         queue,
-                        vol_grp.mesh_el_group.element_nr_base
-                        + data.group_source_element_indices)
+                        data.group_source_element_indices)
                     .with_queue(None),
                     to_element_indices=cl.array.to_device(
                         queue,
