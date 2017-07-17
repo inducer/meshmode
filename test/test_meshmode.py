@@ -56,20 +56,14 @@ logger = logging.getLogger(__name__)
                             #InterpolatoryQuadratureSimplexGroupFactory
                             ])
 @pytest.mark.parametrize("num_parts", [2, 3])
-# FIXME: Mostly fails for multiple groups.
-# The problem is that when multiple groups are partitioned
-# some partitions may not contain all groups. In that case
-# there will be a connection between two partitions with
-# empty batches because there will be a group that doesn't
-# connect to the other partition. I need to deal with these
-# empty batches.
-@pytest.mark.parametrize("num_groups", [1])
+@pytest.mark.parametrize("num_groups", [1, 2])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
-         (2, [3, 5, 10]),
-         (3, [3, 5])
+         (2, [3, 4, 7]),
+         (3, [3, 4])
         ])
 def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     num_parts, num_groups):
+    np.random.seed(42)
     cl_ctx = ctx_getter()
     queue = cl.CommandQueue(cl_ctx)
     order = 4
@@ -96,10 +90,10 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
         else:
             mesh = meshes[0]
 
-        from pymetis import part_graph
-        (_, p) = part_graph(num_parts, adjacency=mesh.adjacency_list())
-        part_per_element = np.array(p)
-        #part_per_element = np.random.randint(num_parts, size=mesh.nelements)
+        #from pymetis import part_graph
+        #(_, p) = part_graph(num_parts, adjacency=mesh.adjacency_list())
+        #part_per_element = np.array(p)
+        part_per_element = np.random.randint(num_parts, size=mesh.nelements)
 
         from meshmode.mesh.processing import partition_mesh
         part_meshes = [
@@ -170,6 +164,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
 @pytest.mark.parametrize("num_parts", [4, 5, 7])
 @pytest.mark.parametrize("num_meshes", [1, 2, 7])
 def test_partition_mesh(num_parts, num_meshes, dim):
+    np.random.seed(42)
     n = (5,) * dim
     from meshmode.mesh.generation import generate_regular_rect_mesh
     meshes = [generate_regular_rect_mesh(a=(0 + i,) * dim, b=(1 + i,) * dim, n=n)
