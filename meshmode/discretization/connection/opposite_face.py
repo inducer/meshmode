@@ -272,7 +272,11 @@ def _find_ibatch_for_face(vbc_tgt_grp_batches, iface):
     return vbc_tgt_grp_face_batch
 
 
-def _make_el_lookup_table(queue, connection, igrp):
+def _make_bdry_el_lookup_table(queue, connection, igrp):
+    """Given a voluem-to-boundary connection as *connection*, return
+    a table of shape ``(from_nelements, nfaces)`` to look up the
+    element number of the boundary element for that face.
+    """
     from_nelements = connection.from_discr.groups[igrp].nelements
     from_nfaces = connection.from_discr.mesh.groups[igrp].nfaces
 
@@ -316,7 +320,7 @@ def make_opposite_face_connection(volume_to_bdry_conn):
         groups = [[] for i_tgt_grp in range(ngrps)]
 
         for i_src_grp in range(ngrps):
-            src_grp_el_lookup = _make_el_lookup_table(
+            src_grp_el_lookup = _make_bdry_el_lookup_table(
                     queue, volume_to_bdry_conn, i_src_grp)
 
             for i_tgt_grp in range(ngrps):
@@ -459,7 +463,7 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
             for i_src_grp in np.unique(i_src_grps):
 
                 src_el_lookup =\
-                        _make_el_lookup_table(queue, src_to_tgt_conn, i_src_grp)
+                        _make_bdry_el_lookup_table(queue, src_to_tgt_conn, i_src_grp)
 
                 for i_tgt_face in i_tgt_faces:
 
