@@ -1061,7 +1061,6 @@ def _compute_facial_adjacency_from_vertices(mesh):
 
         for ineighbor_group in range(len(mesh.groups)):
             nb_count = group_count.get((igroup, ineighbor_group))
-            # FIXME nb_count is None sometimes when it maybe shouldn't be.
             if nb_count is not None:
                 elements = np.empty(nb_count, dtype=mesh.element_id_dtype)
                 element_faces = np.empty(nb_count, dtype=mesh.face_id_dtype)
