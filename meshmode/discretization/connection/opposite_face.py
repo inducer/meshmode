@@ -273,7 +273,7 @@ def _find_ibatch_for_face(vbc_tgt_grp_batches, iface):
 
 
 def _make_bdry_el_lookup_table(queue, connection, igrp):
-    """Given a voluem-to-boundary connection as *connection*, return
+    """Given a volume-to-boundary connection as *connection*, return
     a table of shape ``(from_nelements, nfaces)`` to look up the
     element number of the boundary element for that face.
     """
