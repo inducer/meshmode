@@ -601,7 +601,7 @@ class Mesh(Record):
         A list of mappings from neighbor partition numbers to instances of
         :class:`InterPartitionAdj`.
 
-        ``interpart_adj_gorups[igrp][ineighbor_part]`` gives
+        ``interpart_adj_groups[igrp][ineighbor_part]`` gives
         the set of facial adjacency relations between group *igrp*
         and partition *ineighbor_part*.
 
