@@ -627,8 +627,8 @@ class Mesh(Record):
     .. automethos:: adjacency_list
     """
 
-    face_id_dtype=np.int8
-    element_id_dtype=np.int32
+    face_id_dtype = np.int8
+    element_id_dtype = np.int32
 
     def __init__(self, vertices, groups, skip_tests=False,
             node_vertex_consistency_tolerance=None,
