@@ -411,7 +411,7 @@ class NodalAdjacency(Record):
 
 # {{{ partition adjacency
 
-class InterPartitionAdj():
+class InterPartitionAdjacency(object):
     """
     Describes facial adjacency information of elements in one :class:`Mesh` to
     elements in another :class:`Mesh`. The element's boundary tag gives the
@@ -419,55 +419,45 @@ class InterPartitionAdj():
 
     .. attribute:: elements
 
-        `:class:Mesh`-local element numbers that have neighbors.
+        Group-local element numbers.
+        Element ``element_id_dtype elements[i]`` and face
+        ``face_id_dtype element_faces[i]`` is connected to neighbor element
+        ``element_id_dtype neighbors[i]`` with face
+        ``face_id_dtype neighbor_faces[i]``.
 
     .. attribute:: element_faces
 
-        ``element_faces[i]`` is the face of ``elements[i]`` that has a neighbor.
+        ``face_id_dtype element_faces[i]`` gives the face of
+        ``element_id_dtype elements[i]`` that is connected to ``neighbors[i]``.
 
     .. attribute:: neighbors
 
-        ``neighbors[i]`` gives the element number within the neighboring partiton
-        of the element connected to ``elements[i]``. This gives a mesh-wide element
-        numbering. Use ``Mesh.find_igrp()`` to find the group that the element
-        belongs to, then subtract ``element_nr_base`` to find the element of the
-        group.
+        Mesh-wide element numbers.
+        ``element_id_dtype neighbors[i]`` gives the element number within the
+        neighboring partiton of the element connected to
+        ``element_id_dtype elements[i]``. Use ``Mesh.find_igrp()`` to find the group
+        that the element belongs to, then subtract ``element_nr_base`` to find the
+        element of the group.
 
     .. attribute:: neighbor_faces
 
-        ``neighbor_faces[i]`` gives face index within the neighboring partition
-        of the face connected to ``elements[i]``
+        ``face_id_dtype neighbor_faces[i]`` gives face index within the neighboring
+        partition of the face connected to ``element_id_dtype elements[i]``
 
     .. attribute:: neighbor_lookup_table
 
         A dictionary that maps the tuple ``(element, face)`` to the tuple
-        ``(neighbor_element, neighbor_face)``. May be ``None`` if it has not
-        been generated.
-
-    .. automethod:: append_connection
+        ``(neighbor_element, neighbor_face)``.
 
     .. versionadded:: 2017.1
     """
 
-    def __init__(self):
-        self.elements = np.array([], dtype=int)
-        self.element_faces = np.array([], dtype=int)
-        self.neighbors = np.array([], dtype=int)
-        self.neighbor_faces = np.array([], dtype=int)
-
-    def append_connection(self, elem, face, nelem, nface):
-        """
-        :arg elem:
-        :arg face:
-        :arg nelem:
-        :arg nface:
-        Connects element ``elem`` with face ``face`` to its neighboring element
-        ``nelem`` with face ``nface``.
-        """
-        self.elements = np.append(self.elements, elem)
-        self.element_faces = np.append(self.element_faces, face)
-        self.neighbors = np.append(self.neighbors, nelem)
-        self.neighbor_faces = np.append(self.neighbor_faces, nface)
+    def __init__(self, elements, element_faces, neighbors, neighbor_faces):
+        self.elements = np.array(elements, dtype=Mesh.element_id_dtype)
+        self.element_faces = np.array(element_faces, dtype=Mesh.face_id_dtype)
+        self.neighbors = np.array(neighbors, dtype=Mesh.element_id_dtype)
+        self.neighbor_faces = np.array(neighbor_faces, dtype=Mesh.face_id_dtype)
+        self._generate_neighbor_lookup_table()
 
     def _generate_neighbor_lookup_table(self):
         self.neighbor_lookup_table = dict()
@@ -629,13 +619,16 @@ class Mesh(Record):
 
     .. attribute:: element_id_dtype
 
+    .. attribute:: face_id_dtype
+
     .. automethod:: __eq__
     .. automethod:: __ne__
     .. automethod:: find_igrp
     .. automethos:: adjacency_list
     """
 
-    face_id_dtype = np.int8
+    face_id_dtype=np.int8
+    element_id_dtype=np.int32
 
     def __init__(self, vertices, groups, skip_tests=False,
             node_vertex_consistency_tolerance=None,
