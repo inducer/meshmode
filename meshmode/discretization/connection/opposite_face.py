@@ -490,7 +490,7 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
                                                         src_bdry_element_indices))
 
     return DirectDiscretizationConnection(
-            from_discr=src_bdry,  # Is this right?
+            from_discr=src_bdry,
             to_discr=tgt_bdry,
             groups=[DiscretizationConnectionElementGroup(batches=batches)
                         for batches in part_batches],
