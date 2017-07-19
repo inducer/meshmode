@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.parametrize("group_factory", [
                             PolynomialWarpAndBlendGroupFactory,
-                            #InterpolatoryQuadratureSimplexGroupFactory
+                            InterpolatoryQuadratureSimplexGroupFactory
                             ])
 @pytest.mark.parametrize("num_parts", [2, 3])
 @pytest.mark.parametrize("num_groups", [1, 2])
@@ -211,7 +211,10 @@ def test_partition_mesh(num_parts, num_meshes, dim):
 
                         (n_meshwide_elem, n_face) =\
                                     adj.neighbor_lookup_table[(elem, face)]
-                        n_grp_num = n_part.find_igrp(n_meshwide_elem)
+                        # Hack: find_igrps expects a numpy.ndarray and returns
+                        #       a numpy.ndarray. But if a single integer is fed
+                        #       into find_igrps, an integer is returned.
+                        n_grp_num = n_part.find_igrps(n_meshwide_elem)
                         n_adj = n_part.interpart_adj_groups[n_grp_num][part_num]
                         n_elem_base = n_part.groups[n_grp_num].element_nr_base
                         n_elem = n_meshwide_elem - n_elem_base
@@ -222,8 +225,8 @@ def test_partition_mesh(num_parts, num_meshes, dim):
                         p_meshwide_elem = part_to_global[elem + elem_base]
                         p_meshwide_n_elem = n_part_to_global[n_elem + n_elem_base]
 
-                        p_grp_num = mesh.find_igrp(p_meshwide_elem)
-                        p_n_grp_num = mesh.find_igrp(p_meshwide_n_elem)
+                        p_grp_num = mesh.find_igrps(p_meshwide_elem)
+                        p_n_grp_num = mesh.find_igrps(p_meshwide_n_elem)
 
                         p_elem_base = mesh.groups[p_grp_num].element_nr_base
                         p_n_elem_base = mesh.groups[p_n_grp_num].element_nr_base
