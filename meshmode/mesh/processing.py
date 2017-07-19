@@ -150,15 +150,16 @@ def partition_mesh(mesh, part_per_element, part_nr):
         boundary_adj = part_mesh.facial_adjacency_groups[igrp][None]
         boundary_elems = boundary_adj.elements
         boundary_faces = boundary_adj.element_faces
+        p_meshwide_elems = queried_elems[boundary_elems + elem_base]
+        parent_igrps = mesh.find_igrps(p_meshwide_elems)
         for adj_idx, elem in enumerate(boundary_elems):
             face = boundary_faces[adj_idx]
             tags = -boundary_adj.neighbors[adj_idx]
             assert tags >= 0, "Expected boundary tag in adjacency group."
 
-            p_meshwide_elem = queried_elems[elem + elem_base]
-            parent_igrp = mesh.find_igrp(p_meshwide_elem)
+            parent_igrp = parent_igrps[adj_idx]
             parent_elem_base = mesh.groups[parent_igrp].element_nr_base
-            parent_elem = p_meshwide_elem - parent_elem_base
+            parent_elem = p_meshwide_elems[adj_idx] - parent_elem_base
 
             parent_adj = mesh.facial_adjacency_groups[parent_igrp]
 

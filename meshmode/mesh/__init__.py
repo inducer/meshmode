@@ -623,7 +623,7 @@ class Mesh(Record):
 
     .. automethod:: __eq__
     .. automethod:: __ne__
-    .. automethod:: find_igrp
+    .. automethod:: find_igrps
     .. automethos:: adjacency_list
     """
 
@@ -852,16 +852,19 @@ class Mesh(Record):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def find_igrp(self, meshwide_elem):
+    def find_igrps(self, meshwide_elems):
         """
-        :arg meshwide_elem: Think of it as ``elem + element_nr_base``.
-        :returns: The index of the group that `meshwide_elem` belongs to.
+        :arg meshwide_elems: A :class:``numpy.ndarray`` of mesh-wide element numbers
+            Usually computed by ``elem + element_nr_base``.
+        :returns: A :class:``numpy.ndarray`` of group numbers that ``meshwide_elem``
+            belongs to.
         """
+        grps = np.zeros_like(meshwide_elems)
+        next_grp_boundary = 0
         for igrp, grp in enumerate(self.groups):
-            if meshwide_elem < grp.nelements:
-                return igrp
-            meshwide_elem -= grp.nelements
-        raise RuntimeError("Could not find group with element %d." % meshwide_elem)
+            next_grp_boundary += grp.nelements
+            grps += meshwide_elems >= next_grp_boundary
+        return grps
 
     def adjacency_list(self):
         """
