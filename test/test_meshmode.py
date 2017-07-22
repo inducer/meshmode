@@ -173,10 +173,10 @@ def test_partition_mesh(num_parts, num_meshes, dim):
     from meshmode.mesh.processing import merge_disjoint_meshes
     mesh = merge_disjoint_meshes(meshes)
 
-    #from pymetis import part_graph
-    #(_, p) = part_graph(num_parts, adjacency=mesh.adjacency_list())
-    #part_per_element = np.array(p)
-    part_per_element = np.random.randint(num_parts, size=mesh.nelements)
+    from pymetis import part_graph
+    (_, p) = part_graph(num_parts, adjacency=mesh.adjacency_list())
+    part_per_element = np.array(p)
+    #part_per_element = np.random.randint(num_parts, size=mesh.nelements)
 
     from meshmode.mesh.processing import partition_mesh
     # TODO: The same part_per_element array must be used to partition each mesh.

@@ -868,18 +868,13 @@ class Mesh(Record):
 
     def adjacency_list(self):
         """
-        :returns: An list of sets. `adjacency[i]` is the set
-            of all elements that are adjacent to element `i`.
-            Useful for `pymetis.part_graph`.
+        :returns: `adjacency[i]` is a list of all elements that are adjacent to
+                    element `i`. Useful for `pymetis.part_graph`.
         """
         adjacency_list = []
-        for _ in range(self.nelements):
-            adjacency_list.append(set())
-        nodal_adj = self.nodal_adjacency
         for elem in range(self.nelements):
-            starts = nodal_adj.neighbors_starts
-            for n in range(starts[elem], starts[elem + 1]):
-                adjacency_list[elem].add(nodal_adj.neighbors[n])
+            start, end = self.nodal_adjacency.neighbors_starts[elem:elem+2]
+            adjacency_list.append(self.nodal_adjacency.neighbors[start:end])
         return adjacency_list
 
     # Design experience: Try not to add too many global data structures to the
