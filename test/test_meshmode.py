@@ -204,6 +204,7 @@ def test_partition_mesh(num_parts, num_meshes, dim):
                 n_part, n_part_to_global = new_meshes[n_part_num]
                 tags = -f_grp.neighbors
                 assert np.all(tags >= 0)
+
                 def is_connected_to_part(i):
                     return (part.boundary_tag_bit(BTAG_PARTITION(n_part_num))
                             & tags[i])
