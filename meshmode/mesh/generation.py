@@ -45,6 +45,7 @@ Curve parametrizations
 .. autofunction:: drop
 .. autofunction:: n_gon
 .. autofunction:: qbx_peanut
+.. autofunction:: apple
 .. autoclass:: WobblyCircle
 
 Surfaces
@@ -152,6 +153,24 @@ def qbx_peanut(t):
     return np.vstack([
         0.75*cos(t-0.25*pi)*(1+0.3*sin(2*t)),
         sin(t-0.25*pi)*(1+0.3*sin(2*t))
+        ])
+
+
+def apple(a, t):
+    """
+    :arg a: 0 <= a <= 1; roundedness: 0 returns a circle, 1 returns a cardioid
+    :arg t: the parametrization, runs from [0,1)
+    :return: an array of shape *(2, npoints)*
+    """
+    ilength = 2*np.pi
+    t = t*ilength
+
+    sin = np.sin
+    cos = np.cos
+
+    return np.vstack([
+        cos(t) + a*cos(2*t),
+        sin(t) + a*sin(2*t)
         ])
 
 
