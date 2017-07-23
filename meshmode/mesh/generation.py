@@ -158,7 +158,7 @@ def qbx_peanut(t):
 
 def apple(a, t):
     """
-    :arg a: 0 <= a <= 1; roundedness: 0 returns a circle, 1 returns a cardioid
+    :arg a: 0 <= a <= 1/2; roundedness: 0 returns a circle, 1/2 returns a cardioid
     :arg t: the parametrization, runs from [0,1)
     :return: an array of shape *(2, npoints)*
     """
