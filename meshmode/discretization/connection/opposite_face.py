@@ -454,15 +454,11 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
             i_src_faces = adj.neighbor_faces
             i_src_grps = src_mesh.find_igrps(i_src_meshwide_elems)
 
-            i_src_elems = np.empty_like(i_src_meshwide_elems)
-            for i, i_grp in enumerate(i_src_grps):
-                elem_base = src_mesh.groups[i_grp].element_nr_base
-                i_src_elems[i] = i_src_meshwide_elems[i] - elem_base
-
             for i_src_grp in np.unique(i_src_grps):
 
+                elem_base = src_mesh.groups[i_src_grp].element_nr_base
                 src_el_lookup =\
-                        _make_bdry_el_lookup_table(queue, src_to_tgt_conn, i_src_grp)
+                       _make_bdry_el_lookup_table(queue, src_to_tgt_conn, i_src_grp)
 
                 for i_tgt_face in i_tgt_faces:
 
@@ -478,9 +474,9 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
                     tgt_bdry_element_indices = vbc_tgt_grp_face_batch.\
                             to_element_indices.get(queue=queue)
 
-                    src_bdry_element_indices = src_el_lookup[
-                                                i_src_elems[index_flags],
-                                                i_src_faces[index_flags]]
+                    elems = i_src_meshwide_elems[index_flags] - elem_base
+                    faces = i_src_faces[index_flags]
+                    src_bdry_element_indices = src_el_lookup[elems, faces]
 
                     part_batches[i_tgt_grp].extend(_make_cross_face_batches(queue,
                                                         tgt_bdry, src_bdry,
