@@ -637,6 +637,7 @@ class Mesh(Record):
             interpart_adj_groups=False,
             boundary_tags=None,
             vertex_id_dtype=np.int32,
+            face_id_dtype=np.int8,
             element_id_dtype=np.int32):
         """
         The following are keyword-only:
@@ -720,6 +721,7 @@ class Mesh(Record):
                 boundary_tags=boundary_tags,
                 btag_to_index=btag_to_index,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),
+                face_id_dtype=np.dtype(face_id_dtype),
                 element_id_dtype=np.dtype(element_id_dtype),
                 )
 
