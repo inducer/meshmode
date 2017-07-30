@@ -409,16 +409,17 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 
 def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
     """
-    Given a two boundary restriction connections *tgt_conn* and *src_conn*,
-    return a :class:`DirectDiscretizationConnection` that performs data
-    exchange across adjacent faces of different partitions.
+    Given a two boundary restriction connections *tgt_to_src_conn* and
+    *src_to_tgt_conn*, return a :class:`DirectDiscretizationConnection` that
+    performs data exchange across adjacent faces of different partitions.
 
-    :arg tgt_conn: A :class:`Discretization` for the target partition.
-    :arg src_conn: A :class:`Discretization` for the source partition.
-    :arg i_src_part: The partition number corresponding to *src_conn*.
+    :arg tgt_to_src_conn: A :class:`Discretization` of the target partition.
+    :arg src_to_tgt_conn: A :class:`Discretization` of the source partition.
+    :arg i_src_part: The partition number of the src partition.
 
     :returns: A :class:`DirectDiscretizationConnection` that performs data
-                exchange across faces in different partitions.
+                exchange across faces from partition `src_to_tgt_conn` to
+                `tgt_to_src_conn`.
 
     .. versionadded:: 2017.1
 
