@@ -118,7 +118,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                                         BTAG_PARTITION(i_src_part))
 
                 # If these parts are not connected, don't bother checking the error
-                bdry_nodes = tgt_to_src_conn.to_discr.nodes()[0].with_queue(queue)
+                bdry_nodes = tgt_to_src_conn.to_discr.nodes()
                 if bdry_nodes.size == 0:
                     eoc_rec[(i_tgt_part, i_src_part)] = None
                     continue
