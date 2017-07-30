@@ -51,10 +51,7 @@ logger = logging.getLogger(__name__)
 
 # {{{ partition_interpolation
 
-@pytest.mark.parametrize("group_factory", [
-                            PolynomialWarpAndBlendGroupFactory,
-                            InterpolatoryQuadratureSimplexGroupFactory
-                            ])
+@pytest.mark.parametrize("group_factory", [PolynomialWarpAndBlendGroupFactory])
 @pytest.mark.parametrize("num_parts", [2, 3])
 @pytest.mark.parametrize("num_groups", [1, 2])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
