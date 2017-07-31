@@ -41,9 +41,10 @@ __doc__ = """
 .. autofunction:: affine_map
 """
 
+
 def find_group_indices(groups, meshwide_elems):
     """
-    :arg groups: A list of :class:``MeshElementGroup`` instances that contain 
+    :arg groups: A list of :class:``MeshElementGroup`` instances that contain
         ``meshwide_elems``.
     :arg meshwide_elems: A :class:``numpy.ndarray`` of mesh-wide element numbers
         Usually computed by ``elem + element_nr_base``.
@@ -56,6 +57,7 @@ def find_group_indices(groups, meshwide_elems):
         next_grp_boundary += grp.nelements
         grps += meshwide_elems >= next_grp_boundary
     return grps
+
 
 # {{{ partition_mesh
 
