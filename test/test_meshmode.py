@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("num_groups", [1, 2])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
          (2, [3, 4, 7]),
-         (3, [3, 4])
+         #(3, [3, 4])
         ])
 def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     num_parts, num_groups):
@@ -190,6 +190,7 @@ def test_partition_mesh(num_parts, num_meshes, dim):
         "part_mesh has the wrong number of BTAG_ALL boundaries"
 
     from meshmode.mesh import BTAG_PARTITION
+    from meshmode.mesh.processing import find_group_indices
     num_tags = np.zeros((num_parts,))
 
     for part_num in range(num_parts):
@@ -215,7 +216,7 @@ def test_partition_mesh(num_parts, num_meshes, dim):
                     # Hack: find_igrps expects a numpy.ndarray and returns
                     #       a numpy.ndarray. But if a single integer is fed
                     #       into find_igrps, an integer is returned.
-                    n_grp_num = n_part.find_igrps(n_meshwide_elem)
+                    n_grp_num = find_group_indices(n_part.groups, n_meshwide_elem)
                     n_adj = n_part.interpart_adj_groups[n_grp_num][part_num]
                     n_elem_base = n_part.groups[n_grp_num].element_nr_base
                     n_elem = n_meshwide_elem - n_elem_base
@@ -226,8 +227,8 @@ def test_partition_mesh(num_parts, num_meshes, dim):
                     p_meshwide_elem = part_to_global[elem + elem_base]
                     p_meshwide_n_elem = n_part_to_global[n_elem + n_elem_base]
 
-                    p_grp_num = mesh.find_igrps(p_meshwide_elem)
-                    p_n_grp_num = mesh.find_igrps(p_meshwide_n_elem)
+                    p_grp_num = find_group_indices(mesh.groups, p_meshwide_elem)
+                    p_n_grp_num = find_group_indices(mesh.groups, p_meshwide_n_elem)
 
                     p_elem_base = mesh.groups[p_grp_num].element_nr_base
                     p_n_elem_base = mesh.groups[p_n_grp_num].element_nr_base

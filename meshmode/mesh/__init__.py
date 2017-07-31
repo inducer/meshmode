@@ -422,48 +422,51 @@ class InterPartitionAdjacency(object):
         Group-local element numbers.
         Element ``element_id_dtype elements[i]`` and face
         ``face_id_dtype element_faces[i]`` is connected to neighbor element
-        ``element_id_dtype neighbors[i]`` with face
-        ``face_id_dtype neighbor_faces[i]``.
+        ``element_id_dtype global_neighbors[i]`` with face
+        ``face_id_dtype global_neighbor_faces[i]``.
 
     .. attribute:: element_faces
 
         ``face_id_dtype element_faces[i]`` gives the face of
-        ``element_id_dtype elements[i]`` that is connected to ``neighbors[i]``.
+        ``element_id_dtype elements[i]`` that is connected to
+        ``globla_neighbors[i]``.
 
-    .. attribute:: neighbors
+    .. attribute:: global_neighbors
 
         Mesh-wide element numbers.
-        ``element_id_dtype neighbors[i]`` gives the element number within the
+        ``element_id_dtype global_neighbors[i]`` gives the element number within the
         neighboring partiton of the element connected to
-        ``element_id_dtype elements[i]``. Use ``Mesh.find_igrp()`` to find the group
-        that the element belongs to, then subtract ``element_nr_base`` to find the
-        element of the group.
+        ``element_id_dtype elements[i]``. Use ``find_group_instances()`` to find the
+        group that the element belongs to, then subtract ``element_nr_base`` to find
+        the element of the group.
 
-    .. attribute:: neighbor_faces
+    .. attribute:: global_neighbor_faces
 
-        ``face_id_dtype neighbor_faces[i]`` gives face index within the neighboring
-        partition of the face connected to ``element_id_dtype elements[i]``
+        ``face_id_dtype global_neighbor_faces[i]`` gives face index within the
+        neighboring partition of the face connected to
+        ``element_id_dtype elements[i]``
 
     .. attribute:: neighbor_lookup_table
 
         A dictionary that maps the tuple ``(element, face)`` to the tuple
-        ``(neighbor_element, neighbor_face)``.
+        ``(global_neighbor_element, global_neighbor_face)``.
 
     .. versionadded:: 2017.1
     """
 
-    def __init__(self, elements, element_faces, neighbors, neighbor_faces):
-        self.elements = np.array(elements, dtype=Mesh.element_id_dtype)
-        self.element_faces = np.array(element_faces, dtype=Mesh.face_id_dtype)
-        self.neighbors = np.array(neighbors, dtype=Mesh.element_id_dtype)
-        self.neighbor_faces = np.array(neighbor_faces, dtype=Mesh.face_id_dtype)
+    def __init__(self, elements, element_faces,
+                       global_neighbors, global_neighbor_faces):
+        self.elements = elements
+        self.element_faces = element_faces
+        self.global_neighbors = global_neighbors
+        self.global_neighbor_faces = global_neighbor_faces
         self._generate_neighbor_lookup_table()
 
     def _generate_neighbor_lookup_table(self):
         self.neighbor_lookup_table = dict()
         for idx, (elem, face) in enumerate(zip(self.elements, self.element_faces)):
-            nelem = self.neighbors[idx]
-            nface = self.neighbor_faces[idx]
+            nelem = self.global_neighbors[idx]
+            nface = self.global_neighbor_faces[idx]
             self.neighbor_lookup_table[(elem, face)] = (nelem, nface)
 
 # }}}
@@ -619,16 +622,12 @@ class Mesh(Record):
 
     .. attribute:: element_id_dtype
 
-    .. attribute:: face_id_dtype
-
     .. automethod:: __eq__
     .. automethod:: __ne__
-    .. automethod:: find_igrps
     .. automethos:: adjacency_list
     """
 
     face_id_dtype = np.int8
-    element_id_dtype = np.int32
 
     def __init__(self, vertices, groups, skip_tests=False,
             node_vertex_consistency_tolerance=None,
@@ -637,7 +636,6 @@ class Mesh(Record):
             interpart_adj_groups=False,
             boundary_tags=None,
             vertex_id_dtype=np.int32,
-            face_id_dtype=np.int8,
             element_id_dtype=np.int32):
         """
         The following are keyword-only:
@@ -721,8 +719,7 @@ class Mesh(Record):
                 boundary_tags=boundary_tags,
                 btag_to_index=btag_to_index,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),
-                face_id_dtype=np.dtype(face_id_dtype),
-                element_id_dtype=np.dtype(element_id_dtype),
+                element_id_dtype=np.dtype(element_id_dtype)
                 )
 
         if not skip_tests:
@@ -853,20 +850,6 @@ class Mesh(Record):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-
-    def find_igrps(self, meshwide_elems):
-        """
-        :arg meshwide_elems: A :class:``numpy.ndarray`` of mesh-wide element numbers
-            Usually computed by ``elem + element_nr_base``.
-        :returns: A :class:``numpy.ndarray`` of group numbers that ``meshwide_elem``
-            belongs to.
-        """
-        grps = np.zeros_like(meshwide_elems)
-        next_grp_boundary = 0
-        for igrp, grp in enumerate(self.groups):
-            next_grp_boundary += grp.nelements
-            grps += meshwide_elems >= next_grp_boundary
-        return grps
 
     def adjacency_list(self):
         """

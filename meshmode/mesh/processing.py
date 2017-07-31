@@ -31,6 +31,7 @@ import modepy as mp
 
 
 __doc__ = """
+.. autofunction:: find_group_indices
 .. autofunction:: partition_mesh
 .. autofunction:: find_volume_mesh_element_orientations
 .. autofunction:: perform_flips
@@ -40,6 +41,21 @@ __doc__ = """
 .. autofunction:: affine_map
 """
 
+def find_group_indices(groups, meshwide_elems):
+    """
+    :arg groups: A list of :class:``MeshElementGroup`` instances that contain 
+        ``meshwide_elems``.
+    :arg meshwide_elems: A :class:``numpy.ndarray`` of mesh-wide element numbers
+        Usually computed by ``elem + element_nr_base``.
+    :returns: A :class:``numpy.ndarray`` of group numbers that ``meshwide_elem``
+        belongs to.
+    """
+    grps = np.zeros_like(meshwide_elems)
+    next_grp_boundary = 0
+    for igrp, grp in enumerate(groups):
+        next_grp_boundary += grp.nelements
+        grps += meshwide_elems >= next_grp_boundary
+    return grps
 
 # {{{ partition_mesh
 
@@ -151,7 +167,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
         boundary_elems = boundary_adj.elements
         boundary_faces = boundary_adj.element_faces
         p_meshwide_elems = queried_elems[boundary_elems + elem_base]
-        parent_igrps = mesh.find_igrps(p_meshwide_elems)
+        parent_igrps = find_group_indices(mesh.groups, p_meshwide_elems)
         for adj_idx, elem in enumerate(boundary_elems):
             face = boundary_faces[adj_idx]
             tags = -boundary_adj.neighbors[adj_idx]
@@ -193,7 +209,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
         for n_part_num, adj_data in adj_dict.items():
             elems, faces, n_elems, n_faces = np.array(adj_data).T
             adj_grps[igrp][n_part_num] =\
-                InterPartitionAdjacency(elems, faces, n_elems, n_faces)
+                        InterPartitionAdjacency(elems, faces, n_elems, n_faces)
 
     connected_mesh = part_mesh.copy()
     connected_mesh.interpart_adj_groups = adj_grps
