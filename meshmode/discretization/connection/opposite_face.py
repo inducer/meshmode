@@ -426,6 +426,7 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
     .. warning:: Interface is not final.
     """
 
+    from meshmode.mesh.processing import find_group_indices
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
 
@@ -451,9 +452,9 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
             adj = adj_parts[i_src_part]
 
             i_tgt_faces = adj.element_faces
-            i_src_meshwide_elems = adj.neighbors
-            i_src_faces = adj.neighbor_faces
-            i_src_grps = src_mesh.find_igrps(i_src_meshwide_elems)
+            i_src_meshwide_elems = adj.global_neighbors
+            i_src_faces = adj.global_neighbor_faces
+            i_src_grps = find_group_indices(src_mesh.groups, i_src_meshwide_elems)
 
             for i_src_grp in np.unique(i_src_grps):
 
