@@ -409,84 +409,6 @@ class NodalAdjacency(Record):
 # }}}
 
 
-# {{{ partition adjacency
-
-class InterPartitionAdjacency(object):
-    """
-    Describes facial adjacency information of elements in one :class:`Mesh` to
-    elements in another :class:`Mesh`. The element's boundary tag gives the
-    partition that it is connected to.
-
-    .. attribute:: elements
-
-        Group-local element numbers.
-        Element ``element_id_dtype elements[i]`` and face
-        ``face_id_dtype element_faces[i]`` is connected to neighbor element
-        ``element_id_dtype global_neighbors[i]`` with face
-        ``face_id_dtype global_neighbor_faces[i]``.
-
-    .. attribute:: element_faces
-
-        ``face_id_dtype element_faces[i]`` gives the face of
-        ``element_id_dtype elements[i]`` that is connected to
-        ``globla_neighbors[i]``.
-
-    .. attribute:: global_neighbors
-
-        Mesh-wide element numbers.
-        ``element_id_dtype global_neighbors[i]`` gives the element number within the
-        neighboring partiton of the element connected to
-        ``element_id_dtype elements[i]``. Use ``find_group_instances()`` to find the
-        group that the element belongs to, then subtract ``element_nr_base`` to find
-        the element of the group.
-
-    .. attribute:: global_neighbor_faces
-
-        ``face_id_dtype global_neighbor_faces[i]`` gives face index within the
-        neighboring partition of the face connected to
-        ``element_id_dtype elements[i]``
-
-    .. attribute:: neighbor_lookup_table
-
-        A dictionary that maps the tuple ``(element, face)`` to the tuple
-        ``(global_neighbor_element, global_neighbor_face)``.
-
-    .. versionadded:: 2017.1
-    """
-
-    def __init__(self, elements,
-                       element_faces,
-                       neighbor_parts,
-                       global_neighbors,
-                       global_neighbor_faces):
-        self.elements = elements
-        self.element_faces = element_faces
-        self.neighbor_parts = neighbor_parts
-        self.global_neighbors = global_neighbors
-        self.global_neighbor_faces = global_neighbor_faces
-        self._generate_neighbor_lookup_table()
-
-    def __eq__(self, other):
-        return (
-                type(self) == type(other)
-                and np.array_equal(self.elements, other.elements)
-                and np.array_equal(self.element_faces, other.element_faces)
-                and np.array_equal(self.neighbors, other.neighbors)
-                and np.array_equal(self.neighbor_faces, other.neighbor_faces)
-                and np.array_equal(self.neighbor_part, other.neighbor_part)
-                )
-
-    def _generate_neighbor_lookup_table(self):
-        self.neighbor_lookup_table = dict()
-        for idx, (elem, face) in enumerate(zip(self.elements, self.element_faces)):
-            nelem = self.global_neighbors[idx]
-            nface = self.global_neighbor_faces[idx]
-            npart = self.neighbor_parts[idx]
-            self.neighbor_lookup_table[(elem, face)] = (npart, nelem, nface)
-
-# }}}
-
-
 # {{{ facial adjacency
 
 class FacialAdjacencyGroup(Record):
@@ -561,6 +483,82 @@ class FacialAdjacencyGroup(Record):
 # }}}
 
 
+# {{{ partition adjacency
+
+class InterPartitionAdjacency(FacialAdjacencyGroup):
+    """
+    Describes facial adjacency information of elements in one :class:`Mesh` to
+    elements in another :class:`Mesh`. The element's boundary tag gives the
+    partition that it is connected to.
+
+    .. attribute:: elements
+
+        Group-local element numbers.
+        Element ``element_id_dtype elements[i]`` and face
+        ``face_id_dtype element_faces[i]`` is connected to neighbor element
+        ``element_id_dtype global_neighbors[i]`` with face
+        ``face_id_dtype global_neighbor_faces[i]``.
+
+    .. attribute:: element_faces
+
+        ``face_id_dtype element_faces[i]`` gives the face of
+        ``element_id_dtype elements[i]`` that is connected to
+        ``globla_neighbors[i]``.
+
+    .. attribute:: global_neighbors
+
+        Mesh-wide element numbers.
+        ``element_id_dtype global_neighbors[i]`` gives the element number within the
+        neighboring partiton of the element connected to
+        ``element_id_dtype elements[i]``. Use ``find_group_instances()`` to find the
+        group that the element belongs to, then subtract ``element_nr_base`` to find
+        the element of the group.
+
+    .. attribute:: global_neighbor_faces
+
+        ``face_id_dtype global_neighbor_faces[i]`` gives face index within the
+        neighboring partition of the face connected to
+        ``element_id_dtype elements[i]``
+
+    .. attribute:: neighbor_lookup_table
+
+        A dictionary that maps the tuple ``(element, face)`` to the tuple
+        ``(global_neighbor_element, global_neighbor_face)``.
+
+    .. versionadded:: 2017.1
+    """
+
+    def __init__(self, elements,
+                       element_faces,
+                       neighbor_parts,
+                       global_neighbors,
+                       neighbor_faces):
+        self.elements = elements
+        self.element_faces = element_faces
+        self.neighbor_parts = neighbor_parts
+        self.global_neighbors = global_neighbors
+        self.neighbor_faces = neighbor_faces
+        self._generate_neighbor_lookup_table()
+
+    def __eq__(self, other):
+        return (type(self) == type(other)
+                and np.array_equal(self.elements, other.elements)
+                and np.array_equal(self.element_faces, other.element_faces)
+                and np.array_equal(self.global_neighbors, other.global_neighbors)
+                and np.array_equal(self.neighbor_faces, other.neighbor_faces)
+                and np.array_equal(self.neighbor_part, other.neighbor_part))
+
+    def _generate_neighbor_lookup_table(self):
+        self.neighbor_lookup_table = dict()
+        for idx, (elem, face) in enumerate(zip(self.elements, self.element_faces)):
+            nelem = self.global_neighbors[idx]
+            nface = self.neighbor_faces[idx]
+            npart = self.neighbor_parts[idx]
+            self.neighbor_lookup_table[(elem, face)] = (npart, nelem, nface)
+
+# }}}
+
+
 # {{{ mesh
 
 class Mesh(Record):
@@ -614,15 +612,6 @@ class Mesh(Record):
         (Note that element groups are not necessarily contiguous like the figure
         may suggest.)
 
-    .. attribute:: interpart_adj_groups
-
-        A list of mappings from neighbor partition numbers to instances of
-        :class:`InterPartitionAdj`.
-
-        ``interpart_adj_groups[igrp][ineighbor_part]`` gives
-        the set of facial adjacency relations between group *igrp*
-        and partition *ineighbor_part*.
-
     .. attribute:: boundary_tags
 
         A tuple of boundary tag identifiers. :class:`BTAG_ALL` and
@@ -648,7 +637,6 @@ class Mesh(Record):
             node_vertex_consistency_tolerance=None,
             nodal_adjacency=False,
             facial_adjacency_groups=False,
-            interpart_adj_groups=False,
             boundary_tags=None,
             vertex_id_dtype=np.int32,
             element_id_dtype=np.int32):
@@ -730,7 +718,6 @@ class Mesh(Record):
                 self, vertices=vertices, groups=new_groups,
                 _nodal_adjacency=nodal_adjacency,
                 _facial_adjacency_groups=facial_adjacency_groups,
-                interpart_adj_groups=interpart_adj_groups,
                 boundary_tags=boundary_tags,
                 btag_to_index=btag_to_index,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),

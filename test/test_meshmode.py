@@ -189,28 +189,33 @@ def test_partition_mesh(num_parts, num_meshes, dim):
         [count_tags(new_meshes[i][0], BTAG_ALL) for i in range(num_parts)]), \
         "part_mesh has the wrong number of BTAG_ALL boundaries"
 
-    from meshmode.mesh import BTAG_PARTITION
+    from meshmode.mesh import BTAG_PARTITION, InterPartitionAdjacency
     from meshmode.mesh.processing import find_group_indices
     num_tags = np.zeros((num_parts,))
 
     for part_num in range(num_parts):
         part, part_to_global = new_meshes[part_num]
-        for grp_num, adj in part.interpart_adj_groups.items():
-            f_grp = part.facial_adjacency_groups[grp_num][None]
-            tags = -f_grp.neighbors
-            assert np.all(tags >= 0)
+        for grp_num in range(len(part.groups)):
+            #f_grp = part.facial_adjacency_groups[grp_num][None]
+            #tags = -f_grp.neighbors
+            #assert np.all(tags >= 0)
+            if not 'part' in part.facial_adjacency_groups[grp_num]:
+                continue
+            adj = part.facial_adjacency_groups[grp_num]['part']
+            if not isinstance(adj, InterPartitionAdjacency):
+                continue
             elem_base = part.groups[grp_num].element_nr_base
             for elem, face, n_part_num, n_meshwide_elem, n_face in\
                 zip(adj.elements, adj.element_faces,
                     adj.neighbor_parts, adj.global_neighbors,
-                    adj.global_neighbor_faces):
+                    adj.neighbor_faces):
                 num_tags[n_part_num] += 1
                 n_part, n_part_to_global = new_meshes[n_part_num]
                 # Hack: find_igrps expects a numpy.ndarray and returns
                 #       a numpy.ndarray. But if a single integer is fed
                 #       into find_igrps, an integer is returned.
                 n_grp_num = find_group_indices(n_part.groups, n_meshwide_elem)
-                n_adj = n_part.interpart_adj_groups[int(n_grp_num)]
+                n_adj = n_part.facial_adjacency_groups[int(n_grp_num)]['part']
                 n_elem_base = n_part.groups[n_grp_num].element_nr_base
                 n_elem = n_meshwide_elem - n_elem_base
                 assert (part_num, elem + elem_base, face) ==\
@@ -249,11 +254,10 @@ def test_partition_mesh(num_parts, num_meshes, dim):
 def count_tags(mesh, tag):
     num_bnds = 0
     for adj_dict in mesh.facial_adjacency_groups:
-        for _, bdry_group in adj_dict.items():
-            for neighbors in bdry_group.neighbors:
-                if neighbors < 0:
-                    if -neighbors & mesh.boundary_tag_bit(tag) != 0:
-                        num_bnds += 1
+        for neighbors in adj_dict[None].neighbors:
+            if neighbors < 0:
+                if -neighbors & mesh.boundary_tag_bit(tag) != 0:
+                    num_bnds += 1
     return num_bnds
 
 # }}}
