@@ -454,20 +454,35 @@ class InterPartitionAdjacency(object):
     .. versionadded:: 2017.1
     """
 
-    def __init__(self, elements, element_faces,
-                       global_neighbors, global_neighbor_faces):
+    def __init__(self, elements,
+                       element_faces,
+                       neighbor_parts,
+                       global_neighbors,
+                       global_neighbor_faces):
         self.elements = elements
         self.element_faces = element_faces
+        self.neighbor_parts = neighbor_parts
         self.global_neighbors = global_neighbors
         self.global_neighbor_faces = global_neighbor_faces
         self._generate_neighbor_lookup_table()
+
+    def __eq__(self, other):
+        return (
+                type(self) == type(other)
+                and np.array_equal(self.elements, other.elements)
+                and np.array_equal(self.element_faces, other.element_faces)
+                and np.array_equal(self.neighbors, other.neighbors)
+                and np.array_equal(self.neighbor_faces, other.neighbor_faces)
+                and np.array_equal(self.neighbor_part, other.neighbor_part)
+                )
 
     def _generate_neighbor_lookup_table(self):
         self.neighbor_lookup_table = dict()
         for idx, (elem, face) in enumerate(zip(self.elements, self.element_faces)):
             nelem = self.global_neighbors[idx]
             nface = self.global_neighbor_faces[idx]
-            self.neighbor_lookup_table[(elem, face)] = (nelem, nface)
+            npart = self.neighbor_parts[idx]
+            self.neighbor_lookup_table[(elem, face)] = (npart, nelem, nface)
 
 # }}}
 

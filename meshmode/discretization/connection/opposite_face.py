@@ -437,23 +437,28 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
     tgt_mesh = tgt_vol.mesh
     src_mesh = src_vol.mesh
 
-    adj_grps = tgt_mesh.interpart_adj_groups
-
     part_batches = []
 
     with cl.CommandQueue(tgt_vol.cl_context) as queue:
 
-        for i_tgt_grp, adj_parts in enumerate(adj_grps):
+        for i_tgt_grp, adj in tgt_mesh.interpart_adj_groups.items():
             part_batches.append([])
-            if i_src_part not in adj_parts:
-                # Skip because i_tgt_grp is not connected to i_src_part.
+            #if i_src_part not in adj_parts:
+            #    # Skip because i_tgt_grp is not connected to i_src_part.
+            #    continue
+
+            #adj = adj_parts[i_src_part]
+
+            idxes = i_src_part == adj.neighbor_parts
+            if not np.any(idxes):
                 continue
-
-            adj = adj_parts[i_src_part]
-
-            i_tgt_faces = adj.element_faces
-            i_src_meshwide_elems = adj.global_neighbors
-            i_src_faces = adj.global_neighbor_faces
+            i_tgt_faces = adj.element_faces[idxes]
+            i_src_meshwide_elems = adj.global_neighbors[idxes]
+            i_src_faces = adj.global_neighbor_faces[idxes]
+            
+            #i_tgt_faces = adj.element_faces
+            #i_src_meshwide_elems = adj.global_neighbors
+            #i_src_faces = adj.global_neighbor_faces
             i_src_grps = find_group_indices(src_mesh.groups, i_src_meshwide_elems)
 
             for i_src_grp in np.unique(i_src_grps):
