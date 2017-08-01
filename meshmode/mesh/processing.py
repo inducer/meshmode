@@ -161,7 +161,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
     part_mesh = Mesh(new_vertices, new_mesh_groups,
         facial_adjacency_groups=None, boundary_tags=boundary_tags)
 
-    adj_grps = [dict() for _ in range(len(part_mesh.groups))]
+    adj_data = [[] for _ in range(len(part_mesh.groups))]
 
     for igrp, grp in enumerate(part_mesh.groups):
         elem_base = grp.element_nr_base
@@ -200,18 +200,16 @@ def partition_mesh(mesh, part_per_element, part_nr):
                         n_meshwide_elem = np.count_nonzero(
                                     part_per_element[:rank_neighbor] == n_part_num)
 
-                        if n_part_num not in adj_grps[igrp]:
-                            adj_grps[igrp][n_part_num] = []
-
-                        adj_grps[igrp][n_part_num].\
-                            append((elem, face, n_meshwide_elem, n_face))
+                        adj_data[igrp].append((elem, face, 
+                                               n_part_num, n_meshwide_elem, n_face))
 
     from meshmode.mesh import InterPartitionAdjacency
-    for igrp, adj_dict in enumerate(adj_grps):
-        for n_part_num, adj_data in adj_dict.items():
-            elems, faces, n_elems, n_faces = np.array(adj_data).T
-            adj_grps[igrp][n_part_num] =\
-                        InterPartitionAdjacency(elems, faces, n_elems, n_faces)
+    adj_grps = dict()
+    for igrp, connection in enumerate(adj_data):
+        if connection:
+            elems, faces, n_parts, n_elems, n_faces = np.array(connection).T
+            adj_grps[igrp] =\
+                    InterPartitionAdjacency(elems, faces, n_parts, n_elems, n_faces)
 
     connected_mesh = part_mesh.copy()
     connected_mesh.interpart_adj_groups = adj_grps
