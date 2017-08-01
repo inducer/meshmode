@@ -203,16 +203,16 @@ def partition_mesh(mesh, part_per_element, part_nr):
                         adj_data[igrp].append((elem, face, 
                                                n_part_num, n_meshwide_elem, n_face))
 
-    from meshmode.mesh import InterPartitionAdjacency
-    adj_grps = dict()
-    for igrp, connection in enumerate(adj_data):
-        if connection:
-            elems, faces, n_parts, n_elems, n_faces = np.array(connection).T
-            adj_grps[igrp] =\
-                    InterPartitionAdjacency(elems, faces, n_parts, n_elems, n_faces)
-
     connected_mesh = part_mesh.copy()
-    connected_mesh.interpart_adj_groups = adj_grps
+
+    from meshmode.mesh import InterPartitionAdjacency
+    for igrp, adj in enumerate(adj_data):
+        if adj:
+            elems, faces, n_parts, n_elems, n_faces = np.array(adj).T
+            connected_mesh.facial_adjacency_groups[igrp]['part'] =\
+                    InterPartitionAdjacency(elems, faces,
+                                            n_parts, n_elems, n_faces)
+
     return connected_mesh, queried_elems
 
 # }}}
