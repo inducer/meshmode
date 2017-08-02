@@ -172,8 +172,8 @@ def partition_mesh(mesh, part_per_element, part_nr):
         parent_igrps = find_group_indices(mesh.groups, p_meshwide_elems)
         for adj_idx, elem in enumerate(boundary_elems):
             face = boundary_faces[adj_idx]
-            tags = -boundary_adj.neighbors[adj_idx]
-            assert tags >= 0, "Expected boundary tag in adjacency group."
+            tag = -boundary_adj.neighbors[adj_idx]
+            assert tag >= 0, "Expected boundary tag in adjacency group."
 
             parent_igrp = parent_igrps[adj_idx]
             parent_elem_base = mesh.groups[parent_igrp].element_nr_base
@@ -191,16 +191,16 @@ def partition_mesh(mesh, part_per_element, part_nr):
                         n_face = parent_facial_group.neighbor_faces[idx]
 
                         n_part_num = part_per_element[rank_neighbor]
-                        tags = tags & ~part_mesh.boundary_tag_bit(BTAG_ALL)
-                        tags = tags | part_mesh.boundary_tag_bit(
+                        tag = tag & ~part_mesh.boundary_tag_bit(BTAG_ALL)
+                        tag = tag | part_mesh.boundary_tag_bit(
                                                     BTAG_PARTITION(n_part_num))
-                        boundary_adj.neighbors[adj_idx] = -tags
+                        boundary_adj.neighbors[adj_idx] = -tag
 
                         # Find the neighbor element from the other partition.
                         n_meshwide_elem = np.count_nonzero(
                                     part_per_element[:rank_neighbor] == n_part_num)
 
-                        adj_data[igrp].append((elem, face, 
+                        adj_data[igrp].append((elem, face,
                                                n_part_num, n_meshwide_elem, n_face))
 
     connected_mesh = part_mesh.copy()
@@ -208,9 +208,27 @@ def partition_mesh(mesh, part_per_element, part_nr):
     from meshmode.mesh import InterPartitionAdjacency
     for igrp, adj in enumerate(adj_data):
         if adj:
-            elems, faces, n_parts, n_elems, n_faces = np.array(adj).T
-            connected_mesh.facial_adjacency_groups[igrp]['part'] =\
-                    InterPartitionAdjacency(elems, faces,
+            boundary_adj = connected_mesh.facial_adjacency_groups[igrp][None]
+            n_parts = np.zeros_like(boundary_adj.elements)
+            n_parts.fill(-1)
+            n_elems = np.copy(n_parts)
+            n_faces = np.copy(n_parts)
+            for elem, face, n_part, n_elem, n_face in adj:
+                idx = np.where(np.logical_and(elem == boundary_adj.elements,
+                               face == boundary_adj.element_faces))[0]
+                n_parts[idx] = n_part
+                n_elems[idx] = n_elem
+                n_faces[idx] = n_face
+            #bdry_perm = np.argsort(boundary_adj.elements)
+            #bdry_elems = boundary_adj.elements[perm]
+            #bdry_faces = boundary_adj.element_faces[perm]
+            #elems, faces, n_parts, n_elems, n_faces = np.array(adj).T
+            connected_mesh.facial_adjacency_groups[igrp][None] =\
+                    InterPartitionAdjacency(boundary_adj.elements,
+                                            boundary_adj.element_faces,
+                                            boundary_adj.neighbors,
+                                            boundary_adj.igroup,
+                                            boundary_adj.ineighbor_group,
                                             n_parts, n_elems, n_faces)
 
     return connected_mesh, queried_elems

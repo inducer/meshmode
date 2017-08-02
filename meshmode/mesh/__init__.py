@@ -514,13 +514,13 @@ class InterPartitionAdjacency(FacialAdjacencyGroup):
         group that the element belongs to, then subtract ``element_nr_base`` to find
         the element of the group.
 
-    .. attribute:: global_neighbor_faces
+    .. attribute:: neighbor_faces
 
         ``face_id_dtype global_neighbor_faces[i]`` gives face index within the
         neighboring partition of the face connected to
         ``element_id_dtype elements[i]``
 
-    .. attribute:: neighbor_lookup_table
+    .. attribute:: index_lookup_table
 
         A dictionary that maps the tuple ``(element, face)`` to the tuple
         ``(global_neighbor_element, global_neighbor_face)``.
@@ -528,33 +528,41 @@ class InterPartitionAdjacency(FacialAdjacencyGroup):
     .. versionadded:: 2017.1
     """
 
+    '''
+    I don't like the idea of having InterPartitionAdjacency replace the boundary
+    group for FacialAdjacencyGroup. A boundary may be a real boundary or it may
+    have a partition adjacent to it. FacialAdjacency and InterPartitionAdjacecy
+    will not have the same elements. They should be separate. facial_adjacency_groups
+    should have groups for real boundaries and for 'fake' boundaries.
+    '''
+
     def __init__(self, elements,
                        element_faces,
+                       neighbors,
+                       igroup,
+                       i_neighbor_group,
                        neighbor_parts,
                        global_neighbors,
                        neighbor_faces):
         self.elements = elements
         self.element_faces = element_faces
+        self.neighbors = neighbors
+        self.igroup = igroup
+        self.i_neighbor_group = i_neighbor_group
         self.neighbor_parts = neighbor_parts
         self.global_neighbors = global_neighbors
         self.neighbor_faces = neighbor_faces
-        self._generate_neighbor_lookup_table()
+        self._generate_index_lookup_table()
 
     def __eq__(self, other):
-        return (type(self) == type(other)
-                and np.array_equal(self.elements, other.elements)
-                and np.array_equal(self.element_faces, other.element_faces)
+        return (super.__eq__(self, other)
                 and np.array_equal(self.global_neighbors, other.global_neighbors)
-                and np.array_equal(self.neighbor_faces, other.neighbor_faces)
                 and np.array_equal(self.neighbor_part, other.neighbor_part))
 
-    def _generate_neighbor_lookup_table(self):
-        self.neighbor_lookup_table = dict()
+    def _generate_index_lookup_table(self):
+        self.index_lookup_table = dict()
         for idx, (elem, face) in enumerate(zip(self.elements, self.element_faces)):
-            nelem = self.global_neighbors[idx]
-            nface = self.neighbor_faces[idx]
-            npart = self.neighbor_parts[idx]
-            self.neighbor_lookup_table[(elem, face)] = (npart, nelem, nface)
+            self.index_lookup_table[(elem, face)] = idx
 
 # }}}
 
@@ -847,7 +855,6 @@ class Mesh(Record):
                         == other._nodal_adjacency)
                 and (self._facial_adjacency_groups
                         == other._facial_adjacency_groups)
-                and self.interpart_adj_groups == other.interpart_adj_groups
                 and self.boundary_tags == other.boundary_tags)
 
     def __ne__(self, other):

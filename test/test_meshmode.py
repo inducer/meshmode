@@ -196,32 +196,35 @@ def test_partition_mesh(num_parts, num_meshes, dim):
     for part_num in range(num_parts):
         part, part_to_global = new_meshes[part_num]
         for grp_num in range(len(part.groups)):
-            #f_grp = part.facial_adjacency_groups[grp_num][None]
-            #tags = -f_grp.neighbors
-            #assert np.all(tags >= 0)
-            if not 'part' in part.facial_adjacency_groups[grp_num]:
-                continue
-            adj = part.facial_adjacency_groups[grp_num]['part']
+            adj = part.facial_adjacency_groups[grp_num][None]
+            tags = -part.facial_adjacency_groups[grp_num][None].neighbors
+            assert np.all(tags >= 0)
             if not isinstance(adj, InterPartitionAdjacency):
                 continue
             elem_base = part.groups[grp_num].element_nr_base
-            for elem, face, n_part_num, n_meshwide_elem, n_face in\
-                zip(adj.elements, adj.element_faces,
-                    adj.neighbor_parts, adj.global_neighbors,
-                    adj.neighbor_faces):
+            for idx in range(len(adj.elements)):
+                if adj.global_neighbors[idx] == -1:
+                    continue
+                elem = adj.elements[idx]
+                face = adj.element_faces[idx]
+                n_part_num = adj.neighbor_parts[idx]
+                n_meshwide_elem = adj.global_neighbors[idx]
+                n_face = adj.neighbor_faces[idx]
                 num_tags[n_part_num] += 1
                 n_part, n_part_to_global = new_meshes[n_part_num]
                 # Hack: find_igrps expects a numpy.ndarray and returns
                 #       a numpy.ndarray. But if a single integer is fed
                 #       into find_igrps, an integer is returned.
                 n_grp_num = find_group_indices(n_part.groups, n_meshwide_elem)
-                n_adj = n_part.facial_adjacency_groups[int(n_grp_num)]['part']
+                n_adj = n_part.facial_adjacency_groups[int(n_grp_num)][None]
                 n_elem_base = n_part.groups[n_grp_num].element_nr_base
                 n_elem = n_meshwide_elem - n_elem_base
-                assert (part_num, elem + elem_base, face) ==\
-                        n_adj.neighbor_lookup_table[(n_elem, n_face)],\
+                n_idx = n_adj.index_lookup_table[(n_elem, n_face)]
+                assert (part_num == n_adj.neighbor_parts[n_idx]
+                        and elem + elem_base == n_adj.global_neighbors[n_idx]
+                        and face == n_adj.neighbor_faces[n_idx]),\
                         "InterPartitionAdj is not consistent"
-                n_part_to_global = new_meshes[n_part_num][1]
+                _, n_part_to_global = new_meshes[n_part_num]
                 p_meshwide_elem = part_to_global[elem + elem_base]
                 p_meshwide_n_elem = n_part_to_global[n_elem + n_elem_base]
 
