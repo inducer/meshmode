@@ -524,11 +524,17 @@ class InterPartitionAdjacency(FacialAdjacencyGroup):
         group that the element belongs to, then subtract ``element_nr_base`` to find
         the element of the group.
 
+        If ``global_neighbors[i]`` is negative, ``elements[i]`` is on a true
+        boundary and is not connected to any other :class:``Mesh``.
+
     .. attribute:: neighbor_faces
 
         ``face_id_dtype global_neighbor_faces[i]`` gives face index within the
         neighboring partition of the face connected to
         ``element_id_dtype elements[i]``
+
+        If ``neighbor_partitions[i]`` is negative, ``elements[i]`` is on a true
+        boundary and is not connected to any other :class:``Mesh``.
 
     .. attribute:: neighbor_partitions
 
