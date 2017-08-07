@@ -207,7 +207,7 @@ def test_partition_mesh(num_parts, num_meshes, dim):
                     continue
                 elem = adj.elements[idx]
                 face = adj.element_faces[idx]
-                n_part_num = adj.neighbor_parts[idx]
+                n_part_num = adj.neighbor_partitions[idx]
                 n_meshwide_elem = adj.global_neighbors[idx]
                 n_face = adj.neighbor_faces[idx]
                 num_tags[n_part_num] += 1
@@ -220,7 +220,7 @@ def test_partition_mesh(num_parts, num_meshes, dim):
                 n_elem_base = n_part.groups[n_grp_num].element_nr_base
                 n_elem = n_meshwide_elem - n_elem_base
                 n_idx = n_adj.index_lookup_table[(n_elem, n_face)]
-                assert (part_num == n_adj.neighbor_parts[n_idx]
+                assert (part_num == n_adj.neighbor_partitions[n_idx]
                         and elem + elem_base == n_adj.global_neighbors[n_idx]
                         and face == n_adj.neighbor_faces[n_idx]),\
                         "InterPartitionAdj is not consistent"
