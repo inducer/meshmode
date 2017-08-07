@@ -487,9 +487,12 @@ class FacialAdjacencyGroup(Record):
 
 class InterPartitionAdjacency(FacialAdjacencyGroup):
     """
-    Describes facial adjacency information of elements in one :class:`Mesh` to
-    elements in another :class:`Mesh`. The element's boundary tag gives the
-    partition that it is connected to.
+    Describes boundary adjacency information of elements in
+    :class:`MeshElementGroup`.
+
+    .. attribute:: igroup
+
+        The group number of this group.
 
     .. attribute:: elements
 
@@ -497,19 +500,26 @@ class InterPartitionAdjacency(FacialAdjacencyGroup):
         Element ``element_id_dtype elements[i]`` and face
         ``face_id_dtype element_faces[i]`` is connected to neighbor element
         ``element_id_dtype global_neighbors[i]`` with face
-        ``face_id_dtype global_neighbor_faces[i]``.
+        ``face_id_dtype global_neighbor_faces[i]``. The partition number it connects
+        to is ``neighbor_partitions[i]``.
 
     .. attribute:: element_faces
 
         ``face_id_dtype element_faces[i]`` gives the face of
         ``element_id_dtype elements[i]`` that is connected to
-        ``globla_neighbors[i]``.
+        ``global_neighbors[i]``.
+
+    .. attribute:: neighbors
+
+        Since this is a boundary, ``element_id_dtype neighbors[i]`` is interpreted
+        as a boundary tag. ``-neighbors[i]`` should be interpreted according to
+        :class:``Mesh.boundary_tags``.
 
     .. attribute:: global_neighbors
 
         Mesh-wide element numbers.
         ``element_id_dtype global_neighbors[i]`` gives the element number within the
-        neighboring partiton of the element connected to
+        neighboring partition of the element connected to
         ``element_id_dtype elements[i]``. Use ``find_group_instances()`` to find the
         group that the element belongs to, then subtract ``element_nr_base`` to find
         the element of the group.
@@ -520,44 +530,43 @@ class InterPartitionAdjacency(FacialAdjacencyGroup):
         neighboring partition of the face connected to
         ``element_id_dtype elements[i]``
 
+    .. attribute:: neighbor_partitions
+
+        ``neighbor_partitions[i]`` gives the partition number that ``elements[i]``
+        is connected to.
+
+        If ``neighbor_partitions[i]`` is negative, ``elements[i]`` is on a true
+        boundary and is not connected to any other :class:``Mesh``.
+
     .. attribute:: index_lookup_table
 
-        A dictionary that maps the tuple ``(element, face)`` to the tuple
-        ``(global_neighbor_element, global_neighbor_face)``.
+        A dictionary that maps the tuple ``(element, face)`` to an index ``i`` such
+        that ``elements[i] == element and element_faces[i] == face``.
 
     .. versionadded:: 2017.1
     """
-
-    '''
-    I don't like the idea of having InterPartitionAdjacency replace the boundary
-    group for FacialAdjacencyGroup. A boundary may be a real boundary or it may
-    have a partition adjacent to it. FacialAdjacency and InterPartitionAdjacecy
-    will not have the same elements. They should be separate. facial_adjacency_groups
-    should have groups for real boundaries and for 'fake' boundaries.
-    '''
 
     def __init__(self, elements,
                        element_faces,
                        neighbors,
                        igroup,
-                       i_neighbor_group,
-                       neighbor_parts,
+                       neighbor_partitions,
                        global_neighbors,
                        neighbor_faces):
         self.elements = elements
         self.element_faces = element_faces
         self.neighbors = neighbors
         self.igroup = igroup
-        self.i_neighbor_group = i_neighbor_group
-        self.neighbor_parts = neighbor_parts
+        self.ineighbor_group = None
+        self.neighbor_partitions = neighbor_partitions
         self.global_neighbors = global_neighbors
         self.neighbor_faces = neighbor_faces
         self._generate_index_lookup_table()
 
     def __eq__(self, other):
         return (super.__eq__(self, other)
-                and np.array_equal(self.global_neighbors, other.global_neighbors)
-                and np.array_equal(self.neighbor_part, other.neighbor_part))
+            and np.array_equal(self.global_neighbors, other.global_neighbors)
+            and np.array_equal(self.neighbor_partitions, other.neighbor_partitions))
 
     def _generate_index_lookup_table(self):
         self.index_lookup_table = dict()
@@ -596,7 +605,8 @@ class Mesh(Record):
         the set of facial adjacency relations between group *igrp*
         and *ineighbor_group*. *ineighbor_group* and *igrp* may be
         identical, or *ineighbor_group* may be *None*, in which case
-        a group containing boundary faces is returned.
+        an :class:``InterPartitionAdjacency`` group containing boundary
+        faces is returned.
 
         Referencing this attribute may raise
         :exc:`meshmode.DataUnavailable`.

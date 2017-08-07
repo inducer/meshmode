@@ -445,14 +445,14 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
             part_batches.append([])
             adj = tgt_mesh.facial_adjacency_groups[i_tgt_grp][None]
 
-            indices = i_src_part == adj.neighbor_parts
+            indices = (i_src_part == adj.neighbor_partitions)
             if not np.any(indices):
                 # Skip because i_tgt_grp is not connected to i_src_part.
                 continue
             i_tgt_faces = adj.element_faces[indices]
             i_src_meshwide_elems = adj.global_neighbors[indices]
             i_src_faces = adj.neighbor_faces[indices]
-            
+
             i_src_grps = find_group_indices(src_mesh.groups, i_src_meshwide_elems)
 
             for i_src_grp in np.unique(i_src_grps):
