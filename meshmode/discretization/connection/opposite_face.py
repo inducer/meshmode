@@ -443,7 +443,7 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
 
         for i_tgt_grp in range(len(tgt_mesh.groups)):
             part_batches.append([])
-            adj = tgt_mesh.facial_adjacency_groups[i_tgt_grp]['part']
+            adj = tgt_mesh.facial_adjacency_groups[i_tgt_grp][None]
 
             indices = i_src_part == adj.neighbor_parts
             if not np.any(indices):

@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("num_groups", [1, 2])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
          (2, [3, 4, 7]),
-         #(3, [3, 4])
+         (3, [3, 4])
         ])
 def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     num_parts, num_groups):

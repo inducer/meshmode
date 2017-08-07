@@ -211,25 +211,37 @@ def partition_mesh(mesh, part_per_element, part_nr):
             boundary_adj = connected_mesh.facial_adjacency_groups[igrp][None]
             n_parts = np.zeros_like(boundary_adj.elements)
             n_parts.fill(-1)
-            n_elems = np.copy(n_parts)
+            global_n_elems = np.copy(n_parts)
             n_faces = np.copy(n_parts)
-            for elem, face, n_part, n_elem, n_face in adj:
-                idx = np.where(np.logical_and(elem == boundary_adj.elements,
-                               face == boundary_adj.element_faces))[0]
-                n_parts[idx] = n_part
-                n_elems[idx] = n_elem
-                n_faces[idx] = n_face
-            #bdry_perm = np.argsort(boundary_adj.elements)
-            #bdry_elems = boundary_adj.elements[perm]
-            #bdry_faces = boundary_adj.element_faces[perm]
-            #elems, faces, n_parts, n_elems, n_faces = np.array(adj).T
+            bdry_perm = np.lexsort([boundary_adj.element_faces, boundary_adj.elements])
+            bdry_elems = boundary_adj.elements[bdry_perm]
+            bdry_faces = boundary_adj.element_faces[bdry_perm]
+            bdry_neighbors = boundary_adj.neighbors[bdry_perm]
+            adj_elems, adj_faces, adj_n_parts, adj_gl_n_elems, adj_n_faces = np.array(adj).T
+            adj_perm = np.lexsort([adj_faces, adj_elems])
+            adj_elems = adj_elems[adj_perm]
+            adj_faces = adj_faces[adj_perm]
+            adj_n_parts = adj_n_parts[adj_perm]
+            adj_gl_n_elems = adj_gl_n_elems[adj_perm]
+            adj_n_faces = adj_n_faces[adj_perm]
+            adj_idx = 0
+            for bdry_idx in range(len(bdry_elems)):
+                if adj_idx >= len(adj_elems):
+                    break
+                if (adj_elems[adj_idx] == bdry_elems[bdry_idx]
+                    and adj_faces[adj_idx] == bdry_faces[bdry_idx]):
+                    n_parts[bdry_idx] = adj_n_parts[adj_idx]
+                    global_n_elems[bdry_idx] = adj_gl_n_elems[adj_idx]
+                    n_faces[bdry_idx] = adj_n_faces[adj_idx]
+                    adj_idx += 1
+
             connected_mesh.facial_adjacency_groups[igrp][None] =\
-                    InterPartitionAdjacency(boundary_adj.elements,
-                                            boundary_adj.element_faces,
-                                            boundary_adj.neighbors,
+                    InterPartitionAdjacency(bdry_elems,
+                                            bdry_faces,
+                                            bdry_neighbors,
                                             boundary_adj.igroup,
                                             boundary_adj.ineighbor_group,
-                                            n_parts, n_elems, n_faces)
+                                            n_parts, global_n_elems, n_faces)
 
     return connected_mesh, queried_elems
 
