@@ -128,14 +128,28 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                                         group_factory(order),
                                                         BTAG_PARTITION(i_tgt_part))
 
+                # Gather just enough information for the connection
+                tgt_bdry = tgt_to_src_conn.to_discr
+                tgt_mesh = tgt_to_src_conn.from_discr.mesh
+                tgt_adj_groups = [tgt_mesh.facial_adjacency_groups[i][None]
+                                    for i in range(len(tgt_mesh.groups))]
+                tgt_batches = [tgt_to_src_conn.groups[i].batches
+                                    for i in range(len(tgt_mesh.groups))]
+
+                src_bdry = src_to_tgt_conn.to_discr
+                src_mesh = src_to_tgt_conn.from_discr.mesh
+                src_adj_groups = [src_mesh.facial_adjacency_groups[i][None]
+                                    for i in range(len(src_mesh.groups))]
+                src_batches = [src_to_tgt_conn.groups[i].batches
+                                    for i in range(len(src_mesh.groups))]
+
                 # Connect tgt_mesh to src_mesh
-                tgt_conn = make_partition_connection(tgt_to_src_conn,
-                                                     src_to_tgt_conn, i_src_part)
+                tgt_conn = make_partition_connection(src_to_tgt_conn, i_src_part,
+                                             tgt_bdry, tgt_adj_groups, tgt_batches)
 
                 # Connect src_mesh to tgt_mesh
-                src_conn = make_partition_connection(src_to_tgt_conn,
-                                                     tgt_to_src_conn, i_tgt_part)
-
+                src_conn = make_partition_connection(tgt_to_src_conn, i_tgt_part,
+                                             src_bdry, src_adj_groups, src_batches)
                 check_connection(tgt_conn)
                 check_connection(src_conn)
 

@@ -407,19 +407,21 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 
 # {{{ partition_connection
 
-def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
+def make_partition_connection(src_to_tgt_conn, i_src_part,
+                              tgt_bdry, tgt_adj_groups, tgt_batches):
     """
-    Given a two boundary restriction connections *tgt_to_src_conn* and
-    *src_to_tgt_conn*, return a :class:`DirectDiscretizationConnection` that
-    performs data exchange across adjacent faces of different partitions.
+    Connects ``src_to_tgt_conn`` to a neighboring partition.
 
-    :arg tgt_to_src_conn: A :class:`Discretization` of the target partition.
     :arg src_to_tgt_conn: A :class:`Discretization` of the source partition.
     :arg i_src_part: The partition number of the src partition.
+    :arg tgt_adj_groups: A list of :class:`InterPartitionAdjacency`` of the target
+        partition.
+    :arg tgt_bdry: A :class:`Discretization` of the boundary of the
+        target partition.
+    :arg tgt_batches: A list of batches of the target partition.
 
     :returns: A :class:`DirectDiscretizationConnection` that performs data
-                exchange across faces from partition `src_to_tgt_conn` to
-                `tgt_to_src_conn`.
+        exchange across faces from partition `i_src_part` to the target partition.
 
     .. versionadded:: 2017.1
 
@@ -430,21 +432,14 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
 
-    tgt_vol = tgt_to_src_conn.from_discr
-    src_vol = src_to_tgt_conn.from_discr
-    tgt_bdry = tgt_to_src_conn.to_discr
     src_bdry = src_to_tgt_conn.to_discr
-    tgt_mesh = tgt_vol.mesh
-    src_mesh = src_vol.mesh
+    src_groups = src_to_tgt_conn.from_discr.mesh.groups
 
-    part_batches = []
+    part_batches = [[] for _ in tgt_adj_groups]
 
-    with cl.CommandQueue(tgt_vol.cl_context) as queue:
+    with cl.CommandQueue(src_to_tgt_conn.cl_context) as queue:
 
-        for i_tgt_grp in range(len(tgt_mesh.groups)):
-            part_batches.append([])
-            adj = tgt_mesh.facial_adjacency_groups[i_tgt_grp][None]
-
+        for i_tgt_grp, adj in enumerate(tgt_adj_groups):
             indices = (i_src_part == adj.neighbor_partitions)
             if not np.any(indices):
                 # Skip because i_tgt_grp is not connected to i_src_part.
@@ -453,11 +448,11 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
             i_src_meshwide_elems = adj.global_neighbors[indices]
             i_src_faces = adj.neighbor_faces[indices]
 
-            i_src_grps = find_group_indices(src_mesh.groups, i_src_meshwide_elems)
+            i_src_grps = find_group_indices(src_groups, i_src_meshwide_elems)
 
             for i_src_grp in np.unique(i_src_grps):
 
-                elem_base = src_mesh.groups[i_src_grp].element_nr_base
+                elem_base = src_groups[i_src_grp].element_nr_base
                 src_el_lookup =\
                        _make_bdry_el_lookup_table(queue, src_to_tgt_conn, i_src_grp)
 
@@ -465,12 +460,11 @@ def make_partition_connection(tgt_to_src_conn, src_to_tgt_conn, i_src_part):
 
                     index_flags = np.logical_and(i_src_grps == i_src_grp,
                                                  i_tgt_faces == i_tgt_face)
-
                     if not np.any(index_flags):
                         continue
 
                     vbc_tgt_grp_face_batch = _find_ibatch_for_face(
-                        tgt_to_src_conn.groups[i_tgt_grp].batches, i_tgt_face)
+                        tgt_batches[i_tgt_grp], i_tgt_face)
 
                     tgt_bdry_element_indices = vbc_tgt_grp_face_batch.\
                             to_element_indices.get(queue=queue)
