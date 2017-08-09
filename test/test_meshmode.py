@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("num_groups", [1, 2])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
          (2, [3, 4, 7]),
-         #(3, [3, 4])
+         (3, [3, 4])
         ])
 def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     num_parts, num_groups):
@@ -88,7 +88,9 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
             mesh = meshes[0]
 
         #from pymetis import part_graph
-        #(_, p) = part_graph(num_parts, adjacency=mesh.adjacency_list())
+        #_, p = part_graph(num_parts,
+        #                  xadj=mesh.nodal_adjacency.neighbors_starts.tolist(),
+        #                  adjncy=mesh.nodal_adjacency.neighbors.tolist())
         #part_per_element = np.array(p)
         part_per_element = np.random.randint(num_parts, size=mesh.nelements)
 
@@ -158,7 +160,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                 bdry_t_2 = src_conn(queue, bdry_s)
 
                 err = la.norm((bdry_t - bdry_t_2).get(), np.inf)
-                eoc_rec[(i_tgt_part, i_src_part)].add_data_point(1./n, err)
+                eoc_rec[i_tgt_part, i_src_part].add_data_point(1./n, err)
 
     for (i, j), e in eoc_rec.items():
         if e is not None:
@@ -185,7 +187,9 @@ def test_partition_mesh(num_parts, num_meshes, dim):
     mesh = merge_disjoint_meshes(meshes)
 
     from pymetis import part_graph
-    (_, p) = part_graph(num_parts, adjacency=mesh.adjacency_list())
+    _, p = part_graph(num_parts,
+                      xadj=mesh.nodal_adjacency.neighbors_starts.tolist(),
+                      adjncy=mesh.nodal_adjacency.neighbors.tolist())
     part_per_element = np.array(p)
     #part_per_element = np.random.randint(num_parts, size=mesh.nelements)
 

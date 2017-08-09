@@ -876,17 +876,6 @@ class Mesh(Record):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def adjacency_list(self):
-        """
-        :returns: `adjacency[i]` is a list of all elements that are adjacent to
-                    element `i`. Useful for `pymetis.part_graph`.
-        """
-        adjacency_list = []
-        for elem in range(self.nelements):
-            start, end = self.nodal_adjacency.neighbors_starts[elem:elem+2]
-            adjacency_list.append(self.nodal_adjacency.neighbors[start:end])
-        return adjacency_list
-
     # Design experience: Try not to add too many global data structures to the
     # mesh. Let the element groups be responsible for that at the mesh level.
     #
