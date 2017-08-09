@@ -233,11 +233,11 @@ def test_partition_mesh(num_parts, num_meshes, dim):
                 # Hack: find_igrps expects a numpy.ndarray and returns
                 #       a numpy.ndarray. But if a single integer is fed
                 #       into find_igrps, an integer is returned.
-                n_grp_num = find_group_indices(n_part.groups, n_meshwide_elem)
-                n_adj = n_part.facial_adjacency_groups[int(n_grp_num)][None]
+                n_grp_num = int(find_group_indices(n_part.groups, n_meshwide_elem))
+                n_adj = n_part.facial_adjacency_groups[n_grp_num][None]
                 n_elem_base = n_part.groups[n_grp_num].element_nr_base
                 n_elem = n_meshwide_elem - n_elem_base
-                n_idx = n_adj.index_lookup_table[(n_elem, n_face)]
+                n_idx = n_adj.index_lookup_table[n_elem, n_face]
                 assert (part_num == n_adj.neighbor_partitions[n_idx]
                         and elem + elem_base == n_adj.global_neighbors[n_idx]
                         and face == n_adj.neighbor_faces[n_idx]),\
