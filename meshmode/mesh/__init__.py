@@ -559,14 +559,14 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
                        neighbor_partitions,
                        global_neighbors,
                        neighbor_faces):
-        self.elements = elements
-        self.element_faces = element_faces
-        self.neighbors = neighbors
-        self.igroup = igroup
-        self.ineighbor_group = None
+        FacialAdjacencyGroup.__init__(self, elements=elements,
+                                      element_faces=element_faces,
+                                      neighbors=neighbors,
+                                      neighbor_faces=neighbor_faces,
+                                      igroup=igroup,
+                                      ineighbor_group=None)
         self.neighbor_partitions = neighbor_partitions
         self.global_neighbors = global_neighbors
-        self.neighbor_faces = neighbor_faces
         self._generate_index_lookup_table()
 
     def __eq__(self, other):
@@ -577,7 +577,7 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
     def _generate_index_lookup_table(self):
         self.index_lookup_table = dict()
         for idx, (elem, face) in enumerate(zip(self.elements, self.element_faces)):
-            self.index_lookup_table[(elem, face)] = idx
+            self.index_lookup_table[elem, face] = idx
 
 # }}}
 
