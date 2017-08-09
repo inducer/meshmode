@@ -205,7 +205,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
 
     connected_mesh = part_mesh.copy()
 
-    from meshmode.mesh import InterPartitionAdjacency
+    from meshmode.mesh import InterPartitionAdjacencyGroup
     for igrp, adj in enumerate(adj_data):
         if adj:
             bdry = connected_mesh.facial_adjacency_groups[igrp][None]
@@ -243,9 +243,9 @@ def partition_mesh(mesh, part_per_element, part_nr):
                     adj_idx += 1
 
             connected_mesh.facial_adjacency_groups[igrp][None] =\
-                    InterPartitionAdjacency(elems, faces, neighbors,
-                                            bdry.igroup,
-                                            n_parts, global_n_elems, n_faces)
+                    InterPartitionAdjacencyGroup(elems, faces, neighbors,
+                                                bdry.igroup,
+                                                n_parts, global_n_elems, n_faces)
 
     return connected_mesh, queried_elems
 

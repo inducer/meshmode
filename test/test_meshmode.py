@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("num_groups", [1, 2])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
          (2, [3, 4, 7]),
-         (3, [3, 4])
+         #(3, [3, 4])
         ])
 def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     num_parts, num_groups):
@@ -203,7 +203,7 @@ def test_partition_mesh(num_parts, num_meshes, dim):
         [count_tags(new_meshes[i][0], BTAG_ALL) for i in range(num_parts)]), \
         "part_mesh has the wrong number of BTAG_ALL boundaries"
 
-    from meshmode.mesh import BTAG_PARTITION, InterPartitionAdjacency
+    from meshmode.mesh import BTAG_PARTITION, InterPartitionAdjacencyGroup
     from meshmode.mesh.processing import find_group_indices
     num_tags = np.zeros((num_parts,))
 
@@ -213,7 +213,7 @@ def test_partition_mesh(num_parts, num_meshes, dim):
             adj = part.facial_adjacency_groups[grp_num][None]
             tags = -part.facial_adjacency_groups[grp_num][None].neighbors
             assert np.all(tags >= 0)
-            if not isinstance(adj, InterPartitionAdjacency):
+            if not isinstance(adj, InterPartitionAdjacencyGroup):
                 continue
             elem_base = part.groups[grp_num].element_nr_base
             for idx in range(len(adj.elements)):
@@ -237,7 +237,7 @@ def test_partition_mesh(num_parts, num_meshes, dim):
                 assert (part_num == n_adj.neighbor_partitions[n_idx]
                         and elem + elem_base == n_adj.global_neighbors[n_idx]
                         and face == n_adj.neighbor_faces[n_idx]),\
-                        "InterPartitionAdj is not consistent"
+                        "InterPartitionAdjacencyGroup is not consistent"
                 _, n_part_to_global = new_meshes[n_part_num]
                 p_meshwide_elem = part_to_global[elem + elem_base]
                 p_meshwide_n_elem = n_part_to_global[n_elem + n_elem_base]

@@ -485,7 +485,7 @@ class FacialAdjacencyGroup(Record):
 
 # {{{ partition adjacency
 
-class InterPartitionAdjacency(FacialAdjacencyGroup):
+class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
     """
     Describes boundary adjacency information of elements in
     :class:`MeshElementGroup`.
