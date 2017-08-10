@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("num_groups", [1, 2])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
          (2, [3, 4, 7]),
-         #(3, [3, 4])
+         (3, [3, 4])
         ])
 def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     num_parts, num_groups):
@@ -216,6 +216,7 @@ def test_partition_mesh(num_parts, num_meshes, dim):
         for igrp in range(len(m.groups)):
             adj = m.facial_adjacency_groups[igrp][None]
             if not isinstance(adj, InterPartitionAdjacencyGroup):
+                # This group is not connected to another partition.
                 continue
             for i, (elem, face) in enumerate(zip(adj.elements, adj.element_faces)):
                 index_lookup_table[ipart, igrp, elem, face] = i
@@ -247,7 +248,6 @@ def test_partition_mesh(num_parts, num_meshes, dim):
                 n_adj = n_part.facial_adjacency_groups[n_grp_num][None]
                 n_elem_base = n_part.groups[n_grp_num].element_nr_base
                 n_elem = n_meshwide_elem - n_elem_base
-                #n_idx = n_adj.index_lookup_table[n_elem, n_face]
                 n_idx = index_lookup_table[n_part_num, n_grp_num, n_elem, n_face]
                 assert (part_num == n_adj.neighbor_partitions[n_idx]
                         and elem + elem_base == n_adj.global_neighbors[n_idx]
