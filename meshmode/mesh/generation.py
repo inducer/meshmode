@@ -191,7 +191,14 @@ class WobblyCircle(object):
             ])
 
 
-starfish = WobblyCircle(np.array([0, 0, 0, 0, 0.25]))
+class NArmedStarfish(WobblyCircle):
+    def __init__(self, n_arms, amplitude):
+        coeffs = np.zeros(n_arms)
+        coeffs[-1] = amplitude
+        super(NArmedStarfish, self).__init__(coeffs)
+
+
+starfish = NArmedStarfish(5, 0.25)
 
 # }}}
 
