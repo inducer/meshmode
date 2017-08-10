@@ -544,11 +544,6 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
         If ``neighbor_partitions[i]`` is negative, ``elements[i]`` is on a true
         boundary and is not connected to any other :class:``Mesh``.
 
-    .. attribute:: index_lookup_table
-
-        A dictionary that maps the tuple ``(element, face)`` to an index ``i`` such
-        that ``elements[i] == element and element_faces[i] == face``.
-
     .. versionadded:: 2017.1
     """
 
@@ -567,17 +562,11 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
                                       ineighbor_group=None)
         self.neighbor_partitions = neighbor_partitions
         self.global_neighbors = global_neighbors
-        self._generate_index_lookup_table()
 
     def __eq__(self, other):
         return (super.__eq__(self, other)
             and np.array_equal(self.global_neighbors, other.global_neighbors)
             and np.array_equal(self.neighbor_partitions, other.neighbor_partitions))
-
-    def _generate_index_lookup_table(self):
-        self.index_lookup_table = dict()
-        for idx, (elem, face) in enumerate(zip(self.elements, self.element_faces)):
-            self.index_lookup_table[elem, face] = idx
 
 # }}}
 

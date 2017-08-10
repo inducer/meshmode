@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("num_groups", [1, 2])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
          (2, [3, 4, 7]),
-         (3, [3, 4])
+         #(3, [3, 4])
         ])
 def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     num_parts, num_groups):
@@ -71,7 +71,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
         for j in range(num_parts):
             if i == j:
                 continue
-            eoc_rec[(i, j)] = EOCRecorder()
+            eoc_rec[i, j] = EOCRecorder()
 
     def f(x):
         return 0.1*cl.clmath.sin(30*x)
@@ -110,47 +110,47 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
         for i_tgt_part in range(num_parts):
             for i_src_part in range(num_parts):
                 if (i_tgt_part == i_src_part
-                        or eoc_rec[(i_tgt_part, i_src_part)] is None):
-                    eoc_rec[(i_tgt_part, i_src_part)] = None
+                        or eoc_rec[i_tgt_part, i_src_part] is None):
+                    eoc_rec[i_tgt_part, i_src_part] = None
                     continue
 
                 # Mark faces within tgt_mesh that are connected to src_mesh
-                tgt_to_src_conn = make_face_restriction(vol_discrs[i_tgt_part],
-                                                        group_factory(order),
-                                                        BTAG_PARTITION(i_src_part))
+                tgt_bdry_discr = make_face_restriction(vol_discrs[i_tgt_part],
+                                                       group_factory(order),
+                                                       BTAG_PARTITION(i_src_part))
 
                 # If these parts are not connected, don't bother checking the error
-                bdry_nodes = tgt_to_src_conn.to_discr.nodes()
+                bdry_nodes = tgt_bdry_discr.to_discr.nodes()
                 if bdry_nodes.size == 0:
-                    eoc_rec[(i_tgt_part, i_src_part)] = None
+                    eoc_rec[i_tgt_part, i_src_part] = None
                     continue
 
                 # Mark faces within src_mesh that are connected to tgt_mesh
-                src_to_tgt_conn = make_face_restriction(vol_discrs[i_src_part],
-                                                        group_factory(order),
-                                                        BTAG_PARTITION(i_tgt_part))
+                src_bdry_discr = make_face_restriction(vol_discrs[i_src_part],
+                                                       group_factory(order),
+                                                       BTAG_PARTITION(i_tgt_part))
 
                 # Gather just enough information for the connection
-                tgt_bdry = tgt_to_src_conn.to_discr
-                tgt_mesh = tgt_to_src_conn.from_discr.mesh
+                tgt_bdry = tgt_bdry_discr.to_discr
+                tgt_mesh = tgt_bdry_discr.from_discr.mesh
                 tgt_adj_groups = [tgt_mesh.facial_adjacency_groups[i][None]
                                     for i in range(len(tgt_mesh.groups))]
-                tgt_batches = [tgt_to_src_conn.groups[i].batches
+                tgt_batches = [tgt_bdry_discr.groups[i].batches
                                     for i in range(len(tgt_mesh.groups))]
 
-                src_bdry = src_to_tgt_conn.to_discr
-                src_mesh = src_to_tgt_conn.from_discr.mesh
+                src_bdry = src_bdry_discr.to_discr
+                src_mesh = src_bdry_discr.from_discr.mesh
                 src_adj_groups = [src_mesh.facial_adjacency_groups[i][None]
                                     for i in range(len(src_mesh.groups))]
-                src_batches = [src_to_tgt_conn.groups[i].batches
+                src_batches = [src_bdry_discr.groups[i].batches
                                     for i in range(len(src_mesh.groups))]
 
-                # Connect tgt_mesh to src_mesh
-                tgt_conn = make_partition_connection(src_to_tgt_conn, i_src_part,
+                # Connect src_mesh to tgt_mesh
+                src_conn = make_partition_connection(src_bdry_discr, i_src_part,
                                              tgt_bdry, tgt_adj_groups, tgt_batches)
 
-                # Connect src_mesh to tgt_mesh
-                src_conn = make_partition_connection(tgt_to_src_conn, i_tgt_part,
+                # Connect tgt_mesh to src_mesh
+                tgt_conn = make_partition_connection(tgt_bdry_discr, i_tgt_part,
                                              src_bdry, src_adj_groups, src_batches)
                 check_connection(tgt_conn)
                 check_connection(src_conn)
@@ -166,7 +166,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
         if e is not None:
             print("Error of connection from part %i to part %i." % (i, j))
             print(e)
-            assert(e.order_estimate() >= order - 0.5 or e.max_error() < 1e-12)
+            assert(e.order_estimate() >= order - 0.5 or e.max_error() < 1e-14)
 
 # }}}
 
@@ -211,6 +211,15 @@ def test_partition_mesh(num_parts, num_meshes, dim):
     from meshmode.mesh.processing import find_group_indices
     num_tags = np.zeros((num_parts,))
 
+    index_lookup_table = dict()
+    for ipart, (m, _) in enumerate(new_meshes):
+        for igrp in range(len(m.groups)):
+            adj = m.facial_adjacency_groups[igrp][None]
+            if not isinstance(adj, InterPartitionAdjacencyGroup):
+                continue
+            for i, (elem, face) in enumerate(zip(adj.elements, adj.element_faces)):
+                index_lookup_table[ipart, igrp, elem, face] = i
+
     for part_num in range(num_parts):
         part, part_to_global = new_meshes[part_num]
         for grp_num in range(len(part.groups)):
@@ -218,6 +227,7 @@ def test_partition_mesh(num_parts, num_meshes, dim):
             tags = -part.facial_adjacency_groups[grp_num][None].neighbors
             assert np.all(tags >= 0)
             if not isinstance(adj, InterPartitionAdjacencyGroup):
+                # This group is not connected to another partition.
                 continue
             elem_base = part.groups[grp_num].element_nr_base
             for idx in range(len(adj.elements)):
@@ -237,7 +247,8 @@ def test_partition_mesh(num_parts, num_meshes, dim):
                 n_adj = n_part.facial_adjacency_groups[n_grp_num][None]
                 n_elem_base = n_part.groups[n_grp_num].element_nr_base
                 n_elem = n_meshwide_elem - n_elem_base
-                n_idx = n_adj.index_lookup_table[n_elem, n_face]
+                #n_idx = n_adj.index_lookup_table[n_elem, n_face]
+                n_idx = index_lookup_table[n_part_num, n_grp_num, n_elem, n_face]
                 assert (part_num == n_adj.neighbor_partitions[n_idx]
                         and elem + elem_base == n_adj.global_neighbors[n_idx]
                         and face == n_adj.neighbor_faces[n_idx]),\

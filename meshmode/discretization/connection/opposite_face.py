@@ -407,7 +407,7 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 
 # {{{ partition_connection
 
-def make_partition_connection(src_to_tgt_conn, i_src_part,
+def make_partition_connection(src_bdry_discr, i_src_part,
                               tgt_bdry, tgt_adj_groups, tgt_batches):
     """
     Connects ``src_to_tgt_conn`` to a neighboring partition.
@@ -432,12 +432,12 @@ def make_partition_connection(src_to_tgt_conn, i_src_part,
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
 
-    src_bdry = src_to_tgt_conn.to_discr
-    src_groups = src_to_tgt_conn.from_discr.mesh.groups
+    src_bdry = src_bdry_discr.to_discr
+    src_groups = src_bdry_discr.from_discr.mesh.groups
 
     part_batches = [[] for _ in tgt_adj_groups]
 
-    with cl.CommandQueue(src_to_tgt_conn.cl_context) as queue:
+    with cl.CommandQueue(src_bdry_discr.cl_context) as queue:
 
         for i_tgt_grp, adj in enumerate(tgt_adj_groups):
             indices = (i_src_part == adj.neighbor_partitions)
@@ -454,7 +454,7 @@ def make_partition_connection(src_to_tgt_conn, i_src_part,
 
                 elem_base = src_groups[i_src_grp].element_nr_base
                 src_el_lookup =\
-                       _make_bdry_el_lookup_table(queue, src_to_tgt_conn, i_src_grp)
+                       _make_bdry_el_lookup_table(queue, src_bdry_discr, i_src_grp)
 
                 for i_tgt_face in i_tgt_faces:
 
