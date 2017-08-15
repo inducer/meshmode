@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 def _build_interpolation_batches_for_group(
         queue, group_idx, coarse_discr_group, fine_discr_group, record):
-    """
+    r"""
     To map between discretizations, we sort each of the fine mesh
     elements into an interpolation batch.  Which batch they go
     into is determined by where the refined unit nodes live
