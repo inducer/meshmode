@@ -115,7 +115,8 @@ class BTAG_PARTITION(object):  # noqa
         return not self.__eq__(other)
 
 
-SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY])
+SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
+                   BTAG_PARTITION])
 
 # }}}
 
