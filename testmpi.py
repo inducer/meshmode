@@ -1,6 +1,6 @@
 from mpi4py import MPI
 import numpy as np
-import pyopencl
+import pyopencl as cl
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -30,8 +30,9 @@ elif (rank - 1) in range(num_parts):
     mesh = comm.recv(source=0, tag=1)
     print('Recieved mesh')
 
-    cl_ctx = pyopencl.create_some_context()
-
+    cl_ctx = cl.create_some_context()
+    queue = cl.CommandQueue(cl_ctx)
+    
     from meshmode.discretization.poly_element\
                     import PolynomialWarpAndBlendGroupFactory
     group_factory = PolynomialWarpAndBlendGroupFactory(4)
@@ -68,9 +69,17 @@ elif (rank - 1) in range(num_parts):
                             for i in range(len(local_mesh.groups))]
         local_batches = [local_bdry_conns[i_remote_part].groups[i].batches
                             for i in range(len(local_mesh.groups))]
+        local_to_elem_faces = [[batch.to_element_face for batch in grp_batches]
+                                    for grp_batches in local_batches]
+        local_to_elem_indices = [[batch.to_element_indices.get(queue=queue)
+                                        for batch in grp_batches]
+                                    for grp_batches in local_batches]
+
+        print(local_bdry.groups)
         local_data = {'bdry': local_bdry,
                       'adj': local_adj_groups,
-                      'batches': local_batches}
+                      'to_elem_faces': local_to_elem_faces,
+                      'to_elem_indices': local_to_elem_indices}
         send_reqs.append(comm.isend(local_data, dest=i_remote_part+1, tag=2))
 
     recv_reqs = {}
@@ -93,7 +102,8 @@ elif (rank - 1) in range(num_parts):
             continue
         remote_bdry = data['bdry']
         remote_adj_groups =data['adj']
-        remote_batches = data['batches']
+        remote_to_elem_faces = data['to_elem_faces']
+        remote_to_elem_indices = data['to_elem_indices']
         # Connect local_mesh to remote_mesh
         from meshmode.discretization.connection import make_partition_connection
         connection[i_remote_part] =\
@@ -101,7 +111,8 @@ elif (rank - 1) in range(num_parts):
                                               i_local_part,
                                               remote_bdry,
                                               remote_adj_groups,
-                                              remote_batches)
+                                              remote_to_elem_faces,
+                                              remote_to_elem_indices)
         from meshmode.discretization.connection import check_connection
         check_connection(connection[i_remote_part])
 

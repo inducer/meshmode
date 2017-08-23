@@ -408,7 +408,8 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 # {{{ partition_connection
 
 def make_partition_connection(local_bdry_conn, i_local_part,
-                              remote_bdry, remote_adj_groups, remote_batches):
+                              remote_bdry, remote_adj_groups,
+                              remote_to_elem_faces, remote_to_elem_indices):
     """
     Connects ``local_bdry_conn`` to a neighboring partition.
 
@@ -419,7 +420,11 @@ def make_partition_connection(local_bdry_conn, i_local_part,
         remote partition.
     :arg remote_bdry: A :class:`Discretization` of the boundary of the
         remote partition.
-    :arg remote_batches: A list of batches of the remote partition.
+    :arg remote_to_elem_faces: `remote_to_elem_faces[igrp][idx]` gives the face
+        that batch `idx` interpolates from group `igrp`.
+    :arg remote_to_elem_indices: `remote_to_elem_indices[igrp][idx]` gives a
+        :class:`np.array` of element indices that batch `idx` interpolates from
+        group `igrp`.
 
     :returns: A :class:`DirectDiscretizationConnection` that performs data
         exchange across faces from partition `i_local_part` to the remote partition.
@@ -465,29 +470,29 @@ def make_partition_connection(local_bdry_conn, i_local_part,
                     if not np.any(index_flags):
                         continue
 
-                    vbc_remote_grp_face_batch = _find_ibatch_for_face(
-                        remote_batches[i_remote_grp], i_remote_face)
+                    batch_idx = np.where(remote_to_elem_faces[i_remote_grp]
+                                            == i_remote_face)[0]
 
-                    remote_bdry_element_indices = vbc_remote_grp_face_batch.\
-                            to_element_indices.get(queue=queue)
+                    remote_bdry_indices =\
+                                remote_to_elem_indices[i_remote_grp][batch_idx]
 
                     elems = i_local_meshwide_elems[index_flags] - elem_base
                     faces = i_local_faces[index_flags]
-                    local_bdry_element_indices = local_el_lookup[elems, faces]
+                    local_bdry_indices = local_el_lookup[elems, faces]
 
                     batches = _make_cross_face_batches(queue,
                                                        remote_bdry, local_bdry,
                                                        i_remote_grp, i_local_grp,
-                                                       remote_bdry_element_indices,
-                                                       local_bdry_element_indices)
+                                                       remote_bdry_indices,
+                                                       local_bdry_indices)
 
                     part_batches[i_remote_grp].extend(batches)
 
     return DirectDiscretizationConnection(
             from_discr=local_bdry,
             to_discr=remote_bdry,
-            groups=[DiscretizationConnectionElementGroup(batches=batches)
-                        for batches in part_batches],
+            groups=[DiscretizationConnectionElementGroup(batches=grp_batches)
+                        for grp_batches in part_batches],
             is_surjective=True)
 
 # }}}
