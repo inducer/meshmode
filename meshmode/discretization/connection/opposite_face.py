@@ -470,11 +470,11 @@ def make_partition_connection(local_bdry_conn, i_local_part,
                     if not np.any(index_flags):
                         continue
 
-                    batch_idx = np.where(remote_to_elem_faces[i_remote_grp]
-                                            == i_remote_face)[0]
-
-                    remote_bdry_indices =\
-                                remote_to_elem_indices[i_remote_grp][batch_idx]
+                    for idxs, to_face in zip(remote_to_elem_indices[i_remote_grp],
+                                             remote_to_elem_faces[i_remote_grp]):
+                        if to_face == i_remote_face:
+                            remote_bdry_indices = idxs
+                            break
 
                     elems = i_local_meshwide_elems[index_flags] - elem_base
                     faces = i_local_faces[index_flags]
