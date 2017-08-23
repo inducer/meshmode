@@ -147,7 +147,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                             for grp_batches in local_batches]
 
                 remote_bdry = remote_bdry_conn.to_discr
-                remote_mesh = part_meshes[i_remote_mesh]
+                remote_mesh = part_meshes[i_remote_part]
                 remote_adj_groups = [remote_mesh.facial_adjacency_groups[i][None]
                                     for i in range(len(remote_mesh.groups))]
                 remote_batches = [remote_bdry_conn.groups[i].batches
