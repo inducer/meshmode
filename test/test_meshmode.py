@@ -139,6 +139,12 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     for i in range(len(local_mesh.groups))]
                 local_batches = [local_bdry_conn.groups[i].batches
                                     for i in range(len(local_mesh.groups))]
+                local_to_elem_faces = [[batch.to_element_face
+                                                for batch in grp_batches]
+                                            for grp_batches in local_batches]
+                local_to_elem_indices = [[batch.to_element_indices.get(queue=queue)
+                                                for batch in grp_batches]
+                                            for grp_batches in local_batches]
 
                 remote_bdry = remote_bdry_conn.to_discr
                 remote_mesh = remote_bdry_conn.from_discr.mesh
@@ -146,20 +152,28 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                     for i in range(len(remote_mesh.groups))]
                 remote_batches = [remote_bdry_conn.groups[i].batches
                                     for i in range(len(remote_mesh.groups))]
+                remote_to_elem_faces = [[batch.to_element_face
+                                                for batch in grp_batches]
+                                            for grp_batches in remote_batches]
+                remote_to_elem_indices = [[batch.to_element_indices.get(queue=queue)
+                                                for batch in grp_batches]
+                                            for grp_batches in remote_batches]
 
                 # Connect local_mesh to remote_mesh
                 local_part_conn = make_partition_connection(local_bdry_conn,
                                                             i_local_part,
                                                             remote_bdry,
                                                             remote_adj_groups,
-                                                            remote_batches)
+                                                            remote_to_elem_faces,
+                                                            remote_to_elem_indices)
 
                 # Connect remote mesh to local mesh
                 remote_part_conn = make_partition_connection(remote_bdry_conn,
                                                              i_remote_part,
                                                              local_bdry,
                                                              local_adj_groups,
-                                                             local_batches)
+                                                             local_to_elem_faces,
+                                                             local_to_elem_indices)
 
                 check_connection(local_part_conn)
                 check_connection(remote_part_conn)
