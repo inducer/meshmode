@@ -49,13 +49,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize("num_parts", [3])
-def test_interpartition_comm(num_parts):
-    from pytools.mpi import run_with_mpi_ranks
-    run_with_mpi_ranks("testmpi.py", num_parts + 1, interpartition_communication,
-                       (num_parts,))
-
-
 # {{{ partition_interpolation
 
 @pytest.mark.parametrize("group_factory", [PolynomialWarpAndBlendGroupFactory])
