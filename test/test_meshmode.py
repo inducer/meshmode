@@ -49,6 +49,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.parametrize("num_parts", [3])
+def test_interpartition_comm(num_parts):
+    from pytools.mpi import run_with_mpi_ranks
+    run_with_mpi_ranks("testmpi.py", num_parts + 1, interpartition_communication,
+                       (num_parts,))
+
+
 # {{{ partition_interpolation
 
 @pytest.mark.parametrize("group_factory", [PolynomialWarpAndBlendGroupFactory])
@@ -134,7 +141,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
 
                 # Gather just enough information for the connection
                 local_bdry = local_bdry_conn.to_discr
-                local_mesh = local_bdry_conn.from_discr.mesh
+                local_mesh = part_meshes[i_local_part]
                 local_adj_groups = [local_mesh.facial_adjacency_groups[i][None]
                                     for i in range(len(local_mesh.groups))]
                 local_batches = [local_bdry_conn.groups[i].batches
@@ -147,7 +154,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                                             for grp_batches in local_batches]
 
                 remote_bdry = remote_bdry_conn.to_discr
-                remote_mesh = remote_bdry_conn.from_discr.mesh
+                remote_mesh = part_meshes[i_remote_mesh]
                 remote_adj_groups = [remote_mesh.facial_adjacency_groups[i][None]
                                     for i in range(len(remote_mesh.groups))]
                 remote_batches = [remote_bdry_conn.groups[i].batches
