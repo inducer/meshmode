@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def mpi_comm(num_parts):
 
     from mpi4py import MPI
@@ -121,10 +122,11 @@ def mpi_comm(num_parts):
             from meshmode.discretization.connection import check_connection
             check_connection(connection)
 
+
 if __name__ == "__main__":
     import sys
 
-    assert(len(sys.argv) == 2, 'Invalid number of arguments')
+    assert len(sys.argv) == 2, 'Invalid number of arguments'
 
     num_parts = int(sys.argv[1])
     mpi_comm(num_parts)
