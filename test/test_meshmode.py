@@ -49,12 +49,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.parametrize("num_partitions", [3, 6])
+def test_mpi_communication(num_partitions):
+    num_ranks = num_partitions + 1
+    import subprocess, sys, os
+    newenv = os.environ.copy()
+    newenv["PYTOOLS_RUN_WITHIN_MPI"] = "1"
+    subprocess.check_call(["mpirun", "-np", str(num_ranks),
+                            sys.executable, "testmpi.py", str(num_partitions)],
+                          env=newenv)
+
+
 # {{{ partition_interpolation
 
 @pytest.mark.parametrize("group_factory", [PolynomialWarpAndBlendGroupFactory])
 @pytest.mark.parametrize("num_parts", [2, 3])
 @pytest.mark.parametrize("num_groups", [1, 2])
-@pytest.mark.parametrize(("dim", "mesh_pars"), [
+@pytest.mark.parametrize(("dim", "mesh_pars"),
+        [
          (2, [3, 4, 7]),
          (3, [3, 4])
         ])
@@ -178,8 +190,7 @@ def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
                 check_connection(local_part_conn)
                 check_connection(remote_part_conn)
 
-                true_local_points = f(local_part_conn.to_discr.nodes()[0]
-                                            .with_queue(queue))
+                true_local_points = f(local_bdry.nodes()[0].with_queue(queue))
                 remote_points = local_part_conn(queue, true_local_points)
                 local_points = remote_part_conn(queue, remote_points)
 
