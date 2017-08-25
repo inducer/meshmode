@@ -52,12 +52,14 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize("num_partitions", [3, 6])
 def test_mpi_communication(num_partitions):
     num_ranks = num_partitions + 1
-    import subprocess, sys, os
+    from subprocess import check_call
+    import sys
+    import os
     newenv = os.environ.copy()
     newenv["PYTOOLS_RUN_WITHIN_MPI"] = "1"
-    subprocess.check_call(["mpirun", "-np", str(num_ranks),
-                            sys.executable, "testmpi.py", str(num_partitions)],
-                          env=newenv)
+    check_call(["mpirun", "-np", str(num_ranks),
+                sys.executable, "test/testmpi.py", str(num_partitions)],
+               env=newenv)
 
 
 # {{{ partition_interpolation
