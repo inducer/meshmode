@@ -2,11 +2,12 @@ from __future__ import division, absolute_import, print_function
 import numpy as np
 
 
-def mpi_comm(num_parts):
+def mpi_comm():
 
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
+    num_parts = comm.Get_size() - 1
 
     # This rank only partitions a mesh and sends them to their respective ranks.
     if rank == 0:
@@ -125,9 +126,4 @@ def mpi_comm(num_parts):
 
 
 if __name__ == "__main__":
-    import sys
-
-    assert len(sys.argv) == 2, 'Invalid number of arguments'
-
-    num_parts = int(sys.argv[1])
-    mpi_comm(num_parts)
+    mpi_comm()
