@@ -45,6 +45,7 @@ Curve parametrizations
 .. autofunction:: drop
 .. autofunction:: n_gon
 .. autofunction:: qbx_peanut
+.. autofunction:: apple
 .. autoclass:: WobblyCircle
 
 Surfaces
@@ -155,6 +156,24 @@ def qbx_peanut(t):
         ])
 
 
+def apple(a, t):
+    """
+    :arg a: 0 <= a <= 1/2; roundedness: 0 returns a circle, 1/2 returns a cardioid
+    :arg t: the parametrization, runs from [0,1)
+    :return: an array of shape *(2, npoints)*
+    """
+    ilength = 2*np.pi
+    t = t*ilength
+
+    sin = np.sin
+    cos = np.cos
+
+    return np.vstack([
+        cos(t) + a*cos(2*t),
+        sin(t) + a*sin(2*t)
+        ])
+
+
 class WobblyCircle(object):
     """
     .. automethod:: random
@@ -191,7 +210,14 @@ class WobblyCircle(object):
             ])
 
 
-starfish = WobblyCircle(np.array([0, 0, 0, 0, 0.25]))
+class NArmedStarfish(WobblyCircle):
+    def __init__(self, n_arms, amplitude):
+        coeffs = np.zeros(n_arms)
+        coeffs[-1] = amplitude
+        super(NArmedStarfish, self).__init__(coeffs)
+
+
+starfish = NArmedStarfish(5, 0.25)
 
 # }}}
 

@@ -118,7 +118,11 @@ class Visualizer(object):
         from pytools.obj_array import with_object_array_or_scalar
 
         def resample_and_get_one(fld):
-            return self.connection(queue, fld).get(queue=queue)
+            from numbers import Number
+            if isinstance(fld, Number):
+                return np.ones(self.connection.to_discr.nnodes) * fld
+            else:
+                return self.connection(queue, fld).get(queue=queue)
 
         return with_object_array_or_scalar(resample_and_get_one, vec)
 

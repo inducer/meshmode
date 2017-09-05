@@ -30,6 +30,11 @@ from pytools import RecordWithoutPickling
 import logging
 logger = logging.getLogger(__name__)
 
+__doc__ = """
+.. autoclass :: Refiner
+.. autofunction :: refine_uniformly
+"""
+
 
 class TreeRayNode(object):
     """Describes a ray as a tree, this class represents each node in this tree
@@ -903,6 +908,16 @@ class Refiner(object):
         return NodalAdjacency(neighbors_starts=neighbors_starts, neighbors=neighbors)
 
     # }}}
+
+
+def refine_uniformly(mesh, iterations):
+        refiner = Refiner(mesh)
+        for i in range(iterations):
+            flags = np.ones(mesh.nelements, dtype=bool)
+            refiner.refine(flags)
+            mesh = refiner.get_current_mesh()
+
+        return mesh
 
 
 # vim: foldmethod=marker

@@ -61,8 +61,13 @@ Mesh input/output
 .. automodule:: meshmode.mesh.io
 
 Mesh processing
------------------
+---------------
 
 .. automodule:: meshmode.mesh.processing
+
+Mesh refinement
+---------------
+
+.. automodule:: meshmode.mesh.refinement
 
 .. vim: sw=4
