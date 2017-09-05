@@ -30,6 +30,11 @@ from pytools import RecordWithoutPickling
 import logging
 logger = logging.getLogger(__name__)
 
+__doc__ = """
+.. autoclass :: Refiner
+.. autofunction :: refine_uniformly
+"""
+
 
 class TreeRayNode(object):
     """Describes a ray as a tree, this class represents each node in this tree
