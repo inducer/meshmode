@@ -905,4 +905,14 @@ class Refiner(object):
     # }}}
 
 
+def refine_uniformly(mesh, iterations):
+        refiner = Refiner(mesh)
+        for i in range(iterations):
+            flags = np.ones(mesh.nelements, dtype=bool)
+            refiner.refine(flags)
+            mesh = refiner.get_current_mesh()
+
+        return mesh
+
+
 # vim: foldmethod=marker
