@@ -313,6 +313,8 @@ def all_refine(num_mesh, depth, fname):
     from functools import partial
     from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+    import random
+    random.seed(0)
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
     if 0:
@@ -328,11 +330,11 @@ def all_refine(num_mesh, depth, fname):
                     ["blob-2d.step"]),
                 force_ambient_dim=2,
                 )
-    elif 0:
+    elif 1:
         mesh = generate_regular_rect_mesh()
     elif 0:
         mesh =  generate_box_mesh(2*(np.linspace(0, 1, 5),))
-    elif 1:
+    elif 0:
         mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),),
                 group_factory=TensorProductElementGroup)
     else:
@@ -367,30 +369,28 @@ def all_refine(num_mesh, depth, fname):
     #flags[0] = 1
     #mesh = r.refine(flags)
     for time in range(3):
-        flags = get_random_flags(mesh)
-        coarsen_flags = []
-        if time <= 2:
-            for grp_index, grp in enumerate(mesh.groups):
-                curnels = grp.nelements
-                coarsen_flags.append([])
-                for ind, i in enumerate(flags[grp.element_nr_base : grp.element_nr_base + grp.nelements]):
-                    if i and random.randint(0, 1) == 1:
-                        cur_coarsen = []
-                        cur_coarsen.append(ind)
-                        if isinstance(grp, TensorProductElementGroup):
-                            for k in range(7):
-                                cur_coarsen.append(curnels)
-                                curnels += 1
-                        elif isinstance(grp, SimplexElementGroup):
-                            for k in range(7):
-                                cur_coarsen.append(curnels)
-                                curnels += 1
-                        coarsen_flags[grp_index].append(cur_coarsen)
-                    elif i:
-                        curnels += 7
+        flags = np.zeros(mesh.nelements)
+        #coarsen_flags = []
+        #if time <= 2:
+        #    for grp_index, grp in enumerate(mesh.groups):
+        #        curnels = grp.nelements
+        #        coarsen_flags.append([])
+        #        for ind, i in enumerate(flags[grp.element_nr_base : grp.element_nr_base + grp.nelements]):
+        #            if i and random.randint(0, 1) == 1:
+        #                cur_coarsen = []
+        #                cur_coarsen.append(ind)
+        #                if isinstance(grp, TensorProductElementGroup):
+        #                    for k in range(7):
+        #                        cur_coarsen.append(curnels)
+        #                        curnels += 1
+        #                elif isinstance(grp, SimplexElementGroup):
+        #                    for k in range(7):
+        #                        cur_coarsen.append(curnels)
+        #                        curnels += 1
+        #                coarsen_flags[grp_index].append(cur_coarsen)
+        #            elif i:
+        #                curnels += 7
         mesh = r.refine(flags)
-        if time <= 2:
-            mesh = r.coarsen(coarsen_flags)
     #mesh = r.coarsen(coarsen_flags)
     #flags = get_random_flags(mesh)
     #mesh = r.refine(flags)
@@ -411,7 +411,6 @@ def all_refine(num_mesh, depth, fname):
         #draw_2d_mesh(mesh, False, True, True, fill=None)
         #import matplotlib.pyplot as pt
         #pt.show()
-
     if mesh.dim == 3:
         from meshmode.discretization import Discretization
         from meshmode.discretization.poly_element import (PolynomialWarpAndBlendElementGroup, 
@@ -437,7 +436,7 @@ def all_refine(num_mesh, depth, fname):
         from meshmode.mesh.visualization import draw_2d_mesh
         draw_2d_mesh(mesh,
                 draw_vertex_numbers=False,
-                draw_element_numbers=True,
+                draw_element_numbers=False,
                 draw_nodal_adjacency=False, fill=None)
         import matplotlib.pyplot as pt
         pt.show()

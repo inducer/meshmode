@@ -87,7 +87,24 @@ class Refiner(object):
                     vertex_indices = grp.vertex_indices[iel_grp]
                     for vertex in vertex_indices:
                         self.adjacent_set[vertex].add((grp_index, iel_grp))
-             
+
+        def initialize_vertex_to_generation_and_element():
+            self.vertex_to_generation_and_element = [set() for _ in range(mesh.nvertices)]
+            for grp_index, grp in enumerate(mesh.groups):
+                for iel_grp in range(grp.nelements):
+                    vertex_indices = grp.vertex_indices[iel_grp]
+                    for vertex in vertex_indices:
+                        self.vertex_to_generation_and_element[vertex].add((self.generation, grp_index, iel_grp))
+        
+        def initialize_generation_and_element_to_vertices():
+            import copy
+            self.generation_and_element_to_vertices = {}
+            for grp_index, grp in enumerate(mesh.groups):
+                for iel_grp in range(grp.nelements):
+                    vertex_indices = grp.vertex_indices[iel_grp]
+                    generation_and_element = (self.generation, grp_index, iel_grp)
+                    self.generation_and_element_to_vertices[generation_and_element] = copy.deepcopy(vertex_indices)
+
         generate_tesselations()
         self.simplex_resampler = SimplexResampler()
         self.vertex_pair_to_midpoint = {}
@@ -96,7 +113,11 @@ class Refiner(object):
 
         self.last_mesh = mesh
         initialize_adjacent_set()
-
+        self.generation = 0
+        initialize_vertex_to_generation_and_element()
+        initialize_generation_and_element_to_vertices()
+        self.generation_templates = []
+        self.generation_and_element_to_template_index = {}
 
     # }}}
 
@@ -136,15 +157,14 @@ class Refiner(object):
     def midpoint_of_node_tuples(self, tupa, tupb):
         from six.moves import range
         assert(len(tupa) == len(tupb))
-        #TODO: use comprehension instead
         res = ()
         for k in range(len(tupa)):
             res = res + ((tupa[k] + tupb[k])/2,)
         return res
 
-    def node_tuple_to_vertex_index(self, vertices, dimension, vertex_and_midpoint_tuples):
+    def node_tuple_to_vertex_index(self, vertices, dimension, node_tuples):
         from six.moves import range
-        vertex_tuples = vertex_and_midpoint_tuples[dimension][0]
+        vertex_tuples = [node_tuple for node_tuple in node_tuples if 1 not in node_tuple]
         node_tuple_to_vertex_index = {}
         for i in range(len(vertices)):
             node_tuple_to_vertex_index[vertex_tuples[i]] = vertices[i]
@@ -156,15 +176,85 @@ class Refiner(object):
                 if vertex_pair in self.vertex_pair_to_midpoint: 
                     midpoint_tuple = self.midpoint_of_node_tuples(vertex_tuples[i], 
                             vertex_tuples[j])
-                    node_tuple_to_vertex_index[midpoint_tuple] = self.vertex_pair_to_midpoint[vertex_pair]
+                    if midpoint_tuple in node_tuples:
+                        node_tuple_to_vertex_index[midpoint_tuple] = self.vertex_pair_to_midpoint[vertex_pair]
         return node_tuple_to_vertex_index
     
-    def next_vertices_and_dimension(self, vertices, dimension, tesselations, vertex_and_midpoint_tuples):
+    def next_vertices_and_dimension(self, vertices, dimension):
         from six.moves import range
         from itertools import combinations
-        node_tuples = tesselations[dimension][0]
-        result_tuples = tesselations[dimension][1]
-        node_tuple_to_vertex_index = self.node_tuple_to_vertex_index(vertices, dimension, vertex_and_midpoint_tuples)
+       
+        def get_index(nparray, el):
+            for ind, cur in enumerate(nparray):
+                if cur == el:
+                    return ind
+            assert(False)
+            return -1
+        def get_tesselation(base_tesselation):
+            import copy
+            (base_node_tuples, base_result_tuples) = base_tesselation
+            base_original_node_tuples = [node_tuple for node_tuple in base_node_tuples if 1 not in node_tuple] 
+            first_element_refined_vertices = self.generation_and_element_to_vertices[first_element_refined]
+            vertex_indices = [get_index(first_element_refined_vertices, vertex) for vertex in vertices]
+            
+            sub_node_tuples = []
+            sub_result_tuples = []
+            #generate subtesselation from base tesselation
+            dim = len(base_node_tuples[0])
+            filters_index = []
+            filters_entry = []
+            for d in range(dim):
+                entry_d = base_original_node_tuples[vertex_indices[0]][d]
+                entry_d_is_constant = True
+                for i, vertex_index in enumerate(vertex_indices):
+                    if base_original_node_tuples[vertex_index][d] != entry_d:
+                        #include this axis in sub_node_tuples
+                        entry_d_is_constant = False
+                if entry_d_is_constant:
+                    filters_index.append(d)
+                    filters_entry.append(entry_d)
+            base_to_sub_node_tuple_index = {}
+            for i, node_tuple in enumerate(base_node_tuples):
+                fits = True
+                for f in range(len(filters_index)):
+                    if node_tuple[filters_index[f]] != filters_entry[f]:
+                        fits = False
+                if fits:
+                    sub_node_tuples.append(tuple(entry for index, entry in enumerate(node_tuple) if index not in filters_index))
+                    base_to_sub_node_tuple_index[i] = len(sub_node_tuples)-1
+            for result_tuple in (base_result_tuples):
+                has_sub_tuple = False
+                for entry in result_tuple:
+                    if entry in base_to_sub_node_tuple_index:
+                        has_sub_tuple = True
+                if has_sub_tuple:
+                    sub_result_tuples.append(tuple(base_to_sub_node_tuple_index[index] for index in result_tuple if index in base_to_sub_node_tuple_index))
+
+            return (sub_node_tuples, sub_result_tuples)
+
+        def generate_next_dimension_result():
+            #FIXME: remove hardcoding
+            if dimension == 3 and len(vertices) == 8:
+                result_vertices = list(combinations(vertices, 4))
+            #tet
+            elif dimension == 3 and len(vertices) == 4:
+                result_vertices = list(combinations(vertices, 3))
+            elif dimension == 2:
+                result_vertices = list(combinations(vertices, 2))
+            elif dimension == 1:
+                result_vertices = list(combinations(vertices, 1))
+            return (result_vertices, dimension-1)
+
+        #first element refined whose vertices were *vertices*
+        first_element_refined = min(set.intersection(*[self.vertex_to_generation_and_element[vertex] for vertex in vertices]))
+        (generation, _, _) = first_element_refined
+        if generation == self.generation or first_element_refined not in self.generation_and_element_to_template_index:
+            return generate_next_dimension_result()
+        base_tesselation_index = self.generation_and_element_to_template_index[first_element_refined]
+        base_tesselation = self.generation_templates[generation][base_tesselation_index]
+
+        (node_tuples, result_tuples) = get_tesselation(base_tesselation)
+        node_tuple_to_vertex_index = self.node_tuple_to_vertex_index(vertices, dimension, node_tuples)
         #can tesselate current element
         if len(node_tuple_to_vertex_index) == len(node_tuples):
             result_vertices = []
@@ -175,8 +265,7 @@ class Refiner(object):
                 result_vertices.append(current_subelement_vertices)
             return (result_vertices, dimension)
         #move to lower dimension
-        result_vertices = list(combinations(vertices, len(vertex_and_midpoint_tuples[dimension-1][0])))
-        return (result_vertices, dimension-1)
+        return generate_next_dimension_result()
 
     def split_rect_into_triangles(self, vertices, dimension):
         #can split
@@ -206,35 +295,35 @@ class Refiner(object):
             return (result_vertices, dimension)
         return ([], dimension)
 
-    def remove_from_adjacent_set(self, element_index, vertices, dimension, tesselations, vertex_and_midpoint_tuples):
+    def remove_from_adjacent_set(self, element_index, vertices, dimension):
         if len(vertices) == 1:
             if element_index in self.adjacent_set[vertices[0]]:
                 self.adjacent_set[vertices[0]].remove(element_index)
         else:
-            (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, tesselations, vertex_and_midpoint_tuples)
+            (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension)
             for cur_vertices in next_vertices:
-                self.remove_from_adjacent_set(element_index, cur_vertices, next_dimension, tesselations, vertex_and_midpoint_tuples)
+                self.remove_from_adjacent_set(element_index, cur_vertices, next_dimension)
             (simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
             for cur_vertices in simplex_vertices:
-                self.remove_from_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_tesselations, self.simplex_vertex_and_midpoint_tuples)
+                self.remove_from_adjacent_set(element_index, cur_vertices, simplex_dimension)
 
-    def add_to_adjacent_set(self, element_index, vertices, dimension, tesselations, vertex_and_midpoint_tuples):
+    def add_to_adjacent_set(self, element_index, vertices, dimension):
         if len(vertices) == 1:
             if element_index not in self.adjacent_set[vertices[0]]:
                 self.adjacent_set[vertices[0]].add(element_index)
         else:
-            (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, tesselations, vertex_and_midpoint_tuples)
+            (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension)
             for cur_vertices in next_vertices:
-                self.add_to_adjacent_set(element_index, cur_vertices, next_dimension, tesselations, vertex_and_midpoint_tuples)
+                self.add_to_adjacent_set(element_index, cur_vertices, next_dimension)
             (simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
             for cur_vertices in simplex_vertices:
-                self.add_to_adjacent_set(element_index, cur_vertices, simplex_dimension, self.simplex_tesselations, self.simplex_vertex_and_midpoint_tuples)
+                self.add_to_adjacent_set(element_index, cur_vertices, simplex_dimension)
 
     #creates midpoints in result_vertices and updates adjacent_set with midpoint vertices
-    def create_midpoints(self, group_index, iel_grp, element_vertices, nvertices, vertex_and_midpoint_tuples, midpoints, midpoint_order):
+    def create_midpoints(self, group_index, iel_grp, element_vertices, nvertices, tesselation, midpoints, midpoint_order, vertex_and_midpoint_tuples):
         from six.moves import range
         dimension = self.last_mesh.groups[group_index].dim
-        node_tuples = vertex_and_midpoint_tuples[dimension][0]
+        (vertex_tuples, midpoint_tuples) = vertex_and_midpoint_tuples
         midpoint_tuple_to_index = {}
         for i in range(len(element_vertices)):
             for j in range(i+1, len(element_vertices)):
@@ -242,34 +331,32 @@ class Refiner(object):
                 vertex_j = element_vertices[j]
                 vertex_pair = (vertex_i, vertex_j) if vertex_i < vertex_j else (vertex_j, vertex_i)
                 if vertex_pair in self.vertex_pair_to_midpoint:
-                    midpoint_tuple = self.midpoint_of_node_tuples(node_tuples[i], 
-                            node_tuples[j])
+                    midpoint_tuple = self.midpoint_of_node_tuples(vertex_tuples[i], 
+                            vertex_tuples[j])
                     midpoint_tuple_to_index[midpoint_tuple] = self.vertex_pair_to_midpoint[vertex_pair]
 
         for i in range(len(element_vertices)):
             for j in range(i+1, len(element_vertices)):
-                midpoint_tuple = self.midpoint_of_node_tuples(node_tuples[i], 
-                        node_tuples[j])
+                midpoint_tuple = self.midpoint_of_node_tuples(vertex_tuples[i], 
+                        vertex_tuples[j])
                 vertex_i = element_vertices[i]
                 vertex_j = element_vertices[j]
                 vertex_pair = (vertex_i, vertex_j) if vertex_i < vertex_j else (vertex_j, vertex_i)
                 if vertex_pair not in self.vertex_pair_to_midpoint:
-                    if midpoint_tuple not in midpoint_tuple_to_index and (i, j) in midpoint_order:
+                    if midpoint_tuple not in midpoint_tuple_to_index and (i, j) in midpoint_order\
+                            and midpoint_tuple in midpoint_tuples:
                         self.vertex_pair_to_midpoint[vertex_pair] = nvertices
                         for k in range(len(self.last_mesh.vertices)):
                             self.vertices[k, nvertices] = \
                                     midpoints[iel_grp][k][midpoint_order[(i, j)]]
-                            (self.last_mesh.vertices[k, vertex_i] +
-                            self.last_mesh.vertices[k, vertex_j]) / 2.0
                         # Update adjacent_set
                         self.adjacent_set.append(self.adjacent_set[vertex_i].intersection(self.adjacent_set[vertex_j]))
                         nvertices += 1
-
-                        assert len(self.adjacent_set) == nvertices
                     else:
                         self.vertex_pair_to_midpoint[vertex_pair] = midpoint_tuple_to_index[midpoint_tuple]
 
-                        assert len(self.adjacent_set) == nvertices
+                    assert len(self.adjacent_set) == nvertices
+
                 midpoint_tuple_to_index[midpoint_tuple] = self.vertex_pair_to_midpoint[vertex_pair]
                 self.adjacent_set[self.vertex_pair_to_midpoint[vertex_pair]] = self.adjacent_set[self.vertex_pair_to_midpoint[vertex_pair]].union(
                     self.adjacent_set[vertex_i].intersection(self.adjacent_set[vertex_j]))
@@ -277,20 +364,19 @@ class Refiner(object):
         return nvertices
 
     #returns element indices and vertices
-    def create_elements(self, element_index, element_vertices, dimension, group_index, nelements_in_grp, 
-            element_mapping, tesselations, vertex_and_midpoint_tuples):
-        (node_tuples, result_tuples) = tesselations[dimension]
+    def create_elements(self, element_index, element_vertices, dimension, group_index, nelements_in_grp, tesselation):
+        resulting_elements_indices = []
+        (node_tuples, result_tuples) = tesselation
         result = []
-        node_tuple_to_vertex_index = self.node_tuple_to_vertex_index(element_vertices, dimension, vertex_and_midpoint_tuples)
+        node_tuple_to_vertex_index = self.node_tuple_to_vertex_index(element_vertices, dimension, node_tuples)
         for subelement_index, subelement in enumerate(result_tuples):
             if subelement_index == 0:
                 result_vertices = []
                 for i, index in enumerate(subelement):
-                    
                     cur_node_tuple = node_tuples[index]
                     self.groups[group_index][element_index][i] = node_tuple_to_vertex_index[cur_node_tuple]
                     result_vertices.append(node_tuple_to_vertex_index[cur_node_tuple])
-                element_mapping[-1].append(element_index)
+                resulting_elements_indices.append(element_index)
                 result.append(((group_index, element_index), result_vertices))
             else:
                 result_vertices = []
@@ -298,83 +384,65 @@ class Refiner(object):
                     cur_node_tuple = node_tuples[index]
                     self.groups[group_index][nelements_in_grp][i] = node_tuple_to_vertex_index[cur_node_tuple]
                     result_vertices.append(node_tuple_to_vertex_index[cur_node_tuple])
-                element_mapping[-1].append(nelements_in_grp)
+                resulting_elements_indices.append(nelements_in_grp)
                 result.append(((group_index, nelements_in_grp), result_vertices))
                 nelements_in_grp += 1
-        return (result, nelements_in_grp, element_mapping)
+        return (result, nelements_in_grp, resulting_elements_indices)
 
-    def refine_element(self, group_index, iel_grp, nelements_in_grp, nvertices, element_mapping, tesselations, vertex_and_midpoint_tuples, midpoints, midpoint_order):
+    def update_vertex_to_generation_and_element(self, subelement_indices_and_vertices, nvertices):
+        cur_len = len(self.vertex_to_generation_and_element)
+        for i in range(cur_len, nvertices):
+            self.vertex_to_generation_and_element.append(set())
+        for ((group_index, element_index), vertices) in subelement_indices_and_vertices:
+            for vertex in vertices:
+                self.vertex_to_generation_and_element[vertex].add((self.generation, group_index, element_index))
+
+    def update_generation_and_element_to_vertices(self, subelement_indices_and_vertices):
+        import copy
+        for ((group_index, element_index), vertices) in subelement_indices_and_vertices:
+            self.generation_and_element_to_vertices[(self.generation, group_index, element_index)] = copy.deepcopy(vertices)
+
+    def refine_element(self, group_and_el_index, nelements_in_grp, nvertices, tesselation, midpoints, midpoint_order):
         from six.moves import range
-        grp = self.last_mesh.groups[group_index]
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-        iel_base = grp.element_nr_base
+        (group_index, iel_grp) = group_and_el_index
+        grp = self.last_mesh.groups[group_index]
         element_vertices = grp.vertex_indices[iel_grp]
-        dimension = self.last_mesh.groups[group_index].dim
-        self.remove_from_adjacent_set((group_index, iel_grp), element_vertices, dimension, tesselations, vertex_and_midpoint_tuples)
-        nvertices = self.create_midpoints(group_index, iel_grp, element_vertices, nvertices, vertex_and_midpoint_tuples, midpoints, midpoint_order)
-        element_mapping.append([])
-        (subelement_indices_and_vertices, nelements_in_grp, element_mapping) = self.create_elements(iel_grp, 
-                element_vertices, dimension, group_index, nelements_in_grp, element_mapping,
-                tesselations, vertex_and_midpoint_tuples)
+        self.remove_from_adjacent_set(group_and_el_index, element_vertices, grp.dim)
+        nvertices = self.create_midpoints(group_index, iel_grp, element_vertices, nvertices, tesselation, midpoints, midpoint_order, self.get_vertex_and_midpoint_tuples(tesselation))
+        (subelement_indices_and_vertices, nelements_in_grp, resulting_elements_indices) = self.create_elements(iel_grp, 
+                element_vertices, grp.dim, group_index, nelements_in_grp, tesselation)
+        self.update_vertex_to_generation_and_element(subelement_indices_and_vertices, nvertices)
+        self.update_generation_and_element_to_vertices(subelement_indices_and_vertices)
         for (index, vertices) in subelement_indices_and_vertices:
-            self.add_to_adjacent_set(index, vertices, dimension, tesselations, vertex_and_midpoint_tuples)
-        return (nelements_in_grp, nvertices, element_mapping)
+            self.add_to_adjacent_set(index, vertices, grp.dim)
+        return (nelements_in_grp, nvertices, resulting_elements_indices)
 
-    def elements_connected_to(self, element_index, vertices, dimension, tesselations, vertex_and_midpoint_tuples):
+    def elements_connected_to(self, element_index, vertices, dimension):
         from six.moves import range
         result = set()
         if len(vertices) == 1:
             if element_index in self.adjacent_set[vertices[0]]:
                 result = result.union(self.adjacent_set[vertices[0]])
         else:
-            (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension, tesselations, vertex_and_midpoint_tuples)
+            (next_vertices, next_dimension) = self.next_vertices_and_dimension(vertices, dimension)
             for cur_vertices in next_vertices:
-                result = result.union(self.elements_connected_to(element_index, cur_vertices, next_dimension, tesselations, vertex_and_midpoint_tuples))
+                result = result.union(self.elements_connected_to(element_index, cur_vertices, next_dimension))
             (simplex_vertices, simplex_dimension) = self.split_rect_into_triangles(vertices, dimension)
             for cur_vertices in simplex_vertices:
                 result = result.union(self.elements_connected_to(element_index, cur_vertices, 
-                    simplex_dimension, self.simplex_tesselations, self.simplex_vertex_and_midpoint_tuples))
+                    simplex_dimension))
         return result
     
-    def do_refinement(self, group_index, iel_grp, nelements_in_grp, nvertices, element_mapping,
-            midpoints, midpoint_order):
-        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-        grp = self.last_mesh.groups[group_index]
-        element_vertices = grp.vertex_indices[iel_grp]
-        dimension = self.last_mesh.groups[group_index].dim
-        return self.refine_element(group_index, iel_grp, nelements_in_grp, nvertices,
-                element_mapping, self.get_tesselations(grp),
-                self.get_vertex_and_midpoint_tuples(grp), midpoints, midpoint_order
-                )
-
-    def get_elements_connected_to(self, result_groups, group_index, iel_base, iel_grp): 
-        import copy
-        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-        grp = result_groups[group_index]
-        element_vertices = copy.deepcopy(grp[iel_grp])
-        dimension = self.last_mesh.groups[group_index].dim
-        return self.elements_connected_to((group_index, iel_grp), element_vertices, dimension,
-                self.get_tesselations(self.last_mesh.groups[group_index]), 
-                self.get_vertex_and_midpoint_tuples(self.last_mesh.groups[group_index]))
-
     # Get vertex and midpoint tuples for a group
-    def get_vertex_and_midpoint_tuples(self, grp):
+    def get_vertex_and_midpoint_tuples(self, tesselation):
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-        #simplex
-        if isinstance(grp, SimplexElementGroup):
-            return self.simplex_vertex_and_midpoint_tuples
-        #quad
-        elif isinstance(grp, TensorProductElementGroup):
-            return self.quad_vertex_and_midpoint_tuples
-
-    def get_tesselations(self, grp):
-        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-        tesselations = None
-        if isinstance(grp, SimplexElementGroup):
-            tesselations = self.simplex_tesselations
-        elif isinstance(grp, TensorProductElementGroup):
-            tesselations = self.quad_tesselations
-        return tesselations
+        (node_tuples, _) = tesselation
+        vertex_tuples = [node_tuple for node_tuple in node_tuples
+                if 1 not in node_tuple]
+        midpoint_tuples = [node_tuple for node_tuple in node_tuples
+                if 1 in node_tuple]
+        return (vertex_tuples, midpoint_tuples)
 
     # coarsen_els[group_index][i] is a list of elements to be coarsened together, where the element indices are
     # local to the element group
@@ -515,13 +583,8 @@ class Refiner(object):
                     # Retrieve original order to maintain orientation
                     new_el_vertices.sort()
 
-                    if isinstance(grp, SimplexElementGroup):
-                        print('simplex')
-                    elif isinstance(grp, TensorProductElementGroup):
-                        print('tensor')
                     # Add element to new groups
                     for index_of_vertex, (_, vertex) in enumerate(new_el_vertices):
-                        print(index_of_vertex, vertex, len(self.groups[grp_index][new_iel_grp]))
                         self.groups[grp_index][new_iel_grp][index_of_vertex] = vertex_mapping[vertex]
 
                     new_iel_grp += 1
@@ -560,7 +623,6 @@ class Refiner(object):
             if isinstance(self.last_mesh.groups[grp_index], SimplexElementGroup):
                 grp.append(make_group_from_vertices(self.vertices, group, 4, SimplexElementGroup))
             elif isinstance(self.last_mesh.groups[grp_index], TensorProductElementGroup):
-                print(group)
                 grp.append(make_group_from_vertices(self.vertices, group, 4, TensorProductElementGroup))
 
         from meshmode.mesh import Mesh
@@ -573,17 +635,37 @@ class Refiner(object):
                 vertex_id_dtype=self.last_mesh.vertex_id_dtype,
                 element_id_dtype=self.last_mesh.element_id_dtype)
         return self.last_mesh
-
+    
     def refine(self, refine_flags):
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-        """
-        :arg refine_flags: a :class:`numpy.ndarray` of dtype bool of length ``mesh.nelements``
-            indicating which elements should be split.
-        """
+        refine_tesselations = []
+        refine_indices = []
+        for grp_index, grp in enumerate(self.last_mesh.groups):
+            iel_base = grp.element_nr_base
+            if isinstance(grp, SimplexElementGroup):
+                refine_tesselations.append(self.simplex_tesselations[grp.dim])
+            elif isinstance(grp, TensorProductElementGroup):
+                refine_tesselations.append(self.quad_tesselations[grp.dim])
+            for iel_grp in range(grp.nelements):
+                if refine_flags[iel_base+iel_grp]:
+                    refine_indices.append(grp_index)
+                else:
+                    refine_indices.append(None)
+        return self.refine_using_templates(refine_tesselations, refine_indices)
 
-        if len(refine_flags) != self.last_mesh.nelements:
-            raise ValueError("length of refine_flags does not match "
+    #refine_indices is a list where each entry is either None or an index into refine_templates
+    def refine_using_templates(self, refine_templates, refine_indices):
+        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+        
+        if len(refine_indices) != self.last_mesh.nelements:
+            raise ValueError("length of refine_indices does not match "
                     "element count of last generated mesh")
+
+        self.generation += 1
+        #generate vertex_and_midpoint_tuples for all the templates
+        templates_vertex_and_midpoint_tuples = []
+        for template in refine_templates:
+            templates_vertex_and_midpoint_tuples.append(self.get_vertex_and_midpoint_tuples(template))
 
         # Get number of vertices in next generation mesh
         def get_next_gen_nvertices():
@@ -594,9 +676,9 @@ class Refiner(object):
             for grp_index, grp in enumerate(self.last_mesh.groups):
                 iel_base = grp.element_nr_base
                 for iel_grp in range(grp.nelements):
-                    if refine_flags[iel_base+iel_grp]:
+                    if refine_indices[iel_base+iel_grp] is not None:
                         vertex_indices = grp.vertex_indices[iel_grp]
-                        vertex_tuples = self.get_vertex_and_midpoint_tuples(grp)[grp.dim][0]
+                        (vertex_tuples, midpoint_tuples) = templates_vertex_and_midpoint_tuples[refine_indices[iel_base+iel_grp]]
                         # Maintain seen midpoint tuples for this element to avoid repitition (in case of quad meshes)
                         seen_midpoint_tuples = set()
                         for i in range(len(vertex_indices)):
@@ -610,8 +692,6 @@ class Refiner(object):
                                     midpoint_tuple = self.midpoint_of_node_tuples(vertex_i_tuple, vertex_j_tuple)
                                     seen_midpoint_tuples.add(midpoint_tuple)
                                 
-
-                        
                         # Any vertex pair that doesn't have a midpoint in the current mesh will be refined to create midpoints
                         for i in range(len(vertex_indices)):
                             for j in range(i+1, len(vertex_indices)):
@@ -624,7 +704,8 @@ class Refiner(object):
 
                                 if (vertex_pair not in self.vertex_pair_to_midpoint and
                                     vertex_pair not in next_gen_midpoint_ends and
-                                    midpoint_tuple not in seen_midpoint_tuples):
+                                    midpoint_tuple not in seen_midpoint_tuples and
+                                    midpoint_tuple in midpoint_tuples):
                                     next_gen_nvertices += 1
                                     next_gen_midpoint_ends.add(vertex_pair)
                                     seen_midpoint_tuples.add(midpoint_tuple)
@@ -636,9 +717,12 @@ class Refiner(object):
         
         # Get number of elements in next generation of given group
         def get_next_gen_nelements(grp):
+            next_gen_nelements = grp.nelements
             iel_base = grp.element_nr_base
-            return int(grp.nelements + np.sum(refine_flags[iel_base:iel_base+grp.nelements]) *
-                    (self.nelements_after_refining_element_in_grp(grp) - 1))
+            for iel_grp in range(grp.nelements):
+                if refine_indices[iel_base+iel_grp] is not None:
+                    next_gen_nelements += len(refine_templates[refine_indices[iel_base+iel_grp]][1])-1
+            return next_gen_nelements
 
         def get_tesselation_record(grp):
             from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
@@ -651,7 +735,7 @@ class Refiner(object):
                         self.quad_tesselations[grp.dim][0])
             return tesselation_record
         
-        def get_midpoints_and_midpoint_order(grp, tesselation_record, midpoints_to_find):
+        def get_midpoints_and_midpoint_order(grp, iel_grp, tesselation_record, midpoints_to_find):
             midpoints = None
             midpoint_order = None
             if isinstance(grp, SimplexElementGroup):
@@ -659,18 +743,19 @@ class Refiner(object):
                         grp, tesselation_record, midpoints_to_find)
                 midpoint_order = self.simplex_resampler.get_vertex_pair_to_midpoint_order(grp.dim)
             elif isinstance(grp, TensorProductElementGroup):
-                # TODO: Replace with resampler
+                # FIXME: Replace with resampler
+                iel_base = grp.element_nr_base
                 num_midpoints = 0
                 for vertex in tesselation_record.ref_vertices:
                     if 1 in vertex:
                         num_midpoints += 1
                 midpoints = np.zeros((len(midpoints_to_find), len(self.last_mesh.vertices), 
                     num_midpoints))
-                vertex_tuples = self.get_vertex_and_midpoint_tuples(grp)[grp.dim][0]
+                (vertex_tuples, midpoint_tuples) = templates_vertex_and_midpoint_tuples[refine_indices[iel_base+iel_grp]]
                 midpoint_order = {}
                 cur_el = 0
                 for iel_grp in range(grp.nelements):
-                    if refine_flags[iel_base+iel_grp]:
+                    if refine_indices[iel_base+iel_grp] is not None:
                         cur = 0
                         midpoint_tuple_to_index = set()
                         for i in range(len(grp.vertex_indices[iel_grp])):
@@ -691,6 +776,17 @@ class Refiner(object):
                 midpoints = dict(zip(midpoints_to_find, midpoints))
 
             return (midpoints, midpoint_order)
+        
+        def update_generation_templates_and_generation_and_element_to_template_index():
+            import copy
+            from six.moves import range
+            self.generation_templates.append(copy.deepcopy(refine_templates))
+            for grp in self.last_mesh.groups:
+                iel_base = grp.element_nr_base
+                for iel_grp in range(grp.nelements):
+                    if refine_indices[iel_base+iel_grp] is not None:
+                        import pdb
+                        self.generation_and_element_to_template_index[(self.generation-1, iel_base, iel_grp)] = refine_indices[iel_base+iel_grp]
 
         # Create next generation vertices and groups arrays
         self.vertices = np.empty([len(self.last_mesh.vertices), get_next_gen_nvertices()])
@@ -704,7 +800,7 @@ class Refiner(object):
                 self.vertices[i, j] = self.last_mesh.vertices[i, j]
 
         nvertices = len(self.last_mesh.vertices[0])
-        
+        update_generation_templates_and_generation_and_element_to_template_index()
         del self.group_refinement_records[:]
 
         # Do actual refinement
@@ -713,14 +809,16 @@ class Refiner(object):
             iel_base = grp.element_nr_base
             nelements_in_grp = grp.nelements
             midpoints_to_find = [iel_grp for iel_grp in range(grp.nelements) if
-                    refine_flags[iel_base+iel_grp]]
+                    refine_indices[iel_base+iel_grp] is not None]
             tesselation_record = get_tesselation_record(grp)
-            (midpoints, midpoint_order) = get_midpoints_and_midpoint_order(grp, tesselation_record, midpoints_to_find)
             for iel_grp in range(grp.nelements):
-                if refine_flags[iel_base + iel_grp]:
-                    (nelements_in_grp, nvertices, element_mapping) = \
-                    self.do_refinement(grp_index, iel_grp, nelements_in_grp, 
-                            nvertices, element_mapping, midpoints, midpoint_order)
+                if refine_indices[iel_base+iel_grp] is not None:
+                    (midpoints, midpoint_order) = get_midpoints_and_midpoint_order(grp, iel_grp, tesselation_record, midpoints_to_find)
+                    tesselation = refine_templates[refine_indices[iel_base+iel_grp]]
+                    vertex_and_midpoint_tuples = templates_vertex_and_midpoint_tuples[refine_indices[iel_base+iel_grp]]
+                    (nelements_in_grp, nvertices, resulting_elements_indices) = \
+                    self.refine_element((grp_index, iel_grp), nelements_in_grp, 
+                            nvertices, tesselation, midpoints, midpoint_order)
                 else:
                     for i in range(len(grp.vertex_indices[iel_grp])):
                         self.groups[grp_index][iel_grp][i] = grp.vertex_indices[iel_grp][i]
@@ -786,12 +884,15 @@ class Refiner(object):
                     nvertices, self.groups),
                 vertex_id_dtype=self.last_mesh.vertex_id_dtype,
                 element_id_dtype=self.last_mesh.element_id_dtype)
+
+
         return self.last_mesh
     # }}}
 
     # {{{ generate adjacency
 
     def generate_nodal_adjacency(self, nvertices, groups):
+        import copy
         # medium-term FIXME: make this an incremental update
         # rather than build-from-scratch
         element_to_element = []
@@ -804,7 +905,7 @@ class Refiner(object):
 
         for group_index, grp in enumerate(groups):
             for iel_grp in range(len(grp)):
-                elements_connected_to = self.get_elements_connected_to(groups, group_index, iel_base_for_group[group_index], iel_grp)
+                elements_connected_to = self.elements_connected_to((group_index, iel_grp), copy.deepcopy(grp[iel_grp]), self.last_mesh.groups[group_index].dim)
                 global_elements_connected_to = set()
                 for el in elements_connected_to:
                     global_elements_connected_to.add(iel_base_for_group[el[0]] + el[1])
