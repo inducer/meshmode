@@ -106,14 +106,20 @@ def tesselatesquare():
             pass
 
     result = []
-    
+
     for current in node_tuples:
         try_add_square(current, *tuple(gnitb(2, 2)))
 
     return [node_tuples, result]
 
-def tesselatecube():
-    node_tuples = list(gnitb(3, 3))
+
+def tesselatecube(axes_flags=None):
+    if axes_flags is None:
+        axes_flags = 3*(True,)
+
+    node_tuples = list(gnitb(
+        tuple(3 if af_i else 2 for af_i in axes_flags),
+        ))
 
     node_dict = dict(
             (ituple, idx)
@@ -139,5 +145,12 @@ def tesselatecube():
         try_add_cube(current, *tuple(gnitb(2, 3)))
 
     return [node_tuples, result]
-    
+
+
+if __name__ == "__main__":
+    import numpy as np
+    nodes, cubes = tesselatecube((True, False, True))
+    print(np.array(nodes))
+    print(cubes)
+
 
