@@ -310,6 +310,7 @@ def all_refine(num_mesh, depth, fname):
             generate_icosphere, generate_icosahedron,
             generate_torus, generate_regular_rect_mesh,
             generate_box_mesh, generate_hybrid_mesh)
+    from meshmode.mesh.tesselate import *
     from functools import partial
     from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
@@ -330,11 +331,11 @@ def all_refine(num_mesh, depth, fname):
                     ["blob-2d.step"]),
                 force_ambient_dim=2,
                 )
-    elif 1:
+    elif 0:
         mesh = generate_regular_rect_mesh()
     elif 0:
         mesh =  generate_box_mesh(2*(np.linspace(0, 1, 5),))
-    elif 0:
+    elif 1:
         mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),),
                 group_factory=TensorProductElementGroup)
     else:
@@ -347,11 +348,11 @@ def all_refine(num_mesh, depth, fname):
     #flags[0] = 1
     #flags[1] = 1
     #flags[2] = 1
-    mesh = generate_hybrid_mesh(partial(generate_box_mesh, (
-                np.linspace(0, 1, 3),
-                np.linspace(0, 1, 3),
-                ), group_factory=TensorProductElementGroup, order=1),
-            partial(random_refine_flags, 0.4))
+    #mesh = generate_hybrid_mesh(partial(generate_box_mesh, (
+    #            np.linspace(0, 1, 3),
+    #            np.linspace(0, 1, 3),
+    #            ), group_factory=TensorProductElementGroup, order=1),
+    #        partial(random_refine_flags, 0.4))
 
     #print("END GEN")
     #import timeit
@@ -368,8 +369,12 @@ def all_refine(num_mesh, depth, fname):
     #flags = np.zeros(mesh.nelements)
     #flags[0] = 1
     #mesh = r.refine(flags)
-    for time in range(3):
-        flags = np.zeros(mesh.nelements)
+    for time in range(10):
+        flags = [None for el in range(mesh.nelements)]
+        refine_templates = []
+        refine_templates.append(tesselate_square_into_two())
+        flags[0] = 0
+
         #coarsen_flags = []
         #if time <= 2:
         #    for grp_index, grp in enumerate(mesh.groups):
@@ -390,7 +395,7 @@ def all_refine(num_mesh, depth, fname):
         #                coarsen_flags[grp_index].append(cur_coarsen)
         #            elif i:
         #                curnels += 7
-        mesh = r.refine(flags)
+        mesh = r.refine_using_templates(refine_templates, flags)
     #mesh = r.coarsen(coarsen_flags)
     #flags = get_random_flags(mesh)
     #mesh = r.refine(flags)

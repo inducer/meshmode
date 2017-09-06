@@ -183,19 +183,16 @@ class Refiner(object):
     def next_vertices_and_dimension(self, vertices, dimension):
         from six.moves import range
         from itertools import combinations
-       
         def get_index(nparray, el):
             for ind, cur in enumerate(nparray):
                 if cur == el:
                     return ind
             assert(False)
             return -1
-        def get_tesselation(base_tesselation):
+        def get_tesselation(base_tesselation, vertex_indices):
             import copy
             (base_node_tuples, base_result_tuples) = base_tesselation
             base_original_node_tuples = [node_tuple for node_tuple in base_node_tuples if 1 not in node_tuple] 
-            first_element_refined_vertices = self.generation_and_element_to_vertices[first_element_refined]
-            vertex_indices = [get_index(first_element_refined_vertices, vertex) for vertex in vertices]
             
             sub_node_tuples = []
             sub_result_tuples = []
@@ -248,15 +245,18 @@ class Refiner(object):
         #first element refined whose vertices were *vertices*
         first_element_refined = min(set.intersection(*[self.vertex_to_generation_and_element[vertex] for vertex in vertices]))
         (generation, _, _) = first_element_refined
-        if generation == self.generation or first_element_refined not in self.generation_and_element_to_template_index:
+        if first_element_refined not in self.generation_and_element_to_template_index:
             return generate_next_dimension_result()
+        first_element_refined_vertices = self.generation_and_element_to_vertices[first_element_refined]
+        vertex_indices = [get_index(first_element_refined_vertices, vertex) for vertex in vertices]
+
         base_tesselation_index = self.generation_and_element_to_template_index[first_element_refined]
         base_tesselation = self.generation_templates[generation][base_tesselation_index]
 
-        (node_tuples, result_tuples) = get_tesselation(base_tesselation)
+        (node_tuples, result_tuples) = get_tesselation(base_tesselation, vertex_indices)
         node_tuple_to_vertex_index = self.node_tuple_to_vertex_index(vertices, dimension, node_tuples)
         #can tesselate current element
-        if len(node_tuple_to_vertex_index) == len(node_tuples):
+        if len(node_tuple_to_vertex_index) == len(node_tuples) and len(result_tuples) > 1:
             result_vertices = []
             for subelement in result_tuples:
                 current_subelement_vertices = []
@@ -339,6 +339,8 @@ class Refiner(object):
             for j in range(i+1, len(element_vertices)):
                 midpoint_tuple = self.midpoint_of_node_tuples(vertex_tuples[i], 
                         vertex_tuples[j])
+                if midpoint_tuple not in midpoint_tuples:
+                    continue
                 vertex_i = element_vertices[i]
                 vertex_j = element_vertices[j]
                 vertex_pair = (vertex_i, vertex_j) if vertex_i < vertex_j else (vertex_j, vertex_i)
