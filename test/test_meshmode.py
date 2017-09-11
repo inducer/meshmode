@@ -49,290 +49,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize("num_partitions", [3, 6])
-def test_mpi_communication(num_partitions):
-    num_ranks = num_partitions + 1
-    from subprocess import check_call
-    import sys
-    import os
-    newenv = os.environ.copy()
-    newenv["PYTOOLS_RUN_WITHIN_MPI"] = "1"
-    check_call(["mpirun", "-np", str(num_ranks), sys.executable, "mpi_test_helper.py"],
-               env=newenv)
-
-
-# {{{ partition_interpolation
-
-@pytest.mark.parametrize("group_factory", [PolynomialWarpAndBlendGroupFactory])
-@pytest.mark.parametrize("num_parts", [2, 3])
-@pytest.mark.parametrize("num_groups", [1, 2])
-@pytest.mark.parametrize(("dim", "mesh_pars"),
-        [
-         (2, [3, 4, 7]),
-         (3, [3, 4])
-        ])
-def test_partition_interpolation(ctx_getter, group_factory, dim, mesh_pars,
-                                 num_parts, num_groups, scramble_partitions=True):
-    np.random.seed(42)
-    cl_ctx = ctx_getter()
-    queue = cl.CommandQueue(cl_ctx)
-    order = 4
-
-    from pytools.convergence import EOCRecorder
-    eoc_rec = dict()
-    for i in range(num_parts):
-        for j in range(num_parts):
-            if i == j:
-                continue
-            eoc_rec[i, j] = EOCRecorder()
-
-    def f(x):
-        return 0.5*cl.clmath.sin(30.*x)
-
-    for n in mesh_pars:
-        from meshmode.mesh.generation import generate_warped_rect_mesh
-        meshes = [generate_warped_rect_mesh(dim, order=order, n=n)
-                                for _ in range(num_groups)]
-
-        if num_groups > 1:
-            from meshmode.mesh.processing import merge_disjoint_meshes
-            mesh = merge_disjoint_meshes(meshes)
-        else:
-            mesh = meshes[0]
-
-        if scramble_partitions:
-            part_per_element = np.random.randint(num_parts, size=mesh.nelements)
-        else:
-            from pymetis import part_graph
-            _, p = part_graph(num_parts,
-                              xadj=mesh.nodal_adjacency.neighbors_starts.tolist(),
-                              adjncy=mesh.nodal_adjacency.neighbors.tolist())
-            part_per_element = np.array(p)
-
-        from meshmode.mesh.processing import partition_mesh
-        part_meshes = [
-            partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
-
-        from meshmode.discretization import Discretization
-        vol_discrs = [Discretization(cl_ctx, part_meshes[i], group_factory(order))
-                        for i in range(num_parts)]
-
-        from meshmode.mesh import BTAG_PARTITION
-        from meshmode.discretization.connection import (make_face_restriction,
-                                                        make_partition_connection,
-                                                        check_connection)
-
-        for i_local_part in range(num_parts):
-            for i_remote_part in range(num_parts):
-                if (i_local_part == i_remote_part
-                        or eoc_rec[i_local_part, i_remote_part] is None):
-                    eoc_rec[i_local_part, i_remote_part] = None
-                    continue
-
-                # Mark faces within local_mesh that are connected to remote_mesh
-                local_bdry_conn = make_face_restriction(vol_discrs[i_local_part],
-                                                   group_factory(order),
-                                                   BTAG_PARTITION(i_remote_part))
-
-                # If these parts are not connected, don't bother checking the error
-                bdry_nodes = local_bdry_conn.to_discr.nodes()
-                if bdry_nodes.size == 0:
-                    eoc_rec[i_local_part, i_remote_part] = None
-                    continue
-
-                # Mark faces within remote_mesh that are connected to local_mesh
-                remote_bdry_conn = make_face_restriction(vol_discrs[i_remote_part],
-                                                   group_factory(order),
-                                                   BTAG_PARTITION(i_local_part))
-
-                # Gather just enough information for the connection
-                local_bdry = local_bdry_conn.to_discr
-                local_mesh = part_meshes[i_local_part]
-                local_adj_groups = [local_mesh.facial_adjacency_groups[i][None]
-                                    for i in range(len(local_mesh.groups))]
-                local_batches = [local_bdry_conn.groups[i].batches
-                                    for i in range(len(local_mesh.groups))]
-                local_to_elem_faces = [[batch.to_element_face
-                                                for batch in grp_batches]
-                                            for grp_batches in local_batches]
-                local_to_elem_indices = [[batch.to_element_indices.get(queue=queue)
-                                                for batch in grp_batches]
-                                            for grp_batches in local_batches]
-
-                remote_bdry = remote_bdry_conn.to_discr
-                remote_mesh = part_meshes[i_remote_part]
-                remote_adj_groups = [remote_mesh.facial_adjacency_groups[i][None]
-                                    for i in range(len(remote_mesh.groups))]
-                remote_batches = [remote_bdry_conn.groups[i].batches
-                                    for i in range(len(remote_mesh.groups))]
-                remote_to_elem_faces = [[batch.to_element_face
-                                                for batch in grp_batches]
-                                            for grp_batches in remote_batches]
-                remote_to_elem_indices = [[batch.to_element_indices.get(queue=queue)
-                                                for batch in grp_batches]
-                                            for grp_batches in remote_batches]
-
-                # Connect local_mesh to remote_mesh
-                local_part_conn = make_partition_connection(local_bdry_conn,
-                                                            i_local_part,
-                                                            remote_bdry,
-                                                            remote_adj_groups,
-                                                            remote_to_elem_faces,
-                                                            remote_to_elem_indices)
-
-                # Connect remote mesh to local mesh
-                remote_part_conn = make_partition_connection(remote_bdry_conn,
-                                                             i_remote_part,
-                                                             local_bdry,
-                                                             local_adj_groups,
-                                                             local_to_elem_faces,
-                                                             local_to_elem_indices)
-
-                check_connection(local_part_conn)
-                check_connection(remote_part_conn)
-
-                true_local_points = f(local_bdry.nodes()[0].with_queue(queue))
-                remote_points = local_part_conn(queue, true_local_points)
-                local_points = remote_part_conn(queue, remote_points)
-
-                err = la.norm((true_local_points - local_points).get(), np.inf)
-                eoc_rec[i_local_part, i_remote_part].add_data_point(1./n, err)
-
-    for (i, j), e in eoc_rec.items():
-        if e is not None:
-            print("Error of connection from part %i to part %i." % (i, j))
-            print(e)
-            assert(e.order_estimate() >= order - 0.5 or e.max_error() < 1e-12)
-
-# }}}
-
-
-# {{{ partition_mesh
-
-@pytest.mark.parametrize("dim", [2, 3])
-@pytest.mark.parametrize("num_parts", [4, 5, 7])
-@pytest.mark.parametrize("num_meshes", [1, 2, 7])
-def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions=False):
-    np.random.seed(42)
-    n = (5,) * dim
-    from meshmode.mesh.generation import generate_regular_rect_mesh
-    meshes = [generate_regular_rect_mesh(a=(0 + i,) * dim, b=(1 + i,) * dim, n=n)
-                        for i in range(num_meshes)]
-
-    from meshmode.mesh.processing import merge_disjoint_meshes
-    mesh = merge_disjoint_meshes(meshes)
-
-    if scramble_partitions:
-        part_per_element = np.random.randint(num_parts, size=mesh.nelements)
-    else:
-        from pymetis import part_graph
-        _, p = part_graph(num_parts,
-                          xadj=mesh.nodal_adjacency.neighbors_starts.tolist(),
-                          adjncy=mesh.nodal_adjacency.neighbors.tolist())
-        part_per_element = np.array(p)
-
-    from meshmode.mesh.processing import partition_mesh
-    # TODO: The same part_per_element array must be used to partition each mesh.
-    # Maybe the interface should be changed to guarantee this.
-    new_meshes = [
-        partition_mesh(mesh, part_per_element, i) for i in range(num_parts)]
-
-    assert mesh.nelements == np.sum(
-        [new_meshes[i][0].nelements for i in range(num_parts)]), \
-        "part_mesh has the wrong number of elements"
-
-    assert count_tags(mesh, BTAG_ALL) == np.sum(
-        [count_tags(new_meshes[i][0], BTAG_ALL) for i in range(num_parts)]), \
-        "part_mesh has the wrong number of BTAG_ALL boundaries"
-
-    from meshmode.mesh import BTAG_PARTITION, InterPartitionAdjacencyGroup
-    from meshmode.mesh.processing import find_group_indices
-    num_tags = np.zeros((num_parts,))
-
-    index_lookup_table = dict()
-    for ipart, (m, _) in enumerate(new_meshes):
-        for igrp in range(len(m.groups)):
-            adj = m.facial_adjacency_groups[igrp][None]
-            if not isinstance(adj, InterPartitionAdjacencyGroup):
-                # This group is not connected to another partition.
-                continue
-            for i, (elem, face) in enumerate(zip(adj.elements, adj.element_faces)):
-                index_lookup_table[ipart, igrp, elem, face] = i
-
-    for part_num in range(num_parts):
-        part, part_to_global = new_meshes[part_num]
-        for grp_num in range(len(part.groups)):
-            adj = part.facial_adjacency_groups[grp_num][None]
-            tags = -part.facial_adjacency_groups[grp_num][None].neighbors
-            assert np.all(tags >= 0)
-            if not isinstance(adj, InterPartitionAdjacencyGroup):
-                # This group is not connected to another partition.
-                continue
-            elem_base = part.groups[grp_num].element_nr_base
-            for idx in range(len(adj.elements)):
-                if adj.global_neighbors[idx] == -1:
-                    continue
-                elem = adj.elements[idx]
-                face = adj.element_faces[idx]
-                n_part_num = adj.neighbor_partitions[idx]
-                n_meshwide_elem = adj.global_neighbors[idx]
-                n_face = adj.neighbor_faces[idx]
-                num_tags[n_part_num] += 1
-                n_part, n_part_to_global = new_meshes[n_part_num]
-                # Hack: find_igrps expects a numpy.ndarray and returns
-                #       a numpy.ndarray. But if a single integer is fed
-                #       into find_igrps, an integer is returned.
-                n_grp_num = int(find_group_indices(n_part.groups, n_meshwide_elem))
-                n_adj = n_part.facial_adjacency_groups[n_grp_num][None]
-                n_elem_base = n_part.groups[n_grp_num].element_nr_base
-                n_elem = n_meshwide_elem - n_elem_base
-                n_idx = index_lookup_table[n_part_num, n_grp_num, n_elem, n_face]
-                assert (part_num == n_adj.neighbor_partitions[n_idx]
-                        and elem + elem_base == n_adj.global_neighbors[n_idx]
-                        and face == n_adj.neighbor_faces[n_idx]),\
-                        "InterPartitionAdjacencyGroup is not consistent"
-                _, n_part_to_global = new_meshes[n_part_num]
-                p_meshwide_elem = part_to_global[elem + elem_base]
-                p_meshwide_n_elem = n_part_to_global[n_elem + n_elem_base]
-
-                p_grp_num = find_group_indices(mesh.groups, p_meshwide_elem)
-                p_n_grp_num = find_group_indices(mesh.groups, p_meshwide_n_elem)
-
-                p_elem_base = mesh.groups[p_grp_num].element_nr_base
-                p_n_elem_base = mesh.groups[p_n_grp_num].element_nr_base
-                p_elem = p_meshwide_elem - p_elem_base
-                p_n_elem = p_meshwide_n_elem - p_n_elem_base
-
-                f_groups = mesh.facial_adjacency_groups[p_grp_num]
-                for p_bnd_adj in f_groups.values():
-                    for idx in range(len(p_bnd_adj.elements)):
-                        if (p_elem == p_bnd_adj.elements[idx] and
-                                 face == p_bnd_adj.element_faces[idx]):
-                            assert p_n_elem == p_bnd_adj.neighbors[idx],\
-                                    "Tag does not give correct neighbor"
-                            assert n_face == p_bnd_adj.neighbor_faces[idx],\
-                                    "Tag does not give correct neighbor"
-
-    for i_tag in range(num_parts):
-        tag_sum = 0
-        for mesh, _ in new_meshes:
-            tag_sum += count_tags(mesh, BTAG_PARTITION(i_tag))
-        assert num_tags[i_tag] == tag_sum,\
-                "part_mesh has the wrong number of BTAG_PARTITION boundaries"
-
-
-def count_tags(mesh, tag):
-    num_bnds = 0
-    for adj_dict in mesh.facial_adjacency_groups:
-        for neighbors in adj_dict[None].neighbors:
-            if neighbors < 0:
-                if -neighbors & mesh.boundary_tag_bit(tag) != 0:
-                    num_bnds += 1
-    return num_bnds
-
-# }}}
-
-
 # {{{ circle mesh
 
 def test_circle_mesh(do_plot=False):
@@ -377,9 +93,9 @@ def test_circle_mesh(do_plot=False):
     ("warp", 3, [10, 20, 30]),
     ])
 @pytest.mark.parametrize("per_face_groups", [False, True])
-def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
+def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
         mesh_name, dim, mesh_pars, per_face_groups):
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.discretization import Discretization
@@ -465,9 +181,9 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
     ("warp", 3, [10, 20, 30]),
     ])
 @pytest.mark.parametrize("per_face_groups", [False, True])
-def test_all_faces_interpolation(ctx_getter, mesh_name, dim, mesh_pars,
+def test_all_faces_interpolation(ctx_factory, mesh_name, dim, mesh_pars,
         per_face_groups):
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.discretization import Discretization
@@ -577,11 +293,11 @@ def test_all_faces_interpolation(ctx_getter, mesh_name, dim, mesh_pars,
     ("warp", 2, [3, 5, 7]),
     ("warp", 3, [3, 5]),
     ])
-def test_opposite_face_interpolation(ctx_getter, group_factory,
+def test_opposite_face_interpolation(ctx_factory, group_factory,
         mesh_name, dim, mesh_pars):
     logging.basicConfig(level=logging.INFO)
 
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.discretization import Discretization
@@ -693,12 +409,12 @@ def test_element_orientation():
     ("ball", lambda: mgen.generate_icosahedron(1, 1)),
     ("torus", lambda: mgen.generate_torus(5, 1)),
     ])
-def test_3d_orientation(ctx_getter, what, mesh_gen_func, visualize=False):
+def test_3d_orientation(ctx_factory, what, mesh_gen_func, visualize=False):
     pytest.importorskip("pytential")
 
     logging.basicConfig(level=logging.INFO)
 
-    ctx = ctx_getter()
+    ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
     mesh = mesh_gen_func()
@@ -748,7 +464,7 @@ def test_3d_orientation(ctx_getter, what, mesh_gen_func, visualize=False):
 
 # {{{ merge and map
 
-def test_merge_and_map(ctx_getter, visualize=False):
+def test_merge_and_map(ctx_factory, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
     from meshmode.mesh.generation import generate_box_mesh
     from meshmode.mesh import TensorProductElementGroup
@@ -789,7 +505,7 @@ def test_merge_and_map(ctx_getter, visualize=False):
 
     if visualize:
         from meshmode.discretization import Discretization
-        cl_ctx = ctx_getter()
+        cl_ctx = ctx_factory()
         queue = cl.CommandQueue(cl_ctx)
 
         discr = Discretization(cl_ctx, mesh3, discr_grp_factory)
@@ -805,10 +521,10 @@ def test_merge_and_map(ctx_getter, visualize=False):
 
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("order", [1, 3])
-def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
+def test_sanity_single_element(ctx_factory, dim, order, visualize=False):
     pytest.importorskip("pytential")
 
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
 
     from modepy.tools import unit_vertices
@@ -892,12 +608,12 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
 
 @pytest.mark.parametrize("dim", [2, 3, 4])
 @pytest.mark.parametrize("order", [3])
-def test_sanity_qhull_nd(ctx_getter, dim, order):
+def test_sanity_qhull_nd(ctx_factory, dim, order):
     pytest.importorskip("scipy")
 
     logging.basicConfig(level=logging.INFO)
 
-    ctx = ctx_getter()
+    ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
     from scipy.spatial import Delaunay
@@ -946,13 +662,13 @@ def test_sanity_qhull_nd(ctx_getter, dim, order):
     ("ball-radius-1.step", 3),
     ])
 @pytest.mark.parametrize("mesh_order", [1, 2])
-def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
+def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
         visualize=False):
     pytest.importorskip("pytential")
 
     logging.basicConfig(level=logging.INFO)
 
-    ctx = ctx_getter()
+    ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
     from pytools.convergence import EOCRecorder
@@ -1070,7 +786,7 @@ def test_rect_mesh(do_plot=False):
         pt.show()
 
 
-def test_box_mesh(ctx_getter, visualize=False):
+def test_box_mesh(ctx_factory, visualize=False):
     from meshmode.mesh.generation import generate_box_mesh
     mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
 
@@ -1078,7 +794,7 @@ def test_box_mesh(ctx_getter, visualize=False):
         from meshmode.discretization import Discretization
         from meshmode.discretization.poly_element import \
                 PolynomialWarpAndBlendGroupFactory
-        cl_ctx = ctx_getter()
+        cl_ctx = ctx_factory()
         queue = cl.CommandQueue(cl_ctx)
 
         discr = Discretization(cl_ctx, mesh,
@@ -1227,6 +943,8 @@ def no_test_quad_mesh_3d():
 # }}}
 
 
+# {{{ test_quad_single_element
+
 def test_quad_single_element():
     from meshmode.mesh.generation import make_group_from_vertices
     from meshmode.mesh import Mesh, TensorProductElementGroup
@@ -1250,6 +968,10 @@ def test_quad_single_element():
                 mg.nodes[1].reshape(-1), "o")
         plt.show()
 
+# }}}
+
+
+# {{{ test_quad_multi_element
 
 def test_quad_multi_element():
     from meshmode.mesh.generation import generate_box_mesh
@@ -1269,6 +991,8 @@ def test_quad_multi_element():
                 mg.nodes[0].reshape(-1),
                 mg.nodes[1].reshape(-1), "o")
         plt.show()
+
+# }}}
 
 
 if __name__ == "__main__":
