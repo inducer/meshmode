@@ -57,8 +57,7 @@ def test_mpi_communication(num_partitions):
     import os
     newenv = os.environ.copy()
     newenv["PYTOOLS_RUN_WITHIN_MPI"] = "1"
-    check_call(["mpirun", "-np", str(num_ranks),
-                sys.executable, "test/testmpi.py", str(num_partitions)],
+    check_call(["mpirun", "-np", str(num_ranks), sys.executable, "testmpi.py"],
                env=newenv)
 
 
