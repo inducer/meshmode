@@ -8,6 +8,7 @@ Python 2.7 AMD CPU:
   tags:
   - python2.7
   - amd-cl-cpu
+  - mpi
   except:
   - tags
 
@@ -21,6 +22,7 @@ Python 2.7 POCL:
   tags:
   - python2.7
   - pocl
+  - mpi
   except:
   - tags
 
@@ -34,6 +36,7 @@ Python 3.5 POCL:
   tags:
   - python3.5
   - pocl
+  - mpi
   except:
   - tags
 
