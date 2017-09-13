@@ -310,7 +310,7 @@ def all_refine(num_mesh, depth, fname):
             generate_icosphere, generate_icosahedron,
             generate_torus, generate_regular_rect_mesh,
             generate_box_mesh, generate_hybrid_mesh)
-    from meshmode.mesh.tesselate import *
+    from meshmode.mesh.tesselate import tesselate_square_into_two, tesselatetri
     from functools import partial
     from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
@@ -318,7 +318,7 @@ def all_refine(num_mesh, depth, fname):
     random.seed(0)
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    if 0:
+    if 1:
         mesh = generate_gmsh(
                 ScriptWithFilesSource(
                     """
@@ -335,45 +335,45 @@ def all_refine(num_mesh, depth, fname):
         mesh = generate_regular_rect_mesh()
     elif 0:
         mesh =  generate_box_mesh(2*(np.linspace(0, 1, 5),))
-    elif 1:
+    elif 0:
         mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),),
                 group_factory=TensorProductElementGroup)
     else:
         mesh =  generate_box_mesh(2*(np.linspace(0, 1, 3),),
-                group_factory=TensorProductElementGroup)
+                group_factory=SimplexElementGroup)
         from meshmode.mesh.processing import affine_map
         mesh = affine_map(mesh, A=np.array([[1.2, 0.3], [0.15, 0.9]]))
-    flags = get_random_flags(mesh)
-    #flags = np.zeros(mesh.nelements)
-    #flags[0] = 1
-    #flags[1] = 1
-    #flags[2] = 1
     #mesh = generate_hybrid_mesh(partial(generate_box_mesh, (
     #            np.linspace(0, 1, 3),
     #            np.linspace(0, 1, 3),
     #            ), group_factory=TensorProductElementGroup, order=1),
     #        partial(random_refine_flags, 0.4))
 
-    #print("END GEN")
-    #import timeit
-    #nelements = []
-    #runtimes = []
-    #r = Refiner(mesh)
-    #flags = np.zeros(mesh.nelements)
-    #flags = get_random_flags(mesh)
-    #flags[0] = 1
-    # print(flags, 'here')
-    #mesh = r.refine(flags)
-        #mesh = generate_box_mesh(3*(np.linspace(0, 1, el_fact),))
+
     r = Refiner(mesh)
-    #flags = np.zeros(mesh.nelements)
-    #flags[0] = 1
-    #mesh = r.refine(flags)
-    for time in range(10):
+    for time in range(3):
+        if isinstance(mesh.groups[0], TensorProductElementGroup):
+            print('yes')
+        else:
+            print('no')
         flags = [None for el in range(mesh.nelements)]
         refine_templates = []
+        refine_templates.append(tesselatetri())
         refine_templates.append(tesselate_square_into_two())
-        flags[0] = 0
+        #flags[0] = 1
+        #flags[1] = 1
+        #flags[2] = 1
+        #flags[3] = 1
+        #flags[3] = 1
+        for grp_index, grp in enumerate(mesh.groups):
+            iel_base = grp.element_nr_base
+            for iel_grp in range(grp.nelements):
+                to_refine = random.randint(0, 1)
+                if to_refine == 1:
+                    if isinstance(grp, SimplexElementGroup):
+                        flags[iel_base+iel_grp] = 0
+                    if isinstance(grp, TensorProductElementGroup):
+                        flags[iel_base+iel_grp] = 1
 
         #coarsen_flags = []
         #if time <= 2:
@@ -395,7 +395,9 @@ def all_refine(num_mesh, depth, fname):
         #                coarsen_flags[grp_index].append(cur_coarsen)
         #            elif i:
         #                curnels += 7
+        print(flags)
         mesh = r.refine_using_templates(refine_templates, flags)
+        print('done')
     #mesh = r.coarsen(coarsen_flags)
     #flags = get_random_flags(mesh)
     #mesh = r.refine(flags)
@@ -441,7 +443,7 @@ def all_refine(num_mesh, depth, fname):
         from meshmode.mesh.visualization import draw_2d_mesh
         draw_2d_mesh(mesh,
                 draw_vertex_numbers=False,
-                draw_element_numbers=False,
+                draw_element_numbers=True,
                 draw_nodal_adjacency=False, fill=None)
         import matplotlib.pyplot as pt
         pt.show()
