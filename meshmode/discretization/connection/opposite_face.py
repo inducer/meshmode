@@ -413,7 +413,7 @@ def make_partition_connection(local_bdry_conn, i_local_part,
     """
     Connects ``local_bdry_conn`` to a neighboring partition.
 
-    :arg local_bdry_conn: A :class:`DirectDiscretizationConnection` of the local
+    :arg local_bdry_conn: A :class:`DiscretizationConnection` of the local
         partition.
     :arg i_local_part: The partition number of the local partition.
     :arg remote_adj_groups: A list of :class:`InterPartitionAdjacency`` of the
