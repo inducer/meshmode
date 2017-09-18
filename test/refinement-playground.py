@@ -310,7 +310,7 @@ def all_refine(num_mesh, depth, fname):
             generate_icosphere, generate_icosahedron,
             generate_torus, generate_regular_rect_mesh,
             generate_box_mesh, generate_hybrid_mesh)
-    from meshmode.mesh.tesselate import tesselate_square_into_two, tesselatetri
+    from meshmode.mesh.tesselate import tesselatesquare, tesselatetri
     from functools import partial
     from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
@@ -352,15 +352,16 @@ def all_refine(num_mesh, depth, fname):
 
 
     r = Refiner(mesh)
-    for time in range(4):
+    for time in range(2):
         if isinstance(mesh.groups[0], TensorProductElementGroup):
             print('yes')
         else:
             print('no')
         flags = [None for el in range(mesh.nelements)]
         refine_templates = []
-        refine_templates.append(tesselatetri())
-        refine_templates.append(tesselate_square_into_two())
+        refine_templates.append(tesselatesquare([True, False]))
+        refine_templates.append(tesselatesquare([False, True]))
+        print(refine_templates)
         #flags[0] = 1
         #if(time == 1):
         #    flags[4] = 1
@@ -374,14 +375,11 @@ def all_refine(num_mesh, depth, fname):
         for grp_index, grp in enumerate(mesh.groups):
             iel_base = grp.element_nr_base
             for iel_grp in range(grp.nelements):
-                to_refine = random.randint(0, 1)
-                if to_refine == 1 and iel_grp == 11:
-                    print('refining element 11 at time:', time)
+                to_refine = random.randint(0, 2)
                 if to_refine == 1:
-                    if isinstance(grp, SimplexElementGroup):
-                        flags[iel_base+iel_grp] = 0
-                    if isinstance(grp, TensorProductElementGroup):
-                        flags[iel_base+iel_grp] = 1
+                    flags[iel_base+iel_grp] = 0
+                elif to_refine == 2:
+                    flags[iel_base+iel_grp] = 1
 
         #coarsen_flags = []
         #if time <= 2:

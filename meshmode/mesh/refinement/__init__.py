@@ -88,23 +88,6 @@ class Refiner(object):
                     for vertex in vertex_indices:
                         self.adjacent_set[vertex].add((grp_index, iel_grp))
 
-        def initialize_vertex_to_generation_and_element():
-            self.vertex_to_generation_and_element = [set() for _ in range(mesh.nvertices)]
-            for grp_index, grp in enumerate(mesh.groups):
-                for iel_grp in range(grp.nelements):
-                    vertex_indices = grp.vertex_indices[iel_grp]
-                    for vertex in vertex_indices:
-                        self.vertex_to_generation_and_element[vertex].add((self.generation, grp_index, iel_grp))
-        
-        def initialize_generation_and_element_to_vertices():
-            import copy
-            self.generation_and_element_to_vertices = {}
-            for grp_index, grp in enumerate(mesh.groups):
-                for iel_grp in range(grp.nelements):
-                    vertex_indices = grp.vertex_indices[iel_grp]
-                    generation_and_element = (self.generation, grp_index, iel_grp)
-                    self.generation_and_element_to_vertices[generation_and_element] = copy.deepcopy(vertex_indices)
-
         generate_tesselations()
         self.simplex_resampler = SimplexResampler()
         self.vertex_pair_to_midpoint = {}
@@ -114,8 +97,8 @@ class Refiner(object):
         self.last_mesh = mesh
         initialize_adjacent_set()
         self.generation = 0
-        initialize_vertex_to_generation_and_element()
-        initialize_generation_and_element_to_vertices()
+        self.generation_and_element_to_vertices = {}
+        self.vertex_to_generation_and_element = [set() for _ in range(mesh.nvertices)]
         self.generation_templates = []
         self.generation_and_element_to_template_index = {}
 
@@ -383,18 +366,17 @@ class Refiner(object):
                 nelements_in_grp += 1
         return (result, nelements_in_grp, resulting_elements_indices)
 
-    def update_vertex_to_generation_and_element(self, subelement_indices_and_vertices, nvertices):
-        cur_len = len(self.vertex_to_generation_and_element)
-        for i in range(cur_len, nvertices):
-            self.vertex_to_generation_and_element.append(set())
-        for ((group_index, element_index), vertices) in subelement_indices_and_vertices:
-            for vertex in vertices:
-                self.vertex_to_generation_and_element[vertex].add((self.generation, group_index, element_index))
+    def update_vertex_to_generation_and_element(self, group_index, iel_grp, element_vertices):
+        for vertex in element_vertices:
+            self.vertex_to_generation_and_element[vertex].add((self.generation, group_index, iel_grp))
 
-    def update_generation_and_element_to_vertices(self, subelement_indices_and_vertices):
+    def update_generation_and_element_to_vertices(self, group_index, iel_grp, element_vertices):
         import copy
-        for ((group_index, element_index), vertices) in subelement_indices_and_vertices:
-            self.generation_and_element_to_vertices[(self.generation, group_index, element_index)] = copy.deepcopy(vertices)
+        self.generation_and_element_to_vertices[(self.generation, group_index, iel_grp)] = copy.deepcopy(element_vertices)
+
+    def resize_vertex_to_generation_and_element(self, nvertices):
+        for i in range(len(self.vertex_to_generation_and_element), nvertices):
+            self.vertex_to_generation_and_element.append(set())
 
     def refine_element(self, group_and_el_index, nelements_in_grp, nvertices, tesselation, midpoints, midpoint_order):
         from six.moves import range
@@ -402,12 +384,13 @@ class Refiner(object):
         (group_index, iel_grp) = group_and_el_index
         grp = self.last_mesh.groups[group_index]
         element_vertices = grp.vertex_indices[iel_grp]
+        self.update_vertex_to_generation_and_element(group_index, iel_grp, element_vertices)
+        self.update_generation_and_element_to_vertices(group_index, iel_grp, element_vertices)
         self.remove_from_adjacent_set(group_and_el_index, element_vertices, grp.dim)
         nvertices = self.create_midpoints(group_index, iel_grp, element_vertices, nvertices, tesselation, midpoints, midpoint_order, self.get_vertex_and_midpoint_tuples(tesselation))
+        self.resize_vertex_to_generation_and_element(nvertices)
         (subelement_indices_and_vertices, nelements_in_grp, resulting_elements_indices) = self.create_elements(iel_grp, 
                 element_vertices, grp.dim, group_index, nelements_in_grp, tesselation)
-        self.update_vertex_to_generation_and_element(subelement_indices_and_vertices, nvertices)
-        self.update_generation_and_element_to_vertices(subelement_indices_and_vertices)
         for (index, vertices) in subelement_indices_and_vertices:
             self.add_to_adjacent_set(index, vertices, grp.dim)
         return (nelements_in_grp, nvertices, resulting_elements_indices)
@@ -655,7 +638,6 @@ class Refiner(object):
             raise ValueError("length of refine_indices does not match "
                     "element count of last generated mesh")
 
-        self.generation += 1
         #generate vertex_and_midpoint_tuples for all the templates
         templates_vertex_and_midpoint_tuples = []
         for template in refine_templates:
@@ -780,7 +762,7 @@ class Refiner(object):
                 for iel_grp in range(grp.nelements):
                     if refine_indices[iel_base+iel_grp] is not None:
                         import pdb
-                        self.generation_and_element_to_template_index[(self.generation-1, iel_base, iel_grp)] = refine_indices[iel_base+iel_grp]
+                        self.generation_and_element_to_template_index[(self.generation, iel_base, iel_grp)] = refine_indices[iel_base+iel_grp]
 
         # Create next generation vertices and groups arrays
         self.vertices = np.empty([len(self.last_mesh.vertices), get_next_gen_nvertices()])
@@ -879,6 +861,7 @@ class Refiner(object):
                 vertex_id_dtype=self.last_mesh.vertex_id_dtype,
                 element_id_dtype=self.last_mesh.element_id_dtype)
 
+        self.generation += 1
 
         return self.last_mesh
     # }}}
