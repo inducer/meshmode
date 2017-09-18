@@ -315,10 +315,10 @@ def all_refine(num_mesh, depth, fname):
     from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
     import random
-    random.seed(0)
+    random.seed(5)
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    if 1:
+    if 0:
         mesh = generate_gmsh(
                 ScriptWithFilesSource(
                     """
@@ -333,8 +333,9 @@ def all_refine(num_mesh, depth, fname):
                 )
     elif 0:
         mesh = generate_regular_rect_mesh()
-    elif 0:
-        mesh =  generate_box_mesh(2*(np.linspace(0, 1, 5),))
+    elif 1:
+        mesh =  generate_box_mesh(2*(np.linspace(0, 1, 5),),
+                group_factory=TensorProductElementGroup)
     elif 0:
         mesh =  generate_box_mesh(3*(np.linspace(0, 1, 3),),
                 group_factory=TensorProductElementGroup)
@@ -351,7 +352,7 @@ def all_refine(num_mesh, depth, fname):
 
 
     r = Refiner(mesh)
-    for time in range(3):
+    for time in range(4):
         if isinstance(mesh.groups[0], TensorProductElementGroup):
             print('yes')
         else:
@@ -361,14 +362,21 @@ def all_refine(num_mesh, depth, fname):
         refine_templates.append(tesselatetri())
         refine_templates.append(tesselate_square_into_two())
         #flags[0] = 1
-        #flags[1] = 1
+        #if(time == 1):
+        #    flags[4] = 1
+        #if(time == 2):
+        #    flags[18] = 1
         #flags[2] = 1
         #flags[3] = 1
         #flags[3] = 1
+        #flags[48] = 1
+        #flags[0] = 1
         for grp_index, grp in enumerate(mesh.groups):
             iel_base = grp.element_nr_base
             for iel_grp in range(grp.nelements):
                 to_refine = random.randint(0, 1)
+                if to_refine == 1 and iel_grp == 11:
+                    print('refining element 11 at time:', time)
                 if to_refine == 1:
                     if isinstance(grp, SimplexElementGroup):
                         flags[iel_base+iel_grp] = 0
@@ -442,7 +450,7 @@ def all_refine(num_mesh, depth, fname):
     elif mesh.dim == 2:
         from meshmode.mesh.visualization import draw_2d_mesh
         draw_2d_mesh(mesh,
-                draw_vertex_numbers=False,
+                draw_vertex_numbers=True,
                 draw_element_numbers=True,
                 draw_nodal_adjacency=False, fill=None)
         import matplotlib.pyplot as pt

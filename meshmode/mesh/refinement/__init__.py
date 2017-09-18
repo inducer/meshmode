@@ -228,15 +228,21 @@ class Refiner(object):
 
         #first element refined whose vertices were *vertices*
         intersect_set = set.intersection(*[self.vertex_to_generation_and_element[vertex] for vertex in vertices])
-        if len(intersect_set) == 0 or min(intersect_set) not in self.generation_and_element_to_template_index:
+        intersecting_elements = sorted(list(intersect_set))
+        base_tesselation_index = None 
+        for intersecting_element in intersecting_elements:
+            if intersecting_element in self.generation_and_element_to_template_index:
+                base_tesselation_index = self.generation_and_element_to_template_index[intersecting_element]
+
+        if base_tesselation_index == None:
             return generate_next_dimension_result()
+
 
         first_element_refined = min(intersect_set)
         (generation, _, _) = first_element_refined
         first_element_refined_vertices = self.generation_and_element_to_vertices[first_element_refined]
         vertex_indices = [get_index(first_element_refined_vertices, vertex) for vertex in vertices]
 
-        base_tesselation_index = self.generation_and_element_to_template_index[first_element_refined]
         base_tesselation = self.generation_templates[generation][base_tesselation_index]
 
         (node_tuples, result_tuples) = get_tesselation(base_tesselation, vertex_indices)
@@ -329,7 +335,6 @@ class Refiner(object):
                     continue
                 vertex_i = element_vertices[i]
                 vertex_j = element_vertices[j]
-                print(vertex_i, vertex_j)
                 vertex_pair = (vertex_i, vertex_j) if vertex_i < vertex_j else (vertex_j, vertex_i)
                 if vertex_pair not in self.vertex_pair_to_midpoint:
                     if midpoint_tuple not in midpoint_tuple_to_index and (i, j) in midpoint_order\
@@ -687,7 +692,6 @@ class Refiner(object):
                                 vertex_i = vertex_indices[i]
                                 vertex_j = vertex_indices[j]
                                 vertex_pair = (vertex_i, vertex_j) if vertex_i < vertex_j else (vertex_j, vertex_i)
-                                print(vertex_pair)
                                 vertex_i_tuple = vertex_tuples[i]
                                 vertex_j_tuple = vertex_tuples[j]
                                 midpoint_tuple = self.midpoint_of_node_tuples(vertex_i_tuple, vertex_j_tuple)
