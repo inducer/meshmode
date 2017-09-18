@@ -82,12 +82,26 @@ def tesselatetet():
 
     return [node_tuples, result]
 
+
+def fix_node_tuples_for_axis_flags(node_tuples, axes_flags):
+    """For the axes that do *not* get split ``(axes_flags[i] == False)``,
+    multiply the corresponding entry of the *node_tuples* by 2 so that
+    all node tuple entries range from 0 to 2.
+    """
+
+    return [
+            tuple(
+                (2*t_i if not axis_flag else t_i)
+                for axis_flag, t_i in zip(axes_flags, node_tuple))
+            for node_tuple in node_tuples]
+
+
 def tesselatesquare(axes_flags=None):
     if axes_flags is None:
         axes_flags = 2*(True,)
 
     node_tuples = list(gnitb(
-        tuple(3 if af_i else 2 for af_i in axes_flags), 
+        tuple(3 if af_i else 2 for af_i in axes_flags),
         ))
 
     node_dict = dict(
@@ -110,7 +124,7 @@ def tesselatesquare(axes_flags=None):
     for current in node_tuples:
         try_add_square(current, *tuple(gnitb(2, 2)))
 
-    return [node_tuples, result]
+    return [fix_node_tuples_for_axis_flags(node_tuples, axes_flags), result]
 
 
 def tesselatecube(axes_flags=None):
@@ -144,7 +158,7 @@ def tesselatecube(axes_flags=None):
     for current in node_tuples:
         try_add_cube(current, *tuple(gnitb(2, 3)))
 
-    return [node_tuples, result]
+    return [fix_node_tuples_for_axis_flags(node_tuples, axes_flags), result]
 
 
 if __name__ == "__main__":
@@ -152,5 +166,3 @@ if __name__ == "__main__":
     nodes, cubes = tesselatecube((True, False, True))
     print(np.array(nodes))
     print(cubes)
-
-
