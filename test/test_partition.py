@@ -320,15 +320,15 @@ def count_tags(mesh, tag):
 
 
 # {{{ MPI test rank entrypoint
+TAG_DISTRIBUTE_MESHES = 1
+TAG_SEND_MESH = 2
+
 
 def mpi_test_rank_entrypoint():
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     num_parts = comm.Get_size() - 1
-
-    TAG_DISTRIBUTE_MESHES = 1
-    TAG_SEND_MESH = 2
 
     # This rank only partitions a mesh and sends them to their respective ranks.
     if rank == 0:
