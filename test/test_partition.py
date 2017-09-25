@@ -356,7 +356,8 @@ def mpi_test_rank_entrypoint():
     elif (rank - 1) in range(num_parts):
         status = MPI.Status()
         local_mesh = comm.recv(source=0, tag=TAG_DISTRIBUTE_MESHES, status=status)
-        print('Rank {0}: Recieved local mesh (size = {1})'.format(rank, status.count))
+        print('Rank {0}: Recieved local mesh (size = {1})'
+                        .format(rank, status.count))
 
         from meshmode.discretization.poly_element\
                         import PolynomialWarpAndBlendGroupFactory
@@ -444,7 +445,8 @@ def mpi_test_rank_entrypoint():
                             .format(rank, i_remote_part + 1, status.count))
             total_bytes_recvd += status.count
 
-        print('Rank {0}: Recieved {1} bytes in total'.format(rank, total_bytes_recvd))
+        print('Rank {0}: Recieved {1} bytes in total'
+                        .format(rank, total_bytes_recvd))
 
         for req in send_reqs:
             req.wait()
