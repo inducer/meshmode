@@ -348,7 +348,7 @@ def mpi_test_rank_entrypoint():
         reqs = []
         for r in range(num_parts):
             reqs.append(comm.isend(parts[r], dest=r+1, tag=TAG_DISTRIBUTE_MESHES))
-        print('Rank 0: Sent all mesh partitions.')
+        print('Rank 0: Sent all mesh partitions')
         for req in reqs:
             req.wait()
 
@@ -356,7 +356,7 @@ def mpi_test_rank_entrypoint():
     elif (rank - 1) in range(num_parts):
         status = MPI.Status()
         local_mesh = comm.recv(source=0, tag=TAG_DISTRIBUTE_MESHES, status=status)
-        print('Rank {0}: Recieved full mesh (size = {1})'.format(rank, status.count))
+        print('Rank {0}: Recieved local mesh (size = {1})'.format(rank, status.count))
 
         from meshmode.discretization.poly_element\
                         import PolynomialWarpAndBlendGroupFactory
@@ -434,6 +434,7 @@ def mpi_test_rank_entrypoint():
                                                   tag=TAG_SEND_MESH)
 
         remote_data = {}
+        total_bytes_recvd = 0
         for i_remote_part, req in recv_reqs.items():
             status = MPI.Status()
             remote_data[i_remote_part] = req.wait(status=status)
@@ -441,6 +442,9 @@ def mpi_test_rank_entrypoint():
             remote_buf[i_remote_part] = None  # FIXME: Is this a good idea?
             print('Rank {0}: Received rank {1} data ({2} bytes)'
                             .format(rank, i_remote_part + 1, status.count))
+            total_bytes_recvd += status.count
+
+        print('Rank {0}: Recieved {1} bytes in total'.format(rank, total_bytes_recvd))
 
         for req in send_reqs:
             req.wait()
