@@ -25,6 +25,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import six
 from six.moves import range
 import numpy as np
 import numpy.linalg as la
@@ -321,61 +322,9 @@ def count_tags(mesh, tag):
 
 # {{{ MPI test rank entrypoint
 
-TAG_BASE = 83411
-TAG_DISTRIBUTE_MESHES = TAG_BASE + 1
-TAG_SEND_MESH = TAG_BASE + 2
-
-
-class MPIMeshDistributor(object):
-    def __init__(self, mpi_comm, manager_rank=0):
-        self.mpi_comm = mpi_comm
-        self.manager_rank = manager_rank
-
-    def is_mananger_rank(self):
-        return self.mpi_comm.Get_rank() == self.manager_rank
-
-    def send_mesh_parts(self, mesh, part_per_element, num_parts):
-        mpi_comm = self.mpi_comm
-        rank = mpi_comm.Get_rank()
-        assert num_parts <= mpi_comm.Get_size()
-
-        assert self.is_mananger_rank()
-
-        from meshmode.mesh.processing import partition_mesh
-        parts = [partition_mesh(mesh, part_per_element, i)[0]
-                        for i in range(num_parts)]
-
-        local_part = None
-
-        reqs = []
-        for r, part in enumerate(parts):
-            if r == self.manager_rank:
-                local_part = part
-            else:
-                reqs.append(mpi_comm.isend(part, dest=r, tag=TAG_DISTRIBUTE_MESHES))
-
-        logger.info('rank %d: sent all mesh partitions', rank)
-        for req in reqs:
-            req.wait()
-
-        return local_part
-
-    def receive_mesh_part(self):
-        from mpi4py import MPI
-
-        mpi_comm = self.mpi_comm
-        rank = mpi_comm.Get_rank()
-
-        status = MPI.Status()
-        result = self.mpi_comm.recv(
-                source=self.manager_rank, tag=TAG_DISTRIBUTE_MESHES,
-                status=status)
-        logger.info('rank %d: recieved local mesh (size = %d)', rank, status.count)
-
-        return result
-
-
 def mpi_test_rank_entrypoint():
+    from meshmode.distributed import MPIMeshDistributor, MPIBoundaryCommunicator
+
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
@@ -407,109 +356,12 @@ def mpi_test_rank_entrypoint():
     from meshmode.discretization import Discretization
     vol_discr = Discretization(cl_ctx, local_mesh, group_factory)
 
-    i_local_part = rank
-    local_bdry_conns = {}
-    for i_remote_part in range(num_parts):
-        if i_local_part == i_remote_part:
-            continue
-        # Mark faces within local_mesh that are connected to remote_mesh
-        from meshmode.discretization.connection import make_face_restriction
-        from meshmode.mesh import BTAG_PARTITION
-        local_bdry_conns[i_remote_part] =\
-                make_face_restriction(vol_discr, group_factory,
-                                      BTAG_PARTITION(i_remote_part))
+    bdry_comm = MPIBoundaryCommunicator(comm, queue, vol_discr, group_factory)
+    bdry_comm.check()
 
-    print("Rank %d send begin" % rank)
+    # FIXME: Actually test communicating data with this
 
-    # Send boundary data
-    send_reqs = []
-    for i_remote_part in range(num_parts):
-        if i_local_part == i_remote_part:
-            continue
-        bdry_nodes = local_bdry_conns[i_remote_part].to_discr.nodes()
-        if bdry_nodes.size == 0:
-            # local_mesh is not connected to remote_mesh; send None
-            send_reqs.append(comm.isend(None,
-                                        dest=i_remote_part,
-                                        tag=TAG_SEND_MESH))
-            continue
-
-        # Gather information to send to other ranks
-        local_bdry = local_bdry_conns[i_remote_part].to_discr
-        local_mesh = local_bdry_conns[i_remote_part].from_discr.mesh
-        local_adj_groups = [local_mesh.facial_adjacency_groups[i][None]
-                            for i in range(len(local_mesh.groups))]
-        local_batches = [local_bdry_conns[i_remote_part].groups[i].batches
-                            for i in range(len(local_mesh.groups))]
-        local_to_elem_faces = [[batch.to_element_face for batch in grp_batches]
-                                    for grp_batches in local_batches]
-        local_to_elem_indices = [[batch.to_element_indices.get(queue=queue)
-                                        for batch in grp_batches]
-                                    for grp_batches in local_batches]
-
-        local_data = {'bdry_mesh': local_bdry.mesh,
-                      'adj': local_adj_groups,
-                      'to_elem_faces': local_to_elem_faces,
-                      'to_elem_indices': local_to_elem_indices}
-        send_reqs.append(comm.isend(local_data,
-                                    dest=i_remote_part,
-                                    tag=TAG_SEND_MESH))
-
-    # Receive boundary data
-    remote_buf = {}
-    for i_remote_part in range(num_parts):
-        if i_local_part == i_remote_part:
-            continue
-        remote_rank = i_remote_part
-        status = MPI.Status()
-        comm.probe(source=remote_rank, tag=TAG_SEND_MESH, status=status)
-        remote_buf[i_remote_part] = np.empty(status.count, dtype=bytes)
-
-    recv_reqs = {}
-    for i_remote_part, buf in remote_buf.items():
-        remote_rank = i_remote_part
-        recv_reqs[i_remote_part] = comm.irecv(buf=buf,
-                                              source=remote_rank,
-                                              tag=TAG_SEND_MESH)
-
-    remote_data = {}
-    total_bytes_recvd = 0
-    for i_remote_part, req in recv_reqs.items():
-        status = MPI.Status()
-        remote_data[i_remote_part] = req.wait(status=status)
-        # Free the buffer
-        remote_buf[i_remote_part] = None  # FIXME: Is this a good idea?
-        print('Rank {0}: Received rank {1} data ({2} bytes)'
-                        .format(rank, i_remote_part, status.count))
-        total_bytes_recvd += status.count
-
-    print('Rank {0}: Recieved {1} bytes in total'
-                    .format(rank, total_bytes_recvd))
-
-    for req in send_reqs:
-        req.wait()
-
-    for i_remote_part, data in remote_data.items():
-        if data is None:
-            # Local mesh is not connected to remote mesh
-            continue
-        remote_bdry_mesh = data['bdry_mesh']
-        remote_bdry = Discretization(cl_ctx, remote_bdry_mesh, group_factory)
-        remote_adj_groups = data['adj']
-        remote_to_elem_faces = data['to_elem_faces']
-        remote_to_elem_indices = data['to_elem_indices']
-        # Connect local_mesh to remote_mesh
-        from meshmode.discretization.connection import make_partition_connection
-        connection = make_partition_connection(local_bdry_conns[i_remote_part],
-                                               i_local_part,
-                                               remote_bdry,
-                                               remote_adj_groups,
-                                               remote_to_elem_faces,
-                                               remote_to_elem_indices)
-        from meshmode.discretization.connection import check_connection
-        check_connection(connection)
-
-    print("Rank %d exiting" % rank)
+    logger.debug("Rank %d exiting", rank)
 
 # }}}
 
