@@ -320,6 +320,9 @@ def count_tags(mesh, tag):
 
 
 # {{{ MPI test rank entrypoint
+TAG_DISTRIBUTE_MESHES = 1
+TAG_SEND_MESH = 2
+
 
 def mpi_test_rank_entrypoint():
     from mpi4py import MPI
@@ -344,16 +347,17 @@ def mpi_test_rank_entrypoint():
 
         reqs = []
         for r in range(num_parts):
-            reqs.append(comm.isend(parts[r], dest=r+1, tag=1))
-        print('Rank 0: Sent all mesh partitions.')
+            reqs.append(comm.isend(parts[r], dest=r+1, tag=TAG_DISTRIBUTE_MESHES))
+        print('Rank 0: Sent all mesh partitions')
         for req in reqs:
             req.wait()
 
     # These ranks recieve a mesh and comunicates boundary data to the other ranks.
     elif (rank - 1) in range(num_parts):
         status = MPI.Status()
-        local_mesh = comm.recv(source=0, tag=1, status=status)
-        print('Rank {0}: Recieved full mesh (size = {1})'.format(rank, status.count))
+        local_mesh = comm.recv(source=0, tag=TAG_DISTRIBUTE_MESHES, status=status)
+        print('Rank {0}: Recieved local mesh (size = {1})'
+                        .format(rank, status.count))
 
         from meshmode.discretization.poly_element\
                         import PolynomialWarpAndBlendGroupFactory
@@ -382,17 +386,19 @@ def mpi_test_rank_entrypoint():
         # Send boundary data
         send_reqs = []
         for i_remote_part in range(num_parts):
-            print(i_remote_part)
             if i_local_part == i_remote_part:
                 continue
             bdry_nodes = local_bdry_conns[i_remote_part].to_discr.nodes()
             if bdry_nodes.size == 0:
-                # local_mesh is not connected to remote_mesh, send None
-                send_reqs.append(comm.isend(None, dest=i_remote_part+1, tag=2))
+                # local_mesh is not connected to remote_mesh; send None
+                send_reqs.append(comm.isend(None,
+                                            dest=i_remote_part+1,
+                                            tag=TAG_SEND_MESH))
                 continue
 
             # Gather information to send to other ranks
             local_bdry = local_bdry_conns[i_remote_part].to_discr
+            local_mesh = local_bdry_conns[i_remote_part].from_discr.mesh
             local_adj_groups = [local_mesh.facial_adjacency_groups[i][None]
                                 for i in range(len(local_mesh.groups))]
             local_batches = [local_bdry_conns[i_remote_part].groups[i].batches
@@ -407,20 +413,40 @@ def mpi_test_rank_entrypoint():
                           'adj': local_adj_groups,
                           'to_elem_faces': local_to_elem_faces,
                           'to_elem_indices': local_to_elem_indices}
-            send_reqs.append(comm.isend(local_data, dest=i_remote_part+1, tag=2))
+            send_reqs.append(comm.isend(local_data,
+                                        dest=i_remote_part+1,
+                                        tag=TAG_SEND_MESH))
 
         # Receive boundary data
-        remote_data = {}
+        remote_buf = {}
         for i_remote_part in range(num_parts):
             if i_local_part == i_remote_part:
                 continue
             remote_rank = i_remote_part + 1
             status = MPI.Status()
-            remote_data[i_remote_part] = comm.recv(source=remote_rank,
-                                                   tag=2,
-                                                   status=status)
-            print('Rank {0}: Received rank {1} data (size = {2})'
-                            .format(rank, remote_rank, status.count))
+            comm.probe(source=remote_rank, tag=TAG_SEND_MESH, status=status)
+            remote_buf[i_remote_part] = np.empty(status.count, dtype=bytes)
+
+        recv_reqs = {}
+        for i_remote_part, buf in remote_buf.items():
+            remote_rank = i_remote_part + 1
+            recv_reqs[i_remote_part] = comm.irecv(buf=buf,
+                                                  source=remote_rank,
+                                                  tag=TAG_SEND_MESH)
+
+        remote_data = {}
+        total_bytes_recvd = 0
+        for i_remote_part, req in recv_reqs.items():
+            status = MPI.Status()
+            remote_data[i_remote_part] = req.wait(status=status)
+            # Free the buffer
+            remote_buf[i_remote_part] = None  # FIXME: Is this a good idea?
+            print('Rank {0}: Received rank {1} data ({2} bytes)'
+                            .format(rank, i_remote_part + 1, status.count))
+            total_bytes_recvd += status.count
+
+        print('Rank {0}: Recieved {1} bytes in total'
+                        .format(rank, total_bytes_recvd))
 
         for req in send_reqs:
             req.wait()
