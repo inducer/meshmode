@@ -107,7 +107,21 @@ class MPIBoundaryCommunicator(object):
                 btag.part_nr
                 for btag in part_discr.mesh.boundary_tags
                 if isinstance(btag, BTAG_PARTITION))
-        # /!\ Not final--mutated melow
+        # /!\ Not final--mutated below
+        # self.connected_parts = np.array([])
+        # for adj in part_discr.mesh.facial_adjacency_groups:
+        #     from meshmode.mesh import InterPartitionAdjacencyGroup
+        #     print(adj[None])
+        #     if isinstance(adj[None], InterPartitionAdjacencyGroup):
+        #         indices = adj[None].neighbor_partitions >= 0
+        #         self.connected_parts.append(np.unique(adj[None].neighbor_partitions[indices]))
+        # self.connected_parts = np.unique(self.connected_parts)
+        #self.connected_parts = set(
+        #        part_nr
+        #        for adj in part_discr.mesh.facial_adjacency_groups
+        #        for part_nr in adj[None].neighbor_partitions
+        #        if part_nr >= 0
+        #)
 
         from meshmode.discretization.connection import make_face_restriction
 
@@ -122,6 +136,7 @@ class MPIBoundaryCommunicator(object):
                 self.local_bdry_conns[i_remote_part] = bdry_conn
             else:
                 self.connected_parts.remove(i_remote_part)
+            # self.local_bdry_conns[i_remote_part] = bdry_conn
 
         assert self.i_local_part not in self.connected_parts
 
