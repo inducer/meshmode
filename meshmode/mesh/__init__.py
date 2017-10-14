@@ -548,32 +548,6 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
     .. versionadded:: 2017.1
     """
 
-    #FIXME
-    '''
-    This is a weird error. When we try to pickle and unpickle a mesh,
-    neighbor_partitions does not exist anymore in
-    mesh.facial_adjacency_groups[i][None]. My guess was that pickle did not know
-    that property existed, so I created it.
-    '''
-    neighbor_partitions = None
-    global_neighbors = None
-
-    def __init__(self, elements,
-                       element_faces,
-                       neighbors,
-                       igroup,
-                       neighbor_partitions,
-                       global_neighbors,
-                       neighbor_faces):
-        FacialAdjacencyGroup.__init__(self, elements=elements,
-                                      element_faces=element_faces,
-                                      neighbors=neighbors,
-                                      neighbor_faces=neighbor_faces,
-                                      igroup=igroup,
-                                      ineighbor_group=None)
-        self.neighbor_partitions = neighbor_partitions
-        self.global_neighbors = global_neighbors
-
     def __eq__(self, other):
         return (super.__eq__(self, other)
             and np.array_equal(self.global_neighbors, other.global_neighbors)

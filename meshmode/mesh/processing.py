@@ -243,9 +243,13 @@ def partition_mesh(mesh, part_per_element, part_nr):
                     adj_idx += 1
 
             connected_mesh.facial_adjacency_groups[igrp][None] =\
-                    InterPartitionAdjacencyGroup(elems, faces, neighbors,
-                                                bdry.igroup,
-                                                n_parts, global_n_elems, n_faces)
+                    InterPartitionAdjacencyGroup(elements=elems,
+                                                 element_faces=faces,
+                                                 neighbors=neighbors,
+                                                 igroup=bdry.igroup,
+                                                 neighbor_partitions=n_parts,
+                                                 global_neighbors=global_n_elems,
+                                                 neighbor_faces=n_faces)
 
     return connected_mesh, queried_elems
 
