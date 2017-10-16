@@ -34,7 +34,9 @@ logger = logging.getLogger(__name__)
 
 TAG_BASE = 83411
 TAG_DISTRIBUTE_MESHES = TAG_BASE + 1
-TAG_SEND_MESH = TAG_BASE + 2
+TAG_SEND_BOUNDARY = TAG_BASE + 2
+TAG_SEND_REMOTE_NODES = TAG_BASE + 3
+TAG_SEND_LOCAL_NODES = TAG_BASE + 4
 
 
 # {{{ mesh distributor
@@ -145,7 +147,7 @@ class MPIBoundaryCommunicator(object):
                           'to_elem_faces': local_to_elem_faces,
                           'to_elem_indices': local_to_elem_indices}
             send_reqs.append(self.mpi_comm.isend(
-                local_data, dest=i_remote_part, tag=TAG_SEND_MESH))
+                local_data, dest=i_remote_part, tag=TAG_SEND_BOUNDARY))
 
         return send_reqs
 
@@ -159,14 +161,14 @@ class MPIBoundaryCommunicator(object):
         for i_remote_part in self.connected_parts:
             status = MPI.Status()
             self.mpi_comm.probe(
-                    source=i_remote_part, tag=TAG_SEND_MESH, status=status)
+                    source=i_remote_part, tag=TAG_SEND_BOUNDARY, status=status)
             remote_buf[i_remote_part] = np.empty(status.count, dtype=bytes)
 
         recv_reqs = {}
         for i_remote_part, buf in remote_buf.items():
             recv_reqs[i_remote_part] = self.mpi_comm.irecv(buf=buf,
                                                   source=i_remote_part,
-                                                  tag=TAG_SEND_MESH)
+                                                  tag=TAG_SEND_BOUNDARY)
 
         remote_data = {}
         total_bytes_recvd = 0
@@ -199,7 +201,6 @@ class MPIBoundaryCommunicator(object):
 
             # Connect local_mesh to remote_mesh
             from meshmode.discretization.connection import make_partition_connection
-            # FIXME: rename to local_to_remote_bdry_conns??
             self.remote_to_local_bdry_conns[i_remote_part] = \
                     make_partition_connection(
                         self.local_bdry_conns[i_remote_part],
@@ -225,6 +226,67 @@ class MPIBoundaryCommunicator(object):
 
         for i, conn in six.iteritems(self.remote_to_local_bdry_conns):
             check_connection(conn)
+
+    def test_data_transfer(self, queue):
+        import pyopencl as cl
+
+        def f(x):
+            return 0.1*cl.clmath.sin(30.*x)
+
+        send_reqs = []
+        for i_remote_part in self.connected_parts:
+            conn = self.remote_to_local_bdry_conns[i_remote_part]
+            bdry_discr = self.local_bdry_conns[i_remote_part].to_discr
+            bdry_x = bdry_discr.nodes()[0].with_queue(queue=queue)
+
+            true_local_f = f(bdry_x)
+            remote_f = conn(queue, true_local_f)
+
+            send_reqs.append(self.mpi_comm.isend(remote_f.get(queue=queue),
+                                                 dest=i_remote_part,
+                                                 tag=TAG_SEND_REMOTE_NODES))
+
+        remote_to_local_f_data = {}
+        for i_remote_part in self.connected_parts:
+            remote_to_local_f_data[i_remote_part] =\
+                                self.mpi_comm.recv(source=i_remote_part,
+                                                   tag=TAG_SEND_REMOTE_NODES)
+
+        for req in send_reqs:
+            req.wait()
+
+        send_reqs = []
+        for i_remote_part in self.connected_parts:
+            conn = self.remote_to_local_bdry_conns[i_remote_part]
+            local_f_np = remote_to_local_f_data[i_remote_part]
+            local_f_cl = cl.array.Array(queue,
+                                        shape=local_f_np.shape,
+                                        dtype=local_f_np.dtype)
+            local_f_cl.set(local_f_np)
+            remote_f = conn(queue, local_f_cl).get(queue=queue)
+
+            send_reqs.append(self.mpi_comm.isend(remote_f,
+                                                 dest=i_remote_part,
+                                                 tag=TAG_SEND_LOCAL_NODES))
+
+        local_f_data = {}
+        for i_remote_part in self.connected_parts:
+            local_f_data[i_remote_part] = self.mpi_comm.recv(source=i_remote_part,
+                                                         tag=TAG_SEND_LOCAL_NODES)
+
+        for req in send_reqs:
+            req.wait()
+
+        for i_remote_part in self.connected_parts:
+            bdry_discr = self.local_bdry_conns[i_remote_part].to_discr
+            bdry_x = bdry_discr.nodes()[0].with_queue(queue=queue)
+
+            true_local_f = f(bdry_x).get(queue=queue)
+            local_f = local_f_data[i_remote_part]
+
+            from numpy.linalg import norm
+            err = norm(true_local_f - local_f, np.inf)
+            assert err < 1e-13, "Error (%f) too large" % err
 
 # }}}
 
