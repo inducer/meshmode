@@ -101,44 +101,26 @@ class MPIBoundaryCommunicator(object):
 
         self.bdry_group_factory = bdry_group_factory
 
-        # FIXME: boundary tags for unconnected parts should not exist
-        from meshmode.mesh import BTAG_PARTITION
-        self.connected_parts = set(
-                btag.part_nr
-                for btag in part_discr.mesh.boundary_tags
-                if isinstance(btag, BTAG_PARTITION))
-        # /!\ Not final--mutated below
-        # self.connected_parts = np.array([])
-        # for adj in part_discr.mesh.facial_adjacency_groups:
-        #     from meshmode.mesh import InterPartitionAdjacencyGroup
-        #     print(adj[None])
-        #     if isinstance(adj[None], InterPartitionAdjacencyGroup):
-        #         indices = adj[None].neighbor_partitions >= 0
-        #         self.connected_parts.append(np.unique(adj[None].neighbor_partitions[indices]))
-        # self.connected_parts = np.unique(self.connected_parts)
-        #self.connected_parts = set(
-        #        part_nr
-        #        for adj in part_discr.mesh.facial_adjacency_groups
-        #        for part_nr in adj[None].neighbor_partitions
-        #        if part_nr >= 0
-        #)
+        from meshmode.mesh import InterPartitionAdjacencyGroup
+        self.connected_parts = set()
+        for adj in part_discr.mesh.facial_adjacency_groups:
+            if isinstance(adj[None], InterPartitionAdjacencyGroup):
+                indices = adj[None].neighbor_partitions >= 0
+                self.connected_parts = self.connected_parts.union(
+                                            adj[None].neighbor_partitions[indices])
+        assert self.i_local_part not in self.connected_parts
 
         from meshmode.discretization.connection import make_face_restriction
 
+        from meshmode.mesh import BTAG_PARTITION
         self.local_bdry_conns = {}
         for i_remote_part in list(self.connected_parts):
             bdry_conn = make_face_restriction(part_discr, bdry_group_factory,
                     BTAG_PARTITION(i_remote_part))
 
-            # FIXME This is a really inefficient way of figuring out that that
-            # part of the boundary is empty.
-            if bdry_conn.to_discr.nnodes:
-                self.local_bdry_conns[i_remote_part] = bdry_conn
-            else:
-                self.connected_parts.remove(i_remote_part)
-            # self.local_bdry_conns[i_remote_part] = bdry_conn
-
-        assert self.i_local_part not in self.connected_parts
+            # Assert that everything in self.connected_parts is truly connected
+            assert bdry_conn.to_discr.nnodes > 0
+            self.local_bdry_conns[i_remote_part] = bdry_conn
 
         self._setup(queue)
 
