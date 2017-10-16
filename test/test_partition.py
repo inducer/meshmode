@@ -223,6 +223,17 @@ def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions=False):
     new_meshes = [
         partition_mesh(mesh, part_per_element, i) for i in range(num_parts)]
 
+    import pickle
+    for m, _ in new_meshes:
+        for adj in m.facial_adjacency_groups:
+            data = {'adj': adj[None]}
+            pickle.dump(data, open('tmp.p', 'wb'))
+            data2 = pickle.load(open('tmp.p', 'rb'))
+            assert data == data2
+            from meshmode.mesh import InterPartitionAdjacencyGroup
+            if isinstance(data['adj'], InterPartitionAdjacencyGroup):
+                assert np.equal(data['adj'].neighbor_partitions, data2['adj'].neighbor_partitions).all()
+
     assert mesh.nelements == np.sum(
         [new_meshes[i][0].nelements for i in range(num_parts)]), \
         "part_mesh has the wrong number of elements"
@@ -334,7 +345,7 @@ def mpi_test_rank_entrypoint():
     if mesh_dist.is_mananger_rank():
         np.random.seed(42)
         from meshmode.mesh.generation import generate_warped_rect_mesh
-        meshes = [generate_warped_rect_mesh(3, order=4, n=5) for _ in range(2)]
+        meshes = [generate_warped_rect_mesh(3, order=4, n=4) for _ in range(2)]
 
         from meshmode.mesh.processing import merge_disjoint_meshes
         mesh = merge_disjoint_meshes(meshes)
@@ -368,11 +379,11 @@ def mpi_test_rank_entrypoint():
 # {{{ MPI test pytest entrypoint
 
 @pytest.mark.mpi
-@pytest.mark.parametrize("num_partitions", [3, 6])
+@pytest.mark.parametrize("num_partitions", [3, 4])
 def test_mpi_communication(num_partitions):
     pytest.importorskip("mpi4py")
 
-    num_ranks = num_partitions + 1
+    num_ranks = num_partitions
     from subprocess import check_call
     import sys
     newenv = os.environ.copy()
