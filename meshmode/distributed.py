@@ -108,13 +108,14 @@ class MPIBoundaryCommunicator(object):
                 indices = adj[None].neighbor_partitions >= 0
                 self.connected_parts = self.connected_parts.union(
                                             adj[None].neighbor_partitions[indices])
+        self.connected_parts = list(self.connected_parts)
         assert self.i_local_part not in self.connected_parts
 
         from meshmode.discretization.connection import make_face_restriction
 
         from meshmode.mesh import BTAG_PARTITION
         self.local_bdry_conns = {}
-        for i_remote_part in list(self.connected_parts):
+        for i_remote_part in self.connected_parts:
             bdry_conn = make_face_restriction(part_discr, bdry_group_factory,
                     BTAG_PARTITION(i_remote_part))
 
@@ -198,6 +199,7 @@ class MPIBoundaryCommunicator(object):
 
             # Connect local_mesh to remote_mesh
             from meshmode.discretization.connection import make_partition_connection
+            # FIXME: rename to local_to_remote_bdry_conns??
             self.remote_to_local_bdry_conns[i_remote_part] = \
                     make_partition_connection(
                         self.local_bdry_conns[i_remote_part],

@@ -178,6 +178,11 @@ def test_partition_interpolation(ctx_factory, group_factory, dim, mesh_pars,
                 check_connection(remote_part_conn)
 
                 true_local_points = f(local_bdry.nodes()[0].with_queue(queue))
+                s = true_local_points.shape
+                d = true_local_points.dtype
+                a = cl.array.Array(queue, shape=s, dtype=d)
+                a[:] = true_local_points.get()
+                true_local_points = a
                 remote_points = local_part_conn(queue, true_local_points)
                 local_points = remote_part_conn(queue, remote_points)
 
@@ -369,7 +374,60 @@ def mpi_test_rank_entrypoint():
     bdry_comm = MPIBoundaryCommunicator(comm, queue, vol_discr, group_factory)
     bdry_comm.check()
 
-    # FIXME: Actually test communicating data with this
+    def f(x):
+        return 0.1*cl.clmath.sin(30.*x)
+
+    TAG_A = 123
+    TAG_B = 234
+    send_reqs = []
+    for i_remote_part in bdry_comm.connected_parts:
+        conn = bdry_comm.remote_to_local_bdry_conns[i_remote_part]
+        bdry_discr = bdry_comm.local_bdry_conns[i_remote_part].to_discr
+        bdry_x = bdry_discr.nodes()[0].with_queue(queue=queue)
+
+        true_local_f = f(bdry_x)
+        remote_f = conn(queue, true_local_f)
+
+        data = {'remote_f': remote_f.get(queue=queue),
+                'shape': remote_f.shape,
+                'dtype': remote_f.dtype}
+        send_reqs.append(comm.isend(data, dest=i_remote_part, tag=TAG_A))
+
+    remote_to_local_f_data = {}
+    for i_remote_part in bdry_comm.connected_parts:
+        remote_to_local_f_data[i_remote_part] = comm.recv(source=i_remote_part, tag=TAG_A)
+
+    for req in send_reqs:
+        req.wait()
+
+    send_reqs = []
+    for i_remote_part in bdry_comm.connected_parts:
+        conn = bdry_comm.remote_to_local_bdry_conns[i_remote_part]
+        shape = remote_to_local_f_data[i_remote_part]['shape']
+        dtype = remote_to_local_f_data[i_remote_part]['dtype']
+        local_f_np = remote_to_local_f_data[i_remote_part]['remote_f']
+        local_f_cl = cl.array.Array(queue, shape=shape, dtype=dtype)
+        local_f_cl[:] = local_f_np
+        remote_f = conn(queue, local_f_cl).get(queue=queue)
+
+        send_reqs.append(comm.isend(remote_f, dest=i_remote_part, tag=TAG_B))
+
+    local_f_data = {}
+    for i_remote_part in bdry_comm.connected_parts:
+        local_f_data[i_remote_part] = comm.recv(source=i_remote_part, tag=TAG_B)
+
+    for req in send_reqs:
+        req.wait()
+
+    for i_remote_part in bdry_comm.connected_parts:
+        bdry_discr = bdry_comm.local_bdry_conns[i_remote_part].to_discr
+        bdry_x = bdry_discr.nodes()[0].with_queue(queue=queue)
+
+        true_local_f = f(bdry_x).get(queue=queue)
+        local_f = local_f_data[i_remote_part]
+
+        err = la.norm(true_local_f - local_f, np.inf)
+        assert err < 1e-13, "Error (%f) too large" % err
 
     logger.debug("Rank %d exiting", rank)
 
