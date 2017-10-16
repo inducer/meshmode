@@ -228,17 +228,6 @@ def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions=False):
     new_meshes = [
         partition_mesh(mesh, part_per_element, i) for i in range(num_parts)]
 
-    import pickle
-    for m, _ in new_meshes:
-        for adj in m.facial_adjacency_groups:
-            data = {'adj': adj[None]}
-            pickle.dump(data, open('tmp.p', 'wb'))
-            data2 = pickle.load(open('tmp.p', 'rb'))
-            assert data == data2
-            from meshmode.mesh import InterPartitionAdjacencyGroup
-            if isinstance(data['adj'], InterPartitionAdjacencyGroup):
-                assert np.equal(data['adj'].neighbor_partitions, data2['adj'].neighbor_partitions).all()
-
     assert mesh.nelements == np.sum(
         [new_meshes[i][0].nelements for i in range(num_parts)]), \
         "part_mesh has the wrong number of elements"
@@ -373,61 +362,7 @@ def mpi_test_rank_entrypoint():
 
     bdry_comm = MPIBoundaryCommunicator(comm, queue, vol_discr, group_factory)
     bdry_comm.check()
-
-    def f(x):
-        return 0.1*cl.clmath.sin(30.*x)
-
-    TAG_A = 123
-    TAG_B = 234
-    send_reqs = []
-    for i_remote_part in bdry_comm.connected_parts:
-        conn = bdry_comm.remote_to_local_bdry_conns[i_remote_part]
-        bdry_discr = bdry_comm.local_bdry_conns[i_remote_part].to_discr
-        bdry_x = bdry_discr.nodes()[0].with_queue(queue=queue)
-
-        true_local_f = f(bdry_x)
-        remote_f = conn(queue, true_local_f)
-
-        data = {'remote_f': remote_f.get(queue=queue),
-                'shape': remote_f.shape,
-                'dtype': remote_f.dtype}
-        send_reqs.append(comm.isend(data, dest=i_remote_part, tag=TAG_A))
-
-    remote_to_local_f_data = {}
-    for i_remote_part in bdry_comm.connected_parts:
-        remote_to_local_f_data[i_remote_part] = comm.recv(source=i_remote_part, tag=TAG_A)
-
-    for req in send_reqs:
-        req.wait()
-
-    send_reqs = []
-    for i_remote_part in bdry_comm.connected_parts:
-        conn = bdry_comm.remote_to_local_bdry_conns[i_remote_part]
-        shape = remote_to_local_f_data[i_remote_part]['shape']
-        dtype = remote_to_local_f_data[i_remote_part]['dtype']
-        local_f_np = remote_to_local_f_data[i_remote_part]['remote_f']
-        local_f_cl = cl.array.Array(queue, shape=shape, dtype=dtype)
-        local_f_cl[:] = local_f_np
-        remote_f = conn(queue, local_f_cl).get(queue=queue)
-
-        send_reqs.append(comm.isend(remote_f, dest=i_remote_part, tag=TAG_B))
-
-    local_f_data = {}
-    for i_remote_part in bdry_comm.connected_parts:
-        local_f_data[i_remote_part] = comm.recv(source=i_remote_part, tag=TAG_B)
-
-    for req in send_reqs:
-        req.wait()
-
-    for i_remote_part in bdry_comm.connected_parts:
-        bdry_discr = bdry_comm.local_bdry_conns[i_remote_part].to_discr
-        bdry_x = bdry_discr.nodes()[0].with_queue(queue=queue)
-
-        true_local_f = f(bdry_x).get(queue=queue)
-        local_f = local_f_data[i_remote_part]
-
-        err = la.norm(true_local_f - local_f, np.inf)
-        assert err < 1e-13, "Error (%f) too large" % err
+    bdry_comm.test_data_transfer(queue)
 
     logger.debug("Rank %d exiting", rank)
 
