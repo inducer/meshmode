@@ -28,6 +28,7 @@ THE SOFTWARE.
 import six
 
 import numpy as np
+from mpi4py import MPI
 
 import logging
 logger = logging.getLogger(__name__)
@@ -76,8 +77,6 @@ class MPIMeshDistributor(object):
         return local_part
 
     def receive_mesh_part(self):
-        from mpi4py import MPI
-
         mpi_comm = self.mpi_comm
         rank = mpi_comm.Get_rank()
 
@@ -107,19 +106,18 @@ class MPIBoundaryCommunicator(object):
         self.connected_parts = set()
         for adj in part_discr.mesh.facial_adjacency_groups:
             if isinstance(adj[None], InterPartitionAdjacencyGroup):
-                indices = adj[None].neighbor_partitions >= 0
+                indices = (adj[None].neighbor_partitions >= 0)
                 self.connected_parts = self.connected_parts.union(
                                             adj[None].neighbor_partitions[indices])
-        self.connected_parts = list(self.connected_parts)
         assert self.i_local_part not in self.connected_parts
 
         from meshmode.discretization.connection import make_face_restriction
-
         from meshmode.mesh import BTAG_PARTITION
         self.local_bdry_conns = {}
         for i_remote_part in self.connected_parts:
-            bdry_conn = make_face_restriction(part_discr, bdry_group_factory,
-                    BTAG_PARTITION(i_remote_part))
+            bdry_conn = make_face_restriction(part_discr,
+                                              bdry_group_factory,
+                                              BTAG_PARTITION(i_remote_part))
 
             # Assert that everything in self.connected_parts is truly connected
             assert bdry_conn.to_discr.nnodes > 0
@@ -154,8 +152,6 @@ class MPIBoundaryCommunicator(object):
     def _receive_boundary_data(self, queue):
         rank = self.mpi_comm.Get_rank()
         i_local_part = rank
-
-        from mpi4py import MPI
 
         remote_buf = {}
         for i_remote_part in self.connected_parts:
@@ -233,6 +229,24 @@ class MPIBoundaryCommunicator(object):
         def f(x):
             return 0.1*cl.clmath.sin(30.*x)
 
+        '''
+        Here is a simplified example of what happens from
+        the point of view of the local rank.
+
+        Local rank:
+            1. Transfer local points from local boundary to remote boundary
+                to get remote points.
+            2. Send remote points to remote rank.
+        Remote rank:
+            3. Receive remote points from local rank.
+            4. Transfer remote points from remote boundary to local boundary
+                to get local points.
+            5. Send local points to local rank.
+        Local rank:
+            6. Recieve local points from remote rank.
+            7. Check if local points are the same as the original local points.
+        '''
+
         send_reqs = []
         for i_remote_part in self.connected_parts:
             conn = self.remote_to_local_bdry_conns[i_remote_part]
@@ -246,11 +260,23 @@ class MPIBoundaryCommunicator(object):
                                                  dest=i_remote_part,
                                                  tag=TAG_SEND_REMOTE_NODES))
 
-        remote_to_local_f_data = {}
+        buffers = {}
         for i_remote_part in self.connected_parts:
-            remote_to_local_f_data[i_remote_part] =\
-                                self.mpi_comm.recv(source=i_remote_part,
-                                                   tag=TAG_SEND_REMOTE_NODES)
+            status = MPI.Status()
+            self.mpi_comm.probe(source=i_remote_part,
+                                tag=TAG_SEND_REMOTE_NODES,
+                                status=status)
+            buffers[i_remote_part] = np.empty(status.count, dtype=bytes)
+
+        recv_reqs = {}
+        for i_remote_part, buf in buffers.items():
+            recv_reqs[i_remote_part] = self.mpi_comm.irecv(buf=buf,
+                                                           source=i_remote_part,
+                                                           tag=TAG_SEND_REMOTE_NODES)
+        remote_to_local_f_data = {}
+        for i_remote_part, req in recv_reqs.items():
+            remote_to_local_f_data[i_remote_part] = req.wait()
+            buffers[i_remote_part] = None   # free buffer
 
         for req in send_reqs:
             req.wait()
@@ -269,10 +295,23 @@ class MPIBoundaryCommunicator(object):
                                                  dest=i_remote_part,
                                                  tag=TAG_SEND_LOCAL_NODES))
 
-        local_f_data = {}
+        buffers = {}
         for i_remote_part in self.connected_parts:
-            local_f_data[i_remote_part] = self.mpi_comm.recv(source=i_remote_part,
-                                                         tag=TAG_SEND_LOCAL_NODES)
+            status = MPI.Status()
+            self.mpi_comm.probe(source=i_remote_part,
+                                tag=TAG_SEND_LOCAL_NODES,
+                                status=status)
+            buffers[i_remote_part] = np.empty(status.count, dtype=bytes)
+
+        recv_reqs = {}
+        for i_remote_part, buf in buffers.items():
+            recv_reqs[i_remote_part] = self.mpi_comm.irecv(buf=buf,
+                                                           source=i_remote_part,
+                                                           tag=TAG_SEND_LOCAL_NODES)
+        local_f_data = {}
+        for i_remote_part, req in recv_reqs.items():
+            local_f_data[i_remote_part] = req.wait()
+            buffers[i_remote_part] = None   # free buffer
 
         for req in send_reqs:
             req.wait()
@@ -286,7 +325,7 @@ class MPIBoundaryCommunicator(object):
 
             from numpy.linalg import norm
             err = norm(true_local_f - local_f, np.inf)
-            assert err < 1e-13, "Error (%f) too large" % err
+            assert err < 1e-13, "Error = %f is too large" % err
 
 # }}}
 
