@@ -61,7 +61,7 @@ def find_group_indices(groups, meshwide_elems):
 
 # {{{ partition_mesh
 
-def partition_mesh(mesh, part_per_element, part_nr):
+def partition_mesh(mesh, part_per_element, part_num):
     """
     :arg mesh: A :class:`meshmode.mesh.Mesh` to be partitioned.
     :arg part_per_element: A :class:`numpy.ndarray` containing one
