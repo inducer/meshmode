@@ -495,6 +495,10 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
 
         The group number of this group.
 
+    .. attribute:: ineighbor_group
+
+        *None* for boundary faces.
+
     .. attribute:: elements
 
         Group-local element numbers.
