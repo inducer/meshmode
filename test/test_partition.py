@@ -350,8 +350,6 @@ def mpi_test_rank_entrypoint():
     else:
         local_mesh = mesh_dist.receive_mesh_part()
 
-    from meshmode.discretization.poly_element\
-                    import PolynomialWarpAndBlendGroupFactory
     group_factory = PolynomialWarpAndBlendGroupFactory(4)
     import pyopencl as cl
     cl_ctx = cl.create_some_context()
