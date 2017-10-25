@@ -247,6 +247,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
                                                  element_faces=faces,
                                                  neighbors=neighbors,
                                                  igroup=bdry.igroup,
+                                                 ineighbor_group=None,
                                                  neighbor_partitions=n_parts,
                                                  global_neighbors=global_n_elems,
                                                  neighbor_faces=n_faces)
