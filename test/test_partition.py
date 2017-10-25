@@ -351,7 +351,6 @@ def mpi_test_rank_entrypoint():
         local_mesh = mesh_dist.receive_mesh_part()
 
     group_factory = PolynomialWarpAndBlendGroupFactory(4)
-    import pyopencl as cl
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
 
