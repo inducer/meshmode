@@ -395,12 +395,12 @@ def generate_icosahedron(r, order):
     top_point = 5
 
     tris = []
-    l = len(top_ring)
-    for i in range(l):
-        tris.append([top_ring[i], top_ring[(i+1) % l], top_point])
-        tris.append([bottom_ring[i], bottom_point, bottom_ring[(i+1) % l], ])
-        tris.append([bottom_ring[i], bottom_ring[(i+1) % l], top_ring[i]])
-        tris.append([top_ring[i], bottom_ring[(i+1) % l], top_ring[(i+1) % l]])
+    m = len(top_ring)
+    for i in range(m):
+        tris.append([top_ring[i], top_ring[(i+1) % m], top_point])
+        tris.append([bottom_ring[i], bottom_point, bottom_ring[(i+1) % m], ])
+        tris.append([bottom_ring[i], bottom_ring[(i+1) % m], top_ring[i]])
+        tris.append([top_ring[i], bottom_ring[(i+1) % m], top_ring[(i+1) % m]])
 
     vertices *= r/la.norm(vertices[:, 0])
 
