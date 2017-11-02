@@ -60,8 +60,9 @@ __doc__ = """
 
 .. autofunction:: make_same_mesh_connection
 
-.. autofunction:: FRESTR_INTERIOR_FACES
-.. autofunction:: FRESTR_ALL_FACES
+.. autodata:: FRESTR_INTERIOR_FACES
+.. autodata:: FRESTR_ALL_FACES
+
 .. autofunction:: make_face_restriction
 .. autofunction:: make_face_to_all_faces_embedding
 
