@@ -39,11 +39,24 @@ TAG_SEND_BOUNDARY = TAG_BASE + 2
 TAG_SEND_REMOTE_NODES = TAG_BASE + 3
 TAG_SEND_LOCAL_NODES = TAG_BASE + 4
 
+__doc__ = """
+.. autoclass:: MPIMeshDistributor
+.. autoclass:: MPIBoundaryCommunicator
+"""
+
 
 # {{{ mesh distributor
 
 class MPIMeshDistributor(object):
+    """
+    .. automethod:: is_mananger_rank
+    .. automethod:: send_mesh_parts
+    .. automethod:: recv_mesh_part
+    """
     def __init__(self, mpi_comm, manager_rank=0):
+        """
+        :arg mpi_comm: A :class:`MPI.Intracomm`
+        """
         self.mpi_comm = mpi_comm
         self.manager_rank = manager_rank
 
@@ -51,6 +64,16 @@ class MPIMeshDistributor(object):
         return self.mpi_comm.Get_rank() == self.manager_rank
 
     def send_mesh_parts(self, mesh, part_per_element, num_parts):
+        """
+        :arg mesh: A :class:`Mesh` to distribute to other ranks.
+        :arg part_per_element: A :class:`numpy.ndarray` containing one
+            integer per element of *mesh* indicating which part of the
+            partitioned mesh the element is to become a part of.
+        :arg num_parts: The number of partitions to divide the mesh into.
+
+        Sends each partition to a different rank.
+        Returns one partition that was not sent to any other rank.
+        """
         mpi_comm = self.mpi_comm
         rank = mpi_comm.Get_rank()
         assert num_parts <= mpi_comm.Get_size()
@@ -77,8 +100,13 @@ class MPIMeshDistributor(object):
         return local_part
 
     def receive_mesh_part(self):
+        """
+        Returns the mesh sent by the manager rank.
+        """
         mpi_comm = self.mpi_comm
         rank = mpi_comm.Get_rank()
+
+        assert not self.is_mananger_rank(), "Manager rank cannot recieve mesh"
 
         status = MPI.Status()
         result = self.mpi_comm.recv(
@@ -94,7 +122,23 @@ class MPIMeshDistributor(object):
 # {{{ boundary communicator
 
 class MPIBoundaryCommunicator(object):
+    """
+    .. attribute:: remote_to_local_bdry_conns
+
+        Maps rank numbers to :class:`DirectDiscretizationConnection`.
+
+        ``remote_to_local_bdry_conns[i_remote_part]`` gives the connection
+         that performs data exchange across faces from partition `i_remote_part`
+         to the local mesh.
+    """
     def __init__(self, mpi_comm, queue, part_discr, bdry_group_factory):
+        """
+        :arg mpi_comm: A :class:`MPI.Intracomm`
+        :arg queue:
+        :arg part_discr: A :class:`meshmode.Discretization` of the local mesh
+                to perform boundary communication on.
+        :arg bdry_group_factory:
+        """
         self.mpi_comm = mpi_comm
         self.part_discr = part_discr
 
@@ -223,7 +267,7 @@ class MPIBoundaryCommunicator(object):
         for i, conn in six.iteritems(self.remote_to_local_bdry_conns):
             check_connection(conn)
 
-    def test_data_transfer(self, queue):
+    def _test_data_transfer(self, queue):
         import pyopencl as cl
 
         def f(x):
