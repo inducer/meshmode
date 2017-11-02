@@ -68,12 +68,12 @@ class ElementGroupBase(object):
 
     .. method:: grad_basis()
 
-        :returns: a :class:`tuple` of functions, each of  which
-        accepts arrays of shape *(dims, npts)*
-        and returns a :class:`tuple` of length *dims* containing
-        the derivatives along each axis as an array of size *npts*.
-        'Scalar' evaluation, by passing just one vector of length *dims*,
-        is also supported.
+        :returns: a :class:`tuple` of functions, each of which
+            accepts arrays of shape *(dims, npts)* and returns a
+            :class:`tuple` of length *dims* containing the
+            derivatives along each axis as an array of size
+            *npts*.  'Scalar' evaluation, by passing just one
+            vector of length *dims*, is also supported.
 
     .. method:: diff_matrices()
 
@@ -86,6 +86,7 @@ class ElementGroupBase(object):
 
         Returns an array of length :attr:`nunit_nodes` containing
         quadrature weights.
+
     """
 
     def __init__(self, mesh_el_group, order, node_nr_base):
@@ -162,6 +163,13 @@ class OrderBasedGroupFactory(ElementGroupFactory):
 class Discretization(object):
     """An unstructured composite discretization.
 
+    :param cl_ctx: A :class:`pyopencl.Context`
+    :param mesh: A :class:`meshmode.mesh.Mesh` over which the discretization is
+        built
+    :param group_factory: An :class:`ElementGroupFactory`
+    :param real_dtype: The :mod:`numpy` data type used for representing real
+        data, either :class:`numpy.float32` or :class:`numpy.float64`
+
     .. attribute:: real_dtype
 
     .. attribute:: complex_dtype
@@ -189,6 +197,7 @@ class Discretization(object):
     .. method:: quad_weights(queue)
 
         shape: ``(nnodes)``
+
     """
 
     def __init__(self, cl_ctx, mesh, group_factory, real_dtype=np.float64):
