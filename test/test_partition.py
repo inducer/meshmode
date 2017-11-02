@@ -359,7 +359,7 @@ def mpi_test_rank_entrypoint():
 
     bdry_comm = MPIBoundaryCommunicator(comm, queue, vol_discr, group_factory)
     bdry_comm.check()
-    bdry_comm.test_data_transfer(queue)
+    bdry_comm._test_data_transfer(queue)
 
     logger.debug("Rank %d exiting", rank)
 
