@@ -86,7 +86,6 @@ class ElementGroupBase(object):
 
         Returns an array of length :attr:`nunit_nodes` containing
         quadrature weights.
-
     """
 
     def __init__(self, mesh_el_group, order, node_nr_base):
@@ -197,7 +196,6 @@ class Discretization(object):
     .. method:: quad_weights(queue)
 
         shape: ``(nnodes)``
-
     """
 
     def __init__(self, cl_ctx, mesh, group_factory, real_dtype=np.float64):
