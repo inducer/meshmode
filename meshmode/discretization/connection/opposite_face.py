@@ -427,7 +427,7 @@ def make_partition_connection(local_bdry_conn, i_local_part,
         group `igrp`.
 
     :returns: A :class:`DirectDiscretizationConnection` that performs data
-        exchange across faces from partition `i_local_part` to the remote partition.
+        exchange across faces from the remote partition to partition `i_local_part`.
 
     .. versionadded:: 2017.1
 
