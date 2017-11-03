@@ -146,9 +146,9 @@ def _get_face_vertices(mesh, boundary_tag):
 
         # }}}
     else:
-        # For INTERIOR_FACES, this is likely every vertex in the book.
+        # For FRESTR_INTERIOR_FACES, this is likely every vertex in the book.
         # Don't ever bother trying to cut the list down.
-        # For ALL_FACES, it literally is every single vertex.
+        # For FRESTR_ALL_FACES, it literally is every single vertex.
 
         return np.arange(mesh.nvertices, dtype=np.intp)
 
@@ -163,9 +163,9 @@ def make_face_restriction(discr, group_factory, boundary_tag,
 
     :arg boundary_tag: The boundary tag for which to create a face
         restriction. May be
-        :class:`meshmode.discretization.connection.INTERIOR_FACES`
+        :class:`meshmode.discretization.connection.FRESTR_INTERIOR_FACES`
         to indicate interior faces, or
-        :class:`meshmode.discretization.connection.ALL_FACES`
+        :class:`meshmode.discretization.connection.FRESTR_ALL_FACES`
         to make a discretization consisting of all (interior and
         boundary) faces.
 
@@ -194,7 +194,7 @@ def make_face_restriction(discr, group_factory, boundary_tag,
         boundary_tag = FRESTR_INTERIOR_FACES
         from warnings import warn
         warn("passing *None* for boundary_tag is deprecated--pass "
-                "INTERIOR_FACES instead",
+                "FRESTR_INTERIOR_FACES instead",
                 DeprecationWarning, stacklevel=2)
 
     logger.info("building face restriction: start")
