@@ -40,7 +40,7 @@ from meshmode.discretization.poly_element import (
         )
 from meshmode.mesh import BTAG_ALL
 from meshmode.discretization.connection import \
-        FRESTR_ALL_FACES, FRESTR_INTERIOR_FACES
+        FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
 
 import pytest
@@ -133,8 +133,8 @@ def test_circle_mesh(do_plot=False):
     ])
 @pytest.mark.parametrize("boundary_tag", [
     BTAG_ALL,
-    FRESTR_ALL_FACES,
-    FRESTR_INTERIOR_FACES,
+    FACE_RESTR_ALL,
+    FACE_RESTR_INTERIOR,
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
     ("blob", 2, [1e-1, 8e-2, 5e-2]),
@@ -282,7 +282,7 @@ def test_all_faces_interpolation(ctx_getter, mesh_name, dim, mesh_pars,
 
         all_face_bdry_connection = make_face_restriction(
                 vol_discr, PolynomialWarpAndBlendGroupFactory(order),
-                FRESTR_ALL_FACES, per_face_groups=per_face_groups)
+                FACE_RESTR_ALL, per_face_groups=per_face_groups)
         all_face_bdry_discr = all_face_bdry_connection.to_discr
 
         for ito_grp, ceg in enumerate(all_face_bdry_connection.groups):
@@ -303,7 +303,7 @@ def test_all_faces_interpolation(ctx_getter, mesh_name, dim, mesh_pars,
 
         for boundary_tag in [
                 BTAG_ALL,
-                FRESTR_INTERIOR_FACES,
+                FACE_RESTR_INTERIOR,
                 ]:
             bdry_connection = make_face_restriction(
                     vol_discr, PolynomialWarpAndBlendGroupFactory(order),
@@ -396,7 +396,7 @@ def test_opposite_face_interpolation(ctx_getter, group_factory,
 
         bdry_connection = make_face_restriction(
                 vol_discr, group_factory(order),
-                FRESTR_INTERIOR_FACES)
+                FACE_RESTR_INTERIOR)
         bdry_discr = bdry_connection.to_discr
 
         opp_face = make_opposite_face_connection(bdry_connection)

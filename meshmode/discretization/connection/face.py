@@ -36,7 +36,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class FRESTR_INTERIOR_FACES:  # noqa
+class FACE_RESTR_INTERIOR:  # noqa
     """A special value to pass to
     :func:`meshmode.discretization.connection.make_face_restriction`
     to produce a discretization consisting of all interior faces
@@ -44,12 +44,16 @@ class FRESTR_INTERIOR_FACES:  # noqa
     """
 
 
-class FRESTR_ALL_FACES:  # noqa
+class FACE_RESTR_ALL:  # noqa
     """A special value to pass to
     :func:`meshmode.discretization.connection.make_face_restriction`
     to produce a discretization consisting of all faces (interior and boundary)
     faces in a discretization.
     """
+
+# deprecated names for compatibility
+FRESTR_ALL_FACES = FACE_RESTR_ALL
+FRESTR_INTERIOR_FACES = FACE_RESTR_INTERIOR
 
 
 # {{{ boundary connection
@@ -118,7 +122,7 @@ def _get_face_vertices(mesh, boundary_tag):
     # a set of volume vertex numbers
     bdry_vertex_vol_nrs = set()
 
-    if boundary_tag not in [FRESTR_INTERIOR_FACES, FRESTR_ALL_FACES]:
+    if boundary_tag not in [FACE_RESTR_INTERIOR, FACE_RESTR_ALL]:
         # {{{ boundary faces
 
         btag_bit = mesh.boundary_tag_bit(boundary_tag)
@@ -191,7 +195,7 @@ def make_face_restriction(discr, group_factory, boundary_tag,
     """
 
     if boundary_tag is None:
-        boundary_tag = FRESTR_INTERIOR_FACES
+        boundary_tag = FACE_RESTR_INTERIOR
         from warnings import warn
         warn("passing *None* for boundary_tag is deprecated--pass "
                 "INTERIOR_FACES instead",
@@ -233,7 +237,7 @@ def make_face_restriction(discr, group_factory, boundary_tag,
 
         group_boundary_faces = []
 
-        if boundary_tag is FRESTR_INTERIOR_FACES:
+        if boundary_tag is FACE_RESTR_INTERIOR:
             for fagrp in six.itervalues(fagrp_map):
                 if fagrp.ineighbor_group is None:
                     # boundary faces -> not looking for those
@@ -242,7 +246,7 @@ def make_face_restriction(discr, group_factory, boundary_tag,
                 group_boundary_faces.extend(
                         zip(fagrp.elements, fagrp.element_faces))
 
-        elif boundary_tag is FRESTR_ALL_FACES:
+        elif boundary_tag is FACE_RESTR_ALL:
             group_boundary_faces.extend(
                     (iel, iface)
                     for iface in range(grp.mesh_el_group.nfaces)
@@ -392,12 +396,12 @@ def make_face_to_all_faces_embedding(faces_connection, all_faces_discr):
     :arg faces_connection: must be the (connection) result of calling
         :func:`meshmode.discretization.connection.make_face_restriction`
         with
-        :class:`meshmode.discretization.connection.FRESTR_INTERIOR_FACES`
+        :class:`meshmode.discretization.connection.FACE_RESTR_INTERIOR`
         or a boundary tag.
     :arg all_faces_discr: must be the (discretization) result of calling
         :func:`meshmode.discretization.connection.make_face_restriction`
         with
-        :class:`meshmode.discretization.connection.FRESTR_ALL_FACES`
+        :class:`meshmode.discretization.connection.FACE_RESTR_ALL`
         for the same volume discretization as the one from which
         *faces_discr* was obtained.
     """
