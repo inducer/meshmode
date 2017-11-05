@@ -62,6 +62,7 @@ __doc__ = """
 
 .. autofunction:: FACE_RESTR_INTERIOR
 .. autofunction:: FACE_RESTR_ALL
+
 .. autofunction:: make_face_restriction
 .. autofunction:: make_face_to_all_faces_embedding
 
