@@ -32,7 +32,7 @@ from pytools import memoize_method, memoize_in
 from meshmode.discretization.connection.same_mesh import \
         make_same_mesh_connection
 from meshmode.discretization.connection.face import (
-        FRESTR_INTERIOR_FACES, FRESTR_ALL_FACES,
+        FACE_RESTR_INTERIOR, FACE_RESTR_ALL,
         make_face_restriction, make_face_to_all_faces_embedding)
 from meshmode.discretization.connection.opposite_face import \
         make_opposite_face_connection
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
         "DiscretizationConnection",
         "make_same_mesh_connection",
-        "FRESTR_INTERIOR_FACES", "FRESTR_ALL_FACES",
+        "FACE_RESTR_INTERIOR", "FACE_RESTR_ALL",
         "make_face_restriction",
         "make_face_to_all_faces_embedding",
         "make_opposite_face_connection",
@@ -60,8 +60,8 @@ __doc__ = """
 
 .. autofunction:: make_same_mesh_connection
 
-.. autodata:: FRESTR_INTERIOR_FACES
-.. autodata:: FRESTR_ALL_FACES
+.. autofunction:: FACE_RESTR_INTERIOR
+.. autofunction:: FACE_RESTR_ALL
 
 .. autofunction:: make_face_restriction
 .. autofunction:: make_face_to_all_faces_embedding
