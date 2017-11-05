@@ -51,6 +51,7 @@ class FACE_RESTR_ALL:  # noqa
     faces in a discretization.
     """
 
+
 # deprecated names for compatibility
 FRESTR_ALL_FACES = FACE_RESTR_ALL
 FRESTR_INTERIOR_FACES = FACE_RESTR_INTERIOR
