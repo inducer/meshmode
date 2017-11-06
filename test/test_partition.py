@@ -46,6 +46,12 @@ import os
 import logging
 logger = logging.getLogger(__name__)
 
+# Is there a smart way of choosing this number?
+# Currenly it is the same as the base from MPIBoundaryCommunicator
+TAG_BASE = 83411
+TAG_SEND_REMOTE_NODES = TAG_BASE + 3
+TAG_SEND_LOCAL_NODES = TAG_BASE + 4
+
 
 # {{{ partition_interpolation
 
@@ -366,10 +372,6 @@ def mpi_test_rank_entrypoint():
 
 def _test_data_transfer(bdry_comm, queue):
     from mpi4py import MPI
-    # Is there a smart way of choosing this number?
-    TAG_BASE = 83411
-    TAG_SEND_REMOTE_NODES = TAG_BASE + 3
-    TAG_SEND_LOCAL_NODES = TAG_BASE + 4
 
     def f(x):
         return 0.1*cl.clmath.sin(30.*x)
