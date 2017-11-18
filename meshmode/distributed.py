@@ -25,8 +25,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import six
-
 import numpy as np
 from mpi4py import MPI
 
@@ -104,13 +102,13 @@ class MPIMeshDistributor(object):
         mpi_comm = self.mpi_comm
         rank = mpi_comm.Get_rank()
 
-        assert not self.is_mananger_rank(), "Manager rank cannot recieve mesh"
+        assert not self.is_mananger_rank(), "Manager rank cannot receive mesh"
 
         status = MPI.Status()
         result = self.mpi_comm.recv(
                 source=self.manager_rank, tag=TAG_DISTRIBUTE_MESHES,
                 status=status)
-        logger.info('rank %d: recieved local mesh (size = %d)', rank, status.count)
+        logger.info('rank %d: received local mesh (size = %d)', rank, status.count)
 
         return result
 
@@ -121,152 +119,128 @@ class MPIMeshDistributor(object):
 
 class MPIBoundaryCommunicator(object):
     """
-    .. attribute:: remote_to_local_bdry_conns
-
-        Maps rank numbers to :class:`DirectDiscretizationConnection`.
-
-        ``remote_to_local_bdry_conns[i_remote_part]`` gives the connection
-         that performs data exchange across faces from partition `i_remote_part`
-         to the local mesh.
+    .. automethod:: __call__
+    .. automethod:: is_ready
     """
-    def __init__(self, mpi_comm, queue, part_discr, bdry_group_factory):
-        # FIXME: Refactor so that we can specify which rank we want to recieve from
+    def __init__(self, mpi_comm, queue, part_discr, bdry_grp_factory, i_remote_part):
         """
         :arg mpi_comm: A :class:`MPI.Intracomm`
         :arg queue:
         :arg part_discr: A :class:`meshmode.Discretization` of the local mesh
                 to perform boundary communication on.
-        :arg bdry_group_factory:
+        :arg bdry_grp_factory:
+        :arg i_remote_part: The part number of the remote partition
         """
         self.mpi_comm = mpi_comm
+        self.queue = queue
         self.part_discr = part_discr
-
         self.i_local_part = mpi_comm.Get_rank()
-
-        self.bdry_group_factory = bdry_group_factory
-
-        from meshmode.mesh import InterPartitionAdjacencyGroup
-        self.connected_parts = set()
-        for adj in part_discr.mesh.facial_adjacency_groups:
-            if isinstance(adj[None], InterPartitionAdjacencyGroup):
-                indices = (adj[None].neighbor_partitions >= 0)
-                self.connected_parts = self.connected_parts.union(
-                                            adj[None].neighbor_partitions[indices])
-        assert self.i_local_part not in self.connected_parts
+        self.i_remote_part = i_remote_part
+        self.bdry_grp_factory = bdry_grp_factory
 
         from meshmode.discretization.connection import make_face_restriction
         from meshmode.mesh import BTAG_PARTITION
-        self.local_bdry_conns = {}
-        for i_remote_part in self.connected_parts:
-            bdry_conn = make_face_restriction(part_discr,
-                                              bdry_group_factory,
-                                              BTAG_PARTITION(i_remote_part))
+        self.local_bdry_conn = make_face_restriction(part_discr,
+                                                     bdry_grp_factory,
+                                                     BTAG_PARTITION(i_remote_part))
+        self._setup()
+        self.remote_data = None
 
-            # Assert that everything in self.connected_parts is truly connected
-            assert bdry_conn.to_discr.nnodes > 0
-            self.local_bdry_conns[i_remote_part] = bdry_conn
+    def _setup(self):
+        logger.info("bdry comm rank %d send begin", self.i_local_part)
+        self.send_req = self._post_send_boundary_data()
+        self.recv_req = self._post_recv_boundary_data()
 
-        self._setup(queue)
+    def _post_send_boundary_data(self):
+        local_bdry = self.local_bdry_conn.to_discr
+        local_mesh = self.local_bdry_conn.from_discr.mesh
+        local_adj_groups = [local_mesh.facial_adjacency_groups[i][None]
+                            for i in range(len(local_mesh.groups))]
+        local_batches = [self.local_bdry_conn.groups[i].batches
+                         for i in range(len(local_mesh.groups))]
+        local_to_elem_faces = [[batch.to_element_face for batch in grp_batches]
+                                for grp_batches in local_batches]
+        local_to_elem_indices = [[batch.to_element_indices.get(queue=self.queue)
+                                        for batch in grp_batches]
+                                    for grp_batches in local_batches]
 
-    def _post_boundary_data_sends(self, queue):
-        send_reqs = []
-        for i_remote_part in self.connected_parts:
-            local_bdry = self.local_bdry_conns[i_remote_part].to_discr
-            local_mesh = self.local_bdry_conns[i_remote_part].from_discr.mesh
-            local_adj_groups = [local_mesh.facial_adjacency_groups[i][None]
-                                for i in range(len(local_mesh.groups))]
-            local_batches = [self.local_bdry_conns[i_remote_part].groups[i].batches
-                                for i in range(len(local_mesh.groups))]
-            local_to_elem_faces = [[batch.to_element_face for batch in grp_batches]
-                                        for grp_batches in local_batches]
-            local_to_elem_indices = [[batch.to_element_indices.get(queue=queue)
-                                            for batch in grp_batches]
-                                        for grp_batches in local_batches]
+        local_data = {'bdry_mesh': local_bdry.mesh,
+                      'adj': local_adj_groups,
+                      'to_elem_faces': local_to_elem_faces,
+                      'to_elem_indices': local_to_elem_indices}
+        return self.mpi_comm.isend(local_data,
+                                   dest=self.i_remote_part,
+                                   tag=TAG_SEND_BOUNDARY)
 
-            local_data = {'bdry_mesh': local_bdry.mesh,
-                          'adj': local_adj_groups,
-                          'to_elem_faces': local_to_elem_faces,
-                          'to_elem_indices': local_to_elem_indices}
-            send_reqs.append(self.mpi_comm.isend(
-                local_data, dest=i_remote_part, tag=TAG_SEND_BOUNDARY))
+    def _post_recv_boundary_data(self):
+        status = MPI.Status()
+        self.mpi_comm.probe(source=self.i_remote_part,
+                            tag=TAG_SEND_BOUNDARY, status=status)
+        return self.mpi_comm.irecv(buf=np.empty(status.count, dtype=bytes),
+                                   source=self.i_remote_part,
+                                   tag=TAG_SEND_BOUNDARY)
 
-        return send_reqs
-
-    def _receive_boundary_data(self, queue):
-        rank = self.mpi_comm.Get_rank()
-        i_local_part = rank
-
-        remote_buf = {}
-        for i_remote_part in self.connected_parts:
+    def __call__(self):
+        """
+        Returns the tuple (`remote_to_local_bdry_conn`, [])
+        where `remote_to_local_bdry_conn` is a
+        :class:`DirectDiscretizationConnection` that gives the connection that
+        performs data exchange across faces from partition `i_remote_part` to the
+        local mesh.
+        """
+        if self.remote_data is None:
             status = MPI.Status()
-            self.mpi_comm.probe(
-                    source=i_remote_part, tag=TAG_SEND_BOUNDARY, status=status)
-            remote_buf[i_remote_part] = np.empty(status.count, dtype=bytes)
-
-        recv_reqs = {}
-        for i_remote_part, buf in remote_buf.items():
-            recv_reqs[i_remote_part] = self.mpi_comm.irecv(buf=buf,
-                                                  source=i_remote_part,
-                                                  tag=TAG_SEND_BOUNDARY)
-
-        remote_data = {}
-        total_bytes_recvd = 0
-        for i_remote_part, req in recv_reqs.items():
-            status = MPI.Status()
-            remote_data[i_remote_part] = req.wait(status=status)
-
-            # Free the buffer
-            remote_buf[i_remote_part] = None
+            self.remote_data = self.recv_req.wait(status=status)
             logger.debug('rank %d: Received rank %d data (%d bytes)',
-                    rank, i_remote_part, status.count)
-
-            total_bytes_recvd += status.count
-
-        logger.debug('rank %d: recieved %d bytes in total', rank, total_bytes_recvd)
-
-        self.remote_to_local_bdry_conns = {}
+                         self.i_local_part, self.i_remote_part, status.count)
 
         from meshmode.discretization import Discretization
+        remote_bdry_mesh = self.remote_data['bdry_mesh']
+        remote_bdry = Discretization(self.queue.context, remote_bdry_mesh,
+                                     self.bdry_grp_factory)
+        remote_adj_groups = self.remote_data['adj']
+        remote_to_elem_faces = self.remote_data['to_elem_faces']
+        remote_to_elem_indices = self.remote_data['to_elem_indices']
 
-        for i_remote_part, data in remote_data.items():
-            remote_bdry_mesh = data['bdry_mesh']
-            remote_bdry = Discretization(
-                    queue.context,
-                    remote_bdry_mesh,
-                    self.bdry_group_factory)
-            remote_adj_groups = data['adj']
-            remote_to_elem_faces = data['to_elem_faces']
-            remote_to_elem_indices = data['to_elem_indices']
+        # Connect local_mesh to remote_mesh
+        from meshmode.discretization.connection import make_partition_connection
+        remote_to_local_bdry_conn = make_partition_connection(self.local_bdry_conn,
+                                                              self.i_local_part,
+                                                              remote_bdry,
+                                                              remote_adj_groups,
+                                                              remote_to_elem_faces,
+                                                              remote_to_elem_indices)
+        self.send_req.wait()
+        return remote_to_local_bdry_conn, []
 
-            # Connect local_mesh to remote_mesh
-            from meshmode.discretization.connection import make_partition_connection
-            self.remote_to_local_bdry_conns[i_remote_part] = \
-                    make_partition_connection(
-                        self.local_bdry_conns[i_remote_part],
-                        i_local_part,
-                        remote_bdry,
-                        remote_adj_groups,
-                        remote_to_elem_faces,
-                        remote_to_elem_indices)
-
-    def _setup(self, queue):
-        logger.info("bdry comm rank %d send begin", self.mpi_comm.Get_rank())
-
-        send_reqs = self._post_boundary_data_sends(queue)
-        self._receive_boundary_data(queue)
-
-        for req in send_reqs:
-            req.wait()
-
-        logger.info("bdry comm rank %d send completed", self.mpi_comm.Get_rank())
-
-    def check(self):
-        from meshmode.discretization.connection import check_connection
-
-        for i, conn in six.iteritems(self.remote_to_local_bdry_conns):
-            check_connection(conn)
+    def is_ready(self):
+        """
+        Returns True if the rank boundary data is ready to be received.
+        """
+        if self.remote_data is None:
+            status = MPI.Status()
+            did_receive, self.remote_data = self.recv_req.test(status=status)
+            if not did_receive:
+                return False
+            logger.debug('rank %d: Received rank %d data (%d bytes)',
+                         self.i_local_part, self.i_remote_part, status.count)
+        return True
 
 # }}}
 
+
+def get_connected_partitions(mesh):
+    """
+    :arg mesh: A :class:`Mesh`
+    Returns the set of partition numbers that are connected to `mesh`
+    """
+    connected_parts = set()
+    from meshmode.mesh import InterPartitionAdjacencyGroup
+    for adj in mesh.facial_adjacency_groups:
+        if isinstance(adj[None], InterPartitionAdjacencyGroup):
+            indices = (adj[None].neighbor_partitions >= 0)
+            connected_parts = connected_parts.union(
+                                        adj[None].neighbor_partitions[indices])
+    return connected_parts
 
 # vim: foldmethod=marker
