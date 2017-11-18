@@ -336,11 +336,11 @@ def mpi_test_rank_entrypoint():
     from meshmode.distributed import MPIMeshDistributor, MPIBoundaryCommunicator
 
     from mpi4py import MPI
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    num_parts = comm.Get_size()
+    mpi_comm = MPI.COMM_WORLD
+    i_local_part = mpi_comm.Get_rank()
+    num_parts = mpi_comm.Get_size()
 
-    mesh_dist = MPIMeshDistributor(comm)
+    mesh_dist = MPIMeshDistributor(mpi_comm)
 
     if mesh_dist.is_mananger_rank():
         np.random.seed(42)
@@ -363,14 +363,40 @@ def mpi_test_rank_entrypoint():
     from meshmode.discretization import Discretization
     vol_discr = Discretization(cl_ctx, local_mesh, group_factory)
 
-    bdry_comm = MPIBoundaryCommunicator(comm, queue, vol_discr, group_factory)
-    bdry_comm.check()
-    _test_data_transfer(bdry_comm, queue)
+    from meshmode.distributed import get_connected_partitions
+    connected_parts = get_connected_partitions(local_mesh)
+    assert i_local_part not in connected_parts
+    bdry_conn_futures = {}
+    local_bdry_conns = {}
+    for i_remote_part in connected_parts:
+        bdry_conn_futures[i_remote_part] = MPIBoundaryCommunicator(mpi_comm,
+                                                                   queue,
+                                                                   vol_discr,
+                                                                   group_factory,
+                                                                   i_remote_part)
+        local_bdry_conns[i_remote_part] =\
+                bdry_conn_futures[i_remote_part].local_bdry_conn
 
-    logger.debug("Rank %d exiting", rank)
+    remote_to_local_bdry_conns = {}
+    from meshmode.discretization.connection import check_connection
+    while len(bdry_conn_futures) > 0:
+        for i_remote_part, future in bdry_conn_futures.items():
+            if future.is_ready():
+                conn, _ = bdry_conn_futures.pop(i_remote_part)()
+                check_connection(conn)
+                remote_to_local_bdry_conns[i_remote_part] = conn
+                break
+    _test_data_transfer(mpi_comm,
+                        queue,
+                        local_bdry_conns,
+                        remote_to_local_bdry_conns,
+                        connected_parts)
+
+    logger.debug("Rank %d exiting", i_local_part)
 
 
-def _test_data_transfer(bdry_comm, queue):
+def _test_data_transfer(mpi_comm, queue, local_bdry_conns,
+                        remote_to_local_bdry_conns, connected_parts):
     from mpi4py import MPI
 
     def f(x):
@@ -390,36 +416,36 @@ def _test_data_transfer(bdry_comm, queue):
             to get local points.
         5. Send local points to local rank.
     Local rank:
-        6. Recieve local points from remote rank.
+        6. Receive local points from remote rank.
         7. Check if local points are the same as the original local points.
     '''
 
     send_reqs = []
-    for i_remote_part in bdry_comm.connected_parts:
-        conn = bdry_comm.remote_to_local_bdry_conns[i_remote_part]
-        bdry_discr = bdry_comm.local_bdry_conns[i_remote_part].to_discr
+    for i_remote_part in connected_parts:
+        conn = remote_to_local_bdry_conns[i_remote_part]
+        bdry_discr = local_bdry_conns[i_remote_part].to_discr
         bdry_x = bdry_discr.nodes()[0].with_queue(queue=queue)
 
         true_local_f = f(bdry_x)
         remote_f = conn(queue, true_local_f)
 
-        send_reqs.append(bdry_comm.mpi_comm.isend(remote_f.get(queue=queue),
-                                                  dest=i_remote_part,
-                                                  tag=TAG_SEND_REMOTE_NODES))
+        send_reqs.append(mpi_comm.isend(remote_f.get(queue=queue),
+                                        dest=i_remote_part,
+                                        tag=TAG_SEND_REMOTE_NODES))
 
     buffers = {}
-    for i_remote_part in bdry_comm.connected_parts:
+    for i_remote_part in connected_parts:
         status = MPI.Status()
-        bdry_comm.mpi_comm.probe(source=i_remote_part,
-                                 tag=TAG_SEND_REMOTE_NODES,
-                                 status=status)
+        mpi_comm.probe(source=i_remote_part,
+                       tag=TAG_SEND_REMOTE_NODES,
+                       status=status)
         buffers[i_remote_part] = np.empty(status.count, dtype=bytes)
 
     recv_reqs = {}
     for i_remote_part, buf in buffers.items():
-        recv_reqs[i_remote_part] = bdry_comm.mpi_comm.irecv(buf=buf,
-                                                            source=i_remote_part,
-                                                        tag=TAG_SEND_REMOTE_NODES)
+        recv_reqs[i_remote_part] = mpi_comm.irecv(buf=buf,
+                                                  source=i_remote_part,
+                                                  tag=TAG_SEND_REMOTE_NODES)
     remote_to_local_f_data = {}
     for i_remote_part, req in recv_reqs.items():
         remote_to_local_f_data[i_remote_part] = req.wait()
@@ -429,8 +455,8 @@ def _test_data_transfer(bdry_comm, queue):
         req.wait()
 
     send_reqs = []
-    for i_remote_part in bdry_comm.connected_parts:
-        conn = bdry_comm.remote_to_local_bdry_conns[i_remote_part]
+    for i_remote_part in connected_parts:
+        conn = remote_to_local_bdry_conns[i_remote_part]
         local_f_np = remote_to_local_f_data[i_remote_part]
         local_f_cl = cl.array.Array(queue,
                                     shape=local_f_np.shape,
@@ -438,23 +464,23 @@ def _test_data_transfer(bdry_comm, queue):
         local_f_cl.set(local_f_np)
         remote_f = conn(queue, local_f_cl).get(queue=queue)
 
-        send_reqs.append(bdry_comm.mpi_comm.isend(remote_f,
-                                                  dest=i_remote_part,
-                                                  tag=TAG_SEND_LOCAL_NODES))
+        send_reqs.append(mpi_comm.isend(remote_f,
+                                        dest=i_remote_part,
+                                        tag=TAG_SEND_LOCAL_NODES))
 
     buffers = {}
-    for i_remote_part in bdry_comm.connected_parts:
+    for i_remote_part in connected_parts:
         status = MPI.Status()
-        bdry_comm.mpi_comm.probe(source=i_remote_part,
-                                 tag=TAG_SEND_LOCAL_NODES,
-                                 status=status)
+        mpi_comm.probe(source=i_remote_part,
+                       tag=TAG_SEND_LOCAL_NODES,
+                       status=status)
         buffers[i_remote_part] = np.empty(status.count, dtype=bytes)
 
     recv_reqs = {}
     for i_remote_part, buf in buffers.items():
-        recv_reqs[i_remote_part] = bdry_comm.mpi_comm.irecv(buf=buf,
-                                                            source=i_remote_part,
-                                                            tag=TAG_SEND_LOCAL_NODES)
+        recv_reqs[i_remote_part] = mpi_comm.irecv(buf=buf,
+                                                  source=i_remote_part,
+                                                  tag=TAG_SEND_LOCAL_NODES)
     local_f_data = {}
     for i_remote_part, req in recv_reqs.items():
         local_f_data[i_remote_part] = req.wait()
@@ -463,8 +489,8 @@ def _test_data_transfer(bdry_comm, queue):
     for req in send_reqs:
         req.wait()
 
-    for i_remote_part in bdry_comm.connected_parts:
-        bdry_discr = bdry_comm.local_bdry_conns[i_remote_part].to_discr
+    for i_remote_part in connected_parts:
+        bdry_discr = local_bdry_conns[i_remote_part].to_discr
         bdry_x = bdry_discr.nodes()[0].with_queue(queue=queue)
 
         true_local_f = f(bdry_x).get(queue=queue)
