@@ -211,15 +211,25 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
     .. attribute:: connections
     """
 
-    def __init__(self, connections):
-        if not connections:
-            raise ValueError("connections may not be empty")
+    def __init__(self, connections, from_discr=None):
+        if connections:
+            if from_discr is not None:
+                assert from_discr is connections[0].from_discr
+            else:
+                from_discr = connections[0].from_discr
+            is_surjective = all(cnx.is_surjective for cnx in connections)
+        else:
+            if from_discr is None:
+                raise ValueError("connections may not be empty if from_discr "
+                        "is not specified")
+
+            to_discr = from_discr
+
+            # It's an identity
+            is_surjective = True
 
         super(ChainedDiscretizationConnection, self).__init__(
-                connections[0].from_discr,
-                connections[-1].to_discr,
-                is_surjective=all(
-                    cnx.is_surjective for cnx in connections))
+                from_discr, to_discr, is_surjective=is_surjective)
 
         self.connections = connections
 
