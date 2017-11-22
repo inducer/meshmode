@@ -61,11 +61,18 @@ def random_refine_flags(fract, mesh):
     all_els = list(range(mesh.nelements))
 
     flags = np.zeros(mesh.nelements)
-    from random import shuffle
+    from random import shuffle, seed
+    seed(17)
     shuffle(all_els)
     for i in range(int(mesh.nelements * fract)):
         flags[all_els[i]] = 1
 
+    return flags
+
+
+def even_refine_flags(spacing, mesh):
+    flags = np.zeros(mesh.nelements)
+    flags[::spacing] = 1
     return flags
 
 
@@ -156,7 +163,8 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
 @pytest.mark.parametrize("refine_flags", [
     # FIXME: slow
     #uniform_refine_flags,
-    partial(random_refine_flags, 0.4)
+    #partial(random_refine_flags, 0.4)
+    partial(even_refine_flags, 2)
 ])
 def test_refinement_connection(
         ctx_getter, group_factory, mesh_name, dim, mesh_pars, mesh_order,
