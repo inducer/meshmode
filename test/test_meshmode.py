@@ -1038,7 +1038,7 @@ def test_quad_multi_element():
 
 # {{{ ChainedDiscretizationConnection
 
-def test_ChainedDiscretizationConnection(ctx_getter):
+def test_ChainedDiscretizationConnection(ctx_getter):  # noqa
     mesh_order = 5
     order = 5
     npanels = 10
