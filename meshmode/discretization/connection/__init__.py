@@ -218,6 +218,7 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
             else:
                 from_discr = connections[0].from_discr
             is_surjective = all(cnx.is_surjective for cnx in connections)
+            to_discr = connections[-1].to_discr
         else:
             if from_discr is None:
                 raise ValueError("connections may not be empty if from_discr "
