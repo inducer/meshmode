@@ -112,7 +112,8 @@ class SimplexElementGroupBase(ElementGroupBase):
                 meg.unit_nodes)
 
 
-class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase, SimplexElementGroupBase):
+class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase,
+        SimplexElementGroupBase):
     def is_orthogonal_basis(self):
         return self.dim <= 3
 
