@@ -278,17 +278,25 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         ibatch = self.groups[to_group_index].batches[ibatch_index]
         from_grp = self.from_discr.groups[ibatch.from_group_index]
 
-        if len(from_grp.basis()) != from_grp.unit_nodes.shape[1]:
-            from meshmode.discretization import NoninterpolatoryElementGroupError
-            raise NoninterpolatoryElementGroupError(
-                    "%s does not support interpolation because it is not "
-                    "unisolvent (its unit node count does not match its "
-                    "number of basis functions). Using connections requires "
-                    "the ability to interpolate." % type(from_grp).__name__)
+        nfrom_unit_nodes = from_grp.unit_nodes.shape[1]
+        if np.array_equal(from_grp.unit_nodes, ibatch.result_unit_nodes):
+            # Nodes are exactly identical? We can 'interpolate' even when there
+            # isn't a basis.
 
-        result = mp.resampling_matrix(
-                from_grp.basis(),
-                ibatch.result_unit_nodes, from_grp.unit_nodes)
+            result = np.eye(nfrom_unit_nodes)
+
+        else:
+            if len(from_grp.basis()) != nfrom_unit_nodes:
+                from meshmode.discretization import NoninterpolatoryElementGroupError
+                raise NoninterpolatoryElementGroupError(
+                        "%s does not support interpolation because it is not "
+                        "unisolvent (its unit node count does not match its "
+                        "number of basis functions). Using connections requires "
+                        "the ability to interpolate." % type(from_grp).__name__)
+
+            result = mp.resampling_matrix(
+                    from_grp.basis(),
+                    ibatch.result_unit_nodes, from_grp.unit_nodes)
 
         with cl.CommandQueue(self.cl_context) as queue:
             return cl.array.to_device(queue, result).with_queue(None)
