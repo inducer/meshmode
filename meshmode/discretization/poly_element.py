@@ -62,12 +62,12 @@ Group factories
 # loopy sees strides that it doesn't expect and complains.
 
 
-from meshmode.discretization import ElementGroupBase
+from meshmode.discretization import ElementGroupBase, InterpolatoryElementGroupBase
 
 
 # {{{ base class for poynomial elements
 
-class PolynomialElementGroupBase(ElementGroupBase):
+class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
     @memoize_method
     def mass_matrix(self):
         assert self.is_orthogonal_basis()

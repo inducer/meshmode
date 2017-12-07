@@ -30,6 +30,7 @@ import pyopencl.array  # noqa
 
 __doc__ = """
 .. autoclass:: ElementGroupBase
+.. autoclass:: InterpolatoryElementGroupBase
 .. autoclass:: ElementGroupFactory
 .. autoclass:: Discretization
 """
@@ -59,28 +60,6 @@ class ElementGroupBase(object):
 
         Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_nodes)``
         of reference coordinates of interpolation nodes.
-
-    .. method:: basis()
-
-        Returns a :class:`list` of basis functions that take arrays
-        of shape ``(dim, n)`` and return an array of shape (n,)``
-        (which performs evaluation of the basis function).
-
-    .. method:: grad_basis()
-
-        :returns: a :class:`tuple` of functions, each of which
-            accepts arrays of shape *(dims, npts)* and returns a
-            :class:`tuple` of length *dims* containing the
-            derivatives along each axis as an array of size
-            *npts*.  'Scalar' evaluation, by passing just one
-            vector of length *dims*, is also supported.
-
-    .. method:: diff_matrices()
-
-        Return a :attr:`dim`-long :class:`tuple` of matrices of
-        shape ``(nunit_nodes, nunit_nodes)``, each of which,
-        when applied to an array of nodal values, take derivatives
-        in the reference (r,s,t) directions.
 
     .. method:: weights()
 
@@ -113,6 +92,14 @@ class ElementGroupBase(object):
     def dim(self):
         return self.mesh_el_group.dim
 
+    def basis(self):
+        raise NoninterpolatoryElementGroupError("'%s' "
+                "is not equipped with a unisolvent function space "
+                "and therefore cannot be used for interpolation")
+
+    grad_basis = basis
+    diff_matrices = basis
+
     def _nodes(self):
         # Not cached, because the global nodes array is what counts.
         # This is just used to build that.
@@ -137,6 +124,38 @@ class ElementGroupBase(object):
 # }}}
 
 
+# {{{ interpolatory element group base
+
+class InterpolatoryElementGroupBase(ElementGroupBase):
+    """A subclass of :class:`ElementGroupBase` that is equipped with a
+    function space.
+
+    .. method:: basis()
+
+        Returns a :class:`list` of basis functions that take arrays
+        of shape ``(dim, n)`` and return an array of shape (n,)``
+        (which performs evaluation of the basis function).
+
+    .. method:: grad_basis()
+
+        :returns: a :class:`tuple` of functions, each of which
+            accepts arrays of shape *(dims, npts)* and returns a
+            :class:`tuple` of length *dims* containing the
+            derivatives along each axis as an array of size
+            *npts*.  'Scalar' evaluation, by passing just one
+            vector of length *dims*, is also supported.
+
+    .. method:: diff_matrices()
+
+        Return a :attr:`dim`-long :class:`tuple` of matrices of
+        shape ``(nunit_nodes, nunit_nodes)``, each of which,
+        when applied to an array of nodal values, take derivatives
+        in the reference (r,s,t) directions.
+    """
+
+# }}}
+
+
 # {{{ group factories
 
 class ElementGroupFactory(object):
@@ -155,6 +174,7 @@ class OrderBasedGroupFactory(ElementGroupFactory):
                     "are supported" % self.mesh_group_class.__name__)
 
         return self.group_class(mesh_el_group, self.order, node_nr_base)
+
 
 # }}}
 
