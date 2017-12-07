@@ -26,7 +26,7 @@ import six
 from six.moves import range, zip
 import numpy as np
 
-from meshpy.gmsh_reader import (  # noqa
+from gmsh_interop.reader import (  # noqa
         GmshMeshReceiverBase, ScriptSource, FileSource, LiteralSource,
         ScriptWithFilesSource,
         GmshSimplexElementBase,
@@ -220,7 +220,7 @@ def read_gmsh(filename, force_ambient_dim=None):
     :arg force_ambient_dim: if not None, truncate point coordinates to
         this many dimensions.
     """
-    from meshpy.gmsh_reader import read_gmsh
+    from gmsh_interop.reader import read_gmsh
     recv = GmshMeshReceiver()
     read_gmsh(recv, filename, force_dimension=force_ambient_dim)
 
@@ -240,8 +240,8 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=[],
     """
     recv = GmshMeshReceiver()
 
-    from meshpy.gmsh import GmshRunner
-    from meshpy.gmsh_reader import parse_gmsh
+    from gmsh_interop.runner import GmshRunner
+    from gmsh_interop.reader import parse_gmsh
     with GmshRunner(source, dimensions, order=order,
             other_options=other_options, extension=extension,
             gmsh_executable=gmsh_executable) as runner:
