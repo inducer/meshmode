@@ -55,16 +55,19 @@ TAG_SEND_LOCAL_NODES = TAG_BASE + 4
 
 # {{{ partition_interpolation
 
+
+# FIXME: Getting some warning on some of these tests. Need to look into this later.
 @pytest.mark.parametrize("group_factory", [PolynomialWarpAndBlendGroupFactory])
 @pytest.mark.parametrize("num_parts", [2, 3])
 @pytest.mark.parametrize("num_groups", [1, 2])
+@pytest.mark.parametrize("scramble_partitions", [False])
 @pytest.mark.parametrize(("dim", "mesh_pars"),
         [
          (2, [3, 4, 7]),
          (3, [3, 4])
         ])
 def test_partition_interpolation(ctx_factory, group_factory, dim, mesh_pars,
-                                 num_parts, num_groups, scramble_partitions=True):
+                                 num_parts, num_groups, scramble_partitions):
     np.random.seed(42)
     cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
@@ -79,7 +82,7 @@ def test_partition_interpolation(ctx_factory, group_factory, dim, mesh_pars,
             eoc_rec[i, j] = EOCRecorder()
 
     def f(x):
-        return 0.5*cl.clmath.sin(30.*x)
+        return 10*cl.clmath.sin(60.*x)
 
     for n in mesh_pars:
         from meshmode.mesh.generation import generate_warped_rect_mesh
@@ -114,92 +117,84 @@ def test_partition_interpolation(ctx_factory, group_factory, dim, mesh_pars,
                                                         make_partition_connection,
                                                         check_connection)
 
-        for i_local_part in range(num_parts):
-            for i_remote_part in range(num_parts):
-                if (i_local_part == i_remote_part
-                        or eoc_rec[i_local_part, i_remote_part] is None):
-                    eoc_rec[i_local_part, i_remote_part] = None
-                    continue
+        for i_local_part, i_remote_part in eoc_rec.keys():
+            if eoc_rec[i_local_part, i_remote_part] is None:
+                continue
 
-                # Mark faces within local_mesh that are connected to remote_mesh
-                local_bdry_conn = make_face_restriction(vol_discrs[i_local_part],
-                                                   group_factory(order),
-                                                   BTAG_PARTITION(i_remote_part))
+            # Mark faces within local_mesh that are connected to remote_mesh
+            local_bdry_conn = make_face_restriction(vol_discrs[i_local_part],
+                                                    group_factory(order),
+                                                    BTAG_PARTITION(i_remote_part))
 
-                # If these parts are not connected, don't bother checking the error
-                bdry_nodes = local_bdry_conn.to_discr.nodes()
-                if bdry_nodes.size == 0:
-                    eoc_rec[i_local_part, i_remote_part] = None
-                    continue
+            # If these parts are not connected, don't bother checking the error
+            bdry_nodes = local_bdry_conn.to_discr.nodes()
+            if bdry_nodes.size == 0:
+                eoc_rec[i_local_part, i_remote_part] = None
+                continue
 
-                # Mark faces within remote_mesh that are connected to local_mesh
-                remote_bdry_conn = make_face_restriction(vol_discrs[i_remote_part],
-                                                   group_factory(order),
-                                                   BTAG_PARTITION(i_local_part))
+            # Mark faces within remote_mesh that are connected to local_mesh
+            remote_bdry_conn = make_face_restriction(vol_discrs[i_remote_part],
+                                                     group_factory(order),
+                                                     BTAG_PARTITION(i_local_part))
 
-                # Gather just enough information for the connection
-                local_bdry = local_bdry_conn.to_discr
-                local_mesh = part_meshes[i_local_part]
-                local_adj_groups = [local_mesh.facial_adjacency_groups[i][None]
-                                    for i in range(len(local_mesh.groups))]
-                local_batches = [local_bdry_conn.groups[i].batches
-                                    for i in range(len(local_mesh.groups))]
-                local_to_elem_faces = [[batch.to_element_face
-                                                for batch in grp_batches]
-                                            for grp_batches in local_batches]
-                local_to_elem_indices = [[batch.to_element_indices.get(queue=queue)
-                                                for batch in grp_batches]
-                                            for grp_batches in local_batches]
+            # Gather just enough information for the connection
+            local_bdry = local_bdry_conn.to_discr
+            local_mesh = part_meshes[i_local_part]
+            local_adj_groups = [local_mesh.facial_adjacency_groups[i][None]
+                                for i in range(len(local_mesh.groups))]
+            local_batches = [local_bdry_conn.groups[i].batches
+                                for i in range(len(local_mesh.groups))]
+            local_to_elem_faces = [[batch.to_element_face
+                                            for batch in grp_batches]
+                                        for grp_batches in local_batches]
+            local_to_elem_indices = [[batch.to_element_indices.get(queue=queue)
+                                            for batch in grp_batches]
+                                        for grp_batches in local_batches]
 
-                remote_bdry = remote_bdry_conn.to_discr
-                remote_mesh = part_meshes[i_remote_part]
-                remote_adj_groups = [remote_mesh.facial_adjacency_groups[i][None]
-                                    for i in range(len(remote_mesh.groups))]
-                remote_batches = [remote_bdry_conn.groups[i].batches
-                                    for i in range(len(remote_mesh.groups))]
-                remote_to_elem_faces = [[batch.to_element_face
-                                                for batch in grp_batches]
-                                            for grp_batches in remote_batches]
-                remote_to_elem_indices = [[batch.to_element_indices.get(queue=queue)
-                                                for batch in grp_batches]
-                                            for grp_batches in remote_batches]
+            remote_bdry = remote_bdry_conn.to_discr
+            remote_mesh = part_meshes[i_remote_part]
+            remote_adj_groups = [remote_mesh.facial_adjacency_groups[i][None]
+                                for i in range(len(remote_mesh.groups))]
+            remote_batches = [remote_bdry_conn.groups[i].batches
+                                for i in range(len(remote_mesh.groups))]
+            remote_to_elem_faces = [[batch.to_element_face
+                                            for batch in grp_batches]
+                                        for grp_batches in remote_batches]
+            remote_to_elem_indices = [[batch.to_element_indices.get(queue=queue)
+                                            for batch in grp_batches]
+                                        for grp_batches in remote_batches]
 
-                # Connect local_mesh to remote_mesh
-                local_part_conn = make_partition_connection(local_bdry_conn,
-                                                            i_local_part,
-                                                            remote_bdry,
-                                                            remote_adj_groups,
-                                                            remote_to_elem_faces,
-                                                            remote_to_elem_indices)
+            # Connect local_mesh to remote_mesh
+            local_part_conn = make_partition_connection(local_bdry_conn,
+                                                        i_local_part,
+                                                        remote_bdry,
+                                                        remote_adj_groups,
+                                                        remote_to_elem_faces,
+                                                        remote_to_elem_indices)
 
-                # Connect remote mesh to local mesh
-                remote_part_conn = make_partition_connection(remote_bdry_conn,
-                                                             i_remote_part,
-                                                             local_bdry,
-                                                             local_adj_groups,
-                                                             local_to_elem_faces,
-                                                             local_to_elem_indices)
+            # Connect remote mesh to local mesh
+            remote_part_conn = make_partition_connection(remote_bdry_conn,
+                                                         i_remote_part,
+                                                         local_bdry,
+                                                         local_adj_groups,
+                                                         local_to_elem_faces,
+                                                         local_to_elem_indices)
 
-                check_connection(local_part_conn)
-                check_connection(remote_part_conn)
+            check_connection(local_part_conn)
+            check_connection(remote_part_conn)
 
-                true_local_points = f(local_bdry.nodes()[0].with_queue(queue))
-                s = true_local_points.shape
-                d = true_local_points.dtype
-                a = cl.array.Array(queue, shape=s, dtype=d)
-                a[:] = true_local_points.get()
-                true_local_points = a
-                remote_points = local_part_conn(queue, true_local_points)
-                local_points = remote_part_conn(queue, remote_points)
+            true_local_points = f(local_bdry.nodes()[0].with_queue(queue))
+            remote_points = local_part_conn(queue, true_local_points)
+            local_points = remote_part_conn(queue, remote_points)
 
-                err = la.norm((true_local_points - local_points).get(), np.inf)
-                eoc_rec[i_local_part, i_remote_part].add_data_point(1./n, err)
+            err = la.norm((true_local_points - local_points).get(), np.inf)
+            eoc_rec[i_local_part, i_remote_part].add_data_point(1./n, err)
 
     for (i, j), e in eoc_rec.items():
         if e is not None:
             print("Error of connection from part %i to part %i." % (i, j))
             print(e)
-            assert(e.order_estimate() >= order - 0.5 or e.max_error() < 1e-12)
+            assert(e.order_estimate() >= order - 0.5 or e.max_error() < 1e-14)
 
 # }}}
 
@@ -209,7 +204,8 @@ def test_partition_interpolation(ctx_factory, group_factory, dim, mesh_pars,
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("num_parts", [4, 5, 7])
 @pytest.mark.parametrize("num_meshes", [1, 2, 7])
-def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions=False):
+@pytest.mark.parametrize("scramble_partitions", [True, False])
+def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions):
     np.random.seed(42)
     n = (5,) * dim
     from meshmode.mesh.generation import generate_regular_rect_mesh
@@ -400,7 +396,7 @@ def _test_data_transfer(mpi_comm, queue, local_bdry_conns,
     from mpi4py import MPI
 
     def f(x):
-        return 0.1*cl.clmath.sin(30.*x)
+        return 10*cl.clmath.sin(60.*x)
 
     '''
     Here is a simplified example of what happens from
