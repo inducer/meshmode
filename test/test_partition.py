@@ -82,7 +82,7 @@ def test_partition_interpolation(ctx_factory, group_factory, dim, mesh_pars,
             eoc_rec[i, j] = EOCRecorder()
 
     def f(x):
-        return 10*cl.clmath.sin(60.*x)
+        return 10.*cl.clmath.sin(500.*x)
 
     for n in mesh_pars:
         from meshmode.mesh.generation import generate_warped_rect_mesh
@@ -137,6 +137,9 @@ def test_partition_interpolation(ctx_factory, group_factory, dim, mesh_pars,
                                                      group_factory(order),
                                                      BTAG_PARTITION(i_local_part))
 
+            assert bdry_nodes.size == remote_bdry_conn.to_discr.nodes().size, \
+                        "partitions do not have the same number of connected nodes"
+
             # Gather just enough information for the connection
             local_bdry = local_bdry_conn.to_discr
             local_mesh = part_meshes[i_local_part]
@@ -164,28 +167,26 @@ def test_partition_interpolation(ctx_factory, group_factory, dim, mesh_pars,
                                             for batch in grp_batches]
                                         for grp_batches in remote_batches]
 
-            # Connect local_mesh to remote_mesh
-            local_part_conn = make_partition_connection(local_bdry_conn,
-                                                        i_local_part,
-                                                        remote_bdry,
-                                                        remote_adj_groups,
-                                                        remote_to_elem_faces,
-                                                        remote_to_elem_indices)
-
-            # Connect remote mesh to local mesh
-            remote_part_conn = make_partition_connection(remote_bdry_conn,
-                                                         i_remote_part,
-                                                         local_bdry,
-                                                         local_adj_groups,
-                                                         local_to_elem_faces,
-                                                         local_to_elem_indices)
-
-            check_connection(local_part_conn)
-            check_connection(remote_part_conn)
+            # Connect from local_mesh to remote_mesh
+            local_to_remote_conn = make_partition_connection(local_bdry_conn,
+                                                             i_local_part,
+                                                             remote_bdry,
+                                                             remote_adj_groups,
+                                                             remote_to_elem_faces,
+                                                             remote_to_elem_indices)
+            # Connect from remote mesh to local mesh
+            remote_to_local_conn = make_partition_connection(remote_bdry_conn,
+                                                             i_remote_part,
+                                                             local_bdry,
+                                                             local_adj_groups,
+                                                             local_to_elem_faces,
+                                                             local_to_elem_indices)
+            check_connection(local_to_remote_conn)
+            check_connection(remote_to_local_conn)
 
             true_local_points = f(local_bdry.nodes()[0].with_queue(queue))
-            remote_points = local_part_conn(queue, true_local_points)
-            local_points = remote_part_conn(queue, remote_points)
+            remote_points = local_to_remote_conn(queue, true_local_points)
+            local_points = remote_to_local_conn(queue, remote_points)
 
             err = la.norm((true_local_points - local_points).get(), np.inf)
             eoc_rec[i_local_part, i_remote_part].add_data_point(1./n, err)
