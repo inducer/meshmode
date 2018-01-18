@@ -82,7 +82,7 @@ def test_partition_interpolation(ctx_factory, group_factory, dim, mesh_pars,
             eoc_rec[i, j] = EOCRecorder()
 
     def f(x):
-        return 10.*cl.clmath.sin(500.*x)
+        return 10.*cl.clmath.sin(50.*x)
 
     for n in mesh_pars:
         from meshmode.mesh.generation import generate_warped_rect_mesh
@@ -195,7 +195,7 @@ def test_partition_interpolation(ctx_factory, group_factory, dim, mesh_pars,
         if e is not None:
             print("Error of connection from part %i to part %i." % (i, j))
             print(e)
-            assert(e.order_estimate() >= order - 0.5 or e.max_error() < 1e-14)
+            assert(e.order_estimate() >= order - 0.5 or e.max_error() < 1e-11)
 
 # }}}
 
