@@ -55,9 +55,6 @@ TAG_SEND_LOCAL_NODES = TAG_BASE + 4
 
 # {{{ partition_interpolation
 
-
-# FIXME: Getting some warning on some of these tests. Need to look into this later.
-@pytest.mark.parametrize("group_factory", [PolynomialWarpAndBlendGroupFactory])
 @pytest.mark.parametrize("num_parts", [2, 3])
 @pytest.mark.parametrize("num_groups", [1, 2])
 @pytest.mark.parametrize("scramble_partitions", [False])
@@ -66,9 +63,10 @@ TAG_SEND_LOCAL_NODES = TAG_BASE + 4
          (2, [3, 4, 7]),
          (3, [3, 4])
         ])
-def test_partition_interpolation(ctx_factory, group_factory, dim, mesh_pars,
+def test_partition_interpolation(ctx_factory, dim, mesh_pars,
                                  num_parts, num_groups, scramble_partitions):
     np.random.seed(42)
+    group_factory = PolynomialWarpAndBlendGroupFactory
     cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
     order = 4
