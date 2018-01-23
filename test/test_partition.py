@@ -325,9 +325,9 @@ def count_tags(mesh, tag):
 # }}}
 
 
-# {{{ MPI test rank entrypoint
+# {{{ MPI test boundary swap
 
-def mpi_test_rank_entrypoint():
+def _test_mpi_boundary_swap(dim, order, num_groups):
     from meshmode.distributed import MPIMeshDistributor, MPIBoundaryCommunicator
 
     from mpi4py import MPI
@@ -340,10 +340,14 @@ def mpi_test_rank_entrypoint():
     if mesh_dist.is_mananger_rank():
         np.random.seed(42)
         from meshmode.mesh.generation import generate_warped_rect_mesh
-        meshes = [generate_warped_rect_mesh(3, order=4, n=4) for _ in range(2)]
+        meshes = [generate_warped_rect_mesh(dim, order=order, n=4)
+                        for _ in range(num_groups)]
 
-        from meshmode.mesh.processing import merge_disjoint_meshes
-        mesh = merge_disjoint_meshes(meshes)
+        if num_groups > 1:
+            from meshmode.mesh.processing import merge_disjoint_meshes
+            mesh = merge_disjoint_meshes(meshes)
+        else:
+            mesh = meshes[0]
 
         part_per_element = np.random.randint(num_parts, size=mesh.nelements)
 
@@ -351,7 +355,7 @@ def mpi_test_rank_entrypoint():
     else:
         local_mesh = mesh_dist.receive_mesh_part()
 
-    group_factory = PolynomialWarpAndBlendGroupFactory(4)
+    group_factory = PolynomialWarpAndBlendGroupFactory(order)
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
 
@@ -390,12 +394,13 @@ def mpi_test_rank_entrypoint():
     logger.debug("Rank %d exiting", i_local_part)
 
 
+# TODO
 def _test_data_transfer(mpi_comm, queue, local_bdry_conns,
                         remote_to_local_bdry_conns, connected_parts):
     from mpi4py import MPI
 
     def f(x):
-        return 10*cl.clmath.sin(60.*x)
+        return 10*cl.clmath.sin(20.*x)
 
     '''
     Here is a simplified example of what happens from
@@ -493,16 +498,17 @@ def _test_data_transfer(mpi_comm, queue, local_bdry_conns,
 
         from numpy.linalg import norm
         err = norm(true_local_f - local_f, np.inf)
-        assert err < 1e-13, "Error = %f is too large" % err
+        assert err < 1e-11, "Error = %f is too large" % err
 
 # }}}
 
 
-# {{{ MPI test pytest entrypoint
+# {{{ MPI pytest entrypoint
 
 @pytest.mark.mpi
-@pytest.mark.parametrize("num_partitions", [3, 6])
-def test_mpi_communication(num_partitions):
+@pytest.mark.parametrize("num_partitions", [3, 4])
+@pytest.mark.parametrize("order", [2, 3])
+def test_mpi_communication(num_partitions, order):
     pytest.importorskip("mpi4py")
 
     num_ranks = num_partitions
@@ -510,6 +516,7 @@ def test_mpi_communication(num_partitions):
     import sys
     newenv = os.environ.copy()
     newenv["RUN_WITHIN_MPI"] = "1"
+    newenv["order"] = str(order)
     check_call([
         "mpiexec", "-np", str(num_ranks), "-x", "RUN_WITHIN_MPI",
         sys.executable, __file__],
@@ -520,7 +527,10 @@ def test_mpi_communication(num_partitions):
 
 if __name__ == "__main__":
     if "RUN_WITHIN_MPI" in os.environ:
-        mpi_test_rank_entrypoint()
+        dim = 2
+        order = int(os.environ["order"])
+        num_groups = 2
+        _test_mpi_boundary_swap(dim, order, num_groups)
     else:
         import sys
         if len(sys.argv) > 1:
