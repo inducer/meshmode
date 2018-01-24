@@ -420,6 +420,7 @@ def _test_data_transfer(mpi_comm, queue, local_bdry_conns,
         7. Check if local points are the same as the original local points.
     '''
 
+    # 1.
     send_reqs = []
     for i_remote_part in connected_parts:
         conn = remote_to_local_bdry_conns[i_remote_part]
@@ -429,10 +430,12 @@ def _test_data_transfer(mpi_comm, queue, local_bdry_conns,
         true_local_f = f(bdry_x)
         remote_f = conn(queue, true_local_f)
 
+        # 2.
         send_reqs.append(mpi_comm.isend(remote_f.get(queue=queue),
                                         dest=i_remote_part,
                                         tag=TAG_SEND_REMOTE_NODES))
 
+    # 3.
     buffers = {}
     for i_remote_part in connected_parts:
         status = MPI.Status()
@@ -454,6 +457,7 @@ def _test_data_transfer(mpi_comm, queue, local_bdry_conns,
     for req in send_reqs:
         req.wait()
 
+    # 4.
     send_reqs = []
     for i_remote_part in connected_parts:
         conn = remote_to_local_bdry_conns[i_remote_part]
@@ -464,10 +468,12 @@ def _test_data_transfer(mpi_comm, queue, local_bdry_conns,
         local_f_cl.set(local_f_np)
         remote_f = conn(queue, local_f_cl).get(queue=queue)
 
+        # 5.
         send_reqs.append(mpi_comm.isend(remote_f,
                                         dest=i_remote_part,
                                         tag=TAG_SEND_LOCAL_NODES))
 
+    # 6.
     buffers = {}
     for i_remote_part in connected_parts:
         status = MPI.Status()
@@ -489,6 +495,7 @@ def _test_data_transfer(mpi_comm, queue, local_bdry_conns,
     for req in send_reqs:
         req.wait()
 
+    # 7.
     for i_remote_part in connected_parts:
         bdry_discr = local_bdry_conns[i_remote_part].to_discr
         bdry_x = bdry_discr.nodes()[0].with_queue(queue=queue)

@@ -185,8 +185,8 @@ class MPIBoundaryCommunicator(object):
         Returns the tuple (`remote_to_local_bdry_conn`, [])
         where `remote_to_local_bdry_conn` is a
         :class:`DirectDiscretizationConnection` that gives the connection that
-        performs data exchange across faces from partition `i_remote_part` to the
-        local mesh.
+        performs data exchange across faces from the local mesh to partition
+        `i_remote_part`.
         """
         if self.remote_data is None:
             status = MPI.Status()
