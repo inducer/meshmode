@@ -26,7 +26,9 @@ THE SOFTWARE.
 """
 
 import numpy as np  # noqa
-from mpi4py import MPI
+
+# This file needs to be importable without mpi4py. So don't be tempted to add
+# that import here--push it into individual functions instead.
 
 import logging
 logger = logging.getLogger(__name__)
@@ -104,6 +106,7 @@ class MPIMeshDistributor(object):
 
         assert not self.is_mananger_rank(), "Manager rank cannot receive mesh"
 
+        from mpi4py import MPI
         status = MPI.Status()
         result = self.mpi_comm.recv(
                 source=self.manager_rank, tag=TAG_DISTRIBUTE_MESHES,
