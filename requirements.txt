@@ -1,5 +1,5 @@
 numpy
-git+https://github.com/inducer/meshpy.git
+git+https://github.com/inducer/gmsh_interop.git
 git+https://github.com/inducer/modepy.git
 git+https://github.com/inducer/pyopencl.git
 git+https://github.com/inducer/islpy.git

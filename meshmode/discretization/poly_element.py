@@ -62,12 +62,12 @@ Group factories
 # loopy sees strides that it doesn't expect and complains.
 
 
-from meshmode.discretization import ElementGroupBase
+from meshmode.discretization import ElementGroupBase, InterpolatoryElementGroupBase
 
 
 # {{{ base class for poynomial elements
 
-class PolynomialElementGroupBase(ElementGroupBase):
+class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
     @memoize_method
     def mass_matrix(self):
         assert self.is_orthogonal_basis()
@@ -102,7 +102,18 @@ class PolynomialElementGroupBase(ElementGroupBase):
 
 # {{{ concrete element groups for simplices
 
-class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase):
+class SimplexElementGroupBase(ElementGroupBase):
+    @memoize_method
+    def from_mesh_interp_matrix(self):
+        meg = self.mesh_el_group
+        return mp.resampling_matrix(
+                mp.simplex_best_available_basis(meg.dim, meg.order),
+                self.unit_nodes,
+                meg.unit_nodes)
+
+
+class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase,
+        SimplexElementGroupBase):
     def is_orthogonal_basis(self):
         return self.dim <= 3
 
@@ -117,14 +128,6 @@ class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase):
             return mp.grad_simplex_onb(self.dim, self.order)
         else:
             return mp.grad_simplex_monomial_basis(self.dim, self.order)
-
-    @memoize_method
-    def from_mesh_interp_matrix(self):
-        meg = self.mesh_el_group
-        return mp.resampling_matrix(
-                mp.simplex_best_available_basis(meg.dim, meg.order),
-                self.unit_nodes,
-                meg.unit_nodes)
 
 
 class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
@@ -160,7 +163,7 @@ class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBa
         return self._quadrature_rule().weights
 
 
-class QuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
+class QuadratureSimplexElementGroup(SimplexElementGroupBase):
     """Elemental discretization supplying a high-order quadrature rule
     with a number of nodes which does not necessarily match the number of
     polynomials in :math:`P^k`. This discretization therefore excels at
@@ -186,6 +189,7 @@ class QuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
 
         dim2, nunit_nodes = result.shape
         assert dim2 == self.mesh_el_group.dim
+
         return result
 
     @property

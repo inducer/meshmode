@@ -520,6 +520,10 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
             for mesh in meshes
             for group in mesh.groups])
 
+        if not nodes.flags.c_contiguous:
+            # hstack stopped producing C-contiguous arrays in numpy 1.14
+            nodes = nodes.copy(order="C")
+
         new_groups = [
                 grp_cls(order, vertex_indices, nodes, unit_nodes=unit_nodes)]
 

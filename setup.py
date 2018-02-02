@@ -43,6 +43,7 @@ def main():
           install_requires=[
               "numpy",
               "modepy",
+              "gmsh_interop",
               "six",
               "pytools>=2013.1",
               "pytest>=2.3",
