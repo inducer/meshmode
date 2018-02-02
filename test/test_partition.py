@@ -47,7 +47,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Is there a smart way of choosing this number?
-# Currenly it is the same as the base from MPIBoundaryCommunicator
+# Currenly it is the same as the base from MPIBoundaryTransceiver
 TAG_BASE = 83411
 TAG_SEND_REMOTE_NODES = TAG_BASE + 3
 TAG_SEND_LOCAL_NODES = TAG_BASE + 4
@@ -328,7 +328,7 @@ def count_tags(mesh, tag):
 # {{{ MPI test boundary swap
 
 def _test_mpi_boundary_swap(dim, order, num_groups):
-    from meshmode.distributed import MPIMeshDistributor, MPIBoundaryCommunicator
+    from meshmode.distributed import MPIMeshDistributor, MPIBoundaryCommSetupHelper
 
     from mpi4py import MPI
     mpi_comm = MPI.COMM_WORLD
@@ -365,26 +365,35 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     from meshmode.distributed import get_connected_partitions
     connected_parts = get_connected_partitions(local_mesh)
     assert i_local_part not in connected_parts
-    bdry_conn_futures = {}
+    bdry_setup_helpers = {}
     local_bdry_conns = {}
+
+    from meshmode.discretization.connection import make_face_restriction
+    from meshmode.mesh import BTAG_PARTITION
     for i_remote_part in connected_parts:
-        bdry_conn_futures[i_remote_part] = MPIBoundaryCommunicator(mpi_comm,
-                                                                   queue,
-                                                                   vol_discr,
-                                                                   group_factory,
-                                                                   i_remote_part)
-        local_bdry_conns[i_remote_part] =\
-                bdry_conn_futures[i_remote_part].local_bdry_conn
+        local_bdry_conns[i_remote_part] = make_face_restriction(
+                vol_discr, group_factory, BTAG_PARTITION(i_remote_part))
+
+        setup_helper = bdry_setup_helpers[i_remote_part] = \
+                MPIBoundaryCommSetupHelper(
+                        mpi_comm, queue, local_bdry_conns[i_remote_part],
+                        i_remote_part, bdry_grp_factory=group_factory)
+
+        setup_helper.post_sends()
 
     remote_to_local_bdry_conns = {}
     from meshmode.discretization.connection import check_connection
-    while len(bdry_conn_futures) > 0:
-        for i_remote_part, future in bdry_conn_futures.items():
-            if future.is_ready():
-                conn, _ = bdry_conn_futures.pop(i_remote_part)()
+    while bdry_setup_helpers:
+        for i_remote_part, setup_helper in bdry_setup_helpers.items():
+            if setup_helper.is_setup_ready():
+                assert bdry_setup_helpers.pop(i_remote_part) is setup_helper
+                conn = setup_helper.complete_setup()
                 check_connection(conn)
                 remote_to_local_bdry_conns[i_remote_part] = conn
                 break
+
+        # FIXME: Not ideal, busy-waits
+
     _test_data_transfer(mpi_comm,
                         queue,
                         local_bdry_conns,
