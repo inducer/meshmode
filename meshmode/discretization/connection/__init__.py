@@ -27,6 +27,8 @@ from six.moves import range, zip
 import numpy as np
 import pyopencl as cl
 import pyopencl.array  # noqa
+
+from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method, memoize_in
 
 from meshmode.discretization.connection.same_mesh import \
@@ -367,7 +369,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("nnodes_tgt,nnodes_src", np.int32),
                     "...",
                     ],
-                name="oversample_mat")
+                name="oversample_mat",
+                lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))
@@ -419,7 +422,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("nelements_vec", np.int32),
                     "...",
                     ],
-                name="resample_by_mat")
+                name="resample_by_mat",
+                lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))
@@ -445,7 +449,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("n_from_nodes", np.int32),
                     "...",
                     ],
-                name="resample_by_picking")
+                name="resample_by_picking",
+                lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))

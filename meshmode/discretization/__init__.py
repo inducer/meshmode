@@ -23,10 +23,12 @@ THE SOFTWARE.
 """
 
 import numpy as np
-from pytools import memoize_method, memoize_in
 import loopy as lp
 import pyopencl as cl
 import pyopencl.array  # noqa
+
+from loopy.version import MOST_RECENT_LANGUAGE_VERSION
+from pytools import memoize_method, memoize_in
 
 __doc__ = """
 .. autoclass:: ElementGroupBase
@@ -280,7 +282,8 @@ class Discretization(object):
                     0<=k<nelements and
                     0<=i,j<ndiscr_nodes}""",
                 "result[k,i] = sum(j, diff_mat[i, j] * vec[k, j])",
-                default_offset=lp.auto, name="diff")
+                default_offset=lp.auto, name="diff",
+                lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))
@@ -310,7 +313,8 @@ class Discretization(object):
                 "{[k,i]: 0<=k<nelements and 0<=i<ndiscr_nodes}",
                 "result[k,i] = weights[i]",
                 name="quad_weights",
-                default_offset=lp.auto)
+                default_offset=lp.auto,
+                lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))
@@ -338,7 +342,8 @@ class Discretization(object):
                         sum(j, resampling_mat[i, j] * nodes[d, k, j])
                     """,
                 name="nodes",
-                default_offset=lp.auto)
+                default_offset=lp.auto,
+                lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             knl = lp.tag_inames(knl, dict(k="g.0"))
