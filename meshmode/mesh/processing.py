@@ -479,7 +479,7 @@ def affine_map(mesh, A=None, b=None):  # noqa
         b = np.zeros(A.shape[0])
 
     def f(x):
-        return np.einsum("ij,jv->iv", A, x) + b[:, np.newaxis]
+        return np.dot(A, x) + b.reshape(-1, 1)
 
     return map_mesh(mesh, f)
 
