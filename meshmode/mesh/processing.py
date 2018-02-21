@@ -447,6 +447,8 @@ def map_mesh(mesh, f):  # noqa
     shape ``(ambient_dim, npoints)``."""
 
     vertices = f(mesh.vertices)
+    if not vertices.flags.c_contiguous:
+        vertices = np.copy(vertices, order="C")
 
     # {{{ assemble new groups list
 
@@ -454,6 +456,9 @@ def map_mesh(mesh, f):  # noqa
 
     for group in mesh.groups:
         mapped_nodes = f(group.nodes.reshape(mesh.ambient_dim, -1))
+        if not mapped_nodes.flags.c_contiguous:
+            mapped_nodes = np.copy(mapped_nodes, order="C")
+
         new_groups.append(group.copy(
             nodes=mapped_nodes.reshape(*group.nodes.shape)))
 
