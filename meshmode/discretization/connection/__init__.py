@@ -451,7 +451,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             return lp.tag_inames(knl, dict(k="g.0"))
 
         if not isinstance(vec, cl.array.Array):
-            return vec
+            raise TypeError("non-array passed to discretization connection")
 
         if self.is_surjective:
             result = self.to_discr.empty(dtype=vec.dtype)
