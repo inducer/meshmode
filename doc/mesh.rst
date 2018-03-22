@@ -70,4 +70,9 @@ Mesh refinement
 
 .. automodule:: meshmode.mesh.refinement
 
+Mesh visualization
+---------------
+
+.. automodule:: meshmode.mesh.visualization
+
 .. vim: sw=4

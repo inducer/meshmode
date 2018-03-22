@@ -25,6 +25,12 @@ THE SOFTWARE.
 import numpy as np
 from six.moves import range
 
+__doc__ = """
+.. autofunction:: draw_2d_mesh
+.. autofunction:: draw_curve
+.. autofunction:: write_vertex_vtk_file
+"""
+
 
 # {{{ draw_2d_mesh
 
@@ -159,6 +165,71 @@ def draw_curve(mesh,
                 group.nodes[0].ravel(),
                 group.nodes[1].ravel(), node_style, label="Group %d" % i,
                 **node_kwargs)
+
+# }}}
+
+
+# {{{ write_vtk_file
+
+def write_vertex_vtk_file(mesh, file_name, compressor=None):
+    from pyvisfile.vtk import (
+            UnstructuredGrid, DataArray,
+            AppendedDataXMLGenerator,
+            VF_LIST_OF_COMPONENTS)
+
+    # {{{ create cell_types
+
+    from pyvisfile.vtk import (
+            VTK_LINE, VTK_TRIANGLE, VTK_TETRA,
+            VTK_QUAD, VTK_HEXAHEDRON)
+
+    from meshmode.mesh import TensorProductElementGroup, SimplexElementGroup
+
+    cell_types = np.empty(mesh.nelements, dtype=np.uint8)
+    cell_types.fill(255)
+    for egrp in mesh.groups:
+        if isinstance(egrp, SimplexElementGroup):
+            vtk_cell_type = {
+                    1: VTK_LINE,
+                    2: VTK_TRIANGLE,
+                    3: VTK_TETRA,
+                    }[egrp.dim]
+        elif isinstance(egrp, TensorProductElementGroup):
+            vtk_cell_type = {
+                    1: VTK_LINE,
+                    2: VTK_QUAD,
+                    3: VTK_HEXAHEDRON,
+                    }[egrp.dim]
+        else:
+            raise NotImplementedError("mesh vtk file writing for "
+                    "element group of type '%s'" % type(egrp).__name__)
+
+        cell_types[
+                egrp.element_nr_base:
+                egrp.element_nr_base + egrp.nelements] = \
+                        vtk_cell_type
+
+    assert (cell_types != 255).all()
+
+    # }}}
+
+    grid = UnstructuredGrid(
+            (mesh.nvertices,
+                DataArray("points",
+                    mesh.vertices,
+                    vector_format=VF_LIST_OF_COMPONENTS)),
+            cells=np.hstack([
+                vgrp.vertex_indices.reshape(-1)
+                for vgrp in mesh.groups]),
+            cell_types=cell_types)
+
+    from os.path import exists
+    if exists(file_name):
+        raise RuntimeError("output file '%s' already exists"
+                % file_name)
+
+    with open(file_name, "w") as outf:
+        AppendedDataXMLGenerator(compressor)(grid).write(outf)
 
 # }}}
 
