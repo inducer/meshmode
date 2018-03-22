@@ -620,8 +620,10 @@ class Mesh(Record):
                 )
 
         if not skip_tests:
-            assert _test_node_vertex_consistency(
-                    self, node_vertex_consistency_tolerance)
+            if node_vertex_consistency_tolerance is not False:
+                assert _test_node_vertex_consistency(
+                        self, node_vertex_consistency_tolerance)
+
             for g in self.groups:
                 assert g.vertex_indices.dtype == self.vertex_id_dtype
 
@@ -784,8 +786,8 @@ def _test_node_vertex_consistency_simplex(mesh, mgrp, tol):
     bbox_min, bbox_max = find_bounding_box(mesh)
     size = la.norm(bbox_max-bbox_min)
 
-    assert np.max(per_element_vertex_errors) < tol*size, \
-            np.max(per_element_vertex_errors)
+    max_el_vertex_error = np.max(per_element_vertex_errors)
+    assert max_el_vertex_error < tol*size, max_el_vertex_error
 
     return True
 
@@ -794,9 +796,6 @@ def _test_node_vertex_consistency(mesh, tol):
     """Ensure that order of by-index vertices matches that of mapped
     unit vertices.
     """
-
-    if tol is False:
-        return
 
     for mgrp in mesh.groups:
         if isinstance(mgrp, SimplexElementGroup):
