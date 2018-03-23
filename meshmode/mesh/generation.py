@@ -57,7 +57,7 @@ Surfaces
 .. autofunction:: generate_icosahedron
 .. autofunction:: generate_icosphere
 .. autofunction:: generate_torus
-.. autofunction:: get_blobfish
+.. autofunction:: get_urchin
 
 Volumes
 -------
@@ -518,9 +518,9 @@ def generate_torus(r_outer, r_inner, n_outer=20, n_inner=10, order=1):
     return mesh
 
 
-# {{{ get_blobfish
+# {{{ get_urchin
 
-def _refine_mesh_and_get_blobfish_warper(order, m, n, est_rel_interp_tolerance,
+def _refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
         min_rad=0.2):
     """
     :returns: a tuple ``(unwarped_mesh, warp_mesh)``, where *unwarped_mesh* is
@@ -582,7 +582,7 @@ def _refine_mesh_and_get_blobfish_warper(order, m, n, est_rel_interp_tolerance,
             node_vertex_consistency_tolerance=est_rel_interp_tolerance)
 
 
-def get_blobfish(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
+def get_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
     """
     :returns: a refined :class:`meshmode.mesh.Mesh` of a smooth shape govered
         by a spherical harmonic of order *(m, n)*.
@@ -592,7 +592,7 @@ def get_blobfish(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
 
     .. versionadded: 2018.1
     """
-    unwarped_mesh, warper = _refine_mesh_and_get_blobfish_warper(
+    unwarped_mesh, warper = _refine_mesh_and_get_urchin_warper(
             order, m, n, est_rel_interp_tolerance, min_rad)
     return warper(unwarped_mesh)
 
