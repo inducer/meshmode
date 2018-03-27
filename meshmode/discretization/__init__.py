@@ -290,6 +290,10 @@ class Discretization(object):
 
         result = self.empty(dtype=vec.dtype)
 
+        # Check that we don't differentiate vectors belonging to other
+        # discretizations.
+        assert vec.shape == (self.nnodes,)
+
         for grp in self.groups:
             if grp.nelements == 0:
                 continue
