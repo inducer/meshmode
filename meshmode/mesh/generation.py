@@ -57,6 +57,7 @@ Surfaces
 .. autofunction:: generate_icosahedron
 .. autofunction:: generate_icosphere
 .. autofunction:: generate_torus
+.. autofunction:: refine_mesh_and_get_urchin_warper
 .. autofunction:: get_urchin
 
 Volumes
@@ -520,13 +521,16 @@ def generate_torus(r_outer, r_inner, n_outer=20, n_inner=10, order=1):
 
 # {{{ get_urchin
 
-def _refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
-        min_rad=0.2):
+def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
+        min_rad=0.2, uniform_refinement_rounds=0):
     """
-    :returns: a tuple ``(unwarped_mesh, warp_mesh)``, where *unwarped_mesh* is
-        a locally-refined :class:`meshmode.mesh.Mesh` of a sphere and *warp_mesh*
-        is a callable taking and returning a mesh that warps the unwarped mesh into
-        a smooth shape govered by a spherical harmonic of order *(m, n)*.
+    :returns: a tuple ``(refiner, warp_mesh)``, where *refiner* is
+        a :class:`meshmode.refinement.Refiner` (from which the unwarped mesh
+        may be obtained), and whose
+        :meth:`meshmode.refinement.Refiner.get_current_mesh` returns a
+        locally-refined :class:`meshmode.mesh.Mesh` of a sphere and *warp_mesh*
+        is a callable taking and returning a mesh that warps the unwarped mesh
+        into a smooth shape govered by a spherical harmonic of order *(m, n)*.
     :arg order: the polynomial order of the returned mesh
     :arg est_rel_interp_tolerance: a tolerance for the relative
         interpolation error estimates on the warped version of the mesh.
@@ -566,6 +570,12 @@ def _refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
 
     unwarped_mesh = generate_icosphere(1, order=order)
 
+    from meshmode.mesh.refinement import Refiner
+
+    refiner = Refiner(unwarped_mesh)
+    for i in range(uniform_refinement_rounds):
+        refiner.refine_uniformly()
+
     nodes_sph = sph_harm(m, n, unwarped_mesh.groups[0].nodes).real
     lo = np.min(nodes_sph)
     hi = np.max(nodes_sph)
@@ -573,11 +583,11 @@ def _refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
 
     from functools import partial
     unwarped_mesh = warp_and_refine_until_resolved(
-                unwarped_mesh,
+                refiner,
                 partial(warp_mesh, node_vertex_consistency_tolerance=False),
                 est_rel_interp_tolerance)
 
-    return unwarped_mesh, partial(
+    return refiner, partial(
             warp_mesh,
             node_vertex_consistency_tolerance=est_rel_interp_tolerance)
 
@@ -592,9 +602,9 @@ def get_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
 
     .. versionadded: 2018.1
     """
-    unwarped_mesh, warper = _refine_mesh_and_get_urchin_warper(
+    refiner, warper = refine_mesh_and_get_urchin_warper(
             order, m, n, est_rel_interp_tolerance, min_rad)
-    return warper(unwarped_mesh)
+    return warper(refiner.get_current_mesh())
 
 # }}}
 
