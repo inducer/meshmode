@@ -162,8 +162,8 @@ def draw_curve(mesh,
 
     for i, group in enumerate(mesh.groups):
         plt.plot(
-                group.nodes[0].ravel(),
-                group.nodes[1].ravel(), node_style, label="Group %d" % i,
+                group.nodes[0].T,
+                group.nodes[1].T, node_style, label="Group %d" % i,
                 **node_kwargs)
 
 # }}}
