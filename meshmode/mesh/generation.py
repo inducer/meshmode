@@ -790,7 +790,7 @@ def generate_warped_rect_mesh(dim, order, n):
 # {{{ warp_and_refine_until_resolved
 
 def warp_and_refine_until_resolved(
-        unwarped_mesh, warp_callable, est_rel_interp_tolerance):
+        unwarped_mesh_or_refiner, warp_callable, est_rel_interp_tolerance):
     """Given an original ("un-warped") :class:`meshmode.mesh.Mesh` and a
     warping function *warp_callable* that takes and returns a mesh and a
     tolerance to which the mesh should be resolved by the mapping polynomials,
@@ -809,7 +809,12 @@ def warp_and_refine_until_resolved(
 
     logger.info("warp_and_refine_until_resolved: start")
 
-    refiner = Refiner(unwarped_mesh)
+    if isinstance(unwarped_mesh_or_refiner, Refiner):
+        refiner = unwarped_mesh_or_refiner
+        unwarped_mesh = refiner.get_current_mesh()
+    else:
+        unwarped_mesh = unwarped_mesh_or_refiner
+        refiner = Refiner(unwarped_mesh)
 
     iteration = 0
 
