@@ -326,6 +326,10 @@ class Refiner(object):
 
     # }}}
 
+    def refine_uniformly(self):
+        flags = np.ones(self.last_mesh.nelements, dtype=bool)
+        self.refine(flags)
+
     # {{{ refinement
 
     def refine(self, refine_flags):
