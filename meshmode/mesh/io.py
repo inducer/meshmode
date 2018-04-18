@@ -137,9 +137,13 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         from meshmode.mesh import (Mesh,
                 SimplexElementGroup, TensorProductElementGroup)
 
+        bulk_el_types = set()
+
         for group_el_type, ngroup_elements in six.iteritems(el_type_hist):
             if group_el_type.dimensions != mesh_bulk_dim:
                 continue
+
+            bulk_el_types.add(group_el_type)
 
             nodes = np.empty((ambient_dim, ngroup_elements, el_type.node_count()),
                     np.float64)
@@ -198,15 +202,17 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 raise NotImplementedError("gmsh element type: %s"
                         % type(group_el_type).__name__)
 
-            # Gmsh seems to produce elements in the opposite orientation
-            # of what we like. Flip them all.
-
             groups.append(group)
+
+        # FIXME: This is heuristic.
+        if len(bulk_el_types) == 1:
+            is_conforming = True
+        else:
+            is_conforming = mesh_bulk_dim < 3
 
         return Mesh(
                 vertices, groups,
-                nodal_adjacency=None,
-                facial_adjacency_groups=None)
+                is_conforming=is_conforming)
 
 # }}}
 
@@ -287,8 +293,7 @@ def from_meshpy(mesh_info, order=1):
 
     return Mesh(
             vertices=vertices, groups=[grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -320,8 +325,7 @@ def from_vertices_and_simplices(vertices, simplices, order=1, fix_orientation=Fa
 
     return Mesh(
             vertices=vertices, groups=[grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -364,7 +368,13 @@ def to_json(mesh):
             }
 
     return {
-        "version": 0,
+        # VERSION 0:
+        # - initial version
+        #
+        # VERSION 1:
+        # - added is_conforming
+
+        "version": 1,
         "vertices": mesh.vertices.tolist(),
         "groups": [group_to_json(group) for group in mesh.groups],
         "nodal_adjacency": nodal_adjacency_to_json(mesh),
@@ -374,6 +384,7 @@ def to_json(mesh):
         "btag_to_index": dict(
             (btag_to_json(btag), value)
             for btag, value in six.iteritems(mesh.btag_to_index)),
+        "is_conforming": mesh.is_conforming,
         }
 
 # }}}

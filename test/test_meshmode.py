@@ -590,7 +590,7 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
             nodes=mp.warp_and_blend_nodes(dim, order).reshape(dim, 1, -1),
             dim=dim)
 
-    mesh = Mesh(vertices, [mg], nodal_adjacency=None, facial_adjacency_groups=None)
+    mesh = Mesh(vertices, [mg], is_conforming=True)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
@@ -1063,10 +1063,11 @@ def test_ChainedDiscretizationConnection(ctx_getter):  # noqa
 
     connections = []
 
+    from meshmode.mesh.refinement import Refiner
+    refiner = Refiner(mesh)
+
     def refine_discr(discr):
         mesh = discr.mesh
-        from meshmode.mesh.refinement import Refiner
-        refiner = Refiner(mesh)
         flags = refine_flags(mesh)
         refiner.refine(flags)
         connections.append(

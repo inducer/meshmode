@@ -76,6 +76,10 @@ def even_refine_flags(spacing, mesh):
     return flags
 
 
+def empty_refine_flags(mesh):
+    return np.zeros(mesh.nelements)
+
+
 def uniform_refine_flags(mesh):
     return np.ones(mesh.nelements)
 
