@@ -240,7 +240,7 @@ def test_refinement_connection(
         f_interp = connection(queue, f_coarse).with_queue(queue)
         f_true = f(x_fine).with_queue(queue)
 
-        if plot_mesh:
+        if visualize == "dots":
             import matplotlib.pyplot as plt
             x = x.get(queue)
             err = np.array(np.log10(
@@ -251,6 +251,16 @@ def test_refinement_connection(
             plt.scatter(x[0], x[1], c=cmap.to_rgba(err), s=20, cmap=cmap)
             plt.colorbar(cmap)
             plt.show()
+
+        elif visualize == "vtk":
+            from meshmode.discretization.visualization import make_visualizer
+            fine_vis = make_visualizer(queue, fine_discr, mesh_order)
+
+            fine_vis.write_vtk_file(
+                    "refine-fine-%s-%dd-%s.vtu" % (mesh_name, dim, mesh_par), [
+                        ("f_interp", f_interp),
+                        ("f_true", f_true),
+                        ])
 
         import numpy.linalg as la
         err = la.norm((f_interp - f_true).get(queue), np.inf)
