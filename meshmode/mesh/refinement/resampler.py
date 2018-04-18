@@ -43,7 +43,8 @@ class SimplexResampler(object):
     :func:`meshmode.mesh.tesselate.tesselatetet()`.
     """
 
-    def get_vertex_pair_to_midpoint_order(self, dim):
+    @staticmethod
+    def get_vertex_pair_to_midpoint_order(dim):
         """
         :arg dim: Dimension of the element
 
@@ -58,7 +59,8 @@ class SimplexResampler(object):
             range(nmidpoints)
             ))
 
-    def get_midpoints(self, group, tesselation, elements):
+    @staticmethod
+    def get_midpoints(group, tesselation, elements):
         """
         Compute the midpoints of the vertices of the specified elements.
 
@@ -89,7 +91,8 @@ class SimplexResampler(object):
 
         return dict(zip(elements, resamp_midpoints))
 
-    def get_tesselated_nodes(self, group, tesselation, elements):
+    @staticmethod
+    def get_tesselated_nodes(group, tesselation, elements):
         """
         Compute the nodes of the child elements according to the tesselation.
 
