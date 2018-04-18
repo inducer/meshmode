@@ -566,9 +566,10 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
 
     unwarped_mesh = generate_icosphere(1, order=order)
 
-    from meshmode.mesh.refinement import Refiner
+    from meshmode.mesh.refinement import RefinerWithoutAdjacency
 
-    refiner = Refiner(unwarped_mesh)
+    # These come out conformal, so we're OK to use the faster refiner.
+    refiner = RefinerWithoutAdjacency(unwarped_mesh)
     for i in range(uniform_refinement_rounds):
         refiner.refine_uniformly()
 
@@ -800,11 +801,11 @@ def warp_and_refine_until_resolved(
     from modepy.modes import simplex_onb
     from modepy.matrices import vandermonde
     from modepy.modal_decay import simplex_interp_error_coefficient_estimator_matrix
-    from meshmode.mesh.refinement import Refiner
+    from meshmode.mesh.refinement import Refiner, RefinerWithoutAdjacency
 
     logger.info("warp_and_refine_until_resolved: start")
 
-    if isinstance(unwarped_mesh_or_refiner, Refiner):
+    if isinstance(unwarped_mesh_or_refiner, (Refiner, RefinerWithoutAdjacency)):
         refiner = unwarped_mesh_or_refiner
         unwarped_mesh = refiner.get_current_mesh()
     else:
