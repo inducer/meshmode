@@ -941,21 +941,4 @@ def refine_uniformly(mesh, iterations):
         return mesh
 
 
-class WarpingRefinerWrapper(object):
-    """A refiner that wraps an :attr:`inner_refiner` operating on an
-    un-warped mesh, that, for all external mesh retrieval purposes,
-    returns the warped mesh.
-    """
-
-    def __init__(self, inner_refiner, warp_mesh):
-        self.inner_refiner = inner_refiner
-        self.warp_mesh = warp_mesh
-
-    def refine(self, refine_flags):
-        mesh = self.inner_refiner.refine(refine_flags)
-        return self.warp_mesh(mesh)
-
-    def get_current_mesh(self):
-        return self.warp_mesh(self.inner_refiner.get_current_mesh())
-
 # vim: foldmethod=marker
