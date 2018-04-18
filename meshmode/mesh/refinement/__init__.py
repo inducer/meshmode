@@ -27,6 +27,8 @@ import numpy as np
 import itertools
 from six.moves import range
 from pytools import RecordWithoutPickling
+from meshmode.mesh.refinement.no_adjacency import (  # noqa: F401
+        RefinerWithoutAdjacency)
 
 
 import logging
@@ -34,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 __doc__ = """
 .. autoclass :: Refiner
+.. autoclass :: RefinerWithoutAdjacency
 .. autofunction :: refine_uniformly
 """
 

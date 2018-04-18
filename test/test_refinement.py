@@ -33,7 +33,7 @@ from pyopencl.tools import (  # noqa
 from meshmode.mesh.generation import (  # noqa
         generate_icosahedron, generate_box_mesh, make_curve_mesh, ellipse)
 from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
-from meshmode.mesh.refinement import Refiner
+from meshmode.mesh.refinement import Refiner, RefinerWithoutAdjacency
 
 from meshmode.discretization.poly_element import (
     InterpolatoryQuadratureSimplexGroupFactory,
@@ -152,6 +152,10 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
         check_nodal_adj_against_geometry(mesh)
 
 
+@pytest.mark.parametrize("refiner_cls", [
+    Refiner,
+    RefinerWithoutAdjacency
+    ])
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
     PolynomialWarpAndBlendGroupFactory,
@@ -170,9 +174,10 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
     #partial(random_refine_flags, 0.4)
     partial(even_refine_flags, 2)
 ])
+# test_refinement_connection(cl._csc, RefinerWithoutAdjacency, PolynomialWarpAndBlendGroupFactory, 'warp', 2, [4, 5, 6], 5, partial(even_refine_flags, 2))  # noqa: E501
 def test_refinement_connection(
-        ctx_getter, group_factory, mesh_name, dim, mesh_pars, mesh_order,
-        refine_flags, plot_mesh=False):
+        ctx_getter, refiner_cls, group_factory,
+        mesh_name, dim, mesh_pars, mesh_order, refine_flags, visualize=False):
     from random import seed
     seed(13)
 
@@ -219,7 +224,7 @@ def test_refinement_connection(
 
         discr = Discretization(cl_ctx, mesh, group_factory(order))
 
-        refiner = Refiner(mesh)
+        refiner = refiner_cls(mesh)
         flags = refine_flags(mesh)
         refiner.refine(flags)
 
