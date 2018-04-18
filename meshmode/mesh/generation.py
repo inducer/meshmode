@@ -281,9 +281,8 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 
     mesh = Mesh(
             vertices=vertices, groups=[egroup],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None,
-            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance)
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+            is_conforming=True)
 
     if return_parametrization_points:
         return mesh, t
@@ -420,8 +419,7 @@ def generate_icosahedron(r, order):
     from meshmode.mesh import Mesh
     return Mesh(
             vertices, [grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -439,8 +437,7 @@ def generate_icosphere(r, order):
     from meshmode.mesh import Mesh
     return Mesh(
             mesh.vertices, [grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -505,8 +502,7 @@ def generate_torus_and_cycle_vertices(r_outer, r_inner,
     return (
             Mesh(
                 vertices, [grp.copy(nodes=nodes)],
-                nodal_adjacency=None,
-                facial_adjacency_groups=None),
+                is_conforming=True),
             [idx(i, 0) for i in range(n_outer)],
             [idx(0, j) for j in range(n_inner)])
 
@@ -564,15 +560,16 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
         return Mesh(
                 map_coords(mesh.vertices),
                 groups,
-                nodal_adjacency=None,
                 node_vertex_consistency_tolerance=False,
-                facial_adjacency_groups=None)
+                is_conforming=mesh.is_conforming,
+                )
 
     unwarped_mesh = generate_icosphere(1, order=order)
 
-    from meshmode.mesh.refinement import Refiner
+    from meshmode.mesh.refinement import RefinerWithoutAdjacency
 
-    refiner = Refiner(unwarped_mesh)
+    # These come out conformal, so we're OK to use the faster refiner.
+    refiner = RefinerWithoutAdjacency(unwarped_mesh)
     for i in range(uniform_refinement_rounds):
         refiner.refine_uniformly()
 
@@ -730,8 +727,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
     from meshmode.mesh import Mesh
     return Mesh(vertices, [grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -805,11 +801,11 @@ def warp_and_refine_until_resolved(
     from modepy.modes import simplex_onb
     from modepy.matrices import vandermonde
     from modepy.modal_decay import simplex_interp_error_coefficient_estimator_matrix
-    from meshmode.mesh.refinement import Refiner
+    from meshmode.mesh.refinement import Refiner, RefinerWithoutAdjacency
 
     logger.info("warp_and_refine_until_resolved: start")
 
-    if isinstance(unwarped_mesh_or_refiner, Refiner):
+    if isinstance(unwarped_mesh_or_refiner, (Refiner, RefinerWithoutAdjacency)):
         refiner = unwarped_mesh_or_refiner
         unwarped_mesh = refiner.get_current_mesh()
     else:

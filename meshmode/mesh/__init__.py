@@ -523,6 +523,12 @@ class Mesh(Record):
 
     .. attribute:: element_id_dtype
 
+    .. attribute:: is_conforming
+
+        *True* if it is known that all element interfaces are conforming.
+        *False* if it is known that some element interfaces are non-conforming.
+        *None* if neither of the two is known.
+
     .. automethod:: __eq__
     .. automethod:: __ne__
     """
@@ -531,11 +537,12 @@ class Mesh(Record):
 
     def __init__(self, vertices, groups, skip_tests=False,
             node_vertex_consistency_tolerance=None,
-            nodal_adjacency=False,
-            facial_adjacency_groups=False,
+            nodal_adjacency=None,
+            facial_adjacency_groups=None,
             boundary_tags=None,
             vertex_id_dtype=np.int32,
-            element_id_dtype=np.int32):
+            element_id_dtype=np.int32,
+            is_conforming=None):
         """
         The following are keyword-only:
 
@@ -599,6 +606,12 @@ class Mesh(Record):
 
         # }}}
 
+        if is_conforming is not True:
+            if nodal_adjacency is None:
+                nodal_adjacency = False
+            if facial_adjacency_groups is None:
+                facial_adjacency_groups = False
+
         if nodal_adjacency is not False and nodal_adjacency is not None:
             if not isinstance(nodal_adjacency, NodalAdjacency):
                 nb_starts, nbs = nodal_adjacency
@@ -617,6 +630,7 @@ class Mesh(Record):
                 btag_to_index=btag_to_index,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),
                 element_id_dtype=np.dtype(element_id_dtype),
+                is_conforming=is_conforming,
                 )
 
         if not skip_tests:
@@ -704,7 +718,13 @@ class Mesh(Record):
         if self._nodal_adjacency is False:
             from meshmode import DataUnavailable
             raise DataUnavailable("nodal_adjacency")
+
         elif self._nodal_adjacency is None:
+            if self.is_conforming is not True:
+                from meshmode import DataUnavailable
+                raise DataUnavailable("nodal_adjacency can only "
+                        "be computed for known-conforming meshes")
+
             self._nodal_adjacency = _compute_nodal_adjacency_from_vertices(self)
 
         return self._nodal_adjacency
@@ -721,7 +741,13 @@ class Mesh(Record):
         if self._facial_adjacency_groups is False:
             from meshmode import DataUnavailable
             raise DataUnavailable("facial_adjacency_groups")
+
         elif self._facial_adjacency_groups is None:
+            if self.is_conforming is not True:
+                from meshmode import DataUnavailable
+                raise DataUnavailable("facial_adjacency_groups can only "
+                        "be computed for known-conforming meshes")
+
             self._facial_adjacency_groups = \
                     _compute_facial_adjacency_from_vertices(self)
 
@@ -744,7 +770,8 @@ class Mesh(Record):
                         == other._nodal_adjacency)
                 and (self._facial_adjacency_groups
                         == other._facial_adjacency_groups)
-                and self.boundary_tags == other.boundary_tags)
+                and self.boundary_tags == other.boundary_tags
+                and self.is_conforming == other.is_conforming)
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -1082,7 +1109,8 @@ def as_python(mesh, function_name="make_mesh"):
 
         cg("    nodal_adjacency=%s," % el_con_str)
         cg("    facial_adjacency_groups=facial_adjacency_groups,")
-        cg("    boundary_tags=[%s])" % btags_str)
+        cg("    boundary_tags=[%s]," % btags_str)
+        cg("    is_conforming=%s)" % repr(mesh.is_conforming))
 
         # FIXME: Handle facial adjacency, boundary tags
 

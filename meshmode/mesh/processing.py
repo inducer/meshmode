@@ -137,11 +137,16 @@ def partition_mesh(mesh, part_per_element, part_nr):
         if group_nr not in skip_groups:
             mesh_group = mesh.groups[group_nr]
             new_mesh_groups.append(
-                type(mesh_group)(mesh_group.order, new_indices[group_nr],
-                    new_nodes[group_nr], unit_nodes=mesh_group.unit_nodes))
+                type(mesh_group)(
+                    mesh_group.order, new_indices[group_nr],
+                    new_nodes[group_nr],
+                    unit_nodes=mesh_group.unit_nodes))
 
     from meshmode.mesh import Mesh
-    part_mesh = Mesh(new_vertices, new_mesh_groups)
+    part_mesh = Mesh(
+            new_vertices,
+            new_mesh_groups,
+            is_conforming=mesh.is_conforming)
 
     return part_mesh, queried_elems
 
@@ -318,7 +323,10 @@ def perform_flips(mesh, flip_flags, skip_tests=False):
 
         new_groups.append(new_grp)
 
-    return Mesh(mesh.vertices, new_groups, skip_tests=skip_tests)
+    return Mesh(
+            mesh.vertices, new_groups, skip_tests=skip_tests,
+            is_conforming=mesh.is_conforming,
+            )
 
 # }}}
 
@@ -435,7 +443,10 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
     from meshmode.mesh import Mesh
     return Mesh(vertices, new_groups, skip_tests=skip_tests,
             nodal_adjacency=nodal_adjacency,
-            facial_adjacency_groups=facial_adjacency_groups)
+            facial_adjacency_groups=facial_adjacency_groups,
+            is_conforming=all(
+                mesh.is_conforming
+                for mesh in meshes))
 
 # }}}
 
@@ -467,7 +478,8 @@ def map_mesh(mesh, f):  # noqa
     from meshmode.mesh import Mesh
     return Mesh(vertices, new_groups, skip_tests=True,
             nodal_adjacency=mesh.nodal_adjacency_init_arg(),
-            facial_adjacency_groups=mesh._facial_adjacency_groups)
+            facial_adjacency_groups=mesh._facial_adjacency_groups,
+            is_conforming=mesh.is_conforming)
 
 # }}}
 
