@@ -31,6 +31,7 @@ import modepy as mp
 import logging
 logger = logging.getLogger(__name__)
 
+from pytools import log_process
 
 __doc__ = """
 
@@ -785,6 +786,7 @@ def generate_warped_rect_mesh(dim, order, n):
 
 # {{{ warp_and_refine_until_resolved
 
+@log_process(logger)
 def warp_and_refine_until_resolved(
         unwarped_mesh_or_refiner, warp_callable, est_rel_interp_tolerance):
     """Given an original ("un-warped") :class:`meshmode.mesh.Mesh` and a
@@ -802,8 +804,6 @@ def warp_and_refine_until_resolved(
     from modepy.matrices import vandermonde
     from modepy.modal_decay import simplex_interp_error_coefficient_estimator_matrix
     from meshmode.mesh.refinement import Refiner, RefinerWithoutAdjacency
-
-    logger.info("warp_and_refine_until_resolved: start")
 
     if isinstance(unwarped_mesh_or_refiner, (Refiner, RefinerWithoutAdjacency)):
         refiner = unwarped_mesh_or_refiner
@@ -854,8 +854,6 @@ def warp_and_refine_until_resolved(
 
         unwarped_mesh = refiner.refine(refine_flags)
         iteration += 1
-
-    logger.info("warp_and_refine_until_resolved: done")
 
     return unwarped_mesh
 
