@@ -30,6 +30,8 @@ import pyopencl.array  # noqa
 import logging
 logger = logging.getLogger(__name__)
 
+from pytools import log_process
+
 
 # {{{ Build interpolation batches for group
 
@@ -110,6 +112,7 @@ def _build_interpolation_batches_for_group(
 # }}}
 
 
+@log_process(logger)
 def make_refinement_connection(refiner, coarse_discr, group_factory):
     """Return a
     :class:`meshmode.discretization.connection.DiscretizationConnection`
@@ -144,8 +147,6 @@ def make_refinement_connection(refiner, coarse_discr, group_factory):
         group_factory,
         real_dtype=coarse_discr.real_dtype)
 
-    logger.info("building refinement connection: start")
-
     groups = []
     with cl.CommandQueue(fine_discr.cl_context) as queue:
         for group_idx, (coarse_discr_group, fine_discr_group, record) in \
@@ -156,8 +157,6 @@ def make_refinement_connection(refiner, coarse_discr, group_factory):
                     list(_build_interpolation_batches_for_group(
                             queue, group_idx, coarse_discr_group,
                             fine_discr_group, record))))
-
-    logger.info("building refinement connection: done")
 
     return DirectDiscretizationConnection(
         from_discr=coarse_discr,
