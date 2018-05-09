@@ -383,19 +383,18 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         for i_tgrp, (tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.groups)):
             for i_batch, batch in enumerate(cgrp.batches):
-                if len(batch.from_element_indices):
-                    if not len(batch.from_element_indices):
-                        continue
+                if not len(batch.from_element_indices):
+                    continue
 
-                    sgrp = self.from_discr.groups[batch.from_group_index]
+                sgrp = self.from_discr.groups[batch.from_group_index]
 
-                    knl()(queue,
-                            resample_mat=self._resample_matrix(i_tgrp, i_batch),
-                            result=result,
-                            itgt_base=tgrp.node_nr_base,
-                            isrc_base=sgrp.node_nr_base,
-                            from_element_indices=batch.from_element_indices,
-                            to_element_indices=batch.to_element_indices)
+                knl()(queue,
+                      resample_mat=self._resample_matrix(i_tgrp, i_batch),
+                      result=result,
+                      itgt_base=tgrp.node_nr_base,
+                      isrc_base=sgrp.node_nr_base,
+                      from_element_indices=batch.from_element_indices,
+                      to_element_indices=batch.to_element_indices)
 
         return result
 
