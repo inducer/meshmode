@@ -606,7 +606,7 @@ class Mesh(Record):
 
         # }}}
 
-        if is_conforming is not True:
+        if not is_conforming:
             if nodal_adjacency is None:
                 nodal_adjacency = False
             if facial_adjacency_groups is None:
@@ -720,7 +720,7 @@ class Mesh(Record):
             raise DataUnavailable("nodal_adjacency")
 
         elif self._nodal_adjacency is None:
-            if self.is_conforming is not True:
+            if not self.is_conforming:
                 from meshmode import DataUnavailable
                 raise DataUnavailable("nodal_adjacency can only "
                         "be computed for known-conforming meshes")
@@ -743,7 +743,7 @@ class Mesh(Record):
             raise DataUnavailable("facial_adjacency_groups")
 
         elif self._facial_adjacency_groups is None:
-            if self.is_conforming is not True:
+            if not self.is_conforming:
                 from meshmode import DataUnavailable
                 raise DataUnavailable("facial_adjacency_groups can only "
                         "be computed for known-conforming meshes")
