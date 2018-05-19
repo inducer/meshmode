@@ -202,6 +202,9 @@ class DiscretizationConnection(object):
 
         self.is_surjective = is_surjective
 
+    def full_resample_matrix(self):
+        raise NotImplementedError()
+
     def __call__(self, queue, vec):
         raise NotImplementedError()
 
@@ -235,6 +238,22 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
                 from_discr, to_discr, is_surjective=is_surjective)
 
         self.connections = connections
+
+    @memoize_method
+    def full_resample_matrix(self, queue):
+        if not self.connections:
+            result = cl.array.to_device(queue, np.eye(self.to_discr.nnodes))
+            return result
+
+        acc = self.connections[0].full_resample_matrix(queue).get(queue)
+        print(acc.shape)
+        for cnx in self.connections[1:]:
+            resampler = cnx.full_resample_matrix(queue).get(queue)
+            print(resampler.shape)
+            acc = resampler.dot(acc)
+            print(acc.shape)
+
+        return cl.array.to_device(queue, acc)
 
     def __call__(self, queue, vec):
         for cnx in self.connections:

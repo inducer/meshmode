@@ -134,7 +134,7 @@ class RefinerWithoutAdjacency(object):
     # }}}
 
     def refine_uniformly(self):
-        flags = np.ones(self._last_mesh.nelements, dtype=bool)
+        flags = np.ones(self._current_mesh.nelements, dtype=bool)
         self.refine(flags)
 
     # {{{ refinement top-level
