@@ -40,9 +40,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 def create_chained_connection(queue, ndim,
-                              nelements=30,
-                              mesh_order=4,
-                              discr_order=4,
+                              nelements=42,
+                              mesh_order=2,
+                              discr_order=2,
                               visualize=False):
     ctx = queue.context
     connections = [None, None]
@@ -72,11 +72,9 @@ def create_chained_connection(queue, ndim,
     from meshmode.discretization.connection import make_refinement_connection
     refiner = RefinerWithoutAdjacency(mesh)
 
-    if ndim == 2:
-        flags = np.round(np.random.rand(refiner.get_current_mesh().nelements))
-        refiner.refine(flags)
-    else:
-        refiner.refine_uniformly()
+    threshold = 0.2 if ndim == 3 else 0.5
+    flags = np.random.rand(refiner.get_current_mesh().nelements) < threshold
+    refiner.refine(flags)
     connections[0] = make_refinement_connection(refiner, discr,
             InterpolatoryQuadratureSimplexGroupFactory(discr_order))
 
@@ -94,18 +92,11 @@ def create_chained_connection(queue, ndim,
         pt.clf()
 
     # connection 2: refine / restrict to face
-    if ndim == 2:
-        flags = np.round(np.random.rand(refiner.get_current_mesh().nelements))
-        refiner.refine(flags)
-        connections[1] = make_refinement_connection(refiner,
-                connections[0].to_discr,
-                InterpolatoryQuadratureSimplexGroupFactory(discr_order))
-    else:
-        from meshmode.discretization.connection import make_face_restriction
-        from meshmode.discretization.connection import FACE_RESTR_INTERIOR
-        connections[1] = make_face_restriction(connections[0].to_discr,
-                InterpolatoryQuadratureSimplexGroupFactory(discr_order),
-                FACE_RESTR_INTERIOR, per_face_groups=True)
+    flags = np.random.rand(refiner.get_current_mesh().nelements) < threshold
+    refiner.refine(flags)
+    connections[1] = make_refinement_connection(refiner,
+            connections[0].to_discr,
+            InterpolatoryQuadratureSimplexGroupFactory(discr_order))
 
     if visualize and ndim == 2:
         from_nodes = connections[1].from_discr.nodes().get(queue)

@@ -245,6 +245,7 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
             result = cl.array.to_device(queue, np.eye(self.to_discr.nnodes))
             return result
 
+        print(len(self.connections))
         acc = self.connections[0].full_resample_matrix(queue).get(queue)
         print(acc.shape)
         for cnx in self.connections[1:]:
