@@ -24,7 +24,6 @@ THE SOFTWARE.
 import os
 
 import numpy as np
-import matplotlib.pyplot as pt
 
 import pyopencl as cl
 import pyopencl.array  # noqa
