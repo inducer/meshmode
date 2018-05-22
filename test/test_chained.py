@@ -21,7 +21,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-import os
 
 import numpy as np
 
@@ -78,16 +77,16 @@ def create_chained_connection(queue, ndim,
             InterpolatoryQuadratureSimplexGroupFactory(discr_order))
 
     if visualize and ndim == 2:
+        import matplotlib.pyplot as pt
+
         from_nodes = connections[0].from_discr.nodes().get(queue)
         to_nodes = connections[0].to_discr.nodes().get(queue)
 
         pt.plot(to_nodes[0], to_nodes[1], 'k')
         pt.plot(from_nodes[0], from_nodes[1], 'o', mfc='none')
         pt.plot(to_nodes[0], to_nodes[1], '.')
-        filename = os.path.join(os.path.dirname(__file__),
-            "test_chained_nodes_0.png".format(ndim))
         pt.tight_layout()
-        pt.savefig(filename, dpi=300)
+        pt.savefig("test_chained_nodes_0.png", dpi=300)
         pt.clf()
 
     # connection 2: refine / restrict to face
@@ -98,29 +97,29 @@ def create_chained_connection(queue, ndim,
             InterpolatoryQuadratureSimplexGroupFactory(discr_order))
 
     if visualize and ndim == 2:
+        import matplotlib.pyplot as pt
+
         from_nodes = connections[1].from_discr.nodes().get(queue)
         to_nodes = connections[1].to_discr.nodes().get(queue)
 
         pt.plot(to_nodes[0], to_nodes[1], 'k')
         pt.plot(from_nodes[0], from_nodes[1], 'o', mfc='none')
         pt.plot(to_nodes[0], to_nodes[1], '.')
-        filename = os.path.join(os.path.dirname(__file__),
-            "test_chained_nodes_1.png".format(ndim))
         pt.tight_layout()
-        pt.savefig(filename, dpi=300)
+        pt.savefig("test_chained_nodes_1.png", dpi=300)
         pt.clf()
 
     if visualize and ndim == 2:
+        import matplotlib.pyplot as pt
+
         from_nodes = connections[0].from_discr.nodes().get(queue)
         to_nodes = connections[1].to_discr.nodes().get(queue)
 
         pt.plot(to_nodes[0], to_nodes[1], 'k')
         pt.plot(from_nodes[0], from_nodes[1], 'o', mfc='none')
         pt.plot(to_nodes[0], to_nodes[1], '.')
-        filename = os.path.join(os.path.dirname(__file__),
-            "test_chained_nodes_2.png".format(ndim))
         pt.tight_layout()
-        pt.savefig(filename, dpi=300)
+        pt.savefig("test_chained_nodes_2.png", dpi=300)
         pt.clf()
 
     from meshmode.discretization.connection import ChainedDiscretizationConnection
@@ -267,9 +266,7 @@ def test_chained_to_direct(ctx_factory, ndim, visualize=False):
         pt.plot(f2, label='Chained')
         pt.ylim([np.min(f2) - 0.1, np.max(f2) + 0.1])
         pt.legend()
-        filename = os.path.join(os.path.dirname(__file__),
-            "test_chained_to_direct_fn.png".format(ndim))
-        pt.savefig(filename, dpi=300)
+        pt.savefig('test_chained_to_direct.png', dpi=300)
         pt.clf()
 
     assert np.allclose(f1, f2)
