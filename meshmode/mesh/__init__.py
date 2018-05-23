@@ -390,6 +390,8 @@ class FacialAdjacencyGroup(Record):
     of) a face.
 
     .. image:: images/facial-adjacency-group.png
+        :align: center
+        :width: 60%
 
     Represents (for example) *one* of the (colored) interfaces between
     :class:`MeshElementGroup` instances, or an interface between
@@ -491,6 +493,8 @@ class Mesh(Record):
         :exc:`meshmode.DataUnavailable`.
 
         .. image:: images/facial-adjacency-group.png
+            :align: center
+            :width: 60%
 
         For example for the mesh in the figure, the following data structure
         would be present::

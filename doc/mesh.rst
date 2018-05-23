@@ -38,6 +38,8 @@ them.
 Consider the following picture:
 
 .. image:: images/nodes-vertices.png
+    :align: center
+    :width: 80%
 
 Mesh Data Structure
 -------------------
@@ -71,7 +73,7 @@ Mesh refinement
 .. automodule:: meshmode.mesh.refinement
 
 Mesh visualization
----------------
+------------------
 
 .. automodule:: meshmode.mesh.visualization
 
