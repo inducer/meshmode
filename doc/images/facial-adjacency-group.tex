@@ -1,0 +1,14 @@
+\documentclass{standalone}
+\usepackage{tikz}
+
+\begin{document}
+\begin{tikzpicture}
+\draw [thick] (0, 2) rectangle node {$0$}(3, 4);
+\draw [thick] (3, 2) rectangle node {$1$}(6, 4);
+\draw [thick] (0, 0) rectangle node {$2$} (4, 2);
+\draw [thick] (4, 0) rectangle node {$3$}(6, 2);
+\draw [line width=3pt, line cap=round, orange] (4, 0) -- (6, 0) -- (6, 2); 
+\draw [line width=3pt, line cap=round, magenta] (4, 0) -- (4, 2); 
+\draw [line width=3pt, line cap=round, green!60!black] (4, 2) -- (6, 2); 
+\end{tikzpicture}
+\end{document}
