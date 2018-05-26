@@ -793,7 +793,10 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
         if visualize:
             vol_vis.write_vtk_file("volume-h=%g.vtu" % h, [
                 ("f", vol_one),
-                ("area_el", bind(vol_discr, sym.area_element())(queue)),
+                ("area_el", bind(
+                    vol_discr,
+                    sym.area_element(mesh.ambient_dim, mesh.ambient_dim))
+                    (queue)),
                 ])
             bdry_vis.write_vtk_file("boundary-h=%g.vtu" % h, [("f", bdry_one)])
 
