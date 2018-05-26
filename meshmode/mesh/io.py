@@ -51,7 +51,7 @@ __doc__ = """
 # {{{ gmsh receiver
 
 class GmshMeshReceiver(GmshMeshReceiverBase):
-    def __init__(self):
+    def __init__(self, mesh_construction_kwargs=None):
         # Use data fields similar to meshpy.triangle.MeshInfo and
         # meshpy.tet.MeshInfo
         self.points = None
@@ -59,6 +59,11 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         self.element_types = None
         self.element_markers = None
         self.tags = None
+
+        if mesh_construction_kwargs is None:
+            mesh_construction_kwargs = {}
+
+        self.mesh_construction_kwargs = mesh_construction_kwargs
 
     def set_up_nodes(self, count):
         # Preallocate array of nodes within list; treat None as sentinel value.
@@ -212,22 +217,25 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         return Mesh(
                 vertices, groups,
-                is_conforming=is_conforming)
+                is_conforming=is_conforming,
+                **self.mesh_construction_kwargs)
 
 # }}}
 
 
 # {{{ gmsh
 
-def read_gmsh(filename, force_ambient_dim=None):
+def read_gmsh(filename, force_ambient_dim=None, mesh_construction_kwargs=None):
     """Read a gmsh mesh file from *filename* and return a
     :class:`meshmode.mesh.Mesh`.
 
     :arg force_ambient_dim: if not None, truncate point coordinates to
         this many dimensions.
+    :arg mesh_construction_kwargs: *None* or a dictionary of keyword
+        arguments passed to the :class:`meshmode.mesh.Mesh` constructor.
     """
     from gmsh_interop.reader import read_gmsh
-    recv = GmshMeshReceiver()
+    recv = GmshMeshReceiver(mesh_construction_kwargs=mesh_construction_kwargs)
     read_gmsh(recv, filename, force_dimension=force_ambient_dim)
 
     return recv.get_mesh()
@@ -235,7 +243,7 @@ def read_gmsh(filename, force_ambient_dim=None):
 
 def generate_gmsh(source, dimensions=None, order=None, other_options=[],
         extension="geo", gmsh_executable="gmsh", force_ambient_dim=None,
-        output_file_name="output.msh"):
+        output_file_name="output.msh", mesh_construction_kwargs=None):
     """Run :command:`gmsh` on the input given by *source*, and return a
     :class:`meshmode.mesh.Mesh` based on the result.
 
@@ -243,8 +251,10 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=[],
         :class:`LiteralSource`
     :arg force_ambient_dim: if not None, truncate point coordinates to
         this many dimensions.
+    :arg mesh_construction_kwargs: *None* or a dictionary of keyword
+        arguments passed to the :class:`meshmode.mesh.Mesh` constructor.
     """
-    recv = GmshMeshReceiver()
+    recv = GmshMeshReceiver(mesh_construction_kwargs=mesh_construction_kwargs)
 
     from gmsh_interop.runner import GmshRunner
     from gmsh_interop.reader import parse_gmsh
