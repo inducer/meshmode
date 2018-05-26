@@ -537,6 +537,7 @@ class Mesh(Record):
 
     def __init__(self, vertices, groups, skip_tests=False,
             node_vertex_consistency_tolerance=None,
+            skip_element_orientation_test=False,
             nodal_adjacency=None,
             facial_adjacency_groups=None,
             boundary_tags=None,
@@ -550,7 +551,10 @@ class Mesh(Record):
             mesh anyhow and then fix it inside of this data structure.
         :arg node_vertex_consistency_tolerance: If *False*, do not check
             for consistency between vertex and nodal data. If *None*, use
-            the (small, near FP-epsilon) tolerance.
+            the (small, near FP-epsilon) default tolerance.
+        :arg skip_element_orientation_test: If *False*, check that
+            element orientation is positive in volume meshes
+            (i.e. ones where ambient and topological dimension match).
         :arg nodal_adjacency: One of three options:
             *None*, in which case this information
             will be deduced from vertex adjacency. *False*, in which case
@@ -673,7 +677,7 @@ class Mesh(Record):
             from meshmode.mesh.processing import \
                     test_volume_mesh_element_orientations
 
-            if self.dim == self.ambient_dim:
+            if self.dim == self.ambient_dim and not skip_element_orientation_test:
                 # only for volume meshes, for now
                 assert test_volume_mesh_element_orientations(self), \
                         "negatively oriented elements found"
