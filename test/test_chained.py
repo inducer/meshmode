@@ -214,8 +214,9 @@ def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
     assert np.allclose(f2, f3)
 
 
-@pytest.mark.parametrize("ndim", [2, 3])
-def test_chained_to_direct(ctx_factory, ndim, chain_type=1, visualize=False):
+@pytest.mark.parametrize(("ndim", "chain_type"), [
+    (2, 1), (2, 2), (3, 1), (3, 3)])
+def test_chained_to_direct(ctx_factory, ndim, chain_type, visualize=False):
     import time
     from meshmode.discretization.connection.chained import \
         flatten_chained_connection
@@ -277,12 +278,6 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type=1, visualize=False):
     if visualize:
         print('[TIME] Chained: {:.5e}'.format(t_end - t_start))
 
-    t_start = time.time()
-    f3 = connections[1](queue, connections[0](queue, fx)).get(queue)
-    t_end = time.time()
-    if visualize:
-        print('[TIME] Chained: {:.5e}'.format(t_end - t_start))
-
     if visualize and ndim == 2:
         import matplotlib.pyplot as pt
 
@@ -295,7 +290,6 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type=1, visualize=False):
         pt.clf()
 
     assert np.allclose(f1, f2)
-    assert np.allclose(f2, f3)
 
 
 if __name__ == "__main__":
