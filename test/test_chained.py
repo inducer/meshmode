@@ -36,14 +36,11 @@ from pyopencl.tools import (  # noqa
 import logging
 logger = logging.getLogger(__name__)
 
-
-def create_chained_connection(queue, ndim,
-                              nelements=42,
-                              mesh_order=5,
-                              discr_order=5,
-                              visualize=False):
+def create_discretization(queue, ndim,
+                          nelements=42,
+                          mesh_order=5,
+                          discr_order=5):
     ctx = queue.context
-    connections = [None, None]
 
     # construct base mesh
     if ndim == 2:
@@ -65,67 +62,39 @@ def create_chained_connection(queue, ndim,
     discr = Discretization(ctx, mesh,
             InterpolatoryQuadratureSimplexGroupFactory(discr_order))
 
-    # connection 1: refine
+    return discr
+
+
+def create_refined_connection(queue, discr, threshold=0.3):
     from meshmode.mesh.refinement import RefinerWithoutAdjacency
     from meshmode.discretization.connection import make_refinement_connection
-    refiner = RefinerWithoutAdjacency(mesh)
+    from meshmode.discretization.poly_element import \
+            InterpolatoryQuadratureSimplexGroupFactory
 
-    threshold = 0.2 if ndim == 3 else 0.5
-    flags = np.random.rand(refiner.get_current_mesh().nelements) < threshold
+    flags = np.random.rand(discr.mesh.nelements) < threshold
+    refiner = RefinerWithoutAdjacency(discr.mesh)
     refiner.refine(flags)
-    connections[0] = make_refinement_connection(refiner, discr,
+
+    discr_order = discr.groups[0].order
+    connection = make_refinement_connection(refiner, discr,
             InterpolatoryQuadratureSimplexGroupFactory(discr_order))
 
-    if visualize and ndim == 2:
-        import matplotlib.pyplot as pt
+    return connection
 
-        from_nodes = connections[0].from_discr.nodes().get(queue)
-        to_nodes = connections[0].to_discr.nodes().get(queue)
 
-        pt.plot(to_nodes[0], to_nodes[1], 'k')
-        pt.plot(from_nodes[0], from_nodes[1], 'o', mfc='none')
-        pt.plot(to_nodes[0], to_nodes[1], '.')
-        pt.tight_layout()
-        pt.savefig("test_chained_nodes_0.png", dpi=300)
-        pt.clf()
+def create_face_connection(queue, discr):
+    from meshmode.discretization.connection import FACE_RESTR_ALL
+    from meshmode.discretization.connection import make_face_restriction
+    from meshmode.discretization.poly_element import \
+            InterpolatoryQuadratureSimplexGroupFactory
 
-    # connection 2: refine / restrict to face
-    flags = np.random.rand(refiner.get_current_mesh().nelements) < threshold
-    refiner.refine(flags)
-    connections[1] = make_refinement_connection(refiner,
-            connections[0].to_discr,
-            InterpolatoryQuadratureSimplexGroupFactory(discr_order))
+    discr_order = discr.groups[0].order
+    connection = make_face_restriction(discr,
+            InterpolatoryQuadratureSimplexGroupFactory(discr_order),
+            FACE_RESTR_ALL,
+            per_face_groups=True)
 
-    if visualize and ndim == 2:
-        import matplotlib.pyplot as pt
-
-        from_nodes = connections[1].from_discr.nodes().get(queue)
-        to_nodes = connections[1].to_discr.nodes().get(queue)
-
-        pt.plot(to_nodes[0], to_nodes[1], 'k')
-        pt.plot(from_nodes[0], from_nodes[1], 'o', mfc='none')
-        pt.plot(to_nodes[0], to_nodes[1], '.')
-        pt.tight_layout()
-        pt.savefig("test_chained_nodes_1.png", dpi=300)
-        pt.clf()
-
-    if visualize and ndim == 2:
-        import matplotlib.pyplot as pt
-
-        from_nodes = connections[0].from_discr.nodes().get(queue)
-        to_nodes = connections[1].to_discr.nodes().get(queue)
-
-        pt.plot(to_nodes[0], to_nodes[1], 'k')
-        pt.plot(from_nodes[0], from_nodes[1], 'o', mfc='none')
-        pt.plot(to_nodes[0], to_nodes[1], '.')
-        pt.tight_layout()
-        pt.savefig("test_chained_nodes_2.png", dpi=300)
-        pt.clf()
-
-    from meshmode.discretization.connection import ChainedDiscretizationConnection
-    chained = ChainedDiscretizationConnection(connections)
-
-    return chained
+    return connection
 
 
 @pytest.mark.parametrize("ndim", [2, 3])
@@ -136,10 +105,18 @@ def test_chained_batch_table(ctx_factory, ndim, visualize=False):
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
-    chained = create_chained_connection(queue, ndim, visualize=visualize)
+    discr = create_discretization(queue, ndim)
+    connections = []
+    conn = create_refined_connection(queue, discr)
+    connections.append(conn)
+    conn = create_refined_connection(queue, conn.to_discr)
+    connections.append(conn)
+
+    from meshmode.discretization.connection import ChainedDiscretizationConnection
+    chained = ChainedDiscretizationConnection(connections)
+
     conn = chained.connections[1]
     el_to_batch = _build_element_lookup_table(queue, conn)
-
     for igrp, grp in enumerate(conn.groups):
         for ibatch, batch in enumerate(grp.batches):
             for i, k in enumerate(batch.from_element_indices.get(queue)):
@@ -159,15 +136,18 @@ def test_chained_new_group_table(ctx_factory, ndim, visualize=False):
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
-    chained = create_chained_connection(queue, ndim,
-                                        nelements=8,
-                                        mesh_order=2,
-                                        discr_order=2,
-                                        visualize=visualize)
-    connections = chained.connections
+    discr = create_discretization(queue, ndim,
+                                  nelements=8,
+                                  mesh_order=2,
+                                  discr_order=2)
+    connections = []
+    conn = create_refined_connection(queue, discr)
+    connections.append(conn)
+    conn = create_refined_connection(queue, conn.to_discr)
+    connections.append(conn)
+
     grp_to_grp, grp_info = _build_new_group_table(connections[0],
                                                   connections[1])
-
     if visualize:
         import matplotlib.pyplot as pt
 
@@ -206,10 +186,17 @@ def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
-    chained = create_chained_connection(queue, ndim,
-                                        mesh_order=2, discr_order=2,
-                                        visualize=visualize)
-    connections = chained.connections
+    discr = create_discretization(queue, ndim,
+                                  mesh_order=2,
+                                  discr_order=2)
+    connections = []
+    conn = create_refined_connection(queue, discr)
+    connections.append(conn)
+    conn = create_refined_connection(queue, conn.to_discr)
+    connections.append(conn)
+
+    from meshmode.discretization.connection import ChainedDiscretizationConnection
+    chained = ChainedDiscretizationConnection(connections)
 
     def f(x):
         from six.moves import reduce
@@ -228,7 +215,7 @@ def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
 
 
 @pytest.mark.parametrize("ndim", [2, 3])
-def test_chained_to_direct(ctx_factory, ndim, visualize=False):
+def test_chained_to_direct(ctx_factory, ndim, chain_type=1, visualize=False):
     import time
     from meshmode.discretization.connection.chained import \
         flatten_chained_connection
@@ -236,17 +223,40 @@ def test_chained_to_direct(ctx_factory, ndim, visualize=False):
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
-    chained = create_chained_connection(queue, ndim, visualize=visualize)
-    connections = chained.connections
+    discr = create_discretization(queue, ndim)
+    connections = []
+    if chain_type == 1:
+        conn = create_refined_connection(queue, discr)
+        connections.append(conn)
+        conn = create_refined_connection(queue, conn.to_discr)
+        connections.append(conn)
+    elif chain_type == 2:
+        conn = create_refined_connection(queue, discr)
+        connections.append(conn)
+        conn = create_refined_connection(queue, conn.to_discr)
+        connections.append(conn)
+        conn = create_refined_connection(queue, conn.to_discr)
+        connections.append(conn)
+    elif chain_type == 3 and ndim == 3:
+        conn = create_refined_connection(queue, discr, threshold=np.inf)
+        connections.append(conn)
+        conn = create_face_connection(queue, conn.to_discr)
+        connections.append(conn)
+    else:
+        raise ValueError('unknown test case')
+
+    from meshmode.discretization.connection import ChainedDiscretizationConnection
+    chained = ChainedDiscretizationConnection(connections)
     direct = flatten_chained_connection(queue, chained)
 
-    to_element_indices = np.full(direct.to_discr.mesh.nelements, 0,
-                                 dtype=np.int)
-    for grp in direct.groups:
-        for batch in grp.batches:
-            for i in batch.to_element_indices.get(queue):
-                to_element_indices[i] += 1
-    assert np.min(to_element_indices) > 0
+    if chain_type < 3:
+        to_element_indices = np.full(direct.to_discr.mesh.nelements, 0,
+                                     dtype=np.int)
+        for grp in direct.groups:
+            for batch in grp.batches:
+                for i in batch.to_element_indices.get(queue):
+                    to_element_indices[i] += 1
+        assert np.min(to_element_indices) > 0
 
     def f(x):
         from six.moves import reduce
