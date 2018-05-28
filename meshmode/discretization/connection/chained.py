@@ -30,10 +30,8 @@ from pytools import Record
 
 import modepy as mp
 
-from meshmode.discretization.connection import (
-        DirectDiscretizationConnection,
-        make_same_mesh_connection)
 
+# {{{ flatten chained connection
 
 class _ConnectionBatchData(Record):
     pass
@@ -45,7 +43,7 @@ def _iterbatches(groups):
             yield (igrp, ibatch), (grp, batch)
 
 
-def _build_element_lookup_table(self, queue, conn):
+def _build_element_lookup_table(queue, conn):
     nelements = np.sum([g.nelements for g in conn.from_discr.groups])
     el_table = [[] for _ in range(nelements)]
 
@@ -56,7 +54,7 @@ def _build_element_lookup_table(self, queue, conn):
     return el_table
 
 
-def _build_new_group_table(self, from_discr, from_groups, to_conn):
+def _build_new_group_table(from_conn, to_conn):
     def find_batch(nodes, gtb):
         for igrp, batches in enumerate(gtb):
             for ibatch, batch in enumerate(batches):
@@ -64,7 +62,7 @@ def _build_new_group_table(self, from_discr, from_groups, to_conn):
                     return (igrp, ibatch)
         return (-1, -1)
 
-    nfrom_groups = len(from_groups)
+    nfrom_groups = len(from_conn.groups)
     nto_groups = len(to_conn.groups)
 
     # construct a table from (old groups) -> (new groups)
@@ -72,10 +70,10 @@ def _build_new_group_table(self, from_discr, from_groups, to_conn):
     # the `result_unit_nodes` and only adding a new batch if necessary
     grp_to_grp = {}
     batch_info = [[] for i in range(nfrom_groups * nto_groups)]
-    for (igrp, ibatch), (fgrp, fbatch) in _iterbatches(from_groups):
+    for (igrp, ibatch), (fgrp, fbatch) in _iterbatches(from_conn.groups):
         for (jgrp, jbatch), (tgrp, tbatch) in _iterbatches(to_conn.groups):
             # compute result_unit_nodes
-            ffgrp = from_discr.groups[fbatch.from_group_index]
+            ffgrp = from_conn.from_discr.groups[fbatch.from_group_index]
             from_matrix = mp.resampling_matrix(
                     ffgrp.basis(),
                     fbatch.result_unit_nodes,
@@ -93,7 +91,7 @@ def _build_new_group_table(self, from_discr, from_groups, to_conn):
             (igrp_new, ibatch_new) = find_batch(result_unit_nodes, batch_info)
             if igrp_new < 0:
                 igrp_new = nto_groups * igrp + jgrp
-                ibatch_new = len(batch_info[igrp_new]) + 1
+                ibatch_new = len(batch_info[igrp_new])
 
                 batch_info[igrp_new].append(_ConnectionBatchData(
                     from_group_index=fbatch.from_group_index,
@@ -105,7 +103,10 @@ def _build_new_group_table(self, from_discr, from_groups, to_conn):
     return grp_to_grp, batch_info
 
 
-def _build_batches(self, queue, from_bins, to_bins, batch):
+def _build_batches(queue, from_bins, to_bins, batch):
+    from meshmode.discretization.connection import \
+            InterpolationBatch
+
     def to_device(x):
         return cl.array.to_device(queue, np.asarray(x))
 
@@ -118,44 +119,7 @@ def _build_batches(self, queue, from_bins, to_bins, batch):
                 to_element_face=batch[ibatch].to_element_face)
 
 
-def make_full_resample_matrix(queue, connection):
-    """Build a dense matrix representing the discretization connection.
-
-    This is based on 
-    :func:`~meshmode.discretization.connection.DirectDiscretizationConnection.full_resample_matrix`.
-    If a chained connection is given, the matrix is constructed recursively
-    for each connection and multiplied left to right.
-
-    .. warning::
-
-        This method will be very slow, both in terms of speed and memory 
-        usage, and should only be used for testing or if absolutely necessary.
-
-    :arg queue: a :class:`pyopencl.CommandQueue`.
-    :arg connection: a :class:`~meshmode.discretization.connection.DiscretizationConnection`.
-    :return: a :class:`pyopencl.array.Array` of shape
-        `(connection.from_discr.nnodes, connection.to_discr.nnodes)`.
-    """
-
-    if hasattr(connection, "full_resample_matrix")
-        return connection.full_resample_matrix(queue)
-
-    if not hasattr(connection, 'connections'):
-        raise TypeError('connection is not chained')
-
-    if not connection.connections:
-        result = np.eye(connection.to_discr.nnodes)
-        return cl.array.to_device(queue, result)
-
-    acc = make_full_resample_matrix(queue, connection.connections[0]).get(queue)
-    for conn in connection.connections[1:]:
-        resampler = make_full_resample_matrix(queue, conn).get(queue)
-        acc = resampler.dot(acc)
-
-    return cl.array.to_device(queue, acc)
-
-
-def make_direct_connection(queue, connection):
+def flatten_chained_connection(queue, connection):
     """Collapse a connection into a direct connection.
 
     If the given connection is already a
@@ -185,6 +149,10 @@ def make_direct_connection(queue, connection):
     :arg connection: a :class:`~meshmode.discretization.connection.DiscretizationConnection`.
     :return: a :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`.
     """
+    from meshmode.discretization.connection import (
+            DirectDiscretizationConnection,
+            DiscretizationConnectionElementGroup,
+            make_same_mesh_connection)
 
     if isinstance(connection, DirectDiscretizationConnection):
         return connection
@@ -197,14 +165,13 @@ def make_direct_connection(queue, connection):
     connections = connection.connections
     direct_connections = []
     for conn in connections:
-        direct_connections.append(make_direct_connection(queue, conn))
+        direct_connections.append(flatten_chained_connection(queue, conn))
 
     # merge all the direct connections
-    groups = direct_connections[0].groups
+    from_conn = direct_connections[0]
     for to_conn in direct_connections[1:]:
         el_to_batch = _build_element_lookup_table(queue, to_conn)
-        grp_to_grp, batch_info = _build_new_group_table(connection.from_discr,
-                                                        groups, to_conn)
+        grp_to_grp, batch_info = _build_new_group_table(from_conn, to_conn)
 
         # distribute the indices to new groups and batches
         from_bins = [[[] for _ in g] for g in batch_info]
@@ -219,7 +186,7 @@ def make_direct_connection(queue, connection):
         #   * `ixxx` is an index in from_conn
         #   * `jxxx` is an index in to_conn
         #   * `ito` is the same as `jfrom` (on the same discr)
-        for (igrp, ibatch), (_, from_batch) in _iterbatches(groups):
+        for (igrp, ibatch), (_, from_batch) in _iterbatches(from_conn.groups):
             for ifrom, ito in zip(from_batch.from_element_indices.get(queue),
                                   from_batch.to_element_indices.get(queue)):
                 for j, jgrp, jbatch in el_to_batch[ito]:
@@ -237,9 +204,56 @@ def make_direct_connection(queue, connection):
                 list(_build_batches(queue, from_bin, to_bin,
                                     batch_info[igrp]))))
 
-    return DirectDiscretizationConnection(
-        from_discr=connection.from_discr,
-        to_discr=connection.to_discr,
-        groups=groups,
-        is_surjective=connection.is_surjective)
+        from_conn = DirectDiscretizationConnection(
+            from_discr=from_conn.from_discr,
+            to_discr=to_conn.to_discr,
+            groups=groups,
+            is_surjective=connection.is_surjective)
 
+    return from_conn
+
+# }}}
+
+
+# {{{ build chained resample matrix
+
+def make_full_resample_matrix(queue, connection):
+    """Build a dense matrix representing the discretization connection.
+
+    This is based on 
+    :func:`~meshmode.discretization.connection.DirectDiscretizationConnection.full_resample_matrix`.
+    If a chained connection is given, the matrix is constructed recursively
+    for each connection and multiplied left to right.
+
+    .. warning::
+
+        This method will be very slow, both in terms of speed and memory 
+        usage, and should only be used for testing or if absolutely necessary.
+
+    :arg queue: a :class:`pyopencl.CommandQueue`.
+    :arg connection: a :class:`~meshmode.discretization.connection.DiscretizationConnection`.
+    :return: a :class:`pyopencl.array.Array` of shape
+        `(connection.from_discr.nnodes, connection.to_discr.nnodes)`.
+    """
+
+    if hasattr(connection, "full_resample_matrix"):
+        return connection.full_resample_matrix(queue)
+
+    if not hasattr(connection, 'connections'):
+        raise TypeError('connection is not chained')
+
+    if not connection.connections:
+        result = np.eye(connection.to_discr.nnodes)
+        return cl.array.to_device(queue, result)
+
+    acc = make_full_resample_matrix(queue, connection.connections[0]).get(queue)
+    for conn in connection.connections[1:]:
+        resampler = make_full_resample_matrix(queue, conn).get(queue)
+        acc = resampler.dot(acc)
+
+    return cl.array.to_device(queue, acc)
+
+# }}}
+
+
+# vim: foldmethod=marker

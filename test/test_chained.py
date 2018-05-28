@@ -129,41 +129,53 @@ def create_chained_connection(queue, ndim,
 
 
 @pytest.mark.parametrize("ndim", [2, 3])
-def test_chained_batch_map(ctx_factory, ndim, visualize=False):
+def test_chained_batch_table(ctx_factory, ndim, visualize=False):
+    from meshmode.discretization.connection.chained import \
+        _build_element_lookup_table
+
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
     chained = create_chained_connection(queue, ndim, visualize=visualize)
     conn = chained.connections[1]
-    el_to_batch = chained._element_to_batch(queue, conn)
+    el_to_batch = _build_element_lookup_table(queue, conn)
 
     for igrp, grp in enumerate(conn.groups):
         for ibatch, batch in enumerate(grp.batches):
-            for p, k in enumerate(batch.from_element_indices.get(queue)):
-                assert (igrp, ibatch, p) in el_to_batch[k]
+            for i, k in enumerate(batch.from_element_indices.get(queue)):
+                assert (i, igrp, ibatch) in el_to_batch[k]
 
-    for i, batches in enumerate(el_to_batch):
-        for igrp, ibatch, p in batches:
+    for k, batches in enumerate(el_to_batch):
+        for i, igrp, ibatch in batches:
             batch = conn.groups[igrp].batches[ibatch]
-            assert i == batch.from_element_indices[p]
+            assert k == batch.from_element_indices[i]
 
 
 @pytest.mark.parametrize("ndim", [2, 3])
-def test_chained_merge_groups(ctx_factory, ndim, visualize=False):
+def test_chained_new_group_table(ctx_factory, ndim, visualize=False):
+    from meshmode.discretization.connection.chained import \
+        _build_new_group_table
+
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
-    chained = create_chained_connection(queue, ndim, visualize=visualize)
+    chained = create_chained_connection(queue, ndim,
+                                        nelements=8,
+                                        mesh_order=2,
+                                        discr_order=2,
+                                        visualize=visualize)
     connections = chained.connections
-    grp_to_grp, grp_to_batch = chained._merge_groups(chained.from_discr,
-                                                     connections[0].groups,
-                                                     connections[1])
+    grp_to_grp, grp_info = _build_new_group_table(connections[0],
+                                                  connections[1])
 
     if visualize:
         import matplotlib.pyplot as pt
 
         pt.figure(figsize=(10, 8))
         for k, v in grp_to_grp.items():
+            print(k)
+            print(v)
+
             igrp, ibatch, jgrp, jbatch = k
             mgroup, mbatch = v
             from_group_index = connections[0].groups[igrp] \
@@ -171,10 +183,8 @@ def test_chained_merge_groups(ctx_factory, ndim, visualize=False):
 
             from_unit_nodes = connections[0].from_discr \
                     .groups[from_group_index].unit_nodes
-            to_unit_nodes = grp_to_batch[mgroup][mbatch].result_unit_nodes
+            to_unit_nodes = grp_info[mgroup][mbatch].result_unit_nodes
 
-            print(k)
-            print(v)
 
             if ndim == 2:
                 pt.plot(from_unit_nodes, 'o')
@@ -190,6 +200,9 @@ def test_chained_merge_groups(ctx_factory, ndim, visualize=False):
 
 @pytest.mark.parametrize("ndim", [2, 3])
 def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
+    from meshmode.discretization.connection.chained import \
+        make_full_resample_matrix
+
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
@@ -202,7 +215,7 @@ def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
         from six.moves import reduce
         return 0.1 * reduce(lambda x, y: x * cl.clmath.sin(5 * y), x)
 
-    resample_mat = chained.full_resample_matrix(queue).get(queue)
+    resample_mat = make_full_resample_matrix(queue, chained).get(queue)
 
     x = connections[0].from_discr.nodes().with_queue(queue)
     fx = f(x)
@@ -217,13 +230,15 @@ def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
 @pytest.mark.parametrize("ndim", [2, 3])
 def test_chained_to_direct(ctx_factory, ndim, visualize=False):
     import time
+    from meshmode.discretization.connection.chained import \
+        flatten_chained_connection
 
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
     chained = create_chained_connection(queue, ndim, visualize=visualize)
     connections = chained.connections
-    direct = chained.direct_connection(queue)
+    direct = flatten_chained_connection(queue, chained)
 
     to_element_indices = np.full(direct.to_discr.mesh.nelements, 0,
                                  dtype=np.int)
