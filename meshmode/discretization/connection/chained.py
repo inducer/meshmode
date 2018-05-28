@@ -67,6 +67,9 @@ def _build_new_group_table(self, from_discr, from_groups, to_conn):
     nfrom_groups = len(from_groups)
     nto_groups = len(to_conn.groups)
 
+    # construct a table from (old groups) -> (new groups)
+    # NOTE: we try to reduce the number of new groups and batches by matching
+    # the `result_unit_nodes` and only adding a new batch if necessary
     grp_to_grp = {}
     batch_info = [[] for i in range(nfrom_groups * nto_groups)]
     for (igrp, ibatch), (fgrp, fbatch) in _iterbatches(from_groups):
@@ -116,7 +119,22 @@ def _build_batches(self, queue, from_bins, to_bins, batch):
 
 
 def make_full_resample_matrix(queue, connection):
-    """
+    """Build a dense matrix representing the discretization connection.
+
+    This is based on 
+    :func:`~meshmode.discretization.connection.DirectDiscretizationConnection.full_resample_matrix`.
+    If a chained connection is given, the matrix is constructed recursively
+    for each connection and multiplied left to right.
+
+    .. warning::
+
+        This method will be very slow, both in terms of speed and memory 
+        usage, and should only be used for testing or if absolutely necessary.
+
+    :arg queue: a :class:`pyopencl.CommandQueue`.
+    :arg connection: a :class:`~meshmode.discretization.connection.DiscretizationConnection`.
+    :return: a :class:`pyopencl.array.Array` of shape
+        `(connection.from_discr.nnodes, connection.to_discr.nnodes)`.
     """
 
     if hasattr(connection, "full_resample_matrix")
@@ -138,6 +156,36 @@ def make_full_resample_matrix(queue, connection):
 
 
 def make_direct_connection(queue, connection):
+    """Collapse a connection into a direct connection.
+
+    If the given connection is already a
+    :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`
+    nothing is done. However, if the connection is a
+    :class:`~meshmode.discretization.connection.ChainedDiscretizationConnection`,
+    a new direct connection is constructed that transports from
+    :attr:`connection.from_discr` to :attr:`connection.to_discr`.
+
+    The new direct connection will have a number of groups and batches that
+    is, at worse, the product of all the connections in the chain. For
+    example, if we consider a connection between a discretization and a
+    two-level refinement, both levels will have :math:`n` groups and 
+    :math:`m + 1` batches per group, where :math:`m` is the number of
+    subdivisions of an element (exact number depends on implementation
+    details in :method:`meshmode.discretizationc.connection.make_refinement_connection`).
+    However, a direct connection from level :math:`0` to level :math:`2`
+    will have at worst :math:`n^2` groups and each group will have
+    :math:`(m + 1)^2` batches.
+
+    .. warning::
+
+        If a large number of connections is chained, the number of groups and
+        batches can become very large.
+
+    :arg queue: a :class:`pyopencl.CommandQueue`.
+    :arg connection: a :class:`~meshmode.discretization.connection.DiscretizationConnection`.
+    :return: a :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`.
+    """
+
     if isinstance(connection, DirectDiscretizationConnection):
         return connection
 
