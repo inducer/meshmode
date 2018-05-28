@@ -36,6 +36,7 @@ from pyopencl.tools import (  # noqa
 import logging
 logger = logging.getLogger(__name__)
 
+
 def create_discretization(queue, ndim,
                           nelements=42,
                           mesh_order=5,
@@ -164,7 +165,6 @@ def test_chained_new_group_table(ctx_factory, ndim, visualize=False):
             from_unit_nodes = connections[0].from_discr \
                     .groups[from_group_index].unit_nodes
             to_unit_nodes = grp_info[mgroup][mbatch].result_unit_nodes
-
 
             if ndim == 2:
                 pt.plot(from_unit_nodes, 'o')
