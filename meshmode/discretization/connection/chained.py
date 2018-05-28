@@ -132,10 +132,11 @@ def flatten_chained_connection(queue, connection):
     The new direct connection will have a number of groups and batches that
     is, at worse, the product of all the connections in the chain. For
     example, if we consider a connection between a discretization and a
-    two-level refinement, both levels will have :math:`n` groups and 
+    two-level refinement, both levels will have :math:`n` groups and
     :math:`m + 1` batches per group, where :math:`m` is the number of
     subdivisions of an element (exact number depends on implementation
-    details in :method:`meshmode.discretizationc.connection.make_refinement_connection`).
+    details in
+    :func:`~meshmode.discretizationc.connection.make_refinement_connection`).
     However, a direct connection from level :math:`0` to level :math:`2`
     will have at worst :math:`n^2` groups and each group will have
     :math:`(m + 1)^2` batches.
@@ -145,9 +146,11 @@ def flatten_chained_connection(queue, connection):
         If a large number of connections is chained, the number of groups and
         batches can become very large.
 
-    :arg queue: a :class:`pyopencl.CommandQueue`.
-    :arg connection: a :class:`~meshmode.discretization.connection.DiscretizationConnection`.
-    :return: a :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`.
+    :arg queue: An instance of :class:`pyopencl.CommandQueue`.
+    :arg connection: An instance of
+        :class:`~meshmode.discretization.connection.DiscretizationConnection`.
+    :return: An instance of
+        :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`.
     """
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection,
@@ -220,18 +223,19 @@ def flatten_chained_connection(queue, connection):
 def make_full_resample_matrix(queue, connection):
     """Build a dense matrix representing the discretization connection.
 
-    This is based on 
+    This is based on
     :func:`~meshmode.discretization.connection.DirectDiscretizationConnection.full_resample_matrix`.
     If a chained connection is given, the matrix is constructed recursively
     for each connection and multiplied left to right.
 
     .. warning::
 
-        This method will be very slow, both in terms of speed and memory 
+        This method will be very slow, both in terms of speed and memory
         usage, and should only be used for testing or if absolutely necessary.
 
     :arg queue: a :class:`pyopencl.CommandQueue`.
-    :arg connection: a :class:`~meshmode.discretization.connection.DiscretizationConnection`.
+    :arg connection: a
+        :class:`~meshmode.discretization.connection.DiscretizationConnection`.
     :return: a :class:`pyopencl.array.Array` of shape
         `(connection.from_discr.nnodes, connection.to_discr.nnodes)`.
     """
