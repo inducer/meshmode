@@ -1,9 +1,6 @@
 from __future__ import division, print_function, absolute_import
 
-__copyright__ = """
-Copyright (C) 2014 Andreas Kloeckner
-Copyright (C) 2018 Alexandru Fikl
-"""
+__copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -32,10 +29,7 @@ import pyopencl as cl
 import pyopencl.array  # noqa
 
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
-from pytools import Record
 from pytools import memoize_method, memoize_in
-
-import modepy as mp
 
 from meshmode.discretization.connection.same_mesh import \
         make_same_mesh_connection
@@ -46,7 +40,8 @@ from meshmode.discretization.connection.opposite_face import \
         make_opposite_face_connection
 from meshmode.discretization.connection.refinement import \
         make_refinement_connection
-
+from meshmode.discretization.connection.chained import \
+        make_direct_connection, make_full_resample_matrix
 
 import logging
 logger = logging.getLogger(__name__)
@@ -59,7 +54,9 @@ __all__ = [
         "make_face_restriction",
         "make_face_to_all_faces_embedding",
         "make_opposite_face_connection",
-        "make_refinement_connection"
+        "make_refinement_connection",
+        "make_direct_connection",
+        "make_full_resample_matrix"
         ]
 
 __doc__ = """
@@ -78,6 +75,9 @@ __doc__ = """
 
 .. autofunction:: make_refinement_connection
 
+.. autofunction:: make_direct_connection
+.. autofunction:: make_full_resample_matrix
+
 Implementation details
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -85,10 +85,6 @@ Implementation details
 
 .. autoclass:: DiscretizationConnectionElementGroup
 """
-
-
-class _ConnectionGroupData(Record):
-    pass
 
 
 # {{{ interpolation batch
@@ -212,12 +208,6 @@ class DiscretizationConnection(object):
 
         self.is_surjective = is_surjective
 
-    def full_resample_matrix(self):
-        raise NotImplementedError()
-
-    def direct_connection(self):
-        raise NotImplementedError()
-
     def __call__(self, queue, vec):
         raise NotImplementedError()
 
@@ -251,145 +241,6 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
                 from_discr, to_discr, is_surjective=is_surjective)
 
         self.connections = connections
-
-    def full_resample_matrix(self, queue):
-        if not self.connections:
-            result = cl.array.to_device(queue, np.eye(self.to_discr.nnodes))
-            return result
-
-        acc = self.connections[0].full_resample_matrix(queue).get(queue)
-        for cnx in self.connections[1:]:
-            resampler = cnx.full_resample_matrix(queue).get(queue)
-            acc = resampler.dot(acc)
-
-        return cl.array.to_device(queue, acc)
-
-    def _element_to_batch(self, queue, conn):
-        nelements = np.sum([g.nelements for g in conn.from_discr.groups])
-        el_map = [[] for _ in range(nelements)]
-
-        for i, igrp in enumerate(conn.groups):
-            for j, ibatch in enumerate(igrp.batches):
-                for p, k in enumerate(ibatch.from_element_indices.get(queue)):
-                    el_map[k].append((i, j, p))
-
-        return el_map
-
-    def _merge_groups(self, from_discr, from_groups, to_conn):
-        def iterbatches(groups):
-            for igrp, group in enumerate(groups):
-                for ibatch, batch in enumerate(group.batches):
-                    yield (igrp, ibatch), (group, batch)
-
-        def find_batch(nodes, gtb):
-            for igrp, batches in enumerate(gtb):
-                for ibatch, batch in enumerate(batches):
-                    if np.allclose(nodes, batch.result_unit_nodes):
-                        return (igrp, ibatch)
-            return (-1, -1)
-
-        nfrom_groups = len(from_groups)
-        nto_groups = len(to_conn.groups)
-
-        grp_to_grp = {}
-        grp_to_batch = [[] for i in range(nfrom_groups * nto_groups)]
-        for (igrp, ibatch), (fgrp, fbatch) in iterbatches(from_groups):
-            for (jgrp, jbatch), (tgrp, tbatch) in iterbatches(to_conn.groups):
-                # compute result_unit_nodes
-                ffgrp = from_discr.groups[fbatch.from_group_index]
-                from_matrix = mp.resampling_matrix(
-                        ffgrp.basis(),
-                        fbatch.result_unit_nodes,
-                        ffgrp.unit_nodes)
-                result_unit_nodes = from_matrix.dot(ffgrp.unit_nodes.T)
-
-                tfgrp = to_conn.from_discr.groups[tbatch.from_group_index]
-                to_matrix = mp.resampling_matrix(
-                        tfgrp.basis(),
-                        tbatch.result_unit_nodes,
-                        tfgrp.unit_nodes)
-                result_unit_nodes = to_matrix.dot(result_unit_nodes).T
-
-                # find new (group, batch)
-                (mgroup, mbatch) = find_batch(result_unit_nodes, grp_to_batch)
-                if mgroup < 0:
-                    mgroup = nto_groups * igrp + jgrp
-
-                    grp_to_batch[mgroup].append(_ConnectionGroupData(
-                        from_group_index=fbatch.from_group_index,
-                        from_batch_index=(igrp, ibatch),
-                        to_batch_index=(jgrp, jbatch),
-                        result_unit_nodes=result_unit_nodes,
-                        to_element_face=tbatch.to_element_face))
-                    mbatch = len(grp_to_batch[mgroup]) - 1
-
-                grp_to_grp[(igrp, ibatch, jgrp, jbatch)] = (mgroup, mbatch)
-
-        return grp_to_grp, grp_to_batch
-
-    def _construct_batches(self, queue, from_bins, to_bins, grp_to_batch):
-        def to_device(x):
-            return cl.array.to_device(queue, np.asarray(x))
-
-        for ibatch, (from_bin, to_bin) in enumerate(zip(from_bins, to_bins)):
-            info = grp_to_batch[ibatch]
-
-            yield InterpolationBatch(
-                    from_group_index=info.from_group_index,
-                    from_element_indices=to_device(from_bin),
-                    to_element_indices=to_device(to_bin),
-                    result_unit_nodes=info.result_unit_nodes,
-                    to_element_face=info.to_element_face)
-
-    def direct_connection(self, queue):
-        def iterbatches(groups):
-            for igrp, grp in enumerate(groups):
-                for ibatch, batch in enumerate(grp.batches):
-                    yield (igrp, ibatch), (grp, batch)
-
-        if not self.connections:
-            return make_same_mesh_connection(self.to_discr, self.from_discr)
-
-        connections = []
-        for conn in self.connections:
-            connections.append(conn.direct_connection())
-
-        groups = connections[0].groups
-        for to_conn in connections[1:]:
-            # create an inverse mapping for the elements in to_conn.from_discr
-            el_to_batch = self._element_to_batch(queue, to_conn)
-            # create new group structure to go from groups -> to_conn.to_discr
-            grp_to_grp, grp_to_batch = self._merge_groups(self.from_discr,
-                                                          groups,
-                                                          to_conn)
-
-            # distribute the indices to new groups and batches
-            from_bins = [[[] for _ in g] for g in grp_to_batch]
-            to_bins = [[[] for _ in g] for g in grp_to_batch]
-
-            for (igrp, ibatch), (_, batch) in iterbatches(groups):
-                for ifrom, imid in zip(batch.from_element_indices.get(queue),
-                                      batch.to_element_indices.get(queue)):
-                    for jgrp, jbatch, iel in el_to_batch[imid]:
-                        mgrp, mbatch = grp_to_grp[(igrp, ibatch, jgrp, jbatch)]
-                        ito = to_conn.groups[jgrp].batches[jbatch] \
-                                    .to_element_indices[iel].get(queue)
-
-                        from_bins[mgrp][mbatch].append(ifrom)
-                        to_bins[mgrp][mbatch].append(ito)
-
-            # construct new groups
-            groups = []
-            for igrp, (from_bin, to_bin) in enumerate(zip(from_bins, to_bins)):
-                groups.append(DiscretizationConnectionElementGroup(
-                    list(self._construct_batches(queue, from_bin, to_bin,
-                                                 grp_to_batch[igrp]))))
-
-        return DirectDiscretizationConnection(
-            from_discr=self.from_discr,
-            to_discr=self.to_discr,
-            groups=groups,
-            is_surjective=self.is_surjective)
 
     def __call__(self, queue, vec):
         for cnx in self.connections:
@@ -431,6 +282,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
     @memoize_method
     def _resample_matrix(self, to_group_index, ibatch_index):
+        import modepy as mp
         ibatch = self.groups[to_group_index].batches[ibatch_index]
         from_grp = self.from_discr.groups[ibatch.from_group_index]
 
@@ -551,9 +403,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                       to_element_indices=batch.to_element_indices)
 
         return result
-
-    def direct_connection(self):
-        return self
 
     def __call__(self, queue, vec):
         @memoize_in(self, "resample_by_mat_knl")
