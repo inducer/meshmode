@@ -41,8 +41,9 @@ from meshmode.discretization.connection.opposite_face import \
         make_opposite_face_connection
 from meshmode.discretization.connection.refinement import \
         make_refinement_connection
-from meshmode.discretization.connection.chained import \
-        flatten_chained_connection
+from meshmode.discretization.connection.chained import (
+        ChainedDiscretizationConnection,
+        flatten_chained_connection)
 
 import logging
 logger = logging.getLogger(__name__)
@@ -56,7 +57,8 @@ __all__ = [
         "make_face_to_all_faces_embedding",
         "make_opposite_face_connection",
         "make_refinement_connection",
-        "flatten_chained_connection"
+        "flatten_chained_connection",
+        "ChainedDiscretizationConnection",
         ]
 
 __doc__ = """
@@ -210,43 +212,6 @@ class DiscretizationConnection(object):
 
     def __call__(self, queue, vec):
         raise NotImplementedError()
-
-
-class ChainedDiscretizationConnection(DiscretizationConnection):
-    """Aggregates multiple :class:`DiscretizationConnection` instances
-    into a single one.
-
-    .. attribute:: connections
-    """
-
-    def __init__(self, connections, from_discr=None):
-        if connections:
-            if from_discr is not None:
-                assert from_discr is connections[0].from_discr
-            else:
-                from_discr = connections[0].from_discr
-            is_surjective = all(cnx.is_surjective for cnx in connections)
-            to_discr = connections[-1].to_discr
-        else:
-            if from_discr is None:
-                raise ValueError("connections may not be empty if from_discr "
-                        "is not specified")
-
-            to_discr = from_discr
-
-            # It's an identity
-            is_surjective = True
-
-        super(ChainedDiscretizationConnection, self).__init__(
-                from_discr, to_discr, is_surjective=is_surjective)
-
-        self.connections = connections
-
-    def __call__(self, queue, vec):
-        for cnx in self.connections:
-            vec = cnx(queue, vec)
-
-        return vec
 
 
 class DirectDiscretizationConnection(DiscretizationConnection):
