@@ -59,7 +59,7 @@ Surfaces
 .. autofunction:: generate_icosphere
 .. autofunction:: generate_torus
 .. autofunction:: refine_mesh_and_get_urchin_warper
-.. autofunction:: get_urchin
+.. autofunction:: generate_urchin
 
 Volumes
 -------
@@ -590,7 +590,7 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
             node_vertex_consistency_tolerance=est_rel_interp_tolerance)
 
 
-def get_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
+def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
     """
     :returns: a refined :class:`meshmode.mesh.Mesh` of a smooth shape govered
         by a spherical harmonic of order *(m, n)*.
