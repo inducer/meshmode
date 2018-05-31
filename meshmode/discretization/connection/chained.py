@@ -98,7 +98,7 @@ def _build_new_group_table(from_conn, to_conn):
                     result_unit_nodes=result_unit_nodes,
                     to_element_face=tbatch.to_element_face))
 
-            grp_to_grp[(igrp, ibatch, jgrp, jbatch)] = (igrp_new, ibatch_new)
+            grp_to_grp[igrp, ibatch, jgrp, jbatch] = (igrp_new, ibatch_new)
 
     return grp_to_grp, batch_info
 
@@ -182,7 +182,7 @@ def flatten_chained_connection(queue, connection):
 
         to_element_indices = {}
         for (igrp, ibatch), (_, tbatch) in _iterbatches(to_conn.groups):
-            to_element_indices[(igrp, ibatch)] = \
+            to_element_indices[igrp, ibatch] = \
                 tbatch.to_element_indices.get(queue)
 
         # NOTE: notation used:
@@ -194,8 +194,8 @@ def flatten_chained_connection(queue, connection):
                                   from_batch.to_element_indices.get(queue)):
                 for j, jgrp, jbatch in el_to_batch[ito]:
                     igrp_new, ibatch_new = \
-                            grp_to_grp[(igrp, ibatch, jgrp, jbatch)]
-                    jto = to_element_indices[(jgrp, jbatch)][j]
+                            grp_to_grp[igrp, ibatch, jgrp, jbatch]
+                    jto = to_element_indices[jgrp, jbatch][j]
 
                     from_bins[igrp_new][ibatch_new].append(ifrom)
                     to_bins[igrp_new][ibatch_new].append(jto)
