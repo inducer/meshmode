@@ -47,6 +47,7 @@ def _build_element_lookup_table(queue, conn):
     nelements = np.sum([g.nelements for g in conn.from_discr.groups])
     el_table = [[] for _ in range(nelements)]
 
+    # FIXME: O(n) in number of elements loop in Python should be improved
     for (igrp, ibatch), (_, batch) in _iterbatches(conn.groups):
         for i, k in enumerate(batch.from_element_indices.get(queue)):
             el_table[k].append((i, igrp, ibatch))
@@ -189,6 +190,7 @@ def flatten_chained_connection(queue, connection):
         #   * `ixxx` is an index in from_conn
         #   * `jxxx` is an index in to_conn
         #   * `ito` is the same as `jfrom` (on the same discr)
+        # FIXME: O(n) in number of elements loop in Python should be improved
         for (igrp, ibatch), (_, from_batch) in _iterbatches(from_conn.groups):
             for ifrom, ito in zip(from_batch.from_element_indices.get(queue),
                                   from_batch.to_element_indices.get(queue)):
