@@ -117,17 +117,15 @@ def test_chained_batch_table(ctx_factory, ndim, visualize=False):
     from meshmode.discretization.connection import ChainedDiscretizationConnection
     chained = ChainedDiscretizationConnection(connections)
 
-    conn = chained.connections[1]
-    el_to_batch = _build_element_lookup_table(queue, conn)
+    conn = chained.connections[0]
+    el_table = _build_element_lookup_table(queue, conn)
     for igrp, grp in enumerate(conn.groups):
         for ibatch, batch in enumerate(grp.batches):
-            for i, k in enumerate(batch.from_element_indices.get(queue)):
-                assert (i, igrp, ibatch) in el_to_batch[k]
+            ifrom = batch.from_element_indices.get(queue)
+            jfrom = el_table[igrp][batch.to_element_indices.get(queue)]
 
-    for k, batches in enumerate(el_to_batch):
-        for i, igrp, ibatch in batches:
-            batch = conn.groups[igrp].batches[ibatch]
-            assert k == batch.from_element_indices[i]
+            assert np.all(ifrom == jfrom)
+        assert np.min(el_table[igrp]) >= 0
 
 
 @pytest.mark.skip(reason='implementation detail')
@@ -211,7 +209,7 @@ def test_chained_connection(ctx_factory, ndim, visualize=False):
     assert np.allclose(f1, f2)
 
 
-@pytest.mark.slowtest
+@pytest.mark.skip(reason='slow test')
 @pytest.mark.parametrize("ndim", [2, 3])
 def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
     from meshmode.discretization.connection.chained import \
@@ -251,7 +249,8 @@ def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
 
 @pytest.mark.parametrize(("ndim", "chain_type"), [
     (2, 1), (2, 2), (3, 1), (3, 3)])
-def test_chained_to_direct(ctx_factory, ndim, chain_type, visualize=False):
+def test_chained_to_direct(ctx_factory, ndim, chain_type,
+                           nelements=128, visualize=False):
     import time
     from meshmode.discretization.connection.chained import \
         flatten_chained_connection
@@ -259,7 +258,7 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type, visualize=False):
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
-    discr = create_discretization(queue, ndim)
+    discr = create_discretization(queue, ndim, nelements=nelements)
     connections = []
     if chain_type == 1:
         conn = create_refined_connection(queue, discr)
@@ -284,7 +283,12 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type, visualize=False):
     from meshmode.discretization.connection import \
             ChainedDiscretizationConnection
     chained = ChainedDiscretizationConnection(connections)
+
+    t_start = time.time()
     direct = flatten_chained_connection(queue, chained)
+    t_end = time.time()
+    if visualize:
+        print('[TIME] Flatten: {:.5e}'.format(t_end - t_start))
 
     if chain_type < 3:
         to_element_indices = np.full(direct.to_discr.mesh.nelements, 0,

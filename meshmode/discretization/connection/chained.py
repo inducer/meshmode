@@ -44,13 +44,12 @@ def _iterbatches(groups):
 
 
 def _build_element_lookup_table(queue, conn):
-    nelements = np.sum([g.nelements for g in conn.from_discr.groups])
-    el_table = [[] for _ in range(nelements)]
+    el_table = [np.full(g.nelements, -1, dtype=np.int)
+                for g in conn.to_discr.groups]
 
-    # FIXME: O(n) in number of elements loop in Python should be improved
-    for (igrp, ibatch), (_, batch) in _iterbatches(conn.groups):
-        for i, k in enumerate(batch.from_element_indices.get(queue)):
-            el_table[k].append((i, igrp, ibatch))
+    for (igrp, _), (_, batch) in _iterbatches(conn.groups):
+        el_table[igrp][batch.to_element_indices.get(queue)] = \
+                batch.from_element_indices.get(queue)
 
     return el_table
 
@@ -174,33 +173,29 @@ def flatten_chained_connection(queue, connection):
     # merge all the direct connections
     from_conn = direct_connections[0]
     for to_conn in direct_connections[1:]:
-        el_to_batch = _build_element_lookup_table(queue, to_conn)
+        el_table = _build_element_lookup_table(queue, from_conn)
         grp_to_grp, batch_info = _build_new_group_table(from_conn, to_conn)
 
         # distribute the indices to new groups and batches
-        from_bins = [[[] for _ in g] for g in batch_info]
-        to_bins = [[[] for _ in g] for g in batch_info]
+        from_bins = [[np.empty(0, dtype=np.int) for _ in g] for g in batch_info]
+        to_bins = [[np.empty(0, dtype=np.int) for _ in g] for g in batch_info]
 
-        to_element_indices = {}
-        for (igrp, ibatch), (_, tbatch) in _iterbatches(to_conn.groups):
-            to_element_indices[igrp, ibatch] = \
-                tbatch.to_element_indices.get(queue)
-
-        # NOTE: notation used:
-        #   * `ixxx` is an index in from_conn
-        #   * `jxxx` is an index in to_conn
-        #   * `ito` is the same as `jfrom` (on the same discr)
-        # FIXME: O(n) in number of elements loop in Python should be improved
         for (igrp, ibatch), (_, from_batch) in _iterbatches(from_conn.groups):
-            for ifrom, ito in zip(from_batch.from_element_indices.get(queue),
-                                  from_batch.to_element_indices.get(queue)):
-                for j, jgrp, jbatch in el_to_batch[ito]:
-                    igrp_new, ibatch_new = \
-                            grp_to_grp[igrp, ibatch, jgrp, jbatch]
-                    jto = to_element_indices[jgrp, jbatch][j]
+            from_to_element_indices = from_batch.to_element_indices.get(queue)
 
-                    from_bins[igrp_new][ibatch_new].append(ifrom)
-                    to_bins[igrp_new][ibatch_new].append(jto)
+            for (jgrp, jbatch), (_, to_batch) in _iterbatches(to_conn.groups):
+                igrp_new, ibatch_new = grp_to_grp[igrp, ibatch, jgrp, jbatch]
+
+                jfrom = to_batch.from_element_indices.get(queue)
+                jto = to_batch.to_element_indices.get(queue)
+
+                mask = np.isin(jfrom, from_to_element_indices)
+                from_bins[igrp_new][ibatch_new] = \
+                    np.hstack([from_bins[igrp_new][ibatch_new],
+                               el_table[igrp][jfrom[mask]]])
+                to_bins[igrp_new][ibatch_new] = \
+                    np.hstack([to_bins[igrp_new][ibatch_new],
+                               jto[mask]])
 
         # build new groups
         groups = []
