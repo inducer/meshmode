@@ -43,7 +43,7 @@ def create_discretization(queue, ndim,
                           discr_order=5):
     ctx = queue.context
 
-    # construct base mesh
+    # construct mesh
     if ndim == 2:
         from functools import partial
         from meshmode.mesh.generation import make_curve_mesh, ellipse
@@ -56,7 +56,7 @@ def create_discretization(queue, ndim,
     else:
         raise ValueError("Unsupported dimension: {}".format(ndim))
 
-    # create base discretization
+    # create discretization
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
             InterpolatoryQuadratureSimplexGroupFactory
@@ -98,6 +98,7 @@ def create_face_connection(queue, discr):
     return connection
 
 
+@pytest.mark.skip(reason='implementation detail')
 @pytest.mark.parametrize("ndim", [2, 3])
 def test_chained_batch_table(ctx_factory, ndim, visualize=False):
     from meshmode.discretization.connection.chained import \
@@ -129,6 +130,7 @@ def test_chained_batch_table(ctx_factory, ndim, visualize=False):
             assert k == batch.from_element_indices[i]
 
 
+@pytest.mark.skip(reason='implementation detail')
 @pytest.mark.parametrize("ndim", [2, 3])
 def test_chained_new_group_table(ctx_factory, ndim, visualize=False):
     from meshmode.discretization.connection.chained import \
@@ -179,6 +181,38 @@ def test_chained_new_group_table(ctx_factory, ndim, visualize=False):
 
 
 @pytest.mark.parametrize("ndim", [2, 3])
+def test_chained_connection(ctx_factory, ndim, visualize=False):
+    ctx = ctx_factory()
+    queue = cl.CommandQueue(ctx)
+
+    discr = create_discretization(queue, ndim,
+                                  nelements=10,
+                                  mesh_order=5,
+                                  discr_order=5)
+    connections = []
+    conn = create_refined_connection(queue, discr, threshold=np.inf)
+    connections.append(conn)
+    conn = create_refined_connection(queue, conn.to_discr, threshold=np.inf)
+    connections.append(conn)
+
+    from meshmode.discretization.connection import \
+            ChainedDiscretizationConnection
+    chained = ChainedDiscretizationConnection(connections)
+
+    def f(x):
+        from six.moves import reduce
+        return 0.1 * reduce(lambda x, y: x * cl.clmath.sin(5 * y), x)
+
+    x = connections[0].from_discr.nodes().with_queue(queue)
+    fx = f(x)
+    f1 = chained(queue, fx).get(queue)
+    f2 = connections[1](queue, connections[0](queue, fx)).get(queue)
+
+    assert np.allclose(f1, f2)
+
+
+@pytest.mark.slowtest
+@pytest.mark.parametrize("ndim", [2, 3])
 def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
     from meshmode.discretization.connection.chained import \
         make_full_resample_matrix
@@ -195,7 +229,8 @@ def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
     conn = create_refined_connection(queue, conn.to_discr)
     connections.append(conn)
 
-    from meshmode.discretization.connection import ChainedDiscretizationConnection
+    from meshmode.discretization.connection import \
+            ChainedDiscretizationConnection
     chained = ChainedDiscretizationConnection(connections)
 
     def f(x):
@@ -246,7 +281,8 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type, visualize=False):
     else:
         raise ValueError('unknown test case')
 
-    from meshmode.discretization.connection import ChainedDiscretizationConnection
+    from meshmode.discretization.connection import \
+            ChainedDiscretizationConnection
     chained = ChainedDiscretizationConnection(connections)
     direct = flatten_chained_connection(queue, chained)
 

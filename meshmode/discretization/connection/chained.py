@@ -158,10 +158,10 @@ def flatten_chained_connection(queue, connection):
             DiscretizationConnectionElementGroup,
             make_same_mesh_connection)
 
-    if isinstance(connection, DirectDiscretizationConnection):
+    if not hasattr(connection, 'connections'):
         return connection
 
-    if not hasattr(connection, 'connections') or not connection.connections:
+    if not connection.connections:
         return make_same_mesh_connection(connection.to_discr,
                                          connection.from_discr)
 
