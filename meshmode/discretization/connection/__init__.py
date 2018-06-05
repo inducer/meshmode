@@ -35,12 +35,14 @@ from meshmode.discretization.connection.same_mesh import \
         make_same_mesh_connection
 from meshmode.discretization.connection.face import (
         FACE_RESTR_INTERIOR, FACE_RESTR_ALL,
-        make_face_restriction, make_face_to_all_faces_embedding)
+        make_face_restriction,
+        make_face_to_all_faces_embedding)
 from meshmode.discretization.connection.opposite_face import \
         make_opposite_face_connection
 from meshmode.discretization.connection.refinement import \
         make_refinement_connection
-
+from meshmode.discretization.connection.chained import \
+        flatten_chained_connection
 
 import logging
 logger = logging.getLogger(__name__)
@@ -53,11 +55,13 @@ __all__ = [
         "make_face_restriction",
         "make_face_to_all_faces_embedding",
         "make_opposite_face_connection",
-        "make_refinement_connection"
+        "make_refinement_connection",
+        "flatten_chained_connection"
         ]
 
 __doc__ = """
 .. autoclass:: DiscretizationConnection
+.. autoclass:: ChainedDiscretizationConnection
 .. autoclass:: DirectDiscretizationConnection
 
 .. autofunction:: make_same_mesh_connection
@@ -71,6 +75,8 @@ __doc__ = """
 .. autofunction:: make_opposite_face_connection
 
 .. autofunction:: make_refinement_connection
+
+.. autofunction:: flatten_chained_connection
 
 Implementation details
 ^^^^^^^^^^^^^^^^^^^^^^
