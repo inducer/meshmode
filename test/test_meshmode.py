@@ -68,6 +68,8 @@ def test_partition_torus_mesh():
 
 
 def test_partition_boxes_mesh():
+    pymetis = pytest.importorskip('pymetis')
+
     n = 5
     num_parts = 7
     from meshmode.mesh.generation import generate_regular_rect_mesh
@@ -84,8 +86,7 @@ def test_partition_boxes_mesh():
         for n in range(starts[elem], starts[elem + 1]):
             adjacency_list[elem].add(mesh.nodal_adjacency.neighbors[n])
 
-    from pymetis import part_graph
-    (_, p) = part_graph(num_parts, adjacency=adjacency_list)
+    (_, p) = pymetis.part_graph(num_parts, adjacency=adjacency_list)
     part_per_element = np.array(p)
 
     from meshmode.mesh.processing import partition_mesh
