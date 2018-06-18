@@ -95,9 +95,10 @@ class ElementGroupBase(object):
         return self.mesh_el_group.dim
 
     def basis(self):
-        raise NoninterpolatoryElementGroupError("'%s' "
+        raise NoninterpolatoryElementGroupError("'{}' "
                 "is not equipped with a unisolvent function space "
-                "and therefore cannot be used for interpolation")
+                "and therefore cannot be used for interpolation"
+                .format(self.__class__.__name__))
 
     grad_basis = basis
     diff_matrices = basis
