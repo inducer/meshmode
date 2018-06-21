@@ -1041,6 +1041,8 @@ def test_quad_multi_element():
 
 
 def test_vtk_overwrite(ctx_getter):
+    pytest.importorskip("pyvisfile")
+
     def _try_write_vtk(writer, obj):
         import os
         filename = "test_vtk_overwrite.vtu"
