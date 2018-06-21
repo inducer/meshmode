@@ -228,7 +228,7 @@ def write_vertex_vtk_file(mesh, file_name,
     import os
     if os.path.exists(file_name):
         if overwrite:
-            os.path.remove(file_name)
+            os.remove(file_name)
         else:
             raise RuntimeError("output file '%s' already exists" % file_name)
 

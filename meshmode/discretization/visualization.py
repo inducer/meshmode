@@ -338,7 +338,7 @@ class Visualizer(object):
         import os
         if os.path.exists(file_name):
             if overwrite:
-                os.path.remove(file_name)
+                os.remove(file_name)
             else:
                 raise RuntimeError("output file '%s' already exists" % file_name)
 
@@ -397,7 +397,9 @@ def draw_curve(discr):
 
 # {{{ adjacency
 
-def write_nodal_adjacency_vtk_file(file_name, mesh, compressor=None,):
+def write_nodal_adjacency_vtk_file(file_name, mesh,
+                                   compressor=None,
+                                   overwrite=False):
     from pyvisfile.vtk import (
             UnstructuredGrid, DataArray,
             AppendedDataXMLGenerator,
@@ -434,10 +436,12 @@ def write_nodal_adjacency_vtk_file(file_name, mesh, compressor=None,):
             cell_types=np.asarray([VTK_LINE] * nconnections,
                 dtype=np.uint8))
 
-    from os.path import exists
-    if exists(file_name):
-        raise RuntimeError("output file '%s' already exists"
-                % file_name)
+    import os
+    if os.path.exists(file_name):
+        if overwrite:
+            os.remove(file_name)
+        else:
+            raise RuntimeError("output file '%s' already exists" % file_name)
 
     with open(file_name, "w") as outf:
         AppendedDataXMLGenerator(compressor)(grid).write(outf)
