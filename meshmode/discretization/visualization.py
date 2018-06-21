@@ -275,8 +275,10 @@ class Visualizer(object):
 
     # {{{ vtk
 
-    def write_vtk_file(self, file_name, names_and_fields, compressor=None,
-            real_only=False):
+    def write_vtk_file(self, file_name, names_and_fields,
+                       compressor=None,
+                       real_only=False,
+                       overwrite=False):
 
         from pyvisfile.vtk import (
                 UnstructuredGrid, DataArray,
@@ -333,10 +335,12 @@ class Visualizer(object):
             grid.add_pointdata(DataArray(name, field,
                 vector_format=VF_LIST_OF_COMPONENTS))
 
-        from os.path import exists
-        if exists(file_name):
-            raise RuntimeError("output file '%s' already exists"
-                    % file_name)
+        import os
+        if os.path.exists(file_name):
+            if overwrite:
+                os.path.remove(file_name)
+            else:
+                raise RuntimeError("output file '%s' already exists" % file_name)
 
         with open(file_name, "w") as outf:
             AppendedDataXMLGenerator(compressor)(grid).write(outf)

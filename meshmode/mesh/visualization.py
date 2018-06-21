@@ -171,7 +171,9 @@ def draw_curve(mesh,
 
 # {{{ write_vtk_file
 
-def write_vertex_vtk_file(mesh, file_name, compressor=None):
+def write_vertex_vtk_file(mesh, file_name,
+                          compressor=None,
+                          overwrite=False):
     from pyvisfile.vtk import (
             UnstructuredGrid, DataArray,
             AppendedDataXMLGenerator,
@@ -223,10 +225,12 @@ def write_vertex_vtk_file(mesh, file_name, compressor=None):
                 for vgrp in mesh.groups]),
             cell_types=cell_types)
 
-    from os.path import exists
-    if exists(file_name):
-        raise RuntimeError("output file '%s' already exists"
-                % file_name)
+    import os
+    if os.path.exists(file_name):
+        if overwrite:
+            os.path.remove(file_name)
+        else:
+            raise RuntimeError("output file '%s' already exists" % file_name)
 
     with open(file_name, "w") as outf:
         AppendedDataXMLGenerator(compressor)(grid).write(outf)
