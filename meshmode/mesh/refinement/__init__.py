@@ -9,8 +9,10 @@ in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
+
 The above copyright notice and this permission notice shall be included in
 all copies or substantial portions of the Software.
+
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -25,6 +27,8 @@ import numpy as np
 import itertools
 from six.moves import range
 from pytools import RecordWithoutPickling
+from meshmode.mesh.refinement.no_adjacency import (  # noqa: F401
+        RefinerWithoutAdjacency)
 
 
 import logging
@@ -32,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 __doc__ = """
 .. autoclass :: Refiner
+.. autoclass :: RefinerWithoutAdjacency
 .. autofunction :: refine_uniformly
 """
 
@@ -63,24 +68,34 @@ class TreeRayNode(object):
         self.adjacent_add_diff = []
 
 
+class _Tesselation(RecordWithoutPickling):
+
+    def __init__(self, children, ref_vertices):
+        RecordWithoutPickling.__init__(self,
+                children=children,
+                ref_vertices=ref_vertices,)
+
+
+class _GroupRefinementRecord(RecordWithoutPickling):
+
+    def __init__(self, tesselation, element_mapping):
+        RecordWithoutPickling.__init__(self,
+            tesselation=tesselation, element_mapping=element_mapping)
+
+
 class Refiner(object):
-
-    class _Tesselation(RecordWithoutPickling):
-
-        def __init__(self, children, ref_vertices):
-            RecordWithoutPickling.__init__(self,
-                ref_vertices=ref_vertices, children=children)
-
-    class _GroupRefinementRecord(RecordWithoutPickling):
-
-        def __init__(self, tesselation, element_mapping):
-            RecordWithoutPickling.__init__(self,
-                tesselation=tesselation, element_mapping=element_mapping)
 
     # {{{ constructor
 
     def __init__(self, mesh):
-        from meshmode.mesh.tesselate import tesselateseg, tesselatetet, tesselatetri
+        if mesh.is_conforming is not True:
+            raise ValueError("Refiner can only be used with meshes that are known "
+                    "to be conforming. If you would like to refine non-conforming "
+                    "meshes and do not need adjacency information, consider "
+                    "using RefinerWithoutAdjacency.")
+
+        from meshmode.mesh.refinement.tesselate import \
+                tesselateseg, tesselatetet, tesselatetri
         self.lazy = False
         self.seen_tuple = {}
         self.group_refinement_records = []
@@ -323,6 +338,10 @@ class Refiner(object):
                     new_hanging_vertex_elements[node.right_vertex].append(to_add)
 
     # }}}
+
+    def refine_uniformly(self):
+        flags = np.ones(self.last_mesh.nelements, dtype=bool)
+        self.refine(flags)
 
     # {{{ refinement
 
@@ -585,7 +604,7 @@ class Refiner(object):
                             from meshmode.mesh.refinement.resampler import (
                                 SimplexResampler)
                             resampler = SimplexResampler()
-                            tesselation = self._Tesselation(
+                            tesselation = _Tesselation(
                                 self.simplex_result[grp.dim],
                                 self.simplex_node_tuples[grp.dim])
                     else:
@@ -672,7 +691,7 @@ class Refiner(object):
 #                            if len(cur_list[len(cur_list)-1])
 
             self.group_refinement_records.append(
-                self._GroupRefinementRecord(tesselation, element_mapping))
+                _GroupRefinementRecord(tesselation, element_mapping))
 
         #clear connectivity data
         for grp in self.last_mesh.groups:
@@ -760,13 +779,18 @@ class Refiner(object):
 
         from meshmode.mesh import Mesh
 
+        refine_flags = refine_flags.astype(np.bool)
+
         self.previous_mesh = self.last_mesh
         self.last_mesh = Mesh(
                 vertices, new_mesh_el_groups,
                 nodal_adjacency=self.generate_nodal_adjacency(
                     totalnelements, nvertices, groups),
                 vertex_id_dtype=self.last_mesh.vertex_id_dtype,
-                element_id_dtype=self.last_mesh.element_id_dtype)
+                element_id_dtype=self.last_mesh.element_id_dtype,
+                is_conforming=(
+                    self.last_mesh.is_conforming
+                    and (refine_flags.all() or (~refine_flags).all())))
         return self.last_mesh
 
     # }}}

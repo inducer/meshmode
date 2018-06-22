@@ -33,7 +33,7 @@ from pyopencl.tools import (  # noqa
 from meshmode.mesh.generation import (  # noqa
         generate_icosahedron, generate_box_mesh, make_curve_mesh, ellipse)
 from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
-from meshmode.mesh.refinement import Refiner
+from meshmode.mesh.refinement import Refiner, RefinerWithoutAdjacency
 
 from meshmode.discretization.poly_element import (
     InterpolatoryQuadratureSimplexGroupFactory,
@@ -74,6 +74,10 @@ def even_refine_flags(spacing, mesh):
     flags = np.zeros(mesh.nelements)
     flags[::spacing] = 1
     return flags
+
+
+def empty_refine_flags(mesh):
+    return np.zeros(mesh.nelements)
 
 
 def uniform_refine_flags(mesh):
@@ -148,6 +152,10 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
         check_nodal_adj_against_geometry(mesh)
 
 
+@pytest.mark.parametrize("refiner_cls", [
+    Refiner,
+    RefinerWithoutAdjacency
+    ])
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
     PolynomialWarpAndBlendGroupFactory,
@@ -166,9 +174,10 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
     #partial(random_refine_flags, 0.4)
     partial(even_refine_flags, 2)
 ])
+# test_refinement_connection(cl._csc, RefinerWithoutAdjacency, PolynomialWarpAndBlendGroupFactory, 'warp', 2, [4, 5, 6], 5, partial(even_refine_flags, 2))  # noqa: E501
 def test_refinement_connection(
-        ctx_getter, group_factory, mesh_name, dim, mesh_pars, mesh_order,
-        refine_flags, plot_mesh=False):
+        ctx_getter, refiner_cls, group_factory,
+        mesh_name, dim, mesh_pars, mesh_order, refine_flags, visualize=False):
     from random import seed
     seed(13)
 
@@ -215,7 +224,7 @@ def test_refinement_connection(
 
         discr = Discretization(cl_ctx, mesh, group_factory(order))
 
-        refiner = Refiner(mesh)
+        refiner = refiner_cls(mesh)
         flags = refine_flags(mesh)
         refiner.refine(flags)
 
@@ -231,7 +240,7 @@ def test_refinement_connection(
         f_interp = connection(queue, f_coarse).with_queue(queue)
         f_true = f(x_fine).with_queue(queue)
 
-        if plot_mesh:
+        if visualize == "dots":
             import matplotlib.pyplot as plt
             x = x.get(queue)
             err = np.array(np.log10(
@@ -242,6 +251,16 @@ def test_refinement_connection(
             plt.scatter(x[0], x[1], c=cmap.to_rgba(err), s=20, cmap=cmap)
             plt.colorbar(cmap)
             plt.show()
+
+        elif visualize == "vtk":
+            from meshmode.discretization.visualization import make_visualizer
+            fine_vis = make_visualizer(queue, fine_discr, mesh_order)
+
+            fine_vis.write_vtk_file(
+                    "refine-fine-%s-%dd-%s.vtu" % (mesh_name, dim, mesh_par), [
+                        ("f_interp", f_interp),
+                        ("f_true", f_true),
+                        ])
 
         import numpy.linalg as la
         err = la.norm((f_interp - f_true).get(queue), np.inf)
@@ -258,7 +277,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])
     else:
-        from py.test.cmdline import main
+        from pytest import main
         main([__file__])
 
 # vim: fdm=marker

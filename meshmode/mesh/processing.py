@@ -151,15 +151,21 @@ def partition_mesh(mesh, part_per_element, part_num):
     for group_num, mesh_group in enumerate(mesh.groups):
         if group_num not in skip_groups:
             new_mesh_groups.append(
-                type(mesh_group)(mesh_group.order, new_indices[group_num],
-                    new_nodes[group_num], unit_nodes=mesh_group.unit_nodes))
+                type(mesh_group)(
+                    mesh_group.order, new_indices[group_num],
+                    new_nodes[group_num],
+                    unit_nodes=mesh_group.unit_nodes))
 
     from meshmode.mesh import BTAG_ALL, BTAG_PARTITION
     boundary_tags = [BTAG_PARTITION(n) for n in np.unique(part_per_element)]
 
     from meshmode.mesh import Mesh
-    part_mesh = Mesh(new_vertices, new_mesh_groups,
-        facial_adjacency_groups=None, boundary_tags=boundary_tags)
+    part_mesh = Mesh(
+            new_vertices,
+            new_mesh_groups,
+            facial_adjacency_groups=None,
+            boundary_tags=boundary_tags,
+            is_conforming=mesh.is_conforming)
 
     adj_data = [[] for _ in range(len(part_mesh.groups))]
 
@@ -427,7 +433,10 @@ def perform_flips(mesh, flip_flags, skip_tests=False):
 
         new_groups.append(new_grp)
 
-    return Mesh(mesh.vertices, new_groups, skip_tests=skip_tests)
+    return Mesh(
+            mesh.vertices, new_groups, skip_tests=skip_tests,
+            is_conforming=mesh.is_conforming,
+            )
 
 # }}}
 
@@ -548,7 +557,10 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
     from meshmode.mesh import Mesh
     return Mesh(vertices, new_groups, skip_tests=skip_tests,
             nodal_adjacency=nodal_adjacency,
-            facial_adjacency_groups=facial_adjacency_groups)
+            facial_adjacency_groups=facial_adjacency_groups,
+            is_conforming=all(
+                mesh.is_conforming
+                for mesh in meshes))
 
 # }}}
 
@@ -560,6 +572,8 @@ def map_mesh(mesh, f):  # noqa
     shape ``(ambient_dim, npoints)``."""
 
     vertices = f(mesh.vertices)
+    if not vertices.flags.c_contiguous:
+        vertices = np.copy(vertices, order="C")
 
     # {{{ assemble new groups list
 
@@ -567,6 +581,9 @@ def map_mesh(mesh, f):  # noqa
 
     for group in mesh.groups:
         mapped_nodes = f(group.nodes.reshape(mesh.ambient_dim, -1))
+        if not mapped_nodes.flags.c_contiguous:
+            mapped_nodes = np.copy(mapped_nodes, order="C")
+
         new_groups.append(group.copy(
             nodes=mapped_nodes.reshape(*group.nodes.shape)))
 
@@ -575,7 +592,8 @@ def map_mesh(mesh, f):  # noqa
     from meshmode.mesh import Mesh
     return Mesh(vertices, new_groups, skip_tests=True,
             nodal_adjacency=mesh.nodal_adjacency_init_arg(),
-            facial_adjacency_groups=mesh._facial_adjacency_groups)
+            facial_adjacency_groups=mesh._facial_adjacency_groups,
+            is_conforming=mesh.is_conforming)
 
 # }}}
 
@@ -592,7 +610,7 @@ def affine_map(mesh, A=None, b=None):  # noqa
         b = np.zeros(A.shape[0])
 
     def f(x):
-        return np.einsum("ij,jv->iv", A, x) + b[:, np.newaxis]
+        return np.dot(A, x) + b.reshape(-1, 1)
 
     return map_mesh(mesh, f)
 

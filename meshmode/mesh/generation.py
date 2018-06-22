@@ -28,6 +28,10 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
+import logging
+logger = logging.getLogger(__name__)
+
+from pytools import log_process
 
 __doc__ = """
 
@@ -54,6 +58,8 @@ Surfaces
 .. autofunction:: generate_icosahedron
 .. autofunction:: generate_icosphere
 .. autofunction:: generate_torus
+.. autofunction:: refine_mesh_and_get_urchin_warper
+.. autofunction:: generate_urchin
 
 Volumes
 -------
@@ -62,6 +68,10 @@ Volumes
 .. autofunction:: generate_regular_rect_mesh
 .. autofunction:: generate_warped_rect_mesh
 
+Tools for Iterative Refinement
+------------------------------
+
+.. autofunction:: warp_and_refine_until_resolved
 """
 
 
@@ -272,9 +282,8 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 
     mesh = Mesh(
             vertices=vertices, groups=[egroup],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None,
-            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance)
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+            is_conforming=True)
 
     if return_parametrization_points:
         return mesh, t
@@ -411,8 +420,7 @@ def generate_icosahedron(r, order):
     from meshmode.mesh import Mesh
     return Mesh(
             vertices, [grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -430,8 +438,7 @@ def generate_icosphere(r, order):
     from meshmode.mesh import Mesh
     return Mesh(
             mesh.vertices, [grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -496,8 +503,7 @@ def generate_torus_and_cycle_vertices(r_outer, r_inner,
     return (
             Mesh(
                 vertices, [grp.copy(nodes=nodes)],
-                nodal_adjacency=None,
-                facial_adjacency_groups=None),
+                is_conforming=True),
             [idx(i, 0) for i in range(n_outer)],
             [idx(0, j) for j in range(n_inner)])
 
@@ -508,6 +514,97 @@ def generate_torus(r_outer, r_inner, n_outer=20, n_inner=10, order=1):
     mesh, a_cycle, b_cycle = generate_torus_and_cycle_vertices(
             r_outer, r_inner, n_outer, n_inner, order)
     return mesh
+
+
+# {{{ get_urchin
+
+def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
+        min_rad=0.2, uniform_refinement_rounds=0):
+    """
+    :returns: a tuple ``(refiner, warp_mesh)``, where *refiner* is
+        a :class:`meshmode.refinement.Refiner` (from which the unwarped mesh
+        may be obtained), and whose
+        :meth:`meshmode.refinement.Refiner.get_current_mesh` returns a
+        locally-refined :class:`meshmode.mesh.Mesh` of a sphere and *warp_mesh*
+        is a callable taking and returning a mesh that warps the unwarped mesh
+        into a smooth shape govered by a spherical harmonic of order *(m, n)*.
+    :arg order: the polynomial order of the returned mesh
+    :arg est_rel_interp_tolerance: a tolerance for the relative
+        interpolation error estimates on the warped version of the mesh.
+
+    .. versionadded: 2018.1
+    """
+
+    def sph_harm(m, n, pts):
+        assert abs(m) <= n
+        x, y, z = pts
+        r = np.sqrt(np.sum(pts**2, axis=0))
+        theta = np.arccos(z/r)
+        phi = np.arctan2(y, x)
+
+        import scipy.special as sps
+        return sps.sph_harm(m, n, phi, theta)
+
+    def map_coords(pts):
+        r = np.sqrt(np.sum(pts**2, axis=0))
+
+        sph = sph_harm(m, n, pts).real
+        scaled = min_rad + (sph - lo)/(hi-lo)
+        new_rad = scaled
+
+        return pts * new_rad / r
+
+    def warp_mesh(mesh, node_vertex_consistency_tolerance):
+        groups = [grp.copy(nodes=map_coords(grp.nodes)) for grp in mesh.groups]
+
+        from meshmode.mesh import Mesh
+        return Mesh(
+                map_coords(mesh.vertices),
+                groups,
+                node_vertex_consistency_tolerance=False,
+                is_conforming=mesh.is_conforming,
+                )
+
+    unwarped_mesh = generate_icosphere(1, order=order)
+
+    from meshmode.mesh.refinement import RefinerWithoutAdjacency
+
+    # These come out conformal, so we're OK to use the faster refiner.
+    refiner = RefinerWithoutAdjacency(unwarped_mesh)
+    for i in range(uniform_refinement_rounds):
+        refiner.refine_uniformly()
+
+    nodes_sph = sph_harm(m, n, unwarped_mesh.groups[0].nodes).real
+    lo = np.min(nodes_sph)
+    hi = np.max(nodes_sph)
+    del nodes_sph
+
+    from functools import partial
+    unwarped_mesh = warp_and_refine_until_resolved(
+                refiner,
+                partial(warp_mesh, node_vertex_consistency_tolerance=False),
+                est_rel_interp_tolerance)
+
+    return refiner, partial(
+            warp_mesh,
+            node_vertex_consistency_tolerance=est_rel_interp_tolerance)
+
+
+def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
+    """
+    :returns: a refined :class:`meshmode.mesh.Mesh` of a smooth shape govered
+        by a spherical harmonic of order *(m, n)*.
+    :arg order: the polynomial order of the returned mesh
+    :arg est_rel_interp_tolerance: a tolerance for the relative
+        interpolation error estimates on the warped version of the mesh.
+
+    .. versionadded: 2018.1
+    """
+    refiner, warper = refine_mesh_and_get_urchin_warper(
+            order, m, n, est_rel_interp_tolerance, min_rad)
+    return warper(refiner.get_current_mesh())
+
+# }}}
 
 
 # {{{ generate_box_mesh
@@ -631,8 +728,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
     from meshmode.mesh import Mesh
     return Mesh(vertices, [grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -684,6 +780,82 @@ def generate_warped_rect_mesh(dim, order, n):
 
     from meshmode.mesh.processing import map_mesh
     return map_mesh(mesh, m)
+
+# }}}
+
+
+# {{{ warp_and_refine_until_resolved
+
+@log_process(logger)
+def warp_and_refine_until_resolved(
+        unwarped_mesh_or_refiner, warp_callable, est_rel_interp_tolerance):
+    """Given an original ("un-warped") :class:`meshmode.mesh.Mesh` and a
+    warping function *warp_callable* that takes and returns a mesh and a
+    tolerance to which the mesh should be resolved by the mapping polynomials,
+    this function will iteratively refine the *unwarped_mesh* until relative
+    interpolation error estimates on the warped version are smaller than
+    *est_rel_interp_tolerance* on each element.
+
+    :returns: The refined, un-warped mesh.
+
+    .. versionadded:: 2018.1
+    """
+    from modepy.modes import simplex_onb
+    from modepy.matrices import vandermonde
+    from modepy.modal_decay import simplex_interp_error_coefficient_estimator_matrix
+    from meshmode.mesh.refinement import Refiner, RefinerWithoutAdjacency
+
+    if isinstance(unwarped_mesh_or_refiner, (Refiner, RefinerWithoutAdjacency)):
+        refiner = unwarped_mesh_or_refiner
+        unwarped_mesh = refiner.get_current_mesh()
+    else:
+        unwarped_mesh = unwarped_mesh_or_refiner
+        refiner = Refiner(unwarped_mesh)
+
+    iteration = 0
+
+    while True:
+        refine_flags = np.zeros(unwarped_mesh.nelements, dtype=np.bool)
+
+        warped_mesh = warp_callable(unwarped_mesh)
+
+        for egrp in warped_mesh.groups:
+            dim, nunit_nodes = egrp.unit_nodes.shape
+
+            interp_err_est_mat = simplex_interp_error_coefficient_estimator_matrix(
+                    egrp.unit_nodes, egrp.order,
+                    n_tail_orders=1 if warped_mesh.dim > 1 else 2)
+
+            vdm_inv = la.inv(
+                    vandermonde(simplex_onb(dim, egrp.order), egrp.unit_nodes))
+
+            mapping_coeffs = np.einsum("ij,dej->dei", vdm_inv, egrp.nodes)
+            mapping_norm_2 = np.sqrt(np.sum(mapping_coeffs**2, axis=-1))
+
+            interp_error_coeffs = np.einsum(
+                    "ij,dej->dei", interp_err_est_mat, egrp.nodes)
+            interp_error_norm_2 = np.sqrt(np.sum(interp_error_coeffs**2, axis=-1))
+
+            # max over dimensions
+            est_rel_interp_error = np.max(interp_error_norm_2/mapping_norm_2, axis=0)
+
+            refine_flags[
+                    egrp.element_nr_base:
+                    egrp.element_nr_base+egrp.nelements] = \
+                            est_rel_interp_error > est_rel_interp_tolerance
+
+        nrefined_elements = np.sum(refine_flags.astype(np.int32))
+        if nrefined_elements == 0:
+            break
+
+        logger.info("warp_and_refine_until_resolved: "
+                "iteration %d -> splitting %d/%d elements",
+                iteration, nrefined_elements, unwarped_mesh.nelements)
+
+        unwarped_mesh = refiner.refine(refine_flags)
+        iteration += 1
+
+    return unwarped_mesh
 
 # }}}
 

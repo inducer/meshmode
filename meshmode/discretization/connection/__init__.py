@@ -27,18 +27,22 @@ from six.moves import range, zip
 import numpy as np
 import pyopencl as cl
 import pyopencl.array  # noqa
+
+from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method, memoize_in
 
 from meshmode.discretization.connection.same_mesh import \
         make_same_mesh_connection
 from meshmode.discretization.connection.face import (
         FACE_RESTR_INTERIOR, FACE_RESTR_ALL,
-        make_face_restriction, make_face_to_all_faces_embedding)
+        make_face_restriction,
+        make_face_to_all_faces_embedding)
 from meshmode.discretization.connection.opposite_face import \
         make_opposite_face_connection, make_partition_connection
 from meshmode.discretization.connection.refinement import \
         make_refinement_connection
-
+from meshmode.discretization.connection.chained import \
+        flatten_chained_connection
 
 import logging
 logger = logging.getLogger(__name__)
@@ -52,11 +56,13 @@ __all__ = [
         "make_face_to_all_faces_embedding",
         "make_opposite_face_connection",
         "make_partition_connection",
-        "make_refinement_connection"
+        "make_refinement_connection",
+        "flatten_chained_connection",
         ]
 
 __doc__ = """
 .. autoclass:: DiscretizationConnection
+.. autoclass:: ChainedDiscretizationConnection
 .. autoclass:: DirectDiscretizationConnection
 
 .. autofunction:: make_same_mesh_connection
@@ -71,6 +77,8 @@ __doc__ = """
 .. autofunction:: make_partition_connection
 
 .. autofunction:: make_refinement_connection
+
+.. autofunction:: flatten_chained_connection
 
 Implementation details
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -369,7 +377,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("nnodes_tgt,nnodes_src", np.int32),
                     "...",
                     ],
-                name="oversample_mat")
+                name="oversample_mat",
+                lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))
@@ -382,19 +391,18 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         for i_tgrp, (tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.groups)):
             for i_batch, batch in enumerate(cgrp.batches):
-                if len(batch.from_element_indices):
-                    if not len(batch.from_element_indices):
-                        continue
+                if not len(batch.from_element_indices):
+                    continue
 
-                    sgrp = self.from_discr.groups[batch.from_group_index]
+                sgrp = self.from_discr.groups[batch.from_group_index]
 
-                    knl()(queue,
-                            resample_mat=self._resample_matrix(i_tgrp, i_batch),
-                            result=result,
-                            itgt_base=tgrp.node_nr_base,
-                            isrc_base=sgrp.node_nr_base,
-                            from_element_indices=batch.from_element_indices,
-                            to_element_indices=batch.to_element_indices)
+                knl()(queue,
+                      resample_mat=self._resample_matrix(i_tgrp, i_batch),
+                      result=result,
+                      itgt_base=tgrp.node_nr_base,
+                      isrc_base=sgrp.node_nr_base,
+                      from_element_indices=batch.from_element_indices,
+                      to_element_indices=batch.to_element_indices)
 
         return result
 
@@ -421,7 +429,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("nelements_vec", np.int32),
                     "...",
                     ],
-                name="resample_by_mat")
+                name="resample_by_mat",
+                lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))
@@ -447,13 +456,14 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("n_from_nodes", np.int32),
                     "...",
                     ],
-                name="resample_by_picking")
+                name="resample_by_picking",
+                lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
             knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
             return lp.tag_inames(knl, dict(k="g.0"))
 
         if not isinstance(vec, cl.array.Array):
-            return vec
+            raise TypeError("non-array passed to discretization connection")
 
         if self.is_surjective:
             result = self.to_discr.empty(dtype=vec.dtype)

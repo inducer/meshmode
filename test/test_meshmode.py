@@ -541,7 +541,7 @@ def test_sanity_single_element(ctx_factory, dim, order, visualize=False):
             nodes=mp.warp_and_blend_nodes(dim, order).reshape(dim, 1, -1),
             dim=dim)
 
-    mesh = Mesh(vertices, [mg], nodal_adjacency=None, facial_adjacency_groups=None)
+    mesh = Mesh(vertices, [mg], is_conforming=True)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
@@ -744,7 +744,10 @@ def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
         if visualize:
             vol_vis.write_vtk_file("volume-h=%g.vtu" % h, [
                 ("f", vol_one),
-                ("area_el", bind(vol_discr, sym.area_element())(queue)),
+                ("area_el", bind(
+                    vol_discr,
+                    sym.area_element(mesh.ambient_dim, mesh.ambient_dim))
+                    (queue)),
                 ])
             bdry_vis.write_vtk_file("boundary-h=%g.vtu" % h, [("f", bdry_one)])
 
@@ -995,70 +998,12 @@ def test_quad_multi_element():
 # }}}
 
 
-# {{{ ChainedDiscretizationConnection
-
-def test_ChainedDiscretizationConnection(ctx_getter):  # noqa
-    mesh_order = 5
-    order = 5
-    npanels = 10
-    group_factory = InterpolatoryQuadratureSimplexGroupFactory
-
-    def refine_flags(mesh):
-        return np.ones(mesh.nelements)
-
-    cl_ctx = ctx_getter()
-    queue = cl.CommandQueue(cl_ctx)
-
-    from functools import partial
-    from meshmode.discretization import Discretization
-    from meshmode.discretization.connection import make_refinement_connection
-    from meshmode.mesh.generation import make_curve_mesh, ellipse
-
-    mesh = make_curve_mesh(
-            partial(ellipse, 1), np.linspace(0, 1, npanels + 1),
-            order=mesh_order)
-
-    discr = Discretization(cl_ctx, mesh, group_factory(order))
-
-    connections = []
-
-    def refine_discr(discr):
-        mesh = discr.mesh
-        from meshmode.mesh.refinement import Refiner
-        refiner = Refiner(mesh)
-        flags = refine_flags(mesh)
-        refiner.refine(flags)
-        connections.append(
-                make_refinement_connection(refiner, discr, group_factory(order)))
-        return connections[-1].to_discr
-
-    discr = refine_discr(discr)
-    refine_discr(discr)
-
-    from meshmode.discretization.connection import (
-        ChainedDiscretizationConnection)
-
-    chained_conn = ChainedDiscretizationConnection(connections)
-
-    def f(x):
-        from six.moves import reduce
-        return 0.1 * reduce(lambda x, y: x * cl.clmath.sin(5 * y), x)
-
-    x = connections[0].from_discr.nodes().with_queue(queue)
-
-    assert np.allclose(
-            chained_conn(queue, f(x)).get(queue),
-            connections[1](queue, connections[0](queue, f(x))).get(queue))
-
-# }}}
-
-
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
         exec(sys.argv[1])
     else:
-        from py.test.cmdline import main
+        from pytest import main
         main([__file__])
 
 # vim: fdm=marker

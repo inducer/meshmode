@@ -306,7 +306,6 @@ class Visualizer(object):
 
         # }}}
 
-        nodes = nodes
         if self.element_shrink_factor != 1:
             for vgrp in self.vis_discr.groups:
                 nodes_view = vgrp.view(nodes)

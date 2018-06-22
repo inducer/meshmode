@@ -418,6 +418,8 @@ class FacialAdjacencyGroup(Record):
     of) a face.
 
     .. image:: images/facial-adjacency-group.png
+        :align: center
+        :width: 60%
 
     Represents (for example) *one* of the (colored) interfaces between
     :class:`MeshElementGroup` instances, or an interface between
@@ -596,6 +598,8 @@ class Mesh(Record):
         :exc:`meshmode.DataUnavailable`.
 
         .. image:: images/facial-adjacency-group.png
+            :align: center
+            :width: 60%
 
         For example for the mesh in the figure, the following data structure
         would be present::
@@ -628,6 +632,12 @@ class Mesh(Record):
 
     .. attribute:: element_id_dtype
 
+    .. attribute:: is_conforming
+
+        *True* if it is known that all element interfaces are conforming.
+        *False* if it is known that some element interfaces are non-conforming.
+        *None* if neither of the two is known.
+
     .. automethod:: __eq__
     .. automethod:: __ne__
     .. automethos:: adjacency_list
@@ -637,11 +647,13 @@ class Mesh(Record):
 
     def __init__(self, vertices, groups, skip_tests=False,
             node_vertex_consistency_tolerance=None,
-            nodal_adjacency=False,
-            facial_adjacency_groups=False,
+            skip_element_orientation_test=False,
+            nodal_adjacency=None,
+            facial_adjacency_groups=None,
             boundary_tags=None,
             vertex_id_dtype=np.int32,
-            element_id_dtype=np.int32):
+            element_id_dtype=np.int32,
+            is_conforming=None):
         """
         The following are keyword-only:
 
@@ -649,7 +661,10 @@ class Mesh(Record):
             mesh anyhow and then fix it inside of this data structure.
         :arg node_vertex_consistency_tolerance: If *False*, do not check
             for consistency between vertex and nodal data. If *None*, use
-            the (small, near FP-epsilon) tolerance.
+            the (small, near FP-epsilon) default tolerance.
+        :arg skip_element_orientation_test: If *False*, check that
+            element orientation is positive in volume meshes
+            (i.e. ones where ambient and topological dimension match).
         :arg nodal_adjacency: One of three options:
             *None*, in which case this information
             will be deduced from vertex adjacency. *False*, in which case
@@ -706,6 +721,12 @@ class Mesh(Record):
 
         # }}}
 
+        if not is_conforming:
+            if nodal_adjacency is None:
+                nodal_adjacency = False
+            if facial_adjacency_groups is None:
+                facial_adjacency_groups = False
+
         if nodal_adjacency is not False and nodal_adjacency is not None:
             if not isinstance(nodal_adjacency, NodalAdjacency):
                 nb_starts, nbs = nodal_adjacency
@@ -723,12 +744,15 @@ class Mesh(Record):
                 boundary_tags=boundary_tags,
                 btag_to_index=btag_to_index,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),
-                element_id_dtype=np.dtype(element_id_dtype)
+                element_id_dtype=np.dtype(element_id_dtype),
+                is_conforming=is_conforming,
                 )
 
         if not skip_tests:
-            assert _test_node_vertex_consistency(
-                    self, node_vertex_consistency_tolerance)
+            if node_vertex_consistency_tolerance is not False:
+                assert _test_node_vertex_consistency(
+                        self, node_vertex_consistency_tolerance)
+
             for g in self.groups:
                 assert g.vertex_indices.dtype == self.vertex_id_dtype
 
@@ -764,7 +788,7 @@ class Mesh(Record):
             from meshmode.mesh.processing import \
                     test_volume_mesh_element_orientations
 
-            if self.dim == self.ambient_dim:
+            if self.dim == self.ambient_dim and not skip_element_orientation_test:
                 # only for volume meshes, for now
                 assert test_volume_mesh_element_orientations(self), \
                         "negatively oriented elements found"
@@ -809,7 +833,13 @@ class Mesh(Record):
         if self._nodal_adjacency is False:
             from meshmode import DataUnavailable
             raise DataUnavailable("nodal_adjacency")
+
         elif self._nodal_adjacency is None:
+            if not self.is_conforming:
+                from meshmode import DataUnavailable
+                raise DataUnavailable("nodal_adjacency can only "
+                        "be computed for known-conforming meshes")
+
             self._nodal_adjacency = _compute_nodal_adjacency_from_vertices(self)
 
         return self._nodal_adjacency
@@ -826,7 +856,13 @@ class Mesh(Record):
         if self._facial_adjacency_groups is False:
             from meshmode import DataUnavailable
             raise DataUnavailable("facial_adjacency_groups")
+
         elif self._facial_adjacency_groups is None:
+            if not self.is_conforming:
+                from meshmode import DataUnavailable
+                raise DataUnavailable("facial_adjacency_groups can only "
+                        "be computed for known-conforming meshes")
+
             self._facial_adjacency_groups = \
                     _compute_facial_adjacency_from_vertices(self)
 
@@ -849,7 +885,8 @@ class Mesh(Record):
                         == other._nodal_adjacency)
                 and (self._facial_adjacency_groups
                         == other._facial_adjacency_groups)
-                and self.boundary_tags == other.boundary_tags)
+                and self.boundary_tags == other.boundary_tags
+                and self.is_conforming == other.is_conforming)
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -891,8 +928,8 @@ def _test_node_vertex_consistency_simplex(mesh, mgrp, tol):
     bbox_min, bbox_max = find_bounding_box(mesh)
     size = la.norm(bbox_max-bbox_min)
 
-    assert np.max(per_element_vertex_errors) < tol*size, \
-            np.max(per_element_vertex_errors)
+    max_el_vertex_error = np.max(per_element_vertex_errors)
+    assert max_el_vertex_error < tol*size, max_el_vertex_error
 
     return True
 
@@ -901,9 +938,6 @@ def _test_node_vertex_consistency(mesh, tol):
     """Ensure that order of by-index vertices matches that of mapped
     unit vertices.
     """
-
-    if tol is False:
-        return
 
     for mgrp in mesh.groups:
         if isinstance(mgrp, SimplexElementGroup):
@@ -1190,7 +1224,8 @@ def as_python(mesh, function_name="make_mesh"):
 
         cg("    nodal_adjacency=%s," % el_con_str)
         cg("    facial_adjacency_groups=facial_adjacency_groups,")
-        cg("    boundary_tags=[%s])" % btags_str)
+        cg("    boundary_tags=[%s]," % btags_str)
+        cg("    is_conforming=%s)" % repr(mesh.is_conforming))
 
         # FIXME: Handle facial adjacency, boundary tags
 

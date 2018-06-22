@@ -51,7 +51,7 @@ __doc__ = """
 # {{{ gmsh receiver
 
 class GmshMeshReceiver(GmshMeshReceiverBase):
-    def __init__(self):
+    def __init__(self, mesh_construction_kwargs=None):
         # Use data fields similar to meshpy.triangle.MeshInfo and
         # meshpy.tet.MeshInfo
         self.points = None
@@ -59,6 +59,11 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         self.element_types = None
         self.element_markers = None
         self.tags = None
+
+        if mesh_construction_kwargs is None:
+            mesh_construction_kwargs = {}
+
+        self.mesh_construction_kwargs = mesh_construction_kwargs
 
     def set_up_nodes(self, count):
         # Preallocate array of nodes within list; treat None as sentinel value.
@@ -137,9 +142,13 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         from meshmode.mesh import (Mesh,
                 SimplexElementGroup, TensorProductElementGroup)
 
+        bulk_el_types = set()
+
         for group_el_type, ngroup_elements in six.iteritems(el_type_hist):
             if group_el_type.dimensions != mesh_bulk_dim:
                 continue
+
+            bulk_el_types.add(group_el_type)
 
             nodes = np.empty((ambient_dim, ngroup_elements, el_type.node_count()),
                     np.float64)
@@ -198,30 +207,35 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 raise NotImplementedError("gmsh element type: %s"
                         % type(group_el_type).__name__)
 
-            # Gmsh seems to produce elements in the opposite orientation
-            # of what we like. Flip them all.
-
             groups.append(group)
+
+        # FIXME: This is heuristic.
+        if len(bulk_el_types) == 1:
+            is_conforming = True
+        else:
+            is_conforming = mesh_bulk_dim < 3
 
         return Mesh(
                 vertices, groups,
-                nodal_adjacency=None,
-                facial_adjacency_groups=None)
+                is_conforming=is_conforming,
+                **self.mesh_construction_kwargs)
 
 # }}}
 
 
 # {{{ gmsh
 
-def read_gmsh(filename, force_ambient_dim=None):
+def read_gmsh(filename, force_ambient_dim=None, mesh_construction_kwargs=None):
     """Read a gmsh mesh file from *filename* and return a
     :class:`meshmode.mesh.Mesh`.
 
     :arg force_ambient_dim: if not None, truncate point coordinates to
         this many dimensions.
+    :arg mesh_construction_kwargs: *None* or a dictionary of keyword
+        arguments passed to the :class:`meshmode.mesh.Mesh` constructor.
     """
     from gmsh_interop.reader import read_gmsh
-    recv = GmshMeshReceiver()
+    recv = GmshMeshReceiver(mesh_construction_kwargs=mesh_construction_kwargs)
     read_gmsh(recv, filename, force_dimension=force_ambient_dim)
 
     return recv.get_mesh()
@@ -229,7 +243,7 @@ def read_gmsh(filename, force_ambient_dim=None):
 
 def generate_gmsh(source, dimensions=None, order=None, other_options=[],
         extension="geo", gmsh_executable="gmsh", force_ambient_dim=None,
-        output_file_name="output.msh"):
+        output_file_name="output.msh", mesh_construction_kwargs=None):
     """Run :command:`gmsh` on the input given by *source*, and return a
     :class:`meshmode.mesh.Mesh` based on the result.
 
@@ -237,8 +251,10 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=[],
         :class:`LiteralSource`
     :arg force_ambient_dim: if not None, truncate point coordinates to
         this many dimensions.
+    :arg mesh_construction_kwargs: *None* or a dictionary of keyword
+        arguments passed to the :class:`meshmode.mesh.Mesh` constructor.
     """
-    recv = GmshMeshReceiver()
+    recv = GmshMeshReceiver(mesh_construction_kwargs=mesh_construction_kwargs)
 
     from gmsh_interop.runner import GmshRunner
     from gmsh_interop.reader import parse_gmsh
@@ -287,8 +303,7 @@ def from_meshpy(mesh_info, order=1):
 
     return Mesh(
             vertices=vertices, groups=[grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -320,8 +335,7 @@ def from_vertices_and_simplices(vertices, simplices, order=1, fix_orientation=Fa
 
     return Mesh(
             vertices=vertices, groups=[grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -364,7 +378,13 @@ def to_json(mesh):
             }
 
     return {
-        "version": 0,
+        # VERSION 0:
+        # - initial version
+        #
+        # VERSION 1:
+        # - added is_conforming
+
+        "version": 1,
         "vertices": mesh.vertices.tolist(),
         "groups": [group_to_json(group) for group in mesh.groups],
         "nodal_adjacency": nodal_adjacency_to_json(mesh),
@@ -374,6 +394,7 @@ def to_json(mesh):
         "btag_to_index": dict(
             (btag_to_json(btag), value)
             for btag, value in six.iteritems(mesh.btag_to_index)),
+        "is_conforming": mesh.is_conforming,
         }
 
 # }}}
