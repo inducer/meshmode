@@ -217,8 +217,9 @@ def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions):
     if scramble_partitions:
         part_per_element = np.random.randint(num_parts, size=mesh.nelements)
     else:
-        from pymetis import part_graph
-        _, p = part_graph(num_parts,
+        pymetis = pytest.importorskip('pymetis')
+
+        _, p = pymetis.part_graph(num_parts,
                           xadj=mesh.nodal_adjacency.neighbors_starts.tolist(),
                           adjncy=mesh.nodal_adjacency.neighbors.tolist())
         part_per_element = np.array(p)

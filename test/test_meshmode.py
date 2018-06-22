@@ -998,6 +998,54 @@ def test_quad_multi_element():
 # }}}
 
 
+def test_vtk_overwrite(ctx_getter):
+    pytest.importorskip("pyvisfile")
+
+    def _try_write_vtk(writer, obj):
+        import os
+        from meshmode import FileExistsError
+
+        filename = "test_vtk_overwrite.vtu"
+        if os.path.exists(filename):
+            os.remove(filename)
+
+        writer(filename, [])
+        with pytest.raises(FileExistsError):
+            writer(filename, [])
+
+        writer(filename, [], overwrite=True)
+        if os.path.exists(filename):
+            os.remove(filename)
+
+    ctx = ctx_getter()
+    queue = cl.CommandQueue(ctx)
+
+    target_order = 7
+
+    from meshmode.mesh.generation import generate_torus
+    mesh = generate_torus(10.0, 2.0, order=target_order)
+
+    from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import \
+            InterpolatoryQuadratureSimplexGroupFactory
+    discr = Discretization(
+            queue.context, mesh,
+            InterpolatoryQuadratureSimplexGroupFactory(target_order))
+
+    from meshmode.discretization.visualization import make_visualizer
+    from meshmode.discretization.visualization import \
+            write_nodal_adjacency_vtk_file
+    from meshmode.mesh.visualization import write_vertex_vtk_file
+
+    vis = make_visualizer(queue, discr, 1)
+    _try_write_vtk(vis.write_vtk_file, discr)
+
+    _try_write_vtk(lambda x, y, **kwargs:
+            write_vertex_vtk_file(discr.mesh, x, **kwargs), discr.mesh)
+    _try_write_vtk(lambda x, y, **kwargs:
+            write_nodal_adjacency_vtk_file(x, discr.mesh, **kwargs), discr.mesh)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
