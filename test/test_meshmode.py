@@ -49,56 +49,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# {{{ partition_mesh
-
-def test_partition_torus_mesh():
-    from meshmode.mesh.generation import generate_torus
-    my_mesh = generate_torus(2, 1, n_outer=2, n_inner=2)
-
-    part_per_element = np.array([0, 1, 2, 1, 1, 2, 1, 0])
-
-    from meshmode.mesh.processing import partition_mesh
-    (part_mesh0, _) = partition_mesh(my_mesh, part_per_element, 0)
-    (part_mesh1, _) = partition_mesh(my_mesh, part_per_element, 1)
-    (part_mesh2, _) = partition_mesh(my_mesh, part_per_element, 2)
-
-    assert part_mesh0.nelements == 2
-    assert part_mesh1.nelements == 4
-    assert part_mesh2.nelements == 2
-
-
-def test_partition_boxes_mesh():
-    pymetis = pytest.importorskip('pymetis')
-
-    n = 5
-    num_parts = 7
-    from meshmode.mesh.generation import generate_regular_rect_mesh
-    mesh1 = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(n, n, n))
-    mesh2 = generate_regular_rect_mesh(a=(2, 2, 2), b=(3, 3, 3), n=(n, n, n))
-
-    from meshmode.mesh.processing import merge_disjoint_meshes
-    mesh = merge_disjoint_meshes([mesh1, mesh2])
-
-    adjacency_list = np.zeros((mesh.nelements,), dtype=set)
-    for elem in range(mesh.nelements):
-        adjacency_list[elem] = set()
-        starts = mesh.nodal_adjacency.neighbors_starts
-        for n in range(starts[elem], starts[elem + 1]):
-            adjacency_list[elem].add(mesh.nodal_adjacency.neighbors[n])
-
-    (_, p) = pymetis.part_graph(num_parts, adjacency=adjacency_list)
-    part_per_element = np.array(p)
-
-    from meshmode.mesh.processing import partition_mesh
-    new_meshes = [
-        partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
-
-    assert mesh.nelements == np.sum(
-        [new_meshes[i].nelements for i in range(num_parts)])
-
-# }}}
-
-
 # {{{ circle mesh
 
 def test_circle_mesh(do_plot=False):
@@ -143,9 +93,9 @@ def test_circle_mesh(do_plot=False):
     ("warp", 3, [10, 20, 30]),
     ])
 @pytest.mark.parametrize("per_face_groups", [False, True])
-def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
+def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
         mesh_name, dim, mesh_pars, per_face_groups):
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.discretization import Discretization
@@ -231,9 +181,9 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
     ("warp", 3, [10, 20, 30]),
     ])
 @pytest.mark.parametrize("per_face_groups", [False, True])
-def test_all_faces_interpolation(ctx_getter, mesh_name, dim, mesh_pars,
+def test_all_faces_interpolation(ctx_factory, mesh_name, dim, mesh_pars,
         per_face_groups):
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.discretization import Discretization
@@ -343,11 +293,11 @@ def test_all_faces_interpolation(ctx_getter, mesh_name, dim, mesh_pars,
     ("warp", 2, [3, 5, 7]),
     ("warp", 3, [3, 5]),
     ])
-def test_opposite_face_interpolation(ctx_getter, group_factory,
+def test_opposite_face_interpolation(ctx_factory, group_factory,
         mesh_name, dim, mesh_pars):
     logging.basicConfig(level=logging.INFO)
 
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.discretization import Discretization
@@ -459,12 +409,12 @@ def test_element_orientation():
     ("ball", lambda: mgen.generate_icosahedron(1, 1)),
     ("torus", lambda: mgen.generate_torus(5, 1)),
     ])
-def test_3d_orientation(ctx_getter, what, mesh_gen_func, visualize=False):
+def test_3d_orientation(ctx_factory, what, mesh_gen_func, visualize=False):
     pytest.importorskip("pytential")
 
     logging.basicConfig(level=logging.INFO)
 
-    ctx = ctx_getter()
+    ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
     mesh = mesh_gen_func()
@@ -514,7 +464,7 @@ def test_3d_orientation(ctx_getter, what, mesh_gen_func, visualize=False):
 
 # {{{ merge and map
 
-def test_merge_and_map(ctx_getter, visualize=False):
+def test_merge_and_map(ctx_factory, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
     from meshmode.mesh.generation import generate_box_mesh
     from meshmode.mesh import TensorProductElementGroup
@@ -555,7 +505,7 @@ def test_merge_and_map(ctx_getter, visualize=False):
 
     if visualize:
         from meshmode.discretization import Discretization
-        cl_ctx = ctx_getter()
+        cl_ctx = ctx_factory()
         queue = cl.CommandQueue(cl_ctx)
 
         discr = Discretization(cl_ctx, mesh3, discr_grp_factory)
@@ -571,10 +521,10 @@ def test_merge_and_map(ctx_getter, visualize=False):
 
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("order", [1, 3])
-def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
+def test_sanity_single_element(ctx_factory, dim, order, visualize=False):
     pytest.importorskip("pytential")
 
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
 
     from modepy.tools import unit_vertices
@@ -658,12 +608,12 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
 
 @pytest.mark.parametrize("dim", [2, 3, 4])
 @pytest.mark.parametrize("order", [3])
-def test_sanity_qhull_nd(ctx_getter, dim, order):
+def test_sanity_qhull_nd(ctx_factory, dim, order):
     pytest.importorskip("scipy")
 
     logging.basicConfig(level=logging.INFO)
 
-    ctx = ctx_getter()
+    ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
     from scipy.spatial import Delaunay
@@ -712,13 +662,13 @@ def test_sanity_qhull_nd(ctx_getter, dim, order):
     ("ball-radius-1.step", 3),
     ])
 @pytest.mark.parametrize("mesh_order", [1, 2])
-def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
+def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
         visualize=False):
     pytest.importorskip("pytential")
 
     logging.basicConfig(level=logging.INFO)
 
-    ctx = ctx_getter()
+    ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
     from pytools.convergence import EOCRecorder
@@ -839,7 +789,7 @@ def test_rect_mesh(do_plot=False):
         pt.show()
 
 
-def test_box_mesh(ctx_getter, visualize=False):
+def test_box_mesh(ctx_factory, visualize=False):
     from meshmode.mesh.generation import generate_box_mesh
     mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
 
@@ -847,7 +797,7 @@ def test_box_mesh(ctx_getter, visualize=False):
         from meshmode.discretization import Discretization
         from meshmode.discretization.poly_element import \
                 PolynomialWarpAndBlendGroupFactory
-        cl_ctx = ctx_getter()
+        cl_ctx = ctx_factory()
         queue = cl.CommandQueue(cl_ctx)
 
         discr = Discretization(cl_ctx, mesh,
@@ -996,6 +946,8 @@ def no_test_quad_mesh_3d():
 # }}}
 
 
+# {{{ test_quad_single_element
+
 def test_quad_single_element():
     from meshmode.mesh.generation import make_group_from_vertices
     from meshmode.mesh import Mesh, TensorProductElementGroup
@@ -1019,6 +971,10 @@ def test_quad_single_element():
                 mg.nodes[1].reshape(-1), "o")
         plt.show()
 
+# }}}
+
+
+# {{{ test_quad_multi_element
 
 def test_quad_multi_element():
     from meshmode.mesh.generation import generate_box_mesh
@@ -1038,6 +994,8 @@ def test_quad_multi_element():
                 mg.nodes[0].reshape(-1),
                 mg.nodes[1].reshape(-1), "o")
         plt.show()
+
+# }}}
 
 
 def test_vtk_overwrite(ctx_getter):

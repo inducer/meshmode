@@ -54,6 +54,7 @@ Predefined Boundary tags
 .. autoclass:: BTAG_ALL
 .. autoclass:: BTAG_REALLY_ALL
 .. autoclass:: BTAG_NO_BOUNDARY
+.. autoclass:: BTAG_PARTITION
 """
 
 
@@ -88,7 +89,34 @@ class BTAG_NO_BOUNDARY(object):  # noqa
     pass
 
 
-SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY])
+class BTAG_PARTITION(object):  # noqa
+    """
+    A boundary tag indicating that this edge is adjacent to an element of
+    another :class:`Mesh`. The partition number of the adjacent mesh
+    is given by ``part_nr``.
+
+    .. attribute:: part_nr
+
+    .. versionadded:: 2017.1
+    """
+    def __init__(self, part_nr):
+        self.part_nr = int(part_nr)
+
+    def __hash__(self):
+        return hash((type(self), self.part_nr))
+
+    def __eq__(self, other):
+        if isinstance(other, BTAG_PARTITION):
+            return self.part_nr == other.part_nr
+        else:
+            return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
+SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
+                   BTAG_PARTITION])
 
 # }}}
 
@@ -458,6 +486,82 @@ class FacialAdjacencyGroup(Record):
 # }}}
 
 
+# {{{ partition adjacency
+
+class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
+    """
+    Describes boundary adjacency information of elements in
+    :class:`MeshElementGroup`.
+
+    .. attribute:: igroup
+
+        The group number of this group.
+
+    .. attribute:: ineighbor_group
+
+        *None* for boundary faces.
+
+    .. attribute:: elements
+
+        Group-local element numbers.
+        Element ``element_id_dtype elements[i]`` and face
+        ``face_id_dtype element_faces[i]`` is connected to neighbor element
+        ``element_id_dtype global_neighbors[i]`` with face
+        ``face_id_dtype global_neighbor_faces[i]``. The partition number it connects
+        to is ``neighbor_partitions[i]``.
+
+    .. attribute:: element_faces
+
+        ``face_id_dtype element_faces[i]`` gives the face of
+        ``element_id_dtype elements[i]`` that is connected to
+        ``global_neighbors[i]``.
+
+    .. attribute:: neighbors
+
+        Since this is a boundary, ``element_id_dtype neighbors[i]`` is interpreted
+        as a boundary tag. ``-neighbors[i]`` should be interpreted according to
+        :class:``Mesh.boundary_tags``.
+
+    .. attribute:: global_neighbors
+
+        Mesh-wide element numbers.
+        ``element_id_dtype global_neighbors[i]`` gives the element number within the
+        neighboring partition of the element connected to
+        ``element_id_dtype elements[i]``. Use ``find_group_instances()`` to find the
+        group that the element belongs to, then subtract ``element_nr_base`` to find
+        the element of the group.
+
+        If ``global_neighbors[i]`` is negative, ``elements[i]`` is on a true
+        boundary and is not connected to any other :class:``Mesh``.
+
+    .. attribute:: neighbor_faces
+
+        ``face_id_dtype global_neighbor_faces[i]`` gives face index within the
+        neighboring partition of the face connected to
+        ``element_id_dtype elements[i]``
+
+        If ``neighbor_partitions[i]`` is negative, ``elements[i]`` is on a true
+        boundary and is not connected to any other :class:``Mesh``.
+
+    .. attribute:: neighbor_partitions
+
+        ``neighbor_partitions[i]`` gives the partition number that ``elements[i]``
+        is connected to.
+
+        If ``neighbor_partitions[i]`` is negative, ``elements[i]`` is on a true
+        boundary and is not connected to any other :class:``Mesh``.
+
+    .. versionadded:: 2017.1
+    """
+
+    def __eq__(self, other):
+        return (super.__eq__(self, other)
+            and np.array_equal(self.global_neighbors, other.global_neighbors)
+            and np.array_equal(self.neighbor_partitions, other.neighbor_partitions))
+
+# }}}
+
+
 # {{{ mesh
 
 class Mesh(Record):
@@ -487,7 +591,8 @@ class Mesh(Record):
         the set of facial adjacency relations between group *igrp*
         and *ineighbor_group*. *ineighbor_group* and *igrp* may be
         identical, or *ineighbor_group* may be *None*, in which case
-        a group containing boundary faces is returned.
+        an :class:``InterPartitionAdjacency`` group containing boundary
+        faces is returned.
 
         Referencing this attribute may raise
         :exc:`meshmode.DataUnavailable`.
@@ -535,6 +640,7 @@ class Mesh(Record):
 
     .. automethod:: __eq__
     .. automethod:: __ne__
+    .. automethos:: adjacency_list
     """
 
     face_id_dtype = np.int8
@@ -578,6 +684,7 @@ class Mesh(Record):
             will result in exceptions. Lastly, a data structure as described in
             :attr:`facial_adjacency_groups` may be passed.
         """
+
         el_nr = 0
         node_nr = 0
 
