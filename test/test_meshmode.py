@@ -1045,28 +1045,19 @@ def test_vtk_overwrite(ctx_getter):
 
     def _try_write_vtk(writer, obj):
         import os
+        from meshmode import FileExistsError
+
         filename = "test_vtk_overwrite.vtu"
         if os.path.exists(filename):
             os.remove(filename)
 
         writer(filename, [])
-        try:
+        with pytest.raises(FileExistsError):
             writer(filename, [])
-            runtime_error = False
-        except RuntimeError:
-            print("file cannot be overwritten")
-            runtime_error = True
-        assert runtime_error
 
-        try:
-            writer(filename, [], overwrite=True)
-            print("file overwritten")
-            runtime_error = False
-        except RuntimeError:
-            runtime_error = True
-        assert not runtime_error
-
-        os.remove(filename)
+        writer(filename, [], overwrite=True)
+        if os.path.exists(filename):
+            os.remove(filename)
 
     ctx = ctx_getter()
     queue = cl.CommandQueue(ctx)

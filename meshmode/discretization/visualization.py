@@ -336,11 +336,12 @@ class Visualizer(object):
                 vector_format=VF_LIST_OF_COMPONENTS))
 
         import os
+        from meshmode import FileExistsError
         if os.path.exists(file_name):
             if overwrite:
                 os.remove(file_name)
             else:
-                raise RuntimeError("output file '%s' already exists" % file_name)
+                raise FileExistsError("output file '%s' already exists" % file_name)
 
         with open(file_name, "w") as outf:
             AppendedDataXMLGenerator(compressor)(grid).write(outf)
@@ -437,11 +438,12 @@ def write_nodal_adjacency_vtk_file(file_name, mesh,
                 dtype=np.uint8))
 
     import os
+    from meshmode import FileExistsError
     if os.path.exists(file_name):
         if overwrite:
             os.remove(file_name)
         else:
-            raise RuntimeError("output file '%s' already exists" % file_name)
+            raise FileExistsError("output file '%s' already exists" % file_name)
 
     with open(file_name, "w") as outf:
         AppendedDataXMLGenerator(compressor)(grid).write(outf)

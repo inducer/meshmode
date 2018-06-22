@@ -226,11 +226,12 @@ def write_vertex_vtk_file(mesh, file_name,
             cell_types=cell_types)
 
     import os
+    from meshmode import FileExistsError
     if os.path.exists(file_name):
         if overwrite:
             os.remove(file_name)
         else:
-            raise RuntimeError("output file '%s' already exists" % file_name)
+            raise FileExistsError("output file '%s' already exists" % file_name)
 
     with open(file_name, "w") as outf:
         AppendedDataXMLGenerator(compressor)(grid).write(outf)

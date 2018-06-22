@@ -26,7 +26,10 @@ THE SOFTWARE.
 __doc__ = """
 .. exception:: Error
 .. exception:: DataUnavailable
+.. exception:: FileExistsError
 """
+
+import six
 
 
 class Error(RuntimeError):
@@ -35,3 +38,10 @@ class Error(RuntimeError):
 
 class DataUnavailable(Error):
     pass
+
+
+if six.PY3:
+    from builtins import FileExistsError
+else:
+    class FileExistsError(OSError):
+        pass
