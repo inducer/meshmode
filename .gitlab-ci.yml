@@ -1,12 +1,12 @@
-Python 2.7 Nvidia K40:
+Python 3.6 Nvidia K40:
   script:
-  - export PY_EXE=python2.7
+  - export PY_EXE=python3.6
   - export PYOPENCL_TEST=nvi:k40
   - export EXTRA_INSTALL="numpy mako"
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
   - ". ./build-and-test-py-project.sh"
   tags:
-  - python2.7
+  - python3.6
   - nvidia-k40
   except:
   - tags
@@ -25,15 +25,15 @@ Python 2.7 POCL:
   except:
   - tags
 
-Python 3.5 POCL:
+Python 3.6 POCL:
   script:
-  - export PY_EXE=python3.5
+  - export PY_EXE=python3.6
   - export PYOPENCL_TEST=portable
   - export EXTRA_INSTALL="numpy mako mpi4py"
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
   - ". ./build-and-test-py-project.sh"
   tags:
-  - python3.5
+  - python3.6
   - pocl
   - mpi
   except:
