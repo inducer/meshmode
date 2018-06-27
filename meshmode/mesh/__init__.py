@@ -1236,7 +1236,8 @@ def as_python(mesh, function_name="make_mesh"):
 
 # {{{ check_bc_coverage
 
-def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False, true_boundary_only=True):
+def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
+        true_boundary_only=True):
     """Verify boundary condition coverage.
 
     Given a list of boundary tags as *boundary_tags*, this function verifies
