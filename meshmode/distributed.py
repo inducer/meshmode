@@ -40,6 +40,9 @@ TAG_SEND_BOUNDARY = TAG_BASE + 2
 __doc__ = """
 .. autoclass:: MPIMeshDistributor
 .. autoclass:: MPIBoundaryTransceiver
+
+.. autofunction:: get_partition_by_pymetis
+.. autofunction:: get_connected_partitions
 """
 
 
@@ -207,10 +210,31 @@ class MPIBoundaryCommSetupHelper(object):
 # }}}
 
 
-def get_connected_partitions(mesh):
+def get_partition_by_pymetis(mesh, num_parts, **kwargs):
+    """Return a mesh partition created by :mod:`pymetis`.
+
+    :arg mesh: A :class:`meshmode.mesh.Mesh` instance
+    :arg num_parts: the number of parts in the mesh partition
+    :arg kwargs: Passed unmodified to :func:`pymetis.part_graph`.
+    :returns: a :class:`numpy.ndarray` with one entry per element indicating
+        to which partition each element belongs, with entries between ``0`` and
+        ``num_parts-1``.
     """
-    :arg mesh: A :class:`Mesh`
-    Returns the set of partition numbers that are connected to `mesh`
+    from pymetis import part_graph
+    _, p = part_graph(num_parts,
+                      xadj=mesh.nodal_adjacency.neighbors_starts.tolist(),
+                      adjncy=mesh.nodal_adjacency.neighbors.tolist(),
+                      **kwargs)
+
+    return np.array(p)
+
+
+def get_connected_partitions(mesh):
+    """For a local mesh part in *mesh*, determine the set of numbers
+    of remote partitions to which this mesh piece is connected.
+
+    :arg mesh: A :class:`meshmode.mesh.Mesh` instance
+    :returns: the set of partition numbers that are connected to `mesh`
     """
     connected_parts = set()
     from meshmode.mesh import InterPartitionAdjacencyGroup
@@ -220,5 +244,6 @@ def get_connected_partitions(mesh):
             connected_parts = connected_parts.union(
                                         adj[None].neighbor_partitions[indices])
     return connected_parts
+
 
 # vim: foldmethod=marker

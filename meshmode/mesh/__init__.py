@@ -1236,7 +1236,8 @@ def as_python(mesh, function_name="make_mesh"):
 
 # {{{ check_bc_coverage
 
-def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False):
+def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
+        true_boundary_only=True):
     """Verify boundary condition coverage.
 
     Given a list of boundary tags as *boundary_tags*, this function verifies
@@ -1247,6 +1248,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False):
 
     :arg incomplete_ok: Do not report an error if some faces are not covered
       by the boundary conditions.
+    :arg true_boundary_only: only verify for faces tagged with :class:`BTAG_ALL`.
     """
 
     for igrp, fagrp_map in enumerate(mesh.facial_adjacency_groups):
@@ -1259,7 +1261,16 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False):
 
         nb_el_bits = -nb_elements
 
+        # An array of flags for each face indicating whether we have encountered
+        # a boundary condition for that face.
         seen = np.zeros_like(nb_el_bits, dtype=np.bool)
+
+        if true_boundary_only:
+            tag_bit = mesh.boundary_tag_bit(BTAG_ALL)
+            tag_set = (nb_el_bits & tag_bit) != 0
+
+            # Consider non-boundary faces 'seen'
+            seen = seen | ~tag_set
 
         for btag in boundary_tags:
             tag_bit = mesh.boundary_tag_bit(btag)
