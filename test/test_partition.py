@@ -531,13 +531,12 @@ def test_mpi_communication(num_partitions, order):
     num_ranks = num_partitions
     from subprocess import check_call
     import sys
-    newenv = os.environ.copy()
-    newenv["RUN_WITHIN_MPI"] = "1"
-    newenv["order"] = str(order)
     check_call([
-        "mpiexec", "-np", str(num_ranks), "-x", "RUN_WITHIN_MPI",
+        "mpiexec", "-np", str(num_ranks),
+        "-x", "RUN_WITHIN_MPI=1",
+        "-x", "order=%d" % order,
         sys.executable, __file__],
-        env=newenv)
+        )
 
 # }}}
 
