@@ -41,10 +41,10 @@ __doc__ = """
 
 def separate_by_real_and_imag(data, real_only):
     for name, field in data:
-        from pytools.obj_array import log_shape
+        from pytools.obj_array import log_shape, is_obj_array
         ls = log_shape(field)
 
-        if ls != () and ls[0] > 1:
+        if is_obj_array(field):
             assert len(ls) == 1
             from pytools.obj_array import (
                     oarray_real_copy, oarray_imag_copy,
