@@ -535,7 +535,9 @@ def test_mpi_communication(num_partitions, order):
         "mpiexec", "-np", str(num_ranks),
         "-x", "RUN_WITHIN_MPI=1",
         "-x", "order=%d" % order,
-        sys.executable, __file__],
+
+        # https://mpi4py.readthedocs.io/en/stable/mpi4py.run.html
+        sys.executable, "-m", "mpi4py.run", __file__],
         )
 
 # }}}
