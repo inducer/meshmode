@@ -574,10 +574,17 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
     for i in range(uniform_refinement_rounds):
         refiner.refine_uniformly()
 
+    # Calculating spherical harmonics can cause floating-point errors like overflow
+    # or NaN. Raise FloatingPointError when this occurs.
+    old_settings = np.geterr()
+    np.seterr(all='raise')
+
     nodes_sph = sph_harm(m, n, unwarped_mesh.groups[0].nodes).real
     lo = np.min(nodes_sph)
     hi = np.max(nodes_sph)
     del nodes_sph
+
+    np.seterr(**old_settings)
 
     from functools import partial
     unwarped_mesh = warp_and_refine_until_resolved(
