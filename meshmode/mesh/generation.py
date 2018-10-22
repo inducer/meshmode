@@ -825,8 +825,9 @@ def warp_and_refine_until_resolved(
         warped_mesh = warp_callable(unwarped_mesh)
 
         # test whether there are invalid values in warped mesh
-        if np.isnan(warped_mesh.vertices).any():
-            raise FloatingPointError("Invalid vertices in warped mesh")
+        if not np.isfinite(warped_mesh.vertices).all():
+            raise FloatingPointError("Warped mesh contains non-finite vertices "
+                                     "(NaN or Inf)")
 
         for egrp in warped_mesh.groups:
             dim, nunit_nodes = egrp.unit_nodes.shape
