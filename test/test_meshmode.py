@@ -155,7 +155,7 @@ def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
         bdry_f = f(bdry_x)
         bdry_f_2 = bdry_connection(queue, vol_f)
 
-        if mesh_name == "blob" and dim == 2:
+        if mesh_name == "blob" and dim == 2 and mesh.nelements < 500:
             mat = bdry_connection.full_resample_matrix(queue).get(queue)
             bdry_f_2_by_mat = mat.dot(vol_f.get())
 
