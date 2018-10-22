@@ -829,6 +829,11 @@ def warp_and_refine_until_resolved(
             raise FloatingPointError("Warped mesh contains non-finite vertices "
                                      "(NaN or Inf)")
 
+        for group in warped_mesh.groups:
+            if not np.isfinite(group.nodes).all():
+                raise FloatingPointError("Warped mesh contains non-finite nodes "
+                                         "(NaN or Inf)")
+
         for egrp in warped_mesh.groups:
             dim, nunit_nodes = egrp.unit_nodes.shape
 
