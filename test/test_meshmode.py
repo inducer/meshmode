@@ -88,7 +88,7 @@ def test_circle_mesh(do_plot=False):
     FACE_RESTR_INTERIOR,
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
-    ("blob", 2, [1e-1, 8e-2, 5e-2]),
+    ("blob", 2, [8e-2, 4e-2, 2e-2]),
     ("warp", 2, [10, 20, 30]),
     ("warp", 3, [10, 20, 30]),
     ])
@@ -155,7 +155,7 @@ def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
         bdry_f = f(bdry_x)
         bdry_f_2 = bdry_connection(queue, vol_f)
 
-        if mesh_name == "blob" and dim == 2:
+        if mesh_name == "blob" and dim == 2 and mesh.nelements < 500:
             mat = bdry_connection.full_resample_matrix(queue).get(queue)
             bdry_f_2_by_mat = mat.dot(vol_f.get())
 
@@ -595,8 +595,7 @@ def test_sanity_single_element(ctx_factory, dim, order, visualize=False):
 
     normal_outward_check = bind(bdry_discr,
             sym.normal(dim)
-            |
-            (sym.nodes(dim) + 0.5*sym.ones_vec(dim)),
+            | (sym.nodes(dim) + 0.5*sym.ones_vec(dim)),
             )(queue).as_scalar() > 0
 
     assert normal_outward_check.get().all(), normal_outward_check.get()
@@ -680,7 +679,7 @@ def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
 
     from pytential import bind, sym
 
-    for h in [0.2, 0.14, 0.1]:
+    for h in [0.2, 0.1, 0.05]:
         from meshmode.mesh.io import generate_gmsh, FileSource
         mesh = generate_gmsh(
                 FileSource(src_file), dim, order=mesh_order,
