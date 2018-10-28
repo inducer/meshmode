@@ -542,13 +542,9 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
         theta = np.arccos(z/r)
         phi = np.arctan2(y, x)
 
-        try:
-            from pyfmmlib import ylgndr_vec
-            legendre = ylgndr_vec(n, np.cos(phi))[n][m].reshape(phi.shape)
-            return legendre * np.sqrt(1/(4 * np.pi)) * np.exp(m * theta * 1j)
-        except ImportError:
-            import scipy.special as sps
-            return sps.sph_harm(m, n, phi, theta)
+        import scipy.special as sps
+        # Note phi and theta are interchanged
+        return sps.sph_harm(m, n, phi, theta)
 
     def map_coords(pts):
         r = np.sqrt(np.sum(pts**2, axis=0))
