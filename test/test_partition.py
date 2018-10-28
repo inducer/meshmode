@@ -299,8 +299,8 @@ def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions):
                 f_groups = mesh.facial_adjacency_groups[p_grp_num]
                 for p_bnd_adj in f_groups.values():
                     for idx in range(len(p_bnd_adj.elements)):
-                        if (p_elem == p_bnd_adj.elements[idx] and
-                                 face == p_bnd_adj.element_faces[idx]):
+                        if (p_elem == p_bnd_adj.elements[idx]
+                                 and face == p_bnd_adj.element_faces[idx]):
                             assert p_n_elem == p_bnd_adj.neighbors[idx],\
                                     "Tag does not give correct neighbor"
                             assert n_face == p_bnd_adj.neighbor_faces[idx],\

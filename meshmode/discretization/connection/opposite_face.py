@@ -235,8 +235,7 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
 
         unit_node_dist = np.max(np.max(np.abs(
                 src_unit_nodes[:, todo_elements, :]
-                -
-                template_unit_nodes.reshape(dim, 1, -1)),
+                - template_unit_nodes.reshape(dim, 1, -1)),
                 axis=2), axis=0)
 
         close_els = todo_elements[unit_node_dist < tol]
@@ -244,8 +243,7 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
 
         unit_node_dist = np.max(np.max(np.abs(
                 src_unit_nodes[:, todo_elements, :]
-                -
-                template_unit_nodes.reshape(dim, 1, -1)),
+                - template_unit_nodes.reshape(dim, 1, -1)),
                 axis=2), axis=0)
 
         from meshmode.discretization.connection import InterpolationBatch

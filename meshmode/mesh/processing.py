@@ -190,8 +190,8 @@ def partition_mesh(mesh, part_per_element, part_num):
             for parent_facial_group in parent_adj.values():
                 indices, = np.nonzero(parent_facial_group.elements == parent_elem)
                 for idx in indices:
-                    if (parent_facial_group.neighbors[idx] >= 0 and
-                               parent_facial_group.element_faces[idx] == face):
+                    if (parent_facial_group.neighbors[idx] >= 0
+                            and parent_facial_group.element_faces[idx] == face):
                         rank_neighbor = (parent_facial_group.neighbors[idx]
                                             + parent_elem_base)
                         n_face = parent_facial_group.neighbor_faces[idx]
