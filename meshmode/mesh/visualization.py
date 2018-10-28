@@ -130,8 +130,7 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
                 for iface, fvi in enumerate(grp.face_vertex_indices()):
                     face_center = (
                             0.3*el_center
-                            +
-                            0.7*np.mean(elverts[:, fvi], axis=-1))
+                            + 0.7*np.mean(elverts[:, fvi], axis=-1))
 
                     pt.text(face_center[0], face_center[1], str(iface), fontsize=12,
                             ha="center", va="center", color="purple",

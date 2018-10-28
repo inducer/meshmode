@@ -126,10 +126,10 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                             np.linalg.lstsq(transformation, vertex_transformed)[0:2]
 
                     is_in_element_span = (
-                            residual.size == 0 or
-                            np.linalg.norm(vertex_transformed) == 0 or
-                            (np.linalg.norm(residual) /
-                                np.linalg.norm(vertex_transformed)) <= tol)
+                            residual.size == 0
+                            or np.linalg.norm(vertex_transformed) == 0
+                            or (np.linalg.norm(residual)
+                                / np.linalg.norm(vertex_transformed)) <= tol)
 
                     is_connected = (
                             is_in_element_span
