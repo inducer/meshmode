@@ -165,9 +165,10 @@ def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
         err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
         eoc_rec.add_data_point(h, err)
 
+    order_slack = 0.75 if mesh_name == "blob" else 0.5
     print(eoc_rec)
     assert (
-            eoc_rec.order_estimate() >= order-0.5
+            eoc_rec.order_estimate() >= order-order_slack
             or eoc_rec.max_error() < 1e-14)
 
 # }}}
