@@ -88,7 +88,7 @@ def test_circle_mesh(do_plot=False):
     FACE_RESTR_INTERIOR,
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
-    ("blob", 2, [8e-2, 4e-2, 2e-2]),
+    ("blob", 2, [8e-2, 4e-2, 1e-2]),
     ("warp", 2, [10, 20, 30]),
     ("warp", 3, [10, 20, 30]),
     ])
