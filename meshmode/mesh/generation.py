@@ -543,7 +543,9 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
         phi = np.arctan2(y, x)
 
         import scipy.special as sps
-        # Note phi and theta are interchanged
+        # Note: numpy arguments are called (theta, phi).
+        # This matches the notation in the QBX3D paper?
+        ### FIXME
         return sps.sph_harm(m, n, phi, theta)
 
     def map_coords(pts):
