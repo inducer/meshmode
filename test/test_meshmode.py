@@ -88,7 +88,7 @@ def test_circle_mesh(do_plot=False):
     FACE_RESTR_INTERIOR,
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
-    ("blob", 2, [8e-2, 4e-2, 1e-2]),
+    ("blob", 2, ["8e-2", "6e-2", "4e-2"]),
     ("warp", 2, [10, 20, 30]),
     ("warp", 3, [10, 20, 30]),
     ])
@@ -116,17 +116,21 @@ def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
         if mesh_name == "blob":
             assert dim == 2
 
-            h = mesh_par
+            h = float(mesh_par)
 
-            from meshmode.mesh.io import generate_gmsh, FileSource
-            print("BEGIN GEN")
-            mesh = generate_gmsh(
-                    FileSource("blob-2d.step"), 2, order=order,
-                    force_ambient_dim=2,
-                    other_options=[
-                        "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
-                    )
-            print("END GEN")
+            #from meshmode.mesh.io import generate_gmsh, FileSource
+            # print("BEGIN GEN")
+            # mesh = generate_gmsh(
+            #         FileSource("blob-2d.step"), 2, order=order,
+            #         force_ambient_dim=2,
+            #         other_options=[
+            #             "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
+            #         )
+            # print("END GEN")
+            from meshmode.mesh.io import read_gmsh
+            mesh = read_gmsh(
+                    "blob2d-order%d-h%s.msh" % (order, mesh_par),
+                    force_ambient_dim=2)
         elif mesh_name == "warp":
             from meshmode.mesh.generation import generate_warped_rect_mesh
             mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par)
