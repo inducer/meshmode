@@ -543,6 +543,13 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
         phi = np.arctan2(y, x)
 
         import scipy.special as sps
+        # Note: This matches the spherical harmonic
+        # convention in the QBX3D paper:
+        # https://arxiv.org/abs/1805.06106
+        #
+        # Numpy takes arguments in the order (theta, phi)
+        # *and* swaps their meanings, so passing the
+        # arguments swapped maintains the intended meaning.
         return sps.sph_harm(m, n, phi, theta)
 
     def map_coords(pts):
@@ -818,6 +825,16 @@ def warp_and_refine_until_resolved(
         refine_flags = np.zeros(unwarped_mesh.nelements, dtype=np.bool)
 
         warped_mesh = warp_callable(unwarped_mesh)
+
+        # test whether there are invalid values in warped mesh
+        if not np.isfinite(warped_mesh.vertices).all():
+            raise FloatingPointError("Warped mesh contains non-finite vertices "
+                                     "(NaN or Inf)")
+
+        for group in warped_mesh.groups:
+            if not np.isfinite(group.nodes).all():
+                raise FloatingPointError("Warped mesh contains non-finite nodes "
+                                         "(NaN or Inf)")
 
         for egrp in warped_mesh.groups:
             dim, nunit_nodes = egrp.unit_nodes.shape
