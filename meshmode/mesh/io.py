@@ -59,11 +59,10 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         self.element_types = None
         self.element_markers = None
         self.tags = None
-        self.tag_to_my_index = None  # map name of tag to index in
-                                     # attr:: self.tags
+        self.tag_to_my_index = None  # map name of tag to index in attr:: self.tags
         self.gmsh_tag_index_to_mine = None
-        self.node_2_elts = None      # list of lists, each node maps to
-                                     # a list of elements it is a member of 
+        # list of lists, each node maps to a list of elements it is a member of
+        self.node_2_elts = None
 
         if mesh_construction_kwargs is None:
             mesh_construction_kwargs = {}
@@ -102,7 +101,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             tag_numbers = [tag_numbers[0]]
         self.element_markers[element_nr] = tag_numbers
 
-        # record this element in node to element map 
+        # record this element in node to element map
         for node in lexicographic_nodes:
             self.node_2_elts[node].append(element_nr)
 
@@ -122,8 +121,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             # add tag if new
             self.tag_to_my_index[name] = len(self.tags)
             self.gmsh_tag_index_to_mine[index] = len(self.tags)
-            self.tags.append((name, index, dimension)) 
-        else: 
+            self.tags.append((name, index, dimension))
+        else:
             # ensure not trying to add different tags with same name
             ndx = self.tag_to_my_index[name]
             _, prev_index, prev_dim = self.tags[ndx]
@@ -205,7 +204,6 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     if tag not in self.element_markers[se]:
                         self.element_markers[se].append(tag)
 
-
         element_index_mine_to_gmsh = {}
         for group_el_type, ngroup_elements in six.iteritems(el_type_hist):
             if group_el_type.dimensions != mesh_bulk_dim:
@@ -222,7 +220,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             i = 0
 
             for element, (el_vertices, el_nodes, el_type) in enumerate(zip(
-                self.element_vertices, self.element_nodes, self.element_types)):
+                    self.element_vertices, self.element_nodes, self.element_types)):
                 if el_type is not group_el_type:
                     continue
 
@@ -288,21 +286,21 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         m = Mesh(
                 vertices, groups,
                 is_conforming=is_conforming,
-                boundary_tags = bdy_tags,
+                boundary_tags=bdy_tags,
                 **self.mesh_construction_kwargs)
 
         # now mark boundaries with boundary tags
         if len(self.tags) > 0:
             for igrp in range(len(m.groups)):
                 bdry_fagrp = m.facial_adjacency_groups[igrp].get(None, None)
-                
+
                 if bdry_fagrp is None:
                     continue
 
                 for ndx, e in enumerate(bdry_fagrp.elements):
                     gmsh_e = element_index_mine_to_gmsh[e]
                     for tag_number in self.element_markers[gmsh_e]:
-                        name, _, _ = self.tags[self.gmsh_tag_index_to_mine[tag_number]]
+                        name = self.tags[self.gmsh_tag_index_to_mine[tag_number]][0]
                         btag_bit = m.boundary_tag_bit(name)
 
                         neg = bdry_fagrp.neighbors[ndx]
