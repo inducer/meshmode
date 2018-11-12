@@ -58,9 +58,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         self.elements = None
         self.element_types = None
         self.element_markers = None
-        self.tags = None
-        self.tag_to_my_index = None  # map name of tag to index in attr:: self.tags
-        self.gmsh_tag_index_to_mine = None
+        self.tags = []
+        self.tag_to_my_index = {}  # map name of tag to index in attr:: self.tags
+        self.gmsh_tag_index_to_mine = {}
         # list of lists, each node maps to a list of elements it is a member of
         self.node_2_elts = None
 
@@ -110,15 +110,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
     # May raise ValueError if try to add different tags with the same name
     def add_tag(self, name, index, dimension):
-        if self.tags is None:
-            self.tags = []
-        if self.tag_to_my_index is None:
-            self.tag_to_my_index = {}
-        if self.gmsh_tag_index_to_mine is None:
-            self.gmsh_tag_index_to_mine = {}
-
+        # add tag if new
         if name not in self.tag_to_my_index:
-            # add tag if new
             self.tag_to_my_index[name] = len(self.tags)
             self.gmsh_tag_index_to_mine[index] = len(self.tags)
             self.tags.append((name, index, dimension))
