@@ -61,8 +61,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         self.tags = []
         self.tag_to_my_index = {}  # map name of tag to index in attr:: self.tags
         self.gmsh_tag_index_to_mine = {}
-        # list of lists, each node maps to a list of elements it is a member of
-        self.node_2_elts = None
+        # list of sets, each node maps to a set of elements it is a member of
+        self.node_to_containing_elements = None
 
         if mesh_construction_kwargs is None:
             mesh_construction_kwargs = {}
@@ -74,11 +74,11 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         # Preallocation not done for performance, but to assign values at indices
         # in random order.
         self.points = [None] * count
-        self.node_2_elts = [None] * count
+        self.node_to_containing_elements = [None] * count
 
     def add_node(self, node_nr, point):
         self.points[node_nr] = point
-        self.node_2_elts[node_nr] = []
+        self.node_to_containing_elements[node_nr] = set()
 
     def finalize_nodes(self):
         self.points = np.array(self.points, dtype=np.float64)
@@ -103,7 +103,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         # record this element in node to element map
         for node in lexicographic_nodes:
-            self.node_2_elts[node].append(element_nr)
+            self.node_to_containing_elements[node].add(element_nr)
 
     def finalize_elements(self):
         pass
@@ -168,34 +168,48 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         bulk_el_types = set()
 
-        # get elements of dimension mesh_bulk_dim which contain elt
-        def get_super_elts(elt):
-            super_elts = []
-            for pos_super in self.node_2_elts[self.element_nodes[elt][0]]:
-                if self.element_types[pos_super].dimensions != mesh_bulk_dim:
-                    continue
+        """Returns a set of the indices of elements with dimension mesh_bulk_dim
+        which contain all the nodes of elt.
 
-                contains_each_node = True
-                for node in self.element_nodes[elt][1:]:
-                    if pos_super in self.node_2_elts[node]:
-                        contains_each_node = False
-                        break
-                if contains_each_node:
-                    super_elts.append(pos_super)
+        :arg element_ndx: The index of an element
+        """
+        def get_higher_dim_element(element_ndx):
+            # Take the intersection of the sets of elements which
+            # contain at least one of the nodes used by the
+            # element at element_ndx
+            higher_dim_elts = None
+            for node in self.element_nodes[element_ndx]:
+                if higher_dim_elts is None:
+                    higher_dim_elts = set(self.node_to_containing_elements[node])
+                else:
+                    higher_dim_elts &= self.node_to_containing_elements[node]
 
-            return super_elts
+            # only keep elements of dimension mesh_bulk_dim
+            higher_dim_elts = {e for e in higher_dim_elts
+                               if self.element_types[e].dimensions
+                               == mesh_bulk_dim}
+
+            # if no higher dimension elements, return empty set
+            if higher_dim_elts is None:
+                higher_dim_elts = set()
+
+            return higher_dim_elts
 
         # populate tags from elements of small dimension to elements of
         # full dimension (mesh_bulk_dim)
-        for e in range(len(self.element_types)):
-            if self.element_types[e].dimensions == mesh_bulk_dim:
-                continue
+        if self.tags:
+            for elt_ndx in range(len(self.element_types)):
+                if self.element_types[elt_ndx].dimensions == mesh_bulk_dim:
+                    continue
+                # if this element has no tags, continue
+                if not self.element_markers[elt_ndx]:
+                    continue
 
-            super_elts = get_super_elts(e)
-            for se in super_elts:
-                for tag in self.element_markers[e]:
-                    if tag not in self.element_markers[se]:
-                        self.element_markers[se].append(tag)
+                higher_dim_elements = get_higher_dim_element(elt_ndx)
+                for higher_dim_elt in higher_dim_elements:
+                    for tag in self.element_markers[elt_ndx]:
+                        if tag not in self.element_markers[higher_dim_elt]:
+                            self.element_markers[higher_dim_elt].append(tag)
 
         element_index_mine_to_gmsh = {}
         for group_el_type, ngroup_elements in six.iteritems(el_type_hist):
