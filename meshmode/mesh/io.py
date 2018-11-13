@@ -169,7 +169,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         bulk_el_types = set()
 
         def get_higher_dim_element(element_ndx):
-            """Returns a set of the indices of elements with dimension 
+            """Returns a set of the indices of elements with dimension
             mesh_bulk_dim which contain all the nodes of elt.
 
             :arg element_ndx: The index of an element
@@ -297,7 +297,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 **self.mesh_construction_kwargs)
 
         # now mark boundaries with boundary tags
-        if len(self.tags) > 0:
+        if self.tags:
             for igrp in range(len(m.groups)):
                 bdry_fagrp = m.facial_adjacency_groups[igrp].get(None, None)
 
