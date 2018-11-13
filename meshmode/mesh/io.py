@@ -168,12 +168,12 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         bulk_el_types = set()
 
-        """Returns a set of the indices of elements with dimension mesh_bulk_dim
-        which contain all the nodes of elt.
-
-        :arg element_ndx: The index of an element
-        """
         def get_higher_dim_element(element_ndx):
+            """Returns a set of the indices of elements with dimension 
+            mesh_bulk_dim which contain all the nodes of elt.
+
+            :arg element_ndx: The index of an element
+            """
             # Take the intersection of the sets of elements which
             # contain at least one of the nodes used by the
             # element at element_ndx
