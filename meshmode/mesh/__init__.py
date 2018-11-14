@@ -717,6 +717,8 @@ class Mesh(Record):
 
         # {{{ boundary tags
 
+        self._element_boundary_tags = element_boundary_tags
+
         if boundary_tags is None:
             boundary_tags = []
         else:
@@ -767,10 +769,6 @@ class Mesh(Record):
                 element_id_dtype=np.dtype(element_id_dtype),
                 is_conforming=is_conforming,
                 )
-        if is_conforming and element_boundary_tags and \
-                facial_adjacency_groups is None:
-            self._facial_adjacency_groups = \
-                _compute_facial_adjacency_from_vertices(self, element_boundary_tags)
 
         if not skip_tests:
             if node_vertex_consistency_tolerance is not False:
@@ -888,7 +886,9 @@ class Mesh(Record):
                         "be computed for known-conforming meshes")
 
             self._facial_adjacency_groups = \
-                    _compute_facial_adjacency_from_vertices(self)
+                _compute_facial_adjacency_from_vertices(self,
+                                                        self._element_boundary_tags)
+            self._element_boundary_tags = None
 
         return self._facial_adjacency_groups
 
