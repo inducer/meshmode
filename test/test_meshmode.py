@@ -110,11 +110,11 @@ def test_boundary_tags():
     # raise errors if wrong number of elements marked
     if num_marked_inner_bdy != num_on_inner_bdy:
         raise ValueError("%i marked on inner boundary, should be %i" %
-                         num_marked_inner_bdy, num_on_inner_bdy)
+                         (num_marked_inner_bdy, num_on_inner_bdy))
 
     if num_marked_outer_bdy != num_on_outer_bdy:
         raise ValueError("%i marked on outer boundary, should be %i" %
-                         num_marked_outer_bdy, num_on_outer_bdy)
+                         (num_marked_outer_bdy, num_on_outer_bdy))
 
 # }}}
 
