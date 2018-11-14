@@ -651,6 +651,7 @@ class Mesh(Record):
             nodal_adjacency=None,
             facial_adjacency_groups=None,
             boundary_tags=None,
+            element_boundary_tags=None,
             vertex_id_dtype=np.int32,
             element_id_dtype=np.int32,
             is_conforming=None):
@@ -683,6 +684,25 @@ class Mesh(Record):
             :attr:`element_neighbors_starts` and :attr:`element_neighbors`
             will result in exceptions. Lastly, a data structure as described in
             :attr:`facial_adjacency_groups` may be passed.
+        :arg boundary_tags: One of two options:
+            *None*, in which case the mesh uses only default boundary
+            tags. A list of names of boundary tags, in which case the
+            mesh appends any default tags not already included.
+        :arg element_boundary_tags:
+            If facial_adjacency_groups is included or is_conforming is
+            False, nothing is done.
+            Else, one of two options:
+            *None*, in which case the mesh marks only default boundary
+            tags. Else, a list of lists indicated which boundary tags
+            are associated to which elements. The [igrp] entry is a
+            list of the nonempty boundary tags associated to elements in group
+            at index igrp. Relative order of elements is preserved.
+            EXAMPLE: if group igrp has 3 elements, the first is tagged
+            as 'inner_bdy', the second has no boundary tags, and the
+            third is tagged 'outer_bdy' and 'exterior', then we would
+            have
+            element_boundary_tags[igrp] =
+                [['inner_bdy'], ['outer_bdy', 'exterior']]
         """
 
         el_nr = 0
@@ -747,6 +767,10 @@ class Mesh(Record):
                 element_id_dtype=np.dtype(element_id_dtype),
                 is_conforming=is_conforming,
                 )
+        if is_conforming and element_boundary_tags and \
+                facial_adjacency_groups is None:
+            self._facial_adjacency_groups = \
+                _compute_facial_adjacency_from_vertices(self, element_boundary_tags)
 
         if not skip_tests:
             if node_vertex_consistency_tolerance is not False:
@@ -996,7 +1020,11 @@ def _compute_nodal_adjacency_from_vertices(mesh):
 
 # {{{ vertex-based facial adjacency
 
-def _compute_facial_adjacency_from_vertices(mesh):
+def _compute_facial_adjacency_from_vertices(mesh, element_boundary_tags=None):
+    """
+    :arg element_boundary_tags: See description of :arg:`element_boundary
+    tags1 in initializer of :class:`Mesh`.
+    """
     # FIXME Native code would make this faster
 
     # create face_map, which is a mapping of
@@ -1052,6 +1080,12 @@ def _compute_facial_adjacency_from_vertices(mesh):
             neighbors.fill(-(
                     mesh.boundary_tag_bit(BTAG_ALL)
                     | mesh.boundary_tag_bit(BTAG_REALLY_ALL)))
+            if element_boundary_tags:
+                for ndx, boundary_tags in enumerate(element_boundary_tags[igroup]):
+                    tag = 0
+                    for bt in boundary_tags:
+                        tag |= mesh.boundary_tag_bit(bt)
+                    neighbors[ndx] = -((-neighbors[ndx]) | tag)
 
             grp_map[None] = FacialAdjacencyGroup(
                     igroup=igroup,

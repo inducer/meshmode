@@ -211,10 +211,23 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                         if tag not in self.element_markers[higher_dim_elt]:
                             self.element_markers[higher_dim_elt].append(tag)
 
+        # prepare bdy tags for Mesh
+        bdy_tags = None
+        if self.tags:
+            bdy_tags = [t[0] for t in self.tags if t[-1] == mesh_bulk_dim - 1]
+
+        # for each group, a list of non-empty boundary tags
+        element_bdy_markers = None
+        if self.tags:
+            element_bdy_markers = []
+
         element_index_mine_to_gmsh = {}
         for group_el_type, ngroup_elements in six.iteritems(el_type_hist):
             if group_el_type.dimensions != mesh_bulk_dim:
                 continue
+            if self.tags:
+                boundary_markers = []  # list of nonempty boundary tags in
+                # preserving relative order of index of corresponding faces
 
             bulk_el_types.add(group_el_type)
 
@@ -236,9 +249,21 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                         for v_nr in el_vertices]
                 n_elements = len(element_index_mine_to_gmsh)
                 element_index_mine_to_gmsh[n_elements] = element
+                # record the tags associated to this element if any
+                if self.tags and self.element_markers[element]:
+                    element_tags = []
+                    for t in self.element_markers[element]:
+                        tag = self.tags[self.gmsh_tag_index_to_mine[t]]
+                        if tag[-1] != mesh_bulk_dim - 1:
+                            continue
+                        element_tags.append(tag[0])
+                    if element_tags:
+                        boundary_markers.append(element_tags)
 
                 i += 1
 
+            if element_bdy_markers is not None:
+                element_bdy_markers.append(boundary_markers)
             unit_nodes = (np.array(group_el_type.lexicographic_node_tuples(),
                     dtype=np.float64).T/group_el_type.order)*2 - 1
 
@@ -285,36 +310,12 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         else:
             is_conforming = mesh_bulk_dim < 3
 
-        # prepare bdy tags for Mesh
-        bdy_tags = None
-        if self.tags is not None:
-            bdy_tags = [t[0] for t in self.tags]
-
-        m = Mesh(
+        return Mesh(
                 vertices, groups,
                 is_conforming=is_conforming,
                 boundary_tags=bdy_tags,
+                element_boundary_tags=element_bdy_markers,
                 **self.mesh_construction_kwargs)
-
-        # now mark boundaries with boundary tags
-        if self.tags:
-            for igrp in range(len(m.groups)):
-                bdry_fagrp = m.facial_adjacency_groups[igrp].get(None, None)
-
-                if bdry_fagrp is None:
-                    continue
-
-                for ndx, e in enumerate(bdry_fagrp.elements):
-                    gmsh_e = element_index_mine_to_gmsh[e]
-                    for tag_number in self.element_markers[gmsh_e]:
-                        name = self.tags[self.gmsh_tag_index_to_mine[tag_number]][0]
-                        btag_bit = m.boundary_tag_bit(name)
-
-                        neg = bdry_fagrp.neighbors[ndx]
-                        assert(neg < 0)
-                        bdry_fagrp.neighbors[ndx] = -((-neg) | btag_bit)
-
-        return m
 
 # }}}
 
