@@ -251,6 +251,106 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
         return vec
 
 
+class ReversedChainedDiscretizationConnection(DiscretizationConnection):
+    def __init__(self, chained_connection):
+        self.conn = chained_connection
+        if len(self.conn.to_discr.groups) != 1 \
+            or len(self.conn.from_discr.groups) != 1:
+            raise RuntimeError("multiple element groups are not supported")
+
+        super(ReversedChainedDiscretizationConnection, self).__init__(
+                from_discr=self.conn.to_discr,
+                to_discr=self.conn.from_discr,
+                is_surjective=False)
+
+    @memoize_method
+    def _evaluate_basis(self, queue, group, ibasis):
+        basis_fn = group.basis()[ibasis]
+
+        # evaluate
+        basis = np.zeros(self.to_discr.nnodes)
+        view = group.view(basis)
+        for k in range(view.shape[0]):
+            view[k, :] = basis_fn(group.unit_nodes)
+
+        basis = cl.array.to_device(queue, basis)
+        basis = self.conn(queue, basis).with_queue(None)
+
+        return basis
+
+    @memoize_method
+    def _build_element_index_map(self, queue, group):
+        # evaluate element indices on source
+        indices = np.full(self.to_discr.nnodes, -1.0)
+        view = group.view(indices)
+        for k in range(view.shape[0]):
+            view[k, :] = k
+
+        # interpolate to target
+        indices = self.conn(queue, cl.array.to_device(queue, indices))
+        indices = cl.clmath.round(indices.with_queue(queue)).astype(np.int)
+
+        return indices.with_queue(None)
+
+    def __call__(self, queue, vec):
+        @memoize_in(self, "conn_projection_kernel")
+        def knl():
+            import loopy as lp
+            knl = lp.make_kernel([
+                "{[k]: 0 <= k < nsources}",
+                "{[j]: 0 <= j < n_from_nodes}"
+                ],
+                """
+                    for k, j
+                        result[indices[k, j], ibasis] = \
+                            result[indices[k, j], ibasis] + \
+                                vec[k, j] * basis[k, j] * weights[j]
+                    end
+                """,
+                [
+                    lp.GlobalArg("vec", None,
+                        shape=("nsources", "n_from_nodes")),
+                    lp.GlobalArg("result", None,
+                        shape=("ntargets", "n_to_nodes")),
+                    lp.GlobalArg("indices", None,
+                        shape=("nsources", "n_from_nodes")),
+                    lp.GlobalArg("basis", None,
+                        shape=("nsources", "n_from_nodes")),
+                    lp.GlobalArg("weights", None,
+                        shape="n_from_nodes"),
+                    lp.ValueArg("ibasis", np.int32),
+                    lp.ValueArg("n_to_nodes", np.int32),
+                    lp.ValueArg("ntargets", np.int32),
+                    '...'
+                    ],
+                name="conn_projection_kernel",
+                lang_version=MOST_RECENT_LANGUAGE_VERSION)
+
+            return knl
+
+        if not isinstance(vec, cl.array.Array):
+            raise TypeError("non-array passed to discretization connection")
+
+        if vec.shape != (self.from_discr.nnodes,):
+            raise ValueError("invalid shape of incoming resampling data")
+
+        result = self.to_discr.zeros(queue, dtype=vec.dtype)
+        for tgrp in self.to_discr.groups:
+            el_indices = self._build_element_index_map(queue, tgrp)
+            for ibasis in range(len(tgrp.basis())):
+                basis = self._evaluate_basis(queue, tgrp, ibasis)
+
+                for sgrp in self.from_discr.groups:
+                    knl()(queue,
+                          weights=sgrp.weights, ibasis=ibasis,
+                          vec=sgrp.view(vec),
+                          basis=sgrp.view(basis),
+                          indices=sgrp.view(el_indices),
+                          result=tgrp.view(result))
+
+        return result
+
+
 class DirectDiscretizationConnection(DiscretizationConnection):
     """A concrete :class:`DiscretizationConnection` supported by interpolation
     data.
