@@ -101,7 +101,7 @@ def test_boundary_tags():
         if bdry_fagrp is None:
             continue
 
-        for nbrs in bdry_fagrp.neighbors:
+        for i, nbrs in enumerate(bdry_fagrp.neighbors):
             if (-nbrs) & outer_btag_bit:
                 num_marked_outer_bdy += 1
             if (-nbrs) & inner_btag_bit:
@@ -115,6 +115,10 @@ def test_boundary_tags():
     if num_marked_outer_bdy != num_on_outer_bdy:
         raise ValueError("%i marked on outer boundary, should be %i" %
                          (num_marked_outer_bdy, num_on_outer_bdy))
+
+    # ensure boundary is covered
+    from meshmode.mesh import check_bc_coverage
+    check_bc_coverage(mesh, ['inner_bdy', 'outer_bdy'])
 
 # }}}
 

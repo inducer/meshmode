@@ -689,20 +689,13 @@ class Mesh(Record):
             tags. A list of names of boundary tags, in which case the
             mesh appends any default tags not already included.
         :arg element_boundary_tags:
-            If facial_adjacency_groups is included or is_conforming is
-            False, nothing is done.
+            If *facial_adjacency_groups* is passed as an argument
+            or *is_conforming* is *False*, nothing is done.
             Else, one of two options:
             *None*, in which case the mesh marks only default boundary
-            tags. Else, a list of lists indicated which boundary tags
-            are associated to which elements. The [igrp] entry is a
-            list of the nonempty boundary tags associated to elements in group
-            at index igrp. Relative order of elements is preserved.
-            EXAMPLE: if group igrp has 3 elements, the first is tagged
-            as 'inner_bdy', the second has no boundary tags, and the
-            third is tagged 'outer_bdy' and 'exterior', then we would
-            have
-            element_boundary_tags[igrp] =
-                [['inner_bdy'], ['outer_bdy', 'exterior']]
+            tags. Else, a map which maps the index of the group, a
+            group-local index, and a face index to a list of tag names.
+            i.e. (igrp, igrp_elt, fid) to ['tag_one',...,'tag_n']
         """
 
         el_nr = 0
@@ -1080,12 +1073,6 @@ def _compute_facial_adjacency_from_vertices(mesh, element_boundary_tags=None):
             neighbors.fill(-(
                     mesh.boundary_tag_bit(BTAG_ALL)
                     | mesh.boundary_tag_bit(BTAG_REALLY_ALL)))
-            if element_boundary_tags:
-                for ndx, boundary_tags in enumerate(element_boundary_tags[igroup]):
-                    tag = 0
-                    for bt in boundary_tags:
-                        tag |= mesh.boundary_tag_bit(bt)
-                    neighbors[ndx] = -((-neighbors[ndx]) | tag)
 
             grp_map[None] = FacialAdjacencyGroup(
                     igroup=igroup,
@@ -1149,6 +1136,14 @@ def _compute_facial_adjacency_from_vertices(mesh, element_boundary_tags=None):
             fagrp = facial_adjacency_groups[igroup][None]
             fagrp.elements[idx] = iel
             fagrp.element_faces[idx] = iface
+            # mark tags if present
+            if element_boundary_tags:
+                tags = element_boundary_tags.get(face_tuples[0], None)
+                if tags:
+                    tag = 0
+                    for t in tags:
+                        tag |= mesh.boundary_tag_bit(t)
+                    fagrp.neighbors[idx] = -(-(fagrp.neighbors[idx]) | tag)
 
         else:
             raise RuntimeError("unexpected number of adjacent faces")

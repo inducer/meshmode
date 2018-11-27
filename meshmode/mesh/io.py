@@ -97,7 +97,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         self.element_types[element_nr] = element_type
 
         # only physical tags are supported
-        if tag_numbers and len(tag_numbers) > 1:
+        if tag_numbers:
             tag_numbers = [tag_numbers[0]]
         self.element_markers[element_nr] = tag_numbers
 
@@ -195,39 +195,48 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
             return higher_dim_elts
 
-        # populate tags from elements of small dimension to elements of
-        # full dimension (mesh_bulk_dim)
+        # elt_ndx maps to (dim of tag, face indices, tag)
+        elt_gmsh_index_to_tags = {}
+        # Record tags
         if self.tags:
             for elt_ndx in range(len(self.element_types)):
-                if self.element_types[elt_ndx].dimensions == mesh_bulk_dim:
+                elt_markers = self.element_markers[elt_ndx]
+                if not elt_markers:
                     continue
-                # if this element has no tags, continue
-                if not self.element_markers[elt_ndx]:
-                    continue
+                elt_dim = self.element_types[elt_ndx].dimensions
 
-                higher_dim_elements = get_higher_dim_element(elt_ndx)
-                for higher_dim_elt in higher_dim_elements:
-                    for tag in self.element_markers[elt_ndx]:
-                        if tag not in self.element_markers[higher_dim_elt]:
-                            self.element_markers[higher_dim_elt].append(tag)
+                # if element is of dimension mesh_bulk_dim, record any tags
+                if elt_dim == mesh_bulk_dim:
+                    face_vertices = tuple(range(len(self.element_vertices[elt_ndx])))
+                    if elt_ndx not in elt_gmsh_index_to_tags:
+                        elt_gmsh_index_to_tags[elt_ndx] = []
+                    for tag_nr in elt_markers:
+                        tag_name, _, dim = self.tags[
+                                                self.gmsh_tag_index_to_mine[tag_nr]]
+                        elt_gmsh_index_to_tags[elt_ndx].append(
+                                                (dim, face_vertices, tag_name))
 
-        # prepare bdy tags for Mesh
-        bdy_tags = None
-        if self.tags:
-            bdy_tags = [t[0] for t in self.tags if t[-1] == mesh_bulk_dim - 1]
+                # else, record the tag in the higher dimension elements
+                # with this as a face
+                else:
+                    elt_vertices = set(self.element_vertices[elt_ndx])
+                    higher_dim_elements = get_higher_dim_element(elt_ndx)
+                    for super_elt in higher_dim_elements:
+                        # record tags
+                        if super_elt not in elt_gmsh_index_to_tags:
+                            elt_gmsh_index_to_tags[super_elt] = []
+                        for tag_nr in elt_markers:
+                            tag_name, _, dim = self.tags[
+                                                self.gmsh_tag_index_to_mine[tag_nr]]
+                            elt_gmsh_index_to_tags[super_elt].append(
+                                (dim, elt_vertices, tag_name))
 
-        # for each group, a list of non-empty boundary tags
-        element_bdy_markers = None
-        if self.tags:
-            element_bdy_markers = []
-
-        element_index_mine_to_gmsh = {}
+        group_elt_face_to_tags = {}
         for group_el_type, ngroup_elements in six.iteritems(el_type_hist):
             if group_el_type.dimensions != mesh_bulk_dim:
                 continue
-            if self.tags:
-                boundary_markers = []  # list of nonempty boundary tags in
-                # preserving relative order of index of corresponding faces
+            # group-local element index to gmsh index
+            element_index_mine_to_gmsh = {}
 
             bulk_el_types.add(group_el_type)
 
@@ -249,21 +258,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                         for v_nr in el_vertices]
                 n_elements = len(element_index_mine_to_gmsh)
                 element_index_mine_to_gmsh[n_elements] = element
-                # record the tags associated to this element if any
-                if self.tags and self.element_markers[element]:
-                    element_tags = []
-                    for t in self.element_markers[element]:
-                        tag = self.tags[self.gmsh_tag_index_to_mine[t]]
-                        if tag[-1] != mesh_bulk_dim - 1:
-                            continue
-                        element_tags.append(tag[0])
-                    if element_tags:
-                        boundary_markers.append(element_tags)
 
                 i += 1
 
-            if element_bdy_markers is not None:
-                element_bdy_markers.append(boundary_markers)
             unit_nodes = (np.array(group_el_type.lexicographic_node_tuples(),
                     dtype=np.float64).T/group_el_type.order)*2 - 1
 
@@ -302,6 +299,34 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 raise NotImplementedError("gmsh element type: %s"
                         % type(group_el_type).__name__)
 
+            # record tags in group_elt_face_to_tags
+            if self.tags:
+                igrp = len(groups)
+                for elt_ndx in range(group.nelements):
+                    gmsh_ndx = element_index_mine_to_gmsh[elt_ndx]
+                    if gmsh_ndx not in elt_gmsh_index_to_tags:
+                        continue
+                    tags = elt_gmsh_index_to_tags[gmsh_ndx]
+                    if tags:
+                        for dim, elt_verts, name in tags:
+                            # only record tags of boundary dimension
+                            if dim != mesh_bulk_dim - 1:
+                                continue
+                            elt_verts = {vertex_gmsh_index_to_mine[e]
+                                         for e in elt_verts}
+                            face_ndx = -1
+                            for fid, fvind in enumerate(group.face_vertex_indices()):
+                                face_verts = {group.vertex_indices[elt_ndx][i]
+                                              for i in fvind}
+                                if elt_verts == face_verts:
+                                    face_ndx = fid
+                                    break
+                            assert face_ndx >= 0
+                            grp_el_face = (igrp, elt_ndx, face_ndx)
+                            if grp_el_face not in group_elt_face_to_tags:
+                                group_elt_face_to_tags[grp_el_face] = []
+                            group_elt_face_to_tags[grp_el_face].append(name)
+
             groups.append(group)
 
         # FIXME: This is heuristic.
@@ -310,11 +335,16 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         else:
             is_conforming = mesh_bulk_dim < 3
 
+        # prepare bdy tags for Mesh
+        bdy_tags = None
+        if self.tags:
+            bdy_tags = [tag for tag, _, dim in self.tags if dim == mesh_bulk_dim - 1]
+
         return Mesh(
                 vertices, groups,
                 is_conforming=is_conforming,
                 boundary_tags=bdy_tags,
-                element_boundary_tags=element_bdy_markers,
+                element_boundary_tags=group_elt_face_to_tags,
                 **self.mesh_construction_kwargs)
 
 # }}}
