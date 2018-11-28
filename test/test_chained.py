@@ -23,6 +23,7 @@ THE SOFTWARE.
 """
 
 import numpy as np
+import numpy.linalg as la
 
 import pyopencl as cl
 import pyopencl.array  # noqa
@@ -337,29 +338,33 @@ def test_reversed_chained_connection(ctx_factory, ndim, visualize=False):
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
+    if ndim == 2:
+        order = 5
+        threshold = 0.3
+    else:
+        order = 8
+        threshold = 0.1
+
     # build test connection
     np.random.seed(42)
     discr = create_discretization(queue, ndim,
-                                  nelements=16,
-                                  mesh_order=2,
-                                  discr_order=2)
+                                  mesh_order=order,
+                                  discr_order=order)
 
     connections = []
-    conn = create_refined_connection(queue, discr)
+    conn = create_refined_connection(queue, discr, threshold=threshold)
     connections.append(conn)
-    conn = create_refined_connection(queue, conn.to_discr)
+    conn = create_refined_connection(queue, conn.to_discr, threshold=threshold)
+    connections.append(conn)
+    conn = create_refined_connection(queue, conn.to_discr, threshold=threshold)
     connections.append(conn)
 
     from meshmode.discretization.connection import \
             ChainedDiscretizationConnection
     chained = ChainedDiscretizationConnection(connections)
     from meshmode.discretization.connection import \
-            ReversedChainedDiscretizationConnection
-    reverse = ReversedChainedDiscretizationConnection(chained)
-    from meshmode.discretization.connection import \
-            flatten_chained_connection
-    direct = flatten_chained_connection(queue, chained)
-
+            ReversedDiscretizationConnection
+    reverse = ReversedDiscretizationConnection(connections)
 
     # create test vector
     from_nodes = chained.from_discr.nodes().with_queue(queue)
@@ -370,25 +375,24 @@ def test_reversed_chained_connection(ctx_factory, ndim, visualize=False):
     for i in range(ndim):
         from_x += cl.clmath.cos(from_nodes[i]) ** (i + 1.0)
         to_x += cl.clmath.cos(to_nodes[i]) ** (i + 1.0)
-    from_x.fill(1.0)
-    to_x.fill(1.0)
-
     from_interp = reverse(queue, to_x)
-    print(from_interp)
-    print(from_x)
+
+    from_interp = from_interp.get(queue)
+    from_x = from_x.get(queue)
+
+    print(to_x.shape, from_x.shape)
+    print(la.norm(from_interp - from_x))
+    assert la.norm(from_interp - from_x) / la.norm(from_x) < 1.0e-12
 
     if visualize and ndim == 2:
         import matplotlib.pyplot as pt
 
-        from_group = chained.from_discr.groups[0]
-        to_group = chained.to_discr.groups[0]
-
         from_t = np.linspace(0.0, 1.0, chained.from_discr.nnodes)
         to_t = chained(queue, cl.array.to_device(queue, from_t)).get(queue)
 
-        pt.plot(from_t, from_x.get(queue), '--', label="From")
+        pt.plot(from_t, from_x, '--', label="From")
         pt.plot(to_t, to_x.get(queue), '--', label="To")
-        pt.plot(from_t, from_interp.get(queue), label="Projection")
+        pt.plot(from_t, from_interp, 'o-', label="Projection")
         pt.legend()
         pt.savefig("test_reverse_chained_conn.png")
         pt.clf()
