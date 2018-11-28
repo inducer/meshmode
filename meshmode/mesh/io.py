@@ -60,8 +60,6 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         self.element_markers = None
         self.tags = None
         self.gmsh_tag_index_to_mine = None
-        # map set of face vertex indices to index of gmsh element
-        self.my_fvi_to_gmsh_elt_index = None
 
         if mesh_construction_kwargs is None:
             mesh_construction_kwargs = {}
@@ -120,155 +118,6 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
     def finalize_tags(self):
         pass
 
-    def _compute_facial_adjacency_groups(self, groups, boundary_tags,
-                                         element_id_dtype=np.int32,
-                                         face_id_dtype=np.int8):
-        if not groups:
-            return None
-        boundary_tag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
-
-        def boundary_tag_bit(boundary_tag):
-            return 1 << boundary_tag_to_index[boundary_tag]
-
-        # FIXME Native code would make this faster
-
-        # create face_map, which is a mapping of
-        # (vertices on a face) ->
-        #  [(igrp, iel_grp, face_idx) for elements bordering that face]
-        face_map = {}
-        for igrp, grp in enumerate(groups):
-            for fid, face_vertex_indices in enumerate(grp.face_vertex_indices()):
-                all_fvi = grp.vertex_indices[:, face_vertex_indices]
-
-                for iel_grp, fvi in enumerate(all_fvi):
-                    face_map.setdefault(
-                            frozenset(fvi), []).append((igrp, iel_grp, fid))
-
-        del igrp
-        del grp
-
-        # maps tuples (igrp, ineighbor_group) to number of elements
-        group_count = {}
-        for face_tuples in six.itervalues(face_map):
-            if len(face_tuples) == 2:
-                (igrp, _, _), (inb_grp, _, _) = face_tuples
-                group_count[igrp, inb_grp] = group_count.get((igrp, inb_grp), 0) + 1
-                group_count[inb_grp, igrp] = group_count.get((inb_grp, igrp), 0) + 1
-            elif len(face_tuples) == 1:
-                (igrp, _, _), = face_tuples
-                group_count[igrp, None] = group_count.get((igrp, None), 0) + 1
-            else:
-                raise RuntimeError("unexpected number of adjacent faces")
-
-        del face_tuples
-        del igrp
-
-        # {{{ build facial_adjacency_groups data structure, still empty
-        from meshmode.mesh import FacialAdjacencyGroup, BTAG_ALL, BTAG_REALLY_ALL
-
-        facial_adjacency_groups = []
-        for igroup in range(len(groups)):
-            grp_map = {}
-            facial_adjacency_groups.append(grp_map)
-
-            bdry_count = group_count.get((igroup, None))
-            if bdry_count is not None:
-                elements = np.empty(bdry_count, dtype=element_id_dtype)
-                element_faces = np.empty(bdry_count, dtype=face_id_dtype)
-                neighbors = np.empty(bdry_count, dtype=element_id_dtype)
-                neighbor_faces = np.zeros(bdry_count, dtype=face_id_dtype)
-
-                # Ensure uninitialized entries get noticed
-                elements.fill(-1)
-                element_faces.fill(-1)
-                neighbor_faces.fill(-1)
-
-                neighbors.fill(-(
-                        boundary_tag_bit(BTAG_ALL)
-                        | boundary_tag_bit(BTAG_REALLY_ALL)))
-
-                grp_map[None] = FacialAdjacencyGroup(
-                        igroup=igroup,
-                        ineighbor_group=None,
-                        elements=elements,
-                        element_faces=element_faces,
-                        neighbors=neighbors,
-                        neighbor_faces=neighbor_faces)
-
-            for ineighbor_group in range(len(groups)):
-                nb_count = group_count.get((igroup, ineighbor_group))
-                if nb_count is not None:
-                    elements = np.empty(nb_count, dtype=element_id_dtype)
-                    element_faces = np.empty(nb_count, dtype=face_id_dtype)
-                    neighbors = np.empty(nb_count, dtype=element_id_dtype)
-                    neighbor_faces = np.empty(nb_count, dtype=face_id_dtype)
-
-                    # Ensure uninitialized entries get noticed
-                    elements.fill(-1)
-                    element_faces.fill(-1)
-                    neighbors.fill(-1)
-                    neighbor_faces.fill(-1)
-
-                    grp_map[ineighbor_group] = FacialAdjacencyGroup(
-                            igroup=igroup,
-                            ineighbor_group=ineighbor_group,
-                            elements=elements,
-                            element_faces=element_faces,
-                            neighbors=neighbors,
-                            neighbor_faces=neighbor_faces)
-
-        del igroup
-        del ineighbor_group
-        del grp_map
-
-        # }}}
-
-        # maps tuples (igrp, ineighbor_group) to number of elements filled in group
-        fill_count = {}
-        for face_tuples in six.itervalues(face_map):
-            if len(face_tuples) == 2:
-                for (igroup, iel, iface), (ineighbor_group, inb_el, inb_face) in [
-                        (face_tuples[0], face_tuples[1]),
-                        (face_tuples[1], face_tuples[0]),
-                        ]:
-                    idx = fill_count.get((igroup, ineighbor_group), 0)
-                    fill_count[igroup, ineighbor_group] = idx + 1
-
-                    fagrp = facial_adjacency_groups[igroup][ineighbor_group]
-                    fagrp.elements[idx] = iel
-                    fagrp.element_faces[idx] = iface
-                    fagrp.neighbors[idx] = inb_el
-                    fagrp.neighbor_faces[idx] = inb_face
-
-            elif len(face_tuples) == 1:
-                (igroup, iel, iface), = face_tuples
-
-                idx = fill_count.get((igroup, None), 0)
-                fill_count[igroup, None] = idx + 1
-
-                fagrp = facial_adjacency_groups[igroup][None]
-                fagrp.elements[idx] = iel
-                fagrp.element_faces[idx] = iface
-                # mark tags if present
-                if self.tags and self.my_fvi_to_gmsh_elt_index:
-                    face_vertex_indices = groups[igroup].face_vertex_indices()[iface]
-                    fvi = frozenset(groups[igroup].vertex_indices[
-                            iel, face_vertex_indices])
-                    gmsh_elt_index = self.my_fvi_to_gmsh_elt_index.get(fvi, None)
-                    if gmsh_elt_index is not None:
-                        tag = 0
-                        for t in self.element_markers[gmsh_elt_index]:
-                            tag_name, _ = self.tags[self.gmsh_tag_index_to_mine[t]]
-                            tag |= boundary_tag_bit(tag_name)
-                        fagrp.neighbors[idx] = -(-(fagrp.neighbors[idx]) | tag)
-
-            else:
-                raise RuntimeError("unexpected number of adjacent faces")
-
-        return facial_adjacency_groups
-
-    # }}}
-
     def get_mesh(self):
         el_type_hist = {}
         for el_type in self.element_types:
@@ -286,7 +135,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         # {{{ build vertex numbering
 
-        self.my_fvi_to_gmsh_elt_index = {}
+        # map set of face vertex indices to list of tags associated to face
+        face_vertex_indices_to_tags = {}
         vertex_gmsh_index_to_mine = {}
         for element, (el_vertices, el_type) in enumerate(zip(
                 self.element_vertices, self.element_types)):
@@ -294,8 +144,17 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 if gmsh_vertex_nr not in vertex_gmsh_index_to_mine:
                     vertex_gmsh_index_to_mine[gmsh_vertex_nr] = \
                             len(vertex_gmsh_index_to_mine)
-            el_grp_verts = {vertex_gmsh_index_to_mine[e] for e in el_vertices}
-            self.my_fvi_to_gmsh_elt_index[frozenset(el_grp_verts)] = element
+            if self.tags:
+                el_tag_indexes = [self.gmsh_tag_index_to_mine[t] for t in
+                                  self.element_markers[element]]
+                # record tags of boundary dimension
+                el_tags = [self.tags[i][0] for i in el_tag_indexes if
+                           self.tags[i][1] == mesh_bulk_dim - 1]
+                el_grp_verts = {vertex_gmsh_index_to_mine[e] for e in el_vertices}
+                face_vertex_indices = frozenset(el_grp_verts)
+                if face_vertex_indices not in face_vertex_indices_to_tags:
+                    face_vertex_indices_to_tags[face_vertex_indices] = []
+                face_vertex_indices_to_tags[face_vertex_indices] += el_tags
 
         # }}}
 
@@ -397,8 +256,10 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         # compute facial adjacency for Mesh if there is tag information
         facial_adjacency_groups = None
         if is_conforming and self.tags:
-            facial_adjacency_groups = self._compute_facial_adjacency_groups(
-                    groups, boundary_tags)
+            from meshmode.mesh import _compute_facial_adjacency_from_vertices
+            facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
+                    groups, boundary_tags, np.int32, np.int8,
+                    face_vertex_indices_to_tags)
 
         return Mesh(
                 vertices, groups,
@@ -580,6 +441,7 @@ def to_json(mesh):
         "boundary_tags": [btag_to_json(btag) for btag in mesh.boundary_tags],
         "btag_to_index": dict(
             (btag_to_json(btag), value)
+
             for btag, value in six.iteritems(mesh.btag_to_index)),
         "is_conforming": mesh.is_conforming,
         }
