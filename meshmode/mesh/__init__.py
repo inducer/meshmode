@@ -651,7 +651,6 @@ class Mesh(Record):
             nodal_adjacency=None,
             facial_adjacency_groups=None,
             boundary_tags=None,
-            element_boundary_tags=None,
             vertex_id_dtype=np.int32,
             element_id_dtype=np.int32,
             is_conforming=None):
@@ -684,18 +683,6 @@ class Mesh(Record):
             :attr:`element_neighbors_starts` and :attr:`element_neighbors`
             will result in exceptions. Lastly, a data structure as described in
             :attr:`facial_adjacency_groups` may be passed.
-        :arg boundary_tags: One of two options:
-            *None*, in which case the mesh uses only default boundary
-            tags. A list of names of boundary tags, in which case the
-            mesh appends any default tags not already included.
-        :arg element_boundary_tags:
-            If *facial_adjacency_groups* is passed as an argument
-            or *is_conforming* is *False*, nothing is done.
-            Else, one of two options:
-            *None*, in which case the mesh marks only default boundary
-            tags. Else, a map which maps the index of the group, a
-            group-local index, and a face index to a list of tag names.
-            i.e. (igrp, igrp_elt, fid) to ['tag_one',...,'tag_n']
         """
 
         el_nr = 0
@@ -709,8 +696,6 @@ class Mesh(Record):
             node_nr += ng.nnodes
 
         # {{{ boundary tags
-
-        self._element_boundary_tags = element_boundary_tags
 
         if boundary_tags is None:
             boundary_tags = []
@@ -879,9 +864,7 @@ class Mesh(Record):
                         "be computed for known-conforming meshes")
 
             self._facial_adjacency_groups = \
-                _compute_facial_adjacency_from_vertices(self,
-                                                        self._element_boundary_tags)
-            self._element_boundary_tags = None
+                    _compute_facial_adjacency_from_vertices(self)
 
         return self._facial_adjacency_groups
 
@@ -1013,11 +996,7 @@ def _compute_nodal_adjacency_from_vertices(mesh):
 
 # {{{ vertex-based facial adjacency
 
-def _compute_facial_adjacency_from_vertices(mesh, element_boundary_tags=None):
-    """
-    :arg element_boundary_tags: See description of :arg:`element_boundary
-    tags1 in initializer of :class:`Mesh`.
-    """
+def _compute_facial_adjacency_from_vertices(mesh):
     # FIXME Native code would make this faster
 
     # create face_map, which is a mapping of
@@ -1136,14 +1115,6 @@ def _compute_facial_adjacency_from_vertices(mesh, element_boundary_tags=None):
             fagrp = facial_adjacency_groups[igroup][None]
             fagrp.elements[idx] = iel
             fagrp.element_faces[idx] = iface
-            # mark tags if present
-            if element_boundary_tags:
-                tags = element_boundary_tags.get(face_tuples[0], None)
-                if tags:
-                    tag = 0
-                    for t in tags:
-                        tag |= mesh.boundary_tag_bit(t)
-                    fagrp.neighbors[idx] = -(-(fagrp.neighbors[idx]) | tag)
 
         else:
             raise RuntimeError("unexpected number of adjacent faces")
