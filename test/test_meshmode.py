@@ -76,6 +76,53 @@ def test_circle_mesh(do_plot=False):
 # }}}
 
 
+# {{{ test boundary tags
+
+def test_boundary_tags():
+    from meshmode.mesh.io import read_gmsh
+    # ensure tags are read in
+    mesh = read_gmsh('annulus.msh')
+    if not {'outer_bdy', 'inner_bdy'} <= set(mesh.boundary_tags):
+        print("Mesh boundary tags:", mesh.boundary_tags)
+        raise ValueError('Tags not saved by mesh')
+
+    # correct answers
+    num_on_outer_bdy = 26
+    num_on_inner_bdy = 13
+
+    # check how many elements are marked on each boundary
+    num_marked_outer_bdy = 0
+    num_marked_inner_bdy = 0
+    outer_btag_bit = mesh.boundary_tag_bit('outer_bdy')
+    inner_btag_bit = mesh.boundary_tag_bit('inner_bdy')
+    for igrp in range(len(mesh.groups)):
+        bdry_fagrp = mesh.facial_adjacency_groups[igrp].get(None, None)
+
+        if bdry_fagrp is None:
+            continue
+
+        for i, nbrs in enumerate(bdry_fagrp.neighbors):
+            if (-nbrs) & outer_btag_bit:
+                num_marked_outer_bdy += 1
+            if (-nbrs) & inner_btag_bit:
+                num_marked_inner_bdy += 1
+
+    # raise errors if wrong number of elements marked
+    if num_marked_inner_bdy != num_on_inner_bdy:
+        raise ValueError("%i marked on inner boundary, should be %i" %
+                         (num_marked_inner_bdy, num_on_inner_bdy))
+
+    if num_marked_outer_bdy != num_on_outer_bdy:
+        raise ValueError("%i marked on outer boundary, should be %i" %
+                         (num_marked_outer_bdy, num_on_outer_bdy))
+
+    # ensure boundary is covered
+    from meshmode.mesh import check_bc_coverage
+    check_bc_coverage(mesh, ['inner_bdy', 'outer_bdy'])
+
+# }}}
+
+
 # {{{ convergence of boundary interpolation
 
 @pytest.mark.parametrize("group_factory", [
