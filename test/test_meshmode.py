@@ -1002,6 +1002,8 @@ def test_quad_multi_element():
 # }}}
 
 
+# {{{ test_vtk_overwrite
+
 def test_vtk_overwrite(ctx_getter):
     pytest.importorskip("pyvisfile")
 
@@ -1048,6 +1050,28 @@ def test_vtk_overwrite(ctx_getter):
             write_vertex_vtk_file(discr.mesh, x, **kwargs), discr.mesh)
     _try_write_vtk(lambda x, y, **kwargs:
             write_nodal_adjacency_vtk_file(x, discr.mesh, **kwargs), discr.mesh)
+
+# }}}
+
+
+# {{{ test_mesh_to_tikz
+def test_mesh_to_tikz():
+    from meshmode.mesh.io import generate_gmsh, FileSource
+
+    h = 0.3
+    order = 1
+
+    mesh = generate_gmsh(
+            FileSource("../test/blob-2d.step"), 2, order=order,
+            force_ambient_dim=2,
+            other_options=[
+                "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
+            )
+
+    from meshmode.mesh.visualization import mesh_to_tikz
+    mesh_to_tikz(mesh)
+
+# }}}
 
 
 if __name__ == "__main__":

@@ -29,6 +29,7 @@ __doc__ = """
 .. autofunction:: draw_2d_mesh
 .. autofunction:: draw_curve
 .. autofunction:: write_vertex_vtk_file
+.. autofunction:: mesh_to_tikz
 """
 
 
@@ -234,6 +235,45 @@ def write_vertex_vtk_file(mesh, file_name,
 
     with open(file_name, "w") as outf:
         AppendedDataXMLGenerator(compressor)(grid).write(outf)
+
+# }}}
+
+
+# {{{ mesh_to_tikz
+
+def mesh_to_tikz(mesh):
+    lines = []
+
+    lines.append(r"\def\nelements{%s}" % (sum(grp.nelements for grp in mesh.groups)))
+    lines.append(r"\def\nvertices{%s}" % mesh.nvertices)
+    lines.append("")
+
+    drawel_lines = []
+    drawel_lines.append(r"\def\drawelements#1{")
+
+    for grp in mesh.groups:
+        for iel, el in enumerate(grp.vertex_indices):
+            el_nr = grp.element_nr_base+iel+1
+            elverts = mesh.vertices[:, el]
+
+            centroid = np.average(elverts, axis=1)
+            lines.append(r"\coordinate (cent%d) at (%s);"
+                    % (el_nr,
+                        ", ".join("%.5f" % (vi) for vi in centroid)))
+
+            for ivert, vert in enumerate(elverts.T):
+                lines.append(r"\coordinate (v%d-%d) at (%s);"
+                        % (el_nr, ivert+1, ", ".join("%.5f" % vi for vi in vert)))
+            drawel_lines.append(
+                    r"\draw [#1] %s -- cycle;"
+                    % " -- ".join(
+                        "(v%d-%d)" % (el_nr, vi+1) for vi in range(elverts.shape[1])))
+    drawel_lines.append("}")
+    lines.append("")
+
+    lines.extend(drawel_lines)
+
+    return "\n".join(lines)
 
 # }}}
 
