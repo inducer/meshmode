@@ -267,7 +267,8 @@ def mesh_to_tikz(mesh):
             drawel_lines.append(
                     r"\draw [#1] %s -- cycle;"
                     % " -- ".join(
-                        "(v%d-%d)" % (el_nr, vi+1) for vi in range(elverts.shape[1])))
+                        "(v%d-%d)" % (el_nr, vi+1)
+                        for vi in range(elverts.shape[1])))
     drawel_lines.append("}")
     lines.append("")
 
