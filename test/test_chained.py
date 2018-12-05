@@ -53,7 +53,7 @@ def create_discretization(queue, ndim,
                                order=mesh_order)
     elif ndim == 3:
         from meshmode.mesh.generation import generate_torus
-        mesh = generate_torus(10.0, 5.0, order=mesh_order)
+        mesh = generate_torus(2.0, 1.0, order=mesh_order)
     else:
         raise ValueError("Unsupported dimension: {}".format(ndim))
 
@@ -339,14 +339,13 @@ def test_reversed_chained_connection(ctx_factory, ndim, visualize=False):
     queue = cl.CommandQueue(ctx)
 
     if ndim == 2:
-        order = 5
+        order = 6
         threshold = 0.3
     else:
-        order = 8
+        order = 12
         threshold = 0.1
 
     # build test connection
-    np.random.seed(42)
     discr = create_discretization(queue, ndim,
                                   mesh_order=order,
                                   discr_order=order)
@@ -373,16 +372,9 @@ def test_reversed_chained_connection(ctx_factory, ndim, visualize=False):
     from_x = 0.0
     to_x = 0.0
     for i in range(ndim):
-        from_x += cl.clmath.cos(from_nodes[i]) ** (i + 1.0)
-        to_x += cl.clmath.cos(to_nodes[i]) ** (i + 1.0)
+        from_x += cl.clmath.cos(from_nodes[i] / (4.0 * np.pi)) ** (i + 1.0)
+        to_x += cl.clmath.cos(to_nodes[i] / (4.0 * np.pi)) ** (i + 1.0)
     from_interp = reverse(queue, to_x)
-
-    from_interp = from_interp.get(queue)
-    from_x = from_x.get(queue)
-
-    print(to_x.shape, from_x.shape)
-    print(la.norm(from_interp - from_x))
-    assert la.norm(from_interp - from_x) / la.norm(from_x) < 1.0e-12
 
     if visualize and ndim == 2:
         import matplotlib.pyplot as pt
@@ -390,12 +382,28 @@ def test_reversed_chained_connection(ctx_factory, ndim, visualize=False):
         from_t = np.linspace(0.0, 1.0, chained.from_discr.nnodes)
         to_t = chained(queue, cl.array.to_device(queue, from_t)).get(queue)
 
-        pt.plot(from_t, from_x, '--', label="From")
+        pt.figure(figsize=(10, 8), dpi=300)
+        pt.plot(from_t, from_x.get(queue), '--', label="From")
         pt.plot(to_t, to_x.get(queue), '--', label="To")
-        pt.plot(from_t, from_interp, 'o-', label="Projection")
+        pt.plot(from_t, from_interp.get(queue), 'o-', label="Projection")
         pt.legend()
         pt.savefig("test_reverse_chained_conn.png")
         pt.clf()
+    elif visualize and ndim == 3:
+        from meshmode.discretization.visualization import make_visualizer
+        vis = make_visualizer(queue, chained.from_discr, order)
+
+        vis.write_vtk_file("test_reverse_chained_conn.vtu", [
+            ("x_interp", from_interp),
+            ("x", from_x)
+            ], overwrite=True)
+
+    from_interp = from_interp.get(queue)
+    from_x = from_x.get(queue)
+
+    print(to_x.shape, from_x.shape)
+    print(la.norm(from_interp - from_x) / la.norm(from_x))
+    assert la.norm(from_interp - from_x) / la.norm(from_x) < 1.0e-9
 
 
 if __name__ == "__main__":

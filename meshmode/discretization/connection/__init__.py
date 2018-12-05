@@ -252,8 +252,17 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
 
 
 class ReversedDiscretizationConnection(DiscretizationConnection):
-    """Creates a reverse :class:`DiscretizationConnection` to allow
-    interpolating from *to_discr* to *from_discr*.
+    """Creates a reverse :class:`DiscretizationConnection` from an existing
+    connection to allow transporting from the original connection's
+    *to_discr* to *from_discr*.
+
+    .. attribute:: from_discr
+    .. attribute:: to_discr
+    .. attribute:: is_surjective
+
+    .. attribute:: conn
+    .. automethod:: __call__
+
     """
 
     def __new__(cls, connections, is_surjective=False):
@@ -267,6 +276,7 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
             return ChainedDiscretizationConnection(conns)
 
     def __init__(self, conn, is_surjective=False):
+        # TODO: this may not be strictly necessary
         if len(conn.to_discr.groups) != 1 or len(conn.from_discr.groups) != 1:
             raise RuntimeError("multiple element groups are not supported")
 
@@ -279,20 +289,7 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
                 is_surjective=is_surjective)
 
     @memoize_method
-    def _evaluate_target_basis(self, queue, target, igroup, ibasis):
-        """Evaluates the a basis functions of the target :attr:`to_discr`
-        on another discretization.
-
-        :arg target: one of :attr:`to_discr` or :attr:`from_discr`, on which
-            to evaluate the basis functions.
-        :arg igroup: index of a group in :attr:`to_discr`.
-        :arg ibasis: index of a basis in the group.
-        :returns: an array of shape ``(target.nnodes,)``. The basis function
-            *ibasis* is evaluated on each element at the group's
-            reference nodes. It is then transported to the target discretization,
-            if not already there.
-        """
-
+    def _evaluate_to_basis(self, queue, target, igroup, ibasis):
         @memoize_in(self, "conn_basis_eval_kernel")
         def knl():
             import loopy as lp
@@ -300,18 +297,8 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
                 "{[i]: 0 <= i < nelements}",
                 "{[j]: 0 <= j < n_to_nodes}"
                 ],
-                """
-                vec[i, j] = basis[j]
-                """,
-                [
-                    lp.GlobalArg("vec", None,
-                        shape=("nelements", "n_to_nodes")),
-                    lp.GlobalArg("basis", None,
-                        shape=("n_to_nodes")),
-                    lp.ValueArg("nelements", np.int32),
-                    lp.ValueArg("n_to_nodes", np.int32),
-                    '...'
-                    ],
+                """vec[i, j] = basis[j]""",
+                ['...'],
                 name="conn_basis_eval_kernel",
                 lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
@@ -332,128 +319,93 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
         return basis.with_queue(None)
 
     @memoize_method
-    def _evaluate_target_index(self, queue, target, igroup):
-        """
-        :arg target: one of :attr:`to_discr` or `from_discr`.
-        :arg igroup: index of a group in :attr:`to_discr`.
-        :returns: a tuple ``(indices, count)``, where *indices* is an
-            array of size ``(target.nnodes)`` and *count* is an array
-            of size ``(group.nelements)``. The *indices* array is a mapping
-            from target node indices to :attr:`to_discr` element indices
-            in the given group. The *count* array is a mapping from the
-            element indices in the group to the number of elements in was
-            refined on *target*.
-        """
-
-        @memoize_in(self, "conn_index_kernel")
-        def kindex():
+    def _from_quad_weights(self, queue):
+        @memoize_in(self, "conn_quad_weights_knl")
+        def kweights():
             import loopy as lp
             knl = lp.make_kernel([
-                "{[i]: 0 <= i < nelements}",
-                "{[j]: 0 <= j < n_to_nodes}"
+                "{[k]: 0 <= k < nelements}",
+                "{[j]: 0 <= j < n_from_nodes}",
                 ],
                 """
-                indices[i, j] = i
+                result[from_element_indices[k], j] = \
+                        weights[j] / scaling[to_element_indices[k]]
                 """,
                 [
-                    lp.GlobalArg("indices", None,
-                        shape=("nelements", "n_to_nodes")),
-                    lp.ValueArg("n_to_nodes", np.int32),
-                    lp.ValueArg("nelements", np.int32),
-                    '...'
+                    lp.GlobalArg("result", None,
+                        shape=("n_from_elements", "n_from_nodes")),
+                    lp.ValueArg("n_from_elements", np.int32),
+                    "..."
                     ],
-                name="conn_index_kernel",
+                name="conn_quad_weights_knl",
                 lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
             return knl
 
-        @memoize_in(self, "conn_count_kernel")
-        def kcount():
-            import loopy as lp
-            knl = lp.make_kernel([
-                "{[i]: 0 <= i < nsources}",
-                ],
-                """
-                count[indices[i, 0]] = count[indices[i, 0]] + 1
-                """,
-                [
-                    lp.GlobalArg("indices", None,
-                        shape=("nsources", "n_from_nodes")),
-                    lp.GlobalArg("count", None,
-                        shape=("ntargets")),
-                    lp.ValueArg("n_from_nodes", np.int32),
-                    lp.ValueArg("ntargets", np.int32),
-                    '...'
-                    ],
-                name="conn_count_kernel",
-                lang_version=MOST_RECENT_LANGUAGE_VERSION)
+        elranges = np.cumsum([0]
+                + [g.nelements for g in self.to_discr.groups])
+        scaling = cl.array.zeros(queue, elranges[-1], dtype=np.int)
+        for igrp, grp in enumerate(self.conn.groups):
+            for batch in grp.batches:
+                scaling[elranges[igrp] + batch.from_element_indices] += 1
 
-            return knl
+        weights = self.from_discr.empty(queue, dtype=np.float)
+        for igrp, (tgrp, cgrp) in enumerate(
+                zip(self.from_discr.groups, self.conn.groups)):
+            for batch in cgrp.batches:
+                kweights()(queue,
+                        weights=tgrp.weights,
+                        result=tgrp.view(weights),
+                        scaling=scaling[elranges[igrp]:elranges[igrp + 1]],
+                        to_element_indices=batch.from_element_indices,
+                        from_element_indices=batch.to_element_indices)
 
-        from_group = self.from_discr.groups[igroup]
-        to_group = self.to_discr.groups[igroup]
-
-        # evaluate element indices on source
-        indices = cl.array.empty(queue, self.to_discr.nnodes, dtype=np.float)
-        indices.fill(-1.0)
-        kindex()(queue,
-                 indices=to_group.view(indices))
-
-        if target is self.from_discr:
-            indices = self.conn(queue, indices).with_queue(queue)
-        indices = cl.clmath.round(indices).astype(np.int)
-
-        # count how many times each element was divided during refinement
-        count = cl.array.zeros(queue, to_group.nelements, dtype=np.int)
-        kcount()(queue,
-                 indices=from_group.view(indices),
-                 count=count)
-
-        return indices.with_queue(None), count.with_queue(None)
+        return weights.with_queue(None)
 
     def __call__(self, queue, vec):
-        @memoize_in(self, "conn_projection_kernel")
+        @memoize_in(self, "conn_projection_knl")
         def kproj():
             import loopy as lp
             knl = lp.make_kernel([
-                "{[k]: 0 <= k < nsources}",
+                "{[k]: 0 <= k < nelements}",
                 "{[j]: 0 <= j < n_from_nodes}"
                 ],
                 """
-                for k, j
-                    result[indices[k, j], ibasis] = \
-                        result[indices[k, j], ibasis] + \
-                        vec[k, j] * basis[k, j] * weights[j] / count[indices[k, j]]
+                for k
+                    <> element_dot = \
+                            sum(j, vec[from_element_indices[k], j] * \
+                                   basis[from_element_indices[k], j] * \
+                                   weights[from_element_indices[k], j])
+
+                    result[to_element_indices[k], ibasis] = \
+                            result[to_element_indices[k], ibasis] + element_dot
                 end
                 """,
                 [
                     lp.GlobalArg("vec", None,
-                        shape=("nsources", "n_from_nodes")),
-                    lp.GlobalArg("result", None,
-                        shape=("ntargets", "n_to_nodes")),
-                    lp.GlobalArg("count", None,
-                        shape=("ntargets")),
-                    lp.GlobalArg("indices", None,
-                        shape=("nsources", "n_from_nodes")),
+                        shape=("n_from_elements", "n_from_nodes")),
                     lp.GlobalArg("basis", None,
-                        shape=("nsources", "n_from_nodes")),
+                        shape=("n_from_elements", "n_from_nodes")),
                     lp.GlobalArg("weights", None,
-                        shape="n_from_nodes"),
-                    lp.ValueArg("ibasis", np.int32),
+                        shape=("n_from_elements", "n_from_nodes")),
+                    lp.GlobalArg("result", None,
+                        shape=("n_to_elements", "n_to_nodes")),
+                    lp.ValueArg("n_from_elements", np.int32),
+                    lp.ValueArg("n_to_elements", np.int32),
                     lp.ValueArg("n_to_nodes", np.int32),
-                    lp.ValueArg("ntargets", np.int32),
+                    lp.ValueArg("ibasis", np.int32),
                     '...'
                     ],
-                name="conn_projection_kernel",
+                name="conn_projection_knl",
                 lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
             return knl
 
-        @memoize_in(self, "conn_evaluate_kernel")
+        @memoize_in(self, "conn_evaluate_knl")
         def keval():
             import loopy as lp
             knl = lp.make_kernel([
-                "{[k]: 0 <= k < nresults}",
+                "{[k]: 0 <= k < nelements}",
                 "{[j]: 0 <= j < n_to_nodes}"
                 ],
                 """
@@ -461,18 +413,13 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
                             coefficients[k, ibasis] * basis[k, j]
                 """,
                 [
-                    lp.GlobalArg("result", None,
-                        shape=("nresults", "n_to_nodes")),
-                    lp.GlobalArg("basis", None,
-                        shape=("nresults", "n_to_nodes")),
                     lp.GlobalArg("coefficients", None,
-                        shape=("nresults", "n_to_nodes")),
+                        shape=("nelements", "n_to_nodes")),
                     lp.ValueArg("ibasis", np.int32),
-                    lp.ValueArg("n_to_nodes", np.int32),
-                    lp.ValueArg("nresults", np.int32),
                     '...'
                     ],
-                name="conn_evaluate_kernel",
+                name="conn_evaluate_knl",
+                default_offset=lp.auto,
                 lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
             return knl
@@ -483,38 +430,49 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
         if vec.shape != (self.from_discr.nnodes,):
             raise ValueError("invalid shape of incoming resampling data")
 
-        # perform dot product to get basis coefficients
-        # NOTE: this may work for multiple groups (untested), but it will
-        # set all nodes not in the group to zero.
-        c = self.to_discr.zeros(queue, dtype=vec.dtype)
-        for igrp, tgrp in enumerate(self.to_discr.groups):
-            el_indices, el_count = self._evaluate_target_index(queue,
-                    self.from_discr, igrp)
+        # the code proceeds as follows:
+        #   * we evaluate the basis of to_discr on from_discr nodes
+        #   * in each element of from_discr, we compute the dot product
+        #   with the basis components to get the basis coefficients on
+        #   to_discr
+        #   * once the cofficients are computed and scaled, we evaluate them
+        #   at the actual nodes of to_discr.
 
+        # perform dot product to get basis coefficients
+        weights = self._from_quad_weights(queue)
+        c = self.to_discr.zeros(queue, dtype=vec.dtype)
+        for igrp, (tgrp, cgrp) in enumerate(
+                zip(self.to_discr.groups, self.conn.groups)):
             for ibasis in range(len(tgrp.basis())):
-                basis = self._evaluate_target_basis(queue,
+                to_basis = self._evaluate_to_basis(queue,
                         self.from_discr, igrp, ibasis)
 
-                for sgrp in self.from_discr.groups:
-                    kproj()(queue,
+                for ibatch, batch in enumerate(cgrp.batches):
+                    sgrp = self.from_discr.groups[batch.from_group_index]
+
+                    # NOTE: batch.*_element_indices are reversed here because
+                    # they are from the original forward connection, but
+                    # we are going in reverse here. a bit confusing, but
+                    # saves on recreating the connection groups and batches.
+                    kproj()(queue, ibasis=ibasis,
                             vec=sgrp.view(vec),
-                            basis=sgrp.view(basis),
-                            indices=sgrp.view(el_indices),
-                            count=el_count,
-                            weights=sgrp.weights, ibasis=ibasis,
-                            result=tgrp.view(c))
+                            basis=sgrp.view(to_basis),
+                            weights=sgrp.view(weights),
+                            result=tgrp.view(c),
+                            from_element_indices=batch.to_element_indices,
+                            to_element_indices=batch.from_element_indices)
 
         # evaluate at unit_nodes to get the vector on to_discr
         result = self.to_discr.zeros(queue, dtype=vec.dtype)
+
         for igrp, grp in enumerate(self.to_discr.groups):
             for ibasis in range(len(grp.basis())):
-                basis = self._evaluate_target_basis(queue,
+                basis = self._evaluate_to_basis(queue,
                         self.to_discr, igrp, ibasis)
-                assert basis.size == self.to_discr.nnodes
 
-                keval()(queue,
+                keval()(queue, ibasis=ibasis,
                         result=grp.view(result),
-                        basis=grp.view(basis), ibasis=ibasis,
+                        basis=grp.view(basis),
                         coefficients=grp.view(c))
 
         return result
