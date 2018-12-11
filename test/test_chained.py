@@ -363,7 +363,7 @@ def test_reversed_chained_connection(ctx_factory, ndim, visualize=False):
     chained = ChainedDiscretizationConnection(connections)
     from meshmode.discretization.connection import \
             ReversedDiscretizationConnection
-    reverse = ReversedDiscretizationConnection(connections)
+    reverse = ReversedDiscretizationConnection(chained)
 
     # create test vector
     from_nodes = chained.from_discr.nodes().with_queue(queue)

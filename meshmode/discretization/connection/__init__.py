@@ -272,6 +272,8 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
     def __new__(cls, connections, is_surjective=False):
         if isinstance(connections, DirectDiscretizationConnection):
             return DiscretizationConnection.__new__(cls)
+        elif isinstance(connections, ChainedDiscretizationConnection):
+            return cls(connections.connections, is_surjective=is_surjective)
         else:
             conns = []
             for cnx in reversed(connections):
