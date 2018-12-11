@@ -295,7 +295,7 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
                 is_surjective=is_surjective)
 
     @memoize_method
-    def _evaluate_to_basis(self, queue, target, igroup, ibasis):
+    def _evaluate_to_basis(self, target, igroup, ibasis):
         @memoize_in(self, "conn_basis_eval_kernel")
         def knl():
             import loopy as lp
@@ -313,19 +313,19 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
         group = self.to_discr.groups[igroup]
         basis_fn = group.basis()[ibasis]
 
-        # evaluate
-        basis = self.to_discr.zeros(queue)
-        knl()(queue,
-              vec=group.view(basis),
-              basis=basis_fn(group.unit_nodes).flatten())
+        with cl.CommandQueue(target.cl_context) as queue:
+            basis = self.to_discr.zeros(queue)
+            knl()(queue,
+                  vec=group.view(basis),
+                  basis=basis_fn(group.unit_nodes).flatten())
 
-        if target is self.from_discr:
-            basis = self.conn(queue, basis)
+            if target is self.from_discr:
+                basis = self.conn(queue, basis)
 
         return basis.with_queue(None)
 
     @memoize_method
-    def _from_quad_weights(self, queue):
+    def _from_quad_weights(self):
         @memoize_in(self, "conn_quad_weights_knl")
         def kweights():
             import loopy as lp
@@ -348,23 +348,25 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
 
             return knl
 
-        elranges = np.cumsum([0]
-                + [g.nelements for g in self.to_discr.groups])
-        scaling = cl.array.zeros(queue, elranges[-1], dtype=np.int)
-        for igrp, grp in enumerate(self.conn.groups):
-            for batch in grp.batches:
-                scaling[elranges[igrp] + batch.from_element_indices] += 1
+        with cl.CommandQueue(self.to_discr.cl_context) as queue:
+            elranges = np.cumsum([0]
+                    + [g.nelements for g in self.to_discr.groups])
+            scaling = cl.array.zeros(queue, elranges[-1], dtype=np.int)
+            for igrp, grp in enumerate(self.conn.groups):
+                for batch in grp.batches:
+                    indices = batch.from_element_indices.with_queue(queue)
+                    scaling[elranges[igrp] + indices] += 1
 
-        weights = self.from_discr.empty(queue, dtype=np.float)
-        for igrp, (tgrp, cgrp) in enumerate(
-                zip(self.from_discr.groups, self.conn.groups)):
-            for batch in cgrp.batches:
-                kweights()(queue,
-                        weights=tgrp.weights,
-                        result=tgrp.view(weights),
-                        scaling=scaling[elranges[igrp]:elranges[igrp + 1]],
-                        to_element_indices=batch.from_element_indices,
-                        from_element_indices=batch.to_element_indices)
+            weights = self.from_discr.empty(queue, dtype=np.float)
+            for igrp, (tgrp, cgrp) in enumerate(
+                    zip(self.from_discr.groups, self.conn.groups)):
+                for batch in cgrp.batches:
+                    kweights()(queue,
+                            weights=tgrp.weights,
+                            result=tgrp.view(weights),
+                            scaling=scaling[elranges[igrp]:elranges[igrp + 1]],
+                            to_element_indices=batch.from_element_indices,
+                            from_element_indices=batch.to_element_indices)
 
         return weights.with_queue(None)
 
@@ -445,13 +447,13 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
         #   at the actual nodes of to_discr.
 
         # perform dot product to get basis coefficients
-        weights = self._from_quad_weights(queue)
+        weights = self._from_quad_weights()
         c = self.to_discr.zeros(queue, dtype=vec.dtype)
         for igrp, (tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.conn.groups)):
             for ibasis in range(len(tgrp.basis())):
-                to_basis = self._evaluate_to_basis(queue,
-                        self.from_discr, igrp, ibasis)
+                to_basis = \
+                        self._evaluate_to_basis(self.from_discr, igrp, ibasis)
 
                 for ibatch, batch in enumerate(cgrp.batches):
                     sgrp = self.from_discr.groups[batch.from_group_index]
@@ -460,7 +462,8 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
                     # they are from the original forward connection, but
                     # we are going in reverse here. a bit confusing, but
                     # saves on recreating the connection groups and batches.
-                    kproj()(queue, ibasis=ibasis,
+                    kproj()(queue,
+                            ibasis=ibasis,
                             vec=sgrp.view(vec),
                             basis=sgrp.view(to_basis),
                             weights=sgrp.view(weights),
@@ -473,10 +476,10 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
 
         for igrp, grp in enumerate(self.to_discr.groups):
             for ibasis in range(len(grp.basis())):
-                basis = self._evaluate_to_basis(queue,
-                        self.to_discr, igrp, ibasis)
+                basis = self._evaluate_to_basis(self.to_discr, igrp, ibasis)
 
-                keval()(queue, ibasis=ibasis,
+                keval()(queue,
+                        ibasis=ibasis,
                         result=grp.view(result),
                         basis=grp.view(basis),
                         coefficients=grp.view(c))
