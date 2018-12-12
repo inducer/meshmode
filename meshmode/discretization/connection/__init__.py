@@ -66,7 +66,7 @@ __all__ = [
 __doc__ = """
 .. autoclass:: DiscretizationConnection
 .. autoclass:: ChainedDiscretizationConnection
-.. autoclass:: ReversedDiscretizationConnection
+.. autoclass:: L2ProjectionInverseDiscretizationConnection
 .. autoclass:: DirectDiscretizationConnection
 
 .. autofunction:: make_same_mesh_connection
@@ -256,7 +256,7 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
 
 
 class ReversedDiscretizationConnection(DiscretizationConnection):
-    """Creates a reverse :class:`DiscretizationConnection` from an existing
+    """Creates an inverse :class:`DiscretizationConnection` from an existing
     connection to allow transporting from the original connection's
     *to_discr* to *from_discr*.
 
@@ -282,11 +282,15 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
             return ChainedDiscretizationConnection(conns)
 
     def __init__(self, conn, is_surjective=False):
-        # TODO: this may not be strictly necessary
         if len(conn.to_discr.groups) != 1 or len(conn.from_discr.groups) != 1:
-            raise RuntimeError("multiple element groups are not supported")
+            raise NotImplementedError("multiple element groups are "
+                    "implemented in principle, but not yet tested")
 
-        # TODO: add a check for element -> face connections?
+        if conn.from_discr.dim != conn.to_discr.dim:
+            raise RuntimeError("cannot transport from face to element")
+
+        if not all(g.is_orthogonal_basis() for g in conn.to_discr.groups):
+            raise RuntimeError("`to_discr` must have and orthogonal basis")
 
         self.conn = conn
         super(ReversedDiscretizationConnection, self).__init__(
@@ -352,6 +356,7 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
             elranges = np.cumsum([0]
                     + [g.nelements for g in self.to_discr.groups])
             scaling = cl.array.zeros(queue, elranges[-1], dtype=np.int)
+
             for igrp, grp in enumerate(self.conn.groups):
                 for batch in grp.batches:
                     indices = batch.from_element_indices.with_queue(queue)

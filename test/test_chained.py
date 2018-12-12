@@ -374,7 +374,19 @@ def test_reversed_chained_connection(ctx_factory, ndim, visualize=False):
     for i in range(ndim):
         from_x += cl.clmath.cos(from_nodes[i] / (4.0 * np.pi)) ** (i + 1.0)
         to_x += cl.clmath.cos(to_nodes[i] / (4.0 * np.pi)) ** (i + 1.0)
+
+    import time
+    t_start = time.time()
     from_interp = reverse(queue, to_x)
+    t_end = time.time()
+    if visualize:
+        print('Elapsed: {}'.format(t_end - t_start))
+
+    t_start = time.time()
+    from_interp = reverse(queue, to_x)
+    t_end = time.time()
+    if visualize:
+        print('Elapsed: {}'.format(t_end - t_start))
 
     if visualize and ndim == 2:
         import matplotlib.pyplot as pt
@@ -401,8 +413,10 @@ def test_reversed_chained_connection(ctx_factory, ndim, visualize=False):
     from_interp = from_interp.get(queue)
     from_x = from_x.get(queue)
 
-    print(to_x.shape, from_x.shape)
-    print(la.norm(from_interp - from_x) / la.norm(from_x))
+    if visualize:
+        print(to_x.shape, from_x.shape)
+        print(la.norm(from_interp - from_x) / la.norm(from_x))
+
     assert la.norm(from_interp - from_x) / la.norm(from_x) < 1.0e-9
 
 
