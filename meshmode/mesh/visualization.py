@@ -29,6 +29,7 @@ __doc__ = """
 .. autofunction:: draw_2d_mesh
 .. autofunction:: draw_curve
 .. autofunction:: write_vertex_vtk_file
+.. autofunction:: mesh_to_tikz
 """
 
 
@@ -130,8 +131,7 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
                 for iface, fvi in enumerate(grp.face_vertex_indices()):
                     face_center = (
                             0.3*el_center
-                            +
-                            0.7*np.mean(elverts[:, fvi], axis=-1))
+                            + 0.7*np.mean(elverts[:, fvi], axis=-1))
 
                     pt.text(face_center[0], face_center[1], str(iface), fontsize=12,
                             ha="center", va="center", color="purple",
@@ -171,7 +171,9 @@ def draw_curve(mesh,
 
 # {{{ write_vtk_file
 
-def write_vertex_vtk_file(mesh, file_name, compressor=None):
+def write_vertex_vtk_file(mesh, file_name,
+                          compressor=None,
+                          overwrite=False):
     from pyvisfile.vtk import (
             UnstructuredGrid, DataArray,
             AppendedDataXMLGenerator,
@@ -223,13 +225,56 @@ def write_vertex_vtk_file(mesh, file_name, compressor=None):
                 for vgrp in mesh.groups]),
             cell_types=cell_types)
 
-    from os.path import exists
-    if exists(file_name):
-        raise RuntimeError("output file '%s' already exists"
-                % file_name)
+    import os
+    from meshmode import FileExistsError
+    if os.path.exists(file_name):
+        if overwrite:
+            os.remove(file_name)
+        else:
+            raise FileExistsError("output file '%s' already exists" % file_name)
 
     with open(file_name, "w") as outf:
         AppendedDataXMLGenerator(compressor)(grid).write(outf)
+
+# }}}
+
+
+# {{{ mesh_to_tikz
+
+def mesh_to_tikz(mesh):
+    lines = []
+
+    lines.append(r"\def\nelements{%s}" % (sum(grp.nelements for grp in mesh.groups)))
+    lines.append(r"\def\nvertices{%s}" % mesh.nvertices)
+    lines.append("")
+
+    drawel_lines = []
+    drawel_lines.append(r"\def\drawelements#1{")
+
+    for grp in mesh.groups:
+        for iel, el in enumerate(grp.vertex_indices):
+            el_nr = grp.element_nr_base+iel+1
+            elverts = mesh.vertices[:, el]
+
+            centroid = np.average(elverts, axis=1)
+            lines.append(r"\coordinate (cent%d) at (%s);"
+                    % (el_nr,
+                        ", ".join("%.5f" % (vi) for vi in centroid)))
+
+            for ivert, vert in enumerate(elverts.T):
+                lines.append(r"\coordinate (v%d-%d) at (%s);"
+                        % (el_nr, ivert+1, ", ".join("%.5f" % vi for vi in vert)))
+            drawel_lines.append(
+                    r"\draw [#1] %s -- cycle;"
+                    % " -- ".join(
+                        "(v%d-%d)" % (el_nr, vi+1)
+                        for vi in range(elverts.shape[1])))
+    drawel_lines.append("}")
+    lines.append("")
+
+    lines.extend(drawel_lines)
+
+    return "\n".join(lines)
 
 # }}}
 

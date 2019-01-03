@@ -51,7 +51,7 @@ __doc__ = """
 # {{{ gmsh receiver
 
 class GmshMeshReceiver(GmshMeshReceiverBase):
-    def __init__(self):
+    def __init__(self, mesh_construction_kwargs=None):
         # Use data fields similar to meshpy.triangle.MeshInfo and
         # meshpy.tet.MeshInfo
         self.points = None
@@ -59,6 +59,12 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         self.element_types = None
         self.element_markers = None
         self.tags = None
+        self.gmsh_tag_index_to_mine = None
+
+        if mesh_construction_kwargs is None:
+            mesh_construction_kwargs = {}
+
+        self.mesh_construction_kwargs = mesh_construction_kwargs
 
     def set_up_nodes(self, count):
         # Preallocate array of nodes within list; treat None as sentinel value.
@@ -78,20 +84,36 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         self.element_nodes = [None] * count
         self.element_types = [None] * count
         self.element_markers = [None] * count
-        self.tags = []
 
     def add_element(self, element_nr, element_type, vertex_nrs,
             lexicographic_nodes, tag_numbers):
         self.element_vertices[element_nr] = vertex_nrs
         self.element_nodes[element_nr] = lexicographic_nodes
         self.element_types[element_nr] = element_type
-        self.element_markers[element_nr] = tag_numbers
+        if tag_numbers:
+            # only physical tags are supported
+            physical_tag = tag_numbers[0]
+            self.element_markers[element_nr] = [physical_tag]
 
     def finalize_elements(self):
         pass
 
+    # May raise ValueError if try to add different tags with the same name
     def add_tag(self, name, index, dimension):
-        pass
+        if self.tags is None:
+            self.tags = []
+        if self.gmsh_tag_index_to_mine is None:
+            self.gmsh_tag_index_to_mine = {}
+        # add tag if new
+        if index not in self.gmsh_tag_index_to_mine:
+            self.gmsh_tag_index_to_mine[index] = len(self.tags)
+            self.tags.append((name, dimension))
+        else:
+            # ensure not trying to add different tags with same index
+            my_index = self.gmsh_tag_index_to_mine[index]
+            recorded_name, recorded_dim = self.tags[my_index]
+            if recorded_name != name or recorded_dim != dimension:
+                raise ValueError("Distinct tags with the same tag id")
 
     def finalize_tags(self):
         pass
@@ -113,22 +135,35 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         # {{{ build vertex numbering
 
-        vertex_index_gmsh_to_mine = {}
-        for el_vertices, el_type in zip(
-                self.element_vertices, self.element_types):
+        # map set of face vertex indices to list of tags associated to face
+        face_vertex_indices_to_tags = {}
+        vertex_gmsh_index_to_mine = {}
+        for element, (el_vertices, el_type) in enumerate(zip(
+                self.element_vertices, self.element_types)):
             for gmsh_vertex_nr in el_vertices:
-                if gmsh_vertex_nr not in vertex_index_gmsh_to_mine:
-                    vertex_index_gmsh_to_mine[gmsh_vertex_nr] = \
-                            len(vertex_index_gmsh_to_mine)
+                if gmsh_vertex_nr not in vertex_gmsh_index_to_mine:
+                    vertex_gmsh_index_to_mine[gmsh_vertex_nr] = \
+                            len(vertex_gmsh_index_to_mine)
+            if self.tags:
+                el_tag_indexes = [self.gmsh_tag_index_to_mine[t] for t in
+                                  self.element_markers[element]]
+                # record tags of boundary dimension
+                el_tags = [self.tags[i][0] for i in el_tag_indexes if
+                           self.tags[i][1] == mesh_bulk_dim - 1]
+                el_grp_verts = {vertex_gmsh_index_to_mine[e] for e in el_vertices}
+                face_vertex_indices = frozenset(el_grp_verts)
+                if face_vertex_indices not in face_vertex_indices_to_tags:
+                    face_vertex_indices_to_tags[face_vertex_indices] = []
+                face_vertex_indices_to_tags[face_vertex_indices] += el_tags
 
         # }}}
 
         # {{{ build vertex array
 
         gmsh_vertex_indices, my_vertex_indices = \
-                list(zip(*six.iteritems(vertex_index_gmsh_to_mine)))
+                list(zip(*six.iteritems(vertex_gmsh_index_to_mine)))
         vertices = np.empty(
-                (ambient_dim, len(vertex_index_gmsh_to_mine)), dtype=np.float64)
+                (ambient_dim, len(vertex_gmsh_index_to_mine)), dtype=np.float64)
         vertices[:, np.array(my_vertex_indices, np.intp)] = \
                 self.points[np.array(gmsh_vertex_indices, np.intp)].T
 
@@ -137,9 +172,13 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         from meshmode.mesh import (Mesh,
                 SimplexElementGroup, TensorProductElementGroup)
 
+        bulk_el_types = set()
+
         for group_el_type, ngroup_elements in six.iteritems(el_type_hist):
             if group_el_type.dimensions != mesh_bulk_dim:
                 continue
+
+            bulk_el_types.add(group_el_type)
 
             nodes = np.empty((ambient_dim, ngroup_elements, el_type.node_count()),
                     np.float64)
@@ -149,13 +188,13 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     np.int32)
             i = 0
 
-            for el_vertices, el_nodes, el_type in zip(
-                    self.element_vertices, self.element_nodes, self.element_types):
+            for element, (el_vertices, el_nodes, el_type) in enumerate(zip(
+                    self.element_vertices, self.element_nodes, self.element_types)):
                 if el_type is not group_el_type:
                     continue
 
                 nodes[:, i] = self.points[el_nodes].T
-                vertex_indices[i] = [vertex_index_gmsh_to_mine[v_nr]
+                vertex_indices[i] = [vertex_gmsh_index_to_mine[v_nr]
                         for v_nr in el_vertices]
 
                 i += 1
@@ -198,30 +237,53 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 raise NotImplementedError("gmsh element type: %s"
                         % type(group_el_type).__name__)
 
-            # Gmsh seems to produce elements in the opposite orientation
-            # of what we like. Flip them all.
-
             groups.append(group)
+
+        # FIXME: This is heuristic.
+        if len(bulk_el_types) == 1:
+            is_conforming = True
+        else:
+            is_conforming = mesh_bulk_dim < 3
+
+        # construct boundary tags for mesh
+        from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL
+        boundary_tags = [BTAG_ALL, BTAG_REALLY_ALL]
+        if self.tags:
+            boundary_tags += [tag for tag, dim in self.tags if
+                              dim == mesh_bulk_dim-1]
+        boundary_tags = tuple(boundary_tags)
+
+        # compute facial adjacency for Mesh if there is tag information
+        facial_adjacency_groups = None
+        if is_conforming and self.tags:
+            from meshmode.mesh import _compute_facial_adjacency_from_vertices
+            facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
+                    groups, boundary_tags, np.int32, np.int8,
+                    face_vertex_indices_to_tags)
 
         return Mesh(
                 vertices, groups,
-                nodal_adjacency=None,
-                facial_adjacency_groups=None)
+                is_conforming=is_conforming,
+                facial_adjacency_groups=facial_adjacency_groups,
+                boundary_tags=boundary_tags,
+                **self.mesh_construction_kwargs)
 
 # }}}
 
 
 # {{{ gmsh
 
-def read_gmsh(filename, force_ambient_dim=None):
+def read_gmsh(filename, force_ambient_dim=None, mesh_construction_kwargs=None):
     """Read a gmsh mesh file from *filename* and return a
     :class:`meshmode.mesh.Mesh`.
 
     :arg force_ambient_dim: if not None, truncate point coordinates to
         this many dimensions.
+    :arg mesh_construction_kwargs: *None* or a dictionary of keyword
+        arguments passed to the :class:`meshmode.mesh.Mesh` constructor.
     """
     from gmsh_interop.reader import read_gmsh
-    recv = GmshMeshReceiver()
+    recv = GmshMeshReceiver(mesh_construction_kwargs=mesh_construction_kwargs)
     read_gmsh(recv, filename, force_dimension=force_ambient_dim)
 
     return recv.get_mesh()
@@ -229,7 +291,7 @@ def read_gmsh(filename, force_ambient_dim=None):
 
 def generate_gmsh(source, dimensions=None, order=None, other_options=[],
         extension="geo", gmsh_executable="gmsh", force_ambient_dim=None,
-        output_file_name="output.msh"):
+        output_file_name="output.msh", mesh_construction_kwargs=None):
     """Run :command:`gmsh` on the input given by *source*, and return a
     :class:`meshmode.mesh.Mesh` based on the result.
 
@@ -237,8 +299,10 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=[],
         :class:`LiteralSource`
     :arg force_ambient_dim: if not None, truncate point coordinates to
         this many dimensions.
+    :arg mesh_construction_kwargs: *None* or a dictionary of keyword
+        arguments passed to the :class:`meshmode.mesh.Mesh` constructor.
     """
-    recv = GmshMeshReceiver()
+    recv = GmshMeshReceiver(mesh_construction_kwargs=mesh_construction_kwargs)
 
     from gmsh_interop.runner import GmshRunner
     from gmsh_interop.reader import parse_gmsh
@@ -287,8 +351,7 @@ def from_meshpy(mesh_info, order=1):
 
     return Mesh(
             vertices=vertices, groups=[grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -320,8 +383,7 @@ def from_vertices_and_simplices(vertices, simplices, order=1, fix_orientation=Fa
 
     return Mesh(
             vertices=vertices, groups=[grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -364,7 +426,13 @@ def to_json(mesh):
             }
 
     return {
-        "version": 0,
+        # VERSION 0:
+        # - initial version
+        #
+        # VERSION 1:
+        # - added is_conforming
+
+        "version": 1,
         "vertices": mesh.vertices.tolist(),
         "groups": [group_to_json(group) for group in mesh.groups],
         "nodal_adjacency": nodal_adjacency_to_json(mesh),
@@ -373,7 +441,9 @@ def to_json(mesh):
         "boundary_tags": [btag_to_json(btag) for btag in mesh.boundary_tags],
         "btag_to_index": dict(
             (btag_to_json(btag), value)
+
             for btag, value in six.iteritems(mesh.btag_to_index)),
+        "is_conforming": mesh.is_conforming,
         }
 
 # }}}

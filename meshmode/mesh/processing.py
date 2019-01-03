@@ -31,6 +31,7 @@ import modepy as mp
 
 
 __doc__ = """
+.. autofunction:: find_group_indices
 .. autofunction:: partition_mesh
 .. autofunction:: find_volume_mesh_element_orientations
 .. autofunction:: perform_flips
@@ -41,15 +42,32 @@ __doc__ = """
 """
 
 
+def find_group_indices(groups, meshwide_elems):
+    """
+    :arg groups: A list of :class:``MeshElementGroup`` instances that contain
+        ``meshwide_elems``.
+    :arg meshwide_elems: A :class:``numpy.ndarray`` of mesh-wide element numbers
+        Usually computed by ``elem + element_nr_base``.
+    :returns: A :class:``numpy.ndarray`` of group numbers that ``meshwide_elem``
+        belongs to.
+    """
+    grps = np.zeros_like(meshwide_elems)
+    next_grp_boundary = 0
+    for igrp, grp in enumerate(groups):
+        next_grp_boundary += grp.nelements
+        grps += meshwide_elems >= next_grp_boundary
+    return grps
+
+
 # {{{ partition_mesh
 
-def partition_mesh(mesh, part_per_element, part_nr):
+def partition_mesh(mesh, part_per_element, part_num):
     """
     :arg mesh: A :class:`meshmode.mesh.Mesh` to be partitioned.
     :arg part_per_element: A :class:`numpy.ndarray` containing one
         integer per element of *mesh* indicating which part of the
         partitioned mesh the element is to become a part of.
-    :arg part_nr: The part number of the mesh to return.
+    :arg part_num: The part number of the mesh to return.
 
     :returns: A tuple ``(part_mesh, part_to_global)``, where *part_mesh*
         is a :class:`meshmode.mesh.Mesh` that is a partition of mesh, and
@@ -57,15 +75,12 @@ def partition_mesh(mesh, part_per_element, part_nr):
         numbers on *part_mesh* to ones in *mesh*.
 
     .. versionadded:: 2017.1
-
-    .. warning:: Interface is not final. Connectivity between elements
-        across groups needs to be added.
     """
     assert len(part_per_element) == mesh.nelements, (
         "part_per_element must have shape (mesh.nelements,)")
 
     # Contains the indices of the elements requested.
-    queried_elems = np.where(np.array(part_per_element) == part_nr)[0]
+    queried_elems = np.where(np.array(part_per_element) == part_num)[0]
 
     num_groups = len(mesh.groups)
     new_indices = []
@@ -80,10 +95,10 @@ def partition_mesh(mesh, part_per_element, part_nr):
     skip_groups = []
     num_prev_elems = 0
     start_idx = 0
-    for group_nr in range(num_groups):
-        mesh_group = mesh.groups[group_nr]
+    for group_num in range(num_groups):
+        mesh_group = mesh.groups[group_num]
 
-        # Find the index of first element in the next group
+        # Find the index of first element in the next group.
         end_idx = len(queried_elems)
         for idx in range(start_idx, len(queried_elems)):
             if queried_elems[idx] - num_prev_elems >= mesh_group.nelements:
@@ -91,7 +106,7 @@ def partition_mesh(mesh, part_per_element, part_nr):
                 break
 
         if start_idx == end_idx:
-            skip_groups.append(group_nr)
+            skip_groups.append(group_num)
             new_indices.append(np.array([]))
             new_nodes.append(np.array([]))
             num_prev_elems += mesh_group.nelements
@@ -107,10 +122,10 @@ def partition_mesh(mesh, part_per_element, part_nr):
             for j in range(start_idx, end_idx):
                 elems = queried_elems[j] - num_prev_elems
                 new_idx = j - start_idx
-                new_nodes[group_nr][i, new_idx, :] = mesh_group.nodes[i, elems, :]
+                new_nodes[group_num][i, new_idx, :] = mesh_group.nodes[i, elems, :]
 
-        #index_set = np.append(index_set, new_indices[group_nr].ravel())
-        index_sets = np.append(index_sets, set(new_indices[group_nr].ravel()))
+        #index_set = np.append(index_set, new_indices[group_num].ravel())
+        index_sets = np.append(index_sets, set(new_indices[group_num].ravel()))
 
         num_prev_elems += mesh_group.nelements
         start_idx = end_idx
@@ -124,26 +139,126 @@ def partition_mesh(mesh, part_per_element, part_nr):
         new_vertices[dim] = mesh.vertices[dim][required_indices]
 
     # Our indices need to be in range [0, len(mesh.nelements)].
-    for group_nr in range(num_groups):
-        if group_nr not in skip_groups:
-            for i in range(len(new_indices[group_nr])):
-                for j in range(len(new_indices[group_nr][0])):
-                    original_index = new_indices[group_nr][i, j]
-                    new_indices[group_nr][i, j] = np.where(
-                        required_indices == original_index)[0]
+    for group_num in range(num_groups):
+        if group_num not in skip_groups:
+            for i in range(len(new_indices[group_num])):
+                for j in range(len(new_indices[group_num][0])):
+                    original_index = new_indices[group_num][i, j]
+                    new_indices[group_num][i, j] = np.where(
+                            required_indices == original_index)[0]
 
     new_mesh_groups = []
-    for group_nr in range(num_groups):
-        if group_nr not in skip_groups:
-            mesh_group = mesh.groups[group_nr]
+    for group_num, mesh_group in enumerate(mesh.groups):
+        if group_num not in skip_groups:
             new_mesh_groups.append(
-                type(mesh_group)(mesh_group.order, new_indices[group_nr],
-                    new_nodes[group_nr], unit_nodes=mesh_group.unit_nodes))
+                type(mesh_group)(
+                    mesh_group.order, new_indices[group_num],
+                    new_nodes[group_num],
+                    unit_nodes=mesh_group.unit_nodes))
+
+    from meshmode.mesh import BTAG_ALL, BTAG_PARTITION
+    boundary_tags = [BTAG_PARTITION(n) for n in np.unique(part_per_element)]
 
     from meshmode.mesh import Mesh
-    part_mesh = Mesh(new_vertices, new_mesh_groups)
+    part_mesh = Mesh(
+            new_vertices,
+            new_mesh_groups,
+            facial_adjacency_groups=None,
+            boundary_tags=boundary_tags,
+            is_conforming=mesh.is_conforming)
 
-    return part_mesh, queried_elems
+    adj_data = [[] for _ in range(len(part_mesh.groups))]
+
+    for igrp, grp in enumerate(part_mesh.groups):
+        elem_base = grp.element_nr_base
+        boundary_adj = part_mesh.facial_adjacency_groups[igrp][None]
+        boundary_elems = boundary_adj.elements
+        boundary_faces = boundary_adj.element_faces
+        p_meshwide_elems = queried_elems[boundary_elems + elem_base]
+        parent_igrps = find_group_indices(mesh.groups, p_meshwide_elems)
+        for adj_idx, elem in enumerate(boundary_elems):
+            face = boundary_faces[adj_idx]
+            tag = -boundary_adj.neighbors[adj_idx]
+            assert tag >= 0, "Expected boundary tag in adjacency group."
+
+            parent_igrp = parent_igrps[adj_idx]
+            parent_elem_base = mesh.groups[parent_igrp].element_nr_base
+            parent_elem = p_meshwide_elems[adj_idx] - parent_elem_base
+
+            parent_adj = mesh.facial_adjacency_groups[parent_igrp]
+
+            for parent_facial_group in parent_adj.values():
+                indices, = np.nonzero(parent_facial_group.elements == parent_elem)
+                for idx in indices:
+                    if (parent_facial_group.neighbors[idx] >= 0
+                            and parent_facial_group.element_faces[idx] == face):
+                        rank_neighbor = (parent_facial_group.neighbors[idx]
+                                            + parent_elem_base)
+                        n_face = parent_facial_group.neighbor_faces[idx]
+
+                        n_part_num = part_per_element[rank_neighbor]
+                        tag = tag & ~part_mesh.boundary_tag_bit(BTAG_ALL)
+                        tag = tag | part_mesh.boundary_tag_bit(
+                                                    BTAG_PARTITION(n_part_num))
+                        boundary_adj.neighbors[adj_idx] = -tag
+
+                        # Find the neighbor element from the other partition.
+                        n_meshwide_elem = np.count_nonzero(
+                                    part_per_element[:rank_neighbor] == n_part_num)
+
+                        adj_data[igrp].append((elem, face,
+                                               n_part_num, n_meshwide_elem, n_face))
+
+    connected_mesh = part_mesh.copy()
+
+    from meshmode.mesh import InterPartitionAdjacencyGroup
+    for igrp, adj in enumerate(adj_data):
+        if adj:
+            bdry = connected_mesh.facial_adjacency_groups[igrp][None]
+            # Initialize connections
+            n_parts = np.zeros_like(bdry.elements)
+            n_parts.fill(-1)
+            global_n_elems = np.copy(n_parts)
+            n_faces = np.copy(n_parts)
+
+            # Sort both sets of elements so that we can quickly merge
+            # the two data structures
+            bdry_perm = np.lexsort([bdry.element_faces, bdry.elements])
+            elems = bdry.elements[bdry_perm]
+            faces = bdry.element_faces[bdry_perm]
+            neighbors = bdry.neighbors[bdry_perm]
+            adj_elems, adj_faces, adj_n_parts, adj_gl_n_elems, adj_n_faces =\
+                                    np.array(adj).T
+            adj_perm = np.lexsort([adj_faces, adj_elems])
+            adj_elems = adj_elems[adj_perm]
+            adj_faces = adj_faces[adj_perm]
+            adj_n_parts = adj_n_parts[adj_perm]
+            adj_gl_n_elems = adj_gl_n_elems[adj_perm]
+            adj_n_faces = adj_n_faces[adj_perm]
+
+            # Merge interpartition adjacency data with FacialAdjacencyGroup
+            adj_idx = 0
+            for bdry_idx in range(len(elems)):
+                if adj_idx >= len(adj_elems):
+                    break
+                if (adj_elems[adj_idx] == elems[bdry_idx]
+                        and adj_faces[adj_idx] == faces[bdry_idx]):
+                    n_parts[bdry_idx] = adj_n_parts[adj_idx]
+                    global_n_elems[bdry_idx] = adj_gl_n_elems[adj_idx]
+                    n_faces[bdry_idx] = adj_n_faces[adj_idx]
+                    adj_idx += 1
+
+            connected_mesh.facial_adjacency_groups[igrp][None] =\
+                    InterPartitionAdjacencyGroup(elements=elems,
+                                                 element_faces=faces,
+                                                 neighbors=neighbors,
+                                                 igroup=bdry.igroup,
+                                                 ineighbor_group=None,
+                                                 neighbor_partitions=n_parts,
+                                                 global_neighbors=global_n_elems,
+                                                 neighbor_faces=n_faces)
+
+    return connected_mesh, queried_elems
 
 # }}}
 
@@ -318,7 +433,10 @@ def perform_flips(mesh, flip_flags, skip_tests=False):
 
         new_groups.append(new_grp)
 
-    return Mesh(mesh.vertices, new_groups, skip_tests=skip_tests)
+    return Mesh(
+            mesh.vertices, new_groups, skip_tests=skip_tests,
+            is_conforming=mesh.is_conforming,
+            )
 
 # }}}
 
@@ -383,6 +501,8 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
         grp_cls = None
         order = None
         unit_nodes = None
+        nodal_adjacency = None
+        facial_adjacency_groups = None
 
         for mesh in meshes:
             if mesh._nodal_adjacency is not None:
@@ -418,6 +538,8 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
 
     else:
         new_groups = []
+        nodal_adjacency = None
+        facial_adjacency_groups = None
 
         for mesh, vert_base in zip(meshes, vert_bases):
             if mesh._nodal_adjacency is not None:
@@ -435,7 +557,10 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
     from meshmode.mesh import Mesh
     return Mesh(vertices, new_groups, skip_tests=skip_tests,
             nodal_adjacency=nodal_adjacency,
-            facial_adjacency_groups=facial_adjacency_groups)
+            facial_adjacency_groups=facial_adjacency_groups,
+            is_conforming=all(
+                mesh.is_conforming
+                for mesh in meshes))
 
 # }}}
 
@@ -467,7 +592,8 @@ def map_mesh(mesh, f):  # noqa
     from meshmode.mesh import Mesh
     return Mesh(vertices, new_groups, skip_tests=True,
             nodal_adjacency=mesh.nodal_adjacency_init_arg(),
-            facial_adjacency_groups=mesh._facial_adjacency_groups)
+            facial_adjacency_groups=mesh._facial_adjacency_groups,
+            is_conforming=mesh.is_conforming)
 
 # }}}
 

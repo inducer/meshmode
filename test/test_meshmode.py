@@ -49,55 +49,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# {{{ partition_mesh
-
-def test_partition_torus_mesh():
-    from meshmode.mesh.generation import generate_torus
-    my_mesh = generate_torus(2, 1, n_outer=2, n_inner=2)
-
-    part_per_element = np.array([0, 1, 2, 1, 1, 2, 1, 0])
-
-    from meshmode.mesh.processing import partition_mesh
-    (part_mesh0, _) = partition_mesh(my_mesh, part_per_element, 0)
-    (part_mesh1, _) = partition_mesh(my_mesh, part_per_element, 1)
-    (part_mesh2, _) = partition_mesh(my_mesh, part_per_element, 2)
-
-    assert part_mesh0.nelements == 2
-    assert part_mesh1.nelements == 4
-    assert part_mesh2.nelements == 2
-
-
-def test_partition_boxes_mesh():
-    n = 5
-    num_parts = 7
-    from meshmode.mesh.generation import generate_regular_rect_mesh
-    mesh1 = generate_regular_rect_mesh(a=(0, 0, 0), b=(1, 1, 1), n=(n, n, n))
-    mesh2 = generate_regular_rect_mesh(a=(2, 2, 2), b=(3, 3, 3), n=(n, n, n))
-
-    from meshmode.mesh.processing import merge_disjoint_meshes
-    mesh = merge_disjoint_meshes([mesh1, mesh2])
-
-    adjacency_list = np.zeros((mesh.nelements,), dtype=set)
-    for elem in range(mesh.nelements):
-        adjacency_list[elem] = set()
-        starts = mesh.nodal_adjacency.neighbors_starts
-        for n in range(starts[elem], starts[elem + 1]):
-            adjacency_list[elem].add(mesh.nodal_adjacency.neighbors[n])
-
-    from pymetis import part_graph
-    (_, p) = part_graph(num_parts, adjacency=adjacency_list)
-    part_per_element = np.array(p)
-
-    from meshmode.mesh.processing import partition_mesh
-    new_meshes = [
-        partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
-
-    assert mesh.nelements == np.sum(
-        [new_meshes[i].nelements for i in range(num_parts)])
-
-# }}}
-
-
 # {{{ circle mesh
 
 def test_circle_mesh(do_plot=False):
@@ -125,6 +76,53 @@ def test_circle_mesh(do_plot=False):
 # }}}
 
 
+# {{{ test boundary tags
+
+def test_boundary_tags():
+    from meshmode.mesh.io import read_gmsh
+    # ensure tags are read in
+    mesh = read_gmsh('annulus.msh')
+    if not {'outer_bdy', 'inner_bdy'} <= set(mesh.boundary_tags):
+        print("Mesh boundary tags:", mesh.boundary_tags)
+        raise ValueError('Tags not saved by mesh')
+
+    # correct answers
+    num_on_outer_bdy = 26
+    num_on_inner_bdy = 13
+
+    # check how many elements are marked on each boundary
+    num_marked_outer_bdy = 0
+    num_marked_inner_bdy = 0
+    outer_btag_bit = mesh.boundary_tag_bit('outer_bdy')
+    inner_btag_bit = mesh.boundary_tag_bit('inner_bdy')
+    for igrp in range(len(mesh.groups)):
+        bdry_fagrp = mesh.facial_adjacency_groups[igrp].get(None, None)
+
+        if bdry_fagrp is None:
+            continue
+
+        for i, nbrs in enumerate(bdry_fagrp.neighbors):
+            if (-nbrs) & outer_btag_bit:
+                num_marked_outer_bdy += 1
+            if (-nbrs) & inner_btag_bit:
+                num_marked_inner_bdy += 1
+
+    # raise errors if wrong number of elements marked
+    if num_marked_inner_bdy != num_on_inner_bdy:
+        raise ValueError("%i marked on inner boundary, should be %i" %
+                         (num_marked_inner_bdy, num_on_inner_bdy))
+
+    if num_marked_outer_bdy != num_on_outer_bdy:
+        raise ValueError("%i marked on outer boundary, should be %i" %
+                         (num_marked_outer_bdy, num_on_outer_bdy))
+
+    # ensure boundary is covered
+    from meshmode.mesh import check_bc_coverage
+    check_bc_coverage(mesh, ['inner_bdy', 'outer_bdy'])
+
+# }}}
+
+
 # {{{ convergence of boundary interpolation
 
 @pytest.mark.parametrize("group_factory", [
@@ -137,14 +135,14 @@ def test_circle_mesh(do_plot=False):
     FACE_RESTR_INTERIOR,
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
-    ("blob", 2, [1e-1, 8e-2, 5e-2]),
+    ("blob", 2, ["8e-2", "6e-2", "4e-2"]),
     ("warp", 2, [10, 20, 30]),
     ("warp", 3, [10, 20, 30]),
     ])
 @pytest.mark.parametrize("per_face_groups", [False, True])
-def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
+def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
         mesh_name, dim, mesh_pars, per_face_groups):
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.discretization import Discretization
@@ -165,17 +163,21 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
         if mesh_name == "blob":
             assert dim == 2
 
-            h = mesh_par
+            h = float(mesh_par)
 
-            from meshmode.mesh.io import generate_gmsh, FileSource
-            print("BEGIN GEN")
-            mesh = generate_gmsh(
-                    FileSource("blob-2d.step"), 2, order=order,
-                    force_ambient_dim=2,
-                    other_options=[
-                        "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
-                    )
-            print("END GEN")
+            #from meshmode.mesh.io import generate_gmsh, FileSource
+            # print("BEGIN GEN")
+            # mesh = generate_gmsh(
+            #         FileSource("blob-2d.step"), 2, order=order,
+            #         force_ambient_dim=2,
+            #         other_options=[
+            #             "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
+            #         )
+            # print("END GEN")
+            from meshmode.mesh.io import read_gmsh
+            mesh = read_gmsh(
+                    "blob2d-order%d-h%s.msh" % (order, mesh_par),
+                    force_ambient_dim=2)
         elif mesh_name == "warp":
             from meshmode.mesh.generation import generate_warped_rect_mesh
             mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par)
@@ -204,7 +206,7 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
         bdry_f = f(bdry_x)
         bdry_f_2 = bdry_connection(queue, vol_f)
 
-        if mesh_name == "blob" and dim == 2:
+        if mesh_name == "blob" and dim == 2 and mesh.nelements < 500:
             mat = bdry_connection.full_resample_matrix(queue).get(queue)
             bdry_f_2_by_mat = mat.dot(vol_f.get())
 
@@ -214,9 +216,10 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
         err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
         eoc_rec.add_data_point(h, err)
 
+    order_slack = 0.75 if mesh_name == "blob" else 0.5
     print(eoc_rec)
     assert (
-            eoc_rec.order_estimate() >= order-0.5
+            eoc_rec.order_estimate() >= order-order_slack
             or eoc_rec.max_error() < 1e-14)
 
 # }}}
@@ -230,9 +233,9 @@ def test_boundary_interpolation(ctx_getter, group_factory, boundary_tag,
     ("warp", 3, [10, 20, 30]),
     ])
 @pytest.mark.parametrize("per_face_groups", [False, True])
-def test_all_faces_interpolation(ctx_getter, mesh_name, dim, mesh_pars,
+def test_all_faces_interpolation(ctx_factory, mesh_name, dim, mesh_pars,
         per_face_groups):
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.discretization import Discretization
@@ -342,11 +345,11 @@ def test_all_faces_interpolation(ctx_getter, mesh_name, dim, mesh_pars,
     ("warp", 2, [3, 5, 7]),
     ("warp", 3, [3, 5]),
     ])
-def test_opposite_face_interpolation(ctx_getter, group_factory,
+def test_opposite_face_interpolation(ctx_factory, group_factory,
         mesh_name, dim, mesh_pars):
     logging.basicConfig(level=logging.INFO)
 
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
 
     from meshmode.discretization import Discretization
@@ -458,12 +461,12 @@ def test_element_orientation():
     ("ball", lambda: mgen.generate_icosahedron(1, 1)),
     ("torus", lambda: mgen.generate_torus(5, 1)),
     ])
-def test_3d_orientation(ctx_getter, what, mesh_gen_func, visualize=False):
+def test_3d_orientation(ctx_factory, what, mesh_gen_func, visualize=False):
     pytest.importorskip("pytential")
 
     logging.basicConfig(level=logging.INFO)
 
-    ctx = ctx_getter()
+    ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
     mesh = mesh_gen_func()
@@ -513,7 +516,7 @@ def test_3d_orientation(ctx_getter, what, mesh_gen_func, visualize=False):
 
 # {{{ merge and map
 
-def test_merge_and_map(ctx_getter, visualize=False):
+def test_merge_and_map(ctx_factory, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
     from meshmode.mesh.generation import generate_box_mesh
     from meshmode.mesh import TensorProductElementGroup
@@ -554,7 +557,7 @@ def test_merge_and_map(ctx_getter, visualize=False):
 
     if visualize:
         from meshmode.discretization import Discretization
-        cl_ctx = ctx_getter()
+        cl_ctx = ctx_factory()
         queue = cl.CommandQueue(cl_ctx)
 
         discr = Discretization(cl_ctx, mesh3, discr_grp_factory)
@@ -570,10 +573,10 @@ def test_merge_and_map(ctx_getter, visualize=False):
 
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("order", [1, 3])
-def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
+def test_sanity_single_element(ctx_factory, dim, order, visualize=False):
     pytest.importorskip("pytential")
 
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
 
     from modepy.tools import unit_vertices
@@ -590,7 +593,7 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
             nodes=mp.warp_and_blend_nodes(dim, order).reshape(dim, 1, -1),
             dim=dim)
 
-    mesh = Mesh(vertices, [mg], nodal_adjacency=None, facial_adjacency_groups=None)
+    mesh = Mesh(vertices, [mg], is_conforming=True)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
@@ -644,8 +647,7 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
 
     normal_outward_check = bind(bdry_discr,
             sym.normal(dim)
-            |
-            (sym.nodes(dim) + 0.5*sym.ones_vec(dim)),
+            | (sym.nodes(dim) + 0.5*sym.ones_vec(dim)),
             )(queue).as_scalar() > 0
 
     assert normal_outward_check.get().all(), normal_outward_check.get()
@@ -657,12 +659,12 @@ def test_sanity_single_element(ctx_getter, dim, order, visualize=False):
 
 @pytest.mark.parametrize("dim", [2, 3, 4])
 @pytest.mark.parametrize("order", [3])
-def test_sanity_qhull_nd(ctx_getter, dim, order):
+def test_sanity_qhull_nd(ctx_factory, dim, order):
     pytest.importorskip("scipy")
 
     logging.basicConfig(level=logging.INFO)
 
-    ctx = ctx_getter()
+    ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
     from scipy.spatial import Delaunay
@@ -711,13 +713,13 @@ def test_sanity_qhull_nd(ctx_getter, dim, order):
     ("ball-radius-1.step", 3),
     ])
 @pytest.mark.parametrize("mesh_order", [1, 2])
-def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
+def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
         visualize=False):
     pytest.importorskip("pytential")
 
     logging.basicConfig(level=logging.INFO)
 
-    ctx = ctx_getter()
+    ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
     from pytools.convergence import EOCRecorder
@@ -729,7 +731,7 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
 
     from pytential import bind, sym
 
-    for h in [0.2, 0.14, 0.1]:
+    for h in [0.2, 0.1, 0.05]:
         from meshmode.mesh.io import generate_gmsh, FileSource
         mesh = generate_gmsh(
                 FileSource(src_file), dim, order=mesh_order,
@@ -793,7 +795,10 @@ def test_sanity_balls(ctx_getter, src_file, dim, mesh_order,
         if visualize:
             vol_vis.write_vtk_file("volume-h=%g.vtu" % h, [
                 ("f", vol_one),
-                ("area_el", bind(vol_discr, sym.area_element())(queue)),
+                ("area_el", bind(
+                    vol_discr,
+                    sym.area_element(mesh.ambient_dim, mesh.ambient_dim))
+                    (queue)),
                 ])
             bdry_vis.write_vtk_file("boundary-h=%g.vtu" % h, [("f", bdry_one)])
 
@@ -835,7 +840,7 @@ def test_rect_mesh(do_plot=False):
         pt.show()
 
 
-def test_box_mesh(ctx_getter, visualize=False):
+def test_box_mesh(ctx_factory, visualize=False):
     from meshmode.mesh.generation import generate_box_mesh
     mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
 
@@ -843,7 +848,7 @@ def test_box_mesh(ctx_getter, visualize=False):
         from meshmode.discretization import Discretization
         from meshmode.discretization.poly_element import \
                 PolynomialWarpAndBlendGroupFactory
-        cl_ctx = ctx_getter()
+        cl_ctx = ctx_factory()
         queue = cl.CommandQueue(cl_ctx)
 
         discr = Discretization(cl_ctx, mesh,
@@ -992,6 +997,8 @@ def no_test_quad_mesh_3d():
 # }}}
 
 
+# {{{ test_quad_single_element
+
 def test_quad_single_element():
     from meshmode.mesh.generation import make_group_from_vertices
     from meshmode.mesh import Mesh, TensorProductElementGroup
@@ -1015,6 +1022,10 @@ def test_quad_single_element():
                 mg.nodes[1].reshape(-1), "o")
         plt.show()
 
+# }}}
+
+
+# {{{ test_quad_multi_element
 
 def test_quad_multi_element():
     from meshmode.mesh.generation import generate_box_mesh
@@ -1035,61 +1046,77 @@ def test_quad_multi_element():
                 mg.nodes[1].reshape(-1), "o")
         plt.show()
 
+# }}}
 
-# {{{ ChainedDiscretizationConnection
 
-def test_ChainedDiscretizationConnection(ctx_getter):  # noqa
-    mesh_order = 5
-    order = 5
-    npanels = 10
-    group_factory = InterpolatoryQuadratureSimplexGroupFactory
+# {{{ test_vtk_overwrite
 
-    def refine_flags(mesh):
-        return np.ones(mesh.nelements)
+def test_vtk_overwrite(ctx_getter):
+    pytest.importorskip("pyvisfile")
 
-    cl_ctx = ctx_getter()
-    queue = cl.CommandQueue(cl_ctx)
+    def _try_write_vtk(writer, obj):
+        import os
+        from meshmode import FileExistsError
 
-    from functools import partial
+        filename = "test_vtk_overwrite.vtu"
+        if os.path.exists(filename):
+            os.remove(filename)
+
+        writer(filename, [])
+        with pytest.raises(FileExistsError):
+            writer(filename, [])
+
+        writer(filename, [], overwrite=True)
+        if os.path.exists(filename):
+            os.remove(filename)
+
+    ctx = ctx_getter()
+    queue = cl.CommandQueue(ctx)
+
+    target_order = 7
+
+    from meshmode.mesh.generation import generate_torus
+    mesh = generate_torus(10.0, 2.0, order=target_order)
+
     from meshmode.discretization import Discretization
-    from meshmode.discretization.connection import make_refinement_connection
-    from meshmode.mesh.generation import make_curve_mesh, ellipse
+    from meshmode.discretization.poly_element import \
+            InterpolatoryQuadratureSimplexGroupFactory
+    discr = Discretization(
+            queue.context, mesh,
+            InterpolatoryQuadratureSimplexGroupFactory(target_order))
 
-    mesh = make_curve_mesh(
-            partial(ellipse, 1), np.linspace(0, 1, npanels + 1),
-            order=mesh_order)
+    from meshmode.discretization.visualization import make_visualizer
+    from meshmode.discretization.visualization import \
+            write_nodal_adjacency_vtk_file
+    from meshmode.mesh.visualization import write_vertex_vtk_file
 
-    discr = Discretization(cl_ctx, mesh, group_factory(order))
+    vis = make_visualizer(queue, discr, 1)
+    _try_write_vtk(vis.write_vtk_file, discr)
 
-    connections = []
+    _try_write_vtk(lambda x, y, **kwargs:
+            write_vertex_vtk_file(discr.mesh, x, **kwargs), discr.mesh)
+    _try_write_vtk(lambda x, y, **kwargs:
+            write_nodal_adjacency_vtk_file(x, discr.mesh, **kwargs), discr.mesh)
 
-    def refine_discr(discr):
-        mesh = discr.mesh
-        from meshmode.mesh.refinement import Refiner
-        refiner = Refiner(mesh)
-        flags = refine_flags(mesh)
-        refiner.refine(flags)
-        connections.append(
-                make_refinement_connection(refiner, discr, group_factory(order)))
-        return connections[-1].to_discr
+# }}}
 
-    discr = refine_discr(discr)
-    refine_discr(discr)
 
-    from meshmode.discretization.connection import (
-        ChainedDiscretizationConnection)
+# {{{ test_mesh_to_tikz
+def test_mesh_to_tikz():
+    from meshmode.mesh.io import generate_gmsh, FileSource
 
-    chained_conn = ChainedDiscretizationConnection(connections)
+    h = 0.3
+    order = 1
 
-    def f(x):
-        from six.moves import reduce
-        return 0.1 * reduce(lambda x, y: x * cl.clmath.sin(5 * y), x)
+    mesh = generate_gmsh(
+            FileSource("../test/blob-2d.step"), 2, order=order,
+            force_ambient_dim=2,
+            other_options=[
+                "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
+            )
 
-    x = connections[0].from_discr.nodes().with_queue(queue)
-
-    assert np.allclose(
-            chained_conn(queue, f(x)).get(queue),
-            connections[1](queue, connections[0](queue, f(x))).get(queue))
+    from meshmode.mesh.visualization import mesh_to_tikz
+    mesh_to_tikz(mesh)
 
 # }}}
 

@@ -31,6 +31,7 @@ import modepy as mp
 import logging
 logger = logging.getLogger(__name__)
 
+from pytools import log_process
 
 __doc__ = """
 
@@ -58,7 +59,7 @@ Surfaces
 .. autofunction:: generate_icosphere
 .. autofunction:: generate_torus
 .. autofunction:: refine_mesh_and_get_urchin_warper
-.. autofunction:: get_urchin
+.. autofunction:: generate_urchin
 
 Volumes
 -------
@@ -281,9 +282,8 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 
     mesh = Mesh(
             vertices=vertices, groups=[egroup],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None,
-            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance)
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+            is_conforming=True)
 
     if return_parametrization_points:
         return mesh, t
@@ -420,8 +420,7 @@ def generate_icosahedron(r, order):
     from meshmode.mesh import Mesh
     return Mesh(
             vertices, [grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -439,8 +438,7 @@ def generate_icosphere(r, order):
     from meshmode.mesh import Mesh
     return Mesh(
             mesh.vertices, [grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -505,8 +503,7 @@ def generate_torus_and_cycle_vertices(r_outer, r_inner,
     return (
             Mesh(
                 vertices, [grp.copy(nodes=nodes)],
-                nodal_adjacency=None,
-                facial_adjacency_groups=None),
+                is_conforming=True),
             [idx(i, 0) for i in range(n_outer)],
             [idx(0, j) for j in range(n_inner)])
 
@@ -546,6 +543,13 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
         phi = np.arctan2(y, x)
 
         import scipy.special as sps
+        # Note: This matches the spherical harmonic
+        # convention in the QBX3D paper:
+        # https://arxiv.org/abs/1805.06106
+        #
+        # Numpy takes arguments in the order (theta, phi)
+        # *and* swaps their meanings, so passing the
+        # arguments swapped maintains the intended meaning.
         return sps.sph_harm(m, n, phi, theta)
 
     def map_coords(pts):
@@ -564,15 +568,16 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
         return Mesh(
                 map_coords(mesh.vertices),
                 groups,
-                nodal_adjacency=None,
                 node_vertex_consistency_tolerance=False,
-                facial_adjacency_groups=None)
+                is_conforming=mesh.is_conforming,
+                )
 
     unwarped_mesh = generate_icosphere(1, order=order)
 
-    from meshmode.mesh.refinement import Refiner
+    from meshmode.mesh.refinement import RefinerWithoutAdjacency
 
-    refiner = Refiner(unwarped_mesh)
+    # These come out conformal, so we're OK to use the faster refiner.
+    refiner = RefinerWithoutAdjacency(unwarped_mesh)
     for i in range(uniform_refinement_rounds):
         refiner.refine_uniformly()
 
@@ -592,7 +597,7 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
             node_vertex_consistency_tolerance=est_rel_interp_tolerance)
 
 
-def get_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
+def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
     """
     :returns: a refined :class:`meshmode.mesh.Mesh` of a smooth shape govered
         by a spherical harmonic of order *(m, n)*.
@@ -730,8 +735,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
     from meshmode.mesh import Mesh
     return Mesh(vertices, [grp],
-            nodal_adjacency=None,
-            facial_adjacency_groups=None)
+            is_conforming=True)
 
 # }}}
 
@@ -789,6 +793,7 @@ def generate_warped_rect_mesh(dim, order, n):
 
 # {{{ warp_and_refine_until_resolved
 
+@log_process(logger)
 def warp_and_refine_until_resolved(
         unwarped_mesh_or_refiner, warp_callable, est_rel_interp_tolerance):
     """Given an original ("un-warped") :class:`meshmode.mesh.Mesh` and a
@@ -805,11 +810,9 @@ def warp_and_refine_until_resolved(
     from modepy.modes import simplex_onb
     from modepy.matrices import vandermonde
     from modepy.modal_decay import simplex_interp_error_coefficient_estimator_matrix
-    from meshmode.mesh.refinement import Refiner
+    from meshmode.mesh.refinement import Refiner, RefinerWithoutAdjacency
 
-    logger.info("warp_and_refine_until_resolved: start")
-
-    if isinstance(unwarped_mesh_or_refiner, Refiner):
+    if isinstance(unwarped_mesh_or_refiner, (Refiner, RefinerWithoutAdjacency)):
         refiner = unwarped_mesh_or_refiner
         unwarped_mesh = refiner.get_current_mesh()
     else:
@@ -822,6 +825,16 @@ def warp_and_refine_until_resolved(
         refine_flags = np.zeros(unwarped_mesh.nelements, dtype=np.bool)
 
         warped_mesh = warp_callable(unwarped_mesh)
+
+        # test whether there are invalid values in warped mesh
+        if not np.isfinite(warped_mesh.vertices).all():
+            raise FloatingPointError("Warped mesh contains non-finite vertices "
+                                     "(NaN or Inf)")
+
+        for group in warped_mesh.groups:
+            if not np.isfinite(group.nodes).all():
+                raise FloatingPointError("Warped mesh contains non-finite nodes "
+                                         "(NaN or Inf)")
 
         for egrp in warped_mesh.groups:
             dim, nunit_nodes = egrp.unit_nodes.shape
@@ -858,8 +871,6 @@ def warp_and_refine_until_resolved(
 
         unwarped_mesh = refiner.refine(refine_flags)
         iteration += 1
-
-    logger.info("warp_and_refine_until_resolved: done")
 
     return unwarped_mesh
 

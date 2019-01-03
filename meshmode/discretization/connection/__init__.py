@@ -35,12 +35,14 @@ from meshmode.discretization.connection.same_mesh import \
         make_same_mesh_connection
 from meshmode.discretization.connection.face import (
         FACE_RESTR_INTERIOR, FACE_RESTR_ALL,
-        make_face_restriction, make_face_to_all_faces_embedding)
+        make_face_restriction,
+        make_face_to_all_faces_embedding)
 from meshmode.discretization.connection.opposite_face import \
-        make_opposite_face_connection
+        make_opposite_face_connection, make_partition_connection
 from meshmode.discretization.connection.refinement import \
         make_refinement_connection
-
+from meshmode.discretization.connection.chained import \
+        flatten_chained_connection
 
 import logging
 logger = logging.getLogger(__name__)
@@ -53,11 +55,14 @@ __all__ = [
         "make_face_restriction",
         "make_face_to_all_faces_embedding",
         "make_opposite_face_connection",
-        "make_refinement_connection"
+        "make_partition_connection",
+        "make_refinement_connection",
+        "flatten_chained_connection",
         ]
 
 __doc__ = """
 .. autoclass:: DiscretizationConnection
+.. autoclass:: ChainedDiscretizationConnection
 .. autoclass:: DirectDiscretizationConnection
 
 .. autofunction:: make_same_mesh_connection
@@ -69,8 +74,11 @@ __doc__ = """
 .. autofunction:: make_face_to_all_faces_embedding
 
 .. autofunction:: make_opposite_face_connection
+.. autofunction:: make_partition_connection
 
 .. autofunction:: make_refinement_connection
+
+.. autofunction:: flatten_chained_connection
 
 Implementation details
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -383,19 +391,18 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         for i_tgrp, (tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.groups)):
             for i_batch, batch in enumerate(cgrp.batches):
-                if len(batch.from_element_indices):
-                    if not len(batch.from_element_indices):
-                        continue
+                if not len(batch.from_element_indices):
+                    continue
 
-                    sgrp = self.from_discr.groups[batch.from_group_index]
+                sgrp = self.from_discr.groups[batch.from_group_index]
 
-                    knl()(queue,
-                            resample_mat=self._resample_matrix(i_tgrp, i_batch),
-                            result=result,
-                            itgt_base=tgrp.node_nr_base,
-                            isrc_base=sgrp.node_nr_base,
-                            from_element_indices=batch.from_element_indices,
-                            to_element_indices=batch.to_element_indices)
+                knl()(queue,
+                      resample_mat=self._resample_matrix(i_tgrp, i_batch),
+                      result=result,
+                      itgt_base=tgrp.node_nr_base,
+                      isrc_base=sgrp.node_nr_base,
+                      from_element_indices=batch.from_element_indices,
+                      to_element_indices=batch.to_element_indices)
 
         return result
 

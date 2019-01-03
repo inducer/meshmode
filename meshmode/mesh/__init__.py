@@ -54,6 +54,7 @@ Predefined Boundary tags
 .. autoclass:: BTAG_ALL
 .. autoclass:: BTAG_REALLY_ALL
 .. autoclass:: BTAG_NO_BOUNDARY
+.. autoclass:: BTAG_PARTITION
 """
 
 
@@ -88,7 +89,34 @@ class BTAG_NO_BOUNDARY(object):  # noqa
     pass
 
 
-SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY])
+class BTAG_PARTITION(object):  # noqa
+    """
+    A boundary tag indicating that this edge is adjacent to an element of
+    another :class:`Mesh`. The partition number of the adjacent mesh
+    is given by ``part_nr``.
+
+    .. attribute:: part_nr
+
+    .. versionadded:: 2017.1
+    """
+    def __init__(self, part_nr):
+        self.part_nr = int(part_nr)
+
+    def __hash__(self):
+        return hash((type(self), self.part_nr))
+
+    def __eq__(self, other):
+        if isinstance(other, BTAG_PARTITION):
+            return self.part_nr == other.part_nr
+        else:
+            return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
+SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
+                   BTAG_PARTITION])
 
 # }}}
 
@@ -390,6 +418,8 @@ class FacialAdjacencyGroup(Record):
     of) a face.
 
     .. image:: images/facial-adjacency-group.png
+        :align: center
+        :width: 60%
 
     Represents (for example) *one* of the (colored) interfaces between
     :class:`MeshElementGroup` instances, or an interface between
@@ -456,6 +486,82 @@ class FacialAdjacencyGroup(Record):
 # }}}
 
 
+# {{{ partition adjacency
+
+class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
+    """
+    Describes boundary adjacency information of elements in
+    :class:`MeshElementGroup`.
+
+    .. attribute:: igroup
+
+        The group number of this group.
+
+    .. attribute:: ineighbor_group
+
+        *None* for boundary faces.
+
+    .. attribute:: elements
+
+        Group-local element numbers.
+        Element ``element_id_dtype elements[i]`` and face
+        ``face_id_dtype element_faces[i]`` is connected to neighbor element
+        ``element_id_dtype global_neighbors[i]`` with face
+        ``face_id_dtype global_neighbor_faces[i]``. The partition number it connects
+        to is ``neighbor_partitions[i]``.
+
+    .. attribute:: element_faces
+
+        ``face_id_dtype element_faces[i]`` gives the face of
+        ``element_id_dtype elements[i]`` that is connected to
+        ``global_neighbors[i]``.
+
+    .. attribute:: neighbors
+
+        Since this is a boundary, ``element_id_dtype neighbors[i]`` is interpreted
+        as a boundary tag. ``-neighbors[i]`` should be interpreted according to
+        :class:``Mesh.boundary_tags``.
+
+    .. attribute:: global_neighbors
+
+        Mesh-wide element numbers.
+        ``element_id_dtype global_neighbors[i]`` gives the element number within the
+        neighboring partition of the element connected to
+        ``element_id_dtype elements[i]``. Use ``find_group_instances()`` to find the
+        group that the element belongs to, then subtract ``element_nr_base`` to find
+        the element of the group.
+
+        If ``global_neighbors[i]`` is negative, ``elements[i]`` is on a true
+        boundary and is not connected to any other :class:``Mesh``.
+
+    .. attribute:: neighbor_faces
+
+        ``face_id_dtype global_neighbor_faces[i]`` gives face index within the
+        neighboring partition of the face connected to
+        ``element_id_dtype elements[i]``
+
+        If ``neighbor_partitions[i]`` is negative, ``elements[i]`` is on a true
+        boundary and is not connected to any other :class:``Mesh``.
+
+    .. attribute:: neighbor_partitions
+
+        ``neighbor_partitions[i]`` gives the partition number that ``elements[i]``
+        is connected to.
+
+        If ``neighbor_partitions[i]`` is negative, ``elements[i]`` is on a true
+        boundary and is not connected to any other :class:``Mesh``.
+
+    .. versionadded:: 2017.1
+    """
+
+    def __eq__(self, other):
+        return (super.__eq__(self, other)
+            and np.array_equal(self.global_neighbors, other.global_neighbors)
+            and np.array_equal(self.neighbor_partitions, other.neighbor_partitions))
+
+# }}}
+
+
 # {{{ mesh
 
 class Mesh(Record):
@@ -485,12 +591,15 @@ class Mesh(Record):
         the set of facial adjacency relations between group *igrp*
         and *ineighbor_group*. *ineighbor_group* and *igrp* may be
         identical, or *ineighbor_group* may be *None*, in which case
-        a group containing boundary faces is returned.
+        an :class:``InterPartitionAdjacency`` group containing boundary
+        faces is returned.
 
         Referencing this attribute may raise
         :exc:`meshmode.DataUnavailable`.
 
         .. image:: images/facial-adjacency-group.png
+            :align: center
+            :width: 60%
 
         For example for the mesh in the figure, the following data structure
         would be present::
@@ -523,19 +632,28 @@ class Mesh(Record):
 
     .. attribute:: element_id_dtype
 
+    .. attribute:: is_conforming
+
+        *True* if it is known that all element interfaces are conforming.
+        *False* if it is known that some element interfaces are non-conforming.
+        *None* if neither of the two is known.
+
     .. automethod:: __eq__
     .. automethod:: __ne__
+    .. automethos:: adjacency_list
     """
 
     face_id_dtype = np.int8
 
     def __init__(self, vertices, groups, skip_tests=False,
             node_vertex_consistency_tolerance=None,
-            nodal_adjacency=False,
-            facial_adjacency_groups=False,
+            skip_element_orientation_test=False,
+            nodal_adjacency=None,
+            facial_adjacency_groups=None,
             boundary_tags=None,
             vertex_id_dtype=np.int32,
-            element_id_dtype=np.int32):
+            element_id_dtype=np.int32,
+            is_conforming=None):
         """
         The following are keyword-only:
 
@@ -543,7 +661,10 @@ class Mesh(Record):
             mesh anyhow and then fix it inside of this data structure.
         :arg node_vertex_consistency_tolerance: If *False*, do not check
             for consistency between vertex and nodal data. If *None*, use
-            the (small, near FP-epsilon) tolerance.
+            the (small, near FP-epsilon) default tolerance.
+        :arg skip_element_orientation_test: If *False*, check that
+            element orientation is positive in volume meshes
+            (i.e. ones where ambient and topological dimension match).
         :arg nodal_adjacency: One of three options:
             *None*, in which case this information
             will be deduced from vertex adjacency. *False*, in which case
@@ -563,6 +684,7 @@ class Mesh(Record):
             will result in exceptions. Lastly, a data structure as described in
             :attr:`facial_adjacency_groups` may be passed.
         """
+
         el_nr = 0
         node_nr = 0
 
@@ -599,6 +721,12 @@ class Mesh(Record):
 
         # }}}
 
+        if not is_conforming:
+            if nodal_adjacency is None:
+                nodal_adjacency = False
+            if facial_adjacency_groups is None:
+                facial_adjacency_groups = False
+
         if nodal_adjacency is not False and nodal_adjacency is not None:
             if not isinstance(nodal_adjacency, NodalAdjacency):
                 nb_starts, nbs = nodal_adjacency
@@ -617,6 +745,7 @@ class Mesh(Record):
                 btag_to_index=btag_to_index,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),
                 element_id_dtype=np.dtype(element_id_dtype),
+                is_conforming=is_conforming,
                 )
 
         if not skip_tests:
@@ -659,7 +788,7 @@ class Mesh(Record):
             from meshmode.mesh.processing import \
                     test_volume_mesh_element_orientations
 
-            if self.dim == self.ambient_dim:
+            if self.dim == self.ambient_dim and not skip_element_orientation_test:
                 # only for volume meshes, for now
                 assert test_volume_mesh_element_orientations(self), \
                         "negatively oriented elements found"
@@ -704,7 +833,13 @@ class Mesh(Record):
         if self._nodal_adjacency is False:
             from meshmode import DataUnavailable
             raise DataUnavailable("nodal_adjacency")
+
         elif self._nodal_adjacency is None:
+            if not self.is_conforming:
+                from meshmode import DataUnavailable
+                raise DataUnavailable("nodal_adjacency can only "
+                        "be computed for known-conforming meshes")
+
             self._nodal_adjacency = _compute_nodal_adjacency_from_vertices(self)
 
         return self._nodal_adjacency
@@ -721,9 +856,18 @@ class Mesh(Record):
         if self._facial_adjacency_groups is False:
             from meshmode import DataUnavailable
             raise DataUnavailable("facial_adjacency_groups")
+
         elif self._facial_adjacency_groups is None:
-            self._facial_adjacency_groups = \
-                    _compute_facial_adjacency_from_vertices(self)
+            if not self.is_conforming:
+                from meshmode import DataUnavailable
+                raise DataUnavailable("facial_adjacency_groups can only "
+                        "be computed for known-conforming meshes")
+
+            self._facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
+                                                self.groups,
+                                                self.boundary_tags,
+                                                self.element_id_dtype,
+                                                self.face_id_dtype)
 
         return self._facial_adjacency_groups
 
@@ -744,7 +888,8 @@ class Mesh(Record):
                         == other._nodal_adjacency)
                 and (self._facial_adjacency_groups
                         == other._facial_adjacency_groups)
-                and self.boundary_tags == other.boundary_tags)
+                and self.boundary_tags == other.boundary_tags
+                and self.is_conforming == other.is_conforming)
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -854,14 +999,27 @@ def _compute_nodal_adjacency_from_vertices(mesh):
 
 # {{{ vertex-based facial adjacency
 
-def _compute_facial_adjacency_from_vertices(mesh):
+def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
+                                     element_id_dtype,
+                                     face_id_dtype,
+                                     face_vertex_indices_to_tags=None):
+    if not groups:
+        return None
+    boundary_tag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
+
+    def boundary_tag_bit(boundary_tag):
+        try:
+            return 1 << boundary_tag_to_index[boundary_tag]
+        except KeyError:
+            raise 0
+
     # FIXME Native code would make this faster
 
     # create face_map, which is a mapping of
     # (vertices on a face) ->
     #  [(igrp, iel_grp, face_idx) for elements bordering that face]
     face_map = {}
-    for igrp, grp in enumerate(mesh.groups):
+    for igrp, grp in enumerate(groups):
         for fid, face_vertex_indices in enumerate(grp.face_vertex_indices()):
             all_fvi = grp.vertex_indices[:, face_vertex_indices]
 
@@ -889,18 +1047,19 @@ def _compute_facial_adjacency_from_vertices(mesh):
     del igrp
 
     # {{{ build facial_adjacency_groups data structure, still empty
+    from meshmode.mesh import FacialAdjacencyGroup, BTAG_ALL, BTAG_REALLY_ALL
 
     facial_adjacency_groups = []
-    for igroup in range(len(mesh.groups)):
+    for igroup in range(len(groups)):
         grp_map = {}
         facial_adjacency_groups.append(grp_map)
 
         bdry_count = group_count.get((igroup, None))
         if bdry_count is not None:
-            elements = np.empty(bdry_count, dtype=mesh.element_id_dtype)
-            element_faces = np.empty(bdry_count, dtype=mesh.face_id_dtype)
-            neighbors = np.empty(bdry_count, dtype=mesh.element_id_dtype)
-            neighbor_faces = np.zeros(bdry_count, dtype=mesh.face_id_dtype)
+            elements = np.empty(bdry_count, dtype=element_id_dtype)
+            element_faces = np.empty(bdry_count, dtype=face_id_dtype)
+            neighbors = np.empty(bdry_count, dtype=element_id_dtype)
+            neighbor_faces = np.zeros(bdry_count, dtype=face_id_dtype)
 
             # Ensure uninitialized entries get noticed
             elements.fill(-1)
@@ -908,8 +1067,8 @@ def _compute_facial_adjacency_from_vertices(mesh):
             neighbor_faces.fill(-1)
 
             neighbors.fill(-(
-                    mesh.boundary_tag_bit(BTAG_ALL)
-                    | mesh.boundary_tag_bit(BTAG_REALLY_ALL)))
+                    boundary_tag_bit(BTAG_ALL)
+                    | boundary_tag_bit(BTAG_REALLY_ALL)))
 
             grp_map[None] = FacialAdjacencyGroup(
                     igroup=igroup,
@@ -919,13 +1078,13 @@ def _compute_facial_adjacency_from_vertices(mesh):
                     neighbors=neighbors,
                     neighbor_faces=neighbor_faces)
 
-        for ineighbor_group in range(len(mesh.groups)):
+        for ineighbor_group in range(len(groups)):
             nb_count = group_count.get((igroup, ineighbor_group))
             if nb_count is not None:
-                elements = np.empty(nb_count, dtype=mesh.element_id_dtype)
-                element_faces = np.empty(nb_count, dtype=mesh.face_id_dtype)
-                neighbors = np.empty(nb_count, dtype=mesh.element_id_dtype)
-                neighbor_faces = np.empty(nb_count, dtype=mesh.face_id_dtype)
+                elements = np.empty(nb_count, dtype=element_id_dtype)
+                element_faces = np.empty(nb_count, dtype=face_id_dtype)
+                neighbors = np.empty(nb_count, dtype=element_id_dtype)
+                neighbor_faces = np.empty(nb_count, dtype=face_id_dtype)
 
                 # Ensure uninitialized entries get noticed
                 elements.fill(-1)
@@ -973,6 +1132,17 @@ def _compute_facial_adjacency_from_vertices(mesh):
             fagrp = facial_adjacency_groups[igroup][None]
             fagrp.elements[idx] = iel
             fagrp.element_faces[idx] = iface
+            # mark tags if present
+            if face_vertex_indices_to_tags:
+                face_vertex_indices = groups[igroup].face_vertex_indices()[iface]
+                fvi = frozenset(groups[igroup].vertex_indices[
+                        iel, face_vertex_indices])
+                tags = face_vertex_indices_to_tags.get(fvi, None)
+                if tags is not None:
+                    tag_mask = 0
+                    for tag in tags:
+                        tag_mask |= boundary_tag_bit(tag)
+                    fagrp.neighbors[idx] = -(-(fagrp.neighbors[idx]) | tag_mask)
 
         else:
             raise RuntimeError("unexpected number of adjacent faces")
@@ -1082,7 +1252,8 @@ def as_python(mesh, function_name="make_mesh"):
 
         cg("    nodal_adjacency=%s," % el_con_str)
         cg("    facial_adjacency_groups=facial_adjacency_groups,")
-        cg("    boundary_tags=[%s])" % btags_str)
+        cg("    boundary_tags=[%s]," % btags_str)
+        cg("    is_conforming=%s)" % repr(mesh.is_conforming))
 
         # FIXME: Handle facial adjacency, boundary tags
 
@@ -1093,7 +1264,8 @@ def as_python(mesh, function_name="make_mesh"):
 
 # {{{ check_bc_coverage
 
-def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False):
+def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
+        true_boundary_only=True):
     """Verify boundary condition coverage.
 
     Given a list of boundary tags as *boundary_tags*, this function verifies
@@ -1104,6 +1276,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False):
 
     :arg incomplete_ok: Do not report an error if some faces are not covered
       by the boundary conditions.
+    :arg true_boundary_only: only verify for faces tagged with :class:`BTAG_ALL`.
     """
 
     for igrp, fagrp_map in enumerate(mesh.facial_adjacency_groups):
@@ -1116,7 +1289,16 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False):
 
         nb_el_bits = -nb_elements
 
+        # An array of flags for each face indicating whether we have encountered
+        # a boundary condition for that face.
         seen = np.zeros_like(nb_el_bits, dtype=np.bool)
+
+        if true_boundary_only:
+            tag_bit = mesh.boundary_tag_bit(BTAG_ALL)
+            tag_set = (nb_el_bits & tag_bit) != 0
+
+            # Consider non-boundary faces 'seen'
+            seen = seen | ~tag_set
 
         for btag in boundary_tags:
             tag_bit = mesh.boundary_tag_bit(btag)

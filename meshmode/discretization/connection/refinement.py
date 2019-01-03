@@ -30,6 +30,8 @@ import pyopencl.array  # noqa
 import logging
 logger = logging.getLogger(__name__)
 
+from pytools import log_process
+
 
 # {{{ Build interpolation batches for group
 
@@ -41,30 +43,30 @@ def _build_interpolation_batches_for_group(
     into is determined by where the refined unit nodes live
     relative to the coarse reference element.
 
-    For instance, consider the following refinement:
+    For instance, consider the following refinement::
 
-     ______      ______
-    |\     |    |\    e|
-    | \    |    |d\    |
-    |  \   |    |__\   |
-    |   \  | => |\c|\  |
-    |    \ |    |a\|b\ |
-    |     \|    |  |  \|
-     ‾‾‾‾‾‾      ‾‾‾‾‾‾
+         ______      ______
+        |\     |    |\    e|
+        | \    |    |d\    |
+        |  \   |    |__\   |
+        |   \  | => |\c|\  |
+        |    \ |    |a\|b\ |
+        |     \|    |  |  \|
+         ‾‾‾‾‾‾      ‾‾‾‾‾‾
 
     Here, the discretization unit nodes for elements a,b,c,d,e
     will each have different positions relative to the reference
     element, so each element gets its own batch. On the other
-    hand, for
+    hand, for::
 
-     ______      ______
-    |\     |    |\ f|\e|
-    | \    |    |d\ |g\|
-    |  \   |    |__\|__|
-    |   \  | => |\c|\  |
-    |    \ |    |a\|b\h|
-    |     \|    |  |  \|
-     ‾‾‾‾‾‾      ‾‾‾‾‾‾
+         ______      ______
+        |\     |    |\ f|\e|
+        | \    |    |d\ |g\|
+        |  \   |    |__\|__|
+        |   \  | => |\c|\  |
+        |    \ |    |a\|b\h|
+        |     \|    |  |  \|
+         ‾‾‾‾‾‾      ‾‾‾‾‾‾
 
     the pairs {a,e}, {b,f}, {c,g}, {d,h} can share interpolation
     batches because their unit nodes are mapped from the same part
@@ -110,6 +112,7 @@ def _build_interpolation_batches_for_group(
 # }}}
 
 
+@log_process(logger)
 def make_refinement_connection(refiner, coarse_discr, group_factory):
     """Return a
     :class:`meshmode.discretization.connection.DiscretizationConnection`
@@ -131,10 +134,11 @@ def make_refinement_connection(refiner, coarse_discr, group_factory):
         DirectDiscretizationConnection)
 
     coarse_mesh = refiner.get_previous_mesh()
-    fine_mesh = refiner.last_mesh
+    fine_mesh = refiner.get_current_mesh()
+
     if coarse_discr.mesh != coarse_mesh:
         raise ValueError(
-            "course_discr must live on the same mesh given to the refiner!")
+            "coarse_discr does not live on the same mesh given to the refiner")
 
     from meshmode.discretization import Discretization
     fine_discr = Discretization(
@@ -142,8 +146,6 @@ def make_refinement_connection(refiner, coarse_discr, group_factory):
         fine_mesh,
         group_factory,
         real_dtype=coarse_discr.real_dtype)
-
-    logger.info("building refinement connection: start")
 
     groups = []
     with cl.CommandQueue(fine_discr.cl_context) as queue:
@@ -155,8 +157,6 @@ def make_refinement_connection(refiner, coarse_discr, group_factory):
                     list(_build_interpolation_batches_for_group(
                             queue, group_idx, coarse_discr_group,
                             fine_discr_group, record))))
-
-    logger.info("building refinement connection: done")
 
     return DirectDiscretizationConnection(
         from_discr=coarse_discr,
