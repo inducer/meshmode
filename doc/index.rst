@@ -8,6 +8,7 @@ Contents:
 
    mesh
    discretization
+   connection
    misc
 
 Indices and tables

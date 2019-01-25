@@ -6,15 +6,10 @@ Abstract interface
 
 .. automodule:: meshmode.discretization
 
-Composite polynomial discretization
------------------------------------
+Element Groups for Composite Polynomial Discretization
+------------------------------------------------------
 
 .. automodule:: meshmode.discretization.poly_element
-
-Connection/interpolation
-------------------------
-
-.. automodule:: meshmode.discretization.connection
 
 Visualization
 -------------

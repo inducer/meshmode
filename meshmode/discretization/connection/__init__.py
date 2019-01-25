@@ -61,27 +61,41 @@ __all__ = [
         ]
 
 __doc__ = """
+Base classes
+------------
 .. autoclass:: DiscretizationConnection
 .. autoclass:: ChainedDiscretizationConnection
 .. autoclass:: DirectDiscretizationConnection
 
+
+Same-mesh connections
+---------------------
 .. autofunction:: make_same_mesh_connection
 
-.. autofunction:: FACE_RESTR_INTERIOR
-.. autofunction:: FACE_RESTR_ALL
+Restriction to faces
+--------------------
+.. autodata:: FACE_RESTR_INTERIOR
+.. autodata:: FACE_RESTR_ALL
 
 .. autofunction:: make_face_restriction
 .. autofunction:: make_face_to_all_faces_embedding
 
 .. autofunction:: make_opposite_face_connection
+
+Mesh partitioning
+-----------------
 .. autofunction:: make_partition_connection
 
+Refinement
+----------
 .. autofunction:: make_refinement_connection
 
+Flattening a :class:`ChainedDiscretizationConnection`
+-----------------------------------------------------
 .. autofunction:: flatten_chained_connection
 
 Implementation details
-^^^^^^^^^^^^^^^^^^^^^^
+----------------------
 
 .. autoclass:: InterpolationBatch
 
