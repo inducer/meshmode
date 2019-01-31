@@ -375,6 +375,9 @@ def from_vertices_and_simplices(vertices, simplices, order=1, fix_orientation=Fa
     grp = make_group_from_vertices(vertices, simplices, order)
 
     if fix_orientation:
+        if grp.dim != vertices.shape[0]:
+            raise ValueError("can only fix orientation of volume meshes")
+
         from meshmode.mesh.processing import (
                 find_volume_mesh_element_group_orientation,
                 flip_simplex_element_group)
