@@ -15,15 +15,15 @@ Python 2.7 POCL:
     reports:
       junit: test/pytest.xml
 
-Python 3.6 Nvidia K40:
+Python 3 Nvidia K40:
   script:
-  - export PY_EXE=python3.6
+  - export PY_EXE=python3
   - export PYOPENCL_TEST=nvi:k40
   - export EXTRA_INSTALL="pybind11 numpy mako"
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
   - ". ./build-and-test-py-project.sh"
   tags:
-  - python3.6
+  - python3
   - nvidia-k40
   except:
   - tags
@@ -31,15 +31,15 @@ Python 3.6 Nvidia K40:
     reports:
       junit: test/pytest.xml
 
-Python 3.6 POCL:
+Python 3 POCL:
   script:
-  - export PY_EXE=python3.6
+  - export PY_EXE=python3
   - export PYOPENCL_TEST=portable
   - export EXTRA_INSTALL="pybind11 numpy mako mpi4py"
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
   - ". ./build-and-test-py-project.sh"
   tags:
-  - python3.6
+  - python3
   - pocl
   - mpi
   except:
@@ -48,15 +48,15 @@ Python 3.6 POCL:
     reports:
       junit: test/pytest.xml
 
-Python 3.7 POCL:
+Python 3 POCL:
   script:
-  - export PY_EXE=python3.7
+  - export PY_EXE=python3
   - export PYOPENCL_TEST=portable
   - export EXTRA_INSTALL="pybind11 numpy mako mpi4py"
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
   - ". ./build-and-test-py-project.sh"
   tags:
-  - python3.7
+  - python3
   - pocl
   - mpi
   except:
@@ -71,7 +71,7 @@ Documentation:
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-docs.sh
   - ". ./build-docs.sh"
   tags:
-  - python3.5
+  - python3
   only:
   - master
 
@@ -80,6 +80,6 @@ Flake8:
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-flake8.sh
   - ". ./prepare-and-run-flake8.sh meshmode test"
   tags:
-  - python3.5
+  - python3
   except:
   - tags
