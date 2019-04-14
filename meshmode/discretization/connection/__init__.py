@@ -269,7 +269,7 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
         return vec
 
 
-class ReversedDiscretizationConnection(DiscretizationConnection):
+class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
     """Creates an inverse :class:`DiscretizationConnection` from an existing
     connection to allow transporting from the original connection's
     *to_discr* to *from_discr*.
@@ -307,7 +307,7 @@ class ReversedDiscretizationConnection(DiscretizationConnection):
             raise RuntimeError("`to_discr` must have and orthogonal basis")
 
         self.conn = conn
-        super(ReversedDiscretizationConnection, self).__init__(
+        super(L2ProjectionInverseDiscretizationConnection, self).__init__(
                 from_discr=self.conn.to_discr,
                 to_discr=self.conn.from_discr,
                 is_surjective=is_surjective)
