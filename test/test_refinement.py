@@ -22,6 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import logging
+from functools import partial
+
 import pytest
 import pyopencl as cl
 import pyopencl.clmath  # noqa
@@ -41,20 +44,22 @@ from meshmode.discretization.poly_element import (
     PolynomialEquidistantSimplexGroupFactory,
 )
 
-import logging
 logger = logging.getLogger(__name__)
 
-from functools import partial
 
+def get_blob_mesh(mesh_par, order=4):
+    # from meshmode.mesh.io import generate_gmsh, FileSource
+    # return generate_gmsh(
+    #         FileSource("blob-2d.step"), 2, order=order,
+    #         force_ambient_dim=2,
+    #         other_options=[
+    #             "-string", "Mesh.CharacteristicLengthMax = %s;" % mesh_par]
+    #         )
 
-def gen_blob_mesh(h=0.2, order=1):
-    from meshmode.mesh.io import generate_gmsh, FileSource
-    return generate_gmsh(
-            FileSource("blob-2d.step"), 2, order=order,
-            force_ambient_dim=2,
-            other_options=[
-                "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
-            )
+    from meshmode.mesh.io import read_gmsh
+    return read_gmsh(
+            "blob2d-order%d-h%s.msh" % (order, mesh_par),
+            force_ambient_dim=2)
 
 
 def random_refine_flags(fract, mesh):
@@ -117,7 +122,7 @@ def uniform_refine_flags(mesh):
         3),
 
     ("blob2d_rand",
-        gen_blob_mesh,
+        partial(get_blob_mesh, "6e-2", order=1),
         partial(random_refine_flags, 0.4),
         4),
 
@@ -145,7 +150,7 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
 
     r = Refiner(mesh)
 
-    for igen in range(num_generations):
+    for _ in range(num_generations):
         flags = flag_gen(mesh)
         mesh = r.refine(flags)
 
@@ -163,11 +168,11 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
     ("circle", 1, [20, 30, 40]),
-    ("blob", 2, [8e-2, 4e-2, 2e-2]),
+    ("blob", 2, ["8e-2", "6e-2", "4e-2"]),
     ("warp", 2, [4, 5, 6]),
     ("warp", 3, [4, 5, 6]),
 ])
-@pytest.mark.parametrize("mesh_order", [1, 5])
+@pytest.mark.parametrize("mesh_order", [1, 4, 5])
 @pytest.mark.parametrize("refine_flags", [
     # FIXME: slow
     #uniform_refine_flags,
@@ -194,10 +199,6 @@ def test_refinement_connection(
     from pytools.convergence import EOCRecorder
     eoc_rec = EOCRecorder()
 
-    def f(x):
-        from six.moves import reduce
-        return 0.1 * reduce(lambda x, y: x * cl.clmath.sin(5 * y), x)
-
     for mesh_par in mesh_pars:
         # {{{ get mesh
 
@@ -211,8 +212,8 @@ def test_refinement_connection(
             if mesh_order == 5:
                 pytest.xfail("https://gitlab.tiker.net/inducer/meshmode/issues/2")
             assert dim == 2
-            h = mesh_par
-            mesh = gen_blob_mesh(h, mesh_order)
+            mesh = get_blob_mesh(mesh_par, mesh_order)
+            h = float(mesh_par)
         elif mesh_name == "warp":
             from meshmode.mesh.generation import generate_warped_rect_mesh
             mesh = generate_warped_rect_mesh(dim, order=mesh_order, n=mesh_par)
@@ -221,6 +222,22 @@ def test_refinement_connection(
             raise ValueError("mesh_name not recognized")
 
         # }}}
+
+        from meshmode.mesh.processing import find_bounding_box
+        mesh_bbox_low, mesh_bbox_high = find_bounding_box(mesh)
+        mesh_ext = mesh_bbox_high-mesh_bbox_low
+
+        def f(x):
+            result = 1
+            if mesh_name == "blob":
+                factor = 15
+            else:
+                factor = 9
+
+            for iaxis in range(len(x)):
+                result = result * cl.clmath.sin(factor * (x[iaxis]/mesh_ext[iaxis]))
+
+            return result
 
         discr = Discretization(cl_ctx, mesh, group_factory(order))
 
@@ -266,9 +283,13 @@ def test_refinement_connection(
         err = la.norm((f_interp - f_true).get(queue), np.inf)
         eoc_rec.add_data_point(h, err)
 
+    order_slack = 0.5
+    if mesh_name == "blob" and order > 1:
+        order_slack = 1
+
     print(eoc_rec)
     assert (
-            eoc_rec.order_estimate() >= order-0.5
+            eoc_rec.order_estimate() >= order-order_slack
             or eoc_rec.max_error() < 1e-14)
 
 

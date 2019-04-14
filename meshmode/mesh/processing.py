@@ -289,6 +289,9 @@ def find_volume_mesh_element_group_orientation(vertices, grp):
     ambient_dim = spanning_vectors.shape[0]
     nspan_vectors = spanning_vectors.shape[-1]
 
+    if ambient_dim != grp.dim:
+        raise ValueError("can only find orientation of volume meshes")
+
     spanning_object_array = np.empty(
             (nspan_vectors, ambient_dim),
             dtype=np.object)

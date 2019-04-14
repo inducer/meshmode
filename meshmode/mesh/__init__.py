@@ -863,8 +863,11 @@ class Mesh(Record):
                 raise DataUnavailable("facial_adjacency_groups can only "
                         "be computed for known-conforming meshes")
 
-            self._facial_adjacency_groups = \
-                    _compute_facial_adjacency_from_vertices(self)
+            self._facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
+                                                self.groups,
+                                                self.boundary_tags,
+                                                self.element_id_dtype,
+                                                self.face_id_dtype)
 
         return self._facial_adjacency_groups
 
@@ -996,14 +999,27 @@ def _compute_nodal_adjacency_from_vertices(mesh):
 
 # {{{ vertex-based facial adjacency
 
-def _compute_facial_adjacency_from_vertices(mesh):
+def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
+                                     element_id_dtype,
+                                     face_id_dtype,
+                                     face_vertex_indices_to_tags=None):
+    if not groups:
+        return None
+    boundary_tag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
+
+    def boundary_tag_bit(boundary_tag):
+        try:
+            return 1 << boundary_tag_to_index[boundary_tag]
+        except KeyError:
+            raise 0
+
     # FIXME Native code would make this faster
 
     # create face_map, which is a mapping of
     # (vertices on a face) ->
     #  [(igrp, iel_grp, face_idx) for elements bordering that face]
     face_map = {}
-    for igrp, grp in enumerate(mesh.groups):
+    for igrp, grp in enumerate(groups):
         for fid, face_vertex_indices in enumerate(grp.face_vertex_indices()):
             all_fvi = grp.vertex_indices[:, face_vertex_indices]
 
@@ -1031,18 +1047,19 @@ def _compute_facial_adjacency_from_vertices(mesh):
     del igrp
 
     # {{{ build facial_adjacency_groups data structure, still empty
+    from meshmode.mesh import FacialAdjacencyGroup, BTAG_ALL, BTAG_REALLY_ALL
 
     facial_adjacency_groups = []
-    for igroup in range(len(mesh.groups)):
+    for igroup in range(len(groups)):
         grp_map = {}
         facial_adjacency_groups.append(grp_map)
 
         bdry_count = group_count.get((igroup, None))
         if bdry_count is not None:
-            elements = np.empty(bdry_count, dtype=mesh.element_id_dtype)
-            element_faces = np.empty(bdry_count, dtype=mesh.face_id_dtype)
-            neighbors = np.empty(bdry_count, dtype=mesh.element_id_dtype)
-            neighbor_faces = np.zeros(bdry_count, dtype=mesh.face_id_dtype)
+            elements = np.empty(bdry_count, dtype=element_id_dtype)
+            element_faces = np.empty(bdry_count, dtype=face_id_dtype)
+            neighbors = np.empty(bdry_count, dtype=element_id_dtype)
+            neighbor_faces = np.zeros(bdry_count, dtype=face_id_dtype)
 
             # Ensure uninitialized entries get noticed
             elements.fill(-1)
@@ -1050,8 +1067,8 @@ def _compute_facial_adjacency_from_vertices(mesh):
             neighbor_faces.fill(-1)
 
             neighbors.fill(-(
-                    mesh.boundary_tag_bit(BTAG_ALL)
-                    | mesh.boundary_tag_bit(BTAG_REALLY_ALL)))
+                    boundary_tag_bit(BTAG_ALL)
+                    | boundary_tag_bit(BTAG_REALLY_ALL)))
 
             grp_map[None] = FacialAdjacencyGroup(
                     igroup=igroup,
@@ -1061,13 +1078,13 @@ def _compute_facial_adjacency_from_vertices(mesh):
                     neighbors=neighbors,
                     neighbor_faces=neighbor_faces)
 
-        for ineighbor_group in range(len(mesh.groups)):
+        for ineighbor_group in range(len(groups)):
             nb_count = group_count.get((igroup, ineighbor_group))
             if nb_count is not None:
-                elements = np.empty(nb_count, dtype=mesh.element_id_dtype)
-                element_faces = np.empty(nb_count, dtype=mesh.face_id_dtype)
-                neighbors = np.empty(nb_count, dtype=mesh.element_id_dtype)
-                neighbor_faces = np.empty(nb_count, dtype=mesh.face_id_dtype)
+                elements = np.empty(nb_count, dtype=element_id_dtype)
+                element_faces = np.empty(nb_count, dtype=face_id_dtype)
+                neighbors = np.empty(nb_count, dtype=element_id_dtype)
+                neighbor_faces = np.empty(nb_count, dtype=face_id_dtype)
 
                 # Ensure uninitialized entries get noticed
                 elements.fill(-1)
@@ -1115,6 +1132,17 @@ def _compute_facial_adjacency_from_vertices(mesh):
             fagrp = facial_adjacency_groups[igroup][None]
             fagrp.elements[idx] = iel
             fagrp.element_faces[idx] = iface
+            # mark tags if present
+            if face_vertex_indices_to_tags:
+                face_vertex_indices = groups[igroup].face_vertex_indices()[iface]
+                fvi = frozenset(groups[igroup].vertex_indices[
+                        iel, face_vertex_indices])
+                tags = face_vertex_indices_to_tags.get(fvi, None)
+                if tags is not None:
+                    tag_mask = 0
+                    for tag in tags:
+                        tag_mask |= boundary_tag_bit(tag)
+                    fagrp.neighbors[idx] = -(-(fagrp.neighbors[idx]) | tag_mask)
 
         else:
             raise RuntimeError("unexpected number of adjacent faces")
