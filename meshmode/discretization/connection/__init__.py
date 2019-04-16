@@ -312,9 +312,8 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 to_discr=self.conn.from_discr,
                 is_surjective=is_surjective)
 
-    @memoize_method
-    def _evaluate_to_basis(self, target, igroup, ibasis):
-        @memoize_in(self, "conn_basis_eval_kernel")
+    def _evaluate_basis_on_target(self, discr, igroup, ibasis):
+        @memoize_in(self, "conn_basis_evaluation_knl")
         def knl():
             import loopy as lp
             knl = lp.make_kernel([
@@ -329,65 +328,49 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
             return knl
 
         group = self.to_discr.groups[igroup]
-        basis_fn = group.basis()[ibasis]
+        basis = group.basis()[ibasis]
 
-        with cl.CommandQueue(target.cl_context) as queue:
-            basis = self.to_discr.zeros(queue)
+        with cl.CommandQueue(discr.cl_context) as queue:
+            vec = self.to_discr.zeros(queue)
             knl()(queue,
-                  vec=group.view(basis),
-                  basis=basis_fn(group.unit_nodes).flatten())
+                  vec=group.view(vec),
+                  basis=basis(group.unit_nodes).flatten())
 
-            if target is self.from_discr:
-                basis = self.conn(queue, basis)
+            if discr is self.from_discr:
+                vec = self.conn(queue, vec)
 
-        return basis.with_queue(None)
+        return vec.with_queue(None)
 
     @memoize_method
-    def _from_quad_weights(self):
-        @memoize_in(self, "conn_quad_weights_knl")
-        def kweights():
-            import loopy as lp
-            knl = lp.make_kernel([
-                "{[k]: 0 <= k < nelements}",
-                "{[j]: 0 <= j < n_from_nodes}",
-                ],
-                """
-                result[from_element_indices[k], j] = \
-                        weights[j] / scaling[to_element_indices[k]]
-                """,
-                [
-                    lp.GlobalArg("result", None,
-                        shape=("n_from_elements", "n_from_nodes")),
-                    lp.ValueArg("n_from_elements", np.int32),
-                    "..."
-                    ],
-                name="conn_quad_weights_knl",
-                lang_version=MOST_RECENT_LANGUAGE_VERSION)
+    def _batch_weights(self):
+        from pymbolic.geometric_algebra import MultiVector
+        from functools import reduce
+        from operator import xor
 
-            return knl
+        def det(v):
+            nnodes = v[0].shape[0]
+            det_v = np.empty(nnodes)
 
-        with cl.CommandQueue(self.to_discr.cl_context) as queue:
-            elranges = np.cumsum([0]
-                    + [g.nelements for g in self.to_discr.groups])
-            scaling = cl.array.zeros(queue, elranges[-1], dtype=np.int)
+            for i in range(nnodes):
+                outer_product = reduce(xor, [MultiVector(x[i, :].T) for x in v])
+                det_v[i] = abs((outer_product.I | outer_product).as_scalar())
 
-            for igrp, grp in enumerate(self.conn.groups):
-                for batch in grp.batches:
-                    indices = batch.from_element_indices.with_queue(queue)
-                    scaling[elranges[igrp] + indices] += 1
+            return det_v
 
-            weights = self.from_discr.empty(queue, dtype=np.float)
-            for igrp, (tgrp, cgrp) in enumerate(
-                    zip(self.from_discr.groups, self.conn.groups)):
-                for batch in cgrp.batches:
-                    kweights()(queue,
-                            weights=tgrp.weights,
-                            result=tgrp.view(weights),
-                            scaling=scaling[elranges[igrp]:elranges[igrp + 1]],
-                            to_element_indices=batch.from_element_indices,
-                            from_element_indices=batch.to_element_indices)
+        to_discr = self.to_discr
+        J = np.empty(to_discr.dim, dtype=np.object)
+        weights = [np.empty(len(g.batches), dtype=np.object)
+                   for g in self.conn.groups]
 
-        return weights.with_queue(None)
+        for igrp, grp in enumerate(to_discr.groups):
+            for ibatch, batch in enumerate(self.conn.groups[igrp].batches):
+                for iaxis in range(grp.dim):
+                    D = grp.diff_matrices()[iaxis]
+                    J[iaxis] = D.dot(batch.result_unit_nodes.T)
+
+                weights[igrp][ibatch] = det(J) * grp.weights
+
+        return weights
 
     def __call__(self, queue, vec):
         @memoize_in(self, "conn_projection_knl")
@@ -402,7 +385,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     <> element_dot = \
                             sum(j, vec[from_element_indices[k], j] * \
                                    basis[from_element_indices[k], j] * \
-                                   weights[from_element_indices[k], j])
+                                   weights[j])
 
                     result[to_element_indices[k], ibasis] = \
                             result[to_element_indices[k], ibasis] + element_dot
@@ -414,7 +397,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     lp.GlobalArg("basis", None,
                         shape=("n_from_elements", "n_from_nodes")),
                     lp.GlobalArg("weights", None,
-                        shape=("n_from_elements", "n_from_nodes")),
+                        shape="n_from_nodes"),
                     lp.GlobalArg("result", None,
                         shape=("n_to_elements", "n_to_nodes")),
                     lp.ValueArg("n_from_elements", np.int32),
@@ -428,7 +411,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
 
             return knl
 
-        @memoize_in(self, "conn_evaluate_knl")
+        @memoize_in(self, "conn_evaluation_knl")
         def keval():
             import loopy as lp
             knl = lp.make_kernel([
@@ -457,22 +440,16 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         if vec.shape != (self.from_discr.nnodes,):
             raise ValueError("invalid shape of incoming resampling data")
 
-        # the code proceeds as follows:
-        #   * we evaluate the basis of to_discr on from_discr nodes
-        #   * in each element of from_discr, we compute the dot product
-        #   with the basis components to get the basis coefficients on
-        #   to_discr
-        #   * once the cofficients are computed and scaled, we evaluate them
-        #   at the actual nodes of to_discr.
+        # compute weights on each refinement of the reference element
+        weights = self._batch_weights();
 
-        # perform dot product to get basis coefficients
-        weights = self._from_quad_weights()
+        # perform dot product (on reference element) to get basis coefficients
         c = self.to_discr.zeros(queue, dtype=vec.dtype)
         for igrp, (tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.conn.groups)):
             for ibasis in range(len(tgrp.basis())):
-                to_basis = \
-                        self._evaluate_to_basis(self.from_discr, igrp, ibasis)
+                to_basis = self._evaluate_basis_on_target(
+                        self.from_discr, igrp, ibasis)
 
                 for ibatch, batch in enumerate(cgrp.batches):
                     sgrp = self.from_discr.groups[batch.from_group_index]
@@ -485,7 +462,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                             ibasis=ibasis,
                             vec=sgrp.view(vec),
                             basis=sgrp.view(to_basis),
-                            weights=sgrp.view(weights),
+                            weights=weights[igrp][ibatch],
                             result=tgrp.view(c),
                             from_element_indices=batch.to_element_indices,
                             to_element_indices=batch.from_element_indices)
@@ -495,7 +472,8 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
 
         for igrp, grp in enumerate(self.to_discr.groups):
             for ibasis in range(len(grp.basis())):
-                basis = self._evaluate_to_basis(self.to_discr, igrp, ibasis)
+                basis = self._evaluate_basis_on_target(
+                        self.to_discr, igrp, ibasis)
 
                 keval()(queue,
                         ibasis=ibasis,
