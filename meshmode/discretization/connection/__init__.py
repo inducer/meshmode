@@ -312,7 +312,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 to_discr=self.conn.from_discr,
                 is_surjective=is_surjective)
 
-    def _evaluate_basis_on_target(self, discr, igroup, ibasis):
+    def _evaluate_basis_on_target(self, queue, discr, igroup, ibasis):
         @memoize_in(self, "conn_basis_evaluation_knl")
         def knl():
             import loopy as lp
@@ -330,16 +330,15 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         group = self.to_discr.groups[igroup]
         basis = group.basis()[ibasis]
 
-        with cl.CommandQueue(discr.cl_context) as queue:
-            vec = self.to_discr.zeros(queue)
-            knl()(queue,
-                  vec=group.view(vec),
-                  basis=basis(group.unit_nodes).flatten())
+        vec = self.to_discr.zeros(queue)
+        knl()(queue,
+              vec=group.view(vec),
+              basis=basis(group.unit_nodes).flatten())
 
-            if discr is self.from_discr:
-                vec = self.conn(queue, vec)
+        if discr is self.from_discr:
+            vec = self.conn(queue, vec)
 
-        return vec.with_queue(None)
+        return vec
 
     @memoize_method
     def _batch_weights(self):
@@ -449,7 +448,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 zip(self.to_discr.groups, self.conn.groups)):
             for ibasis in range(len(tgrp.basis())):
                 to_basis = self._evaluate_basis_on_target(
-                        self.from_discr, igrp, ibasis)
+                        queue, self.from_discr, igrp, ibasis)
 
                 for ibatch, batch in enumerate(cgrp.batches):
                     sgrp = self.from_discr.groups[batch.from_group_index]
@@ -473,7 +472,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         for igrp, grp in enumerate(self.to_discr.groups):
             for ibasis in range(len(grp.basis())):
                 basis = self._evaluate_basis_on_target(
-                        self.to_discr, igrp, ibasis)
+                        queue, self.to_discr, igrp, ibasis)
 
                 keval()(queue,
                         ibasis=ibasis,
