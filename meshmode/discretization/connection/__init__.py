@@ -358,17 +358,17 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
             return det_v
 
         to_discr = self.to_discr
-        J = np.empty(to_discr.dim, dtype=np.object)
+        jac = np.empty(to_discr.dim, dtype=np.object)
         weights = [np.empty(len(g.batches), dtype=np.object)
                    for g in self.conn.groups]
 
         for igrp, grp in enumerate(to_discr.groups):
             for ibatch, batch in enumerate(self.conn.groups[igrp].batches):
                 for iaxis in range(grp.dim):
-                    D = grp.diff_matrices()[iaxis]
-                    J[iaxis] = D.dot(batch.result_unit_nodes.T)
+                    mat = grp.diff_matrices()[iaxis]
+                    jac[iaxis] = mat.dot(batch.result_unit_nodes.T)
 
-                weights[igrp][ibatch] = det(J) * grp.weights
+                weights[igrp][ibatch] = det(jac) * grp.weights
 
         return weights
 
@@ -441,7 +441,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
             raise ValueError("invalid shape of incoming resampling data")
 
         # compute weights on each refinement of the reference element
-        weights = self._batch_weights();
+        weights = self._batch_weights()
 
         # perform dot product (on reference element) to get basis coefficients
         c = self.to_discr.zeros(queue, dtype=vec.dtype)
