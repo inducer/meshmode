@@ -297,14 +297,15 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
 
     def __init__(self, conn, is_surjective=False):
         if len(conn.to_discr.groups) != 1 or len(conn.from_discr.groups) != 1:
-            raise NotImplementedError("multiple element groups are "
-                    "implemented in principle, but not yet tested")
+            from warnings import warn
+            warn("multiple element groups are implemented in principle, "
+                 "but not yet tested")
 
         if conn.from_discr.dim != conn.to_discr.dim:
             raise RuntimeError("cannot transport from face to element")
 
         if not all(g.is_orthogonal_basis() for g in conn.to_discr.groups):
-            raise RuntimeError("`to_discr` must have and orthogonal basis")
+            raise RuntimeError("`to_discr` must have an orthogonal basis")
 
         self.conn = conn
         super(L2ProjectionInverseDiscretizationConnection, self).__init__(
