@@ -313,7 +313,17 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 to_discr=self.conn.from_discr,
                 is_surjective=is_surjective)
 
-    def _evaluate_basis_on_target(self, queue, discr, igroup, ibasis):
+    def _evaluate_basis_on_target(self, queue, discr, igroup, ibasis_func):
+        """Evaluates a basis function from the target discretization
+        :attr:`to_discr` on all elements of `discr`.
+
+        :arg discr: discretization on which to evaluate the basis function.
+        :arg igroup: group index in the array returned by
+            :attr:`to_discr.groups`.
+        :arg ibasis_func: basis index in the array returned by
+            :attr:`to_discr.basis()`.
+        """
+
         @memoize_in(self, "conn_basis_evaluation_knl")
         def knl():
             import loopy as lp
@@ -322,14 +332,13 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 "{[j]: 0 <= j < n_to_nodes}"
                 ],
                 """vec[i, j] = basis[j]""",
-                ['...'],
                 name="conn_basis_eval_kernel",
                 lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
             return knl
 
         group = self.to_discr.groups[igroup]
-        basis = group.basis()[ibasis]
+        basis = group.basis()[ibasis_func]
 
         vec = self.to_discr.zeros(queue)
         knl()(queue,
@@ -343,6 +352,15 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
 
     @memoize_method
     def _batch_weights(self):
+        """Computes scaled quadrature weights for each interpolation batch in
+        :attr:`conn`. The quadrature weights can be used to integrate over
+        refined elements in the domain of the parent element.
+
+        :returns: a list of lists of size `(ngroups, ngroup_batches)`
+            containing the quadrature weights (of size `batch.nunit_nodes`)
+            for a given batch in a given group of :attr:`conn`.
+        """
+
         from pymbolic.geometric_algebra import MultiVector
         from functools import reduce
         from operator import xor
@@ -387,8 +405,8 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                                    basis[from_element_indices[k], j] * \
                                    weights[j])
 
-                    result[to_element_indices[k], ibasis] = \
-                            result[to_element_indices[k], ibasis] + element_dot
+                    result[to_element_indices[k], ibasis_func] = \
+                            result[to_element_indices[k], ibasis_func] + element_dot
                 end
                 """,
                 [
@@ -403,7 +421,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("n_from_elements", np.int32),
                     lp.ValueArg("n_to_elements", np.int32),
                     lp.ValueArg("n_to_nodes", np.int32),
-                    lp.ValueArg("ibasis", np.int32),
+                    lp.ValueArg("ibasis_func", np.int32),
                     '...'
                     ],
                 name="conn_projection_knl",
@@ -420,12 +438,12 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 ],
                 """
                     result[k, j] = result[k, j] + \
-                            coefficients[k, ibasis] * basis[k, j]
+                            coefficients[k, ibasis_func] * basis[k, j]
                 """,
                 [
                     lp.GlobalArg("coefficients", None,
                         shape=("nelements", "n_to_nodes")),
-                    lp.ValueArg("ibasis", np.int32),
+                    lp.ValueArg("ibasis_func", np.int32),
                     '...'
                     ],
                 name="conn_evaluate_knl",
@@ -447,9 +465,9 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         c = self.to_discr.zeros(queue, dtype=vec.dtype)
         for igrp, (tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.conn.groups)):
-            for ibasis in range(len(tgrp.basis())):
+            for ibasis_func in range(len(tgrp.basis())):
                 to_basis = self._evaluate_basis_on_target(
-                        queue, self.from_discr, igrp, ibasis)
+                        queue, self.from_discr, igrp, ibasis_func)
 
                 for ibatch, batch in enumerate(cgrp.batches):
                     sgrp = self.from_discr.groups[batch.from_group_index]
@@ -459,7 +477,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     # we are going in reverse here. a bit confusing, but
                     # saves on recreating the connection groups and batches.
                     kproj()(queue,
-                            ibasis=ibasis,
+                            ibasis_func=ibasis_func,
                             vec=sgrp.view(vec),
                             basis=sgrp.view(to_basis),
                             weights=weights[igrp][ibatch],
@@ -471,12 +489,12 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         result = self.to_discr.zeros(queue, dtype=vec.dtype)
 
         for igrp, grp in enumerate(self.to_discr.groups):
-            for ibasis in range(len(grp.basis())):
+            for ibasis_func in range(len(grp.basis())):
                 basis = self._evaluate_basis_on_target(
-                        queue, self.to_discr, igrp, ibasis)
+                        queue, self.to_discr, igrp, ibasis_func)
 
                 keval()(queue,
-                        ibasis=ibasis,
+                        ibasis_func=ibasis_func,
                         result=grp.view(result),
                         basis=grp.view(basis),
                         coefficients=grp.view(c))

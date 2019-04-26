@@ -53,7 +53,7 @@ def create_discretization(queue, ndim,
                                order=mesh_order)
     elif ndim == 3:
         from meshmode.mesh.generation import generate_torus
-        mesh = generate_torus(2.0, 1.0, order=mesh_order)
+        mesh = generate_torus(10.0, 5.0, order=mesh_order)
     else:
         raise ValueError("Unsupported dimension: {}".format(ndim))
 
@@ -342,7 +342,7 @@ def test_reversed_chained_connection(ctx_factory, ndim, visualize=False):
         order = 6
         threshold = 0.3
     else:
-        order = 12
+        order = 6
         threshold = 0.1
 
     # build test connection
@@ -406,7 +406,7 @@ def test_reversed_chained_connection(ctx_factory, ndim, visualize=False):
     if visualize:
         print('Error: {}'.format(error))
 
-    assert error < 1.0e-9
+    assert error < 1.0e-9, error
 
 
 if __name__ == "__main__":
