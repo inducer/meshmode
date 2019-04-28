@@ -371,9 +371,11 @@ def test_reversed_chained_connection(ctx_factory, ndim, visualize=False):
 
     from_x = 0.0
     to_x = 0.0
-    for i in range(ndim):
-        from_x += cl.clmath.cos(from_nodes[i] / (4.0 * np.pi)) ** (i + 1.0)
-        to_x += cl.clmath.cos(to_nodes[i] / (4.0 * np.pi)) ** (i + 1.0)
+    from_t = cl.array.to_device(queue, np.linspace(0.0, 1.0, from_nodes.shape[1]))
+    to_t = cl.array.to_device(queue, np.linspace(0.0, 1.0, to_nodes.shape[1]))
+    for i in range(2):
+        from_x += cl.clmath.cos(from_t / (4.0 * np.pi)) ** (i + 1.0)
+        to_x += cl.clmath.cos(to_t / (4.0 * np.pi)) ** (i + 1.0)
 
     from_interp = reverse(queue, to_x)
 
