@@ -296,11 +296,6 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
             return ChainedDiscretizationConnection(conns)
 
     def __init__(self, conn, is_surjective=False):
-        if len(conn.to_discr.groups) != 1 or len(conn.from_discr.groups) != 1:
-            from warnings import warn
-            warn("multiple element groups are implemented in principle, "
-                 "but not yet tested")
-
         if conn.from_discr.dim != conn.to_discr.dim:
             raise RuntimeError("cannot transport from face to element")
 
@@ -317,9 +312,10 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
     def _batch_weights(self):
         """Computes scaled quadrature weights for each interpolation batch in
         :attr:`conn`. The quadrature weights can be used to integrate over
-        refined elements in the domain of the parent element.
+        child elements in the domain of the parent element, by a change of
+        variables.
 
-        :return: a dictionary with keys ``(group_id, batch_id)`` tuples.
+        :return: a dictionary with keys ``(group_id, batch_id)``.
         """
 
         from pymbolic.geometric_algebra import MultiVector
@@ -443,7 +439,6 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
 
         # evaluate at unit_nodes to get the vector on to_discr
         result = self.to_discr.zeros(queue, dtype=vec.dtype)
-
         for igrp, grp in enumerate(self.to_discr.groups):
             for ibasis, basis_fn in enumerate(grp.basis()):
                 basis = basis_fn(grp.unit_nodes).flatten()
