@@ -419,9 +419,10 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         c = self.to_discr.zeros(queue, dtype=vec.dtype)
         for igrp, (tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.conn.groups)):
-            for ibasis, basis_fn in enumerate(tgrp.basis()):
-                for ibatch, batch in enumerate(cgrp.batches):
-                    sgrp = self.from_discr.groups[batch.from_group_index]
+            for ibatch, batch in enumerate(cgrp.batches):
+                sgrp = self.from_discr.groups[batch.from_group_index]
+
+                for ibasis, basis_fn in enumerate(sgrp.basis()):
                     basis = basis_fn(batch.result_unit_nodes).flatten()
 
                     # NOTE: batch.*_element_indices are reversed here because
