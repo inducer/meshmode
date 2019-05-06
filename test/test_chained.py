@@ -67,7 +67,8 @@ def create_discretization(queue, ndim,
             mesh_name = "torus"
 
         if mesh_name == "torus":
-            mesh = generate_torus(10.0, 5.0, order=order)
+            mesh = generate_torus(10.0, 5.0, order=order,
+                    n_inner=nelements, n_outer=nelements)
         elif mesh_name == "warp":
             mesh = generate_warped_rect_mesh(ndim, order=order, n=nelements)
         else:
@@ -349,7 +350,7 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type,
 
 @pytest.mark.parametrize(("ndim", "mesh_name"), [
     (2, "starfish"),
-    (3, "warp")])
+    (3, "torus")])
 def test_reversed_chained_connection(ctx_factory, ndim, mesh_name, visualize=False):
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
@@ -382,13 +383,14 @@ def test_reversed_chained_connection(ctx_factory, ndim, mesh_name, visualize=Fal
         reverse = L2ProjectionInverseDiscretizationConnection(chained)
 
         # create test vector
-        nnodes = chained.from_discr.nnodes
-        from_t = cl.array.to_device(queue, np.linspace(0.0, 1.0, nnodes))
-        nnodes = chained.to_discr.nnodes
-        to_t = cl.array.to_device(queue, np.linspace(0.0, 1.0, nnodes))
+        from_nodes = chained.from_discr.nodes().with_queue(queue)
+        to_nodes = chained.to_discr.nodes().with_queue(queue)
 
-        from_x = cl.clmath.cos(2.0 * np.pi * from_t)
-        to_x = cl.clmath.cos(2.0 * np.pi * to_t)
+        from_x = 0
+        to_x = 0
+        for d in range(ndim):
+            from_x += cl.clmath.cos(from_nodes[d]) ** (d + 1)
+            to_x += cl.clmath.cos(to_nodes[d]) ** (d + 1)
 
         from_interp = reverse(queue, to_x)
 
@@ -401,10 +403,7 @@ def test_reversed_chained_connection(ctx_factory, ndim, mesh_name, visualize=Fal
     eoc = EOCRecorder()
 
     order = 4
-    if ndim == 2:
-        mesh_sizes = [32, 64, 128, 256, 512]
-    else:
-        mesh_sizes = [2, 4, 6, 8, 10, 12, 14, 16]
+    mesh_sizes = [16, 32, 48, 64, 96, 128]
 
     for n in mesh_sizes:
         h, error = run(n, order)
