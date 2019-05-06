@@ -147,7 +147,7 @@ def _build_new_group_table(from_conn, to_conn):
 
 
 def _build_batches(queue, from_bins, to_bins, batch):
-    from meshmode.discretization.connection import \
+    from meshmode.discretization.connection.direct import \
             InterpolationBatch
 
     def to_device(x):

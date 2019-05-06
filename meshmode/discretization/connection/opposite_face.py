@@ -246,7 +246,7 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
                 - template_unit_nodes.reshape(dim, 1, -1)),
                 axis=2), axis=0)
 
-        from meshmode.discretization.connection import InterpolationBatch
+        from meshmode.discretization.connection.direct import InterpolationBatch
         yield InterpolationBatch(
                 from_group_index=i_src_grp,
                 from_element_indices=to_dev(src_bdry_element_indices[close_els]),

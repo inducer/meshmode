@@ -30,8 +30,9 @@ import pyopencl.array  # noqa
 # {{{ same-mesh constructor
 
 def make_same_mesh_connection(to_discr, from_discr):
-    from meshmode.discretization.connection import (
-            InterpolationBatch, DiscretizationConnectionElementGroup,
+    from meshmode.discretization.connection.direct import (
+            InterpolationBatch,
+            DiscretizationConnectionElementGroup,
             DirectDiscretizationConnection)
 
     if from_discr.mesh is not to_discr.mesh:
