@@ -29,6 +29,49 @@ import pyopencl.array  # noqa
 from pytools import Record
 
 import modepy as mp
+from meshmode.discretization.connection.direct import \
+        DiscretizationConnection
+
+
+# {{{ chained discretization connection
+
+class ChainedDiscretizationConnection(DiscretizationConnection):
+    """Aggregates multiple :class:`DiscretizationConnection` instances
+    into a single one.
+
+    .. attribute:: connections
+    """
+
+    def __init__(self, connections, from_discr=None):
+        if connections:
+            if from_discr is not None:
+                assert from_discr is connections[0].from_discr
+            else:
+                from_discr = connections[0].from_discr
+            is_surjective = all(cnx.is_surjective for cnx in connections)
+            to_discr = connections[-1].to_discr
+        else:
+            if from_discr is None:
+                raise ValueError("connections may not be empty if from_discr "
+                        "is not specified")
+
+            to_discr = from_discr
+
+            # It's an identity
+            is_surjective = True
+
+        super(ChainedDiscretizationConnection, self).__init__(
+                from_discr, to_discr, is_surjective=is_surjective)
+
+        self.connections = connections
+
+    def __call__(self, queue, vec):
+        for cnx in self.connections:
+            vec = cnx(queue, vec)
+
+        return vec
+
+# }}}
 
 
 # {{{ flatten chained connection
@@ -136,7 +179,7 @@ def flatten_chained_connection(queue, connection):
     :math:`m + 1` batches per group, where :math:`m` is the number of
     subdivisions of an element (exact number depends on implementation
     details in
-    :func:`~meshmode.discretizationc.connection.make_refinement_connection`).
+    :func:`~meshmode.discretization.connection.make_refinement_connection`).
     However, a direct connection from level :math:`0` to level :math:`2`
     will have at worst :math:`n^2` groups and each group will have
     :math:`(m + 1)^2` batches.
