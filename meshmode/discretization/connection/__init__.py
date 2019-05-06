@@ -25,7 +25,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import numpy as np
 import pyopencl as cl
 import pyopencl.array  # noqa
 
@@ -58,6 +57,10 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
         "DiscretizationConnection",
+        "DirectDiscretizationConnection",
+        "ChainedDiscretizationConnection",
+        "L2ProjectionInverseDiscretizationConnection",
+
         "make_same_mesh_connection",
         "FACE_RESTR_INTERIOR", "FACE_RESTR_ALL",
         "make_face_restriction",
@@ -66,6 +69,9 @@ __all__ = [
         "make_partition_connection",
         "make_refinement_connection",
         "flatten_chained_connection",
+
+        "InterpolationBatch",
+        "DiscretizationConnectionElementGroup",
         ]
 
 __doc__ = """
@@ -110,6 +116,7 @@ Implementation details
 
 .. autoclass:: DiscretizationConnectionElementGroup
 """
+
 
 # {{{ check connection
 
