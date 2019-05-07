@@ -23,6 +23,7 @@ THE SOFTWARE.
 """
 
 import numpy as np
+import numpy.linalg as la
 
 import pyopencl as cl
 import pyopencl.array  # noqa
@@ -39,29 +40,48 @@ logger = logging.getLogger(__name__)
 
 def create_discretization(queue, ndim,
                           nelements=42,
-                          mesh_order=5,
-                          discr_order=5):
+                          mesh_name=None,
+                          order=4):
     ctx = queue.context
 
     # construct mesh
     if ndim == 2:
         from functools import partial
-        from meshmode.mesh.generation import make_curve_mesh, ellipse
-        mesh = make_curve_mesh(partial(ellipse, 2),
-                               np.linspace(0.0, 1.0, nelements + 1),
-                               order=mesh_order)
+        from meshmode.mesh.generation import make_curve_mesh, ellipse, starfish
+
+        if mesh_name is None:
+            mesh_name = "ellipse"
+
+        t = np.linspace(0.0, 1.0, nelements + 1)
+        if mesh_name == "ellipse":
+            mesh = make_curve_mesh(partial(ellipse, 2), t, order=order)
+        elif mesh_name == "starfish":
+            mesh = make_curve_mesh(starfish, t, order=order)
+        else:
+            raise ValueError('unknown mesh name: {}'.format(mesh_name))
     elif ndim == 3:
         from meshmode.mesh.generation import generate_torus
-        mesh = generate_torus(10.0, 5.0, order=mesh_order)
+        from meshmode.mesh.generation import generate_warped_rect_mesh
+
+        if mesh_name is None:
+            mesh_name = "torus"
+
+        if mesh_name == "torus":
+            mesh = generate_torus(10.0, 5.0, order=order,
+                    n_inner=nelements, n_outer=nelements)
+        elif mesh_name == "warp":
+            mesh = generate_warped_rect_mesh(ndim, order=order, n=nelements)
+        else:
+            raise ValueError("unknown mesh name: {}".format(mesh_name))
     else:
-        raise ValueError("Unsupported dimension: {}".format(ndim))
+        raise ValueError("unsupported dimension: {}".format(ndim))
 
     # create discretization
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
             InterpolatoryQuadratureSimplexGroupFactory
     discr = Discretization(ctx, mesh,
-            InterpolatoryQuadratureSimplexGroupFactory(discr_order))
+            InterpolatoryQuadratureSimplexGroupFactory(order))
 
     return discr
 
@@ -184,9 +204,7 @@ def test_chained_connection(ctx_factory, ndim, visualize=False):
     queue = cl.CommandQueue(ctx)
 
     discr = create_discretization(queue, ndim,
-                                  nelements=10,
-                                  mesh_order=5,
-                                  discr_order=5)
+                                  nelements=10)
     connections = []
     conn = create_refined_connection(queue, discr, threshold=np.inf)
     connections.append(conn)
@@ -218,9 +236,7 @@ def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
 
-    discr = create_discretization(queue, ndim,
-                                  mesh_order=2,
-                                  discr_order=2)
+    discr = create_discretization(queue, ndim)
     connections = []
     conn = create_refined_connection(queue, discr)
     connections.append(conn)
@@ -321,15 +337,81 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type,
     if visualize and ndim == 2:
         import matplotlib.pyplot as pt
 
-        pt.figure(figsize=(10, 8))
+        pt.figure(figsize=(10, 8), dpi=300)
         pt.plot(f1, label='Direct')
         pt.plot(f2, label='Chained')
         pt.ylim([np.min(f2) - 0.1, np.max(f2) + 0.1])
         pt.legend()
-        pt.savefig('test_chained_to_direct.png', dpi=300)
+        pt.savefig('test_chained_to_direct.png')
         pt.clf()
 
     assert np.allclose(f1, f2)
+
+
+@pytest.mark.parametrize(("ndim", "mesh_name"), [
+    (2, "starfish"),
+    (3, "torus")])
+def test_reversed_chained_connection(ctx_factory, ndim, mesh_name, visualize=False):
+    ctx = ctx_factory()
+    queue = cl.CommandQueue(ctx)
+
+    def run(nelements, order):
+        discr = create_discretization(queue, ndim,
+            nelements=nelements,
+            order=order,
+            mesh_name=mesh_name)
+
+        threshold = 1.0
+        connections = []
+        conn = create_refined_connection(queue,
+                discr, threshold=threshold)
+        connections.append(conn)
+        if ndim == 2:
+            # NOTE: additional refinement makes the 3D meshes explode in size
+            conn = create_refined_connection(queue,
+                    conn.to_discr, threshold=threshold)
+            connections.append(conn)
+            conn = create_refined_connection(queue,
+                    conn.to_discr, threshold=threshold)
+            connections.append(conn)
+
+        from meshmode.discretization.connection import \
+                ChainedDiscretizationConnection
+        chained = ChainedDiscretizationConnection(connections)
+        from meshmode.discretization.connection import \
+                L2ProjectionInverseDiscretizationConnection
+        reverse = L2ProjectionInverseDiscretizationConnection(chained)
+
+        # create test vector
+        from_nodes = chained.from_discr.nodes().with_queue(queue)
+        to_nodes = chained.to_discr.nodes().with_queue(queue)
+
+        from_x = 0
+        to_x = 0
+        for d in range(ndim):
+            from_x += cl.clmath.cos(from_nodes[d]) ** (d + 1)
+            to_x += cl.clmath.cos(to_nodes[d]) ** (d + 1)
+
+        from_interp = reverse(queue, to_x)
+
+        from_interp = from_interp.get(queue)
+        from_x = from_x.get(queue)
+
+        return 1.0 / nelements, la.norm(from_interp - from_x) / la.norm(from_x)
+
+    from pytools.convergence import EOCRecorder
+    eoc = EOCRecorder()
+
+    order = 4
+    mesh_sizes = [16, 32, 48, 64, 96, 128]
+
+    for n in mesh_sizes:
+        h, error = run(n, order)
+        eoc.add_data_point(h, error)
+
+    print(eoc)
+
+    assert eoc.order_estimate() > (order + 1 - 0.5)
 
 
 if __name__ == "__main__":
