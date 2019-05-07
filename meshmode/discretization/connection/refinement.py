@@ -72,7 +72,7 @@ def _build_interpolation_batches_for_group(
     batches because their unit nodes are mapped from the same part
     of the reference element.
     """
-    from meshmode.discretization.connection import InterpolationBatch
+    from meshmode.discretization.connection.direct import InterpolationBatch
 
     num_children = len(record.tesselation.children) \
                    if record.tesselation else 0

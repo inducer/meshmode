@@ -640,7 +640,6 @@ class Mesh(Record):
 
     .. automethod:: __eq__
     .. automethod:: __ne__
-    .. automethos:: adjacency_list
     """
 
     face_id_dtype = np.int8

@@ -65,8 +65,9 @@ class _ConnectionBatchData(Record):
 
 def _build_boundary_connection(queue, vol_discr, bdry_discr, connection_data,
         per_face_groups):
-    from meshmode.discretization.connection import (
-            InterpolationBatch, DiscretizationConnectionElementGroup,
+    from meshmode.discretization.connection.direct import (
+            InterpolationBatch,
+            DiscretizationConnectionElementGroup,
             DirectDiscretizationConnection)
 
     ibdry_grp = 0
