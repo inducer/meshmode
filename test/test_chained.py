@@ -411,7 +411,7 @@ def test_reversed_chained_connection(ctx_factory, ndim, mesh_name, visualize=Fal
 
     print(eoc)
 
-    assert eoc.order_estimate() > (order - 0.5)
+    assert eoc.order_estimate() > (order + 1 - 0.5)
 
 
 if __name__ == "__main__":
