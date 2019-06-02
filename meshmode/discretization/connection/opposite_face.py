@@ -33,7 +33,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# {{{ opposite-face connection
+# {{{ _make_cross_face_batches
 
 def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
                                     i_tgt_grp, i_src_grp,
@@ -289,6 +289,10 @@ def _make_bdry_el_lookup_table(queue, connection, igrp):
 
     return iel_lookup
 
+# }}}
+
+
+# {{{ make_opposite_face_connection
 
 def make_opposite_face_connection(volume_to_bdry_conn):
     """Given a boundary restriction connection *volume_to_bdry_conn*,
@@ -403,7 +407,7 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 # }}}
 
 
-# {{{ partition_connection
+# {{{ make_partition_connection
 
 def make_partition_connection(local_bdry_conn, i_local_part,
                               remote_bdry, remote_adj_groups,
