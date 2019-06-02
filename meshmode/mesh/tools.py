@@ -23,6 +23,7 @@ THE SOFTWARE.
 """
 
 import numpy as np
+import numpy.linalg as la
 from pytools.spatial_btree import SpatialBinaryTreeBucket
 from six.moves import range
 
@@ -138,6 +139,39 @@ def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None):
 
     M = (np.outer(V, V) - np.eye(3)).dot(R)  # noqa: N806
     return M
+
+# }}}
+
+
+# {{{ AffineMap
+
+class AffineMap(object):
+    """An affine map ``A@x+b``represented by a matrix *A* and an offset vector *b*.
+
+    .. attribute:: matrix
+
+        A :class:`numpy.ndarray` representing the matrix *A*.
+
+    .. attribute:: offset
+
+        A :class:`numpy.ndarray` representing the vector *b*.
+
+    .. autofunction:: inverted
+    .. autofunction:: __call__
+    """
+
+    def __init__(self, matrix, offset):
+        self.matrix = matrix
+        self.offset = offset
+
+    def inverted(self):
+        return AffineMap(la.inv(self.matrix), -la.solve(self.matrix, self.offset))
+
+    def __call__(self, vecs):
+        """Apply the affine map to an array *vecs* whose first axis
+        length matches ``matrix.shape[1]``.
+        """
+        return (np.dot(self.matrix, vecs).T + self.offset).T
 
 # }}}
 

@@ -1121,6 +1121,24 @@ def test_mesh_to_tikz():
 # }}}
 
 
+def test_affine_map():
+    from meshmode.mesh.tools import AffineMap
+    for d in range(1, 5):
+        for i in range(100):
+            a = np.random.randn(d, d)+10*np.eye(d)
+            b = np.random.randn(d)
+
+            m = AffineMap(a, b)
+
+            assert la.norm(m.inverted().matrix - la.inv(a)) < 1e-10*la.norm(a)
+
+            x = np.random.randn(d)
+
+            m_inv = m.inverted()
+
+            assert la.norm(x-m_inv(m(x))) < 1e-10
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
