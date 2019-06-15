@@ -308,7 +308,8 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=[],
     from gmsh_interop.reader import parse_gmsh
     with GmshRunner(source, dimensions, order=order,
             other_options=other_options, extension=extension,
-            gmsh_executable=gmsh_executable) as runner:
+            gmsh_executable=gmsh_executable,
+            target_unit="mm") as runner:
         parse_gmsh(recv, runner.output_file,
                 force_dimension=force_ambient_dim)
 
