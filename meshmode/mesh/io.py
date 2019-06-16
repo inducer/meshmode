@@ -291,7 +291,8 @@ def read_gmsh(filename, force_ambient_dim=None, mesh_construction_kwargs=None):
 
 def generate_gmsh(source, dimensions=None, order=None, other_options=[],
         extension="geo", gmsh_executable="gmsh", force_ambient_dim=None,
-        output_file_name="output.msh", mesh_construction_kwargs=None):
+        output_file_name="output.msh", mesh_construction_kwargs=None,
+        target_unit=None):
     """Run :command:`gmsh` on the input given by *source*, and return a
     :class:`meshmode.mesh.Mesh` based on the result.
 
@@ -301,14 +302,25 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=[],
         this many dimensions.
     :arg mesh_construction_kwargs: *None* or a dictionary of keyword
         arguments passed to the :class:`meshmode.mesh.Mesh` constructor.
+    :arg target_unit: Value of the option *Geometry.OCCTargetUnit*.
+        Supported values are the strings `'M'` or `'MM'`.
     """
     recv = GmshMeshReceiver(mesh_construction_kwargs=mesh_construction_kwargs)
 
     from gmsh_interop.runner import GmshRunner
     from gmsh_interop.reader import parse_gmsh
+
+    if target_unit is None:
+        target_unit = "MM"
+        from warnings import warn
+        warn(
+                "Not specifying target_unit is deprecated. Set target_unit='MM' "
+                "to retain prior behavior.", DeprecationWarning, stacklevel=2)
+
     with GmshRunner(source, dimensions, order=order,
             other_options=other_options, extension=extension,
-            gmsh_executable=gmsh_executable) as runner:
+            gmsh_executable=gmsh_executable,
+            target_unit=target_unit) as runner:
         parse_gmsh(recv, runner.output_file,
                 force_dimension=force_ambient_dim)
 
