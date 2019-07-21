@@ -372,7 +372,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             raise TypeError("non-array passed to discretization connection")
 
         if self.is_surjective:
-            result = self.to_discr.empty(dtype=vec.dtype)
+            result = self.to_discr.empty(queue, dtype=vec.dtype)
         else:
             result = self.to_discr.zeros(queue, dtype=vec.dtype)
 
