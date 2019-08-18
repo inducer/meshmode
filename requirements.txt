@@ -6,6 +6,7 @@ git+https://gitlab.tiker.net/inducer/islpy.git
 git+https://gitlab.tiker.net/inducer/loopy.git
 
 # required by pytential, which is in turn needed for some tests
+git+https://gitlab.tiker.net/inducer/pymbolic.git
 git+https://gitlab.tiker.net/inducer/boxtree.git
 git+https://gitlab.tiker.net/inducer/sumpy.git
 git+https://gitlab.tiker.net/inducer/pytential.git
