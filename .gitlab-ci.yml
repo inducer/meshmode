@@ -2,7 +2,8 @@ Python 2.7 POCL:
   script:
   - export PY_EXE=python2.7
   - export PYOPENCL_TEST=portable
-  - export EXTRA_INSTALL="pybind11 numpy mako mpi4py"
+  - export EXTRA_INSTALL="pybind11 cython numpy mako mpi4py"
+  # cython is here because pytential (for now, for TS) depends on it
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
   - ". ./build-and-test-py-project.sh"
   tags:
@@ -19,7 +20,8 @@ Python 3 Nvidia K40:
   script:
   - export PY_EXE=python3
   - export PYOPENCL_TEST=nvi:k40
-  - export EXTRA_INSTALL="pybind11 numpy mako"
+  - export EXTRA_INSTALL="pybind11 cython numpy mako"
+  # cython is here because pytential (for now, for TS) depends on it
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
   - ". ./build-and-test-py-project.sh"
   tags:
@@ -35,7 +37,8 @@ Python 3 POCL:
   script:
   - export PY_EXE=python3
   - export PYOPENCL_TEST=portable
-  - export EXTRA_INSTALL="pybind11 numpy mako mpi4py"
+  # cython is here because pytential (for now, for TS) depends on it
+  - export EXTRA_INSTALL="pybind11 cython numpy mako mpi4py"
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
   - ". ./build-and-test-py-project.sh"
   tags:
@@ -52,7 +55,8 @@ Python 3 POCL:
   script:
   - export PY_EXE=python3
   - export PYOPENCL_TEST=portable
-  - export EXTRA_INSTALL="pybind11 numpy mako mpi4py"
+  # cython is here because pytential (for now, for TS) depends on it
+  - export EXTRA_INSTALL="pybind11 cython numpy mako mpi4py"
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
   - ". ./build-and-test-py-project.sh"
   tags:
