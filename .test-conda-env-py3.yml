@@ -15,6 +15,9 @@ dependencies:
 # for Pytential
 - cython
 
+# for pymetis
+- pybind11
+
 # Only needed to make pylint succeed
 - matplotlib
 
