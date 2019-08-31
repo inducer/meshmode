@@ -12,6 +12,9 @@ dependencies:
 - pyopencl
 - islpy
 
+# for Pytential
+- cython
+
 # Only needed to make pylint succeed
 - matplotlib
 
