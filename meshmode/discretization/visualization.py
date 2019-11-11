@@ -101,6 +101,7 @@ class _VisConnectivityGroup(Record):
 class Visualizer(object):
     """
     .. automethod:: show_scalar_in_mayavi
+    .. automethod:: show_scalar_in_matplotlib_3d
     .. automethod:: write_vtk_file
     """
 
@@ -347,6 +348,76 @@ class Visualizer(object):
             AppendedDataXMLGenerator(compressor)(grid).write(outf)
 
         # }}}
+
+    # {{{ matplotlib 3D
+
+    def show_scalar_in_matplotlib_3d(self, field, **kwargs):
+        import matplotlib.pyplot as plt
+
+        # This import also registers the 3D projection.
+        import mpl_toolkits.mplot3d.art3d as art3d
+
+        do_show = kwargs.pop("do_show", True)
+        vmin = kwargs.pop("vmin", None)
+        vmax = kwargs.pop("vmax", None)
+        norm = kwargs.pop("norm", None)
+
+        with cl.CommandQueue(self.vis_discr.cl_context) as queue:
+            nodes = self.vis_discr.nodes().with_queue(queue).get()
+
+            field = self._resample_and_get(queue, field)
+
+        assert nodes.shape[0] == self.vis_discr.ambient_dim
+
+        vis_connectivity, = self._vis_connectivity()
+
+        fig = plt.gcf()
+        ax = fig.gca(projection="3d")
+
+        had_data = ax.has_data()
+
+        if self.vis_discr.dim == 2:
+            nodes = list(nodes)
+            # pad to 3D with zeros
+            while len(nodes) < 3:
+                nodes.append(0*nodes[0])
+
+            from matplotlib.tri.triangulation import Triangulation
+            tri, args, kwargs = \
+                Triangulation.get_from_args_and_kwargs(
+                        *nodes,
+                        triangles=vis_connectivity.vis_connectivity.reshape(-1, 3))
+
+            triangles = tri.get_masked_triangles()
+            xt = nodes[0][triangles]
+            yt = nodes[1][triangles]
+            zt = nodes[2][triangles]
+            verts = np.stack((xt, yt, zt), axis=-1)
+
+            fieldt = field[triangles]
+
+            polyc = art3d.Poly3DCollection(verts, **kwargs)
+
+            # average over the three points of each triangle
+            avg_field = fieldt.mean(axis=1)
+            polyc.set_array(avg_field)
+
+            if vmin is not None or vmax is not None:
+                polyc.set_clim(vmin, vmax)
+            if norm is not None:
+                polyc.set_norm(norm)
+
+            ax.add_collection(polyc)
+            ax.auto_scale_xyz(xt, yt, zt, had_data)
+
+        else:
+            raise RuntimeError("meshes of bulk dimension %d are currently "
+                    "unsupported" % self.vis_discr.dim)
+
+        if do_show:
+            plt.show()
+
+    # }}}
 
 
 def make_visualizer(queue, discr, vis_order, element_shrink_factor=None):

@@ -427,17 +427,26 @@ def generate_icosahedron(r, order):
 
 # {{{ generate_icosphere
 
-def generate_icosphere(r, order):
+def generate_icosphere(r, order, uniform_refinement_rounds=0):
     mesh = generate_icosahedron(r, order)
 
-    grp, = mesh.groups
+    if uniform_refinement_rounds:
+        # These come out conformal, so we're OK to use the faster refiner.
+        from meshmode.mesh.refinement import RefinerWithoutAdjacency
+        refiner = RefinerWithoutAdjacency(mesh)
+        for i in range(uniform_refinement_rounds):
+            refiner.refine_uniformly()
 
+        mesh = refiner.get_current_mesh()
+
+    vertices = mesh.vertices * r / np.sqrt(np.sum(mesh.vertices**2, axis=0))
+    grp, = mesh.groups
     grp = grp.copy(
             nodes=grp.nodes * r / np.sqrt(np.sum(grp.nodes**2, axis=0)))
 
     from meshmode.mesh import Mesh
     return Mesh(
-            mesh.vertices, [grp],
+            vertices, [grp],
             is_conforming=True)
 
 # }}}
