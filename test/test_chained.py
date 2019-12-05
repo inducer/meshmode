@@ -68,7 +68,7 @@ def create_discretization(queue, ndim,
 
         if mesh_name == "torus":
             mesh = generate_torus(10.0, 5.0, order=order,
-                    n_inner=nelements, n_outer=nelements)
+                    n_minor=nelements, n_major=nelements)
         elif mesh_name == "warp":
             mesh = generate_warped_rect_mesh(ndim, order=order, n=nelements)
         else:
