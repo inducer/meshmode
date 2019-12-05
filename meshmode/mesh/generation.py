@@ -546,8 +546,8 @@ def generate_torus(r_major, r_minor, n_major=20, n_minor=10, order=1):
 
     :arg r_major: radius of the major circle
     :arg r_minor: radius of the minor circle
-    :arg n_major: number of elements along major circle
-    :arg n_minor: number of elements along minor circle
+    :arg n_major: number of rectangles along major circle
+    :arg n_minor: number of rectangles along minor circle
     :arg order: element order
     :returns: a :class:`meshmode.mesh.Mesh` of a torus
 
