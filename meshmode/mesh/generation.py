@@ -454,13 +454,13 @@ def generate_icosphere(r, order, uniform_refinement_rounds=0):
 
 # {{{ generate_torus_and_cycle_vertices
 
-def generate_torus_and_cycle_vertices(r_outer, r_inner,
-        n_outer=20, n_inner=10, order=1):
-    a = r_outer
-    b = r_inner
-    u, v = np.mgrid[0:2*np.pi:2*np.pi/n_outer, 0:2*np.pi:2*np.pi/n_inner]
+def generate_torus_and_cycle_vertices(r_major, r_minor,
+        n_major=20, n_minor=10, order=1):
+    a = r_major
+    b = r_minor
+    u, v = np.mgrid[0:2*np.pi:2*np.pi/n_major, 0:2*np.pi:2*np.pi/n_minor]
 
-    # http://www.math.hmc.edu/~gu/curves_and_surfaces/surfaces/torus.html
+    # https://web.archive.org/web/20160410151837/https://www.math.hmc.edu/~gu/curves_and_surfaces/surfaces/torus.html  # noqa
     x = np.cos(u)*(a+b*np.cos(v))
     y = np.sin(u)*(a+b*np.cos(v))
     z = b*np.sin(v)
@@ -468,11 +468,11 @@ def generate_torus_and_cycle_vertices(r_outer, r_inner,
             .transpose(0, 2, 1).copy().reshape(3, -1))
 
     def idx(i, j):
-        return (i % n_outer) + (j % n_inner) * n_outer
+        return (i % n_major) + (j % n_minor) * n_major
     vertex_indices = ([(idx(i, j), idx(i+1, j), idx(i, j+1))
-            for i in range(n_outer) for j in range(n_inner)]
+            for i in range(n_major) for j in range(n_minor)]
             + [(idx(i+1, j), idx(i+1, j+1), idx(i, j+1))
-            for i in range(n_outer) for j in range(n_inner)])
+            for i in range(n_major) for j in range(n_minor)])
 
     vertex_indices = np.array(vertex_indices, dtype=np.int32)
     grp = make_group_from_vertices(vertices, vertex_indices, order)
@@ -513,15 +513,47 @@ def generate_torus_and_cycle_vertices(r_outer, r_inner,
             Mesh(
                 vertices, [grp.copy(nodes=nodes)],
                 is_conforming=True),
-            [idx(i, 0) for i in range(n_outer)],
-            [idx(0, j) for j in range(n_inner)])
+            [idx(i, 0) for i in range(n_major)],
+            [idx(0, j) for j in range(n_minor)])
 
 # }}}
 
 
-def generate_torus(r_outer, r_inner, n_outer=20, n_inner=10, order=1):
+def generate_torus(r_major, r_minor, n_major=20, n_minor=10, order=1):
+    r"""Generate a torus.
+
+    .. figure:: images/torus.png
+        :align: center
+
+        Shown: A torus with major circle (magenta) and minor circle (red).
+        Source: https://commons.wikimedia.org/wiki/File:Torus_cycles.svg
+        (public domain image by Krishnavedala).
+
+    The torus is obtained as the image of the parameter domain
+    :math:`(u, v) \in [0, 2\pi) \times [0, 2 \pi)` under the map
+
+    .. math::
+        \begin{align}
+        x &= \cos(u) (r_\text{major} + r_\text{minor} \cos(v)) \\
+        y &= \sin(u) (r_\text{major} + r_\text{minor} \sin(v)) \\
+        z &= r_\text{minor} \sin(v)
+        \end{align}
+
+    where :math:`r_\text{major}` and :math:`r_\text{minor}` are the radii of the
+    major and minor circles, respectively. The parameter domain is tiled with
+    :math:`n_\text{major} \times n_\text{minor}` contiguous rectangles, and then
+    each rectangle is subdivided into two triangles.
+
+    :arg r_major: radius of the major circle
+    :arg r_minor: radius of the minor circle
+    :arg n_major: number of elements along major circle
+    :arg n_minor: number of elements along minor circle
+    :arg order: element order
+    :returns: a :class:`meshmode.mesh.Mesh` of a torus
+
+    """
     mesh, a_cycle, b_cycle = generate_torus_and_cycle_vertices(
-            r_outer, r_inner, n_outer, n_inner, order)
+            r_major, r_minor, n_major, n_minor, order)
     return mesh
 
 
