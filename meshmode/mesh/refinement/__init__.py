@@ -934,14 +934,16 @@ class Refiner(object):
     # }}}
 
 
-def refine_uniformly(mesh, iterations):
+def refine_uniformly(mesh, iterations, with_adjacency=True):
+    if with_adjacency:
         refiner = Refiner(mesh)
-        for i in range(iterations):
-            flags = np.ones(mesh.nelements, dtype=bool)
-            refiner.refine(flags)
-            mesh = refiner.get_current_mesh()
+    else:
+        refiner = RefinerWithoutAdjacency(mesh)
 
-        return mesh
+    for _ in range(iterations):
+        refiner.refine_uniformly()
+
+    return refiner.get_current_mesh()
 
 
 # vim: foldmethod=marker
