@@ -934,7 +934,7 @@ class Refiner(object):
     # }}}
 
 
-def refine_uniformly(mesh, iterations, with_adjacency=True):
+def refine_uniformly(mesh, iterations, with_adjacency=False):
     if with_adjacency:
         refiner = Refiner(mesh)
     else:
