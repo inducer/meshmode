@@ -293,6 +293,18 @@ def test_refinement_connection(
             or eoc_rec.max_error() < 1e-14)
 
 
+@pytest.mark.parametrize("with_adjacency", [True, False])
+def test_uniform_refinement(ctx_factory, with_adjacency):
+    make_mesh = partial(generate_box_mesh, (
+            np.linspace(0.0, 1.0, 2),
+            np.linspace(0.0, 1.0, 3),
+            np.linspace(0.0, 1.0, 2)), order=4)
+    mesh = make_mesh()
+
+    from meshmode.mesh.refinement import refine_uniformly
+    mesh = refine_uniformly(mesh, 1, with_adjacency=with_adjacency)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
