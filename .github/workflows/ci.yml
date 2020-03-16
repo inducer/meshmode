@@ -45,6 +45,7 @@ jobs:
         -   name: "Main Script"
             run: |
                 CONDA_ENVIRONMENT=.test-conda-env-py3.yml
+                sudo apt update
                 sudo apt install gfortran-7
                 sudo ln -s /usr/bin/gfortran-7 /usr/bin/gfortran
                 curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project-within-miniconda.sh
