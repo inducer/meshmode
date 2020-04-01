@@ -146,6 +146,8 @@ class RefinerWithoutAdjacency(object):
         """
 
         mesh = self._current_mesh
+        if mesh.vertices is None:
+            raise RuntimeError("Meshes without vertices cannot be refined.")
 
         refine_flags = np.asarray(refine_flags, dtype=np.bool)
 
