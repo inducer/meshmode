@@ -723,7 +723,7 @@ class Mesh(Record):
         # }}}
 
         if vertices is None:
-            is_conforming = False
+            is_conforming = None
 
         if not is_conforming:
             if nodal_adjacency is None:
@@ -828,6 +828,10 @@ class Mesh(Record):
 
     @property
     def nvertices(self):
+        if self.vertices is None:
+            from meshmode import DataUnavailable
+            raise DataUnavailable("vertices")
+
         return self.vertices.shape[-1]
 
     @property
@@ -837,9 +841,6 @@ class Mesh(Record):
     @property
     def nodal_adjacency(self):
         from meshmode import DataUnavailable
-        if self.vertices is None:
-            raise DataUnavailable("vertices")
-
         if self._nodal_adjacency is False:
             raise DataUnavailable("nodal_adjacency")
 
@@ -862,9 +863,6 @@ class Mesh(Record):
     @property
     def facial_adjacency_groups(self):
         from meshmode import DataUnavailable
-        if self.vertices is None:
-            raise DataUnavailable("vertices")
-
         if self._facial_adjacency_groups is False:
             raise DataUnavailable("facial_adjacency_groups")
 

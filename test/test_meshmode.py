@@ -1153,6 +1153,10 @@ def test_mesh_without_vertices(ctx_factory):
     groups = [grp.copy(nodes=grp.nodes, vertex_indices=None) for grp in mesh.groups]
     mesh = Mesh(None, groups, is_conforming=False)
 
+    # try refining it
+    from meshmode.mesh.refinement import refine_uniformly
+    mesh = refine_uniformly(mesh, 1)
+
     # make sure the world doesn't end
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
