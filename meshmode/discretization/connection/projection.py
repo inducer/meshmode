@@ -54,6 +54,9 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         if isinstance(connections, DirectDiscretizationConnection):
             return DiscretizationConnection.__new__(cls)
         elif isinstance(connections, ChainedDiscretizationConnection):
+            if len(connections.connections) == 0:
+                return connections
+
             return cls(connections.connections, is_surjective=is_surjective)
         else:
             conns = []
