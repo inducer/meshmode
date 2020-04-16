@@ -213,7 +213,7 @@ class MeshElementGroup(Record):
 
     @property
     def nelements(self):
-        return self.vertex_indices.shape[0]
+        return self.nodes.shape[1]
 
     @property
     def nnodes(self):
@@ -279,9 +279,6 @@ class SimplexElementGroup(MeshElementGroup):
         automatically assigned.
         """
 
-        if not issubclass(vertex_indices.dtype.type, np.integer):
-            raise TypeError("vertex_indices must be integral")
-
         if unit_nodes is None:
             if dim is None:
                 raise TypeError("'dim' must be passed "
@@ -294,10 +291,14 @@ class SimplexElementGroup(MeshElementGroup):
 
         dims = unit_nodes.shape[0]
 
-        if vertex_indices.shape[-1] != dims+1:
-            raise ValueError("vertex_indices has wrong number of vertices per "
-                    "element. expected: %d, got: %d" % (dims+1,
-                        vertex_indices.shape[-1]))
+        if vertex_indices is not None:
+            if not issubclass(vertex_indices.dtype.type, np.integer):
+                raise TypeError("vertex_indices must be integral")
+
+            if vertex_indices.shape[-1] != dims+1:
+                raise ValueError("vertex_indices has wrong number of vertices per "
+                        "element. expected: %d, got: %d" % (dims+1,
+                            vertex_indices.shape[-1]))
 
         super(SimplexElementGroup, self).__init__(order, vertex_indices, nodes,
                 element_nr_base, node_nr_base, unit_nodes, dim)
@@ -349,15 +350,16 @@ class TensorProductElementGroup(MeshElementGroup):
         automatically assigned.
         """
 
-        if not issubclass(vertex_indices.dtype.type, np.integer):
-            raise TypeError("vertex_indices must be integral")
-
         dims = unit_nodes.shape[0]
 
-        if vertex_indices.shape[-1] != 2**dims:
-            raise ValueError("vertex_indices has wrong number of vertices per "
-                    "element. expected: %d, got: %d" % (2**dims,
-                        vertex_indices.shape[-1]))
+        if vertex_indices is not None:
+            if not issubclass(vertex_indices.dtype.type, np.integer):
+                raise TypeError("vertex_indices must be integral")
+
+            if vertex_indices.shape[-1] != 2**dims:
+                raise ValueError("vertex_indices has wrong number of vertices per "
+                        "element. expected: %d, got: %d" % (2**dims,
+                            vertex_indices.shape[-1]))
 
         super(TensorProductElementGroup, self).__init__(order, vertex_indices, nodes,
                 element_nr_base, node_nr_base, unit_nodes)
@@ -568,8 +570,9 @@ class Mesh(Record):
     """
     .. attribute:: vertices
 
-        An array of vertex coordinates with shape
-        *(ambient_dim, nvertices)*
+        *None* or an array of vertex coordinates with shape
+        *(ambient_dim, nvertices)*. If *None*, vertices are not
+        known for this mesh.
 
     .. attribute:: groups
 
@@ -720,6 +723,9 @@ class Mesh(Record):
 
         # }}}
 
+        if vertices is None:
+            is_conforming = None
+
         if not is_conforming:
             if nodal_adjacency is None:
                 nodal_adjacency = False
@@ -753,7 +759,8 @@ class Mesh(Record):
                         self, node_vertex_consistency_tolerance)
 
             for g in self.groups:
-                assert g.vertex_indices.dtype == self.vertex_id_dtype
+                if g.vertex_indices is not None:
+                    assert g.vertex_indices.dtype == self.vertex_id_dtype
 
             if nodal_adjacency:
                 assert nodal_adjacency.neighbors_starts.shape == (self.nelements+1,)
@@ -812,7 +819,8 @@ class Mesh(Record):
 
     @property
     def ambient_dim(self):
-        return self.vertices.shape[0]
+        from pytools import single_valued
+        return single_valued(grp.nodes.shape[0] for grp in self.groups)
 
     @property
     def dim(self):
@@ -821,6 +829,10 @@ class Mesh(Record):
 
     @property
     def nvertices(self):
+        if self.vertices is None:
+            from meshmode import DataUnavailable
+            raise DataUnavailable("vertices")
+
         return self.vertices.shape[-1]
 
     @property
@@ -829,13 +841,12 @@ class Mesh(Record):
 
     @property
     def nodal_adjacency(self):
+        from meshmode import DataUnavailable
         if self._nodal_adjacency is False:
-            from meshmode import DataUnavailable
             raise DataUnavailable("nodal_adjacency")
 
         elif self._nodal_adjacency is None:
             if not self.is_conforming:
-                from meshmode import DataUnavailable
                 raise DataUnavailable("nodal_adjacency can only "
                         "be computed for known-conforming meshes")
 
@@ -852,13 +863,12 @@ class Mesh(Record):
 
     @property
     def facial_adjacency_groups(self):
+        from meshmode import DataUnavailable
         if self._facial_adjacency_groups is False:
-            from meshmode import DataUnavailable
             raise DataUnavailable("facial_adjacency_groups")
 
         elif self._facial_adjacency_groups is None:
             if not self.is_conforming:
-                from meshmode import DataUnavailable
                 raise DataUnavailable("facial_adjacency_groups can only "
                         "be computed for known-conforming meshes")
 
@@ -904,6 +914,9 @@ class Mesh(Record):
 # {{{ node-vertex consistency test
 
 def _test_node_vertex_consistency_simplex(mesh, mgrp, tol):
+    if mesh.vertices is None:
+        return True
+
     if mgrp.nelements == 0:
         return True
 

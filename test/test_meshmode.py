@@ -1139,6 +1139,35 @@ def test_affine_map():
             assert la.norm(x-m_inv(m(x))) < 1e-10
 
 
+def test_mesh_without_vertices(ctx_factory):
+    ctx = ctx_factory()
+    queue = cl.CommandQueue(ctx)
+
+    # create a mesh
+    from meshmode.mesh.generation import generate_icosphere
+    mesh = generate_icosphere(r=1.0, order=4)
+
+    # create one without the vertices
+    from meshmode.mesh import Mesh
+    grp, = mesh.groups
+    groups = [grp.copy(nodes=grp.nodes, vertex_indices=None) for grp in mesh.groups]
+    mesh = Mesh(None, groups, is_conforming=False)
+
+    # try refining it
+    from meshmode.mesh.refinement import refine_uniformly
+    mesh = refine_uniformly(mesh, 1)
+
+    # make sure the world doesn't end
+    from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import \
+            InterpolatoryQuadratureSimplexGroupFactory as GroupFactory
+    discr = Discretization(ctx, mesh, GroupFactory(4))
+    discr.nodes().with_queue(queue)
+
+    from meshmode.discretization.visualization import make_visualizer
+    make_visualizer(queue, discr, 4)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:

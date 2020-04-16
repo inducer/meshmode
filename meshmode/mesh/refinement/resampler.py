@@ -74,7 +74,8 @@ class SimplexResampler(object):
             follows their ordering in the tesselation (see also
             :meth:`SimplexResampler.get_vertex_pair_to_midpoint_order`)
         """
-        assert len(group.vertex_indices[0]) == group.dim + 1
+        if group.vertex_indices is not None:
+            assert len(group.vertex_indices[0]) == group.dim + 1
 
         # Get midpoints, converted to unit coordinates.
         midpoints = -1 + np.array([vertex for vertex in
@@ -106,7 +107,8 @@ class SimplexResampler(object):
             The ordering of the child nodes follows the ordering
             of ``tesselation.children.``
         """
-        assert len(group.vertex_indices[0]) == group.dim + 1
+        if group.vertex_indices is not None:
+            assert len(group.vertex_indices[0]) == group.dim + 1
 
         from meshmode.mesh.refinement.utils import map_unit_nodes_to_children
 
