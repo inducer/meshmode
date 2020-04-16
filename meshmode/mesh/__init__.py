@@ -570,8 +570,9 @@ class Mesh(Record):
     """
     .. attribute:: vertices
 
-        An array of vertex coordinates with shape
-        *(ambient_dim, nvertices)*
+        *None* or an array of vertex coordinates with shape
+        *(ambient_dim, nvertices)*. If *None*, vertices are not
+        known for this mesh.
 
     .. attribute:: groups
 
