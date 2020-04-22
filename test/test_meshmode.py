@@ -341,6 +341,7 @@ def test_all_faces_interpolation(ctx_factory, mesh_name, dim, mesh_pars,
     PolynomialWarpAndBlendGroupFactory
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
+    ("segment", 1, [8, 16, 32]),
     ("blob", 2, [1e-1, 8e-2, 5e-2]),
     ("warp", 2, [3, 5, 7]),
     ("warp", 3, [3, 5]),
@@ -368,7 +369,15 @@ def test_opposite_face_interpolation(ctx_factory, group_factory,
     for mesh_par in mesh_pars:
         # {{{ get mesh
 
-        if mesh_name == "blob":
+        if mesh_name == "segment":
+            assert dim == 1
+
+            from meshmode.mesh.generation import generate_box_mesh
+            mesh = generate_box_mesh(
+                    [np.linspace(-0.5, 0.5, mesh_par)],
+                    order=order)
+            h = 1.0 / mesh_par
+        elif mesh_name == "blob":
             assert dim == 2
 
             h = mesh_par
@@ -407,7 +416,6 @@ def test_opposite_face_interpolation(ctx_factory, group_factory,
 
         bdry_x = bdry_discr.nodes()[0].with_queue(queue)
         bdry_f = f(bdry_x)
-
         bdry_f_2 = opp_face(queue, bdry_f)
 
         err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
@@ -1102,6 +1110,7 @@ def test_vtk_overwrite(ctx_getter):
 
 
 # {{{ test_mesh_to_tikz
+
 def test_mesh_to_tikz():
     from meshmode.mesh.io import generate_gmsh, FileSource
 
