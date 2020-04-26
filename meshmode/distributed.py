@@ -239,10 +239,12 @@ def get_connected_partitions(mesh):
     connected_parts = set()
     from meshmode.mesh import InterPartitionAdjacencyGroup
     for adj in mesh.facial_adjacency_groups:
-        if isinstance(adj[None], InterPartitionAdjacencyGroup):
-            indices = (adj[None].neighbor_partitions >= 0)
+        grp = adj.get(None, None)
+        if isinstance(grp, InterPartitionAdjacencyGroup):
+            indices = grp.neighbor_partitions >= 0
             connected_parts = connected_parts.union(
-                                        adj[None].neighbor_partitions[indices])
+                    grp.neighbor_partitions[indices])
+
     return connected_parts
 
 
