@@ -356,9 +356,8 @@ class Discretization(object):
                     "stride:auto,stride:auto,stride:auto")
             return knl
 
-        result = self.empty(dtype=self.real_dtype, extra_dims=(self.ambient_dim,))
-
         with cl.CommandQueue(self.cl_context) as queue:
+            result = self.empty(queue=queue, dtype=self.real_dtype, extra_dims=(self.ambient_dim,))
             for grp in self.groups:
                 if grp.nelements == 0:
                     continue

@@ -658,7 +658,7 @@ def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
 # {{{ generate_box_mesh
 
 def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
-        group_factory=None):
+        group_factory=None, boundary_tags=[]):
     """Create a semi-structured mesh.
 
     :param axis_coords: a tuple with a number of entries corresponding
@@ -776,14 +776,15 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
     from meshmode.mesh import Mesh
     return Mesh(vertices, [grp],
-            is_conforming=True)
+            is_conforming=True, boundary_tags=boundary_tags)
 
 # }}}
 
 
 # {{{ generate_regular_rect_mesh
 
-def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1):
+def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
+                               boundary_tags=[]):
     """Create a semi-structured rectangular mesh.
 
     :param a: the lower left hand point of the rectangle
@@ -797,7 +798,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1):
     axis_coords = [np.linspace(a_i, b_i, n_i)
             for a_i, b_i, n_i in zip(a, b, n)]
 
-    return generate_box_mesh(axis_coords, order=order)
+    return generate_box_mesh(axis_coords, order=order, boundary_tags=boundary_tags)
 
 # }}}
 
