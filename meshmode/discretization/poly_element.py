@@ -177,7 +177,9 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
     @memoize_method
     def _quadrature_rule(self):
         dims = self.mesh_el_group.dim
-        if dims == 1:
+        if dims == 0:
+            return mp.Quadrature(np.empty((0, 1)), np.empty((0, 1)))
+        elif dims == 1:
             return mp.LegendreGaussQuadrature(self.order)
         else:
             return mp.XiaoGimbutasSimplexQuadrature(self.order, dims)
