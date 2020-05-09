@@ -1177,6 +1177,34 @@ def test_mesh_without_vertices(ctx_factory):
     make_visualizer(queue, discr, 4)
 
 
+@pytest.mark.parametrize("curve_name", ["ellipse", "arc"])
+def test_open_curved_mesh(curve_name):
+    def arc_curve(t, start=0, end=np.pi):
+        return np.vstack([
+            np.cos((end - start) * t + start),
+            np.sin((end - start) * t + start)
+            ])
+
+    if curve_name == "ellipse":
+        from functools import partial
+        from meshmode.mesh.generation import ellipse
+        curve_f = partial(ellipse, 2.0)
+        closed = True
+    elif curve_name == "arc":
+        curve_f = arc_curve
+        closed = False
+    else:
+        raise ValueError("unknown curve")
+
+    from meshmode.mesh.generation import make_curve_mesh
+    nelements = 32
+    order = 4
+    make_curve_mesh(curve_f,
+            np.linspace(0.0, 1.0, nelements + 1),
+            order=order,
+            closed=closed)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:

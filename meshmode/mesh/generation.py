@@ -237,6 +237,7 @@ starfish = NArmedStarfish(5, 0.25)
 def make_curve_mesh(curve_f, element_boundaries, order,
         unit_nodes=None,
         node_vertex_consistency_tolerance=None,
+        closed=True,
         return_parametrization_points=False):
     """
     :arg curve_f: A callable representing a parametrization for a curve,
@@ -245,10 +246,12 @@ def make_curve_mesh(curve_f, element_boundaries, order,
     :arg element_boundaries: a vector of element boundary locations in
         :math:`[0,1]`, in order. 0 must be the first entry, 1 the
         last one.
+    :arg closed: if *True*, the curve is assumed closed and the first and
+        last of the *element_boundaries* must match.
     :arg unit_nodes: if given, the unit nodes to use. Must have shape
-        ``(dim, nnoodes)``.
+        ``(dim, nnodes)``.
     :returns: a :class:`meshmode.mesh.Mesh`, or if *return_parametrization_points*
-        is True, a tuple ``(mesh, par_points)``, where *par_points* is an array of
+        is *True*, a tuple ``(mesh, par_points)``, where *par_points* is an array of
         parametrization points.
     """
 
@@ -260,7 +263,21 @@ def make_curve_mesh(curve_f, element_boundaries, order,
         unit_nodes = mp.warp_and_blend_nodes(1, order)
     nodes_01 = 0.5*(unit_nodes+1)
 
-    vertices = curve_f(element_boundaries)
+    wrap = nelements
+    if not closed:
+        wrap += 1
+
+    vertices = curve_f(element_boundaries)[:, :wrap]
+    vertex_indices = np.vstack([
+        np.arange(0, nelements, dtype=np.int32),
+        np.arange(1, nelements + 1, dtype=np.int32) % wrap
+        ]).T
+
+    assert vertices.shape[1] == np.max(vertex_indices) + 1
+    if closed:
+        assert la.norm(
+                curve_f(element_boundaries[0])
+                - curve_f(element_boundaries[-1])) < 1.0e-14
 
     el_lengths = np.diff(element_boundaries)
     el_starts = element_boundaries[:-1]
@@ -273,10 +290,7 @@ def make_curve_mesh(curve_f, element_boundaries, order,
     from meshmode.mesh import Mesh, SimplexElementGroup
     egroup = SimplexElementGroup(
             order,
-            vertex_indices=np.vstack([
-                np.arange(nelements, dtype=np.int32),
-                np.arange(1, nelements+1, dtype=np.int32) % nelements,
-                ]).T,
+            vertex_indices=vertex_indices,
             nodes=nodes,
             unit_nodes=unit_nodes)
 
