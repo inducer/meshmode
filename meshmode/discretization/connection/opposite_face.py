@@ -43,7 +43,7 @@ def _make_cross_face_batches(queue,
         return cl.array.to_device(queue, ary, array_queue=None)
 
     from meshmode.discretization.connection.direct import InterpolationBatch
-    if tgt_bdry_discr.ambient_dim == 1:
+    if tgt_bdry_discr.dim == 0:
         yield InterpolationBatch(
             from_group_index=i_src_grp,
             from_element_indices=to_dev(src_bdry_element_indices),
