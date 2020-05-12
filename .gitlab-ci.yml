@@ -74,7 +74,8 @@ Python 3 POCL Examples:
   - test -n "$SKIP_EXAMPLES" && exit
   - export PY_EXE=python3
   - export PYOPENCL_TEST=portable:pthread
-  - export EXTRA_INSTALL="pybind11 numpy mako"
+  # cython is here because pytential (for now, for TS) depends on it
+  - export EXTRA_INSTALL="pybind11 cython numpy mako"
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-py-project-and-run-examples.sh
   - ". ./build-py-project-and-run-examples.sh"
   tags:
