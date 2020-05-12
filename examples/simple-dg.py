@@ -24,6 +24,7 @@ THE SOFTWARE.
 
 
 import numpy as np
+import numpy.linalg as la  # noqa
 import pyopencl as cl
 import pyopencl.array as cla  # noqa
 import pyopencl.clmath as clmath
@@ -33,7 +34,7 @@ from pytools.obj_array import (
         with_object_array_or_scalar,
         is_obj_array)
 import loopy as lp
-from meshmode.mesh import BTAG_ALL  # noqa
+from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
 
 
 # Features lost vs. https://github.com/inducer/grudge:
@@ -137,7 +138,11 @@ class DGDiscretization:
             return self.interior_faces_connection()
         elif src_tgt == ("vol", "all_faces"):
             return self.all_faces_connection()
+        elif src_tgt == ("vol", BTAG_ALL):
+            return self.boundary_connection(tgt)
         elif src_tgt == ("int_faces", "all_faces"):
+            return self.get_to_all_face_embedding(src)
+        elif src_tgt == (BTAG_ALL, "all_faces"):
             return self.get_to_all_face_embedding(src)
         else:
             raise ValueError(f"locations '{src}'->'{tgt}' not understood")
@@ -156,6 +161,8 @@ class DGDiscretization:
             return self.all_faces_connection().to_discr
         elif where == "int_faces":
             return self.interior_faces_connection().to_discr
+        elif where == BTAG_ALL:
+            return self.boundary_connection(where).to_discr
         else:
             raise ValueError(f"location '{where}' not understood")
 
@@ -215,7 +222,8 @@ class DGDiscretization:
             ((a,), (b,)) = with_queue(
                     queue, parametrization_derivative(queue, bdry_discr))
 
-            return without_queue(join_fields(b, -a))
+            nrm = 1/(a**2+b**2)**0.5
+            return without_queue(join_fields(b*nrm, -a*nrm))
 
     @memoize_method
     def face_jacobian(self, where):
@@ -241,7 +249,7 @@ class DGDiscretization:
     def inverse_mass(self, vec):
         if is_obj_array(vec):
             return with_object_array_or_scalar(
-                    lambda el: self.face_mass(el), vec)
+                    lambda el: self.inverse_mass(el), vec)
 
         @memoize_in(self, "elwise_linear_knl")
         def knl():
@@ -258,12 +266,12 @@ class DGDiscretization:
 
         discr = self.volume_discr
 
-        result = discr.empty(queue=self.queue, dtype=vec.dtype)
+        result = discr.empty(queue=vec.queue, dtype=vec.dtype)
 
         for grp in discr.groups:
             matrix = self.get_inverse_mass_matrix(grp, vec.dtype)
 
-            knl()(self.queue, mat=matrix, result=grp.view(result),
+            knl()(vec.queue, mat=matrix, result=grp.view(result),
                     vec=grp.view(vec))
 
         return result/self.vol_jacobian()
@@ -318,6 +326,9 @@ class DGDiscretization:
 
         result = vol_discr.empty(queue=vec.queue, dtype=vec.dtype)
 
+        fj = self.face_jacobian("all_faces")
+        vec = vec*fj
+
         assert len(all_faces_discr.groups) == len(vol_discr.groups)
 
         for afgrp, volgrp in zip(all_faces_discr.groups, vol_discr.groups):
@@ -330,7 +341,7 @@ class DGDiscretization:
             knl()(vec.queue, mat=matrix, result=volgrp.view(result),
                     vec=input_view)
 
-        return result*self.face_jacobian("all_faces")
+        return result
 
 # }}}
 
@@ -410,24 +421,25 @@ def wave_operator(discr, c, w):
     u = w[0]
     v = w[1:]
 
-    # dir_u = discr.interp("vol", BTAG_ALL, u)
-    # dir_v = discr.interp("vol", BTAG_ALL, v)
-    # dir_bc = join_fields(-dir_u, dir_v)
+    dir_u = discr.interp("vol", BTAG_ALL, u)
+    dir_v = discr.interp("vol", BTAG_ALL, v)
+    dir_bval = join_fields(dir_u, dir_v)
+    dir_bc = join_fields(-dir_u, dir_v)
 
-    result = (
+    return (
             - join_fields(
                 -c*discr.div(v),
                 -c*discr.grad(u)
                 )
-             +  # noqa: W504
-             discr.inverse_mass(
-                 discr.face_mass(
-                     wave_flux(discr, c=c, w_tpair=interior_trace_pair(discr, w))
-                     #+ flux(sym.bv_tpair(self.dirichlet_tag, w, dir_bc))
-                     ))
+            +  # noqa: W504
+            discr.inverse_mass(
+                discr.face_mass(
+                    wave_flux(discr, c=c, w_tpair=interior_trace_pair(discr, w))
+                    + wave_flux(discr, c=c, w_tpair=TracePair(
+                        BTAG_ALL, dir_bval, dir_bc))
+                    ))
                 )
 
-    return result
 
 # }}}
 
@@ -440,59 +452,63 @@ def rk4_step(y, t, h, f):
     return y + h/6*(k1 + 2*k2 + 2*k3 + k4)
 
 
-def main():
-    cl_ctx = cl.create_some_context()
-    queue = cl.CommandQueue(cl_ctx)
-
-    from meshmode.mesh.generation import generate_regular_rect_mesh
-    mesh = generate_regular_rect_mesh(
-            a=(-0.5, -0.5),
-            b=(0.5, 0.5),
-            n=(16, 16))
-
-    dt = 0.04
-
-    print("%d elements" % mesh.nelements)
-
-    discr = DGDiscretization(cl_ctx, mesh, order=4)
-
-    fields = join_fields(discr.zeros(queue),
-            [discr.zeros(queue) for i in range(discr.dim)])
-
-    from meshmode.discretization.visualization import make_visualizer
-    vis = make_visualizer(queue, discr.volume_discr, discr.order)
-
+def bump(discr, queue, t=0):
     source_center = np.array([0.0, 0.05])
     source_width = 0.05
     source_omega = 3
 
+    nodes = discr.volume_discr.nodes().with_queue(queue)
+    center_dist = join_fields([
+        nodes[0] - source_center[0],
+        nodes[1] - source_center[1],
+        ])
+
+    return (
+        np.cos(source_omega*t)
+        * clmath.exp(
+            -np.dot(center_dist, center_dist)
+            / source_width**2))
+
+
+def main():
+    cl_ctx = cl.create_some_context()
+    queue = cl.CommandQueue(cl_ctx)
+
+    nel_1d = 16
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh = generate_regular_rect_mesh(
+            a=(-0.5, -0.5),
+            b=(0.5, 0.5),
+            n=(nel_1d, nel_1d))
+
+    order = 3
+
+    # no deep meaning here, just a fudge factor
+    dt = 0.75/(nel_1d*order**2)
+
+    print("%d elements" % mesh.nelements)
+
+    discr = DGDiscretization(cl_ctx, mesh, order=order)
+
+    fields = join_fields(
+            bump(discr, queue),
+            [discr.zeros(queue) for i in range(discr.dim)]
+            )
+
+    from meshmode.discretization.visualization import make_visualizer
+    vis = make_visualizer(queue, discr.volume_discr, discr.order+3)
+
     def rhs(t, w):
-        queue = w[0].queue
-
-        nodes = discr.volume_discr.nodes().with_queue(queue)
-        center_dist = join_fields([
-            nodes[0] - source_center[0],
-            nodes[1] - source_center[1],
-            ])
-
-        source_f = (
-            np.sin(source_omega*t)
-            * clmath.exp(
-                -np.dot(center_dist, center_dist)
-                / source_width**2))
-        result = wave_operator(discr, c=1, w=w)
-        if t < 0.3:
-            result[0] = result[0] + source_f
-
-        return result
+        return wave_operator(discr, c=1, w=w)
 
     t = 0
-    t_final = 5
+    t_final = 3
     istep = 0
     while t < t_final:
         fields = rk4_step(fields, t, dt, rhs)
 
-        if istep % 2 == 0:
+        if istep % 10 == 0:
+            print(istep, t, la.norm(fields[0].get()))
             vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep,
                     [
                         ("u", fields[0]),
