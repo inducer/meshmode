@@ -52,7 +52,7 @@ jobs:
                 . ./build-and-test-py-project-within-miniconda.sh
 
     examples3:
-        name: Pytest Conda Py3
+        name: Examples Conda Py3
         runs-on: ubuntu-latest
         steps:
         -   uses: actions/checkout@v2
