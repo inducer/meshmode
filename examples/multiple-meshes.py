@@ -1,6 +1,7 @@
 from __future__ import division
 
 import numpy as np  # noqa
+import sys
 
 
 order = 4
@@ -20,7 +21,10 @@ def main():
     draw_2d_mesh(mesh, set_bounding_box=True)
 
     import matplotlib.pyplot as pt
-    pt.show()
+    if sys.stdin.isatty():
+        pt.show()
+    else:
+        pt.savefig("plot.pdf")
 
 if __name__ == "__main__":
     main()
