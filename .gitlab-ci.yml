@@ -69,6 +69,21 @@ Python 3 POCL:
     reports:
       junit: test/pytest.xml
 
+Python 3 POCL Examples:
+  script:
+  - test -n "$SKIP_EXAMPLES" && exit
+  - export PY_EXE=python3
+  - export PYOPENCL_TEST=portable:pthread
+  - export EXTRA_INSTALL="pybind11 numpy mako"
+  - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-py-project-and-run-examples.sh
+  - ". ./build-py-project-and-run-examples.sh"
+  tags:
+  - python3
+  - pocl
+  - large-node
+  except:
+  - tags
+
 Documentation:
   script:
   - EXTRA_INSTALL="pybind11 cython numpy"
