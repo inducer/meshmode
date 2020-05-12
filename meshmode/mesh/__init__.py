@@ -1141,7 +1141,8 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
                     tag_mask = 0
                     for tag in tags:
                         tag_mask |= boundary_tag_bit(tag)
-                    fagrp.neighbors[idx] = -(-(fagrp.neighbors[idx]) | tag_mask)
+                    fagrp.neighbors[idx] = -(tag_mask | boundary_tag_bit(
+                                             BTAG_REALLY_ALL))
 
         else:
             raise RuntimeError("unexpected number of adjacent faces")

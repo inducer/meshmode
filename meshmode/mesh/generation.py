@@ -658,7 +658,7 @@ def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
 # {{{ generate_box_mesh
 
 def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
-        group_factory=None, boundary_tags=[]):
+        group_factory=None, boundary_dict={}):
     """Create a semi-structured mesh.
 
     :param axis_coords: a tuple with a number of entries corresponding
@@ -666,6 +666,10 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
         specifying the coordinates to be used along that axis.
     :param group_factory: One of :class:`meshmode.mesh.SimplexElementGroup`
         or :class:`meshmode.mesh.TensorProductElementGroup`.
+    :param boundary_dict: an optional dictionary for boundary configuration.
+        The keys correspond to custom boundary tags, with the values giving
+        a list of the faces on which they should be applied in terms of cardinal
+        directions.
 
     .. versionchanged:: 2017.1
 
@@ -774,8 +778,53 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
             vertices.reshape(dim, -1), el_vertices, order,
             group_factory=group_factory)
 
+    # compute facial adjacency for Mesh if there is tag information
+    facial_adjacency_groups = None
+    face_vertex_indices_to_tags = {}
+    boundary_tags = list(boundary_dict.keys())
+    if boundary_tags:
+        for tag_idx, tag in enumerate(boundary_tags):
+            # Need to map the correct face vertices to the boundary tags
+            for face in boundary_dict[tag]:
+                if face == "east":
+                    face_id = 1
+                    dim_crit = 0
+                    node_crit = axis_coords[0][0]
+                elif face == "west":
+                    face_id = 1
+                    dim_crit = 0
+                    node_crit = axis_coords[0][-1]
+                elif face == "north":
+                    face_id = 0
+                    dim_crit = 1
+                    node_crit = axis_coords[1][-1]
+                elif face == "south":
+                    face_id = 0
+                    dim_crit = 1
+                    node_crit = axis_coords[1][0]
+                for ielem in range(0, grp.nelements):
+                    if grp.nodes[dim_crit][ielem][0] == node_crit:
+                        fvi = grp.vertex_indices[ielem,
+                                                 grp.face_vertex_indices()[
+                                                     face_id]]
+                        if frozenset(fvi) not in face_vertex_indices_to_tags:
+                            face_vertex_indices_to_tags[frozenset(fvi)] = []
+                        face_vertex_indices_to_tags[frozenset(fvi)].append(tag)
+        # Need to add BTAG ALL and BTAG_REALLY_ALL to list of tags
+        from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL
+        boundary_tags.append(BTAG_ALL)
+        boundary_tags.append(BTAG_REALLY_ALL)
+        from meshmode.mesh import _compute_facial_adjacency_from_vertices
+        facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
+                [grp], boundary_tags, np.int32, np.int8,
+                face_vertex_indices_to_tags)
+    else:
+        facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
+                [grp], boundary_tags, np.int32, np.int8)
+
     from meshmode.mesh import Mesh
     return Mesh(vertices, [grp],
+            facial_adjacency_groups=facial_adjacency_groups,
             is_conforming=True, boundary_tags=boundary_tags)
 
 # }}}
@@ -784,7 +833,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 # {{{ generate_regular_rect_mesh
 
 def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
-                               boundary_tags=[]):
+                               boundary_dict={}):
     """Create a semi-structured rectangular mesh.
 
     :param a: the lower left hand point of the rectangle
@@ -798,7 +847,8 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
     axis_coords = [np.linspace(a_i, b_i, n_i)
             for a_i, b_i, n_i in zip(a, b, n)]
 
-    return generate_box_mesh(axis_coords, order=order, boundary_tags=boundary_tags)
+    return generate_box_mesh(axis_coords, order=order,
+                             boundary_dict=boundary_dict)
 
 # }}}
 
