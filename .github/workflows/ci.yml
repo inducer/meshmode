@@ -51,4 +51,19 @@ jobs:
                 curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project-within-miniconda.sh
                 . ./build-and-test-py-project-within-miniconda.sh
 
+    examples3:
+        name: Pytest Conda Py3
+        runs-on: ubuntu-latest
+        steps:
+        -   uses: actions/checkout@v2
+        -   name: "Main Script"
+            run: |
+                CONDA_ENVIRONMENT=.test-conda-env-py3.yml
+                sudo apt update
+                sudo apt install gfortran-7
+                sudo ln -s /usr/bin/gfortran-7 /usr/bin/gfortran
+                USE_CONDA_BUILD=1
+                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-py-project-and-run-examples.sh
+                ". ./build-py-project-and-run-examples.sh"
+
 # vim: sw=4
