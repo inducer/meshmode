@@ -64,6 +64,6 @@ jobs:
                 sudo ln -s /usr/bin/gfortran-7 /usr/bin/gfortran
                 USE_CONDA_BUILD=1
                 curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-py-project-and-run-examples.sh
-                ". ./build-py-project-and-run-examples.sh"
+                . ./build-py-project-and-run-examples.sh
 
 # vim: sw=4
