@@ -37,3 +37,6 @@ dependencies:
 
     # requires pymetis for tests for partition_mesh
     - git+https://gitlab.tiker.net/inducer/pymetis.git
+
+    # required for plot-connectivity.py example
+    - git+https://gitlab.tiker.net/inducer/pyvisfile.git
