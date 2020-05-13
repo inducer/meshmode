@@ -42,6 +42,7 @@ __doc__ = """
 
 .. autoclass:: NodalAdjacency
 .. autoclass:: FacialAdjacencyGroup
+.. autoclass:: InterPartitionAdjacencyGroup
 
 .. autofunction:: as_python
 .. autofunction:: check_bc_coverage
@@ -68,22 +69,22 @@ class BTAG_NONE(object):  # noqa
 class BTAG_ALL(object):  # noqa
     """A boundary tag representing the entire boundary or volume.
 
-    In the case of the boundary, TAG_ALL does not include rank boundaries,
-    or, more generally, anything tagged with TAG_NO_BOUNDARY."""
+    In the case of the boundary, :class:`BTAG_ALL` does not include rank boundaries,
+    or, more generally, anything tagged with :class:`BTAG_NO_BOUNDARY`."""
     pass
 
 
 class BTAG_REALLY_ALL(object):  # noqa
     """A boundary tag representing the entire boundary.
 
-    Unlike :class:`TAG_ALL`, this includes rank boundaries,
-    or, more generally, everything tagged with :class:`TAG_NO_BOUNDARY`."""
+    Unlike :class:`BTAG_ALL`, this includes rank boundaries,
+    or, more generally, everything tagged with :class:`BTAG_NO_BOUNDARY`."""
     pass
 
 
 class BTAG_NO_BOUNDARY(object):  # noqa
     """A boundary tag indicating that this edge should not fall under
-    :class:`TAG_ALL`. Among other things, this is used to keep rank boundaries
+    :class:`BTAG_ALL`. Among other things, this is used to keep rank boundaries
     out of :class:`BTAG_ALL`.
     """
     pass
@@ -171,7 +172,7 @@ class MeshElementGroup(Record):
             element_nr_base=None, node_nr_base=None,
             unit_nodes=None, dim=None):
         """
-        :arg order: the mamximum total degree used for interpolation.
+        :arg order: the maximum total degree used for interpolation.
         :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
             The nodes are assumed to be mapped versions of *unit_nodes*.
         :arg unit_nodes: ``[dim, nunit_nodes]``
@@ -263,7 +264,7 @@ class SimplexElementGroup(MeshElementGroup):
             element_nr_base=None, node_nr_base=None,
             unit_nodes=None, dim=None):
         """
-        :arg order: the mamximum total degree used for interpolation.
+        :arg order: the maximum total degree used for interpolation.
         :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
             The nodes are assumed to be mapped versions of *unit_nodes*.
         :arg unit_nodes: ``[dim, nunit_nodes]``
@@ -339,7 +340,7 @@ class TensorProductElementGroup(MeshElementGroup):
             element_nr_base=None, node_nr_base=None,
             unit_nodes=None):
         """
-        :arg order: the mamximum total degree used for interpolation.
+        :arg order: the maximum total degree used for interpolation.
         :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
             The nodes are assumed to be mapped versions of *unit_nodes*.
         :arg unit_nodes: ``[dim, nunit_nodes]``
@@ -594,7 +595,7 @@ class Mesh(Record):
         the set of facial adjacency relations between group *igrp*
         and *ineighbor_group*. *ineighbor_group* and *igrp* may be
         identical, or *ineighbor_group* may be *None*, in which case
-        an :class:``InterPartitionAdjacency`` group containing boundary
+        an :class:`InterPartitionAdjacencyGroup` group containing boundary
         faces is returned.
 
         Referencing this attribute may raise
@@ -855,8 +856,8 @@ class Mesh(Record):
         return self._nodal_adjacency
 
     def nodal_adjacency_init_arg(self):
-        """Returns an 'nodal_adjacency' argument that can be
-        passed to a Mesh constructor.
+        """Returns a *nodal_adjacency* argument that can be
+        passed to a :class:`Mesh` constructor.
         """
 
         return self._nodal_adjacency

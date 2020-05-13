@@ -577,12 +577,12 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
         min_rad=0.2, uniform_refinement_rounds=0):
     """
     :returns: a tuple ``(refiner, warp_mesh)``, where *refiner* is
-        a :class:`meshmode.refinement.Refiner` (from which the unwarped mesh
+        a :class:`~meshmode.mesh.refinement.Refiner` (from which the unwarped mesh
         may be obtained), and whose
-        :meth:`meshmode.refinement.Refiner.get_current_mesh` returns a
-        locally-refined :class:`meshmode.mesh.Mesh` of a sphere and *warp_mesh*
+        :meth:`~meshmode.mesh.refinement.Refiner.get_current_mesh` returns a
+        locally-refined :class:`~meshmode.mesh.Mesh` of a sphere and *warp_mesh*
         is a callable taking and returning a mesh that warps the unwarped mesh
-        into a smooth shape govered by a spherical harmonic of order *(m, n)*.
+        into a smooth shape covered by a spherical harmonic of order *(m, n)*.
     :arg order: the polynomial order of the returned mesh
     :arg est_rel_interp_tolerance: a tolerance for the relative
         interpolation error estimates on the warped version of the mesh.
@@ -654,7 +654,7 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
 
 def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
     """
-    :returns: a refined :class:`meshmode.mesh.Mesh` of a smooth shape govered
+    :returns: a refined :class:`~meshmode.mesh.Mesh` of a smooth shape covered
         by a spherical harmonic of order *(m, n)*.
     :arg order: the polynomial order of the returned mesh
     :arg est_rel_interp_tolerance: a tolerance for the relative
@@ -851,14 +851,14 @@ def generate_warped_rect_mesh(dim, order, n):
 @log_process(logger)
 def warp_and_refine_until_resolved(
         unwarped_mesh_or_refiner, warp_callable, est_rel_interp_tolerance):
-    """Given an original ("un-warped") :class:`meshmode.mesh.Mesh` and a
+    """Given an original ("unwarped") :class:`meshmode.mesh.Mesh` and a
     warping function *warp_callable* that takes and returns a mesh and a
     tolerance to which the mesh should be resolved by the mapping polynomials,
     this function will iteratively refine the *unwarped_mesh* until relative
     interpolation error estimates on the warped version are smaller than
     *est_rel_interp_tolerance* on each element.
 
-    :returns: The refined, un-warped mesh.
+    :returns: The refined, unwarped mesh.
 
     .. versionadded:: 2018.1
     """

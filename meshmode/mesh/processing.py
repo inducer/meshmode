@@ -44,11 +44,11 @@ __doc__ = """
 
 def find_group_indices(groups, meshwide_elems):
     """
-    :arg groups: A list of :class:``MeshElementGroup`` instances that contain
-        ``meshwide_elems``.
-    :arg meshwide_elems: A :class:``numpy.ndarray`` of mesh-wide element numbers
+    :arg groups: A list of :class:`~meshmode.mesh.MeshElementGroup` instances
+        that contain *meshwide_elems*.
+    :arg meshwide_elems: A :class:`numpy.ndarray` of mesh-wide element numbers.
         Usually computed by ``elem + element_nr_base``.
-    :returns: A :class:``numpy.ndarray`` of group numbers that ``meshwide_elem``
+    :returns: A :class:`numpy.ndarray` of group numbers that *meshwide_elem*
         belongs to.
     """
     grps = np.zeros_like(meshwide_elems)
@@ -63,14 +63,14 @@ def find_group_indices(groups, meshwide_elems):
 
 def partition_mesh(mesh, part_per_element, part_num):
     """
-    :arg mesh: A :class:`meshmode.mesh.Mesh` to be partitioned.
+    :arg mesh: A :class:`~meshmode.mesh.Mesh` to be partitioned.
     :arg part_per_element: A :class:`numpy.ndarray` containing one
         integer per element of *mesh* indicating which part of the
         partitioned mesh the element is to become a part of.
     :arg part_num: The part number of the mesh to return.
 
     :returns: A tuple ``(part_mesh, part_to_global)``, where *part_mesh*
-        is a :class:`meshmode.mesh.Mesh` that is a partition of mesh, and
+        is a :class:`~meshmode.mesh.Mesh` that is a partition of mesh, and
         *part_to_global* is a :class:`numpy.ndarray` mapping element
         numbers on *part_mesh* to ones in *mesh*.
 
@@ -321,7 +321,7 @@ def find_volume_mesh_element_orientations(mesh, tolerate_unimplemented_checks=Fa
     each negatively oriented element.
 
     :arg tolerate_unimplemented_checks: If *True*, elements for which no
-        check is available will return NaN.
+        check is available will return *NaN*.
     """
 
     result = np.empty(mesh.nelements, dtype=np.float64)
@@ -414,7 +414,8 @@ def flip_simplex_element_group(vertices, grp, grp_flip_flags):
 
 def perform_flips(mesh, flip_flags, skip_tests=False):
     """
-    :arg flip_flags: A :class:`numpy.ndarray` with *mesh.nelements* entries
+    :arg flip_flags: A :class:`numpy.ndarray` with
+        :attr:`meshmode.mesh.Mesh.nelements` entries
         indicating by their Boolean value whether the element is to be
         flipped.
     """

@@ -274,8 +274,11 @@ texinfo_documents = [
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 #texinfo_no_detailmenu = False
 
-
 intersphinx_mapping = {
     'http://docs.python.org/': None,
-    'https://documen.tician.de/pyopencl': None
+    'http://docs.scipy.org/doc/numpy/': None,
+    'https://documen.tician.de/pyopencl': None,
+    'https://documen.tician.de/meshpy': None,
+    'https://documen.tician.de/modepy': None,
+    'https://documen.tician.de/loopy': None
 }
