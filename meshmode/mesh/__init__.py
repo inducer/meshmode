@@ -225,6 +225,7 @@ class MeshElementGroup(Record):
     def nunit_nodes(self):
         return self.unit_nodes.shape[-1]
 
+    @property
     @memoize_method
     def is_affine(self):
         return is_affine_group(self)
@@ -1360,19 +1361,36 @@ def is_boundary_tag_empty(mesh, boundary_tag):
 
 # {{{
 
-def is_affine_group(group):
+def is_affine_group(group, abs_tol=None):
+    if abs_tol is None:
+        abs_tol = 1.0e-13
+
+    # get matrices
     basis = mp.simplex_best_available_basis(group.dim, group.order)
     grad_basis = mp.grad_simplex_best_available_basis(group.dim, group.order)
 
-    diff_matrix = mp.differentiation_matrices(basis, grad_basis, group.unit_nodes)
     vinv = la.inv(mp.vandermonde(basis, group.unit_nodes))
+    diff = mp.differentiation_matrices(basis, grad_basis, group.unit_nodes)
+    if not isinstance(diff, tuple):
+        diff = (diff,)
 
-    if not isinstance(diff_matrix, tuple):
-        diff_matrix = (diff_matrix,)
-    mat = tuple(vinv.dot(d.dot(d)) for d in diff_matrix)
+    # construct all second derivative matrices (including cross terms)
+    from itertools import product
+    mats = []
+    for n in product(range(group.dim), repeat=2):
+        if n[0] > n[1]:
+            continue
+        mats.append(vinv.dot(diff[n[0]].dot(diff[n[1]])))
 
-    ddx_coeffs = np.einsum("aij,bj->abi", mat, group.nodes[:, 0, :])
-    return np.max(np.abs(ddx_coeffs)) < 1.0e-13
+    # check if any element has a non-affine parametrization
+    ddx_coeffs = np.einsum("aij,bj->abi", mats, group.nodes[:, 0, :])
+    norm_inf = np.max(np.abs(ddx_coeffs))
+    if norm_inf > abs_tol:
+        return False
+
+    ddx_coeffs = np.einsum("aij,bcj->abci", mats, group.nodes)
+    norm_inf = np.max(np.abs(ddx_coeffs))
+    return norm_inf < abs_tol
 
 # }}}
 

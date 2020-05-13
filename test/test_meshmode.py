@@ -1205,8 +1205,25 @@ def test_open_curved_mesh(curve_name):
             closed=closed)
 
 
+def _generate_cross_warped_rect_mesh(dim, order, n):
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh = generate_regular_rect_mesh(
+            a=(0,)*dim, b=(1,)*dim,
+            n=(n,)*dim, order=order)
+
+    def m(x):
+        results = np.empty_like(x)
+        results[0] = 1 + 1.5 * (x[0] + 0.25) * (x[1] + 0.3)
+        results[1] = x[1]
+        return results
+
+    from meshmode.mesh.processing import map_mesh
+    return map_mesh(mesh, m)
+
+
 @pytest.mark.parametrize("mesh_name", [
-    "box", "warped_box",
+    "box2d", "box3d",
+    "warped_box2d", "warped_box3d", "cross_warped_box",
     "circle", "ellipse",
     "sphere", "torus"
     ])
@@ -1219,16 +1236,20 @@ def test_is_affine_group_check(mesh_name):
     order = 4
     nelements = 32
 
-    if mesh_name == "box":
-        dim = 2
+    if mesh_name.startswith("box"):
+        dim = int(mesh_name[-2])
         is_affine = True
         mesh = generate_regular_rect_mesh(
                 a=(-0.5,)*dim, b=(0.5,)*dim,
                 n=(nelements,)*dim, order=order)
-    elif mesh_name == "warped_box":
+    elif mesh_name.startswith("warped_box"):
+        dim = int(mesh_name[-2])
         is_affine = False
-        dim = 2
         mesh = generate_warped_rect_mesh(dim, order, nelements)
+    elif mesh_name == "cross_warped_box":
+        dim = 2
+        is_affine = False
+        mesh = _generate_cross_warped_rect_mesh(dim, order, nelements)
     elif mesh_name == "circle":
         is_affine = False
         mesh = make_curve_mesh(
@@ -1248,7 +1269,7 @@ def test_is_affine_group_check(mesh_name):
     else:
         raise ValueError("unknown mesh name: {}".format(mesh_name))
 
-    assert all(grp.is_affine() for grp in mesh.groups) == is_affine
+    assert all(grp.is_affine for grp in mesh.groups) == is_affine
 
 
 if __name__ == "__main__":
