@@ -79,6 +79,10 @@ class ElementGroupBase(object):
         self.node_nr_base = node_nr_base
 
     @property
+    def is_affine(self):
+        return self.mesh_el_group.is_affine
+
+    @property
     def nelements(self):
         return self.mesh_el_group.nelements
 

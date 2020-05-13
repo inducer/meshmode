@@ -26,9 +26,10 @@ from six.moves import range
 import six
 
 import numpy as np
-import modepy as mp
 import numpy.linalg as la
-from pytools import Record
+
+import modepy as mp
+from pytools import Record, memoize_method
 
 __doc__ = """
 
@@ -158,6 +159,7 @@ class MeshElementGroup(Record):
         *Not* the ambient dimension, see :attr:`Mesh.ambient_dim`
         for that.
 
+    .. automethod:: is_affine
     .. automethod:: face_vertex_indices
     .. automethod:: vertex_unit_coordinates
 
@@ -222,6 +224,10 @@ class MeshElementGroup(Record):
     @property
     def nunit_nodes(self):
         return self.unit_nodes.shape[-1]
+
+    @memoize_method
+    def is_affine(self):
+        return is_affine_group(self)
 
     def face_vertex_indices(self):
         """Return a tuple of tuples indicating which vertices
@@ -1351,5 +1357,23 @@ def is_boundary_tag_empty(mesh, boundary_tag):
 
 # }}}
 
+
+# {{{
+
+def is_affine_group(group):
+    basis = mp.simplex_best_available_basis(group.dim, group.order)
+    grad_basis = mp.grad_simplex_best_available_basis(group.dim, group.order)
+
+    diff_matrix = mp.differentiation_matrices(basis, grad_basis, group.unit_nodes)
+    vinv = la.inv(mp.vandermonde(basis, group.unit_nodes))
+
+    if not isinstance(diff_matrix, tuple):
+        diff_matrix = (diff_matrix,)
+    mat = tuple(vinv.dot(d.dot(d)) for d in diff_matrix)
+
+    ddx_coeffs = np.einsum("aij,bj->abi", mat, group.nodes[:, 0, :])
+    return np.max(np.abs(ddx_coeffs)) < 1.0e-13
+
+# }}}
 
 # vim: foldmethod=marker
