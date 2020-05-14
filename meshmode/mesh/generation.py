@@ -658,7 +658,7 @@ def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
 # {{{ generate_box_mesh
 
 def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
-        group_factory=None, boundary_dict={}):
+        group_factory=None, face_to_boundary_tag={}):
     """Create a semi-structured mesh.
 
     :param axis_coords: a tuple with a number of entries corresponding
@@ -666,10 +666,10 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
         specifying the coordinates to be used along that axis.
     :param group_factory: One of :class:`meshmode.mesh.SimplexElementGroup`
         or :class:`meshmode.mesh.TensorProductElementGroup`.
-    :param boundary_dict: an optional dictionary for boundary configuration.
+    :param face_to_boundary_tag: an optional dictionary for boundary configuration.
         The keys correspond to custom boundary tags, with the values giving
-        a list of the faces on which they should be applied in terms of cardinal
-        directions.
+        a list of the faces on which they should be applied in terms of coordinate
+        directions (+x, -x, +y, -y, +z, -z).
 
     .. versionchanged:: 2017.1
 
@@ -781,28 +781,52 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     # compute facial adjacency for Mesh if there is tag information
     facial_adjacency_groups = None
     face_vertex_indices_to_tags = {}
-    boundary_tags = list(boundary_dict.keys())
+    boundary_tags = list(face_to_boundary_tag.keys())
     from meshmode.mesh import _compute_facial_adjacency_from_vertices
     if boundary_tags:
         for tag_idx, tag in enumerate(boundary_tags):
             # Need to map the correct face vertices to the boundary tags
-            for face in boundary_dict[tag]:
-                if face == "east":
+            for face in face_to_boundary_tag[tag]:
+                if face == "-x":
                     face_id = 1
                     dim_crit = 0
                     node_crit = axis_coords[0][0]
-                elif face == "west":
+                elif face == "+x":
                     face_id = 1
                     dim_crit = 0
                     node_crit = axis_coords[0][-1]
-                elif face == "north":
+                elif face == "-y":
+                    # Check to make sure we are at least 2D.
+                    if dim < 2:
+                        raise ValueError("Attempting to implement y- "
+                                "boundary condition on 1D box mesh.")
                     face_id = 0
                     dim_crit = 1
                     node_crit = axis_coords[1][-1]
-                elif face == "south":
+                elif face == "+y":
+                    # Check to make sure we are at least 2D.
+                    if dim < 2:
+                        raise ValueError("Attempting to implement y- "
+                                "boundary condition on 1D box mesh.")
                     face_id = 0
                     dim_crit = 1
                     node_crit = axis_coords[1][0]
+                elif face == "-z":
+                    # Check to make sure we are at least 3D.
+                    if dim < 3:
+                        raise ValueError("Attempting to implement z- "
+                                "boundary condition on 2D box mesh.")
+                    face_id = 0
+                    dim_crit = 2
+                    node_crit = axis_coords[2][-1]
+                elif face == "+z":
+                    # Check to make sure we are at least 3D.
+                    if dim < 3:
+                        raise ValueError("Attempting to implement z- "
+                                "boundary condition on 2D box mesh.")
+                    face_id = 0
+                    dim_crit = 2
+                    node_crit = axis_coords[2][0]
                 for ielem in range(0, grp.nelements):
                     if grp.nodes[dim_crit][ielem][0] == node_crit:
                         fvi = grp.vertex_indices[ielem,
@@ -830,13 +854,17 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 # {{{ generate_regular_rect_mesh
 
 def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
-                               boundary_dict={}):
+                               face_to_boundary_tag={}):
     """Create a semi-structured rectangular mesh.
 
     :param a: the lower left hand point of the rectangle
     :param b: the upper right hand point of the rectangle
     :param n: a tuple of integers indicating the total number of points
       on [a,b].
+    :param face_to_boundary_tag: an optional dictionary for boundary configuration.
+        The keys correspond to custom boundary tags, with the values giving
+        a list of the faces on which they should be applied in terms of coordinate
+        directions (+x, -x, +y, -y, +z, -z).
     """
     if min(n) < 2:
         raise ValueError("need at least two points in each direction")
@@ -845,7 +873,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
             for a_i, b_i, n_i in zip(a, b, n)]
 
     return generate_box_mesh(axis_coords, order=order,
-                             boundary_dict=boundary_dict)
+                             face_to_boundary_tag=face_to_boundary_tag)
 
 # }}}
 
