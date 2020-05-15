@@ -669,7 +669,9 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     :param face_to_boundary_tag: an optional dictionary for boundary configuration.
         The keys correspond to custom boundary tags, with the values giving
         a list of the faces on which they should be applied in terms of coordinate
-        directions (+x, -x, +y, -y, +z, -z).
+        directions (+x, -x, +y, -y, +z, -z). One example of this would be:
+
+        face_to_boundary_tag={"bdry_1": ["+x", "+y"], "bdry_2": ["-x"]}
 
     .. versionchanged:: 2017.1
 
