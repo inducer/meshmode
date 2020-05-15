@@ -123,6 +123,56 @@ def test_boundary_tags():
 # }}}
 
 
+# {{{ test custom boundary tags on box mesh
+
+def test_box_boundary_tags():
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    from meshmode.mesh import is_boundary_tag_empty
+    from meshmode.mesh import check_bc_coverage
+    # Test this capability with a 2D mesh.
+    mesh = generate_regular_rect_mesh(a=(0, -1), b=(1, 1),
+                                      n=(20, 20), order=3,
+                                      face_to_boundary_tag={
+                                          "btag_test_1": ["+x", "-y"],
+                                          "btag_test_2": ["+y", "-x"]})
+
+    # ensure boundary is covered
+    assert not is_boundary_tag_empty(mesh, "btag_test_1")
+    assert not is_boundary_tag_empty(mesh, "btag_test_2")
+    check_bc_coverage(mesh, ['btag_test_1', 'btag_test_2'])
+
+    # correct answers
+    num_on_bdy = 38
+
+    # check how many elements are marked on each boundary
+    num_marked_bdy_1 = 0
+    num_marked_bdy_2 = 0
+    btag_1_bit = mesh.boundary_tag_bit('btag_test_1')
+    btag_2_bit = mesh.boundary_tag_bit('btag_test_2')
+    for igrp in range(len(mesh.groups)):
+        bdry_fagrp = mesh.facial_adjacency_groups[igrp].get(None, None)
+
+        if bdry_fagrp is None:
+            continue
+
+        for i, nbrs in enumerate(bdry_fagrp.neighbors):
+            if (-nbrs) & btag_1_bit:
+                num_marked_bdy_1 += 1
+            if (-nbrs) & btag_2_bit:
+                num_marked_bdy_2 += 1
+
+    # raise errors if wrong number of elements marked
+    if num_marked_bdy_1 != num_on_bdy:
+        raise ValueError("%i marked on custom boundary 1, should be %i" %
+                         (num_marked_bdy_1, num_on_bdy))
+
+    if num_marked_bdy_2 != num_on_bdy:
+        raise ValueError("%i marked on custom boundary 2, should be %i" %
+                         (num_marked_bdy_2, num_on_bdy))
+
+# }}}
+
+
 # {{{ convergence of boundary interpolation
 
 @pytest.mark.parametrize("group_factory", [
