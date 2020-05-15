@@ -782,51 +782,28 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     facial_adjacency_groups = None
     face_vertex_indices_to_tags = {}
     boundary_tags = list(face_to_boundary_tag.keys())
+    axes = ["x", "y", "z"]
+    face_ids = [1, 0, 0]
     from meshmode.mesh import _compute_facial_adjacency_from_vertices
     if boundary_tags:
         for tag_idx, tag in enumerate(boundary_tags):
             # Need to map the correct face vertices to the boundary tags
             for face in face_to_boundary_tag[tag]:
-                if face == "-x":
-                    face_id = 1
-                    dim_crit = 0
-                    node_crit = axis_coords[0][0]
-                elif face == "+x":
-                    face_id = 1
-                    dim_crit = 0
-                    node_crit = axis_coords[0][-1]
-                elif face == "-y":
-                    # Check to make sure we are at least 2D.
-                    if dim < 2:
-                        raise ValueError("Attempting to implement y- "
-                                "boundary condition on 1D box mesh.")
-                    face_id = 0
-                    dim_crit = 1
-                    node_crit = axis_coords[1][-1]
-                elif face == "+y":
-                    # Check to make sure we are at least 2D.
-                    if dim < 2:
-                        raise ValueError("Attempting to implement y- "
-                                "boundary condition on 1D box mesh.")
-                    face_id = 0
-                    dim_crit = 1
-                    node_crit = axis_coords[1][0]
-                elif face == "-z":
-                    # Check to make sure we are at least 3D.
-                    if dim < 3:
-                        raise ValueError("Attempting to implement z- "
-                                "boundary condition on 2D box mesh.")
-                    face_id = 0
-                    dim_crit = 2
-                    node_crit = axis_coords[2][-1]
-                elif face == "+z":
-                    # Check to make sure we are at least 3D.
-                    if dim < 3:
-                        raise ValueError("Attempting to implement z- "
-                                "boundary condition on 2D box mesh.")
-                    face_id = 0
-                    dim_crit = 2
-                    node_crit = axis_coords[2][0]
+                for i_ax, axis in enumerate(axes):
+                    if face == "-" + axis:
+                        if dim < i_ax + 1:
+                            raise ValueError("Boundary condition dimension "
+                            "mismatch")
+                        face_id = face_ids[i_ax]
+                        dim_crit = i_ax
+                        node_crit = axis_coords[i_ax][0]
+                    elif face == "+" + axis:
+                        if dim < i_ax + 1:
+                            raise ValueError("Boundary condition dimension "
+                            "mismatch")
+                        face_id = face_ids[i_ax]
+                        dim_crit = i_ax
+                        node_crit = axis_coords[i_ax][-1]
                 for ielem in range(0, grp.nelements):
                     if grp.nodes[dim_crit][ielem][0] == node_crit:
                         fvi = grp.vertex_indices[ielem,
