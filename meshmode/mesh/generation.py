@@ -275,9 +275,10 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 
     assert vertices.shape[1] == np.max(vertex_indices) + 1
     if closed:
-        assert la.norm(
-                curve_f(element_boundaries[0])
-                - curve_f(element_boundaries[-1])) < 1.0e-14
+        start_end_par = np.array([0, 1], dtype=np.float64)
+        start_end_curve = curve_f(start_end_par)
+
+        assert la.norm(start_end_curve[:, 0] - start_end_curve[:, 1]) < 1.0e-12
 
     el_lengths = np.diff(element_boundaries)
     el_starts = element_boundaries[:-1]
