@@ -226,9 +226,8 @@ class MeshElementGroup(Record):
         return self.unit_nodes.shape[-1]
 
     @property
-    @memoize_method
     def is_affine(self):
-        return is_affine_group(self)
+        raise NotImplementedError()
 
     def face_vertex_indices(self):
         """Return a tuple of tuples indicating which vertices
@@ -309,6 +308,11 @@ class SimplexElementGroup(MeshElementGroup):
 
         super(SimplexElementGroup, self).__init__(order, vertex_indices, nodes,
                 element_nr_base, node_nr_base, unit_nodes, dim)
+
+    @property
+    @memoize_method
+    def is_affine(self):
+        return is_affine_simplex_group(self)
 
     def face_vertex_indices(self):
         if self.dim == 1:
@@ -1361,9 +1365,13 @@ def is_boundary_tag_empty(mesh, boundary_tag):
 
 # {{{
 
-def is_affine_group(group, abs_tol=None):
+def is_affine_simplex_group(group, abs_tol=None):
     if abs_tol is None:
         abs_tol = 1.0e-13
+
+    if not isinstance(group, SimplexElementGroup):
+        raise TypeError("expected a 'SimplexElementGroup' not '%s'" %
+                type(group).__name__)
 
     # get matrices
     basis = mp.simplex_best_available_basis(group.dim, group.order)

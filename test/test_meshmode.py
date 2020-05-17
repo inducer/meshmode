@@ -1234,7 +1234,7 @@ def test_is_affine_group_check(mesh_name):
             generate_icosphere, generate_torus)
 
     order = 4
-    nelements = 32
+    nelements = 16
 
     if mesh_name.startswith("box"):
         dim = int(mesh_name[-2])
