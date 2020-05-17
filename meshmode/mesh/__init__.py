@@ -115,6 +115,9 @@ class BTAG_PARTITION(object):  # noqa
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def __repr__(self):
+        return "<%s(%s)>" % (type(self).__name__, repr(self.part_nr))
+
 
 SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
                    BTAG_PARTITION])
@@ -632,6 +635,11 @@ class Mesh(Record):
         A mapping that maps boundary tag identifiers to their
         corresponding index.
 
+        .. note::
+
+            Elements of :attr:`boundary_tags` that do not cover any
+            part of the boundary will not be keys in this dictionary.
+
     .. attribute:: vertex_id_dtype
 
     .. attribute:: element_id_dtype
@@ -882,6 +890,12 @@ class Mesh(Record):
         return self._facial_adjacency_groups
 
     def boundary_tag_bit(self, boundary_tag):
+        if boundary_tag is BTAG_NONE:
+            return 0
+
+        if boundary_tag not in self.boundary_tags:
+            raise ValueError("boundary tag '%s' is not known" % boundary_tag)
+
         try:
             return 1 << self.btag_to_index[boundary_tag]
         except KeyError:

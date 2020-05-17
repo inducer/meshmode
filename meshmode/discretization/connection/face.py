@@ -168,9 +168,9 @@ def make_face_restriction(discr, group_factory, boundary_tag,
 
     :arg boundary_tag: The boundary tag for which to create a face
         restriction. May be
-        :class:`meshmode.discretization.connection.FRESTR_INTERIOR_FACES`
+        :class:`FACE_RESTR_INTERIOR`
         to indicate interior faces, or
-        :class:`meshmode.discretization.connection.FRESTR_ALL_FACES`
+        :class:`FACE_RESTR_ALL`
         to make a discretization consisting of all (interior and
         boundary) faces.
 
@@ -199,7 +199,7 @@ def make_face_restriction(discr, group_factory, boundary_tag,
         boundary_tag = FACE_RESTR_INTERIOR
         from warnings import warn
         warn("passing *None* for boundary_tag is deprecated--pass "
-                "FRESTR_INTERIOR_FACES instead",
+                "FACE_RESTR_INTERIOR instead",
                 DeprecationWarning, stacklevel=2)
 
     logger.info("building face restriction: start")
@@ -223,7 +223,8 @@ def make_face_restriction(discr, group_factory, boundary_tag,
     bdry_mesh_groups = []
     connection_data = {}
 
-    btag_bit = discr.mesh.boundary_tag_bit(boundary_tag)
+    if boundary_tag not in [FACE_RESTR_ALL, FACE_RESTR_INTERIOR]:
+        btag_bit = discr.mesh.boundary_tag_bit(boundary_tag)
 
     for igrp, (grp, fagrp_map) in enumerate(
             zip(discr.groups, discr.mesh.facial_adjacency_groups)):
