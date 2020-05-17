@@ -115,6 +115,9 @@ class BTAG_PARTITION(object):  # noqa
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def __repr__(self):
+        return "<%s(%s)>" % (type(self).__name__, repr(self.part_nr))
+
 
 SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
                    BTAG_PARTITION])
