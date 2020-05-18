@@ -35,20 +35,34 @@ logger = logging.getLogger(__name__)
 
 # {{{ _make_cross_face_batches
 
-def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
-                                    i_tgt_grp, i_src_grp,
-                                    tgt_bdry_element_indices,
-                                    src_bdry_element_indices):
+def _make_cross_face_batches(queue,
+        tgt_bdry_discr, src_bdry_discr,
+        i_tgt_grp, i_src_grp,
+        tgt_bdry_element_indices, src_bdry_element_indices):
+    def to_dev(ary):
+        return cl.array.to_device(queue, ary, array_queue=None)
+
+    from meshmode.discretization.connection.direct import InterpolationBatch
+    if tgt_bdry_discr.dim == 0:
+        yield InterpolationBatch(
+            from_group_index=i_src_grp,
+            from_element_indices=to_dev(src_bdry_element_indices),
+            to_element_indices=to_dev(tgt_bdry_element_indices),
+            result_unit_nodes=src_bdry_discr.groups[i_src_grp].unit_nodes,
+            to_element_face=None)
+        return
 
     # FIXME: This should view-then-transfer
     # (but PyOpenCL doesn't do non-contiguous transfers for now).
-    tgt_bdry_nodes = (tgt_bdry_discr.groups[i_tgt_grp].view(tgt_bdry_discr.nodes().
-                        get(queue=queue))[:, tgt_bdry_element_indices])
+    tgt_bdry_nodes = (tgt_bdry_discr.groups[i_tgt_grp]
+            .view(tgt_bdry_discr.nodes().get(queue=queue))
+            [:, tgt_bdry_element_indices])
 
     # FIXME: This should view-then-transfer
     # (but PyOpenCL doesn't do non-contiguous transfers for now).
-    src_bdry_nodes = (src_bdry_discr.groups[i_src_grp].view(src_bdry_discr.nodes().
-                        get(queue=queue))[:, src_bdry_element_indices])
+    src_bdry_nodes = (src_bdry_discr.groups[i_src_grp]
+            .view(src_bdry_discr.nodes().get(queue=queue))
+            [:, src_bdry_element_indices])
 
     tol = 1e4 * np.finfo(tgt_bdry_nodes.dtype).eps
 
@@ -222,9 +236,6 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
 
     # {{{ find groups of src_unit_nodes
 
-    def to_dev(ary):
-        return cl.array.to_device(queue, ary, array_queue=None)
-
     done_elements = np.zeros(nelements, dtype=np.bool)
     while True:
         todo_elements, = np.where(~done_elements)
@@ -240,11 +251,6 @@ def _make_cross_face_batches(queue, tgt_bdry_discr, src_bdry_discr,
 
         close_els = todo_elements[unit_node_dist < tol]
         done_elements[close_els] = True
-
-        unit_node_dist = np.max(np.max(np.abs(
-                src_unit_nodes[:, todo_elements, :]
-                - template_unit_nodes.reshape(dim, 1, -1)),
-                axis=2), axis=0)
 
         from meshmode.discretization.connection.direct import InterpolationBatch
         yield InterpolationBatch(
@@ -388,11 +394,12 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 
                     # }}}
 
-                    groups[i_tgt_grp].extend(_make_cross_face_batches(queue,
+                    batches = _make_cross_face_batches(queue,
                             bdry_discr, bdry_discr,
                             i_tgt_grp, i_src_grp,
                             tgt_bdry_element_indices,
-                            src_bdry_element_indices))
+                            src_bdry_element_indices)
+                    groups[i_tgt_grp].extend(batches)
 
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
@@ -485,10 +492,10 @@ def make_partition_connection(local_bdry_conn, i_local_part,
                     local_bdry_indices = local_el_lookup[elems, faces]
 
                     batches = _make_cross_face_batches(queue,
-                                                       local_bdry, remote_bdry,
-                                                       i_local_grp, i_remote_grp,
-                                                       local_bdry_indices,
-                                                       remote_bdry_indices)
+                            local_bdry, remote_bdry,
+                            i_local_grp, i_remote_grp,
+                            local_bdry_indices,
+                            remote_bdry_indices)
 
                     part_batches[i_local_grp].extend(batches)
 

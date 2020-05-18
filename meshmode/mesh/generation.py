@@ -237,6 +237,7 @@ starfish = NArmedStarfish(5, 0.25)
 def make_curve_mesh(curve_f, element_boundaries, order,
         unit_nodes=None,
         node_vertex_consistency_tolerance=None,
+        closed=True,
         return_parametrization_points=False):
     """
     :arg curve_f: A callable representing a parametrization for a curve,
@@ -245,10 +246,12 @@ def make_curve_mesh(curve_f, element_boundaries, order,
     :arg element_boundaries: a vector of element boundary locations in
         :math:`[0,1]`, in order. 0 must be the first entry, 1 the
         last one.
+    :arg closed: if *True*, the curve is assumed closed and the first and
+        last of the *element_boundaries* must match.
     :arg unit_nodes: if given, the unit nodes to use. Must have shape
-        ``(dim, nnoodes)``.
+        ``(dim, nnodes)``.
     :returns: a :class:`meshmode.mesh.Mesh`, or if *return_parametrization_points*
-        is True, a tuple ``(mesh, par_points)``, where *par_points* is an array of
+        is *True*, a tuple ``(mesh, par_points)``, where *par_points* is an array of
         parametrization points.
     """
 
@@ -260,7 +263,22 @@ def make_curve_mesh(curve_f, element_boundaries, order,
         unit_nodes = mp.warp_and_blend_nodes(1, order)
     nodes_01 = 0.5*(unit_nodes+1)
 
-    vertices = curve_f(element_boundaries)
+    wrap = nelements
+    if not closed:
+        wrap += 1
+
+    vertices = curve_f(element_boundaries)[:, :wrap]
+    vertex_indices = np.vstack([
+        np.arange(0, nelements, dtype=np.int32),
+        np.arange(1, nelements + 1, dtype=np.int32) % wrap
+        ]).T
+
+    assert vertices.shape[1] == np.max(vertex_indices) + 1
+    if closed:
+        start_end_par = np.array([0, 1], dtype=np.float64)
+        start_end_curve = curve_f(start_end_par)
+
+        assert la.norm(start_end_curve[:, 0] - start_end_curve[:, 1]) < 1.0e-12
 
     el_lengths = np.diff(element_boundaries)
     el_starts = element_boundaries[:-1]
@@ -273,10 +291,7 @@ def make_curve_mesh(curve_f, element_boundaries, order,
     from meshmode.mesh import Mesh, SimplexElementGroup
     egroup = SimplexElementGroup(
             order,
-            vertex_indices=np.vstack([
-                np.arange(nelements, dtype=np.int32),
-                np.arange(1, nelements+1, dtype=np.int32) % nelements,
-                ]).T,
+            vertex_indices=vertex_indices,
             nodes=nodes,
             unit_nodes=unit_nodes)
 
@@ -563,12 +578,12 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
         min_rad=0.2, uniform_refinement_rounds=0):
     """
     :returns: a tuple ``(refiner, warp_mesh)``, where *refiner* is
-        a :class:`meshmode.refinement.Refiner` (from which the unwarped mesh
+        a :class:`~meshmode.mesh.refinement.Refiner` (from which the unwarped mesh
         may be obtained), and whose
-        :meth:`meshmode.refinement.Refiner.get_current_mesh` returns a
-        locally-refined :class:`meshmode.mesh.Mesh` of a sphere and *warp_mesh*
+        :meth:`~meshmode.mesh.refinement.Refiner.get_current_mesh` returns a
+        locally-refined :class:`~meshmode.mesh.Mesh` of a sphere and *warp_mesh*
         is a callable taking and returning a mesh that warps the unwarped mesh
-        into a smooth shape govered by a spherical harmonic of order *(m, n)*.
+        into a smooth shape covered by a spherical harmonic of order *(m, n)*.
     :arg order: the polynomial order of the returned mesh
     :arg est_rel_interp_tolerance: a tolerance for the relative
         interpolation error estimates on the warped version of the mesh.
@@ -640,7 +655,7 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
 
 def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
     """
-    :returns: a refined :class:`meshmode.mesh.Mesh` of a smooth shape govered
+    :returns: a refined :class:`~meshmode.mesh.Mesh` of a smooth shape covered
         by a spherical harmonic of order *(m, n)*.
     :arg order: the polynomial order of the returned mesh
     :arg est_rel_interp_tolerance: a tolerance for the relative
@@ -892,14 +907,14 @@ def generate_warped_rect_mesh(dim, order, n):
 @log_process(logger)
 def warp_and_refine_until_resolved(
         unwarped_mesh_or_refiner, warp_callable, est_rel_interp_tolerance):
-    """Given an original ("un-warped") :class:`meshmode.mesh.Mesh` and a
+    """Given an original ("unwarped") :class:`meshmode.mesh.Mesh` and a
     warping function *warp_callable* that takes and returns a mesh and a
     tolerance to which the mesh should be resolved by the mapping polynomials,
     this function will iteratively refine the *unwarped_mesh* until relative
     interpolation error estimates on the warped version are smaller than
     *est_rel_interp_tolerance* on each element.
 
-    :returns: The refined, un-warped mesh.
+    :returns: The refined, unwarped mesh.
 
     .. versionadded:: 2018.1
     """

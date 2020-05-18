@@ -391,6 +391,7 @@ def test_all_faces_interpolation(ctx_factory, mesh_name, dim, mesh_pars,
     PolynomialWarpAndBlendGroupFactory
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
+    ("segment", 1, [8, 16, 32]),
     ("blob", 2, [1e-1, 8e-2, 5e-2]),
     ("warp", 2, [3, 5, 7]),
     ("warp", 3, [3, 5]),
@@ -418,7 +419,15 @@ def test_opposite_face_interpolation(ctx_factory, group_factory,
     for mesh_par in mesh_pars:
         # {{{ get mesh
 
-        if mesh_name == "blob":
+        if mesh_name == "segment":
+            assert dim == 1
+
+            from meshmode.mesh.generation import generate_box_mesh
+            mesh = generate_box_mesh(
+                    [np.linspace(-0.5, 0.5, mesh_par)],
+                    order=order)
+            h = 1.0 / mesh_par
+        elif mesh_name == "blob":
             assert dim == 2
 
             h = mesh_par
@@ -457,7 +466,6 @@ def test_opposite_face_interpolation(ctx_factory, group_factory,
 
         bdry_x = bdry_discr.nodes()[0].with_queue(queue)
         bdry_f = f(bdry_x)
-
         bdry_f_2 = opp_face(queue, bdry_f)
 
         err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
@@ -1152,6 +1160,7 @@ def test_vtk_overwrite(ctx_getter):
 
 
 # {{{ test_mesh_to_tikz
+
 def test_mesh_to_tikz():
     from meshmode.mesh.io import generate_gmsh, FileSource
 
@@ -1187,6 +1196,63 @@ def test_affine_map():
             m_inv = m.inverted()
 
             assert la.norm(x-m_inv(m(x))) < 1e-10
+
+
+def test_mesh_without_vertices(ctx_factory):
+    ctx = ctx_factory()
+    queue = cl.CommandQueue(ctx)
+
+    # create a mesh
+    from meshmode.mesh.generation import generate_icosphere
+    mesh = generate_icosphere(r=1.0, order=4)
+
+    # create one without the vertices
+    from meshmode.mesh import Mesh
+    grp, = mesh.groups
+    groups = [grp.copy(nodes=grp.nodes, vertex_indices=None) for grp in mesh.groups]
+    mesh = Mesh(None, groups, is_conforming=False)
+
+    # try refining it
+    from meshmode.mesh.refinement import refine_uniformly
+    mesh = refine_uniformly(mesh, 1)
+
+    # make sure the world doesn't end
+    from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import \
+            InterpolatoryQuadratureSimplexGroupFactory as GroupFactory
+    discr = Discretization(ctx, mesh, GroupFactory(4))
+    discr.nodes().with_queue(queue)
+
+    from meshmode.discretization.visualization import make_visualizer
+    make_visualizer(queue, discr, 4)
+
+
+@pytest.mark.parametrize("curve_name", ["ellipse", "arc"])
+def test_open_curved_mesh(curve_name):
+    def arc_curve(t, start=0, end=np.pi):
+        return np.vstack([
+            np.cos((end - start) * t + start),
+            np.sin((end - start) * t + start)
+            ])
+
+    if curve_name == "ellipse":
+        from functools import partial
+        from meshmode.mesh.generation import ellipse
+        curve_f = partial(ellipse, 2.0)
+        closed = True
+    elif curve_name == "arc":
+        curve_f = arc_curve
+        closed = False
+    else:
+        raise ValueError("unknown curve")
+
+    from meshmode.mesh.generation import make_curve_mesh
+    nelements = 32
+    order = 4
+    make_curve_mesh(curve_f,
+            np.linspace(0.0, 1.0, nelements + 1),
+            order=order,
+            closed=closed)
 
 
 if __name__ == "__main__":

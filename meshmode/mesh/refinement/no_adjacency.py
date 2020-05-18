@@ -146,17 +146,19 @@ class RefinerWithoutAdjacency(object):
         """
 
         mesh = self._current_mesh
-
         refine_flags = np.asarray(refine_flags, dtype=np.bool)
 
         if len(refine_flags) != mesh.nelements:
             raise ValueError("length of refine_flags does not match "
                     "element count of last generated mesh")
 
+        perform_vertex_updates = mesh.vertices is not None
+
         new_el_groups = []
         group_refinement_records = []
         additional_vertices = []
-        inew_vertex = mesh.nvertices
+        if perform_vertex_updates:
+            inew_vertex = mesh.nvertices
 
         for igrp, group in enumerate(mesh.groups):
             bisection_info = self._get_bisection_tesselation_info(
@@ -195,55 +197,59 @@ class RefinerWithoutAdjacency(object):
 
             # {{{ get new vertices together
 
-            midpoints = bisection_info.resampler.get_midpoints(
-                    group, bisection_info, refining_el_old_indices)
+            if perform_vertex_updates:
+                midpoints = bisection_info.resampler.get_midpoints(
+                        group, bisection_info, refining_el_old_indices)
 
-            new_vertex_indices = np.empty(
-                (new_nelements, group.vertex_indices.shape[1]),
-                dtype=mesh.vertex_id_dtype)
-            new_vertex_indices.fill(-17)
+                new_vertex_indices = np.empty(
+                    (new_nelements, group.vertex_indices.shape[1]),
+                    dtype=mesh.vertex_id_dtype)
+                new_vertex_indices.fill(-17)
 
-            # copy over unchanged vertices
-            new_vertex_indices[unrefined_el_new_indices] = \
-                    group.vertex_indices[~grp_flags]
+                # copy over unchanged vertices
+                new_vertex_indices[unrefined_el_new_indices] = \
+                        group.vertex_indices[~grp_flags]
 
-            for old_iel in refining_el_old_indices:
-                new_iel_base = child_el_indices[old_iel]
+                for old_iel in refining_el_old_indices:
+                    new_iel_base = child_el_indices[old_iel]
 
-                refining_vertices = np.empty(len(bisection_info.ref_vertices),
+                    refining_vertices = np.empty(len(bisection_info.ref_vertices),
                         dtype=mesh.vertex_id_dtype)
-                refining_vertices.fill(-17)
+                    refining_vertices.fill(-17)
 
-                # carry over old vertices
-                refining_vertices[bisection_info.orig_vertex_indices] = \
-                        group.vertex_indices[old_iel]
+                    # carry over old vertices
+                    refining_vertices[bisection_info.orig_vertex_indices] = \
+                            group.vertex_indices[old_iel]
 
-                for imidpoint, (iref_midpoint, (v1, v2)) in enumerate(zip(
-                        bisection_info.midpoint_indices,
-                        bisection_info.midpoint_vertex_pairs)):
+                    for imidpoint, (iref_midpoint, (v1, v2)) in enumerate(zip(
+                            bisection_info.midpoint_indices,
+                            bisection_info.midpoint_vertex_pairs)):
 
-                    global_v1 = group.vertex_indices[old_iel, v1]
-                    global_v2 = group.vertex_indices[old_iel, v2]
+                        global_v1 = group.vertex_indices[old_iel, v1]
+                        global_v2 = group.vertex_indices[old_iel, v2]
 
-                    if global_v1 > global_v2:
-                        global_v1, global_v2 = global_v2, global_v1
+                        if global_v1 > global_v2:
+                            global_v1, global_v2 = global_v2, global_v1
 
-                    try:
-                        global_midpoint = self.global_vertex_pair_to_midpoint[
-                                global_v1, global_v2]
-                    except KeyError:
-                        global_midpoint = inew_vertex
-                        additional_vertices.append(midpoints[old_iel][:, imidpoint])
-                        inew_vertex += 1
+                        try:
+                            global_midpoint = self.global_vertex_pair_to_midpoint[
+                                    global_v1, global_v2]
+                        except KeyError:
+                            global_midpoint = inew_vertex
+                            additional_vertices.append(
+                                    midpoints[old_iel][:, imidpoint])
+                            inew_vertex += 1
 
-                    refining_vertices[iref_midpoint] = global_midpoint
+                        refining_vertices[iref_midpoint] = global_midpoint
 
-                assert (refining_vertices >= 0).all()
+                    assert (refining_vertices >= 0).all()
 
-                new_vertex_indices[new_iel_base:new_iel_base+nchildren] = \
-                        refining_vertices[bisection_info.children]
+                    new_vertex_indices[new_iel_base:new_iel_base+nchildren] = \
+                            refining_vertices[bisection_info.children]
 
-            assert (new_vertex_indices >= 0).all()
+                assert (new_vertex_indices >= 0).all()
+            else:
+                new_vertex_indices = None
 
             # }}}
 
@@ -277,11 +283,14 @@ class RefinerWithoutAdjacency(object):
                     nodes=new_nodes,
                     unit_nodes=group.unit_nodes))
 
-        new_vertices = np.empty(
-                (mesh.ambient_dim, mesh.nvertices + len(additional_vertices)),
-                mesh.vertices.dtype)
-        new_vertices[:, :mesh.nvertices] = mesh.vertices
-        new_vertices[:, mesh.nvertices:] = np.array(additional_vertices).T
+        if perform_vertex_updates:
+            new_vertices = np.empty(
+                    (mesh.ambient_dim, mesh.nvertices + len(additional_vertices)),
+                    mesh.vertices.dtype)
+            new_vertices[:, :mesh.nvertices] = mesh.vertices
+            new_vertices[:, mesh.nvertices:] = np.array(additional_vertices).T
+        else:
+            new_vertices = None
 
         from meshmode.mesh import Mesh
         new_mesh = Mesh(new_vertices, new_el_groups, is_conforming=(
