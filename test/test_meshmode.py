@@ -124,25 +124,24 @@ def test_boundary_tags():
 
 
 # {{{ test custom boundary tags on box mesh
-
-def test_box_boundary_tags():
+@pytest.mark.parametrize(("dim", "nelem"), [
+    (2, 20),
+    ])
+def test_box_boundary_tags(dim, nelem):
     from meshmode.mesh.generation import generate_regular_rect_mesh
     from meshmode.mesh import is_boundary_tag_empty
     from meshmode.mesh import check_bc_coverage
-    # Test this capability with a 2D mesh.
     mesh = generate_regular_rect_mesh(a=(0, -1), b=(1, 1),
-                                      n=(20, 20), order=3,
-                                      face_to_boundary_tag={
-                                          "btag_test_1": ["+x", "-y"],
-                                          "btag_test_2": ["+y", "-x"]})
+                                      n=(nelem, nelem), order=3,
+                                      boundary_tag_to_face={
+                                      "btag_test_1": ["+x", "-y"],
+                                      "btag_test_2": ["+y", "-x"]})
+    # correct answer
+    num_on_bdy = dim*(nelem-1)
 
-    # ensure boundary is covered
     assert not is_boundary_tag_empty(mesh, "btag_test_1")
     assert not is_boundary_tag_empty(mesh, "btag_test_2")
     check_bc_coverage(mesh, ['btag_test_1', 'btag_test_2'])
-
-    # correct answers
-    num_on_bdy = 38
 
     # check how many elements are marked on each boundary
     num_marked_bdy_1 = 0
@@ -160,15 +159,14 @@ def test_box_boundary_tags():
                 num_marked_bdy_1 += 1
             if (-nbrs) & btag_2_bit:
                 num_marked_bdy_2 += 1
-
     # raise errors if wrong number of elements marked
     if num_marked_bdy_1 != num_on_bdy:
         raise ValueError("%i marked on custom boundary 1, should be %i" %
                          (num_marked_bdy_1, num_on_bdy))
-
     if num_marked_bdy_2 != num_on_bdy:
         raise ValueError("%i marked on custom boundary 2, should be %i" %
                          (num_marked_bdy_2, num_on_bdy))
+
 
 # }}}
 

@@ -673,7 +673,7 @@ def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
 # {{{ generate_box_mesh
 
 def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
-        group_factory=None, face_to_boundary_tag={}):
+        group_factory=None, boundary_tag_to_face={}):
     """Create a semi-structured mesh.
 
     :param axis_coords: a tuple with a number of entries corresponding
@@ -681,12 +681,12 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
         specifying the coordinates to be used along that axis.
     :param group_factory: One of :class:`meshmode.mesh.SimplexElementGroup`
         or :class:`meshmode.mesh.TensorProductElementGroup`.
-    :param face_to_boundary_tag: an optional dictionary for boundary configuration.
+    :param boundary_tag_to_face: an optional dictionary for boundary configuration.
         The keys correspond to custom boundary tags, with the values giving
         a list of the faces on which they should be applied in terms of coordinate
-        directions (+x, -x, +y, -y, +z, -z). One example of this would be:
+        directions (+x, -x, +y, -y, +z, -z, +w, -w). One example of this would be:
 
-        face_to_boundary_tag={"bdry_1": ["+x", "+y"], "bdry_2": ["-x"]}
+        boundary_tag_to_face={"bdry_1": ["+x", "+y"], "bdry_2": ["-x"]}
 
     .. versionchanged:: 2017.1
 
@@ -798,26 +798,39 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     # compute facial adjacency for Mesh if there is tag information
     facial_adjacency_groups = None
     face_vertex_indices_to_tags = {}
-    boundary_tags = list(face_to_boundary_tag.keys())
-    axes = ["x", "y", "z"]
-    face_ids = [1, 0, 0]
+    boundary_tags = list(boundary_tag_to_face.keys())
+    axes = ["x", "y", "z", "w"]
+    face_ids = [1, 0, 0, 0]
     from meshmode.mesh import _compute_facial_adjacency_from_vertices
     if boundary_tags:
         for tag_idx, tag in enumerate(boundary_tags):
             # Need to map the correct face vertices to the boundary tags
-            for face in face_to_boundary_tag[tag]:
+            for face in boundary_tag_to_face[tag]:
+                # Check if face to boundary input is formatted properly
+                if face.startswith("-"):
+                    pass
+                elif face.startswith("+"):
+                    pass
+                else:
+                    raise ValueError("Face ", face, " given for boundary tag ",
+                            tag, " is not formatted properly. Use +x, -x, +y, "
+                            "+z, -z, +w, or -w")
                 for i_ax, axis in enumerate(axes):
                     if face == "-" + axis:
                         if dim < i_ax + 1:
                             raise ValueError("Boundary condition dimension "
-                            "mismatch")
+                            "mismatch: facial dimension ", face, " for tag ",
+                            tag, " is higher than the dimension of the "
+                            "problem")
                         face_id = face_ids[i_ax]
                         dim_crit = i_ax
                         node_crit = axis_coords[i_ax][0]
                     elif face == "+" + axis:
                         if dim < i_ax + 1:
                             raise ValueError("Boundary condition dimension "
-                            "mismatch")
+                            "mismatch: facial dimension ", face, " for tag ",
+                            tag, " is higher than the dimension of the "
+                            "problem")
                         face_id = face_ids[i_ax]
                         dim_crit = i_ax
                         node_crit = axis_coords[i_ax][-1]
@@ -848,14 +861,14 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 # {{{ generate_regular_rect_mesh
 
 def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
-                               face_to_boundary_tag={}):
+                               boundary_tag_to_face={}):
     """Create a semi-structured rectangular mesh.
 
     :param a: the lower left hand point of the rectangle
     :param b: the upper right hand point of the rectangle
     :param n: a tuple of integers indicating the total number of points
       on [a,b].
-    :param face_to_boundary_tag: an optional dictionary for boundary configuration.
+    :param boundary_tag_to_face: an optional dictionary for boundary configuration.
         The keys correspond to custom boundary tags, with the values giving
         a list of the faces on which they should be applied in terms of coordinate
         directions (+x, -x, +y, -y, +z, -z).
@@ -867,7 +880,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
             for a_i, b_i, n_i in zip(a, b, n)]
 
     return generate_box_mesh(axis_coords, order=order,
-                             face_to_boundary_tag=face_to_boundary_tag)
+                             boundary_tag_to_face=boundary_tag_to_face)
 
 # }}}
 
