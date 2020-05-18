@@ -1396,6 +1396,7 @@ def is_affine_simplex_group(group, abs_tol=None):
     if norm_inf > abs_tol:
         return False
 
+    # check all elements for a non-affine local-to-global mapping
     ddx_coeffs = np.einsum("aij,bcj->abci", mats, group.nodes)
     norm_inf = np.max(np.abs(ddx_coeffs))
     return norm_inf < abs_tol
