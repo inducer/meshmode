@@ -26,9 +26,10 @@ from six.moves import range
 import six
 
 import numpy as np
-import modepy as mp
 import numpy.linalg as la
-from pytools import Record
+
+import modepy as mp
+from pytools import Record, memoize_method
 
 __doc__ = """
 
@@ -162,6 +163,11 @@ class MeshElementGroup(Record):
         *Not* the ambient dimension, see :attr:`Mesh.ambient_dim`
         for that.
 
+    .. attribute:: is_affine
+
+        A :class:`bool` flag that is *True* if the local-to-global
+        parametrization of all the elements in the group is affine.
+
     .. automethod:: face_vertex_indices
     .. automethod:: vertex_unit_coordinates
 
@@ -226,6 +232,10 @@ class MeshElementGroup(Record):
     @property
     def nunit_nodes(self):
         return self.unit_nodes.shape[-1]
+
+    @property
+    def is_affine(self):
+        raise NotImplementedError()
 
     def face_vertex_indices(self):
         """Return a tuple of tuples indicating which vertices
@@ -306,6 +316,11 @@ class SimplexElementGroup(MeshElementGroup):
 
         super(SimplexElementGroup, self).__init__(order, vertex_indices, nodes,
                 element_nr_base, node_nr_base, unit_nodes, dim)
+
+    @property
+    @memoize_method
+    def is_affine(self):
+        return is_affine_simplex_group(self)
 
     def face_vertex_indices(self):
         if self.dim == 1:
@@ -1366,5 +1381,45 @@ def is_boundary_tag_empty(mesh, boundary_tag):
 
 # }}}
 
+
+# {{{
+
+def is_affine_simplex_group(group, abs_tol=None):
+    if abs_tol is None:
+        abs_tol = 1.0e-13
+
+    if not isinstance(group, SimplexElementGroup):
+        raise TypeError("expected a 'SimplexElementGroup' not '%s'" %
+                type(group).__name__)
+
+    # get matrices
+    basis = mp.simplex_best_available_basis(group.dim, group.order)
+    grad_basis = mp.grad_simplex_best_available_basis(group.dim, group.order)
+
+    vinv = la.inv(mp.vandermonde(basis, group.unit_nodes))
+    diff = mp.differentiation_matrices(basis, grad_basis, group.unit_nodes)
+    if not isinstance(diff, tuple):
+        diff = (diff,)
+
+    # construct all second derivative matrices (including cross terms)
+    from itertools import product
+    mats = []
+    for n in product(range(group.dim), repeat=2):
+        if n[0] > n[1]:
+            continue
+        mats.append(vinv.dot(diff[n[0]].dot(diff[n[1]])))
+
+    # check just the first element for a non-affine local-to-global mapping
+    ddx_coeffs = np.einsum("aij,bj->abi", mats, group.nodes[:, 0, :])
+    norm_inf = np.max(np.abs(ddx_coeffs))
+    if norm_inf > abs_tol:
+        return False
+
+    # check all elements for a non-affine local-to-global mapping
+    ddx_coeffs = np.einsum("aij,bcj->abci", mats, group.nodes)
+    norm_inf = np.max(np.abs(ddx_coeffs))
+    return norm_inf < abs_tol
+
+# }}}
 
 # vim: foldmethod=marker

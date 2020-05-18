@@ -1205,6 +1205,73 @@ def test_open_curved_mesh(curve_name):
             closed=closed)
 
 
+def _generate_cross_warped_rect_mesh(dim, order, n):
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh = generate_regular_rect_mesh(
+            a=(0,)*dim, b=(1,)*dim,
+            n=(n,)*dim, order=order)
+
+    def m(x):
+        results = np.empty_like(x)
+        results[0] = 1 + 1.5 * (x[0] + 0.25) * (x[1] + 0.3)
+        results[1] = x[1]
+        return results
+
+    from meshmode.mesh.processing import map_mesh
+    return map_mesh(mesh, m)
+
+
+@pytest.mark.parametrize("mesh_name", [
+    "box2d", "box3d",
+    "warped_box2d", "warped_box3d", "cross_warped_box",
+    "circle", "ellipse",
+    "sphere", "torus"
+    ])
+def test_is_affine_group_check(mesh_name):
+    from meshmode.mesh.generation import (
+            generate_regular_rect_mesh, generate_warped_rect_mesh,
+            make_curve_mesh, ellipse,
+            generate_icosphere, generate_torus)
+
+    order = 4
+    nelements = 16
+
+    if mesh_name.startswith("box"):
+        dim = int(mesh_name[-2])
+        is_affine = True
+        mesh = generate_regular_rect_mesh(
+                a=(-0.5,)*dim, b=(0.5,)*dim,
+                n=(nelements,)*dim, order=order)
+    elif mesh_name.startswith("warped_box"):
+        dim = int(mesh_name[-2])
+        is_affine = False
+        mesh = generate_warped_rect_mesh(dim, order, nelements)
+    elif mesh_name == "cross_warped_box":
+        dim = 2
+        is_affine = False
+        mesh = _generate_cross_warped_rect_mesh(dim, order, nelements)
+    elif mesh_name == "circle":
+        is_affine = False
+        mesh = make_curve_mesh(
+                lambda t: ellipse(1.0, t),
+                np.linspace(0.0, 1.0, nelements + 1), order=order)
+    elif mesh_name == "ellipse":
+        is_affine = False
+        mesh = make_curve_mesh(
+                lambda t: ellipse(2.0, t),
+                np.linspace(0.0, 1.0, nelements + 1), order=order)
+    elif mesh_name == "sphere":
+        is_affine = False
+        mesh = generate_icosphere(r=1.0, order=order)
+    elif mesh_name == "torus":
+        is_affine = False
+        mesh = generate_torus(10.0, 2.0, order=order)
+    else:
+        raise ValueError("unknown mesh name: {}".format(mesh_name))
+
+    assert all(grp.is_affine for grp in mesh.groups) == is_affine
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
