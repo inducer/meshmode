@@ -843,7 +843,6 @@ def generate_warped_rect_mesh(dim, order, n):
     from meshmode.mesh.processing import map_mesh
     return map_mesh(mesh, m)
 
-
 # }}}
 
 

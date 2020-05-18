@@ -159,7 +159,11 @@ class MeshElementGroup(Record):
         *Not* the ambient dimension, see :attr:`Mesh.ambient_dim`
         for that.
 
-    .. automethod:: is_affine
+    .. attribute:: is_affine
+
+        A :class:`bool` flag that is *True* if the local-to-global
+        parametrization of all the elements in the group is affine.
+
     .. automethod:: face_vertex_indices
     .. automethod:: vertex_unit_coordinates
 
