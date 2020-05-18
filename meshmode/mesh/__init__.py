@@ -1390,7 +1390,7 @@ def is_affine_simplex_group(group, abs_tol=None):
             continue
         mats.append(vinv.dot(diff[n[0]].dot(diff[n[1]])))
 
-    # check if any element has a non-affine parametrization
+    # check just the first element for a non-affine local-to-global mapping
     ddx_coeffs = np.einsum("aij,bj->abi", mats, group.nodes[:, 0, :])
     norm_inf = np.max(np.abs(ddx_coeffs))
     if norm_inf > abs_tol:
