@@ -7,6 +7,7 @@ Contents:
    :maxdepth: 2
 
    mesh
+   array_context
    discretization
    connection
    misc
