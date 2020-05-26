@@ -35,6 +35,7 @@ from pytools.obj_array import (
         is_obj_array)
 import loopy as lp
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
+from meshmode.discretization import DOFArray  # noqa: F401
 
 
 # Features lost vs. https://github.com/inducer/grudge:
@@ -45,8 +46,12 @@ from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
 
 
 def with_queue(queue, ary):
-    return with_object_array_or_scalar(
-            lambda x: x.with_queue(queue), ary)
+    def dof_array_with_queue(dof_array):
+        return dof_array.copy(group_arrays=[
+            grp_ary.with_queue(queue)
+            for grp_ary in dof_array.group_arrays])
+
+    return with_object_array_or_scalar(dof_array_with_queue, ary)
 
 
 def without_queue(ary):
@@ -457,7 +462,7 @@ def bump(discr, queue, t=0):
     source_width = 0.05
     source_omega = 3
 
-    nodes = discr.volume_discr.nodes().with_queue(queue)
+    nodes = with_queue(queue, discr.volume_discr.nodes())
     center_dist = join_fields([
         nodes[0] - source_center[0],
         nodes[1] - source_center[1],
