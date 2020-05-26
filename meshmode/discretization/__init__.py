@@ -1,6 +1,4 @@
-from __future__ import division
-
-__copyright__ = "Copyright (C) 2013 Andreas Kloeckner"
+__copyright__ = "Copyright (C) 2013-2020 Andreas Kloeckner"
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,17 +21,16 @@ THE SOFTWARE.
 """
 
 import numpy as np
-import loopy as lp
-import pyopencl as cl
-import pyopencl.array  # noqa
 
-from loopy.version import MOST_RECENT_LANGUAGE_VERSION
-from pytools import memoize_method, memoize_in
+from pytools import memoize_in, memoize_method
+from pytools.obj_array import make_obj_array
+from meshmode.array_context import ArrayContext, make_loopy_program
 
 __doc__ = """
 .. autoclass:: ElementGroupBase
 .. autoclass:: InterpolatoryElementGroupBase
 .. autoclass:: ElementGroupFactory
+.. autoclass:: DOFArray
 .. autoclass:: Discretization
 """
 
@@ -50,22 +47,22 @@ class ElementGroupBase(object):
 
     .. attribute :: mesh_el_group
     .. attribute :: order
-    .. attribute :: node_nr_base
+    .. attribute :: index
 
     .. autoattribute:: nelements
-    .. autoattribute:: nunit_nodes
+    .. autoattribute:: ndofs
     .. autoattribute:: nnodes
     .. autoattribute:: dim
     .. automethod:: view
 
     .. method:: unit_nodes()
 
-        Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_nodes)``
+        Returns a :class:`numpy.ndarray` of shape ``(dim, ndofs)``
         of reference coordinates of interpolation nodes.
 
     .. method:: weights()
 
-        Returns an array of length :attr:`nunit_nodes` containing
+        Returns an array of length :attr:`ndofs` containing
         quadrature weights.
 
     .. attribute:: is_affine
@@ -75,14 +72,14 @@ class ElementGroupBase(object):
         :attr:`meshmode.mesh.MeshElementGroup.is_affine`.
     """
 
-    def __init__(self, mesh_el_group, order, node_nr_base):
+    def __init__(self, mesh_el_group, order, index):
         """
         :arg mesh_el_group: an instance of
             :class:`meshmode.mesh.MeshElementGroup`
         """
         self.mesh_el_group = mesh_el_group
         self.order = order
-        self.node_nr_base = node_nr_base
+        self.index = index
 
     @property
     def is_affine(self):
@@ -93,12 +90,8 @@ class ElementGroupBase(object):
         return self.mesh_el_group.nelements
 
     @property
-    def nunit_nodes(self):
+    def ndofs(self):
         return self.unit_nodes.shape[-1]
-
-    @property
-    def nnodes(self):
-        return self.nunit_nodes * self.nelements
 
     @property
     def dim(self):
@@ -112,27 +105,6 @@ class ElementGroupBase(object):
 
     grad_basis = basis
     diff_matrices = basis
-
-    def _nodes(self):
-        # Not cached, because the global nodes array is what counts.
-        # This is just used to build that.
-
-        return np.tensordot(
-                self.mesh_el_group.nodes,
-                self._from_mesh_interp_matrix(),
-                (-1, -1))
-
-    def view(self, global_array):
-        """Return a view of *global_array* of shape ``(..., nelements,
-        nunit_nodes)`` where *global_array* is of shape ``(..., nnodes)``,
-        where *nnodes* is the global (per-discretization) node count.
-        """
-
-        return global_array[
-                ..., self.node_nr_base:self.node_nr_base + self.nnodes] \
-                .reshape(
-                        global_array.shape[:-1]
-                        + (self.nelements, self.nunit_nodes))
 
 # }}}
 
@@ -192,15 +164,36 @@ class OrderBasedGroupFactory(ElementGroupFactory):
 # }}}
 
 
+class DOFArray(object):
+    """
+    .. attribute:: array_context
+
+        An instance of :class:`ArrayContext`, or *None* if the arrays
+        in :attr:`group_arrays` are :meth:`ArrayContext.finalize`d.
+
+    .. attribute:: group_arrays
+
+        A list of arrays recognized by :attr:`array_context`,
+        one for each :class:`ElementGroupBase` of the :class:`Discretization`
+        that generated this :class:`DOFArray`.
+    """
+
+    # FIXME: How much arithmetic?
+
+    def __init__(self, array_context, group_arrays):
+        self.array_context = array_context
+        self.group_arrays = group_arrays
+
+    def copy(self, group_arrays=None):
+        return type(self)(
+                array_context=self.array_context,
+                group_arrays=(
+                    group_arrays if group_arrays is not None
+                    else self.group_arrays))
+
+
 class Discretization(object):
     """An unstructured composite discretization.
-
-    :param cl_ctx: A :class:`pyopencl.Context`
-    :param mesh: A :class:`meshmode.mesh.Mesh` over which the discretization is
-        built
-    :param group_factory: An :class:`ElementGroupFactory`
-    :param real_dtype: The :mod:`numpy` data type used for representing real
-        data, either :class:`numpy.float32` or :class:`numpy.float64`
 
     .. attribute:: real_dtype
 
@@ -212,8 +205,6 @@ class Discretization(object):
 
     .. attribute:: ambient_dim
 
-    .. attribute :: nnodes
-
     .. attribute :: groups
 
     .. automethod:: empty
@@ -222,31 +213,57 @@ class Discretization(object):
 
     .. method:: nodes()
 
-        shape: ``(ambient_dim, nnodes)``
+        An object array of shape ``(ambient_dim,)`` containing
+        :class:`DOFArray`s of node coordinates.
 
     .. method:: num_reference_derivative(queue, ref_axes, vec)
 
     .. method:: quad_weights(queue)
 
-        shape: ``(nnodes)``
+        A :class:`DOFArray` with quadrature weights.
     """
 
-    def __init__(self, cl_ctx, mesh, group_factory, real_dtype=np.float64):
-        self.cl_context = cl_ctx
+    def __init__(self, actx: ArrayContext, mesh, group_factory,
+            real_dtype=np.float64):
+        """
+        :param actx: A :class:`ArrayContext` used to perform computation needed
+            during initial set-up of the mesh.
+        :param mesh: A :class:`meshmode.mesh.Mesh` over which the discretization is
+            built
+        :param group_factory: An :class:`ElementGroupFactory`
+        :param real_dtype: The :mod:`numpy` data type used for representing real
+            data, either :class:`numpy.float32` or :class:`numpy.float64`
+        """
+
+        if not isinstance(actx, ArrayContext):
+            from meshmode.array_context import PyOpenCLArrayContext
+
+            import pyopencl as cl
+            if isinstance(actx, cl.Context):
+                from warnings import warn
+                warn("Passing a pyopencl Context to Discretization is deprecated. "
+                        "Pass an ArrayContext instead.",
+                        DeprecationWarning,
+                        stacklevel=2)
+                actx = PyOpenCLArrayContext(cl.CommandQueue(actx))
+            else:
+                raise TypeError("'actx' must be an ArrayContext")
 
         self.mesh = mesh
-        self.nnodes = 0
-        self.groups = []
+        groups = []
         for mg in mesh.groups:
-            ng = group_factory(mg, self.nnodes)
-            self.groups.append(ng)
-            self.nnodes += ng.nnodes
+            ng = group_factory(mg, len(groups))
+            groups.append(ng)
+
+        self.groups = groups
 
         self.real_dtype = np.dtype(real_dtype)
         self.complex_dtype = np.dtype({
                 np.float32: np.complex64,
                 np.float64: np.complex128
                 }[self.real_dtype.type])
+
+        self._setup_actx = actx
 
     @property
     def dim(self):
@@ -256,13 +273,7 @@ class Discretization(object):
     def ambient_dim(self):
         return self.mesh.ambient_dim
 
-    def empty(self, queue=None, dtype=None, extra_dims=None, allocator=None):
-        """Return an empty DOF vector.
-
-        :arg dtype: type special value 'c' will result in a
-            vector of dtype :attr:`self.complex_dtype`. If
-            *None* (the default), a real vector will be returned.
-        """
+    def _new_array(self, actx, creation_func, dtype=None):
         if dtype is None:
             dtype = self.real_dtype
         elif dtype == "c":
@@ -270,45 +281,42 @@ class Discretization(object):
         else:
             dtype = np.dtype(dtype)
 
-        if queue is None:
-            first_arg = self.cl_context
-        else:
-            first_arg = queue
+        return DOFArray(actx, [
+            creation_func(shape=(grp.nelements, grp.nunit_nodes), dtype=dtype)
+            for grp in self.groups])
 
-        shape = (self.nnodes,)
-        if extra_dims is not None:
-            shape = extra_dims + shape
+    def empty(self, actx: ArrayContext, dtype=None):
+        """Return an empty DOF vector.
 
-        return cl.array.empty(first_arg, shape, dtype=dtype, allocator=allocator)
+        :arg dtype: type special value 'c' will result in a
+            vector of dtype :attr:`self.complex_dtype`. If
+            *None* (the default), a real vector will be returned.
+        """
+        return self._new_array(actx, actx.empty, dtype=dtype)
 
-    def zeros(self, queue, dtype=None, extra_dims=None, allocator=None):
-        return self.empty(queue, dtype=dtype, extra_dims=extra_dims,
-                allocator=allocator).fill(0)
+    def zeros(self, actx: ArrayContext, dtype=None):
+        """Return a zero-initilaized DOF vector.
 
-    def num_reference_derivative(self, queue, ref_axes, vec):
-        @memoize_in(self, "reference_derivative_knl")
-        def knl():
-            knl = lp.make_kernel(
-                """{[k,i,j]:
-                    0<=k<nelements and
-                    0<=i,j<ndiscr_nodes}""",
-                "result[k,i] = sum(j, diff_mat[i, j] * vec[k, j])",
-                default_offset=lp.auto, name="diff",
-                lang_version=MOST_RECENT_LANGUAGE_VERSION)
+        :arg dtype: type special value 'c' will result in a
+            vector of dtype :attr:`self.complex_dtype`. If
+            *None* (the default), a real vector will be returned.
+        """
+        return self._new_array(actx, actx.zeros, dtype=dtype)
 
-            knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
-            return lp.tag_inames(knl, dict(k="g.0"))
+    def num_reference_derivative(self, ref_axes, vec, actx: ArrayContext = None):
+        @memoize_in(self, "reference_derivative_prg")
+        def prg():
+            return make_loopy_program(
+                """{[iel,idof,j]:
+                    0<=iel<nelements and
+                    0<=idof,j<ndofs}""",
+                "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
+                name="diff")
 
-        result = self.empty(dtype=vec.dtype)
+        if actx is None:
+            actx = vec.array_context
 
-        # Check that we don't differentiate vectors belonging to other
-        # discretizations.
-        assert vec.shape == (self.nnodes,)
-
-        for grp in self.groups:
-            if grp.nelements == 0:
-                continue
-
+        def get_mat(grp):
             mat = None
             for ref_axis in ref_axes:
                 next_mat = grp.diff_matrices()[ref_axis]
@@ -317,68 +325,59 @@ class Discretization(object):
                 else:
                     mat = np.dot(next_mat, mat)
 
-            knl()(queue, diff_mat=mat, result=grp.view(result), vec=grp.view(vec))
+            return mat
 
-        return result
+        return DOFArray(actx, [
+                actx.call_loopy(
+                    prg(), diff_mat=actx.from_numpy(get_mat(grp)), vec=vec[grp.index]
+                    )["result"]
+                for grp in self.groups])
 
-    def quad_weights(self, queue):
-        @memoize_in(self, "quad_weights_knl")
-        def knl():
-            knl = lp.make_kernel(
-                "{[k,i]: 0<=k<nelements and 0<=i<ndiscr_nodes}",
-                "result[k,i] = weights[i]",
-                name="quad_weights",
-                default_offset=lp.auto,
-                lang_version=MOST_RECENT_LANGUAGE_VERSION)
+    @memoize_method
+    def quad_weights(self):
+        @memoize_in(self, "quad_weights_prg")
+        def prg():
+            return make_loopy_program(
+                "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs}",
+                "result[iel,idof] = weights[idof]",
+                name="quad_weights")
 
-            knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
-            return lp.tag_inames(knl, dict(k="g.0"))
+        actx = self._setup_actx
 
-        result = self.empty(dtype=self.real_dtype)
-        for grp in self.groups:
-            if grp.nelements == 0:
-                continue
-
-            knl()(queue, result=grp.view(result), weights=grp.weights)
-        return result
+        return DOFArray(None, [
+                actx.finalize(
+                    actx.call_loopy(
+                        prg(), weights=actx.from_numpy(grp.weights)
+                        )["result"])
+                for grp in self.groups])
 
     @memoize_method
     def nodes(self):
-        @memoize_in(self, "nodes_knl")
-        def knl():
-            knl = lp.make_kernel(
-                """{[d,k,i,j]:
-                    0<=d<dims and
-                    0<=k<nelements and
-                    0<=i<ndiscr_nodes and
+        @memoize_in(self, "nodes_prg")
+        def prg():
+            return make_loopy_program(
+                """{[iel,idof,j]:
+                    0<=iel<nelements and
+                    0<=idof<ndiscr_nodes and
                     0<=j<nmesh_nodes}""",
                 """
-                    result[d, k, i] = \
-                        sum(j, resampling_mat[i, j] * nodes[d, k, j])
+                    result[iel, idof] = \
+                        sum(j, resampling_mat[idof, j] * nodes[iel, j])
                     """,
-                name="nodes",
-                default_offset=lp.auto,
-                lang_version=MOST_RECENT_LANGUAGE_VERSION)
+                name="nodes")
 
-            knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
-            knl = lp.tag_inames(knl, dict(k="g.0"))
-            knl = lp.tag_array_axes(knl, "result",
-                    "stride:auto,stride:auto,stride:auto")
-            return knl
+        actx = self._setup_actx
 
-        result = self.empty(dtype=self.real_dtype, extra_dims=(self.ambient_dim,))
-
-        with cl.CommandQueue(self.cl_context) as queue:
-            for grp in self.groups:
-                if grp.nelements == 0:
-                    continue
-
-                meg = grp.mesh_el_group
-                knl()(queue,
-                        resampling_mat=grp.from_mesh_interp_matrix(),
-                        result=grp.view(result), nodes=meg.nodes)
-
-        return result
-
+        return make_obj_array([
+            DOFArray(None, [
+                actx.finalize(
+                    actx.call_loopy(
+                        prg(),
+                        resampling_mat=actx.from_numpy(
+                            grp.from_mesh_interp_matrix()),
+                        nodes=actx.from_numpy(grp.mesh_el_group.nodes[iaxis])
+                        )["result"])
+                for grp in self.groups])
+            for iaxis in range(self.ambient_dim)])
 
 # vim: fdm=marker
