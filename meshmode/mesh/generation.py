@@ -728,6 +728,9 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
     el_vertices = []
 
+    vertex_indices_left = {}
+    vertex_indices_right = {}
+
     if dim == 1:
         for i in range(shape[0]-1):
             # a--b
@@ -738,6 +741,11 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
             el_vertices.append((a, b,))
 
     elif dim == 2:
+        # For custom boundary tagging.
+        vertex_indices_left["x"] = vertex_indices[0, :].flatten()
+        vertex_indices_right["x"] = vertex_indices[-1, :].flatten()
+        vertex_indices_left["y"] = vertex_indices[:, 0].flatten()
+        vertex_indices_right["y"] = vertex_indices[:, -1].flatten()
         for i in range(shape[0]-1):
             for j in range(shape[1]-1):
 
@@ -757,6 +765,13 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
                     el_vertices.append((d, c, b))
 
     elif dim == 3:
+        # For custom boundary tagging.
+        vertex_indices_left["x"] = vertex_indices[0, :, :].flatten()
+        vertex_indices_right["x"] = vertex_indices[-1, :, :].flatten()
+        vertex_indices_left["y"] = vertex_indices[:, 0, :].flatten()
+        vertex_indices_right["y"] = vertex_indices[:, -1, :].flatten()
+        vertex_indices_left["z"] = vertex_indices[:, :, 0].flatten()
+        vertex_indices_right["z"] = vertex_indices[:, :, -1].flatten()
         for i in range(shape[0]-1):
             for j in range(shape[1]-1):
                 for k in range(shape[2]-1):
@@ -800,7 +815,6 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     face_vertex_indices_to_tags = {}
     boundary_tags = list(boundary_tag_to_face.keys())
     axes = ["x", "y", "z", "w"]
-    face_ids = [1, 0, 0, 0]
     from meshmode.mesh import _compute_facial_adjacency_from_vertices
     if boundary_tags:
         for tag_idx, tag in enumerate(boundary_tags):
@@ -815,6 +829,18 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
                     raise ValueError("Face ", face, " given for boundary tag ",
                             tag, " is not formatted properly. Use +x, -x, +y, "
                             "+z, -z, +w, or -w")
+                if face.endswith("x"):
+                    pass
+                elif face.endswith("y"):
+                    pass
+                elif face.endswith("z"):
+                    pass
+                elif face.endswith("w"):
+                    pass
+                else:
+                    raise ValueError("Face ", face, " given for boundary tag ",
+                            tag, " is not formatted properly. Use +x, -x, +y, "
+                            "+z, -z, +w, or -w")
                 for i_ax, axis in enumerate(axes):
                     if face == "-" + axis:
                         if dim < i_ax + 1:
@@ -822,26 +848,25 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
                             "mismatch: facial dimension ", face, " for tag ",
                             tag, " is higher than the dimension of the "
                             "problem")
-                        face_id = face_ids[i_ax]
-                        dim_crit = i_ax
-                        node_crit = axis_coords[i_ax][0]
+                        vert_crit = vertex_indices_left[axis]
                     elif face == "+" + axis:
                         if dim < i_ax + 1:
                             raise ValueError("Boundary condition dimension "
                             "mismatch: facial dimension ", face, " for tag ",
                             tag, " is higher than the dimension of the "
                             "problem")
-                        face_id = face_ids[i_ax]
-                        dim_crit = i_ax
-                        node_crit = axis_coords[i_ax][-1]
+                        vert_crit = vertex_indices_right[axis]
                 for ielem in range(0, grp.nelements):
-                    if grp.nodes[dim_crit][ielem][0] == node_crit:
+                    # Loop through potential boundary-facing faces.
+                    for i in range(0, dim+1):
+                        # Element vertices:
                         fvi = grp.vertex_indices[ielem,
                                                  grp.face_vertex_indices()[
-                                                     face_id]]
-                        if frozenset(fvi) not in face_vertex_indices_to_tags:
-                            face_vertex_indices_to_tags[frozenset(fvi)] = []
-                        face_vertex_indices_to_tags[frozenset(fvi)].append(tag)
+                                                     i]]
+                        if all(ind in vert_crit for ind in fvi):
+                            if frozenset(fvi) not in face_vertex_indices_to_tags:
+                                face_vertex_indices_to_tags[frozenset(fvi)] = []
+                            face_vertex_indices_to_tags[frozenset(fvi)].append(tag)
         # Need to add BTAG ALL and BTAG_REALLY_ALL to list of tags
         from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL
         boundary_tags.append(BTAG_ALL)
