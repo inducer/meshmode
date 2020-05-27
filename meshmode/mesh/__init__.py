@@ -905,16 +905,8 @@ class Mesh(Record):
         return self._facial_adjacency_groups
 
     def boundary_tag_bit(self, boundary_tag):
-        if boundary_tag is BTAG_NONE:
-            return 0
-
-        if boundary_tag not in self.boundary_tags:
-            raise ValueError("boundary tag '%s' is not known" % boundary_tag)
-
-        try:
-            return 1 << self.btag_to_index[boundary_tag]
-        except KeyError:
-            return 0
+        return _boundary_tag_bit(self.boundary_tags, self.btag_to_index,
+                        boundary_tag)
 
     def __eq__(self, other):
         return (
@@ -1039,6 +1031,23 @@ def _compute_nodal_adjacency_from_vertices(mesh):
 # }}}
 
 
+# {{{ boundary tag to bit
+
+def _boundary_tag_bit(boundary_tags, btag_to_index, boundary_tag):
+    if boundary_tag is BTAG_NONE:
+        return 0
+
+    if boundary_tag not in boundary_tags:
+        raise ValueError("boundary tag '%s' is not known" % boundary_tag)
+
+    try:
+        return 1 << btag_to_index[boundary_tag]
+    except KeyError:
+        return 0
+
+# }}}
+
+
 # {{{ vertex-based facial adjacency
 
 def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
@@ -1050,10 +1059,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
     boundary_tag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
 
     def boundary_tag_bit(boundary_tag):
-        try:
-            return 1 << boundary_tag_to_index[boundary_tag]
-        except KeyError:
-            raise 0
+        return _boundary_tag_bit(boundary_tags, boundary_tag_to_index, boundary_tag)
 
     # FIXME Native code would make this faster
 

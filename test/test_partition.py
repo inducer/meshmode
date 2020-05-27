@@ -75,11 +75,6 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
 
     from pytools.convergence import EOCRecorder
     eoc_rec = dict()
-    for i in range(num_parts):
-        for j in range(num_parts):
-            if i == j:
-                continue
-            eoc_rec[i, j] = EOCRecorder()
 
     def f(x):
         return 10.*actx.np.sin(50.*x)
@@ -104,6 +99,23 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
                               adjncy=mesh.nodal_adjacency.neighbors.tolist())
             part_per_element = np.array(p)
 
+        connected_parts = set()
+        for igrp, grp in enumerate(mesh.groups):
+            # Groups in this mesh are disjoint, so we only need to look at
+            # intra-group adjacency
+            facial_adjacency = mesh.facial_adjacency_groups[igrp][igrp]
+            for iel in range(len(facial_adjacency.elements)):
+                elem_part = part_per_element[grp.element_nr_base
+                        + facial_adjacency.elements[iel]]
+                neighbor_part = part_per_element[grp.element_nr_base
+                        + facial_adjacency.neighbors[iel]]
+                if neighbor_part != elem_part:
+                    connected_parts.add((elem_part, neighbor_part))
+
+        for i_local_part, i_remote_part in connected_parts:
+            if (i_local_part, i_remote_part) not in eoc_rec:
+                eoc_rec[i_local_part, i_remote_part] = EOCRecorder()
+
         from meshmode.mesh.processing import partition_mesh
         part_meshes = [
             partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
@@ -117,27 +129,19 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
                                                         make_partition_connection,
                                                         check_connection)
 
-        for i_local_part, i_remote_part in eoc_rec.keys():
-            if eoc_rec[i_local_part, i_remote_part] is None:
-                continue
-
+        for i_local_part, i_remote_part in connected_parts:
             # Mark faces within local_mesh that are connected to remote_mesh
             local_bdry_conn = make_face_restriction(actx, vol_discrs[i_local_part],
                                                     group_factory(order),
                                                     BTAG_PARTITION(i_remote_part))
-
-            # If these parts are not connected, don't bother checking the error
-            bdry_nelements = sum(
-                    grp.nelements for grp in local_bdry_conn.to_discr.groups)
-            if bdry_nelements == 0:
-                eoc_rec[i_local_part, i_remote_part] = None
-                continue
 
             # Mark faces within remote_mesh that are connected to local_mesh
             remote_bdry_conn = make_face_restriction(actx, vol_discrs[i_remote_part],
                                                      group_factory(order),
                                                      BTAG_PARTITION(i_local_part))
 
+            bdry_nelements = sum(
+                    grp.nelements for grp in local_bdry_conn.to_discr.groups)
             remote_bdry_nelements = sum(
                     grp.nelements for grp in remote_bdry_conn.to_discr.groups)
             assert bdry_nelements == remote_bdry_nelements, \
@@ -195,8 +199,11 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
     for (i, j), e in eoc_rec.items():
         if e is not None:
             print("Error of connection from part %i to part %i." % (i, j))
-            print(e)
-            assert(e.order_estimate() >= order - 0.5 or e.max_error() < 1e-11)
+            # TODO: Figure out how to deal with divide-by-zero and
+            # not-enough-data-points errors
+            # print(e)
+            # assert(e.order_estimate() >= order - 0.5 or e.max_error() < 1e-11)
+            assert(e.max_error() < 1e-11)
 
 # }}}
 
@@ -240,6 +247,19 @@ def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions):
     assert count_tags(mesh, BTAG_ALL) == np.sum(
         [count_tags(new_meshes[i][0], BTAG_ALL) for i in range(num_parts)]), \
         "part_mesh has the wrong number of BTAG_ALL boundaries"
+
+    connected_parts = set()
+    for igrp, grp in enumerate(mesh.groups):
+        # Groups in this mesh are disjoint, so we only need to look at intra-group
+        # adjacency
+        facial_adjacency = mesh.facial_adjacency_groups[igrp][igrp]
+        for iel in range(len(facial_adjacency.elements)):
+            elem_part = part_per_element[grp.element_nr_base
+                    + facial_adjacency.elements[iel]]
+            neighbor_part = part_per_element[grp.element_nr_base
+                    + facial_adjacency.neighbors[iel]]
+            if neighbor_part != elem_part:
+                connected_parts.add((elem_part, neighbor_part))
 
     from meshmode.mesh import BTAG_PARTITION, InterPartitionAdjacencyGroup
     from meshmode.mesh.processing import find_group_indices
@@ -309,11 +329,12 @@ def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions):
                             assert n_face == p_bnd_adj.neighbor_faces[idx],\
                                     "Tag does not give correct neighbor"
 
-    for i_tag in range(num_parts):
+    for i_remote_part in range(num_parts):
         tag_sum = 0
-        for mesh, _ in new_meshes:
-            tag_sum += count_tags(mesh, BTAG_PARTITION(i_tag))
-        assert num_tags[i_tag] == tag_sum,\
+        for i_local_part, (mesh, _) in enumerate(new_meshes):
+            if (i_local_part, i_remote_part) in connected_parts:
+                tag_sum += count_tags(mesh, BTAG_PARTITION(i_remote_part))
+        assert num_tags[i_remote_part] == tag_sum,\
                 "part_mesh has the wrong number of BTAG_PARTITION boundaries"
 
 

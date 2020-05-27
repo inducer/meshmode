@@ -157,22 +157,25 @@ def partition_mesh(mesh, part_per_element, part_num):
                     new_nodes[group_num],
                     unit_nodes=mesh_group.unit_nodes))
 
-    from meshmode.mesh import BTAG_ALL, BTAG_PARTITION
-    boundary_tags = [BTAG_PARTITION(n) for n in np.unique(part_per_element)]
+    adj_data = [[] for _ in range(len(new_mesh_groups))]
 
-    from meshmode.mesh import Mesh
-    part_mesh = Mesh(
-            new_vertices,
-            new_mesh_groups,
-            facial_adjacency_groups=None,
-            boundary_tags=boundary_tags,
-            is_conforming=mesh.is_conforming)
+    boundary_tags = mesh.boundary_tags[:]
+    btag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
 
-    adj_data = [[] for _ in range(len(part_mesh.groups))]
+    def boundary_tag_bit(boundary_tag):
+        from meshmode.mesh import _boundary_tag_bit
+        return _boundary_tag_bit(boundary_tags, btag_to_index, boundary_tag)
 
-    for igrp, grp in enumerate(part_mesh.groups):
-        elem_base = grp.element_nr_base
-        boundary_adj = part_mesh.facial_adjacency_groups[igrp][None]
+    from meshmode.mesh import _compute_facial_adjacency_from_vertices
+    facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
+                                    new_mesh_groups, boundary_tags,
+                                    mesh.element_id_dtype, mesh.face_id_dtype)
+
+    el_nr = 0
+    for igrp, grp in enumerate(new_mesh_groups):
+        elem_base = el_nr
+        el_nr += grp.nelements
+        boundary_adj = facial_adjacency_groups[igrp][None]
         boundary_elems = boundary_adj.elements
         boundary_faces = boundary_adj.element_faces
         p_meshwide_elems = queried_elems[boundary_elems + elem_base]
@@ -198,9 +201,13 @@ def partition_mesh(mesh, part_per_element, part_num):
                         n_face = parent_facial_group.neighbor_faces[idx]
 
                         n_part_num = part_per_element[rank_neighbor]
-                        tag = tag & ~part_mesh.boundary_tag_bit(BTAG_ALL)
-                        tag = tag | part_mesh.boundary_tag_bit(
-                                                    BTAG_PARTITION(n_part_num))
+                        from meshmode.mesh import BTAG_PARTITION, BTAG_ALL
+                        part_tag = BTAG_PARTITION(n_part_num)
+                        if part_tag not in boundary_tags:
+                            boundary_tags.append(part_tag)
+                            btag_to_index[part_tag] = len(boundary_tags)-1
+                        tag = tag & ~boundary_tag_bit(BTAG_ALL)
+                        tag = tag | boundary_tag_bit(part_tag)
                         boundary_adj.neighbors[adj_idx] = -tag
 
                         # Find the neighbor element from the other partition.
@@ -210,12 +217,18 @@ def partition_mesh(mesh, part_per_element, part_num):
                         adj_data[igrp].append((elem, face,
                                                n_part_num, n_meshwide_elem, n_face))
 
-    connected_mesh = part_mesh.copy()
+    from meshmode.mesh import Mesh
+    part_mesh = Mesh(
+            new_vertices,
+            new_mesh_groups,
+            facial_adjacency_groups=facial_adjacency_groups,
+            boundary_tags=boundary_tags,
+            is_conforming=mesh.is_conforming)
 
     from meshmode.mesh import InterPartitionAdjacencyGroup
     for igrp, adj in enumerate(adj_data):
         if adj:
-            bdry = connected_mesh.facial_adjacency_groups[igrp][None]
+            bdry = part_mesh.facial_adjacency_groups[igrp][None]
             # Initialize connections
             n_parts = np.zeros_like(bdry.elements)
             n_parts.fill(-1)
@@ -249,7 +262,7 @@ def partition_mesh(mesh, part_per_element, part_num):
                     n_faces[bdry_idx] = adj_n_faces[adj_idx]
                     adj_idx += 1
 
-            connected_mesh.facial_adjacency_groups[igrp][None] =\
+            part_mesh.facial_adjacency_groups[igrp][None] =\
                     InterPartitionAdjacencyGroup(elements=elems,
                                                  element_faces=faces,
                                                  neighbors=neighbors,
@@ -259,7 +272,7 @@ def partition_mesh(mesh, part_per_element, part_num):
                                                  global_neighbors=global_n_elems,
                                                  neighbor_faces=n_faces)
 
-    return connected_mesh, queried_elems
+    return part_mesh, queried_elems
 
 # }}}
 
