@@ -1,13 +1,13 @@
-from warnings import warn  # noqa
 import numpy as np
 import numpy.linalg as la
 
-from meshmode.mesh.interop import ExternalImporter
+from meshmode.interop import ExternalImporter
 
 
 __doc__ = """
 .. autoclass:: FIATSimplexCellImporter
 """
+
 
 # {{{ Compute an affine mapping from given input/outputs
 
@@ -57,17 +57,23 @@ def get_affine_mapping(reference_vects, vects):
 class FIATSimplexCellImporter(ExternalImporter):
     """
     Importer for a :mod:`FIAT` simplex cell.
-    There is no data created from the :attr:`from_data`. Instead,
-    the data is simply used to obtain FIAT's reference
+
+    There is no obvious meshmode counterpart for :attr:`from_data`.
+    The data is simply used to obtain FIAT's reference
     nodes according to :mod:`modepy`'s reference coordinates
-    using :meth:`make_modepy_points`.
+    using :meth:`make_points`.
+
+    In particular, methods
+    :meth:`import_data` and :meth:`validate_to_data`
+    are *NOT* implemented
+    and there is no :attr:`to_data` to be computed.
 
     .. attribute:: from_data
 
         An instance of :class:`fiat.FIAT.reference_element.Simplex`.
 
     .. attribute:: to_data
-        
+
         :raises ValueError: If accessed.
     """
     def __init__(self, cell):
@@ -78,7 +84,7 @@ class FIATSimplexCellImporter(ExternalImporter):
         from FIAT.reference_element import Simplex
         assert isinstance(cell, Simplex)
 
-        super(SimplexCellInteroperator, self).__init__(cell)
+        super(FIATSimplexCellImporter, self).__init__(cell)
 
         # Stored as (dim, nunit_vertices)
         from modepy.tools import unit_vertices
@@ -91,7 +97,7 @@ class FIATSimplexCellImporter(ExternalImporter):
         self._mat, self._shift = get_affine_mapping(reference_vertices,
                                                     self._unit_vertices)
 
-    def make_modepy_points(self, dim, entity_id, order):
+    def make_points(self, dim, entity_id, order):
         """
         Constructs a lattice of points on the *entity_id*th facet
         of dimension *dim*.
