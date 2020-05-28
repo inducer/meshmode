@@ -99,26 +99,20 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
                               adjncy=mesh.nodal_adjacency.neighbors.tolist())
             part_per_element = np.array(p)
 
+        from meshmode.mesh.processing import partition_mesh
+        part_meshes = [
+            partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
+
         connected_parts = set()
-        for igrp, grp in enumerate(mesh.groups):
-            # Groups in this mesh are disjoint, so we only need to look at
-            # intra-group adjacency
-            facial_adjacency = mesh.facial_adjacency_groups[igrp][igrp]
-            for iel in range(len(facial_adjacency.elements)):
-                elem_part = part_per_element[grp.element_nr_base
-                        + facial_adjacency.elements[iel]]
-                neighbor_part = part_per_element[grp.element_nr_base
-                        + facial_adjacency.neighbors[iel]]
-                if neighbor_part != elem_part:
-                    connected_parts.add((elem_part, neighbor_part))
+        for i_local_part, part_mesh in enumerate(part_meshes):
+            from meshmode.distributed import get_connected_partitions
+            neighbors = get_connected_partitions(part_mesh)
+            for i_remote_part in neighbors:
+                connected_parts.add((i_local_part, i_remote_part))
 
         for i_local_part, i_remote_part in connected_parts:
             if (i_local_part, i_remote_part) not in eoc_rec:
                 eoc_rec[i_local_part, i_remote_part] = EOCRecorder()
-
-        from meshmode.mesh.processing import partition_mesh
-        part_meshes = [
-            partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
 
         from meshmode.discretization import Discretization
         vol_discrs = [Discretization(actx, part_meshes[i], group_factory(order))
@@ -249,17 +243,11 @@ def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions):
         "part_mesh has the wrong number of BTAG_ALL boundaries"
 
     connected_parts = set()
-    for igrp, grp in enumerate(mesh.groups):
-        # Groups in this mesh are disjoint, so we only need to look at intra-group
-        # adjacency
-        facial_adjacency = mesh.facial_adjacency_groups[igrp][igrp]
-        for iel in range(len(facial_adjacency.elements)):
-            elem_part = part_per_element[grp.element_nr_base
-                    + facial_adjacency.elements[iel]]
-            neighbor_part = part_per_element[grp.element_nr_base
-                    + facial_adjacency.neighbors[iel]]
-            if neighbor_part != elem_part:
-                connected_parts.add((elem_part, neighbor_part))
+    for i_local_part, (part_mesh, _) in enumerate(new_meshes):
+        from meshmode.distributed import get_connected_partitions
+        neighbors = get_connected_partitions(part_mesh)
+        for i_remote_part in neighbors:
+            connected_parts.add((i_local_part, i_remote_part))
 
     from meshmode.mesh import BTAG_PARTITION, InterPartitionAdjacencyGroup
     from meshmode.mesh.processing import find_group_indices
