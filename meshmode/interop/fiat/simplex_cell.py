@@ -6,10 +6,7 @@ from meshmode.mesh.interop import ExternalImporter
 
 
 __doc__ = """
-Interoperators
---------------
-.. autoclass:: SimplexCellAnalog
-    :members:
+.. autoclass:: FIATSimplexCellImporter
 """
 
 # {{{ Compute an affine mapping from given input/outputs
