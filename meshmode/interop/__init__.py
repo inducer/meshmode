@@ -30,6 +30,7 @@ Development Interface
 .. autoclass:: ExternalExporter
 """
 
+
 # {{{ Generic, most abstract class for transporting meshmode <-> external
 
 class ExternalTransporter(ABC):
@@ -45,10 +46,10 @@ class ExternalTransporter(ABC):
 
         This attribute does not exist at instantiation time.
         If exporting (resp. importing) from meshmode
-        then we are using an :class:`ExternalExporter` 
-        (resp. :class:`ExternalImporter`) instance. :attr:`to_data` is 
-        computed with a call to :fun:`ExternalExporter.export`
-        (resp. :fun:`ExternalImporter.import`).
+        then we are using an :class:`ExternalExporter`
+        (resp. :class:`ExternalImporter`) instance. :attr:`to_data` is
+        computed with a call to :fun:`ExternalExporter.export_data`
+        (resp. :fun:`ExternalImporter.import_data`).
 
         :raises ValueError: if :attr:`to_data` is accessed before creation.
         :raises NotImplementedError: if :meth:`validate_to_data` is called
@@ -64,7 +65,7 @@ class ExternalTransporter(ABC):
         :return: *True* if :attr:`to_data` has been computed and is valid
                  and *False* otherwise
         """
-        raise NotImplementedError("*validate_to_data* method not implemented " \
+        raise NotImplementedError("*validate_to_data* method not implemented "
                                   "for object of type %s" % type(self))
 
     def __hash__(self):
@@ -81,10 +82,10 @@ class ExternalTransporter(ABC):
     def __getattr__(self, attr):
         if attr != 'to_data':
             return super(ExternalTransporter, self).__getattr__(attr)
-        raise ValueError("Attribute *to_data* has not yet been computed. " \
-                         "An object of class *ExternalExporter* (resp. " \
-                         "*ExternalImporter*) must call *export()* " \
-                         "(resp. *import()*) to compute attribute *to_data*")
+        raise ValueError("Attribute *to_data* has not yet been computed. "
+                         "An object of class *ExternalExporter* (resp. "
+                         "*ExternalImporter*) must call *export_data()* "
+                         "(resp. *import_data()*) to compute attribute *to_data*")
 
 # }}}
 
@@ -92,19 +93,28 @@ class ExternalTransporter(ABC):
 # {{{ Define specific classes for meshmode -> external and meshmode <- external
 
 class ExternalExporter(ExternalTransporter):
-    def export(self):
+    """
+    Subclass of :class:`ExternalTransporter` for meshmode -> external
+    data transfer
+    """
+    def export_data(self):
         """
         Compute :attr:`to_data` from :attr:`from_data`
         """
-        raise NotImplementedError("*export* method not implemented " \
+        raise NotImplementedError("*export_data* method not implemented "
                                   "for type %s" % type(self))
 
+
 class ExternalImporter(ExternalTransporter):
-    def import(self):
+    """
+    Subclass of :class:`ExternalTransporter` for external -> meshmode
+    data transfer
+    """
+    def import_data(self):
         """
         Compute :attr:`to_data` from :attr:`from_data`
         """
-        raise NotImplementedError("*import* method not implemented " \
+        raise NotImplementedError("*import_data* method not implemented "
                                   "for type %s" % type(self))
 
 # }}}
