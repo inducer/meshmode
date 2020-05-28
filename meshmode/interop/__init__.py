@@ -25,33 +25,89 @@ from abc import ABC
 __doc__ = """
 Development Interface
 ---------------------
-.. autoclass:: Interoperator
+.. autoclass:: ExternalTransporter
+.. autoclass:: ExternalImporter
+.. autoclass:: ExternalExporter
 """
 
+# {{{ Generic, most abstract class for transporting meshmode <-> external
 
-class Interoperator(ABC):
+class ExternalTransporter(ABC):
     """
-    An object which handles the interoperation of an external
-    object with its closest meshmode representation
+    .. attribute:: from_data
+
+        The object which needs to be transported either to meshmode or
+        from meshmode
+
+    .. attribute:: to_data
+
+        The "transported" object, i.e. the
+
+        This attribute does not exist at instantiation time.
+        If exporting (resp. importing) from meshmode
+        then we are using an :class:`ExternalExporter` 
+        (resp. :class:`ExternalImporter`) instance. :attr:`to_data` is 
+        computed with a call to :fun:`ExternalExporter.export`
+        (resp. :fun:`ExternalImporter.import`).
+
+        :raises ValueError: if :attr:`to_data` is accessed before creation.
+        :raises NotImplementedError: if :meth:`validate_to_data` is called
+                                     without an implementation.
     """
+    def __init__(self, from_data):
+        self.from_data = from_data
 
-    def __init__(self):
-        pass
+    def validate_to_data(self):
+        """
+        Validate :attr:`to_data`
 
-    def as_meshmode(self):
-        pass
-
-    def as_external(self):
-        pass
+        :return: *True* if :attr:`to_data` has been computed and is valid
+                 and *False* otherwise
+        """
+        raise NotImplementedError("*validate_to_data* method not implemented " \
+                                  "for object of type %s" % type(self))
 
     def __hash__(self):
-        pass
+        return hash((type(self), self.from_data))
 
     def __eq__(self, other):
-        pass
+        return isinstance(other, type(self)) and \
+               isinstance(self, type(other)) and \
+               self.from_data == other.from_data
 
     def __neq__(self, other):
         return not self.__eq__(other)
+
+    def __getattr__(self, attr):
+        if attr != 'to_data':
+            return super(ExternalTransporter, self).__getattr__(attr)
+        raise ValueError("Attribute *to_data* has not yet been computed. " \
+                         "An object of class *ExternalExporter* (resp. " \
+                         "*ExternalImporter*) must call *export()* " \
+                         "(resp. *import()*) to compute attribute *to_data*")
+
+# }}}
+
+
+# {{{ Define specific classes for meshmode -> external and meshmode <- external
+
+class ExternalExporter(ExternalTransporter):
+    def export(self):
+        """
+        Compute :attr:`to_data` from :attr:`from_data`
+        """
+        raise NotImplementedError("*export* method not implemented " \
+                                  "for type %s" % type(self))
+
+class ExternalImporter(ExternalTransporter):
+    def import(self):
+        """
+        Compute :attr:`to_data` from :attr:`from_data`
+        """
+        raise NotImplementedError("*import* method not implemented " \
+                                  "for type %s" % type(self))
+
+# }}}
 
 
 # vim: fdm=marker
