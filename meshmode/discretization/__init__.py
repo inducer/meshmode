@@ -67,6 +67,12 @@ class ElementGroupBase(object):
 
         Returns an array of length :attr:`nunit_nodes` containing
         quadrature weights.
+
+    .. attribute:: is_affine
+
+        A :class:`bool` flag that is *True* if the local-to-global
+        parametrization of all the elements in the group is affine. Based on
+        :attr:`meshmode.mesh.MeshElementGroup.is_affine`.
     """
 
     def __init__(self, mesh_el_group, order, node_nr_base):
@@ -77,6 +83,10 @@ class ElementGroupBase(object):
         self.mesh_el_group = mesh_el_group
         self.order = order
         self.node_nr_base = node_nr_base
+
+    @property
+    def is_affine(self):
+        return self.mesh_el_group.is_affine
 
     @property
     def nelements(self):
