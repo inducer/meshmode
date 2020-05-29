@@ -125,6 +125,7 @@ def test_boundary_tags():
 
 # {{{ test custom boundary tags on box mesh
 @pytest.mark.parametrize(("dim", "nelem"), [
+    (1, 20),
     (2, 20),
     (3, 20),
     ])
@@ -132,7 +133,13 @@ def test_box_boundary_tags(dim, nelem):
     from meshmode.mesh.generation import generate_regular_rect_mesh
     from meshmode.mesh import is_boundary_tag_empty
     from meshmode.mesh import check_bc_coverage
-    if dim == 2:
+    if dim == 1:
+        a = (0,)
+        b = (1,)
+        n = (nelem,)
+        btag_to_face = {"btag_test_1": ["+x"],
+                        "btag_test_2": ["-x"]}
+    elif dim == 2:
         a = (0, -1)
         b = (1, 1)
         n = (nelem, nelem)
@@ -148,7 +155,10 @@ def test_box_boundary_tags(dim, nelem):
                                       n=n, order=3,
                                       boundary_tag_to_face=btag_to_face)
     # correct answer
-    num_on_bdy = dim*(dim-1)*(nelem-1)**(dim-1)
+    if dim == 1:
+        num_on_bdy = 1
+    else:
+        num_on_bdy = dim*(dim-1)*(nelem-1)**(dim-1)
 
     assert not is_boundary_tag_empty(mesh, "btag_test_1")
     assert not is_boundary_tag_empty(mesh, "btag_test_2")
@@ -157,8 +167,8 @@ def test_box_boundary_tags(dim, nelem):
     # check how many elements are marked on each boundary
     num_marked_bdy_1 = 0
     num_marked_bdy_2 = 0
-    btag_1_bit = mesh.boundary_tag_bit('btag_test_1')
-    btag_2_bit = mesh.boundary_tag_bit('btag_test_2')
+    btag_1_bit = mesh.boundary_tag_bit("btag_test_1")
+    btag_2_bit = mesh.boundary_tag_bit("btag_test_2")
     for igrp in range(len(mesh.groups)):
         bdry_fagrp = mesh.facial_adjacency_groups[igrp].get(None, None)
 
