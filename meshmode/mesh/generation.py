@@ -685,6 +685,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
         The keys correspond to custom boundary tags, with the values giving
         a list of the faces on which they should be applied in terms of coordinate
         directions (``+x``, ``-x``, ``+y``, ``-y``, ``+z``, ``-z``, ``+w``, ``-w``).
+
         For example::
 
             boundary_tag_to_face={"bdry_1": ["+x", "+y"], "bdry_2": ["-x"]}
@@ -871,17 +872,16 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 # {{{ generate_regular_rect_mesh
 
 def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
-                               boundary_tag_to_face={}):
+                               boundary_tag_to_face=None,
+                               group_factory=None):
     """Create a semi-structured rectangular mesh.
 
     :param a: the lower left hand point of the rectangle
     :param b: the upper right hand point of the rectangle
     :param n: a tuple of integers indicating the total number of points
       on [a,b].
-    :param boundary_tag_to_face: an optional dictionary for boundary configuration.
-        The keys correspond to custom boundary tags, with the values giving
-        a list of the faces on which they should be applied in terms of coordinate
-        directions (+x, -x, +y, -y, +z, -z).
+    :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
+        See :func:`generate_box_mesh`.
     """
     if min(n) < 2:
         raise ValueError("need at least two points in each direction")
@@ -890,7 +890,8 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
             for a_i, b_i, n_i in zip(a, b, n)]
 
     return generate_box_mesh(axis_coords, order=order,
-                             boundary_tag_to_face=boundary_tag_to_face)
+                             boundary_tag_to_face=boundary_tag_to_face,
+                             group_factory=group_factory)
 
 # }}}
 
