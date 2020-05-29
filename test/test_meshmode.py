@@ -33,6 +33,7 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 
+from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
         PolynomialWarpAndBlendGroupFactory,
@@ -124,12 +125,19 @@ def test_boundary_tags():
 
 
 # {{{ test custom boundary tags on box mesh
+
 @pytest.mark.parametrize(("dim", "nelem"), [
     (1, 20),
     (2, 20),
-    (3, 20),
+    (3, 10),
     ])
-def test_box_boundary_tags(dim, nelem):
+@pytest.mark.parametrize("group_factory", [
+    SimplexElementGroup,
+
+    # FIXME: Not implemented: TPE.face_vertex_indices
+    # TensorProductElementGroup
+    ])
+def test_box_boundary_tags(dim, nelem, group_factory):
     from meshmode.mesh.generation import generate_regular_rect_mesh
     from meshmode.mesh import is_boundary_tag_empty
     from meshmode.mesh import check_bc_coverage
@@ -153,7 +161,8 @@ def test_box_boundary_tags(dim, nelem):
                         "btag_test_2": ["+y", "-x", "+z"]}
     mesh = generate_regular_rect_mesh(a=a, b=b,
                                       n=n, order=3,
-                                      boundary_tag_to_face=btag_to_face)
+                                      boundary_tag_to_face=btag_to_face,
+                                      group_factory=group_factory)
     # correct answer
     if dim == 1:
         num_on_bdy = 1
