@@ -39,7 +39,7 @@ from meshmode.discretization.poly_element import (
         PolynomialWarpAndBlendGroupFactory,
         PolynomialEquidistantSimplexGroupFactory,
         )
-from meshmode.mesh import BTAG_ALL
+from meshmode.mesh import Mesh, BTAG_ALL
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -606,7 +606,6 @@ def test_3d_orientation(ctx_factory, what, mesh_gen_func, visualize=False):
 def test_merge_and_map(ctx_factory, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
     from meshmode.mesh.generation import generate_box_mesh
-    from meshmode.mesh import TensorProductElementGroup
     from meshmode.discretization.poly_element import (
             PolynomialWarpAndBlendGroupFactory,
             LegendreGaussLobattoTensorProductGroupFactory)
@@ -1088,7 +1087,6 @@ def no_test_quad_mesh_3d():
 
 def test_quad_single_element():
     from meshmode.mesh.generation import make_group_from_vertices
-    from meshmode.mesh import Mesh, TensorProductElementGroup
 
     vertices = np.array([
                 [0.91, 1.10],
@@ -1116,7 +1114,6 @@ def test_quad_single_element():
 
 def test_quad_multi_element():
     from meshmode.mesh.generation import generate_box_mesh
-    from meshmode.mesh import TensorProductElementGroup
     mesh = generate_box_mesh(
             (
                 np.linspace(3, 8, 4),
