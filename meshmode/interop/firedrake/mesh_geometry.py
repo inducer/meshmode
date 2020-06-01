@@ -103,7 +103,7 @@ class FiredrakeMeshGeometryImporter(ExternalImportHandler):
             """
             from meshmode.interop.firedrake.function import \
                 FiredrakeFunctionImporter
-            from meshmode.interop.firedrake.functionspace import \
+            from meshmode.interop.firedrake.function_space import \
                 FiredrakeWithGeometryImporter
             from firedrake import Function
 

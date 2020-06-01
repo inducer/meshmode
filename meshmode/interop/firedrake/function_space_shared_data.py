@@ -167,7 +167,7 @@ def get_discretization(mesh_analog, key):
     return discretization
 
 
-class FunctionSpaceDataAnalog(ExternalImportHandler):
+class FiredrakeFunctionSpaceDataImporter(ExternalImportHandler):
     """
     This is not *quite* the usual thought of a
     :class:`ExternalImportHandler`.
