@@ -10,23 +10,23 @@ from meshmode.interop.FInAT.lagrange_element import \
 
 
 @decorator
-def cached(f, mesh_analog, key, *args, **kwargs):
+def cached(f, mesh_importer, key, *args, **kwargs):
     """
     Exactly :func:`firedrake.functionspacedata.cached`, but
     caching on mesh Geometry instead
 
     :param f: The function to cache.
-    :param mesh_analog: The mesh_analog to cache on (should have a
+    :param mesh_importer: The mesh_importer to cache on (should have a
         ``_shared_data_cache`` object).
     :param key: The key to the cache.
     :args args: Additional arguments to ``f``.
     :kwargs kwargs:  Additional keyword arguments to ``f``."""
-    assert hasattr(mesh_analog, "_shared_data_cache")
-    cache = mesh_analog._shared_data_cache[f.__name__]
+    assert hasattr(mesh_importer, "_shared_data_cache")
+    cache = mesh_importer._shared_data_cache[f.__name__]
     try:
         return cache[key]
     except KeyError:
-        result = f(mesh_analog, key, *args, **kwargs)
+        result = f(mesh_importer, key, *args, **kwargs)
         cache[key] = result
         return result
 
@@ -93,7 +93,7 @@ def reordering_array(mesh_importer, key, fspace_data):
     :class:`firedrake.functionspacedata.FunctionSpaceData`
 
     :returns: an *np.array* that can reorder the data by composition,
-    see :meth:`fd2mm.function_space.FunctionSpaceAnalog.reorder_nodes`
+    see :meth:`reorder_nodes` in class :class:`FiredrakeWithGeometryImporter`
     """
     finat_element_importer, firedrake_to_meshmode = key
     assert isinstance(finat_element_importer, FinatLagrangeElementImporter)
@@ -148,21 +148,21 @@ def reordering_array(mesh_importer, key, fspace_data):
 
 
 @cached
-def get_factory(mesh_analog, degree):
+def get_factory(mesh_importer, degree):
     from meshmode.discretization.poly_element import \
             InterpolatoryQuadratureSimplexGroupFactory
     return InterpolatoryQuadratureSimplexGroupFactory(degree)
 
 
 @cached
-def get_discretization(mesh_analog, key):
+def get_discretization(mesh_importer, key):
     finat_element_importer, cl_ctx = key
     assert isinstance(finat_element_importer, FinatLagrangeElementImporter)
 
     degree = finat_element_importer.data.degree
     discretization = Discretization(cl_ctx,
-                                    mesh_analog.meshmode_mesh(),
-                                    get_factory(mesh_analog, degree))
+                                    mesh_importer.meshmode_mesh(),
+                                    get_factory(mesh_importer, degree))
 
     return discretization
 
@@ -191,15 +191,15 @@ class FiredrakeFunctionSpaceDataImporter(ExternalImportHandler):
     # FIXME: Give two finat elts
     def __init__(self, cl_ctx, mesh_importer, finat_element_importer):
         """
-        Note that :param:`mesh_analog` and :param:`finat_element_analog`
-        are used for analog-checking
+        Note that :param:`mesh_importer` and :param:`finat_element_importer`
+        are used for checking
         """
         if mesh_importer.topological_a == mesh_importer:
             raise TypeError(":param:`mesh_importer` is a "
                             "FiredrakeMeshTopologyImporter, but "
                             " must be a FiredrakeMeshGeometryImporter")
         importer = (mesh_importer.importer(), finat_element_importer.importer())
-        super(FunctionSpaceDataAnalog, self).__init__(importer)
+        super(FiredrakeFunctionSpaceDataImporter, self).__init__(importer)
 
         self._fspace_data = FunctionSpaceData(mesh_importer.importer(),
                                               finat_element_importer.importer())

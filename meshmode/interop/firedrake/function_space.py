@@ -52,7 +52,7 @@ class FiredrakeWithGeometryImporter(ExternalImportHandler):
 
         # }}}
 
-        # Initialize as Analog
+        # Initialize as importer
         super(FiredrakeWithGeometryImporter, self).__init__(function_space)
         self._topology_importer = function_space_importer
         self._mesh_importer = mesh_importer
