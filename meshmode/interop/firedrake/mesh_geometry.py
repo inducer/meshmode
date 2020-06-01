@@ -3,7 +3,7 @@ from collections import defaultdict
 import numpy as np
 
 from meshmode.interop import ExternalImportHandler
-from meshmode.interop.firedrake.coordinateless_functions_impl import \
+from meshmode.interop.firedrake.function_space_coordless import \
     FiredrakeCoordinatelessFunctionImporter
 
 
