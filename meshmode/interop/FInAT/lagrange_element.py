@@ -2,7 +2,7 @@ import numpy as np
 import numpy.linalg as la
 import six
 
-from meshmode.interop import ExternalImporter
+from meshmode.interop import ExternalImportHandler
 from meshmode.interop.fiat import FIATSimplexCellImporter
 
 
@@ -12,16 +12,10 @@ __doc__ = """
 """
 
 
-class FinatLagrangeElementImporter(ExternalImporter):
+class FinatLagrangeElementImporter(ExternalImportHandler):
     """
     An importer for a FInAT element, usually instantiated from
     ``some_instantiated_firedrake_function_space.finat_element``
-
-    This importer does not have an obvious meshmode counterpart,
-    so is instead used for its method.
-    In particular, methods :meth:`import_data`
-    and :meth:`validate_to_data` are *NOT* implemented
-    and there is no :attr:`to_data` to be computed.
     """
     def __init__(self, finat_element):
         """
@@ -76,11 +70,11 @@ class FinatLagrangeElementImporter(ExternalImporter):
 
             # Get unit nodes
             for dim, element_nrs in six.iteritems(
-                    self.analog().entity_support_dofs()):
+                    self.data.entity_support_dofs()):
                 for element_nr, node_list in six.iteritems(element_nrs):
                     # Get the nodes on the element (in meshmode reference coords)
                     pts_on_element = self.cell_importer.make_points(
-                        dim, element_nr, self.analog().degree)
+                        dim, element_nr, self.data.degree)
                     # Record any new nodes
                     i = 0
                     for node_nr in node_list:
@@ -106,7 +100,7 @@ class FinatLagrangeElementImporter(ExternalImporter):
         """
         :return: The dimension of the FInAT element's cell
         """
-        return self.cell_importer.from_data.get_dimension()
+        return self.cell_importer.data.get_dimension()
 
     def unit_vertex_indices(self):
         """
@@ -162,7 +156,7 @@ class FinatLagrangeElementImporter(ExternalImporter):
             from modepy import resampling_matrix, simplex_best_available_basis
 
             flip_matrix = resampling_matrix(
-                simplex_best_available_basis(self.dim(), self.analog().degree),
+                simplex_best_available_basis(self.dim(), self.data.degree),
                 flipped_unit_nodes, self.unit_nodes())
 
             flip_matrix[np.abs(flip_matrix) < 1e-15] = 0

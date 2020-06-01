@@ -1,7 +1,7 @@
 import numpy as np
 import numpy.linalg as la
 
-from meshmode.interop import ExternalImporter
+from meshmode.interop import ExternalImportHandler
 
 
 __doc__ = """
@@ -54,27 +54,13 @@ def get_affine_mapping(reference_vects, vects):
 
 # {{{ Interoperator for FIAT's reference_element.Simplex
 
-class FIATSimplexCellImporter(ExternalImporter):
+class FIATSimplexCellImporter(ExternalImportHandler):
     """
-    Importer for a :mod:`FIAT` simplex cell.
+    Import handler for a :mod:`FIAT` simplex cell.
 
-    There is no obvious meshmode counterpart for :attr:`from_data`.
-    The data is simply used to obtain FIAT's reference
-    nodes according to :mod:`modepy`'s reference coordinates
-    using :meth:`make_points`.
-
-    In particular, methods
-    :meth:`import_data` and :meth:`validate_to_data`
-    are *NOT* implemented
-    and there is no :attr:`to_data` to be computed.
-
-    .. attribute:: from_data
+    .. attribute:: data
 
         An instance of :class:`fiat.FIAT.reference_element.Simplex`.
-
-    .. attribute:: to_data
-
-        :raises ValueError: If accessed.
     """
     def __init__(self, cell):
         """
@@ -116,7 +102,7 @@ class FIATSimplexCellImporter(ExternalImporter):
         :return: an *np.array* of shape *(dim, npoints)* holding the
                  coordinates of each of the ver
         """
-        points = self.from_data.make_points(dim, entity_id, order)
+        points = self.data.make_points(dim, entity_id, order)
         if not points:
             return points
         points = np.array(points)

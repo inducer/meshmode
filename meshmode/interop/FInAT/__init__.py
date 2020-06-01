@@ -20,4 +20,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from meshmode.interop.FInAT.lagrange_element import FinatLagrangeElementImporter
+
 __all__ = ['FinatLagrangeElementImporter']

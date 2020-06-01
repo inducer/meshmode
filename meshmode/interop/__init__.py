@@ -25,97 +25,59 @@ from abc import ABC
 __doc__ = """
 Development Interface
 ---------------------
-.. autoclass:: ExternalTransporter
-.. autoclass:: ExternalImporter
-.. autoclass:: ExternalExporter
+.. autoclass:: ExternalDataHandler
+.. autoclass:: ExternalExportHandler
+.. autoclass:: ExternalImportHandler
 """
 
 
 # {{{ Generic, most abstract class for transporting meshmode <-> external
 
-class ExternalTransporter(ABC):
+class ExternalDataHandler(ABC):
     """
-    .. attribute:: from_data
+    A data handler takes data from meshmode and facilitates its use
+    in another package or the reverse: takes data from another package
+    and facilitates its use in meshmode.
 
-        The object which needs to be transported either to meshmode or
-        from meshmode
+    .. attribute:: data
 
-    .. attribute:: to_data
-
-        The "transported" object, i.e. the
-
-        This attribute does not exist at instantiation time.
-        If exporting (resp. importing) from meshmode
-        then we are using an :class:`ExternalExporter`
-        (resp. :class:`ExternalImporter`) instance. :attr:`to_data` is
-        computed with a call to :fun:`ExternalExporter.export_data`
-        (resp. :fun:`ExternalImporter.import_data`).
-
-        :raises ValueError: if :attr:`to_data` is accessed before creation.
-        :raises NotImplementedError: if :meth:`validate_to_data` is called
-                                     without an implementation.
+        The object which needs to be interfaced either into meshmode or
+        out of meshmode.
+        Should not be modified after creation.
     """
-    def __init__(self, from_data):
-        self.from_data = from_data
-
-    def validate_to_data(self):
-        """
-        Validate :attr:`to_data`
-
-        :return: *True* if :attr:`to_data` has been computed and is valid
-                 and *False* otherwise
-        """
-        raise NotImplementedError("*validate_to_data* method not implemented "
-                                  "for object of type %s" % type(self))
+    def __init__(self, data):
+        self.data = data
 
     def __hash__(self):
-        return hash((type(self), self.from_data))
+        return hash((type(self), self.data))
 
     def __eq__(self, other):
         return isinstance(other, type(self)) and \
                isinstance(self, type(other)) and \
-               self.from_data == other.from_data
+               self.data == other.data
 
     def __neq__(self, other):
         return not self.__eq__(other)
-
-    def __getattr__(self, attr):
-        if attr != 'to_data':
-            return super(ExternalTransporter, self).__getattr__(attr)
-        raise ValueError("Attribute *to_data* has not yet been computed. "
-                         "An object of class *ExternalExporter* (resp. "
-                         "*ExternalImporter*) must call *export_data()* "
-                         "(resp. *import_data()*) to compute attribute *to_data*")
 
 # }}}
 
 
 # {{{ Define specific classes for meshmode -> external and meshmode <- external
 
-class ExternalExporter(ExternalTransporter):
+class ExternalExportHandler(ExternalDataHandler):
     """
-    Subclass of :class:`ExternalTransporter` for meshmode -> external
+    Subclass of :class:`ExternalDataHandler` for meshmode -> external
     data transfer
     """
-    def export_data(self):
-        """
-        Compute :attr:`to_data` from :attr:`from_data`
-        """
-        raise NotImplementedError("*export_data* method not implemented "
-                                  "for type %s" % type(self))
+    pass
 
 
-class ExternalImporter(ExternalTransporter):
+class ExternalImportHandler(ExternalDataHandler):
     """
-    Subclass of :class:`ExternalTransporter` for external -> meshmode
+    Subclass of :class:`ExternalDataHandler` for external -> meshmode
     data transfer
     """
-    def import_data(self):
-        """
-        Compute :attr:`to_data` from :attr:`from_data`
-        """
-        raise NotImplementedError("*import_data* method not implemented "
-                                  "for type %s" % type(self))
+    pass
 
 # }}}
 
