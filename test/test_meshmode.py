@@ -1308,6 +1308,13 @@ def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
     assert mesh.facial_adjacency_groups
     assert mesh.nodal_adjacency
 
+    if visualize:
+        from meshmode.mesh.visualization import draw_2d_mesh
+        draw_2d_mesh(mesh, draw_element_numbers=True, draw_face_numbers=True,
+                set_bounding_box=True)
+        import matplotlib.pyplot as plt
+        plt.show()
+
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
             PolynomialWarpAndBlendGroupFactory as GroupFactory
