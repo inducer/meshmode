@@ -157,39 +157,38 @@ class FiredrakeMeshTopologyImporter(ExternalImportHandler):
             # TODO... not sure how to get around the private access
             plex = self.data._plex
 
-            # variable names follow a dmplex naming convention for
-            # cell Start/end and vertex Start/end.
-            cStart, cEnd = plex.getHeightStratum(0)
-            vStart, vEnd = plex.getDepthStratum(0)
+            # dmplex cell Start/end and vertex Start/end.
+            c_start, c_end = plex.getHeightStratum(0)
+            v_start, v_end = plex.getDepthStratum(0)
 
             # TODO... not sure how to get around the private access
             to_fd_id = np.vectorize(self.data._cell_numbering.getOffset)(
-                np.arange(cStart, cEnd, dtype=np.int32))
+                np.arange(c_start, c_end, dtype=np.int32))
 
             element_to_neighbors = {}
             verts_checked = set()  # dmplex ids of vertex checked
 
             # If using all cells, loop over them all
             if self.icell_to_fd is None:
-                range_ = range(cStart, cEnd)
+                range_ = range(c_start, c_end)
             # Otherwise, just the ones you're using
             else:
                 isin = np.isin(to_fd_id, self.icell_to_fd)
-                range_ = np.arange(cStart, cEnd, dtype=np.int32)[isin]
+                range_ = np.arange(c_start, c_end, dtype=np.int32)[isin]
 
             # For each cell
             for cell_id in range_:
                 # For each vertex touching the cell (that haven't already seen)
                 for vert_id in plex.getTransitiveClosure(cell_id)[0]:
-                    if vStart <= vert_id < vEnd and vert_id not in verts_checked:
+                    if v_start <= vert_id < v_end and vert_id not in verts_checked:
                         verts_checked.add(vert_id)
                         cells = []
                         # Record all cells touching that vertex
                         support = plex.getTransitiveClosure(vert_id,
                                                             useCone=False)[0]
                         for other_cell_id in support:
-                            if cStart <= other_cell_id < cEnd:
-                                cells.append(to_fd_id[other_cell_id - cStart])
+                            if c_start <= other_cell_id < c_end:
+                                cells.append(to_fd_id[other_cell_id - c_start])
 
                         # If only using some cells, clean out extraneous ones
                         # and relabel them to new id

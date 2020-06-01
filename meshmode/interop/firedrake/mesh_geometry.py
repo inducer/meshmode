@@ -133,13 +133,14 @@ class FiredrakeMeshGeometryImporter(ExternalImportHandler):
             coordinates_fs_importer = \
                 self._coordinates_importer.function_space_importer()
 
-            V_importer = FiredrakeWithGeometryImporter(cl_ctx,
-                                                       coordinates_fs,
-                                                       coordinates_fs_importer,
-                                                       self)
-            f = Function(V_importer.data, val=self._coordinates_a.data)
+            fspace_importer = \
+                FiredrakeWithGeometryImporter(cl_ctx,
+                                              coordinates_fs,
+                                              coordinates_fs_importer,
+                                              self)
+            f = Function(fspace_importer.data, val=self._coordinates_a.data)
             self._coordinates_function_importer = \
-                FiredrakeFunctionImporter(f, V_importer)
+                FiredrakeFunctionImporter(f, fspace_importer)
 
             del self._callback
 
