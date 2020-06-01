@@ -1,4 +1,4 @@
-__copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
+__copyright__ = "Copyright (C) 2020 Benjamin Sepanski"
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
