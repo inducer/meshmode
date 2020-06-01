@@ -569,6 +569,51 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
 # }}}
 
 
+# {{{ split meshes
+
+
+def split_mesh_groups(mesh, element_flags):
+    """Split all the groups in *mesh* in two according to the values of
+    *element_flags*.
+
+    :arg element_flags: a :class:`numpy.ndarray` with
+        :attr:`~meshmode.mesh.Mesh.nelements` entries
+        indicating by their *Boolean* value how the elements in a group
+        are to be split.
+
+    :returns: a :class:`~meshmode.mesh.Mesh` where each group has been split
+        according to flags in *element_flags*.
+    """
+    assert element_flags.shape == (mesh.nelements,)
+
+    new_groups = []
+    for grp in mesh.groups:
+        mask = element_flags[
+                grp.element_nr_base:grp.element_nr_base + grp.nelements]
+
+        vertex_indices = grp.vertex_indices[mask, :].copy()
+        if vertex_indices.size > 0:
+            new_groups.append(grp.copy(
+                vertex_indices=vertex_indices,
+                nodes=grp.nodes[:, mask, :].copy()
+                ))
+
+        vertex_indices = grp.vertex_indices[~mask, :].copy()
+        if vertex_indices.size > 0:
+            new_groups.append(grp.copy(
+                vertex_indices=vertex_indices,
+                nodes=grp.nodes[:, ~mask, :].copy()
+                ))
+
+    from meshmode.mesh import Mesh
+    return Mesh(
+            vertices=mesh.vertices,
+            groups=new_groups,
+            is_conforming=mesh.is_conforming)
+
+# }}}
+
+
 # {{{ map
 
 def map_mesh(mesh, f):  # noqa

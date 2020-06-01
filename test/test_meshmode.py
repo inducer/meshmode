@@ -1304,11 +1304,19 @@ def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
     mesh = generate_regular_rect_mesh(
             a=(-0.5,)*ambient_dim, b=(0.5,)*ambient_dim,
             n=(8,)*ambient_dim, order=order)
-    mesh = split_mesh(mesh, axis=0, cutoff=0.0)
+    assert len(mesh.groups) == 1
+
+    from meshmode.mesh.processing import split_mesh_groups
+    element_flags = np.any(
+            mesh.vertices[0, mesh.groups[0].vertex_indices] < 0.0,
+            axis=1)
+    mesh = split_mesh_groups(mesh, element_flags)
+
+    assert len(mesh.groups) == 2
     assert mesh.facial_adjacency_groups
     assert mesh.nodal_adjacency
 
-    if visualize:
+    if visualize and ambient_dim == 2:
         from meshmode.mesh.visualization import draw_2d_mesh
         draw_2d_mesh(mesh, draw_element_numbers=True, draw_face_numbers=True,
                 set_bounding_box=True)
