@@ -9,6 +9,7 @@ Contents:
    mesh
    discretization
    connection
+   interop
    misc
 
 Indices and tables
