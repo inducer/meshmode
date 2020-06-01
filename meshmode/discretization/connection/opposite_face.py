@@ -350,9 +350,14 @@ def make_opposite_face_connection(volume_to_bdry_conn):
                     # inter-group connections.
 
                     adj_tgt_flags = adj.element_faces == i_face_tgt
-
                     adj_els = adj.elements[adj_tgt_flags]
-                    vbc_els = vbc_tgt_grp_face_batch.from_element_indices.get(queue=queue)
+                    if adj_els.size == 0:
+                        # NOTE: this case can happen for inter-group boundaries
+                        # when all elements are adjacent on the same face
+                        # index, so all other ones will be empty
+                        continue
+
+                    vbc_els = vbc_tgt_grp_face_batch.from_element_indices.get(queue)
 
                     if len(adj_els) == len(vbc_els):
                         # Same length: assert (below) that the two use the same
@@ -362,8 +367,9 @@ def make_opposite_face_connection(volume_to_bdry_conn):
                     else:
                         # Genuine subset: figure out an index mapping.
                         vbc_els_sort_idx = np.argsort(vbc_els)
-                        vbc_used_els = vbc_els_sort_idx[
-                                np.searchsorted(vbc_els, adj_els, sorter=vbc_els_sort_idx)]
+                        vbc_used_els = vbc_els_sort_idx[np.searchsorted(
+                            vbc_els, adj_els, sorter=vbc_els_sort_idx
+                            )]
 
                     assert np.array_equal(vbc_els[vbc_used_els], adj_els)
 

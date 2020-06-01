@@ -1352,11 +1352,16 @@ def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
             check_connection(opposite)
 
             op_bdry_f = opposite(queue, bdry_f)
-            assert abs(cl.array.sum(bdry_f - op_bdry_f).get(queue)) < 1.0e-14
+            error = abs(cl.array.sum(bdry_f - op_bdry_f).get(queue))
+            assert error < 1.0e-11, error
 
         if boundary_tag == FACE_RESTR_ALL:
             embedding = make_face_to_all_faces_embedding(conn, conn.to_discr)
             check_connection(embedding)
+
+            em_bdry_f = embedding(queue, bdry_f)
+            error = abs(cl.array.sum(bdry_f - em_bdry_f).get(queue))
+            assert error < 1.0e-11, error
 
 
 if __name__ == "__main__":
