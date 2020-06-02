@@ -20,8 +20,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from abc import ABC
-
 __doc__ = """
 Development Interface
 ---------------------
@@ -33,7 +31,7 @@ Development Interface
 
 # {{{ Generic, most abstract class for transporting meshmode <-> external
 
-class ExternalDataHandler(ABC):
+class ExternalDataHandler:
     """
     A data handler takes data from meshmode and facilitates its use
     in another package or the reverse: takes data from another package
