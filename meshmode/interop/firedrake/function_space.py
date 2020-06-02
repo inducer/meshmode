@@ -88,7 +88,7 @@ class FiredrakeWithGeometryImporter(ExternalImportHandler):
 
         mesh_order = mesh_importer.data.coordinates.\
             function_space().finat_element.degree
-        if mesh_order > self.data.degree:
+        if mesh_order > self.data.finat_element.degree:
             warn("Careful! When the mesh order is higher than the element"
                  " order. Conversion MIGHT work, but maybe not..."
                  " To be honest I really don't know.")
@@ -98,7 +98,7 @@ class FiredrakeWithGeometryImporter(ExternalImportHandler):
         self._resampling_mat_mm2fd = None
 
     def __getattr__(self, attr):
-        return getattr(self._topology_a, attr)
+        return getattr(self._topology_importer, attr)
 
     def mesh_importer(self):
         return self._mesh_importer
@@ -118,7 +118,7 @@ class FiredrakeWithGeometryImporter(ExternalImportHandler):
         if self._resampling_mat_fd2mm is None:
             element_grp = self.discretization().groups[0]
             self._resampling_mat_fd2mm = \
-                self.finat_element_a.make_resampling_matrix(element_grp)
+                self.finat_element_importer.make_resampling_matrix(element_grp)
 
             self._resampling_mat_mm2fd = np.linalg.inv(self._resampling_mat_fd2mm)
 

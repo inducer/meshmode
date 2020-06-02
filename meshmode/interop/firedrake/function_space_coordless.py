@@ -82,6 +82,10 @@ class FiredrakeFunctionSpaceImporter(ExternalImportHandler):
                            a different mesh or finat element than the provided
                            :param:`function_space` is built on.
         """
+        # We want to ignore any geomery
+        function_space = function_space.topological
+        mesh_importer = mesh_importer.topological_importer
+
         # {{{ Some type-checking
         from firedrake.functionspaceimpl import FunctionSpace, WithGeometry
 
@@ -95,7 +99,7 @@ class FiredrakeFunctionSpaceImporter(ExternalImportHandler):
             raise TypeError(":param:`mesh_importer` must be either *None* "
                             "or of type :class:`meshmode.interop.firedrake."
                             "FiredrakeMeshTopologyImporter`")
-        if not function_space.mesh() == mesh_importer.data:
+        if not function_space.mesh().topological == mesh_importer.data:
             raise ValueError(":param:`mesh_importer`'s *data* attribute "
                              "must be the same mesh as returned by "
                              ":param:`function_space`'s *mesh()* method.")
@@ -114,8 +118,7 @@ class FiredrakeFunctionSpaceImporter(ExternalImportHandler):
 
         # }}}
 
-        # We want to ignore any geometry and then finish initialization
-        function_space = function_space.topological
+        # finish initialization
         super(FiredrakeFunctionSpaceImporter, self).__init__(function_space)
 
         self._mesh_importer = mesh_importer
@@ -170,6 +173,10 @@ class FiredrakeCoordinatelessFunctionImporter(ExternalImportHandler):
                 importer for a firedrake function space which is not
                 identical to ``function.topological.function_space()``
         """
+        # Throw out geometric information if there is any
+        function = function.topological
+        function_space_importer = function_space_importer.topological_importer
+
         # {{{ Some type-checking
 
         from firedrake.function import Function, CoordinatelessFunction
@@ -188,9 +195,6 @@ class FiredrakeCoordinatelessFunctionImporter(ExternalImportHandler):
             raise ValueError(":param:`function_space_importer`'s *data* "
                              "attribute and ``function.function_space()`` "
                              "must be identical.")
-
-        function = function.topological
-        function_space_importer = function_space_importer.topological_importer
 
         super(FiredrakeCoordinatelessFunctionImporter, self).__init__(function)
 

@@ -216,15 +216,15 @@ class FiredrakeFunctionSpaceDataImporter(ExternalImportHandler):
         Note that :param:`mesh_importer` and :param:`finat_element_importer`
         are used for checking
         """
-        if mesh_importer.topological_a == mesh_importer:
+        if mesh_importer.topological_importer == mesh_importer:
             raise TypeError(":param:`mesh_importer` is a "
                             "FiredrakeMeshTopologyImporter, but "
                             " must be a FiredrakeMeshGeometryImporter")
-        importer = (mesh_importer.importer(), finat_element_importer.importer())
+        importer = (mesh_importer.data, finat_element_importer.data)
         super(FiredrakeFunctionSpaceDataImporter, self).__init__(importer)
 
-        self._fspace_data = FunctionSpaceData(mesh_importer.importer(),
-                                              finat_element_importer.importer())
+        self._fspace_data = FunctionSpaceData(mesh_importer.data,
+                                              finat_element_importer.data)
 
         self._cl_ctx = cl_ctx
         self._mesh_importer = mesh_importer

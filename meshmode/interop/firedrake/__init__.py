@@ -163,7 +163,8 @@ def import_firedrake_function_space(cl_ctx, fdrake_fspace, mesh_importer):
     from meshmode.interop.firedrake.function_space_coordless import \
         FiredrakeFunctionSpaceImporter
     mesh_importer.init(cl_ctx)
-    finat_elt_importer = FinatLagrangeElementImporter(fdrake_fspace.finat_elt)
+    finat_elt_importer = \
+        FinatLagrangeElementImporter(fdrake_fspace.finat_element)
     topological_importer = FiredrakeFunctionSpaceImporter(fdrake_fspace,
                                                           mesh_importer,
                                                           finat_elt_importer)

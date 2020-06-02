@@ -91,7 +91,7 @@ class FiredrakeMeshGeometryImporter(ExternalImportHandler):
         fspace_importer = coordinates_importer.function_space_importer()
         topology_importer = fspace_importer.mesh_importer()
 
-        if topology_importer != mesh.topology:
+        if topology_importer.data != mesh.topology:
             raise ValueError("Topology :param:`coordinates` lives on must be "
                              "the same "
                              "topology that :param:`mesh` lives on")
@@ -138,7 +138,7 @@ class FiredrakeMeshGeometryImporter(ExternalImportHandler):
                                               coordinates_fs,
                                               coordinates_fs_importer,
                                               self)
-            f = Function(fspace_importer.data, val=self._coordinates_a.data)
+            f = Function(fspace_importer.data, val=self._coordinates_importer.data)
             self._coordinates_function_importer = \
                 FiredrakeFunctionImporter(f, fspace_importer)
 
