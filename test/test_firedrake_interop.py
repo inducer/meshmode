@@ -20,7 +20,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import pyopencl as cl
 import numpy as np
 
 from pyopencl.tools import (  # noqa
@@ -40,7 +39,7 @@ firedrake = pytest.importorskip("firedrake")
 from firedrake import (
     UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh,
     FunctionSpace, VectorFunctionSpace, Function,
-    SpatialCoordinate, sin, exp, pi, as_vector)
+    SpatialCoordinate)
 
 
 CLOSE_ATOL = 10**-12
@@ -87,7 +86,7 @@ def check_idempotency(fdrake_connection, fdrake_function):
     np.testing.assert_allclose(mm_field_copy, mm_field, atol=CLOSE_ATOL)
 
 
-def test_scalar_idempotency(ctx_getter, fdrake_mesh, fdrake_degree):
+def test_scalar_idempotency(ctx_factory, fdrake_mesh, fdrake_degree):
     """
     Make sure fd->mm->fd and mm->fd->mm are identity for scalar DG spaces
     """
@@ -98,12 +97,12 @@ def test_scalar_idempotency(ctx_getter, fdrake_mesh, fdrake_degree):
     fdrake_unique.dat.data[:] = np.arange(fdrake_unique.dat.data.shape[0])
 
     # test idempotency
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
     check_idempotency(fdrake_connection, fdrake_unique)
 
 
-def test_vector_idempotency(ctx_getter, fdrake_mesh, fdrake_degree):
+def test_vector_idempotency(ctx_factory, fdrake_mesh, fdrake_degree):
     """
     Make sure fd->mm->fd and mm->fd->mm are identity for vector DG spaces
     """
@@ -114,7 +113,7 @@ def test_vector_idempotency(ctx_getter, fdrake_mesh, fdrake_degree):
     fdrake_unique = Function(fdrake_vfspace).interpolate(xx)
 
     # test idempotency
-    cl_ctx = ctx_getter()
+    cl_ctx = ctx_factory()
     fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_vfspace)
     check_idempotency(fdrake_connection, fdrake_unique)
 
