@@ -574,7 +574,7 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
 
 
 def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
-    """Split all the groups in *mesh* in according to the values of
+    """Split all the groups in *mesh* according to the values of
     *element_flags*. The element flags are expected to be integers
     defining, for each group, how the elements are to be split into
     subgroups. For example, a single-group mesh with flags::
@@ -592,7 +592,7 @@ def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
     :returns: a :class:`~meshmode.mesh.Mesh` where each group has been split
         according to flags in *element_flags*. If *return_subgroup_mapping*
         is *True*, it also returns a mapping of
-        ``(group_index, subgroup) -> new_group_index``
+        ``(group_index, subgroup) -> new_group_index``.
 
     """
     assert element_flags.shape == (mesh.nelements,)
@@ -608,6 +608,7 @@ def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
         for flag in unique_grp_flags:
             subgroup_to_group_map[igrp, flag] = len(new_groups)
 
+            # NOTE: making copies to maintain contiguity of the arrays
             mask = grp_flags == flag
             new_groups.append(grp.copy(
                 vertex_indices=grp.vertex_indices[mask, :].copy(),
