@@ -577,11 +577,9 @@ def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
     """Split all the groups in *mesh* in according to the values of
     *element_flags*. The element flags are expected to be integers
     defining, for each group, how the elements are to be split into
-    subgroups. For example, a single-group mesh with flags
+    subgroups. For example, a single-group mesh with flags::
 
-        .. code::
-
-            element_flags = [0, 0, 0, 42, 42, 42, 0, 0, 0, 41, 41, 41]
+        element_flags = [0, 0, 0, 42, 42, 42, 0, 0, 0, 41, 41, 41]
 
     will create three subgroups. The integer flags need not be increasing
     or contiguous and can repeat across different groups (i.e. they are
