@@ -1309,7 +1309,7 @@ def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
     from meshmode.mesh.processing import split_mesh_groups
     element_flags = np.any(
             mesh.vertices[0, mesh.groups[0].vertex_indices] < 0.0,
-            axis=1)
+            axis=1).astype(np.int)
     mesh = split_mesh_groups(mesh, element_flags)
 
     assert len(mesh.groups) == 2
@@ -1318,10 +1318,14 @@ def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
 
     if visualize and ambient_dim == 2:
         from meshmode.mesh.visualization import draw_2d_mesh
-        draw_2d_mesh(mesh, draw_element_numbers=True, draw_face_numbers=True,
+        draw_2d_mesh(mesh,
+                draw_vertex_numbers=False,
+                draw_element_numbers=True,
+                draw_face_numbers=False,
                 set_bounding_box=True)
+
         import matplotlib.pyplot as plt
-        plt.show()
+        plt.savefig("test_mesh_multiple_groups_2d_elements.png", dpi=300)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
