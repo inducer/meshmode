@@ -33,12 +33,13 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 
+from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
         PolynomialWarpAndBlendGroupFactory,
         PolynomialEquidistantSimplexGroupFactory,
         )
-from meshmode.mesh import BTAG_ALL
+from meshmode.mesh import Mesh, BTAG_ALL
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -119,6 +120,84 @@ def test_boundary_tags():
     # ensure boundary is covered
     from meshmode.mesh import check_bc_coverage
     check_bc_coverage(mesh, ['inner_bdy', 'outer_bdy'])
+
+# }}}
+
+
+# {{{ test custom boundary tags on box mesh
+
+@pytest.mark.parametrize(("dim", "nelem"), [
+    (1, 20),
+    (2, 20),
+    (3, 10),
+    ])
+@pytest.mark.parametrize("group_factory", [
+    SimplexElementGroup,
+
+    # FIXME: Not implemented: TPE.face_vertex_indices
+    # TensorProductElementGroup
+    ])
+def test_box_boundary_tags(dim, nelem, group_factory):
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    from meshmode.mesh import is_boundary_tag_empty
+    from meshmode.mesh import check_bc_coverage
+    if dim == 1:
+        a = (0,)
+        b = (1,)
+        n = (nelem,)
+        btag_to_face = {"btag_test_1": ["+x"],
+                        "btag_test_2": ["-x"]}
+    elif dim == 2:
+        a = (0, -1)
+        b = (1, 1)
+        n = (nelem, nelem)
+        btag_to_face = {"btag_test_1": ["+x", "-y"],
+                        "btag_test_2": ["+y", "-x"]}
+    elif dim == 3:
+        a = (0, -1, -1)
+        b = (1, 1, 1)
+        n = (nelem, nelem, nelem)
+        btag_to_face = {"btag_test_1": ["+x", "-y", "-z"],
+                        "btag_test_2": ["+y", "-x", "+z"]}
+    mesh = generate_regular_rect_mesh(a=a, b=b,
+                                      n=n, order=3,
+                                      boundary_tag_to_face=btag_to_face,
+                                      group_factory=group_factory)
+    # correct answer
+    if dim == 1:
+        num_on_bdy = 1
+    else:
+        num_on_bdy = dim*(dim-1)*(nelem-1)**(dim-1)
+
+    assert not is_boundary_tag_empty(mesh, "btag_test_1")
+    assert not is_boundary_tag_empty(mesh, "btag_test_2")
+    check_bc_coverage(mesh, ['btag_test_1', 'btag_test_2'])
+
+    # check how many elements are marked on each boundary
+    num_marked_bdy_1 = 0
+    num_marked_bdy_2 = 0
+    btag_1_bit = mesh.boundary_tag_bit("btag_test_1")
+    btag_2_bit = mesh.boundary_tag_bit("btag_test_2")
+    for igrp in range(len(mesh.groups)):
+        bdry_fagrp = mesh.facial_adjacency_groups[igrp].get(None, None)
+
+        if bdry_fagrp is None:
+            continue
+
+        for i, nbrs in enumerate(bdry_fagrp.neighbors):
+            if (-nbrs) & btag_1_bit:
+                num_marked_bdy_1 += 1
+            if (-nbrs) & btag_2_bit:
+                num_marked_bdy_2 += 1
+
+    # raise errors if wrong number of elements marked
+    if num_marked_bdy_1 != num_on_bdy:
+        raise ValueError("%i marked on custom boundary 1, should be %i" %
+                         (num_marked_bdy_1, num_on_bdy))
+    if num_marked_bdy_2 != num_on_bdy:
+        raise ValueError("%i marked on custom boundary 2, should be %i" %
+                         (num_marked_bdy_2, num_on_bdy))
+
 
 # }}}
 
@@ -527,7 +606,6 @@ def test_3d_orientation(ctx_factory, what, mesh_gen_func, visualize=False):
 def test_merge_and_map(ctx_factory, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
     from meshmode.mesh.generation import generate_box_mesh
-    from meshmode.mesh import TensorProductElementGroup
     from meshmode.discretization.poly_element import (
             PolynomialWarpAndBlendGroupFactory,
             LegendreGaussLobattoTensorProductGroupFactory)
@@ -1009,7 +1087,6 @@ def no_test_quad_mesh_3d():
 
 def test_quad_single_element():
     from meshmode.mesh.generation import make_group_from_vertices
-    from meshmode.mesh import Mesh, TensorProductElementGroup
 
     vertices = np.array([
                 [0.91, 1.10],
@@ -1037,7 +1114,6 @@ def test_quad_single_element():
 
 def test_quad_multi_element():
     from meshmode.mesh.generation import generate_box_mesh
-    from meshmode.mesh import TensorProductElementGroup
     mesh = generate_box_mesh(
             (
                 np.linspace(3, 8, 4),

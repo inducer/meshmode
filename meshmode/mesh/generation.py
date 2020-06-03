@@ -673,7 +673,7 @@ def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
 # {{{ generate_box_mesh
 
 def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
-        group_factory=None):
+        group_factory=None, boundary_tag_to_face=None):
     """Create a semi-structured mesh.
 
     :param axis_coords: a tuple with a number of entries corresponding
@@ -681,11 +681,26 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
         specifying the coordinates to be used along that axis.
     :param group_factory: One of :class:`meshmode.mesh.SimplexElementGroup`
         or :class:`meshmode.mesh.TensorProductElementGroup`.
+    :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
+        The keys correspond to custom boundary tags, with the values giving
+        a list of the faces on which they should be applied in terms of coordinate
+        directions (``+x``, ``-x``, ``+y``, ``-y``, ``+z``, ``-z``, ``+w``, ``-w``).
+
+        For example::
+
+            boundary_tag_to_face={"bdry_1": ["+x", "+y"], "bdry_2": ["-x"]}
 
     .. versionchanged:: 2017.1
 
         *group_factory* parameter added.
+
+    .. versionchanged:: 2020.1
+
+        *boundary_tag_to_face* parameter added.
     """
+
+    if boundary_tag_to_face is None:
+        boundary_tag_to_face = {}
 
     for iaxis, axc in enumerate(axis_coords):
         if len(axc) < 2:
@@ -780,8 +795,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
                         el_vertices.append((a011, a111, a101, a110))
 
     else:
-        raise NotImplementedError("box meshes of dimension %d"
-                % dim)
+        raise NotImplementedError("box meshes of dimension %d" % dim)
 
     el_vertices = np.array(el_vertices, dtype=np.int32)
 
@@ -789,22 +803,85 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
             vertices.reshape(dim, -1), el_vertices, order,
             group_factory=group_factory)
 
+    # {{{ compute facial adjacency for mesh if there is tag information
+
+    facial_adjacency_groups = None
+    face_vertex_indices_to_tags = {}
+    boundary_tags = list(boundary_tag_to_face.keys())
+    axes = ["x", "y", "z", "w"]
+
+    if boundary_tags:
+        from pytools import indices_in_shape
+        vert_index_to_tuple = {
+                vertex_indices[itup]: itup
+                for itup in indices_in_shape(shape)}
+
+    for tag_idx, tag in enumerate(boundary_tags):
+        # Need to map the correct face vertices to the boundary tags
+        for face in boundary_tag_to_face[tag]:
+            if len(face) != 2:
+                raise ValueError("face identifier '%s' does not "
+                        "consist of exactly two characters" % face)
+
+            side, axis = face
+            try:
+                axis = axes.index(axis)
+            except ValueError:
+                raise ValueError("unrecognized axis in face identifier '%s'" % face)
+            if axis >= dim:
+                raise ValueError("axis in face identifier '%s' does not exist in %dD"
+                        % (face, dim))
+
+            if side == "-":
+                vert_crit = 0
+            elif side == "+":
+                vert_crit = shape[axis] - 1
+            else:
+                raise ValueError("first character of face identifier '%s' is not"
+                        "'+' or '-'" % face)
+
+            for ielem in range(0, grp.nelements):
+                for ref_fvi in grp.face_vertex_indices():
+                    fvi = grp.vertex_indices[ielem, ref_fvi]
+                    fvi_tuples = [vert_index_to_tuple[i] for i in fvi]
+
+                    if all(fvi_tuple[axis] == vert_crit for fvi_tuple in fvi_tuples):
+                        key = frozenset(fvi)
+                        face_vertex_indices_to_tags.setdefault(key, []).append(tag)
+
+    if boundary_tags:
+        from meshmode.mesh import (
+                _compute_facial_adjacency_from_vertices, BTAG_ALL, BTAG_REALLY_ALL)
+        boundary_tags.extend([BTAG_ALL, BTAG_REALLY_ALL])
+        facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
+                [grp], boundary_tags, np.int32, np.int8,
+                face_vertex_indices_to_tags)
+    else:
+        facial_adjacency_groups = None
+
+    # }}}
+
     from meshmode.mesh import Mesh
     return Mesh(vertices, [grp],
-            is_conforming=True)
+            facial_adjacency_groups=facial_adjacency_groups,
+            is_conforming=True, boundary_tags=boundary_tags)
 
 # }}}
 
 
 # {{{ generate_regular_rect_mesh
 
-def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1):
+def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
+                               boundary_tag_to_face=None,
+                               group_factory=None):
     """Create a semi-structured rectangular mesh.
 
     :param a: the lower left hand point of the rectangle
     :param b: the upper right hand point of the rectangle
     :param n: a tuple of integers indicating the total number of points
       on [a,b].
+    :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
+        See :func:`generate_box_mesh`.
     """
     if min(n) < 2:
         raise ValueError("need at least two points in each direction")
@@ -812,7 +889,9 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1):
     axis_coords = [np.linspace(a_i, b_i, n_i)
             for a_i, b_i, n_i in zip(a, b, n)]
 
-    return generate_box_mesh(axis_coords, order=order)
+    return generate_box_mesh(axis_coords, order=order,
+                             boundary_tag_to_face=boundary_tag_to_face,
+                             group_factory=group_factory)
 
 # }}}
 
