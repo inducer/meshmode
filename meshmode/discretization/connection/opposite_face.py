@@ -342,22 +342,42 @@ def make_opposite_face_connection(volume_to_bdry_conn):
 
                     # {{{ index wrangling
 
-                    # Assert that the adjacency group and the restriction
-                    # interpolation batch and the adjacency group have the same
-                    # element ordering.
+                    # The elements in the adjacency group will be a subset of
+                    # the elements in the restriction interpolation batch:
+                    # Imagine an inter-group boundary. The volume-to-boundary
+                    # connection will include all faces as targets, whereas
+                    # there will be separate adjacency groups for intra- and
+                    # inter-group connections.
 
                     adj_tgt_flags = adj.element_faces == i_face_tgt
+                    adj_els = adj.elements[adj_tgt_flags]
+                    if adj_els.size == 0:
+                        # NOTE: this case can happen for inter-group boundaries
+                        # when all elements are adjacent on the same face
+                        # index, so all other ones will be empty
+                        continue
 
-                    assert (np.array_equal(
-                                adj.elements[adj_tgt_flags],
-                                vbc_tgt_grp_face_batch.from_element_indices
-                                .get(queue=queue)))
+                    vbc_els = vbc_tgt_grp_face_batch.from_element_indices.get(queue)
+
+                    if len(adj_els) == len(vbc_els):
+                        # Same length: assert (below) that the two use the same
+                        # ordering.
+                        vbc_used_els = slice(None)
+
+                    else:
+                        # Genuine subset: figure out an index mapping.
+                        vbc_els_sort_idx = np.argsort(vbc_els)
+                        vbc_used_els = vbc_els_sort_idx[np.searchsorted(
+                            vbc_els, adj_els, sorter=vbc_els_sort_idx
+                            )]
+
+                    assert np.array_equal(vbc_els[vbc_used_els], adj_els)
 
                     # find to_element_indices
 
                     tgt_bdry_element_indices = (
                             vbc_tgt_grp_face_batch.to_element_indices
-                            .get(queue=queue))
+                            .get(queue=queue)[vbc_used_els])
 
                     # find from_element_indices
 

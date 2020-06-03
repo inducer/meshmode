@@ -37,6 +37,7 @@ __doc__ = """
 .. autofunction:: perform_flips
 .. autofunction:: find_bounding_box
 .. autofunction:: merge_disjoint_meshes
+.. autofunction:: split_mesh_groups
 .. autofunction:: map_mesh
 .. autofunction:: affine_map
 """
@@ -565,6 +566,64 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
             is_conforming=all(
                 mesh.is_conforming
                 for mesh in meshes))
+
+# }}}
+
+
+# {{{ split meshes
+
+def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
+    """Split all the groups in *mesh* according to the values of
+    *element_flags*. The element flags are expected to be integers
+    defining, for each group, how the elements are to be split into
+    subgroups. For example, a single-group mesh with flags::
+
+        element_flags = [0, 0, 0, 42, 42, 42, 0, 0, 0, 41, 41, 41]
+
+    will create three subgroups. The integer flags need not be increasing
+    or contiguous and can repeat across different groups (i.e. they are
+    group-local).
+
+    :arg element_flags: a :class:`numpy.ndarray` with
+        :attr:`~meshmode.mesh.Mesh.nelements` entries
+        indicating how the elements in a group are to be split.
+
+    :returns: a :class:`~meshmode.mesh.Mesh` where each group has been split
+        according to flags in *element_flags*. If *return_subgroup_mapping*
+        is *True*, it also returns a mapping of
+        ``(group_index, subgroup) -> new_group_index``.
+
+    """
+    assert element_flags.shape == (mesh.nelements,)
+
+    new_groups = []
+    subgroup_to_group_map = {}
+
+    for igrp, grp in enumerate(mesh.groups):
+        grp_flags = element_flags[
+                grp.element_nr_base:grp.element_nr_base + grp.nelements]
+        unique_grp_flags = np.unique(grp_flags)
+
+        for flag in unique_grp_flags:
+            subgroup_to_group_map[igrp, flag] = len(new_groups)
+
+            # NOTE: making copies to maintain contiguity of the arrays
+            mask = grp_flags == flag
+            new_groups.append(grp.copy(
+                vertex_indices=grp.vertex_indices[mask, :].copy(),
+                nodes=grp.nodes[:, mask, :].copy()
+                ))
+
+    from meshmode.mesh import Mesh
+    mesh = Mesh(
+            vertices=mesh.vertices,
+            groups=new_groups,
+            is_conforming=mesh.is_conforming)
+
+    if return_subgroup_mapping:
+        return mesh, subgroup_to_group_map
+    else:
+        return mesh
 
 # }}}
 
