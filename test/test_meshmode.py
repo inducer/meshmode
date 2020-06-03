@@ -1272,27 +1272,6 @@ def test_is_affine_group_check(mesh_name):
     assert all(grp.is_affine for grp in mesh.groups) == is_affine
 
 
-def split_mesh(mesh, axis, cutoff):
-    groups = []
-    for grp in mesh.groups:
-        mask = np.any(mesh.vertices[axis, grp.vertex_indices] < cutoff, axis=1)
-
-        groups.append(grp.copy(
-                vertex_indices=grp.vertex_indices[mask, :].copy(),
-                nodes=grp.nodes[:, mask, :].copy())
-                )
-        groups.append(grp.copy(
-                vertex_indices=grp.vertex_indices[~mask, :].copy(),
-                nodes=grp.nodes[:, ~mask, :].copy())
-                )
-
-    from meshmode.mesh import Mesh
-    return Mesh(
-            vertices=mesh.vertices,
-            groups=groups,
-            is_conforming=mesh.is_conforming)
-
-
 @pytest.mark.parametrize("ambient_dim", [1, 2, 3])
 def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
     ctx = ctx_factory()

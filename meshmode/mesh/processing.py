@@ -572,7 +572,6 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
 
 # {{{ split meshes
 
-
 def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
     """Split all the groups in *mesh* according to the values of
     *element_flags*. The element flags are expected to be integers
