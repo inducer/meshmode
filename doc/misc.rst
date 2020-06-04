@@ -3,28 +3,44 @@
 Installation
 ============
 
-This command should install :mod:`meshmode`::
+This set of instructions is intended for 64-bit Linux and MacOS computers.
 
-    pip install meshmode
+#.  Make sure your system has the basics to build software.
 
-(Note the extra "."!)
+    On Debian derivatives (Ubuntu and many more),
+    installing ``build-essential`` should do the trick.
 
-You may need to run this with :command:`sudo`.
-If you don't already have `pip <https://pypi.python.org/pypi/pip>`_,
-run this beforehand::
+    Everywhere else, just making sure you have the ``g++`` package should be
+    enough.
 
-    curl -O https://raw.github.com/pypa/pip/master/contrib/get-pip.py
-    python get-pip.py
+#.  Installing `miniforge for Python 3 on your respective system <https://github.com/conda-forge/miniforge>`_.
 
-For a more manual installation, `download the source
-<http://pypi.python.org/pypi/meshmode>`_, unpack it, and say::
+#.  ``export CONDA=/WHERE/YOU/INSTALLED/miniforge3``
 
-    python setup.py install
+    If you accepted the default location, this should work:
 
-You may also clone its git repository::
+    ``export CONDA=$HOME/miniforge3``
 
-    git clone --recursive git://github.com/inducer/meshmode
-    git clone --recursive http://git.tiker.net/trees/meshmode.git
+#.  ``$CONDA/bin/conda create -n dgfem``
+
+#.  ``source $CONDA/bin/activate dgfem``
+
+#.  ``conda config --add channels conda-forge``
+
+#.  ``conda install git pip pocl islpy pyopencl``
+
+#.  Type the following command::
+
+        hash -r; for i in pymbolic cgen genpy modepy pyvisfile loopy meshmode; do python -m pip install git+https://github.com/inducer/$i.git; done
+
+Next time you want to use :mod:`meshmode`, just run the following command::
+
+    source /WHERE/YOU/INSTALLED/miniforge3/bin/activate dgfem
+
+You may also like to add this to a startup file (like :file:`$HOME/.bashrc`) or create an alias for it.
+
+After this, you should be able to run the `tests <https://github.com/inducer/meshmode/tree/master/test>`_
+or `examples <https://github.com/inducer/meshmode/tree/master/examples>`_.
 
 User-visible Changes
 ====================
