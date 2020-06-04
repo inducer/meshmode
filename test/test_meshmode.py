@@ -1348,6 +1348,89 @@ def test_is_affine_group_check(mesh_name):
     assert all(grp.is_affine for grp in mesh.groups) == is_affine
 
 
+@pytest.mark.parametrize("ambient_dim", [1, 2, 3])
+def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
+    ctx = ctx_factory()
+    queue = cl.CommandQueue(ctx)
+
+    order = 4
+
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh = generate_regular_rect_mesh(
+            a=(-0.5,)*ambient_dim, b=(0.5,)*ambient_dim,
+            n=(8,)*ambient_dim, order=order)
+    assert len(mesh.groups) == 1
+
+    from meshmode.mesh.processing import split_mesh_groups
+    element_flags = np.any(
+            mesh.vertices[0, mesh.groups[0].vertex_indices] < 0.0,
+            axis=1).astype(np.int)
+    mesh = split_mesh_groups(mesh, element_flags)
+
+    assert len(mesh.groups) == 2
+    assert mesh.facial_adjacency_groups
+    assert mesh.nodal_adjacency
+
+    if visualize and ambient_dim == 2:
+        from meshmode.mesh.visualization import draw_2d_mesh
+        draw_2d_mesh(mesh,
+                draw_vertex_numbers=False,
+                draw_element_numbers=True,
+                draw_face_numbers=False,
+                set_bounding_box=True)
+
+        import matplotlib.pyplot as plt
+        plt.savefig("test_mesh_multiple_groups_2d_elements.png", dpi=300)
+
+    from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import \
+            PolynomialWarpAndBlendGroupFactory as GroupFactory
+    discr = Discretization(ctx, mesh, GroupFactory(order))
+
+    if visualize:
+        group_id = discr.empty(queue, dtype=np.int)
+        for igrp, grp in enumerate(discr.groups):
+            group_id_view = grp.view(group_id)
+            group_id_view.fill(igrp)
+
+        from meshmode.discretization.visualization import make_visualizer
+        vis = make_visualizer(queue, discr, vis_order=order)
+        vis.write_vtk_file("test_mesh_multiple_groups.vtu", [
+            ("group_id", group_id)
+            ], overwrite=True)
+
+    # check face restrictions
+    from meshmode.discretization.connection import (
+            make_face_restriction,
+            make_face_to_all_faces_embedding,
+            make_opposite_face_connection,
+            check_connection)
+    for boundary_tag in [BTAG_ALL, FACE_RESTR_INTERIOR, FACE_RESTR_ALL]:
+        conn = make_face_restriction(discr, GroupFactory(order),
+                boundary_tag=boundary_tag,
+                per_face_groups=False)
+        check_connection(conn)
+
+        bdry_f = conn.to_discr.empty(queue)
+        bdry_f.fill(1.0)
+
+        if boundary_tag == FACE_RESTR_INTERIOR:
+            opposite = make_opposite_face_connection(conn)
+            check_connection(opposite)
+
+            op_bdry_f = opposite(queue, bdry_f)
+            error = abs(cl.array.sum(bdry_f - op_bdry_f).get(queue))
+            assert error < 1.0e-11, error
+
+        if boundary_tag == FACE_RESTR_ALL:
+            embedding = make_face_to_all_faces_embedding(conn, conn.to_discr)
+            check_connection(embedding)
+
+            em_bdry_f = embedding(queue, bdry_f)
+            error = abs(cl.array.sum(bdry_f - em_bdry_f).get(queue))
+            assert error < 1.0e-11, error
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
