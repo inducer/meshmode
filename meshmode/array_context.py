@@ -64,8 +64,9 @@ class ArrayContext:
     .. automethod:: from_numpy_data
     .. automethod:: to_numpy
     .. automethod:: call_loopy
-    .. automethod:: finalize
     .. automethod:: special_func
+    .. automethod:: freeze
+    .. automethod:: thaw
     """
 
     def empty(self, shape, dtype):
@@ -107,12 +108,6 @@ class ArrayContext:
         """
         raise NotImplementedError
 
-    def finalize(self, array):
-        """Return a version of the context-defined array *array* that
-        is 'finalized', i.e. suitable for long-term storage and reuse.
-        For example, in the context of OpenCL, this might entail
-        stripping the array of an associated queue, whereas in a
-        lazily-evaluated context, it might mean that the array is
     @memoize_method
     def special_func(self, name):
         """Returns a callable for the special function *name*, where *name* is a
@@ -131,7 +126,22 @@ class ArrayContext:
 
         return f
 
+    def freeze(self, array):
+        """Return a version of the context-defined array *array* that is
+        'frozen', i.e. suitable for long-term storage and reuse. Frozen arrays
+        do not support arithmetic. For example, in the context of
+        OpenCL, this might entail stripping the array of an associated queue,
+        whereas in a lazily-evaluated context, it might mean that the array is
         evaluated and stored.
+
+        Freezing makes the array independent of this :class:`ArrayContext`;
+        it is permitted to :meth:`thaw` it in a different one, as long as that
+        context understands the array format.
+        """
+        raise NotImplementedError
+
+    def thaw(self, array):
+        """Take a 'frozen' array
         """
         raise NotImplementedError
 
@@ -188,9 +198,12 @@ class PyOpenCLArrayContext(ArrayContext):
         evt, result = program(self.queue, **args)
         return result
 
-    def finalize(self, array):
+    def freeze(self, array):
         array.finish()
         return array.with_queue(None)
+
+    def thaw(self, array):
+        return array.with_queue(self.queue)
 
     # }}}
 
