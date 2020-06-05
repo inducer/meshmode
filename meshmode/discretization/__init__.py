@@ -50,19 +50,19 @@ class ElementGroupBase(object):
     .. attribute :: index
 
     .. autoattribute:: nelements
+    .. autoattribute:: nunit_dofs
     .. autoattribute:: ndofs
-    .. autoattribute:: nnodes
     .. autoattribute:: dim
     .. automethod:: view
 
     .. method:: unit_nodes()
 
-        Returns a :class:`numpy.ndarray` of shape ``(dim, ndofs)``
+        Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
         of reference coordinates of interpolation nodes.
 
     .. method:: weights()
 
-        Returns an array of length :attr:`ndofs` containing
+        Returns an array of length :attr:`nunit_dofs` containing
         quadrature weights.
 
     .. attribute:: is_affine
@@ -90,8 +90,12 @@ class ElementGroupBase(object):
         return self.mesh_el_group.nelements
 
     @property
-    def ndofs(self):
+    def nunit_dofs(self):
         return self.unit_nodes.shape[-1]
+
+    @property
+    def ndofs(self):
+        return self.nunit_dofs * self.nelements
 
     @property
     def dim(self):
@@ -281,8 +285,8 @@ class Discretization(object):
         else:
             dtype = np.dtype(dtype)
 
-        return DOFArray(actx, [
-            creation_func(shape=(grp.nelements, grp.nunit_nodes), dtype=dtype)
+        return DOFArray.from_list(actx, [
+            creation_func(shape=(grp.nelements, grp.nunit_dofs), dtype=dtype)
             for grp in self.groups])
 
     def empty(self, actx: ArrayContext, dtype=None):
@@ -309,7 +313,7 @@ class Discretization(object):
             return make_loopy_program(
                 """{[iel,idof,j]:
                     0<=iel<nelements and
-                    0<=idof,j<ndofs}""",
+                    0<=idof,j<nunit_dofs}""",
                 "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
                 name="diff")
 
@@ -338,7 +342,7 @@ class Discretization(object):
         @memoize_in(self, "quad_weights_prg")
         def prg():
             return make_loopy_program(
-                "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs}",
+                "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
                 "result[iel,idof] = weights[idof]",
                 name="quad_weights")
 

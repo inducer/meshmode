@@ -148,6 +148,7 @@ class Visualizer(object):
                 VTK_QUAD, VTK_HEXAHEDRON)
 
         subel_nr_base = 0
+        node_nr_base = 0
 
         for group in self.vis_discr.groups:
             if isinstance(group.mesh_el_group, SimplexElementGroup):
@@ -202,10 +203,10 @@ class Visualizer(object):
                 raise NotImplementedError("visualization for element groups "
                         "of type '%s'" % type(group.mesh_el_group).__name__)
 
-            assert len(node_tuples) == group.nunit_nodes
+            assert len(node_tuples) == group.nunit_dofs
             vis_connectivity = (
-                    group.node_nr_base + np.arange(
-                        0, group.nelements*group.nunit_nodes, group.nunit_nodes
+                    node_nr_base + np.arange(
+                        0, group.nelements*group.nunit_dofs, group.nunit_dofs
                         )[:, np.newaxis, np.newaxis]
                     + el_connectivity).astype(np.intp)
 
@@ -216,6 +217,7 @@ class Visualizer(object):
             result.append(vgrp)
 
             subel_nr_base += vgrp.nsubelements
+            node_nr_base += group.ndofs
 
         return result
 
@@ -319,7 +321,7 @@ class Visualizer(object):
                         * el_centers[:, :, np.newaxis])
 
         grid = UnstructuredGrid(
-                (self.vis_discr.nnodes,
+                (self.vis_discr.groups[0].ndofs,
                     DataArray("points",
                         nodes.reshape(self.vis_discr.ambient_dim, -1),
                         vector_format=VF_LIST_OF_COMPONENTS)),
