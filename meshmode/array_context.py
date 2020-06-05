@@ -65,6 +65,7 @@ class ArrayContext:
     .. automethod:: to_numpy
     .. automethod:: call_loopy
     .. automethod:: finalize
+    .. automethod:: special_func
     """
 
     def empty(self, shape, dtype):
@@ -112,6 +113,24 @@ class ArrayContext:
         For example, in the context of OpenCL, this might entail
         stripping the array of an associated queue, whereas in a
         lazily-evaluated context, it might mean that the array is
+    @memoize_method
+    def special_func(self, name):
+        """Returns a callable for the special function *name*, where *name* is a
+        (potentially dotted) function name resolvable by :mod:`loopy`.
+        """
+        prg = make_loopy_program(
+                "{[iel, idof]: 0<=iel<nelements and 0<=idof<ndofs}",
+                "out[iel, idof] = %s(inp[iel, idof])" % name,
+                name="actx_special_%s" % name)
+
+        def f(ary):
+            # FIXME: Maybe involve loopy type inference?
+            result = self.empty(ary.shape, ary.dtype)
+            self.call_loopy(prg, inp=ary, out=result)
+            return result
+
+        return f
+
         evaluated and stored.
         """
         raise NotImplementedError
