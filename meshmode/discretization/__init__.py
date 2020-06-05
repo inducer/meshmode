@@ -344,6 +344,10 @@ class Discretization(object):
             vector of dtype :attr:`self.complex_dtype`. If
             *None* (the default), a real vector will be returned.
         """
+        if not isinstance(actx, ArrayContext):
+            raise TypeError("'actx' must be an ArrayContext, not '%s'"
+                    % type(actx).__name__)
+
         return self._new_array(actx, actx.empty, dtype=dtype)
 
     def zeros(self, actx: ArrayContext, dtype=None):
@@ -353,6 +357,10 @@ class Discretization(object):
             vector of dtype :attr:`self.complex_dtype`. If
             *None* (the default), a real vector will be returned.
         """
+        if not isinstance(actx, ArrayContext):
+            raise TypeError("'actx' must be an ArrayContext, not '%s'"
+                    % type(actx).__name__)
+
         return self._new_array(actx, actx.zeros, dtype=dtype)
 
     def num_reference_derivative(self, ref_axes, vec, actx: ArrayContext = None):
