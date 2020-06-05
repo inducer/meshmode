@@ -22,8 +22,11 @@ THE SOFTWARE.
 
 import numpy as np
 
-from pytools import memoize_in, memoize_method
-from pytools.obj_array import make_obj_array
+from functools import partial
+from typing import Optional
+
+from pytools import memoize_in, memoize_method, single_valued
+from pytools.obj_array import make_obj_array, oarray_vectorize
 from meshmode.array_context import ArrayContext, make_loopy_program
 
 __doc__ = """
@@ -31,6 +34,8 @@ __doc__ = """
 .. autoclass:: InterpolatoryElementGroupBase
 .. autoclass:: ElementGroupFactory
 .. autoclass:: DOFArray
+.. autofunction:: thaw
+.. autofunction:: freeze
 .. autoclass:: Discretization
 """
 
@@ -168,32 +173,85 @@ class OrderBasedGroupFactory(ElementGroupFactory):
 # }}}
 
 
-class DOFArray(object):
+# {{{ DOFArray
+
+class DOFArray(np.ndarray):
+    """This array type is a subclass of :class:`numpy.ndarray` that only
+    offers :meth:`from_list` as additional functionality. Its intended use
+    is for degree-of-freedom arrays associated with a discretization,
+    with one entry per element group.
+
+    The main purpose of this class is to better describe the data structure,
+    i.e. when a :class:`DOFArray` occurs inside of a numpy object array,
+    the level representing the array of element groups will be more
+    easily recognized.
+
+    .. attribute:: entry_dtype
+    .. automethod:: from_list
     """
-    .. attribute:: array_context
 
-        An instance of :class:`ArrayContext`, or *None* if the arrays
-        in :attr:`group_arrays` are :meth:`ArrayContext.finalize`d.
+    def __new__(cls, actx: Optional[ArrayContext], input_array):
+        if not (actx is None or isinstance(actx, ArrayContext)):
+            raise TypeError("actx must be of type ArrayContext")
 
-    .. attribute:: group_arrays
+        result = np.asarray(input_array).view(cls)
+        if len(result.shape) != 1:
+            raise ValueError("DOFArray instances must have one-dimensional "
+                    "shape, with one entry per element group")
 
-        A list of arrays recognized by :attr:`array_context`,
-        one for each :class:`ElementGroupBase` of the :class:`Discretization`
-        that generated this :class:`DOFArray`.
-    """
+        result.array_context = actx
+        return result
 
-    # FIXME: How much arithmetic?
+    def __array_finalize__(self, obj):
+        if obj is None:
+            return
+        self.array_context = getattr(obj, 'array_context', None)
 
-    def __init__(self, array_context, group_arrays):
-        self.array_context = array_context
-        self.group_arrays = group_arrays
+    @property
+    def entry_dtype(self):
+        return single_valued(subary.dtype for subary in self.flat)
 
-    def copy(self, group_arrays=None):
-        return type(self)(
-                array_context=self.array_context,
-                group_arrays=(
-                    group_arrays if group_arrays is not None
-                    else self.group_arrays))
+    @classmethod
+    def from_list(cls, actx: Optional[ArrayContext], res_list):
+        if not (actx is None or isinstance(actx, ArrayContext)):
+            raise TypeError("actx must be of type ArrayContext")
+
+        result = np.empty((len(res_list),), dtype=object).view(cls)
+        result[:] = res_list
+        result.array_context = actx
+        return result
+
+
+def thaw(actx: ArrayContext, ary):
+    if (isinstance(ary, np.ndarray)
+            and ary.dtype.char == "O"
+            and not isinstance(ary, DOFArray)):
+        return oarray_vectorize(partial(thaw, actx), ary)
+
+    if ary.array_context is not None:
+        raise ValueError("DOFArray passed to thaw is not frozen")
+
+    return DOFArray.from_list(actx, [
+        actx.thaw(subary)
+        for subary in ary
+        ])
+
+
+def freeze(ary):
+    if (isinstance(ary, np.ndarray)
+            and ary.dtype.char == "O"
+            and not isinstance(ary, DOFArray)):
+        return oarray_vectorize(freeze, ary)
+
+    if ary.array_context is None:
+        raise ValueError("DOFArray passed to freeze is already frozen")
+
+    return DOFArray.from_list(None, [
+        ary.array_context.freeze(subary)
+        for subary in ary
+        ])
+
+# }}}
 
 
 class Discretization(object):
@@ -212,7 +270,6 @@ class Discretization(object):
     .. attribute :: groups
 
     .. automethod:: empty
-
     .. automethod:: zeros
     .. automethod:: empty_like
     .. automethod:: zeros_like
@@ -339,7 +396,7 @@ class Discretization(object):
 
             return mat
 
-        return DOFArray(actx, [
+        return DOFArray.from_list(actx, [
                 actx.call_loopy(
                     prg(), diff_mat=actx.from_numpy(get_mat(grp)), vec=vec[grp.index]
                     )["result"]
@@ -357,7 +414,7 @@ class Discretization(object):
         actx = self._setup_actx
 
         return DOFArray(None, [
-                actx.finalize(
+                actx.freeze(
                     actx.call_loopy(
                         prg(), weights=actx.from_numpy(grp.weights)
                         )["result"])
@@ -381,8 +438,8 @@ class Discretization(object):
         actx = self._setup_actx
 
         return make_obj_array([
-            DOFArray(None, [
-                actx.finalize(
+            DOFArray.from_list(None, [
+                actx.freeze(
                     actx.call_loopy(
                         prg(),
                         resampling_mat=actx.from_numpy(
