@@ -363,13 +363,13 @@ class Discretization(object):
 
         return self._new_array(actx, actx.zeros, dtype=dtype)
 
-    def num_reference_derivative(self, ref_axes, vec, actx: ArrayContext = None):
     def empty_like(self, array: DOFArray):
         return self.empty(array.array_context, dtype=array.entry_dtype)
 
     def zeros_like(self, array: DOFArray):
         return self.zeros(array.array_context, dtype=array.entry_dtype)
 
+    def num_reference_derivative(self, ref_axes, vec):
         @memoize_in(self, "reference_derivative_prg")
         def prg():
             return make_loopy_program(
@@ -379,8 +379,7 @@ class Discretization(object):
                 "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
                 name="diff")
 
-        if actx is None:
-            actx = vec.array_context
+        actx = vec.array_context
 
         def get_mat(grp):
             mat = None
