@@ -299,18 +299,7 @@ class Discretization(object):
         """
 
         if not isinstance(actx, ArrayContext):
-            from meshmode.array_context import PyOpenCLArrayContext
-
-            import pyopencl as cl
-            if isinstance(actx, cl.Context):
-                from warnings import warn
-                warn("Passing a pyopencl Context to Discretization is deprecated. "
-                        "Pass an ArrayContext instead.",
-                        DeprecationWarning,
-                        stacklevel=2)
-                actx = PyOpenCLArrayContext(cl.CommandQueue(actx))
-            else:
-                raise TypeError("'actx' must be an ArrayContext")
+            raise TypeError("'actx' must be an ArrayContext")
 
         self.mesh = mesh
         groups = []
