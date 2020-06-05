@@ -26,8 +26,6 @@ from six.moves import range
 
 import numpy as np
 import numpy.linalg as la
-import pyopencl as cl
-import pyopencl.array  # noqa
 
 import logging
 logger = logging.getLogger(__name__)

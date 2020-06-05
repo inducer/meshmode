@@ -25,8 +25,6 @@ THE SOFTWARE.
 from six.moves import range, zip
 
 import numpy as np
-import pyopencl as cl
-import pyopencl.array  # noqa
 
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method, memoize_in

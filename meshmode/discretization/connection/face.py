@@ -28,8 +28,6 @@ from six.moves import range, zip
 from pytools import Record
 
 import numpy as np
-import pyopencl as cl
-import pyopencl.array  # noqa
 import modepy as mp
 
 import logging

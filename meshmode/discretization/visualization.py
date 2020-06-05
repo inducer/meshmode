@@ -25,7 +25,6 @@ THE SOFTWARE.
 from six.moves import range
 import numpy as np
 from pytools import memoize_method, Record
-import pyopencl as cl
 
 __doc__ = """
 

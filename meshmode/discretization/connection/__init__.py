@@ -25,9 +25,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import pyopencl as cl
-import pyopencl.array  # noqa
-
 from meshmode.discretization.connection.direct import (
         InterpolationBatch,
         DiscretizationConnectionElementGroup,
