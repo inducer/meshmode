@@ -29,9 +29,25 @@ from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method
 
 __doc__ = """
+.. autofunction:: make_loopy_program
 .. autoclass:: ArrayContext
 .. autoclass:: PyOpenCLArrayContext
 """
+
+
+def make_loopy_program(domains, statements, kernel_data=["..."], name=None):
+    """Return a :class:`loopy.Program` suitable for use with
+    :meth:`ArrayContext.call_loopy`.
+    """
+    return lp.make_kernel(
+            domains,
+            statements,
+            kernel_data=kernel_data,
+            options=lp.Options(
+                no_numpy=True,
+                return_dict=True),
+            name=name,
+            lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
 
 # {{{ ArrayContext
@@ -160,17 +176,6 @@ class PyOpenCLArrayContext(ArrayContext):
         return lp.tag_inames(program, dict(iel="g.0"))
 
 # }}}
-
-
-def make_loopy_program(domains, statements, name=None):
-    return lp.make_kernel(
-            domains,
-            statements,
-            options=lp.Options(
-                no_numpy=True,
-                return_dict=True),
-            name=name,
-            lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
 
 # vim: foldmethod=marker
