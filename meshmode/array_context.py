@@ -58,6 +58,8 @@ class ArrayContext:
 
     .. automethod:: empty
     .. automethod:: zeros
+    .. automethod:: empty_like
+    .. automethod:: zeros_like
     .. automethod:: from_numpy_constant
     .. automethod:: from_numpy_data
     .. automethod:: to_numpy
@@ -70,6 +72,12 @@ class ArrayContext:
 
     def zeros(self, shape, dtype):
         raise NotImplementedError
+
+    def empty_like(self, ary):
+        return self.empty(shape=ary.shape, dtype=ary.dtype)
+
+    def zeros_like(self, ary):
+        return self.zeros(shape=ary.shape, dtype=ary.dtype)
 
     def from_numpy(self, array: np.ndarray):
         """
