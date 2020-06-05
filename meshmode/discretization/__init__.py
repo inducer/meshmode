@@ -214,6 +214,8 @@ class Discretization(object):
     .. automethod:: empty
 
     .. automethod:: zeros
+    .. automethod:: empty_like
+    .. automethod:: zeros_like
 
     .. method:: nodes()
 
@@ -308,6 +310,12 @@ class Discretization(object):
         return self._new_array(actx, actx.zeros, dtype=dtype)
 
     def num_reference_derivative(self, ref_axes, vec, actx: ArrayContext = None):
+    def empty_like(self, array: DOFArray):
+        return self.empty(array.array_context, dtype=array.entry_dtype)
+
+    def zeros_like(self, array: DOFArray):
+        return self.zeros(array.array_context, dtype=array.entry_dtype)
+
         @memoize_in(self, "reference_derivative_prg")
         def prg():
             return make_loopy_program(
