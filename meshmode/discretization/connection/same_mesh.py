@@ -27,7 +27,7 @@ import numpy as np
 
 # {{{ same-mesh constructor
 
-def make_same_mesh_connection(to_discr, from_discr):
+def make_same_mesh_connection(actx, to_discr, from_discr):
     from meshmode.discretization.connection.direct import (
             InterpolationBatch,
             DiscretizationConnectionElementGroup,
@@ -37,23 +37,22 @@ def make_same_mesh_connection(to_discr, from_discr):
         raise ValueError("from_discr and to_discr must be based on "
                 "the same mesh")
 
-    assert to_discr.cl_context == from_discr.cl_context
+    groups = []
+    for igrp, (fgrp, tgrp) in enumerate(zip(from_discr.groups, to_discr.groups)):
+        all_elements = actx.freeze(
+                actx.from_numpy(
+                    np.arange(
+                        fgrp.nelements,
+                        dtype=np.intp)))
+        ibatch = InterpolationBatch(
+                from_group_index=igrp,
+                from_element_indices=all_elements,
+                to_element_indices=all_elements,
+                result_unit_nodes=tgrp.unit_nodes,
+                to_element_face=None)
 
-    with cl.CommandQueue(to_discr.cl_context) as queue:
-        groups = []
-        for igrp, (fgrp, tgrp) in enumerate(zip(from_discr.groups, to_discr.groups)):
-            all_elements = cl.array.arange(queue,
-                    fgrp.nelements,
-                    dtype=np.intp).with_queue(None)
-            ibatch = InterpolationBatch(
-                    from_group_index=igrp,
-                    from_element_indices=all_elements,
-                    to_element_indices=all_elements,
-                    result_unit_nodes=tgrp.unit_nodes,
-                    to_element_face=None)
-
-            groups.append(
-                    DiscretizationConnectionElementGroup([ibatch]))
+        groups.append(
+                DiscretizationConnectionElementGroup([ibatch]))
 
     return DirectDiscretizationConnection(
             from_discr, to_discr, groups,
