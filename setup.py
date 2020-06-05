@@ -44,7 +44,7 @@ def main():
               "modepy",
               "gmsh_interop",
               "six",
-              "pytools>=2018.4",
+              "pytools>=2020.3",
               "pytest>=2.3",
               "loo.py>=2014.1",
               ],
