@@ -503,7 +503,10 @@ def main():
         fields = rk4_step(fields, t, dt, rhs)
 
         if istep % 10 == 0:
-            print(istep, t, la.norm(fields[0].get()))
+            # FIXME: Maybe an integral function to go with the
+            # DOFArray would be nice?
+            assert len(fields[0]) == 1
+            print(istep, t, la.norm(actx.to_numpy(fields[0][0])))
             vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep,
                     [
                         ("u", fields[0]),
