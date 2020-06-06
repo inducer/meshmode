@@ -190,6 +190,8 @@ class DOFArray(np.ndarray):
     .. automethod:: from_list
     """
 
+    # Follows https://numpy.org/devdocs/user/basics.subclassing.html
+
     def __new__(cls, actx: Optional[ArrayContext], input_array):
         if not (actx is None or isinstance(actx, ArrayContext)):
             raise TypeError("actx must be of type ArrayContext")
