@@ -22,6 +22,8 @@ THE SOFTWARE.
 
 import numpy as np
 from pytools import memoize_method, Record
+from meshmode.discretization import DOFArray
+
 
 __doc__ = """
 
@@ -43,18 +45,18 @@ def separate_by_real_and_imag(data, real_only):
         if is_obj_array(field):
             assert len(ls) == 1
             from pytools.obj_array import (
-                    oarray_real_copy, oarray_imag_copy,
-                    with_object_array_or_scalar)
+                    obj_array_real_copy, obj_array_imag_copy,
+                    obj_array_vectorize)
 
             if field[0].dtype.kind == "c":
                 if real_only:
                     yield (name,
-                            with_object_array_or_scalar(oarray_real_copy, field))
+                            obj_array_vectorize(obj_array_real_copy, field))
                 else:
                     yield (name+"_r",
-                            with_object_array_or_scalar(oarray_real_copy, field))
+                            obj_array_vectorize(obj_array_real_copy, field))
                     yield (name+"_i",
-                            with_object_array_or_scalar(oarray_imag_copy, field))
+                            obj_array_vectorize(obj_array_imag_copy, field))
             else:
                 yield (name, field)
         else:
@@ -111,17 +113,23 @@ class Visualizer(object):
 
         self.element_shrink_factor = element_shrink_factor
 
-    def _resample_and_get(self, queue, vec):
-        from pytools.obj_array import with_object_array_or_scalar
+    def _resample_to_numpy(self, vec):
+        if (isinstance(vec, np.ndarray)
+                and vec.dtype.char == "O"
+                and not isinstance(vec, DOFArray)):
+            from pytools.obj_array import obj_array_vectorize
+            return obj_array_vectorize(self._resample_to_numpy, vec)
 
-        def resample_and_get_one(fld):
-            from numbers import Number
-            if isinstance(fld, Number):
-                return np.ones(self.connection.to_discr.nnodes) * fld
-            else:
-                return self.connection(queue, fld).get(queue=queue)
-
-        return with_object_array_or_scalar(resample_and_get_one, vec)
+        from numbers import Number
+        if isinstance(vec, Number):
+            raise NotImplementedError("visualizing constants")
+            #return np.ones(self.connection.to_discr.nnodes) * fld
+        else:
+            resampled = self.connection(vec)
+            if len(resampled) != 1:
+                raise NotImplementedError("visualization with multiple "
+                        "element groups")
+            return resampled.array_context.to_numpy(resampled[0]).reshape(-1)
 
     # {{{ vis sub-element connectivity
 
@@ -274,6 +282,18 @@ class Visualizer(object):
 
     # {{{ vtk
 
+    @memoize_method
+    def _vis_nodes(self):
+        if len(self.vis_discr.groups) != 1:
+            raise NotImplementedError("visualization with multiple "
+                    "element groups")
+
+        actx = self.vis_discr._setup_actx
+        return np.array([
+            actx.to_numpy(actx.thaw(ary[0]))
+            for ary in self.vis_discr.nodes()
+            ])
+
     def write_vtk_file(self, file_name, names_and_fields,
                        compressor=None,
                        real_only=False,
@@ -284,12 +304,10 @@ class Visualizer(object):
                 AppendedDataXMLGenerator,
                 VF_LIST_OF_COMPONENTS)
 
-        with cl.CommandQueue(self.vis_discr.cl_context) as queue:
-            nodes = self.vis_discr.nodes().with_queue(queue).get()
-
-            names_and_fields = [
-                    (name, self._resample_and_get(queue, fld))
-                    for name, fld in names_and_fields]
+        nodes = self._vis_nodes()
+        names_and_fields = [
+                (name, self._resample_to_numpy(fld))
+                for name, fld in names_and_fields]
 
         vc_groups = self._vis_connectivity()
 
@@ -315,6 +333,10 @@ class Visualizer(object):
                         (self.element_shrink_factor * nodes_view)
                         + (1-self.element_shrink_factor)
                         * el_centers[:, :, np.newaxis])
+
+        if len(self.vis_discr.groups) != 1:
+            raise NotImplementedError("visualization with multiple "
+                    "element groups")
 
         grid = UnstructuredGrid(
                 (self.vis_discr.groups[0].ndofs,
@@ -418,14 +440,14 @@ class Visualizer(object):
     # }}}
 
 
-def make_visualizer(queue, discr, vis_order, element_shrink_factor=None):
+def make_visualizer(actx, discr, vis_order, element_shrink_factor=None):
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import (
             PolynomialWarpAndBlendElementGroup,
             LegendreGaussLobattoTensorProductElementGroup,
             OrderAndTypeBasedGroupFactory)
     vis_discr = Discretization(
-            discr.cl_context, discr.mesh,
+            actx, discr.mesh,
             OrderAndTypeBasedGroupFactory(
                 vis_order,
                 simplex_group_class=PolynomialWarpAndBlendElementGroup,
@@ -436,7 +458,7 @@ def make_visualizer(queue, discr, vis_order, element_shrink_factor=None):
             make_same_mesh_connection
 
     return Visualizer(
-            make_same_mesh_connection(vis_discr, discr),
+            make_same_mesh_connection(actx, vis_discr, discr),
             element_shrink_factor=element_shrink_factor)
 
 # }}}
