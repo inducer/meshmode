@@ -32,7 +32,7 @@ from pytools.obj_array import (
         flat_obj_array, make_obj_array,
         obj_array_vectorize)
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
-from meshmode.discretization import DOFArray, freeze, thaw
+from meshmode.dof_array import DOFArray, freeze, thaw
 from meshmode.array_context import PyOpenCLArrayContext, make_loopy_program
 
 

@@ -353,7 +353,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
             return knl
 
-        from meshmode.discretization import DOFArray
+        from meshmode.dof_array import DOFArray
         if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")
 

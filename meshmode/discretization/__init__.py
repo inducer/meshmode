@@ -22,20 +22,17 @@ THE SOFTWARE.
 
 import numpy as np
 
-from functools import partial
-from typing import Optional
-
-from pytools import memoize_in, memoize_method, single_valued
-from pytools.obj_array import make_obj_array, obj_array_vectorize
+from pytools import memoize_in, memoize_method
+from pytools.obj_array import make_obj_array
 from meshmode.array_context import ArrayContext, make_loopy_program
+
+# underscored because it shouldn't be imported from here.
+from meshmode.dof_array import DOFArray as _DOFArray
 
 __doc__ = """
 .. autoclass:: ElementGroupBase
 .. autoclass:: InterpolatoryElementGroupBase
 .. autoclass:: ElementGroupFactory
-.. autoclass:: DOFArray
-.. autofunction:: thaw
-.. autofunction:: freeze
 .. autoclass:: Discretization
 """
 
@@ -173,89 +170,6 @@ class OrderBasedGroupFactory(ElementGroupFactory):
 # }}}
 
 
-# {{{ DOFArray
-
-class DOFArray(np.ndarray):
-    """This array type is a subclass of :class:`numpy.ndarray` that only
-    offers :meth:`from_list` as additional functionality. Its intended use
-    is for degree-of-freedom arrays associated with a discretization,
-    with one entry per element group.
-
-    The main purpose of this class is to better describe the data structure,
-    i.e. when a :class:`DOFArray` occurs inside of a numpy object array,
-    the level representing the array of element groups will be more
-    easily recognized.
-
-    .. attribute:: entry_dtype
-    .. automethod:: from_list
-    """
-
-    # Follows https://numpy.org/devdocs/user/basics.subclassing.html
-
-    def __new__(cls, actx: Optional[ArrayContext], input_array):
-        if not (actx is None or isinstance(actx, ArrayContext)):
-            raise TypeError("actx must be of type ArrayContext")
-
-        result = np.asarray(input_array).view(cls)
-        if len(result.shape) != 1:
-            raise ValueError("DOFArray instances must have one-dimensional "
-                    "shape, with one entry per element group")
-
-        result.array_context = actx
-        return result
-
-    def __array_finalize__(self, obj):
-        if obj is None:
-            return
-        self.array_context = getattr(obj, 'array_context', None)
-
-    @property
-    def entry_dtype(self):
-        return single_valued(subary.dtype for subary in self.flat)
-
-    @classmethod
-    def from_list(cls, actx: Optional[ArrayContext], res_list):
-        if not (actx is None or isinstance(actx, ArrayContext)):
-            raise TypeError("actx must be of type ArrayContext")
-
-        result = np.empty((len(res_list),), dtype=object).view(cls)
-        result[:] = res_list
-        result.array_context = actx
-        return result
-
-
-def thaw(actx: ArrayContext, ary):
-    if (isinstance(ary, np.ndarray)
-            and ary.dtype.char == "O"
-            and not isinstance(ary, DOFArray)):
-        return obj_array_vectorize(partial(thaw, actx), ary)
-
-    if ary.array_context is not None:
-        raise ValueError("DOFArray passed to thaw is not frozen")
-
-    return DOFArray.from_list(actx, [
-        actx.thaw(subary)
-        for subary in ary
-        ])
-
-
-def freeze(ary):
-    if (isinstance(ary, np.ndarray)
-            and ary.dtype.char == "O"
-            and not isinstance(ary, DOFArray)):
-        return obj_array_vectorize(freeze, ary)
-
-    if ary.array_context is None:
-        raise ValueError("DOFArray passed to freeze is already frozen")
-
-    return DOFArray.from_list(None, [
-        ary.array_context.freeze(subary)
-        for subary in ary
-        ])
-
-# }}}
-
-
 class Discretization(object):
     """An unstructured composite discretization.
 
@@ -276,16 +190,13 @@ class Discretization(object):
     .. automethod:: empty_like
     .. automethod:: zeros_like
 
-    .. method:: nodes()
-
-        An object array of shape ``(ambient_dim,)`` containing
-        :class:`DOFArray`s of node coordinates.
+    .. automethod:: nodes()
 
     .. method:: num_reference_derivative(queue, ref_axes, vec)
 
     .. method:: quad_weights(queue)
 
-        A :class:`DOFArray` with quadrature weights.
+        A :class:`~meshmode.dof_array.DOFArray` with quadrature weights.
     """
 
     def __init__(self, actx: ArrayContext, mesh, group_factory,
@@ -335,12 +246,12 @@ class Discretization(object):
         else:
             dtype = np.dtype(dtype)
 
-        return DOFArray.from_list(actx, [
+        return _DOFArray.from_list(actx, [
             creation_func(shape=(grp.nelements, grp.nunit_dofs), dtype=dtype)
             for grp in self.groups])
 
     def empty(self, actx: ArrayContext, dtype=None):
-        """Return an empty DOF vector.
+        """Return an empty :class:`~meshmode.dof_array.DOFArray`.
 
         :arg dtype: type special value 'c' will result in a
             vector of dtype :attr:`self.complex_dtype`. If
@@ -353,7 +264,7 @@ class Discretization(object):
         return self._new_array(actx, actx.empty, dtype=dtype)
 
     def zeros(self, actx: ArrayContext, dtype=None):
-        """Return a zero-initilaized DOF vector.
+        """Return a zero-initialized :class:`~meshmode.dof_array.DOFArray`.
 
         :arg dtype: type special value 'c' will result in a
             vector of dtype :attr:`self.complex_dtype`. If
@@ -365,10 +276,10 @@ class Discretization(object):
 
         return self._new_array(actx, actx.zeros, dtype=dtype)
 
-    def empty_like(self, array: DOFArray):
+    def empty_like(self, array: _DOFArray):
         return self.empty(array.array_context, dtype=array.entry_dtype)
 
-    def zeros_like(self, array: DOFArray):
+    def zeros_like(self, array: _DOFArray):
         return self.zeros(array.array_context, dtype=array.entry_dtype)
 
     def num_reference_derivative(self, ref_axes, vec):
@@ -394,7 +305,7 @@ class Discretization(object):
 
             return mat
 
-        return DOFArray.from_list(actx, [
+        return _DOFArray.from_list(actx, [
                 actx.call_loopy(
                     prg(), diff_mat=actx.from_numpy(get_mat(grp)), vec=vec[grp.index]
                     )["result"]
@@ -411,7 +322,7 @@ class Discretization(object):
 
         actx = self._setup_actx
 
-        return DOFArray(None, [
+        return _DOFArray(None, [
                 actx.freeze(
                     actx.call_loopy(
                         prg(), weights=actx.from_numpy(grp.weights)
@@ -420,6 +331,11 @@ class Discretization(object):
 
     @memoize_method
     def nodes(self):
+        """
+        :returns: object array of shape ``(ambient_dim,)`` containing
+            :class:`~meshmode.dof_array.DOFArray`s of node coordinates.
+        """
+
         @memoize_in(self, "nodes_prg")
         def prg():
             return make_loopy_program(
@@ -436,7 +352,7 @@ class Discretization(object):
         actx = self._setup_actx
 
         return make_obj_array([
-            DOFArray.from_list(None, [
+            _DOFArray.from_list(None, [
                 actx.freeze(
                     actx.call_loopy(
                         prg(),

@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 import numpy as np
 from pytools import memoize_method, Record
-from meshmode.discretization import DOFArray
+from meshmode.dof_array import DOFArray
 
 
 __doc__ = """
