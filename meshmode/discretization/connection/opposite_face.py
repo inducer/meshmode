@@ -57,13 +57,13 @@ def _make_cross_face_batches(actx,
         return
 
     tgt_bdry_nodes = np.array([
-        thaw_to_numpy(actx, ary)[tgt_bdry_element_indices]
-        for ary in tgt_bdry_discr.nodes()[i_tgt_grp]
+        thaw_to_numpy(actx, ary[i_tgt_grp])[tgt_bdry_element_indices]
+        for ary in tgt_bdry_discr.nodes()
         ])
 
     src_bdry_nodes = np.array([
-        thaw_to_numpy(actx, ary)[src_bdry_element_indices]
-        for ary in src_bdry_discr.nodes()[i_src_grp]
+        thaw_to_numpy(actx, ary[i_src_grp])[src_bdry_element_indices]
+        for ary in src_bdry_discr.nodes()
         ])
 
     tol = 1e4 * np.finfo(tgt_bdry_nodes.dtype).eps
