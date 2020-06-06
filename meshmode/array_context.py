@@ -124,7 +124,8 @@ class ArrayContext:
             self.call_loopy(prg, inp=ary, out=result)
             return result
 
-        return f
+        from pytools.obj_array import obj_array_vectorized
+        return obj_array_vectorized(f)
 
     def freeze(self, array):
         """Return a version of the context-defined array *array* that is
