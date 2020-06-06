@@ -38,12 +38,12 @@ __doc__ = """
 # {{{ visualizer
 
 def separate_by_real_and_imag(data, real_only):
-    for name, field in data:
-        from pytools.obj_array import log_shape, is_obj_array
-        ls = log_shape(field)
+    # This function is called on numpy data that has already been
+    # merged into a single vector.
 
-        if is_obj_array(field):
-            assert len(ls) == 1
+    for name, field in data:
+        if isinstance(field, np.ndarray) and field.dtype.char == "O":
+            assert len(field.shape) == 1
             from pytools.obj_array import (
                     obj_array_real_copy, obj_array_imag_copy,
                     obj_array_vectorize)
@@ -60,7 +60,6 @@ def separate_by_real_and_imag(data, real_only):
             else:
                 yield (name, field)
         else:
-            # ls == ()
             if field.dtype.kind == "c":
                 yield (name+"_r", field.real.copy())
                 yield (name+"_i", field.imag.copy())
@@ -158,9 +157,9 @@ class Visualizer(object):
             if isinstance(group.mesh_el_group, SimplexElementGroup):
                 node_tuples = list(gnitstam(group.order, group.dim))
 
-                from modepy.tools import submesh
+                from modepy.tools import simplex_submesh
                 el_connectivity = np.array(
-                        submesh(node_tuples),
+                        simplex_submesh(node_tuples),
                         dtype=np.intp)
                 vtk_cell_type = {
                         1: VTK_LINE,
