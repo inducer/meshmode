@@ -26,7 +26,7 @@ from functools import partial
 from typing import Optional
 
 from pytools import memoize_in, memoize_method, single_valued
-from pytools.obj_array import make_obj_array, oarray_vectorize
+from pytools.obj_array import make_obj_array, obj_array_vectorize
 from meshmode.array_context import ArrayContext, make_loopy_program
 
 __doc__ = """
@@ -226,7 +226,7 @@ def thaw(actx: ArrayContext, ary):
     if (isinstance(ary, np.ndarray)
             and ary.dtype.char == "O"
             and not isinstance(ary, DOFArray)):
-        return oarray_vectorize(partial(thaw, actx), ary)
+        return obj_array_vectorize(partial(thaw, actx), ary)
 
     if ary.array_context is not None:
         raise ValueError("DOFArray passed to thaw is not frozen")
@@ -241,7 +241,7 @@ def freeze(ary):
     if (isinstance(ary, np.ndarray)
             and ary.dtype.char == "O"
             and not isinstance(ary, DOFArray)):
-        return oarray_vectorize(freeze, ary)
+        return obj_array_vectorize(freeze, ary)
 
     if ary.array_context is None:
         raise ValueError("DOFArray passed to freeze is already frozen")

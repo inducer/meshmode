@@ -30,7 +30,7 @@ import pyopencl.array as cla  # noqa
 from pytools import memoize_method, memoize_in
 from pytools.obj_array import (
         flat_obj_array, make_obj_array,
-        oarray_vectorize, oarray_vectorized)
+        obj_array_vectorize, obj_array_vectorized)
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
 from meshmode.discretization import DOFArray, freeze, thaw
 from meshmode.array_context import PyOpenCLArrayContext, make_loopy_program
@@ -151,7 +151,7 @@ class DGDiscretization:
         if (isinstance(vec, np.ndarray)
                 and vec.dtype.char == "O"
                 and not isinstance(vec, DOFArray)):
-            return oarray_vectorize(
+            return obj_array_vectorize(
                     lambda el: self.interp(src, tgt, el), vec)
 
         return self.get_connection(src, tgt)(vec)
@@ -242,7 +242,7 @@ class DGDiscretization:
         if (isinstance(vec, np.ndarray)
                 and vec.dtype.char == "O"
                 and not isinstance(vec, DOFArray)):
-            return oarray_vectorize(
+            return obj_array_vectorize(
                     lambda el: self.inverse_mass(el), vec)
 
         @memoize_in(self, "elwise_linear_knl")
@@ -296,7 +296,7 @@ class DGDiscretization:
         if (isinstance(vec, np.ndarray)
                 and vec.dtype.char == "O"
                 and not isinstance(vec, DOFArray)):
-            return oarray_vectorize(
+            return obj_array_vectorize(
                     lambda el: self.face_mass(el), vec)
 
         @memoize_in(self, "face_mass_knl")
@@ -370,7 +370,7 @@ class TracePair:
 
 def interior_trace_pair(discr, vec):
     i = discr.interp("vol", "int_faces", vec)
-    e = oarray_vectorize(
+    e = obj_array_vectorize(
             lambda el: discr.opposite_face_connection()(el),
             i)
     return TracePair("int_faces", i, e)
@@ -455,7 +455,7 @@ def bump(actx, discr, t=0):
         nodes[1] - source_center[1],
         ])
 
-    exp = oarray_vectorized(actx.special_func("exp"))
+    exp = obj_array_vectorized(actx.special_func("exp"))
     return (
         np.cos(source_omega*t)
         * exp(
