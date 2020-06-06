@@ -1,4 +1,4 @@
 Array Contexts
 ==============
 
-.. automodule:: meshmode.array
+.. automodule:: meshmode.array_context
