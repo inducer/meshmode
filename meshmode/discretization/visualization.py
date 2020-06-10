@@ -333,7 +333,7 @@ class VTKLagrangeVisualizer(VTKVisualizer):
         # NOTE: version 2.2 has an updated ordering for the hexahedron
         # elements that is not supported currently
         # https://gitlab.kitware.com/vtk/vtk/-/merge_requests/6678
-        return "2.1"
+        return "2.0"
 
     @property
     def simplex_cell_types(self):
@@ -383,7 +383,8 @@ class VTKLagrangeVisualizer(VTKVisualizer):
             for grp in self.groups
             ])
         offsets = np.hstack([
-                np.arange(grp.nunit_nodes, grp.nnodes + 1, grp.nunit_nodes)
+                grp.node_nr_base
+                + np.arange(grp.nunit_nodes, grp.nnodes + 1, grp.nunit_nodes)
                 for grp in self.vis_discr.groups
                 ])
 
@@ -557,26 +558,35 @@ class Visualizer(object):
     # }}}
 
 
-def make_visualizer(queue, discr, vis_order, element_shrink_factor=None):
+def make_visualizer(queue, discr, vis_order,
+        element_shrink_factor=None, use_high_order_vtk=False):
     from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import (
-            PolynomialWarpAndBlendElementGroup,
-            LegendreGaussLobattoTensorProductElementGroup,
-            OrderAndTypeBasedGroupFactory)
+
+    if use_high_order_vtk:
+        from meshmode.discretization.poly_element import (
+                PolynomialEquidistantSimplexElementGroup as SimplexElementGroup,
+                EquidistantTensorProductElementGroup as TensorElementGroup)
+    else:
+        from meshmode.discretization.poly_element import (
+                PolynomialWarpAndBlendElementGroup as SimplexElementGroup,
+                LegendreGaussLobattoTensorProductElementGroup as TensorElementGroup)
+
+    from meshmode.discretization.poly_element import OrderAndTypeBasedGroupFactory
     vis_discr = Discretization(
             discr.cl_context, discr.mesh,
             OrderAndTypeBasedGroupFactory(
                 vis_order,
-                simplex_group_class=PolynomialWarpAndBlendElementGroup,
-                tensor_product_group_class=(
-                    LegendreGaussLobattoTensorProductElementGroup)),
+                simplex_group_class=SimplexElementGroup,
+                tensor_product_group_class=TensorElementGroup),
             real_dtype=discr.real_dtype)
+
     from meshmode.discretization.connection import \
             make_same_mesh_connection
 
     return Visualizer(
             make_same_mesh_connection(vis_discr, discr),
-            element_shrink_factor=element_shrink_factor)
+            element_shrink_factor=element_shrink_factor,
+            use_high_order_vtk=use_high_order_vtk)
 
 # }}}
 

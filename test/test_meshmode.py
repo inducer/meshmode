@@ -548,7 +548,7 @@ def test_element_orientation():
     ("ball", lambda: mgen.generate_icosahedron(1, 1)),
     ("torus", lambda: mgen.generate_torus(5, 1)),
     ])
-def test_3d_orientation(ctx_factory, what, mesh_gen_func, visualize=False):
+def test_orientation_3d(ctx_factory, what, mesh_gen_func, visualize=False):
     pytest.importorskip("pytential")
 
     logging.basicConfig(level=logging.INFO)
@@ -562,7 +562,7 @@ def test_3d_orientation(ctx_factory, what, mesh_gen_func, visualize=False):
 
     from meshmode.discretization import Discretization
     discr = Discretization(ctx, mesh,
-            PolynomialWarpAndBlendGroupFactory(1))
+            PolynomialWarpAndBlendGroupFactory(3))
 
     from pytential import bind, sym
 
@@ -592,9 +592,9 @@ def test_3d_orientation(ctx_factory, what, mesh_gen_func, visualize=False):
 
     if visualize:
         from meshmode.discretization.visualization import make_visualizer
-        vis = make_visualizer(queue, discr, 1)
+        vis = make_visualizer(queue, discr, 3)
 
-        vis.write_vtk_file("normals.vtu", [
+        vis.write_vtk_file("orientation_3d_normals_%s.vtu" % what, [
             ("normals", normals),
             ])
 
@@ -634,7 +634,7 @@ def test_merge_and_map(ctx_factory, visualize=False):
     from meshmode.mesh.processing import merge_disjoint_meshes, affine_map
     mesh2 = affine_map(mesh,
             A=np.eye(mesh.ambient_dim),
-            b=np.array([5, 0, 0])[:mesh.ambient_dim])
+            b=np.array([2, 0, 0])[:mesh.ambient_dim])
 
     mesh3 = merge_disjoint_meshes((mesh2, mesh))
     mesh3.facial_adjacency_groups
@@ -650,7 +650,7 @@ def test_merge_and_map(ctx_factory, visualize=False):
 
         from meshmode.discretization.visualization import make_visualizer
         vis = make_visualizer(queue, discr, 3, element_shrink_factor=0.8)
-        vis.write_vtk_file("merged.vtu", [])
+        vis.write_vtk_file("merge_and_map.vtu", [])
 
 # }}}
 
@@ -715,20 +715,15 @@ def test_sanity_single_element(ctx_factory, dim, order, visualize=False):
 
     # }}}
 
-    # {{{ visualizers
-
-    from meshmode.discretization.visualization import make_visualizer
-    #vol_vis = make_visualizer(queue, vol_discr, 4)
-    bdry_vis = make_visualizer(queue, bdry_discr, 4)
-
-    # }}}
-
     from pytential import bind, sym
     bdry_normals = bind(bdry_discr, sym.normal(dim))(queue).as_vector(dtype=object)
 
     if visualize:
-        bdry_vis.write_vtk_file("boundary.vtu", [
-            ("bdry_normals", bdry_normals)
+        from meshmode.discretization.visualization import make_visualizer
+        bdry_vis = make_visualizer(queue, bdry_discr, 4)
+
+        bdry_vis.write_vtk_file("sanity_single_element_boundary.vtu", [
+            ("normals", bdry_normals)
             ])
 
     normal_outward_check = bind(bdry_discr,
@@ -799,8 +794,7 @@ def test_sanity_qhull_nd(ctx_factory, dim, order):
     ("ball-radius-1.step", 3),
     ])
 @pytest.mark.parametrize("mesh_order", [1, 2])
-def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
-        visualize=False):
+def test_sanity_balls(ctx_factory, src_file, dim, mesh_order, visualize=False):
     pytest.importorskip("pytential")
 
     logging.basicConfig(level=logging.INFO)
@@ -841,14 +835,6 @@ def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
 
         # }}}
 
-        # {{{ visualizers
-
-        from meshmode.discretization.visualization import make_visualizer
-        vol_vis = make_visualizer(queue, vol_discr, 20)
-        bdry_vis = make_visualizer(queue, bdry_discr, 20)
-
-        # }}}
-
         from math import gamma
         true_surf = 2*np.pi**(dim/2)/gamma(dim/2)
         true_vol = true_surf/dim
@@ -879,14 +865,22 @@ def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
         print("SURF", true_surf, comp_surf)
 
         if visualize:
-            vol_vis.write_vtk_file("volume-h=%g.vtu" % h, [
+            from meshmode.discretization.visualization import make_visualizer
+            vol_vis = make_visualizer(queue, vol_discr, 7)
+            bdry_vis = make_visualizer(queue, bdry_discr, 7)
+
+            name = src_file.split("-")[0]
+            vol_vis.write_vtk_file("sanity_balls_volume_%s_%g.vtu" % (name, h), [
                 ("f", vol_one),
                 ("area_el", bind(
                     vol_discr,
                     sym.area_element(mesh.ambient_dim, mesh.ambient_dim))
                     (queue)),
                 ])
-            bdry_vis.write_vtk_file("boundary-h=%g.vtu" % h, [("f", bdry_one)])
+
+            bdry_vis.write_vtk_file("sanity_balls_boundary_%s_%g.vtu" % (name, h), [
+                ("f", bdry_one)
+                ])
 
         # {{{ check normals point outward
 
@@ -942,7 +936,7 @@ def test_box_mesh(ctx_factory, visualize=False):
 
         from meshmode.discretization.visualization import make_visualizer
         vis = make_visualizer(queue, discr, 1)
-        vis.write_vtk_file("box.vtu", [])
+        vis.write_vtk_file("box_mesh.vtu", [])
 
 # }}}
 
@@ -1142,7 +1136,7 @@ def test_vtk_overwrite(ctx_getter):
         import os
         from meshmode import FileExistsError
 
-        filename = "test_vtk_overwrite.vtu"
+        filename = "vtk_overwrite_temp.vtu"
         if os.path.exists(filename):
             os.remove(filename)
 
@@ -1395,7 +1389,7 @@ def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
 
         from meshmode.discretization.visualization import make_visualizer
         vis = make_visualizer(queue, discr, vis_order=order)
-        vis.write_vtk_file("test_mesh_multiple_groups.vtu", [
+        vis.write_vtk_file("mesh_multiple_groups.vtu", [
             ("group_id", group_id)
             ], overwrite=True)
 
