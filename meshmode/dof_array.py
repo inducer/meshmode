@@ -21,13 +21,17 @@ THE SOFTWARE.
 """
 
 import numpy as np
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from functools import partial
 
-from pytools import single_valued
+from pytools import single_valued, memoize_in
 from pytools.obj_array import obj_array_vectorize
 
-from meshmode.array_context import ArrayContext
+from meshmode.array_context import ArrayContext, make_loopy_program
+
+if TYPE_CHECKING:
+    from meshmode.discretization import Discretization as _Discretization
+
 
 __doc__ = """
 .. autoclass:: DOFArray
@@ -134,12 +138,73 @@ def freeze(ary: np.ndarray) -> np.ndarray:
         ])
 
 
-def flatten_dof_array(ary: DOFArray):
-    pass
+def flatten(ary: np.ndarray) -> np.ndarray:
+    r"""Convert a :class:`DOFArray` into a "flat" array of degrees of freedom,
+    where the resulting type of the array is given by the
+    :attr:`DOFArray.array_context`.
+
+    Array elements are laid out contiguously, with the element group
+    index varying slowest, element index next, and intra-element DOF
+    index fastest.
+
+    Vectorizes over object arrays of :class:`DOFArray`\ s.
+    """
+    if (isinstance(ary, np.ndarray)
+            and ary.dtype.char == "O"
+            and not isinstance(ary, DOFArray)):
+        return obj_array_vectorize(flatten, ary)
+
+    group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in ary]
+    group_starts = np.cumsum([0] + group_sizes)
+
+    actx = ary.array_context
+
+    @memoize_in(actx, "flatten_prg")
+    def prg():
+        return make_loopy_program(
+            "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
+            "result[grp_start + iel*nunit_dofs + idof] = grp_ary[iel, idof]",
+            name="flatten")
+
+    result = actx.empty(group_starts[-1], dtype=ary.entry_dtype)
+
+    for grp_start, grp_ary in zip(group_starts, ary):
+        actx.call_loopy(prg(), grp_ary=grp_ary, result=result, grp_start=grp_start)
+
+    return result
 
 
-def unflatten_dof_array(actx: ArrayContext, ary):
-    pass
+def unflatten(actx: ArrayContext, discr: "_Discretization", ary) -> np.ndarray:
+    r"""Convert a 'flat' array returned by :func:`flatten` back to a :class:`DOFArray`.
+
+    Vectorizes over object arrays of :class:`DOFArray`\ s.
+    """
+    if (isinstance(ary, np.ndarray)
+            and ary.dtype.char == "O"
+            and not isinstance(ary, DOFArray)):
+        return obj_array_vectorize(
+                lambda subary: unflatten(actx, discr, subary),
+                ary)
+
+    actx = ary.array_context
+
+    @memoize_in(actx, "unflatten_prg")
+    def prg():
+        return make_loopy_program(
+            "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
+            "result[iel, idof] = ary[grp_start + iel*nunit_dofs + idof]",
+            name="unflatten")
+
+    group_sizes = [grp.nelements*grp.nunit_dofs for grp in discr.groups]
+    group_starts = np.cumsum([0] + group_sizes)
+
+    return DOFArray.from_list(None, [
+            actx.freeze(
+                actx.call_loopy(
+                    prg(),
+                    grp_start=grp_start, ary=ary
+                    )["result"])
+            for grp_start, grp in zip(group_starts, discr.groups)])
 
 
 # vim: foldmethod=marker
