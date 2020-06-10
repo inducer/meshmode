@@ -65,7 +65,8 @@ def test_circle_mesh(do_plot=False):
             FileSource("circle.step"), 2, order=2,
             force_ambient_dim=2,
             other_options=[
-                "-string", "Mesh.CharacteristicLengthMax = 0.05;"]
+                "-string", "Mesh.CharacteristicLengthMax = 0.05;"],
+            target_unit="MM",
             )
     print("END GEN")
     print(mesh.nelements)
@@ -352,7 +353,8 @@ def test_all_faces_interpolation(ctx_factory, mesh_name, dim, mesh_pars,
                     FileSource("blob-2d.step"), 2, order=order,
                     force_ambient_dim=2,
                     other_options=[
-                        "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
+                        "-string", "Mesh.CharacteristicLengthMax = %s;" % h],
+                    target_unit="MM",
                     )
             print("END GEN")
         elif mesh_name == "warp":
@@ -475,7 +477,8 @@ def test_opposite_face_interpolation(ctx_factory, group_factory,
                     FileSource("blob-2d.step"), 2, order=order,
                     force_ambient_dim=2,
                     other_options=[
-                        "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
+                        "-string", "Mesh.CharacteristicLengthMax = %s;" % h],
+                    target_unit="MM",
                     )
             print("END GEN")
         elif mesh_name == "warp":
@@ -526,7 +529,8 @@ def test_element_orientation():
     mesh = generate_gmsh(
             FileSource("blob-2d.step"), 2, order=mesh_order,
             force_ambient_dim=2,
-            other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"]
+            other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"],
+            target_unit="MM",
             )
 
     from meshmode.mesh.processing import (perform_flips,
@@ -624,7 +628,8 @@ def test_merge_and_map(ctx_factory, visualize=False):
         mesh = generate_gmsh(
                 FileSource("blob-2d.step"), 2, order=mesh_order,
                 force_ambient_dim=2,
-                other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"]
+                other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"],
+                target_unit="MM",
                 )
 
         discr_grp_factory = PolynomialWarpAndBlendGroupFactory(3)
@@ -1052,6 +1057,7 @@ def test_quad_mesh_2d():
                 """,
                 ["blob-2d.step"]),
             force_ambient_dim=2,
+            target_unit="MM",
             )
     print("END GEN")
     print(mesh.nelements)
@@ -1205,7 +1211,8 @@ def test_mesh_to_tikz():
             FileSource("../test/blob-2d.step"), 2, order=order,
             force_ambient_dim=2,
             other_options=[
-                "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
+                "-string", "Mesh.CharacteristicLengthMax = %s;" % h],
+            target_unit="MM",
             )
 
     from meshmode.mesh.visualization import mesh_to_tikz
