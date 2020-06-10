@@ -89,9 +89,16 @@ class DOFArray(np.ndarray):
         if not (actx is None or isinstance(actx, ArrayContext)):
             raise TypeError("actx must be of type ArrayContext")
 
-        result = np.empty((len(res_list),), dtype=object).view(cls)
-        result[:] = res_list
+        ngroups = len(res_list)
+
+        result = np.empty(ngroups, dtype=object).view(cls)
         result.array_context = actx
+
+        # 'result[:] = res_list' may look tempting, however:
+        # https://github.com/numpy/numpy/issues/16564
+        for igrp in range(ngroups):
+            result[igrp] = res_list[igrp]
+
         return result
 
 # }}}
