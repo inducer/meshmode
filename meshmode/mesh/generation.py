@@ -811,10 +811,9 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     axes = ["x", "y", "z", "w"]
 
     if boundary_tags:
-        from pytools import indices_in_shape
         vert_index_to_tuple = {
                 vertex_indices[itup]: itup
-                for itup in indices_in_shape(shape)}
+                for itup in np.ndindex(shape)}
 
     for tag_idx, tag in enumerate(boundary_tags):
         # Need to map the correct face vertices to the boundary tags
