@@ -31,12 +31,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def freeze_from_numpy(self, array):
-    return self.freeze(self.from_numpy(array))
+def freeze_from_numpy(actx, array):
+    return actx.freeze(actx.from_numpy(array))
 
 
-def thaw_to_numpy(self, array):
-    return self.to_numpy(self.thaw(array))
+def thaw_to_numpy(actx, array):
+    return actx.to_numpy(actx.thaw(array))
 
 
 # {{{ _make_cross_face_batches
