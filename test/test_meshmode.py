@@ -39,7 +39,7 @@ from meshmode.discretization.poly_element import (
         )
 from meshmode.mesh import Mesh, BTAG_ALL
 from meshmode.array_context import PyOpenCLArrayContext
-from meshmode.dof_array import thaw, freeze, flatten, DOFArray
+from meshmode.dof_array import thaw, flatten, DOFArray
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -325,6 +325,7 @@ def test_all_faces_interpolation(ctx_factory, mesh_name, dim, mesh_pars,
         per_face_groups):
     cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
@@ -336,8 +337,10 @@ def test_all_faces_interpolation(ctx_factory, mesh_name, dim, mesh_pars,
 
     order = 4
 
+    sin = actx.special_func("sin")
+
     def f(x):
-        return 0.1*cl.clmath.sin(30*x)
+        return 0.1*sin(30*x)
 
     for mesh_par in mesh_pars:
         # {{{ get mesh
@@ -367,20 +370,20 @@ def test_all_faces_interpolation(ctx_factory, mesh_name, dim, mesh_pars,
 
         # }}}
 
-        vol_discr = Discretization(cl_ctx, mesh,
+        vol_discr = Discretization(actx, mesh,
                 PolynomialWarpAndBlendGroupFactory(order))
         print("h=%s -> %d elements" % (
                 h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
         all_face_bdry_connection = make_face_restriction(
-                vol_discr, PolynomialWarpAndBlendGroupFactory(order),
+                actx, vol_discr, PolynomialWarpAndBlendGroupFactory(order),
                 FACE_RESTR_ALL, per_face_groups=per_face_groups)
         all_face_bdry_discr = all_face_bdry_connection.to_discr
 
         for ito_grp, ceg in enumerate(all_face_bdry_connection.groups):
             for ibatch, batch in enumerate(ceg.batches):
                 assert np.array_equal(
-                        batch.from_element_indices.get(queue),
+                        actx.to_numpy(actx.thaw(batch.from_element_indices)),
                         np.arange(vol_discr.mesh.nelements))
 
                 if per_face_groups:
@@ -388,31 +391,31 @@ def test_all_faces_interpolation(ctx_factory, mesh_name, dim, mesh_pars,
                 else:
                     assert ibatch == batch.to_element_face
 
-        all_face_x = all_face_bdry_discr.nodes()[0].with_queue(queue)
+        all_face_x = thaw(actx, all_face_bdry_discr.nodes()[0])
         all_face_f = f(all_face_x)
 
-        all_face_f_2 = all_face_bdry_discr.zeros(queue)
+        all_face_f_2 = all_face_bdry_discr.zeros(actx)
 
         for boundary_tag in [
                 BTAG_ALL,
                 FACE_RESTR_INTERIOR,
                 ]:
             bdry_connection = make_face_restriction(
-                    vol_discr, PolynomialWarpAndBlendGroupFactory(order),
+                    actx, vol_discr, PolynomialWarpAndBlendGroupFactory(order),
                     boundary_tag, per_face_groups=per_face_groups)
             bdry_discr = bdry_connection.to_discr
 
-            bdry_x = bdry_discr.nodes()[0].with_queue(queue)
+            bdry_x = thaw(actx, bdry_discr.nodes()[0])
             bdry_f = f(bdry_x)
 
             all_face_embedding = make_face_to_all_faces_embedding(
-                    bdry_connection, all_face_bdry_discr)
+                    actx, bdry_connection, all_face_bdry_discr)
 
-            check_connection(all_face_embedding)
+            check_connection(actx, all_face_embedding)
 
-            all_face_f_2 += all_face_embedding(queue, bdry_f)
+            all_face_f_2 = all_face_f_2 + all_face_embedding(bdry_f)
 
-        err = la.norm((all_face_f-all_face_f_2).get(), np.inf)
+        err = flat_norm(all_face_f-all_face_f_2, np.inf)
         eoc_rec.add_data_point(h, err)
 
     print(eoc_rec)
@@ -441,6 +444,7 @@ def test_opposite_face_interpolation(ctx_factory, group_factory,
 
     cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
@@ -452,8 +456,10 @@ def test_opposite_face_interpolation(ctx_factory, group_factory,
 
     order = 5
 
+    sin = actx.special_func("sin")
+
     def f(x):
-        return 0.1*cl.clmath.sin(30*x)
+        return 0.1*sin(30*x)
 
     for mesh_par in mesh_pars:
         # {{{ get mesh
@@ -491,24 +497,24 @@ def test_opposite_face_interpolation(ctx_factory, group_factory,
 
         # }}}
 
-        vol_discr = Discretization(cl_ctx, mesh,
+        vol_discr = Discretization(actx, mesh,
                 group_factory(order))
         print("h=%s -> %d elements" % (
                 h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
         bdry_connection = make_face_restriction(
-                vol_discr, group_factory(order),
+                actx, vol_discr, group_factory(order),
                 FACE_RESTR_INTERIOR)
         bdry_discr = bdry_connection.to_discr
 
-        opp_face = make_opposite_face_connection(bdry_connection)
-        check_connection(opp_face)
+        opp_face = make_opposite_face_connection(actx, bdry_connection)
+        check_connection(actx, opp_face)
 
-        bdry_x = bdry_discr.nodes()[0].with_queue(queue)
+        bdry_x = thaw(actx, bdry_discr.nodes()[0])
         bdry_f = f(bdry_x)
-        bdry_f_2 = opp_face(queue, bdry_f)
+        bdry_f_2 = opp_face(bdry_f)
 
-        err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
+        err = flat_norm(bdry_f-bdry_f_2, np.inf)
         eoc_rec.add_data_point(h, err)
 
     print(eoc_rec)
@@ -765,6 +771,7 @@ def test_sanity_qhull_nd(ctx_factory, dim, order):
 
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     from scipy.spatial import Delaunay
     verts = np.random.rand(1000, dim)
@@ -775,28 +782,30 @@ def test_sanity_qhull_nd(ctx_factory, dim, order):
             fix_orientation=True)
 
     from meshmode.discretization import Discretization
-    low_discr = Discretization(ctx, mesh,
+    low_discr = Discretization(actx, mesh,
             PolynomialEquidistantSimplexGroupFactory(order))
-    high_discr = Discretization(ctx, mesh,
+    high_discr = Discretization(actx, mesh,
             PolynomialEquidistantSimplexGroupFactory(order+1))
 
     from meshmode.discretization.connection import make_same_mesh_connection
-    cnx = make_same_mesh_connection(high_discr, low_discr)
+    cnx = make_same_mesh_connection(actx, high_discr, low_discr)
+
+    sin = actx.special_func("sin")
 
     def f(x):
-        return 0.1*cl.clmath.sin(x)
+        return 0.1*sin(x)
 
-    x_low = low_discr.nodes()[0].with_queue(queue)
+    x_low = thaw(actx, low_discr.nodes()[0])
     f_low = f(x_low)
 
-    x_high = high_discr.nodes()[0].with_queue(queue)
+    x_high = thaw(actx, high_discr.nodes()[0])
     f_high_ref = f(x_high)
 
-    f_high_num = cnx(queue, f_low)
+    f_high_num = cnx(f_low)
 
-    err = (f_high_ref-f_high_num).get()
-
-    err = la.norm(err, np.inf)/la.norm(f_high_ref.get(), np.inf)
+    err = (
+            flat_norm(f_high_ref-f_high_num, np.inf)
+            / flat_norm(f_high_ref, np.inf))
 
     print(err)
     assert err < 1e-2
@@ -1149,7 +1158,7 @@ def test_quad_multi_element():
 
 # {{{ test_vtk_overwrite
 
-def test_vtk_overwrite(ctx_getter):
+def test_vtk_overwrite(ctx_factory):
     pytest.importorskip("pyvisfile")
 
     def _try_write_vtk(writer, obj):
@@ -1168,8 +1177,9 @@ def test_vtk_overwrite(ctx_getter):
         if os.path.exists(filename):
             os.remove(filename)
 
-    ctx = ctx_getter()
+    ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     target_order = 7
 
@@ -1180,7 +1190,7 @@ def test_vtk_overwrite(ctx_getter):
     from meshmode.discretization.poly_element import \
             InterpolatoryQuadratureSimplexGroupFactory
     discr = Discretization(
-            queue.context, mesh,
+            actx, mesh,
             InterpolatoryQuadratureSimplexGroupFactory(target_order))
 
     from meshmode.discretization.visualization import make_visualizer
@@ -1188,7 +1198,7 @@ def test_vtk_overwrite(ctx_getter):
             write_nodal_adjacency_vtk_file
     from meshmode.mesh.visualization import write_vertex_vtk_file
 
-    vis = make_visualizer(queue, discr, 1)
+    vis = make_visualizer(actx, discr, 1)
     _try_write_vtk(vis.write_vtk_file, discr)
 
     _try_write_vtk(lambda x, y, **kwargs:
@@ -1242,6 +1252,7 @@ def test_affine_map():
 def test_mesh_without_vertices(ctx_factory):
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     # create a mesh
     from meshmode.mesh.generation import generate_icosphere
@@ -1261,11 +1272,11 @@ def test_mesh_without_vertices(ctx_factory):
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
             InterpolatoryQuadratureSimplexGroupFactory as GroupFactory
-    discr = Discretization(ctx, mesh, GroupFactory(4))
-    discr.nodes().with_queue(queue)
+    discr = Discretization(actx, mesh, GroupFactory(4))
+    thaw(actx, discr.nodes())
 
     from meshmode.discretization.visualization import make_visualizer
-    make_visualizer(queue, discr, 4)
+    make_visualizer(actx, discr, 4)
 
 
 @pytest.mark.parametrize("curve_name", ["ellipse", "arc"])
@@ -1367,6 +1378,7 @@ def test_is_affine_group_check(mesh_name):
 def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     order = 4
 
@@ -1400,16 +1412,16 @@ def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
             PolynomialWarpAndBlendGroupFactory as GroupFactory
-    discr = Discretization(ctx, mesh, GroupFactory(order))
+    discr = Discretization(actx, mesh, GroupFactory(order))
 
     if visualize:
-        group_id = discr.empty(queue, dtype=np.int)
+        group_id = discr.empty(actx, dtype=np.int)
         for igrp, grp in enumerate(discr.groups):
             group_id_view = grp.view(group_id)
             group_id_view.fill(igrp)
 
         from meshmode.discretization.visualization import make_visualizer
-        vis = make_visualizer(queue, discr, vis_order=order)
+        vis = make_visualizer(actx, discr, vis_order=order)
         vis.write_vtk_file("test_mesh_multiple_groups.vtu", [
             ("group_id", group_id)
             ], overwrite=True)
@@ -1421,28 +1433,27 @@ def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
             make_opposite_face_connection,
             check_connection)
     for boundary_tag in [BTAG_ALL, FACE_RESTR_INTERIOR, FACE_RESTR_ALL]:
-        conn = make_face_restriction(discr, GroupFactory(order),
+        conn = make_face_restriction(actx, discr, GroupFactory(order),
                 boundary_tag=boundary_tag,
                 per_face_groups=False)
-        check_connection(conn)
+        check_connection(actx, conn)
 
-        bdry_f = conn.to_discr.empty(queue)
-        bdry_f.fill(1.0)
+        bdry_f = conn.to_discr.zeros(actx) + 1
 
         if boundary_tag == FACE_RESTR_INTERIOR:
-            opposite = make_opposite_face_connection(conn)
-            check_connection(opposite)
+            opposite = make_opposite_face_connection(actx, conn)
+            check_connection(actx, opposite)
 
-            op_bdry_f = opposite(queue, bdry_f)
-            error = abs(cl.array.sum(bdry_f - op_bdry_f).get(queue))
+            op_bdry_f = opposite(bdry_f)
+            error = flat_norm(bdry_f - op_bdry_f, np.inf)
             assert error < 1.0e-11, error
 
         if boundary_tag == FACE_RESTR_ALL:
-            embedding = make_face_to_all_faces_embedding(conn, conn.to_discr)
-            check_connection(embedding)
+            embedding = make_face_to_all_faces_embedding(actx, conn, conn.to_discr)
+            check_connection(actx, embedding)
 
-            em_bdry_f = embedding(queue, bdry_f)
-            error = abs(cl.array.sum(bdry_f - em_bdry_f).get(queue))
+            em_bdry_f = embedding(bdry_f)
+            error = flat_norm(bdry_f - em_bdry_f)
             assert error < 1.0e-11, error
 
 
