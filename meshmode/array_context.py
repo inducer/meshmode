@@ -112,6 +112,9 @@ class ArrayContext:
     def special_func(self, name):
         """Returns a callable for the special function *name*, where *name* is a
         (potentially dotted) function name resolvable by :mod:`loopy`.
+
+        The returned callable will vectorize over object arrays, including
+        :class:`meshmode.dof_array.DOFArray`.
         """
         prg = make_loopy_program(
                 "{[iel, idof]: 0<=iel<nelements and 0<=idof<ndofs}",
