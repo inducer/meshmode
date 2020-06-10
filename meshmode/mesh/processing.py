@@ -93,7 +93,7 @@ def partition_mesh(mesh, part_per_element, part_num):
     #index_set = np.array([], dtype=int)
     index_sets = np.array([], dtype=set)
 
-    skip_groups = []
+    global_group_to_part_group = [None for _ in mesh.groups]
     num_prev_elems = 0
     start_idx = 0
     for group_num in range(num_groups):
@@ -107,11 +107,10 @@ def partition_mesh(mesh, part_per_element, part_num):
                 break
 
         if start_idx == end_idx:
-            skip_groups.append(group_num)
-            new_indices.append(np.array([]))
-            new_nodes.append(np.array([]))
             num_prev_elems += mesh_group.nelements
             continue
+
+        global_group_to_part_group[group_num] = len(new_indices)
 
         elems = queried_elems[start_idx:end_idx] - num_prev_elems
         new_indices.append(mesh_group.vertex_indices[elems])
@@ -123,10 +122,10 @@ def partition_mesh(mesh, part_per_element, part_num):
             for j in range(start_idx, end_idx):
                 elems = queried_elems[j] - num_prev_elems
                 new_idx = j - start_idx
-                new_nodes[group_num][i, new_idx, :] = mesh_group.nodes[i, elems, :]
+                new_nodes[-1][i, new_idx, :] = mesh_group.nodes[i, elems, :]
 
-        #index_set = np.append(index_set, new_indices[group_num].ravel())
-        index_sets = np.append(index_sets, set(new_indices[group_num].ravel()))
+        #index_set = np.append(index_set, new_indices[-1].ravel())
+        index_sets = np.append(index_sets, set(new_indices[-1].ravel()))
 
         num_prev_elems += mesh_group.nelements
         start_idx = end_idx
@@ -140,21 +139,20 @@ def partition_mesh(mesh, part_per_element, part_num):
         new_vertices[dim] = mesh.vertices[dim][required_indices]
 
     # Our indices need to be in range [0, len(mesh.nelements)].
-    for group_num in range(num_groups):
-        if group_num not in skip_groups:
-            for i in range(len(new_indices[group_num])):
-                for j in range(len(new_indices[group_num][0])):
-                    original_index = new_indices[group_num][i, j]
-                    new_indices[group_num][i, j] = np.where(
-                            required_indices == original_index)[0]
+    for indices in new_indices:
+        for i in range(len(indices)):
+            for j in range(len(indices[0])):
+                original_index = indices[i, j]
+                indices[i, j] = np.where(required_indices == original_index)[0]
 
     new_mesh_groups = []
     for group_num, mesh_group in enumerate(mesh.groups):
-        if group_num not in skip_groups:
+        i_new_group = global_group_to_part_group[group_num]
+        if i_new_group is not None:
             new_mesh_groups.append(
                 type(mesh_group)(
-                    mesh_group.order, new_indices[group_num],
-                    new_nodes[group_num],
+                    mesh_group.order, new_indices[i_new_group],
+                    new_nodes[i_new_group],
                     unit_nodes=mesh_group.unit_nodes))
 
     adj_data = [[] for _ in range(len(new_mesh_groups))]
