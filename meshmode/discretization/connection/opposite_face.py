@@ -50,8 +50,8 @@ def _make_cross_face_batches(actx,
     if tgt_bdry_discr.dim == 0:
         yield InterpolationBatch(
             from_group_index=i_src_grp,
-            from_element_indices=freeze_from_numpy(src_bdry_element_indices),
-            to_element_indices=freeze_from_numpy(tgt_bdry_element_indices),
+            from_element_indices=freeze_from_numpy(actx, src_bdry_element_indices),
+            to_element_indices=freeze_from_numpy(actx, tgt_bdry_element_indices),
             result_unit_nodes=src_bdry_discr.groups[i_src_grp].unit_nodes,
             to_element_face=None)
         return
