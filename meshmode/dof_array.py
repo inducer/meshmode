@@ -93,7 +93,12 @@ class DOFArray(np.ndarray):
 # }}}
 
 
-def thaw(actx: ArrayContext, ary):
+def thaw(actx: ArrayContext, ary: np.ndarray) -> np.ndarray:
+    r"""Call :meth:`~meshmode.array_context.ArrayContext.thaw` on the element
+    group arrays making up the :class:`DOFArray`, using *actx*.
+
+    Vectorizes over object arrays of :class:`DOFArray`\ s.
+    """
     if (isinstance(ary, np.ndarray)
             and ary.dtype.char == "O"
             and not isinstance(ary, DOFArray)):
@@ -108,7 +113,13 @@ def thaw(actx: ArrayContext, ary):
         ])
 
 
-def freeze(ary):
+def freeze(ary: np.ndarray) -> np.ndarray:
+    r"""Call :meth:`~meshmode.array_context.arrayContext.freeze` on the element
+    group arrays making up the :class:`DOFArray`, using the
+    :class:`~meshmode.array_context.ArrayContext` in *ary*.
+
+    Vectorizes over object arrays of :class:`DOFArray`\ s.
+    """
     if (isinstance(ary, np.ndarray)
             and ary.dtype.char == "O"
             and not isinstance(ary, DOFArray)):
