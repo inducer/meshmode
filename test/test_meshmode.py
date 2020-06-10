@@ -26,8 +26,6 @@ from six.moves import range
 import numpy as np
 import numpy.linalg as la
 import pyopencl as cl
-import pyopencl.array  # noqa
-import pyopencl.clmath  # noqa
 
 from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
@@ -40,6 +38,8 @@ from meshmode.discretization.poly_element import (
         PolynomialEquidistantSimplexGroupFactory,
         )
 from meshmode.mesh import Mesh, BTAG_ALL
+from meshmode.array_context import PyOpenCLArrayContext
+from meshmode.dof_array import thaw, freeze, flatten, DOFArray
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -48,6 +48,12 @@ import pytest
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+def flat_norm(ary: DOFArray, ord=2):
+    # FIXME This could be done without flattening and copying
+    actx = ary.array_context
+    return la.norm(actx.to_numpy(flatten(ary)), ord)
 
 
 # {{{ circle mesh
@@ -223,6 +229,7 @@ def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
         mesh_name, dim, mesh_pars, per_face_groups):
     cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
@@ -233,8 +240,10 @@ def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
 
     order = 4
 
+    sin = actx.special_func("sin")
+
     def f(x):
-        return 0.1*cl.clmath.sin(30*x)
+        return 0.1*sin(30*x)
 
     for mesh_par in mesh_pars:
         # {{{ get mesh
@@ -267,32 +276,31 @@ def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
 
         # }}}
 
-        vol_discr = Discretization(cl_ctx, mesh,
-                group_factory(order))
+        vol_discr = Discretization(actx, mesh, group_factory(order))
         print("h=%s -> %d elements" % (
                 h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
-        x = vol_discr.nodes()[0].with_queue(queue)
+        x = thaw(actx, vol_discr.nodes()[0])
         vol_f = f(x)
 
         bdry_connection = make_face_restriction(
-                vol_discr, group_factory(order),
+                actx, vol_discr, group_factory(order),
                 boundary_tag, per_face_groups=per_face_groups)
-        check_connection(bdry_connection)
+        check_connection(actx, bdry_connection)
         bdry_discr = bdry_connection.to_discr
 
-        bdry_x = bdry_discr.nodes()[0].with_queue(queue)
+        bdry_x = thaw(actx, bdry_discr.nodes()[0])
         bdry_f = f(bdry_x)
-        bdry_f_2 = bdry_connection(queue, vol_f)
+        bdry_f_2 = bdry_connection(vol_f)
 
         if mesh_name == "blob" and dim == 2 and mesh.nelements < 500:
-            mat = bdry_connection.full_resample_matrix(queue).get(queue)
-            bdry_f_2_by_mat = mat.dot(vol_f.get())
+            mat = actx.to_numpy(bdry_connection.full_resample_matrix(actx))
+            bdry_f_2_by_mat = mat.dot(actx.to_numpy(flatten(vol_f)))
 
-            mat_error = la.norm(bdry_f_2.get(queue=queue) - bdry_f_2_by_mat)
+            mat_error = la.norm(actx.to_numpy(flatten(bdry_f_2)) - bdry_f_2_by_mat)
             assert mat_error < 1e-14, mat_error
 
-        err = la.norm((bdry_f-bdry_f_2).get(), np.inf)
+        err = flat_norm(bdry_f-bdry_f_2, np.inf)
         eoc_rec.add_data_point(h, err)
 
     order_slack = 0.75 if mesh_name == "blob" else 0.5
