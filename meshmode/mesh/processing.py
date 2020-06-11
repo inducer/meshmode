@@ -83,7 +83,6 @@ def partition_mesh(mesh, part_per_element, part_num):
     # Contains the indices of the elements requested.
     queried_elems = np.where(np.array(part_per_element) == part_num)[0]
 
-    num_groups = len(mesh.groups)
     new_indices = []
     new_nodes = []
 
@@ -96,47 +95,46 @@ def partition_mesh(mesh, part_per_element, part_num):
     global_group_to_part_group = [None for _ in mesh.groups]
     num_prev_elems = 0
     start_idx = 0
-    for group_num in range(num_groups):
-        mesh_group = mesh.groups[group_num]
+    for igrp, grp in enumerate(mesh.groups):
 
         # Find the index of first element in the next group.
         end_idx = len(queried_elems)
         for idx in range(start_idx, len(queried_elems)):
-            if queried_elems[idx] - num_prev_elems >= mesh_group.nelements:
+            if queried_elems[idx] - num_prev_elems >= grp.nelements:
                 end_idx = idx
                 break
 
         if start_idx == end_idx:
-            num_prev_elems += mesh_group.nelements
+            num_prev_elems += grp.nelements
             continue
 
-        global_group_to_part_group[group_num] = len(new_indices)
+        global_group_to_part_group[igrp] = len(new_indices)
 
         elems = queried_elems[start_idx:end_idx] - num_prev_elems
-        new_indices.append(mesh_group.vertex_indices[elems])
+        new_indices.append(grp.vertex_indices[elems])
 
         new_nodes.append(
             np.zeros(
-                (mesh.ambient_dim, end_idx - start_idx, mesh_group.nunit_nodes)))
+                (mesh.ambient_dim, end_idx - start_idx, grp.nunit_nodes)))
         for i in range(mesh.ambient_dim):
             for j in range(start_idx, end_idx):
                 elems = queried_elems[j] - num_prev_elems
                 new_idx = j - start_idx
-                new_nodes[-1][i, new_idx, :] = mesh_group.nodes[i, elems, :]
+                new_nodes[-1][i, new_idx, :] = grp.nodes[i, elems, :]
 
         #index_set = np.append(index_set, new_indices[-1].ravel())
         index_sets = np.append(index_sets, set(new_indices[-1].ravel()))
 
-        num_prev_elems += mesh_group.nelements
+        num_prev_elems += grp.nelements
         start_idx = end_idx
 
     # A sorted np.array of vertex indices we need (without duplicates).
     #required_indices = np.unique(np.sort(index_set))
     required_indices = np.array(list(set.union(*index_sets)))
 
-    new_vertices = np.zeros((mesh.ambient_dim, len(required_indices)))
+    part_vertices = np.zeros((mesh.ambient_dim, len(required_indices)))
     for dim in range(mesh.ambient_dim):
-        new_vertices[dim] = mesh.vertices[dim][required_indices]
+        part_vertices[dim] = mesh.vertices[dim][required_indices]
 
     # Our indices need to be in range [0, len(mesh.nelements)].
     for indices in new_indices:
@@ -145,17 +143,16 @@ def partition_mesh(mesh, part_per_element, part_num):
                 original_index = indices[i, j]
                 indices[i, j] = np.where(required_indices == original_index)[0]
 
-    new_mesh_groups = []
-    for group_num, mesh_group in enumerate(mesh.groups):
-        i_new_group = global_group_to_part_group[group_num]
-        if i_new_group is not None:
-            new_mesh_groups.append(
-                type(mesh_group)(
-                    mesh_group.order, new_indices[i_new_group],
-                    new_nodes[i_new_group],
-                    unit_nodes=mesh_group.unit_nodes))
+    part_mesh_groups = []
+    for igrp, grp in enumerate(mesh.groups):
+        i_part_group = global_group_to_part_group[igrp]
+        if i_part_group is not None:
+            part_mesh_groups.append(
+                type(grp)(
+                    grp.order, new_indices[i_part_group], new_nodes[i_part_group],
+                    unit_nodes=grp.unit_nodes))
 
-    adj_data = [[] for _ in range(len(new_mesh_groups))]
+    adj_data = [[] for _ in range(len(part_mesh_groups))]
 
     boundary_tags = mesh.boundary_tags[:]
     btag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
@@ -166,11 +163,11 @@ def partition_mesh(mesh, part_per_element, part_num):
 
     from meshmode.mesh import _compute_facial_adjacency_from_vertices
     facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
-                                    new_mesh_groups, boundary_tags,
+                                    part_mesh_groups, boundary_tags,
                                     mesh.element_id_dtype, mesh.face_id_dtype)
 
     el_nr = 0
-    for igrp, grp in enumerate(new_mesh_groups):
+    for igrp, grp in enumerate(part_mesh_groups):
         elem_base = el_nr
         el_nr += grp.nelements
         boundary_adj = facial_adjacency_groups[igrp][None]
@@ -217,8 +214,8 @@ def partition_mesh(mesh, part_per_element, part_num):
 
     from meshmode.mesh import Mesh
     part_mesh = Mesh(
-            new_vertices,
-            new_mesh_groups,
+            part_vertices,
+            part_mesh_groups,
             facial_adjacency_groups=facial_adjacency_groups,
             boundary_tags=boundary_tags,
             is_conforming=mesh.is_conforming)
