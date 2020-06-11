@@ -39,6 +39,7 @@ __doc__ = """
 .. autofunction:: freeze
 .. autofunction:: flatten
 .. autofunction:: unflatten
+.. autofunction:: flat_norm
 """
 
 
@@ -212,6 +213,13 @@ def unflatten(actx: ArrayContext, discr: "_Discretization", ary) -> np.ndarray:
                     grp_start=grp_start, ary=ary
                     )["result"])
             for grp_start, grp in zip(group_starts, discr.groups)])
+
+
+def flat_norm(ary: DOFArray, ord=2):
+    # FIXME This could be done without flattening and copying
+    actx = ary.array_context
+    import numpy.linalg as la
+    return la.norm(actx.to_numpy(flatten(ary)), ord)
 
 
 # vim: foldmethod=marker

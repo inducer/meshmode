@@ -39,7 +39,7 @@ from meshmode.discretization.poly_element import (
         )
 from meshmode.mesh import Mesh, BTAG_ALL
 from meshmode.array_context import PyOpenCLArrayContext
-from meshmode.dof_array import thaw, flatten, DOFArray
+from meshmode.dof_array import thaw, flat_norm, flatten
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -48,12 +48,6 @@ import pytest
 
 import logging
 logger = logging.getLogger(__name__)
-
-
-def flat_norm(ary: DOFArray, ord=2):
-    # FIXME This could be done without flattening and copying
-    actx = ary.array_context
-    return la.norm(actx.to_numpy(flatten(ary)), ord)
 
 
 # {{{ circle mesh
