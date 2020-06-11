@@ -27,12 +27,13 @@ from functools import partial
 
 import pytest
 import pyopencl as cl
-import pyopencl.clmath  # noqa
 
 import numpy as np
 from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
+from meshmode.array_context import PyOpenCLArrayContext
+from meshmode.dof_array import thaw, flat_norm
 from meshmode.mesh.generation import (  # noqa
         generate_icosahedron, generate_box_mesh, make_curve_mesh, ellipse)
 from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
@@ -191,10 +192,13 @@ def test_refinement_connection(
 
     cl_ctx = ctx_getter()
     queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
             make_refinement_connection, check_connection)
+
+    sin = actx.special_func("sin")
 
     from pytools.convergence import EOCRecorder
     eoc_rec = EOCRecorder()
@@ -235,27 +239,27 @@ def test_refinement_connection(
                 factor = 9
 
             for iaxis in range(len(x)):
-                result = result * cl.clmath.sin(factor * (x[iaxis]/mesh_ext[iaxis]))
+                result = result * sin(factor * (x[iaxis]/mesh_ext[iaxis]))
 
             return result
 
-        discr = Discretization(cl_ctx, mesh, group_factory(order))
+        discr = Discretization(actx, mesh, group_factory(order))
 
         refiner = refiner_cls(mesh)
         flags = refine_flags(mesh)
         refiner.refine(flags)
 
         connection = make_refinement_connection(
-            refiner, discr, group_factory(order))
-        check_connection(connection)
+            actx, refiner, discr, group_factory(order))
+        check_connection(actx, connection)
 
         fine_discr = connection.to_discr
 
-        x = discr.nodes().with_queue(queue)
-        x_fine = fine_discr.nodes().with_queue(queue)
+        x = thaw(actx, discr.nodes())
+        x_fine = thaw(actx, fine_discr.nodes())
         f_coarse = f(x)
-        f_interp = connection(queue, f_coarse).with_queue(queue)
-        f_true = f(x_fine).with_queue(queue)
+        f_interp = connection(f_coarse)
+        f_true = f(x_fine)
 
         if visualize == "dots":
             import matplotlib.pyplot as plt
@@ -279,8 +283,7 @@ def test_refinement_connection(
                         ("f_true", f_true),
                         ])
 
-        import numpy.linalg as la
-        err = la.norm((f_interp - f_true).get(queue), np.inf)
+        err = flat_norm(f_interp - f_true, np.inf)
         eoc_rec.add_data_point(h, err)
 
     order_slack = 0.5

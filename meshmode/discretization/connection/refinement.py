@@ -24,8 +24,6 @@ THE SOFTWARE.
 """
 
 import numpy as np
-import pyopencl as cl
-import pyopencl.array  # noqa
 
 import logging
 logger = logging.getLogger(__name__)
@@ -36,7 +34,7 @@ from pytools import log_process
 # {{{ Build interpolation batches for group
 
 def _build_interpolation_batches_for_group(
-        queue, group_idx, coarse_discr_group, fine_discr_group, record):
+        actx, group_idx, coarse_discr_group, fine_discr_group, record):
     r"""
     To map between discretizations, we sort each of the fine mesh
     elements into an interpolation batch.  Which batch they go
@@ -104,8 +102,8 @@ def _build_interpolation_batches_for_group(
             continue
         yield InterpolationBatch(
             from_group_index=group_idx,
-            from_element_indices=cl.array.to_device(queue, np.asarray(from_bin)),
-            to_element_indices=cl.array.to_device(queue, np.asarray(to_bin)),
+            from_element_indices=actx.from_numpy(np.asarray(from_bin)),
+            to_element_indices=actx.from_numpy(np.asarray(to_bin)),
             result_unit_nodes=unit_nodes,
             to_element_face=None)
 
@@ -113,7 +111,7 @@ def _build_interpolation_batches_for_group(
 
 
 @log_process(logger)
-def make_refinement_connection(refiner, coarse_discr, group_factory):
+def make_refinement_connection(actx, refiner, coarse_discr, group_factory):
     """Return a
     :class:`meshmode.discretization.connection.DiscretizationConnection`
     connecting `coarse_discr` to a discretization on the fine mesh.
@@ -142,21 +140,20 @@ def make_refinement_connection(refiner, coarse_discr, group_factory):
 
     from meshmode.discretization import Discretization
     fine_discr = Discretization(
-        coarse_discr.cl_context,
+        actx,
         fine_mesh,
         group_factory,
         real_dtype=coarse_discr.real_dtype)
 
     groups = []
-    with cl.CommandQueue(fine_discr.cl_context) as queue:
-        for group_idx, (coarse_discr_group, fine_discr_group, record) in \
-                enumerate(zip(coarse_discr.groups, fine_discr.groups,
-                              refiner.group_refinement_records)):
-            groups.append(
-                DiscretizationConnectionElementGroup(
-                    list(_build_interpolation_batches_for_group(
-                            queue, group_idx, coarse_discr_group,
-                            fine_discr_group, record))))
+    for group_idx, (coarse_discr_group, fine_discr_group, record) in \
+            enumerate(zip(coarse_discr.groups, fine_discr.groups,
+                          refiner.group_refinement_records)):
+        groups.append(
+            DiscretizationConnectionElementGroup(
+                list(_build_interpolation_batches_for_group(
+                        actx, group_idx, coarse_discr_group,
+                        fine_discr_group, record))))
 
     return DirectDiscretizationConnection(
         from_discr=coarse_discr,
