@@ -93,24 +93,22 @@ def partition_mesh(mesh, part_per_element, part_num):
     index_sets = np.array([], dtype=set)
 
     global_group_to_part_group = [None for _ in mesh.groups]
-    num_prev_elems = 0
     start_idx = 0
     for igrp, grp in enumerate(mesh.groups):
 
         # Find the index of first element in the next group.
         end_idx = len(queried_elems)
         for idx in range(start_idx, len(queried_elems)):
-            if queried_elems[idx] - num_prev_elems >= grp.nelements:
+            if queried_elems[idx] - grp.element_nr_base >= grp.nelements:
                 end_idx = idx
                 break
 
         if start_idx == end_idx:
-            num_prev_elems += grp.nelements
             continue
 
         global_group_to_part_group[igrp] = len(new_indices)
 
-        elems = queried_elems[start_idx:end_idx] - num_prev_elems
+        elems = queried_elems[start_idx:end_idx] - grp.element_nr_base
         new_indices.append(grp.vertex_indices[elems])
 
         new_nodes.append(
@@ -118,14 +116,13 @@ def partition_mesh(mesh, part_per_element, part_num):
                 (mesh.ambient_dim, end_idx - start_idx, grp.nunit_nodes)))
         for i in range(mesh.ambient_dim):
             for j in range(start_idx, end_idx):
-                elems = queried_elems[j] - num_prev_elems
+                elems = queried_elems[j] - grp.element_nr_base
                 new_idx = j - start_idx
                 new_nodes[-1][i, new_idx, :] = grp.nodes[i, elems, :]
 
         #index_set = np.append(index_set, new_indices[-1].ravel())
         index_sets = np.append(index_sets, set(new_indices[-1].ravel()))
 
-        num_prev_elems += grp.nelements
         start_idx = end_idx
 
     # A sorted np.array of vertex indices we need (without duplicates).
