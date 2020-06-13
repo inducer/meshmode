@@ -213,10 +213,11 @@ class PyOpenCLArrayContext(ArrayContext):
 
     @memoize_method
     def transform_loopy_program(self, program):
-        # FIXME: This assumes that inames 'idof' and 'iel' exist.
+        # FIXME: This assumes that the iname 'iel' exists.
         # FIXME: This could be much smarter.
         import loopy as lp
-        program = lp.split_iname(program, "idof", 16, inner_tag="l.0")
+        if "idof" in program.all_inames():
+            program = lp.split_iname(program, "idof", 16, inner_tag="l.0")
         return lp.tag_inames(program, dict(iel="g.0"))
 
 # }}}
