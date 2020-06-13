@@ -27,10 +27,10 @@ THE SOFTWARE.
 
 from six.moves import range
 import numpy as np
-import numpy.linalg as la
 import pyopencl as cl
-import pyopencl.array  # noqa
-import pyopencl.clmath  # noqa
+
+from meshmode.array_context import PyOpenCLArrayContext
+from meshmode.dof_array import thaw, flat_norm
 
 from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
@@ -69,6 +69,8 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
     group_factory = PolynomialWarpAndBlendGroupFactory
     cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
+
     order = 4
 
     from pytools.convergence import EOCRecorder
@@ -79,8 +81,10 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
                 continue
             eoc_rec[i, j] = EOCRecorder()
 
+    sin = actx.special_func("sin")
+
     def f(x):
-        return 10.*cl.clmath.sin(50.*x)
+        return 10.*sin(50.*x)
 
     for n in mesh_pars:
         from meshmode.mesh.generation import generate_warped_rect_mesh
@@ -107,7 +111,7 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
             partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
 
         from meshmode.discretization import Discretization
-        vol_discrs = [Discretization(cl_ctx, part_meshes[i], group_factory(order))
+        vol_discrs = [Discretization(actx, part_meshes[i], group_factory(order))
                         for i in range(num_parts)]
 
         from meshmode.mesh import BTAG_PARTITION
@@ -120,23 +124,26 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
                 continue
 
             # Mark faces within local_mesh that are connected to remote_mesh
-            local_bdry_conn = make_face_restriction(vol_discrs[i_local_part],
+            local_bdry_conn = make_face_restriction(actx, vol_discrs[i_local_part],
                                                     group_factory(order),
                                                     BTAG_PARTITION(i_remote_part))
 
             # If these parts are not connected, don't bother checking the error
-            bdry_nodes = local_bdry_conn.to_discr.nodes()
-            if bdry_nodes.size == 0:
+            bdry_nelements = sum(
+                    grp.nelements for grp in local_bdry_conn.to_discr.groups)
+            if bdry_nelements == 0:
                 eoc_rec[i_local_part, i_remote_part] = None
                 continue
 
             # Mark faces within remote_mesh that are connected to local_mesh
-            remote_bdry_conn = make_face_restriction(vol_discrs[i_remote_part],
+            remote_bdry_conn = make_face_restriction(actx, vol_discrs[i_remote_part],
                                                      group_factory(order),
                                                      BTAG_PARTITION(i_local_part))
 
-            assert bdry_nodes.size == remote_bdry_conn.to_discr.nodes().size, \
-                        "partitions do not have the same number of connected nodes"
+            remote_bdry_nelements = sum(
+                    grp.nelements for grp in remote_bdry_conn.to_discr.groups)
+            assert bdry_nelements == remote_bdry_nelements, \
+                    "partitions do not have the same number of connected elements"
 
             # Gather just enough information for the connection
             local_bdry = local_bdry_conn.to_discr
@@ -166,27 +173,25 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
                                         for grp_batches in remote_batches]
 
             # Connect from remote_mesh to local_mesh
-            remote_to_local_conn = make_partition_connection(local_bdry_conn,
-                                                             i_local_part,
-                                                             remote_bdry,
-                                                             remote_adj_groups,
-                                                             remote_from_elem_faces,
-                                                            remote_from_elem_indices)
+            remote_to_local_conn = make_partition_connection(
+                    actx, local_bdry_conn, i_local_part, remote_bdry,
+                    remote_adj_groups, remote_from_elem_faces,
+                    remote_from_elem_indices)
+
             # Connect from local mesh to remote mesh
-            local_to_remote_conn = make_partition_connection(remote_bdry_conn,
-                                                             i_remote_part,
-                                                             local_bdry,
-                                                             local_adj_groups,
-                                                             local_from_elem_faces,
-                                                             local_from_elem_indices)
-            check_connection(remote_to_local_conn)
-            check_connection(local_to_remote_conn)
+            local_to_remote_conn = make_partition_connection(
+                    actx, remote_bdry_conn, i_remote_part, local_bdry,
+                    local_adj_groups, local_from_elem_faces,
+                    local_from_elem_indices)
 
-            true_local_points = f(local_bdry.nodes()[0].with_queue(queue))
-            remote_points = local_to_remote_conn(queue, true_local_points)
-            local_points = remote_to_local_conn(queue, remote_points)
+            check_connection(actx, remote_to_local_conn)
+            check_connection(actx, local_to_remote_conn)
 
-            err = la.norm((true_local_points - local_points).get(), np.inf)
+            true_local_points = f(thaw(actx, local_bdry.nodes()[0]))
+            remote_points = local_to_remote_conn(true_local_points)
+            local_points = remote_to_local_conn(remote_points)
+
+            err = flat_norm(true_local_points - local_points, np.inf)
             eoc_rec[i_local_part, i_remote_part].add_data_point(1./n, err)
 
     for (i, j), e in eoc_rec.items():
