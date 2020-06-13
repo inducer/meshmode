@@ -23,12 +23,13 @@ THE SOFTWARE.
 """
 
 import numpy as np
-import pyopencl as cl
-import pyopencl.array  # noqa
 
-from loopy.version import MOST_RECENT_LANGUAGE_VERSION
-from pytools import memoize_method, memoize_in
+from pytools import keyed_memoize_method, memoize_in
 
+import loopy as lp
+
+from meshmode.array_context import make_loopy_program
+from meshmode.dof_array import DOFArray
 from meshmode.discretization.connection.direct import (
         DiscretizationConnection,
         DirectDiscretizationConnection)
@@ -78,8 +79,8 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 to_discr=self.conn.from_discr,
                 is_surjective=is_surjective)
 
-    @memoize_method
-    def _batch_weights(self):
+    @keyed_memoize_method(key=lambda actx: ())
+    def _batch_weights(self, actx):
         """Computes scaled quadrature weights for each interpolation batch in
         :attr:`conn`. The quadrature weights can be used to integrate over
         child elements in the domain of the parent element, by a change of
@@ -111,26 +112,26 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     mat = grp.diff_matrices()[iaxis]
                     jac[iaxis] = mat.dot(batch.result_unit_nodes.T)
 
-                weights[igrp, ibatch] = det(jac) * grp.weights
+                weights[igrp, ibatch] = actx.freeze(actx.from_numpy(
+                    det(jac) * grp.weights))
 
         return weights
 
-    def __call__(self, queue, vec):
+    def __call__(self, vec):
         @memoize_in(self, "conn_projection_knl")
         def kproj():
-            import loopy as lp
-            knl = lp.make_kernel([
-                "{[k]: 0 <= k < nelements}",
-                "{[j]: 0 <= j < n_from_nodes}"
+            return make_loopy_program([
+                "{[iel]: 0 <= iel < nelements}",
+                "{[idof_quad]: 0 <= idof_quad < n_from_nodes}"
                 ],
                 """
-                for k
-                    <> element_dot = \
-                            sum(j, vec[from_element_indices[k], j] * \
-                                   basis[j] * weights[j])
+                for iel
+                    <> element_dot = sum(idof_quad,
+                                vec[from_element_indices[iel], idof_quad]
+                                * basis[idof_quad] * weights[idof_quad])
 
-                    result[to_element_indices[k], ibasis] = \
-                            result[to_element_indices[k], ibasis] + element_dot
+                    result[to_element_indices[iel], ibasis] = \
+                            result[to_element_indices[iel], ibasis] + element_dot
                 end
                 """,
                 [
@@ -148,21 +149,17 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("ibasis", np.int32),
                     '...'
                     ],
-                name="conn_projection_knl",
-                lang_version=MOST_RECENT_LANGUAGE_VERSION)
-
-            return knl
+                name="conn_projection_knl")
 
         @memoize_in(self, "conn_evaluation_knl")
         def keval():
-            import loopy as lp
-            knl = lp.make_kernel([
-                "{[k]: 0 <= k < nelements}",
-                "{[j]: 0 <= j < n_to_nodes}"
+            return make_loopy_program([
+                "{[iel]: 0 <= iel < nelements}",
+                "{[idof]: 0 <= idof < n_to_nodes}"
                 ],
                 """
-                    result[k, j] = result[k, j] + \
-                            coefficients[k, ibasis] * basis[j]
+                    result[iel, idof] = result[iel, idof] + \
+                            coefficients[iel, ibasis] * basis[idof]
                 """,
                 [
                     lp.GlobalArg("coefficients", None,
@@ -170,55 +167,54 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("ibasis", np.int32),
                     '...'
                     ],
-                name="conn_evaluate_knl",
-                default_offset=lp.auto,
-                lang_version=MOST_RECENT_LANGUAGE_VERSION)
+                name="conn_evaluate_knl")
 
-            return knl
-
-        if not isinstance(vec, cl.array.Array):
+        if not isinstance(vec, DOFArray):
             raise TypeError("non-array passed to discretization connection")
 
-        if vec.shape != (self.from_discr.nnodes,):
-            raise ValueError("invalid shape of incoming resampling data")
+        actx = vec.array_context
 
         # compute weights on each refinement of the reference element
-        weights = self._batch_weights()
+        weights = self._batch_weights(actx)
 
         # perform dot product (on reference element) to get basis coefficients
-        c = self.to_discr.zeros(queue, dtype=vec.dtype)
+        c = self.to_discr.zeros(actx, dtype=vec.entry_dtype)
+
         for igrp, (tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.conn.groups)):
             for ibatch, batch in enumerate(cgrp.batches):
                 sgrp = self.from_discr.groups[batch.from_group_index]
 
                 for ibasis, basis_fn in enumerate(sgrp.basis()):
-                    basis = basis_fn(batch.result_unit_nodes).flatten()
+                    basis = actx.from_numpy(
+                            basis_fn(batch.result_unit_nodes).flatten())
 
                     # NOTE: batch.*_element_indices are reversed here because
                     # they are from the original forward connection, but
                     # we are going in reverse here. a bit confusing, but
                     # saves on recreating the connection groups and batches.
-                    kproj()(queue,
+                    actx.call_loopy(kproj(),
                             ibasis=ibasis,
-                            vec=sgrp.view(vec),
+                            vec=vec[sgrp.index],
                             basis=basis,
                             weights=weights[igrp, ibatch],
-                            result=tgrp.view(c),
+                            result=c[igrp],
                             from_element_indices=batch.to_element_indices,
                             to_element_indices=batch.from_element_indices)
 
         # evaluate at unit_nodes to get the vector on to_discr
-        result = self.to_discr.zeros(queue, dtype=vec.dtype)
+        result = self.to_discr.zeros(actx, dtype=vec.entry_dtype)
         for igrp, grp in enumerate(self.to_discr.groups):
             for ibasis, basis_fn in enumerate(grp.basis()):
-                basis = basis_fn(grp.unit_nodes).flatten()
+                basis = actx.from_numpy(
+                        basis_fn(grp.unit_nodes).flatten())
 
-                keval()(queue,
+                actx.call_loopy(
+                        keval(),
                         ibasis=ibasis,
-                        result=grp.view(result),
+                        result=result[grp.index],
                         basis=basis,
-                        coefficients=grp.view(c))
+                        coefficients=c[grp.index])
 
         return result
 

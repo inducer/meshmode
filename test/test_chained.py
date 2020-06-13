@@ -23,27 +23,25 @@ THE SOFTWARE.
 """
 
 import numpy as np
-import numpy.linalg as la
 
 import pyopencl as cl
-import pyopencl.array  # noqa
-import pyopencl.clmath  # noqa
 
 import pytest
 from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 
+from meshmode.array_context import PyOpenCLArrayContext
+from meshmode.dof_array import thaw, flat_norm, flatten
+
 import logging
 logger = logging.getLogger(__name__)
 
 
-def create_discretization(queue, ndim,
+def create_discretization(actx, ndim,
                           nelements=42,
                           mesh_name=None,
                           order=4):
-    ctx = queue.context
-
     # construct mesh
     if ndim == 2:
         from functools import partial
@@ -80,13 +78,13 @@ def create_discretization(queue, ndim,
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
             InterpolatoryQuadratureSimplexGroupFactory
-    discr = Discretization(ctx, mesh,
+    discr = Discretization(actx, mesh,
             InterpolatoryQuadratureSimplexGroupFactory(order))
 
     return discr
 
 
-def create_refined_connection(queue, discr, threshold=0.3):
+def create_refined_connection(actx, discr, threshold=0.3):
     from meshmode.mesh.refinement import RefinerWithoutAdjacency
     from meshmode.discretization.connection import make_refinement_connection
     from meshmode.discretization.poly_element import \
@@ -97,20 +95,20 @@ def create_refined_connection(queue, discr, threshold=0.3):
     refiner.refine(flags)
 
     discr_order = discr.groups[0].order
-    connection = make_refinement_connection(refiner, discr,
+    connection = make_refinement_connection(actx, refiner, discr,
             InterpolatoryQuadratureSimplexGroupFactory(discr_order))
 
     return connection
 
 
-def create_face_connection(queue, discr):
+def create_face_connection(actx, discr):
     from meshmode.discretization.connection import FACE_RESTR_ALL
     from meshmode.discretization.connection import make_face_restriction
     from meshmode.discretization.poly_element import \
             InterpolatoryQuadratureSimplexGroupFactory
 
     discr_order = discr.groups[0].order
-    connection = make_face_restriction(discr,
+    connection = make_face_restriction(actx, discr,
             InterpolatoryQuadratureSimplexGroupFactory(discr_order),
             FACE_RESTR_ALL,
             per_face_groups=True)
@@ -126,19 +124,20 @@ def test_chained_batch_table(ctx_factory, ndim, visualize=False):
 
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
 
-    discr = create_discretization(queue, ndim)
+    discr = create_discretization(actx, ndim)
     connections = []
-    conn = create_refined_connection(queue, discr)
+    conn = create_refined_connection(actx, discr)
     connections.append(conn)
-    conn = create_refined_connection(queue, conn.to_discr)
+    conn = create_refined_connection(actx, conn.to_discr)
     connections.append(conn)
 
     from meshmode.discretization.connection import ChainedDiscretizationConnection
     chained = ChainedDiscretizationConnection(connections)
 
     conn = chained.connections[0]
-    el_table = _build_element_lookup_table(queue, conn)
+    el_table = _build_element_lookup_table(actx, conn)
     for igrp, grp in enumerate(conn.groups):
         for ibatch, batch in enumerate(grp.batches):
             ifrom = batch.from_element_indices.get(queue)
@@ -156,15 +155,15 @@ def test_chained_new_group_table(ctx_factory, ndim, visualize=False):
 
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
 
-    discr = create_discretization(queue, ndim,
+    discr = create_discretization(actx, ndim,
                                   nelements=8,
-                                  mesh_order=2,
-                                  discr_order=2)
+                                  order=2)
     connections = []
-    conn = create_refined_connection(queue, discr)
+    conn = create_refined_connection(actx, discr)
     connections.append(conn)
-    conn = create_refined_connection(queue, conn.to_discr)
+    conn = create_refined_connection(actx, conn.to_discr)
     connections.append(conn)
 
     grp_to_grp, grp_info = _build_new_group_table(connections[0],
@@ -202,29 +201,31 @@ def test_chained_new_group_table(ctx_factory, ndim, visualize=False):
 def test_chained_connection(ctx_factory, ndim, visualize=False):
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
 
-    discr = create_discretization(queue, ndim,
-                                  nelements=10)
+    discr = create_discretization(actx, ndim, nelements=10)
     connections = []
-    conn = create_refined_connection(queue, discr, threshold=np.inf)
+    conn = create_refined_connection(actx, discr, threshold=np.inf)
     connections.append(conn)
-    conn = create_refined_connection(queue, conn.to_discr, threshold=np.inf)
+    conn = create_refined_connection(actx, conn.to_discr, threshold=np.inf)
     connections.append(conn)
 
     from meshmode.discretization.connection import \
             ChainedDiscretizationConnection
     chained = ChainedDiscretizationConnection(connections)
 
+    sin = actx.special_func("sin")
+
     def f(x):
         from six.moves import reduce
-        return 0.1 * reduce(lambda x, y: x * cl.clmath.sin(5 * y), x)
+        return 0.1 * reduce(lambda x, y: x * sin(5 * y), x)
 
-    x = connections[0].from_discr.nodes().with_queue(queue)
+    x = thaw(actx, connections[0].from_discr.nodes())
     fx = f(x)
-    f1 = chained(queue, fx).get(queue)
-    f2 = connections[1](queue, connections[0](queue, fx)).get(queue)
+    f1 = chained(fx)
+    f2 = connections[1](connections[0](fx))
 
-    assert np.allclose(f1, f2)
+    assert flat_norm(f1-f2, np.inf) / flat_norm(f2) < 1e-11
 
 
 @pytest.mark.skip(reason='slow test')
@@ -235,29 +236,32 @@ def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
 
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
 
-    discr = create_discretization(queue, ndim)
+    discr = create_discretization(actx, ndim)
     connections = []
-    conn = create_refined_connection(queue, discr)
+    conn = create_refined_connection(actx, discr)
     connections.append(conn)
-    conn = create_refined_connection(queue, conn.to_discr)
+    conn = create_refined_connection(actx, conn.to_discr)
     connections.append(conn)
 
     from meshmode.discretization.connection import \
             ChainedDiscretizationConnection
     chained = ChainedDiscretizationConnection(connections)
 
+    sin = actx.special_func("sin")
+
     def f(x):
         from six.moves import reduce
-        return 0.1 * reduce(lambda x, y: x * cl.clmath.sin(5 * y), x)
+        return 0.1 * reduce(lambda x, y: x * sin(5 * y), x)
 
-    resample_mat = make_full_resample_matrix(queue, chained).get(queue)
+    resample_mat = actx.to_numpy(make_full_resample_matrix(actx, chained))
 
-    x = connections[0].from_discr.nodes().with_queue(queue)
+    x = thaw(actx, connections[0].from_discr.nodes())
     fx = f(x)
-    f1 = np.dot(resample_mat, fx.get(queue))
-    f2 = chained(queue, fx).get(queue)
-    f3 = connections[1](queue, connections[0](queue, fx)).get(queue)
+    f1 = resample_mat @ actx.to_numpy(flatten(fx))
+    f2 = actx.to_numpy(flatten(chained(fx)))
+    f3 = actx.to_numpy(flatten(connections[1](connections[0](fx))))
 
     assert np.allclose(f1, f2)
     assert np.allclose(f2, f3)
@@ -273,25 +277,26 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type,
 
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
 
-    discr = create_discretization(queue, ndim, nelements=nelements)
+    discr = create_discretization(actx, ndim, nelements=nelements)
     connections = []
     if chain_type == 1:
-        conn = create_refined_connection(queue, discr)
+        conn = create_refined_connection(actx, discr)
         connections.append(conn)
-        conn = create_refined_connection(queue, conn.to_discr)
+        conn = create_refined_connection(actx, conn.to_discr)
         connections.append(conn)
     elif chain_type == 2:
-        conn = create_refined_connection(queue, discr)
+        conn = create_refined_connection(actx, discr)
         connections.append(conn)
-        conn = create_refined_connection(queue, conn.to_discr)
+        conn = create_refined_connection(actx, conn.to_discr)
         connections.append(conn)
-        conn = create_refined_connection(queue, conn.to_discr)
+        conn = create_refined_connection(actx, conn.to_discr)
         connections.append(conn)
     elif chain_type == 3 and ndim == 3:
-        conn = create_refined_connection(queue, discr, threshold=np.inf)
+        conn = create_refined_connection(actx, discr, threshold=np.inf)
         connections.append(conn)
-        conn = create_face_connection(queue, conn.to_discr)
+        conn = create_face_connection(actx, conn.to_discr)
         connections.append(conn)
     else:
         raise ValueError('unknown test case')
@@ -301,7 +306,7 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type,
     chained = ChainedDiscretizationConnection(connections)
 
     t_start = time.time()
-    direct = flatten_chained_connection(queue, chained)
+    direct = flatten_chained_connection(actx, chained)
     t_end = time.time()
     if visualize:
         print('[TIME] Flatten: {:.5e}'.format(t_end - t_start))
@@ -315,21 +320,23 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type,
                     to_element_indices[i] += 1
         assert np.min(to_element_indices) > 0
 
+    sin = actx.special_func("sin")
+
     def f(x):
         from six.moves import reduce
-        return 0.1 * reduce(lambda x, y: x * cl.clmath.sin(5 * y), x)
+        return 0.1 * reduce(lambda x, y: x * sin(5 * y), x)
 
-    x = connections[0].from_discr.nodes().with_queue(queue)
+    x = thaw(actx, connections[0].from_discr.nodes())
     fx = f(x)
 
     t_start = time.time()
-    f1 = direct(queue, fx).get(queue)
+    f1 = actx.to_numpy(flatten(direct(fx)))
     t_end = time.time()
     if visualize:
         print('[TIME] Direct: {:.5e}'.format(t_end - t_start))
 
     t_start = time.time()
-    f2 = chained(queue, fx).get(queue)
+    f2 = actx.to_numpy(flatten(chained(fx)))
     t_end = time.time()
     if visualize:
         print('[TIME] Chained: {:.5e}'.format(t_end - t_start))
@@ -351,27 +358,28 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type,
 @pytest.mark.parametrize(("ndim", "mesh_name"), [
     (2, "starfish"),
     (3, "torus")])
-def test_reversed_chained_connection(ctx_factory, ndim, mesh_name, visualize=False):
+def test_reversed_chained_connection(ctx_factory, ndim, mesh_name):
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     def run(nelements, order):
-        discr = create_discretization(queue, ndim,
+        discr = create_discretization(actx, ndim,
             nelements=nelements,
             order=order,
             mesh_name=mesh_name)
 
         threshold = 1.0
         connections = []
-        conn = create_refined_connection(queue,
+        conn = create_refined_connection(actx,
                 discr, threshold=threshold)
         connections.append(conn)
         if ndim == 2:
             # NOTE: additional refinement makes the 3D meshes explode in size
-            conn = create_refined_connection(queue,
+            conn = create_refined_connection(actx,
                     conn.to_discr, threshold=threshold)
             connections.append(conn)
-            conn = create_refined_connection(queue,
+            conn = create_refined_connection(actx,
                     conn.to_discr, threshold=threshold)
             connections.append(conn)
 
@@ -383,21 +391,21 @@ def test_reversed_chained_connection(ctx_factory, ndim, mesh_name, visualize=Fal
         reverse = L2ProjectionInverseDiscretizationConnection(chained)
 
         # create test vector
-        from_nodes = chained.from_discr.nodes().with_queue(queue)
-        to_nodes = chained.to_discr.nodes().with_queue(queue)
+        from_nodes = thaw(actx, chained.from_discr.nodes())
+        to_nodes = thaw(actx, chained.to_discr.nodes())
+
+        cos = actx.special_func("cos")
 
         from_x = 0
         to_x = 0
         for d in range(ndim):
-            from_x += cl.clmath.cos(from_nodes[d]) ** (d + 1)
-            to_x += cl.clmath.cos(to_nodes[d]) ** (d + 1)
+            from_x += cos(from_nodes[d]) ** (d + 1)
+            to_x += cos(to_nodes[d]) ** (d + 1)
 
-        from_interp = reverse(queue, to_x)
+        from_interp = reverse(to_x)
 
-        from_interp = from_interp.get(queue)
-        from_x = from_x.get(queue)
-
-        return 1.0 / nelements, la.norm(from_interp - from_x) / la.norm(from_x)
+        return (1.0 / nelements,
+                flat_norm(from_interp - from_x, np.inf) / flat_norm(from_x, np.inf))
 
     from pytools.convergence import EOCRecorder
     eoc = EOCRecorder()
