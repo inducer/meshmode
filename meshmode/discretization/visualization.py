@@ -130,6 +130,18 @@ class Visualizer(object):
                         "element groups")
             return resampled.array_context.to_numpy(resampled[0]).reshape(-1)
 
+    @memoize_method
+    def _vis_nodes(self):
+        if len(self.vis_discr.groups) != 1:
+            raise NotImplementedError("visualization with multiple "
+                    "element groups")
+
+        actx = self.vis_discr._setup_actx
+        return np.array([
+            actx.to_numpy(actx.thaw(ary[0]))
+            for ary in self.vis_discr.nodes()
+            ])
+
     # {{{ vis sub-element connectivity
 
     @memoize_method
@@ -233,10 +245,8 @@ class Visualizer(object):
 
         do_show = kwargs.pop("do_show", True)
 
-        with cl.CommandQueue(self.vis_discr.cl_context) as queue:
-            nodes = self.vis_discr.nodes().with_queue(queue).get()
-
-            field = self._resample_and_get(queue, field)
+        nodes = self._vis_nodes()
+        field = self._resample_to_numpy(field)
 
         assert nodes.shape[0] == self.vis_discr.ambient_dim
         #mlab.points3d(nodes[0], nodes[1], 0*nodes[0])
@@ -280,18 +290,6 @@ class Visualizer(object):
     # }}}
 
     # {{{ vtk
-
-    @memoize_method
-    def _vis_nodes(self):
-        if len(self.vis_discr.groups) != 1:
-            raise NotImplementedError("visualization with multiple "
-                    "element groups")
-
-        actx = self.vis_discr._setup_actx
-        return np.array([
-            actx.to_numpy(actx.thaw(ary[0]))
-            for ary in self.vis_discr.nodes()
-            ])
 
     def write_vtk_file(self, file_name, names_and_fields,
                        compressor=None,
@@ -381,10 +379,8 @@ class Visualizer(object):
         vmax = kwargs.pop("vmax", None)
         norm = kwargs.pop("norm", None)
 
-        with cl.CommandQueue(self.vis_discr.cl_context) as queue:
-            nodes = self.vis_discr.nodes().with_queue(queue).get()
-
-            field = self._resample_and_get(queue, field)
+        nodes = self._vis_nodes()
+        field = self._resample_to_numpy(field)
 
         assert nodes.shape[0] == self.vis_discr.ambient_dim
 
@@ -472,16 +468,18 @@ def draw_curve(discr):
     plt.plot(mesh.vertices[0], mesh.vertices[1], "o")
 
     color = plt.cm.rainbow(np.linspace(0, 1, len(discr.groups)))
-    with cl.CommandQueue(discr.cl_context) as queue:
-        for i, group in enumerate(discr.groups):
-            group_nodes = group.view(discr.nodes()).get(queue=queue)
-            artist_handles = plt.plot(
-                    group_nodes[0].T,
-                    group_nodes[1].T, "-x",
-                    color=color[i])
+    for igrp, group in enumerate(discr.groups):
+        group_nodes = np.array([
+            discr._setup_actx.to_numpy(discr.nodes()[iaxis][igrp])
+            for iaxis in range(discr.ambient_dim)
+            ])
+        artist_handles = plt.plot(
+                group_nodes[0].T,
+                group_nodes[1].T, "-x",
+                color=color[igrp])
 
-            if artist_handles:
-                artist_handles[0].set_label("Group %d" % i)
+        if artist_handles:
+            artist_handles[0].set_label("Group %d" % igrp)
 
 # }}}
 
