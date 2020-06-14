@@ -30,7 +30,7 @@ import numpy as np
 import pyopencl as cl
 
 from meshmode.array_context import PyOpenCLArrayContext
-from meshmode.dof_array import thaw, flat_norm
+from meshmode.dof_array import thaw, flatten, unflatten, flat_norm
 
 from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
@@ -364,9 +364,10 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     group_factory = PolynomialWarpAndBlendGroupFactory(order)
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     from meshmode.discretization import Discretization
-    vol_discr = Discretization(cl_ctx, local_mesh, group_factory)
+    vol_discr = Discretization(actx, local_mesh, group_factory)
 
     from meshmode.distributed import get_connected_partitions
     connected_parts = get_connected_partitions(local_mesh)
@@ -378,11 +379,11 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     from meshmode.mesh import BTAG_PARTITION
     for i_remote_part in connected_parts:
         local_bdry_conns[i_remote_part] = make_face_restriction(
-                vol_discr, group_factory, BTAG_PARTITION(i_remote_part))
+                actx, vol_discr, group_factory, BTAG_PARTITION(i_remote_part))
 
         setup_helper = bdry_setup_helpers[i_remote_part] = \
                 MPIBoundaryCommSetupHelper(
-                        mpi_comm, queue, local_bdry_conns[i_remote_part],
+                        mpi_comm, actx, local_bdry_conns[i_remote_part],
                         i_remote_part, bdry_grp_factory=group_factory)
 
         setup_helper.post_sends()
@@ -394,14 +395,14 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
             if setup_helper.is_setup_ready():
                 assert bdry_setup_helpers.pop(i_remote_part) is setup_helper
                 conn = setup_helper.complete_setup()
-                check_connection(conn)
+                check_connection(actx, conn)
                 remote_to_local_bdry_conns[i_remote_part] = conn
                 break
 
         # FIXME: Not ideal, busy-waits
 
     _test_data_transfer(mpi_comm,
-                        queue,
+                        actx,
                         local_bdry_conns,
                         remote_to_local_bdry_conns,
                         connected_parts)
@@ -410,12 +411,14 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
 
 
 # TODO
-def _test_data_transfer(mpi_comm, queue, local_bdry_conns,
+def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
                         remote_to_local_bdry_conns, connected_parts):
     from mpi4py import MPI
 
+    sin = actx.special_func("sin")
+
     def f(x):
-        return 10*cl.clmath.sin(20.*x)
+        return 10*sin(20.*x)
 
     '''
     Here is a simplified example of what happens from
@@ -440,13 +443,13 @@ def _test_data_transfer(mpi_comm, queue, local_bdry_conns,
     for i_remote_part in connected_parts:
         conn = remote_to_local_bdry_conns[i_remote_part]
         bdry_discr = local_bdry_conns[i_remote_part].to_discr
-        bdry_x = bdry_discr.nodes()[0].with_queue(queue=queue)
+        bdry_x = thaw(actx, bdry_discr.nodes()[0])
 
         true_local_f = f(bdry_x)
-        remote_f = conn(queue, true_local_f)
+        remote_f = conn(true_local_f)
 
         # 2.
-        send_reqs.append(mpi_comm.isend(remote_f.get(queue=queue),
+        send_reqs.append(mpi_comm.isend(actx.to_numpy(flatten(remote_f)),
                                         dest=i_remote_part,
                                         tag=TAG_SEND_REMOTE_NODES))
 
@@ -476,12 +479,9 @@ def _test_data_transfer(mpi_comm, queue, local_bdry_conns,
     send_reqs = []
     for i_remote_part in connected_parts:
         conn = remote_to_local_bdry_conns[i_remote_part]
-        local_f_np = remote_to_local_f_data[i_remote_part]
-        local_f_cl = cl.array.Array(queue,
-                                    shape=local_f_np.shape,
-                                    dtype=local_f_np.dtype)
-        local_f_cl.set(local_f_np)
-        remote_f = conn(queue, local_f_cl).get(queue=queue)
+        local_f = unflatten(actx, conn.from_discr,
+                actx.from_numpy(remote_to_local_f_data[i_remote_part]))
+        remote_f = actx.to_numpy(flatten(conn(local_f)))
 
         # 5.
         send_reqs.append(mpi_comm.isend(remote_f,
@@ -513,9 +513,9 @@ def _test_data_transfer(mpi_comm, queue, local_bdry_conns,
     # 7.
     for i_remote_part in connected_parts:
         bdry_discr = local_bdry_conns[i_remote_part].to_discr
-        bdry_x = bdry_discr.nodes()[0].with_queue(queue=queue)
+        bdry_x = thaw(actx, bdry_discr.nodes()[0])
 
-        true_local_f = f(bdry_x).get(queue=queue)
+        true_local_f = actx.to_numpy(flatten(f(bdry_x)))
         local_f = local_f_data[i_remote_part]
 
         from numpy.linalg import norm
