@@ -194,8 +194,6 @@ def unflatten(actx: ArrayContext, discr: "_Discretization", ary) -> np.ndarray:
                 lambda subary: unflatten(actx, discr, subary),
                 ary)
 
-    actx = ary.array_context
-
     @memoize_in(actx, "unflatten_prg")
     def prg():
         return make_loopy_program(
@@ -204,13 +202,19 @@ def unflatten(actx: ArrayContext, discr: "_Discretization", ary) -> np.ndarray:
             name="unflatten")
 
     group_sizes = [grp.nelements*grp.nunit_dofs for grp in discr.groups]
+    if ary.size != sum(group_sizes):
+        raise ValueError("array has size %d, expected %d"
+                % (ary.size, sum(group_sizes)))
+
     group_starts = np.cumsum([0] + group_sizes)
 
-    return DOFArray.from_list(None, [
+    return DOFArray.from_list(actx, [
             actx.freeze(
                 actx.call_loopy(
                     prg(),
-                    grp_start=grp_start, ary=ary
+                    grp_start=grp_start, ary=ary,
+                    nelements=grp.nelements,
+                    nunit_dofs=grp.nunit_dofs,
                     )["result"])
             for grp_start, grp in zip(group_starts, discr.groups)])
 
