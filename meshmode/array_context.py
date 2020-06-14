@@ -109,6 +109,21 @@ class ArrayContext:
         raise NotImplementedError
 
     @memoize_method
+    def _get_special_func_loopy_program(self, name, nargs):
+        from pymbolic import var
+        iel = var("iel")
+        idof = var("idof")
+        return make_loopy_program(
+                "{[iel, idof]: 0<=iel<nelements and 0<=idof<ndofs}",
+                [
+                    lp.Assignment(
+                        var("out")[iel, idof],
+                        var(name)(*[
+                            var("inp%d" % i)[iel, idof] for i in range(nargs)]))
+                    ],
+                name="actx_special_%s" % name)
+
+    @memoize_method
     def special_func(self, name):
         """Returns a callable for the special function *name*, where *name* is a
         (potentially dotted) function name resolvable by :mod:`loopy`.
@@ -116,19 +131,16 @@ class ArrayContext:
         The returned callable will vectorize over object arrays, including
         :class:`meshmode.dof_array.DOFArray`.
         """
-        prg = make_loopy_program(
-                "{[iel, idof]: 0<=iel<nelements and 0<=idof<ndofs}",
-                "out[iel, idof] = %s(inp[iel, idof])" % name,
-                name="actx_special_%s" % name)
-
-        def f(ary):
+        def f(*args):
             # FIXME: Maybe involve loopy type inference?
-            result = self.empty(ary.shape, ary.dtype)
-            self.call_loopy(prg, inp=ary, out=result)
+            result = self.empty(args[0].shape, args[0].dtype)
+            prg = self._get_special_func_loopy_program(name, len(args))
+            self.call_loopy(prg, out=result,
+                    **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result
 
-        from pytools.obj_array import obj_array_vectorized
-        return obj_array_vectorized(f)
+        from pytools.obj_array import obj_array_vectorized_n_args
+        return obj_array_vectorized_n_args(f)
 
     def freeze(self, array):
         """Return a version of the context-defined array *array* that is
