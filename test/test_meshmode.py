@@ -567,13 +567,14 @@ def test_3d_orientation(ctx_factory, what, mesh_gen_func, visualize=False):
 
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     mesh = mesh_gen_func()
 
     logger.info("%d elements" % mesh.nelements)
 
     from meshmode.discretization import Discretization
-    discr = Discretization(ctx, mesh,
+    discr = Discretization(actx, mesh,
             PolynomialWarpAndBlendGroupFactory(1))
 
     from pytential import bind, sym
@@ -594,17 +595,18 @@ def test_3d_orientation(ctx_factory, what, mesh_gen_func, visualize=False):
         normal_outward_expr = (
                 sym.normal(mesh.ambient_dim) | sym.nodes(mesh.ambient_dim))
 
-    normal_outward_check = bind(discr, normal_outward_expr)(queue).as_scalar() > 0
+    normal_outward_check = actx.to_numpy(
+            flatten(bind(discr, normal_outward_expr)(actx).as_scalar())) > 0
 
-    assert normal_outward_check.get().all(), normal_outward_check.get()
+    assert normal_outward_check.all(), normal_outward_check
 
     # }}}
 
-    normals = bind(discr, sym.normal(mesh.ambient_dim).xproject(1))(queue)
+    normals = bind(discr, sym.normal(mesh.ambient_dim).xproject(1))(actx)
 
     if visualize:
         from meshmode.discretization.visualization import make_visualizer
-        vis = make_visualizer(queue, discr, 1)
+        vis = make_visualizer(actx, discr, 1)
 
         vis.write_vtk_file("normals.vtu", [
             ("normals", normals),
@@ -677,6 +679,7 @@ def test_sanity_single_element(ctx_factory, dim, order, visualize=False):
 
     cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     from modepy.tools import unit_vertices
     vertices = unit_vertices(dim).T.copy()
@@ -697,21 +700,20 @@ def test_sanity_single_element(ctx_factory, dim, order, visualize=False):
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
             PolynomialWarpAndBlendGroupFactory
-    vol_discr = Discretization(cl_ctx, mesh,
+    vol_discr = Discretization(actx, mesh,
             PolynomialWarpAndBlendGroupFactory(order+3))
 
     # {{{ volume calculation check
 
-    vol_x = vol_discr.nodes().with_queue(queue)
+    vol_x = thaw(actx, vol_discr.nodes())
 
-    vol_one = vol_x[0].copy()
-    vol_one.fill(1)
+    vol_one = vol_x[0] * 0 + 1
     from pytential import norm, integral  # noqa
 
     from pytools import factorial
     true_vol = 1/factorial(dim) * 2**dim
 
-    comp_vol = integral(vol_discr, queue, vol_one)
+    comp_vol = integral(vol_discr, vol_one)
     rel_vol_err = abs(true_vol - comp_vol) / true_vol
 
     assert rel_vol_err < 1e-12
@@ -722,7 +724,7 @@ def test_sanity_single_element(ctx_factory, dim, order, visualize=False):
 
     from meshmode.discretization.connection import make_face_restriction
     bdry_connection = make_face_restriction(
-            vol_discr, PolynomialWarpAndBlendGroupFactory(order + 3),
+            actx, vol_discr, PolynomialWarpAndBlendGroupFactory(order + 3),
             BTAG_ALL)
     bdry_discr = bdry_connection.to_discr
 
@@ -732,12 +734,12 @@ def test_sanity_single_element(ctx_factory, dim, order, visualize=False):
 
     from meshmode.discretization.visualization import make_visualizer
     #vol_vis = make_visualizer(queue, vol_discr, 4)
-    bdry_vis = make_visualizer(queue, bdry_discr, 4)
+    bdry_vis = make_visualizer(actx, bdry_discr, 4)
 
     # }}}
 
     from pytential import bind, sym
-    bdry_normals = bind(bdry_discr, sym.normal(dim))(queue).as_vector(dtype=object)
+    bdry_normals = bind(bdry_discr, sym.normal(dim))(actx).as_vector(dtype=object)
 
     if visualize:
         bdry_vis.write_vtk_file("boundary.vtu", [
@@ -747,9 +749,10 @@ def test_sanity_single_element(ctx_factory, dim, order, visualize=False):
     normal_outward_check = bind(bdry_discr,
             sym.normal(dim)
             | (sym.nodes(dim) + 0.5*sym.ones_vec(dim)),
-            )(queue).as_scalar() > 0
+            )(actx).as_scalar()
 
-    assert normal_outward_check.get().all(), normal_outward_check.get()
+    normal_outward_check = actx.to_numpy(flatten(normal_outward_check) > 0)
+    assert normal_outward_check.all(), normal_outward_check
 
 # }}}
 
@@ -815,14 +818,14 @@ def test_sanity_qhull_nd(ctx_factory, dim, order):
     ("ball-radius-1.step", 3),
     ])
 @pytest.mark.parametrize("mesh_order", [1, 2])
-def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
-        visualize=False):
+def test_sanity_balls(ctx_factory, src_file, dim, mesh_order, visualize=False):
     pytest.importorskip("pytential")
 
     logging.basicConfig(level=logging.INFO)
 
     ctx = ctx_factory()
     queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     from pytools.convergence import EOCRecorder
     vol_eoc_rec = EOCRecorder()
@@ -838,18 +841,20 @@ def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
         mesh = generate_gmsh(
                 FileSource(src_file), dim, order=mesh_order,
                 other_options=["-string", "Mesh.CharacteristicLengthMax = %g;" % h],
-                force_ambient_dim=dim)
+                force_ambient_dim=dim,
+                target_unit="MM")
 
         logger.info("%d elements" % mesh.nelements)
 
         # {{{ discretizations and connections
 
         from meshmode.discretization import Discretization
-        vol_discr = Discretization(ctx, mesh,
+        vol_discr = Discretization(actx, mesh,
                 InterpolatoryQuadratureSimplexGroupFactory(quad_order))
 
         from meshmode.discretization.connection import make_face_restriction
         bdry_connection = make_face_restriction(
+                actx,
                 vol_discr,
                 InterpolatoryQuadratureSimplexGroupFactory(quad_order),
                 BTAG_ALL)
@@ -860,8 +865,8 @@ def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
         # {{{ visualizers
 
         from meshmode.discretization.visualization import make_visualizer
-        vol_vis = make_visualizer(queue, vol_discr, 20)
-        bdry_vis = make_visualizer(queue, bdry_discr, 20)
+        vol_vis = make_visualizer(actx, vol_discr, 20)
+        bdry_vis = make_visualizer(actx, bdry_discr, 20)
 
         # }}}
 
@@ -869,27 +874,25 @@ def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
         true_surf = 2*np.pi**(dim/2)/gamma(dim/2)
         true_vol = true_surf/dim
 
-        vol_x = vol_discr.nodes().with_queue(queue)
+        vol_x = thaw(actx, vol_discr.nodes())
 
-        vol_one = vol_x[0].copy()
-        vol_one.fill(1)
+        vol_one = vol_x[0]*0 + 1
         from pytential import norm, integral  # noqa
 
-        comp_vol = integral(vol_discr, queue, vol_one)
+        comp_vol = integral(vol_discr, vol_one)
         rel_vol_err = abs(true_vol - comp_vol) / true_vol
         vol_eoc_rec.add_data_point(h, rel_vol_err)
         print("VOL", true_vol, comp_vol)
 
-        bdry_x = bdry_discr.nodes().with_queue(queue)
+        bdry_x = thaw(actx, bdry_discr.nodes())
 
-        bdry_one_exact = bdry_x[0].copy()
-        bdry_one_exact.fill(1)
+        bdry_one_exact = bdry_x[0] * 0 + 1
 
-        bdry_one = bdry_connection(queue, vol_one).with_queue(queue)
-        intp_err = norm(bdry_discr, queue, bdry_one-bdry_one_exact)
+        bdry_one = bdry_connection(vol_one)
+        intp_err = norm(bdry_discr, bdry_one-bdry_one_exact)
         assert intp_err < 1e-14
 
-        comp_surf = integral(bdry_discr, queue, bdry_one)
+        comp_surf = integral(bdry_discr, bdry_one)
         rel_surf_err = abs(true_surf - comp_surf) / true_surf
         surf_eoc_rec.add_data_point(h, rel_surf_err)
         print("SURF", true_surf, comp_surf)
@@ -900,7 +903,7 @@ def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
                 ("area_el", bind(
                     vol_discr,
                     sym.area_element(mesh.ambient_dim, mesh.ambient_dim))
-                    (queue)),
+                    (actx)),
                 ])
             bdry_vis.write_vtk_file("boundary-h=%g.vtu" % h, [("f", bdry_one)])
 
@@ -908,9 +911,10 @@ def test_sanity_balls(ctx_factory, src_file, dim, mesh_order,
 
         normal_outward_check = bind(bdry_discr,
                 sym.normal(mesh.ambient_dim) | sym.nodes(mesh.ambient_dim),
-                )(queue).as_scalar() > 0
+                )(actx).as_scalar()
 
-        assert normal_outward_check.get().all(), normal_outward_check.get()
+        normal_outward_check = actx.to_numpy(flatten(normal_outward_check) > 0)
+        assert normal_outward_check.all(), normal_outward_check
 
         # }}}
 
