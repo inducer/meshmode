@@ -2,7 +2,8 @@ from __future__ import division
 
 import numpy as np  # noqa
 import pyopencl as cl
-
+from meshmode.array_context import PyOpenCLArrayContext
+from meshmode.dof_array import thaw
 
 order = 4
 
@@ -10,6 +11,7 @@ order = 4
 def main():
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     from meshmode.mesh.generation import (  # noqa
             generate_icosphere, generate_icosahedron,
@@ -23,13 +25,13 @@ def main():
             PolynomialWarpAndBlendGroupFactory
 
     discr = Discretization(
-            cl_ctx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+            actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
 
     from meshmode.discretization.visualization import make_visualizer
-    vis = make_visualizer(queue, discr, order)
+    vis = make_visualizer(actx, discr, order)
 
     vis.write_vtk_file("geometry.vtu", [
-        ("f", discr.nodes()[0]),
+        ("f", thaw(actx, discr.nodes()[0])),
         ])
 
     from meshmode.discretization.visualization import \
