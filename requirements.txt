@@ -1,4 +1,5 @@
 numpy
+git+https://gitlab.tiker.net/inducer/pytools.git
 git+https://gitlab.tiker.net/inducer/gmsh_interop.git
 git+https://gitlab.tiker.net/inducer/modepy.git
 git+https://gitlab.tiker.net/inducer/pyopencl.git@better-empty-handling
