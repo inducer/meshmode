@@ -334,7 +334,7 @@ class Discretization(object):
     def nodes(self):
         """
         :returns: object array of shape ``(ambient_dim,)`` containing
-            :class:`~meshmode.dof_array.DOFArray`s of node coordinates.
+            :class:`~meshmode.dof_array.DOFArray`\ s of node coordinates.
         """
 
         @memoize_in(self, "nodes_prg")
