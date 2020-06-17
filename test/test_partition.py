@@ -81,10 +81,8 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
                 continue
             eoc_rec[i, j] = EOCRecorder()
 
-    sin = actx.special_func("sin")
-
     def f(x):
-        return 10.*sin(50.*x)
+        return 10.*actx.np.sin(50.*x)
 
     for n in mesh_pars:
         from meshmode.mesh.generation import generate_warped_rect_mesh
@@ -415,10 +413,8 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
                         remote_to_local_bdry_conns, connected_parts):
     from mpi4py import MPI
 
-    sin = actx.special_func("sin")
-
     def f(x):
-        return 10*sin(20.*x)
+        return 10*actx.np.sin(20.*x)
 
     '''
     Here is a simplified example of what happens from

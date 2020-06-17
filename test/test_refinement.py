@@ -198,8 +198,6 @@ def test_refinement_connection(
     from meshmode.discretization.connection import (
             make_refinement_connection, check_connection)
 
-    sin = actx.special_func("sin")
-
     from pytools.convergence import EOCRecorder
     eoc_rec = EOCRecorder()
 
@@ -239,7 +237,7 @@ def test_refinement_connection(
                 factor = 9
 
             for iaxis in range(len(x)):
-                result = result * sin(factor * (x[iaxis]/mesh_ext[iaxis]))
+                result = result * actx.np.sin(factor * (x[iaxis]/mesh_ext[iaxis]))
 
             return result
 

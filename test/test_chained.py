@@ -214,11 +214,9 @@ def test_chained_connection(ctx_factory, ndim, visualize=False):
             ChainedDiscretizationConnection
     chained = ChainedDiscretizationConnection(connections)
 
-    sin = actx.special_func("sin")
-
     def f(x):
-        from six.moves import reduce
-        return 0.1 * reduce(lambda x, y: x * sin(5 * y), x)
+        from functools import reduce
+        return 0.1 * reduce(lambda x, y: x * actx.np.sin(5 * y), x)
 
     x = thaw(actx, connections[0].from_discr.nodes())
     fx = f(x)
@@ -249,11 +247,9 @@ def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
             ChainedDiscretizationConnection
     chained = ChainedDiscretizationConnection(connections)
 
-    sin = actx.special_func("sin")
-
     def f(x):
         from six.moves import reduce
-        return 0.1 * reduce(lambda x, y: x * sin(5 * y), x)
+        return 0.1 * reduce(lambda x, y: x * actx.np.sin(5 * y), x)
 
     resample_mat = actx.to_numpy(make_full_resample_matrix(actx, chained))
 
@@ -320,11 +316,9 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type,
                     to_element_indices[i] += 1
         assert np.min(to_element_indices) > 0
 
-    sin = actx.special_func("sin")
-
     def f(x):
         from six.moves import reduce
-        return 0.1 * reduce(lambda x, y: x * sin(5 * y), x)
+        return 0.1 * reduce(lambda x, y: x * actx.np.sin(5 * y), x)
 
     x = thaw(actx, connections[0].from_discr.nodes())
     fx = f(x)
@@ -394,13 +388,11 @@ def test_reversed_chained_connection(ctx_factory, ndim, mesh_name):
         from_nodes = thaw(actx, chained.from_discr.nodes())
         to_nodes = thaw(actx, chained.to_discr.nodes())
 
-        cos = actx.special_func("cos")
-
         from_x = 0
         to_x = 0
         for d in range(ndim):
-            from_x += cos(from_nodes[d]) ** (d + 1)
-            to_x += cos(to_nodes[d]) ** (d + 1)
+            from_x += actx.np.cos(from_nodes[d]) ** (d + 1)
+            to_x += actx.np.cos(to_nodes[d]) ** (d + 1)
 
         from_interp = reverse(to_x)
 

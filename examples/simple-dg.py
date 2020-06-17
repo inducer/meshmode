@@ -455,10 +455,9 @@ def bump(actx, discr, t=0):
         nodes[1] - source_center[1],
         ])
 
-    exp = (actx.special_func("exp"))
     return (
         np.cos(source_omega*t)
-        * exp(
+        * actx.np.exp(
             -np.dot(center_dist, center_dist)
             / source_width**2))
 

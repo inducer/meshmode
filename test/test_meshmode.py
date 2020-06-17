@@ -235,10 +235,8 @@ def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
 
     order = 4
 
-    sin = actx.special_func("sin")
-
     def f(x):
-        return 0.1*sin(30*x)
+        return 0.1*actx.np.sin(30*x)
 
     for mesh_par in mesh_pars:
         # {{{ get mesh
@@ -331,10 +329,8 @@ def test_all_faces_interpolation(ctx_factory, mesh_name, dim, mesh_pars,
 
     order = 4
 
-    sin = actx.special_func("sin")
-
     def f(x):
-        return 0.1*sin(30*x)
+        return 0.1*actx.np.sin(30*x)
 
     for mesh_par in mesh_pars:
         # {{{ get mesh
@@ -450,10 +446,8 @@ def test_opposite_face_interpolation(ctx_factory, group_factory,
 
     order = 5
 
-    sin = actx.special_func("sin")
-
     def f(x):
-        return 0.1*sin(30*x)
+        return 0.1*actx.np.sin(30*x)
 
     for mesh_par in mesh_pars:
         # {{{ get mesh
@@ -787,10 +781,8 @@ def test_sanity_qhull_nd(ctx_factory, dim, order):
     from meshmode.discretization.connection import make_same_mesh_connection
     cnx = make_same_mesh_connection(actx, high_discr, low_discr)
 
-    sin = actx.special_func("sin")
-
     def f(x):
-        return 0.1*sin(x)
+        return 0.1*actx.np.sin(x)
 
     x_low = thaw(actx, low_discr.nodes()[0])
     f_low = f(x_low)

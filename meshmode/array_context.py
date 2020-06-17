@@ -52,6 +52,24 @@ def make_loopy_program(domains, statements, kernel_data=["..."], name=None):
 
 # {{{ ArrayContext
 
+class _FakeNumpyNamespace:
+    def __init__(self, array_context):
+        self._array_context = array_context
+
+    def __getattr__(self, name):
+        def f(*args):
+            actx = self._array_context
+            # FIXME: Maybe involve loopy type inference?
+            result = actx.empty(args[0].shape, args[0].dtype)
+            prg = actx._get_scalar_func_loopy_program(name, len(args))
+            actx.call_loopy(prg, out=result,
+                    **{"inp%d" % i: arg for i, arg in enumerate(args)})
+            return result
+
+        from pytools.obj_array import obj_array_vectorized_n_args
+        return obj_array_vectorized_n_args(f)
+
+
 class ArrayContext:
     """An interface that allows a :class:`Discretization` to create and interact with
     arrays of degrees of freedom without fully specifying their types.
@@ -63,12 +81,28 @@ class ArrayContext:
     .. automethod:: from_numpy
     .. automethod:: to_numpy
     .. automethod:: call_loopy
-    .. automethod:: special_func
+    .. attribute:: np
+
+         Provides access to a namespace that serves as a work-alike to
+         :mod:`numpy`.  The actual level of functionality provided is up to the
+         individual array context implementation, however the functions and
+         objects available under this namespace must not behave differently
+         from :mod:`numpy`.
+
+         As a baseline, special functions available through :mod:`loopy`
+         (e.g. ``sin``, ``exp``) are accessible through this interface.
+
+         Callables accessible through this namespace vectorize over object
+         arrays, including :class:`meshmode.dof_array.DOFArray`.
+
     .. automethod:: freeze
     .. automethod:: thaw
 
     .. versionadded:: 2020.2
     """
+
+    def __init__(self):
+        self.np = _FakeNumpyNamespace(self)
 
     def empty(self, shape, dtype):
         raise NotImplementedError
@@ -112,7 +146,7 @@ class ArrayContext:
         raise NotImplementedError
 
     @memoize_method
-    def _get_special_func_loopy_program(self, name, nargs):
+    def _get_scalar_func_loopy_program(self, name, nargs):
         from pymbolic import var
         iel = var("iel")
         idof = var("idof")
@@ -125,25 +159,6 @@ class ArrayContext:
                             var("inp%d" % i)[iel, idof] for i in range(nargs)]))
                     ],
                 name="actx_special_%s" % name)
-
-    @memoize_method
-    def special_func(self, name):
-        """Returns a callable for the special function *name*, where *name* is a
-        (potentially dotted) function name resolvable by :mod:`loopy`.
-
-        The returned callable will vectorize over object arrays, including
-        :class:`meshmode.dof_array.DOFArray`.
-        """
-        def f(*args):
-            # FIXME: Maybe involve loopy type inference?
-            result = self.empty(args[0].shape, args[0].dtype)
-            prg = self._get_special_func_loopy_program(name, len(args))
-            self.call_loopy(prg, out=result,
-                    **{"inp%d" % i: arg for i, arg in enumerate(args)})
-            return result
-
-        from pytools.obj_array import obj_array_vectorized_n_args
-        return obj_array_vectorized_n_args(f)
 
     def freeze(self, array):
         """Return a version of the context-defined array *array* that is
@@ -194,6 +209,7 @@ class PyOpenCLArrayContext(ArrayContext):
     """
 
     def __init__(self, queue, allocator=None):
+        super().__init__()
         self.context = queue.context
         self.queue = queue
         self.allocator = allocator
