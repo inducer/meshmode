@@ -79,7 +79,7 @@ class DOFArray(np.ndarray):
     def __array_finalize__(self, obj):
         if obj is None:
             return
-        self.array_context = getattr(obj, 'array_context', None)
+        self.array_context = getattr(obj, "array_context", None)
 
     @property
     def entry_dtype(self):
