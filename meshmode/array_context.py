@@ -147,9 +147,9 @@ class ArrayContext:
         """Return a version of the context-defined array *array* that is
         'frozen', i.e. suitable for long-term storage and reuse. Frozen arrays
         do not support arithmetic. For example, in the context of
-        OpenCL, this might entail stripping the array of an associated queue,
-        whereas in a lazily-evaluated context, it might mean that the array is
-        evaluated and stored.
+        :class:`~pyopencl.array.Array`, this might mean stripping the array
+        of an associated command queue, whereas in a lazily-evaluated context,
+        it might mean that the array is evaluated and stored.
 
         Freezing makes the array independent of this :class:`ArrayContext`;
         it is permitted to :meth:`thaw` it in a different one, as long as that
@@ -158,7 +158,15 @@ class ArrayContext:
         raise NotImplementedError
 
     def thaw(self, array):
-        """Take a 'frozen' array
+        """Take a 'frozen' array and return a new array representing the data in
+        *array* that is able to perform arithmetic and other operations, using
+        the execution resources of this context. In the context of
+        :class:`~pyopencl.array.Array`, this might mean that the array is
+        equipped with a command queue, whereas in a lazily-evaluated context,
+        it might mean that the returned array is a symbol bound to
+        the data in *array*.
+
+        The returned array may not be used with other contexts while thawed.
         """
         raise NotImplementedError
 
