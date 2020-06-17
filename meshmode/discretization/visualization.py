@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 import numpy as np
 from pytools import memoize_method, Record
-from meshmode.dof_array import DOFArray
+from meshmode.dof_array import DOFArray, flatten, thaw
 
 
 __doc__ = """
@@ -121,24 +121,18 @@ class Visualizer(object):
 
         from numbers import Number
         if isinstance(vec, Number):
-            raise NotImplementedError("visualizing constants")
-            #return np.ones(self.connection.to_discr.nnodes) * fld
+            nnodes = sum(grp.ndofs for grp in self.connection.to_discr.groups)
+            return np.ones(nnodes) * vec
         else:
             resampled = self.connection(vec)
-            if len(resampled) != 1:
-                raise NotImplementedError("visualization with multiple "
-                        "element groups")
-            return resampled.array_context.to_numpy(resampled[0]).reshape(-1)
+            actx = resampled.array_context
+            return actx.to_numpy(flatten(resampled))
 
     @memoize_method
     def _vis_nodes(self):
-        if len(self.vis_discr.groups) != 1:
-            raise NotImplementedError("visualization with multiple "
-                    "element groups")
-
         actx = self.vis_discr._setup_actx
         return np.array([
-            actx.to_numpy(actx.thaw(ary[0]))
+            actx.to_numpy(flatten(thaw(actx, ary)))
             for ary in self.vis_discr.nodes()
             ])
 
@@ -336,7 +330,7 @@ class Visualizer(object):
                     "element groups")
 
         grid = UnstructuredGrid(
-                (self.vis_discr.groups[0].ndofs,
+                (sum(grp.ndofs for grp in self.vis_discr.groups),
                     DataArray("points",
                         nodes.reshape(self.vis_discr.ambient_dim, -1),
                         vector_format=VF_LIST_OF_COMPONENTS)),
