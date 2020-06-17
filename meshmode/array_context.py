@@ -177,7 +177,7 @@ class PyOpenCLArrayContext(ArrayContext):
 
     .. attribute:: queue
 
-        A :class:`pyopencl.CommandQueue` or *None*.
+        A :class:`pyopencl.CommandQueue`.
 
     .. attribute:: allocator
     """
