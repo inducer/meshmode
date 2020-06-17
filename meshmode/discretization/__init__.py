@@ -55,7 +55,6 @@ class ElementGroupBase(object):
     .. autoattribute:: nunit_dofs
     .. autoattribute:: ndofs
     .. autoattribute:: dim
-    .. automethod:: view
 
     .. method:: unit_nodes()
 
