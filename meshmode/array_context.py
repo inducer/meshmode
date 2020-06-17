@@ -83,16 +83,18 @@ class ArrayContext:
         return self.zeros(shape=ary.shape, dtype=ary.dtype)
 
     def from_numpy(self, array: np.ndarray):
-        """
+        r"""
         :returns: the :class:`numpy.ndarray` *array* converted to the
-            array context's array type.
+            array context's array type. The returned array will be
+            :meth:`thaw`\ ed.
         """
         raise NotImplementedError
 
     def to_numpy(self, array):
-        """
+        r"""
         :returns: *array*, an array recognized by the context, converted
-            to a :class:`numpy.ndarray`.
+            to a :class:`numpy.ndarray`. *array* must be
+            :meth:`thaw`\ ed.
         """
         raise NotImplementedError
 
