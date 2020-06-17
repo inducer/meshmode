@@ -288,7 +288,9 @@ class Discretization(object):
         return self.zeros(array.array_context, dtype=array.entry_dtype)
 
     def num_reference_derivative(self, ref_axes, vec):
-        @memoize_in(self, "reference_derivative_prg")
+        actx = vec.array_context
+
+        @memoize_in(actx, (Discretization, "reference_derivative_prg"))
         def prg():
             return make_loopy_program(
                 """{[iel,idof,j]:
@@ -296,8 +298,6 @@ class Discretization(object):
                     0<=idof,j<nunit_dofs}""",
                 "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
                 name="diff")
-
-        actx = vec.array_context
 
         def get_mat(grp):
             mat = None
@@ -318,14 +318,14 @@ class Discretization(object):
 
     @memoize_method
     def quad_weights(self):
-        @memoize_in(self, "quad_weights_prg")
+        actx = self._setup_actx
+
+        @memoize_in(actx, (Discretization, "quad_weights_prg"))
         def prg():
             return make_loopy_program(
                 "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
                 "result[iel,idof] = weights[idof]",
                 name="quad_weights")
-
-        actx = self._setup_actx
 
         return _DOFArray.from_list(None, [
                 actx.freeze(
@@ -343,7 +343,9 @@ class Discretization(object):
             :class:`~meshmode.dof_array.DOFArray`\ s of node coordinates.
         """
 
-        @memoize_in(self, "nodes_prg")
+        actx = self._setup_actx
+
+        @memoize_in(actx, (Discretization, "nodes_prg"))
         def prg():
             return make_loopy_program(
                 """{[iel,idof,j]:
@@ -355,8 +357,6 @@ class Discretization(object):
                         sum(j, resampling_mat[idof, j] * nodes[iel, j])
                     """,
                 name="nodes")
-
-        actx = self._setup_actx
 
         return make_obj_array([
             _DOFArray.from_list(None, [

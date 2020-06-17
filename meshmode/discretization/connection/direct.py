@@ -263,7 +263,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             :class:`~meshmode.dof_array.flatten`.
         """
 
-        @memoize_in(self, "oversample_mat_knl")
+        @memoize_in(actx, (DirectDiscretizationConnection, "oversample_mat_knl"))
         def knl():
             return make_loopy_program(
                 """{[iel, idof, j]:
@@ -317,7 +317,13 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         return result
 
     def __call__(self, ary):
-        @memoize_in(self, "resample_by_mat_knl")
+        from meshmode.dof_array import DOFArray
+        if not isinstance(ary, DOFArray):
+            raise TypeError("non-array passed to discretization connection")
+
+        actx = ary.array_context
+
+        @memoize_in(actx, (DirectDiscretizationConnection, "resample_by_mat_knl"))
         def mat_knl():
             knl = make_loopy_program(
                 """{[iel, idof, j]:
@@ -342,7 +348,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
             return knl
 
-        @memoize_in(self, "resample_by_picking_knl")
+        @memoize_in(actx,
+                (DirectDiscretizationConnection, "resample_by_picking_knl"))
         def pick_knl():
             knl = make_loopy_program(
                 """{[iel, idof, j]:
@@ -365,12 +372,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 name="resample_by_picking")
 
             return knl
-
-        from meshmode.dof_array import DOFArray
-        if not isinstance(ary, DOFArray):
-            raise TypeError("non-array passed to discretization connection")
-
-        actx = ary.array_context
 
         if self.is_surjective:
             result = self.to_discr.empty(actx, dtype=ary.entry_dtype)

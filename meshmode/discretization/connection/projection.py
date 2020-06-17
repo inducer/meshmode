@@ -118,7 +118,13 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         return weights
 
     def __call__(self, vec):
-        @memoize_in(self, "conn_projection_knl")
+        if not isinstance(vec, DOFArray):
+            raise TypeError("non-array passed to discretization connection")
+
+        actx = vec.array_context
+
+        @memoize_in(actx, (L2ProjectionInverseDiscretizationConnection,
+            "conn_projection_knl"))
         def kproj():
             return make_loopy_program([
                 "{[iel]: 0 <= iel < nelements}",
@@ -151,7 +157,8 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     ],
                 name="conn_projection_knl")
 
-        @memoize_in(self, "conn_evaluation_knl")
+        @memoize_in(actx, (L2ProjectionInverseDiscretizationConnection,
+            "conn_evaluation_knl"))
         def keval():
             return make_loopy_program([
                 "{[iel]: 0 <= iel < nelements}",
@@ -168,11 +175,6 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     '...'
                     ],
                 name="conn_evaluate_knl")
-
-        if not isinstance(vec, DOFArray):
-            raise TypeError("non-array passed to discretization connection")
-
-        actx = vec.array_context
 
         # compute weights on each refinement of the reference element
         weights = self._batch_weights(actx)

@@ -182,7 +182,7 @@ def flatten(ary: np.ndarray) -> np.ndarray:
 
     actx = ary.array_context
 
-    @memoize_in(actx, "flatten_prg")
+    @memoize_in(actx, (flatten, "flatten_prg"))
     def prg():
         return make_loopy_program(
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
@@ -209,7 +209,7 @@ def unflatten(actx: ArrayContext, discr: "_Discretization", ary) -> np.ndarray:
                 lambda subary: unflatten(actx, discr, subary),
                 ary)
 
-    @memoize_in(actx, "unflatten_prg")
+    @memoize_in(actx, (unflatten, "unflatten_prg"))
     def prg():
         return make_loopy_program(
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
