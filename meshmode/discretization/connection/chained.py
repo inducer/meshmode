@@ -271,7 +271,7 @@ def make_full_resample_matrix(actx, connection):
         This method will be very slow, both in terms of speed and memory
         usage, and should only be used for testing or if absolutely necessary.
 
-    :arg queue: a :class:`meshmode.array_context.ArrayContext`.
+    :arg actx: a :class:`meshmode.array_context.ArrayContext`.
     :arg connection: a
         :class:`~meshmode.discretization.connection.DiscretizationConnection`.
     :return: a :class:`pyopencl.array.Array` of shape
