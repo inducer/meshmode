@@ -210,7 +210,7 @@ class PyOpenCLArrayContext(ArrayContext):
         assert program.options.return_dict
         assert program.options.no_numpy
 
-        evt, result = program(self.queue, **kwargs)
+        evt, result = program(self.queue, **kwargs, allocator=self.allocator)
         return result
 
     def freeze(self, array):
