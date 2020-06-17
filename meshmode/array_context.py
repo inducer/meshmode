@@ -66,6 +66,8 @@ class ArrayContext:
     .. automethod:: special_func
     .. automethod:: freeze
     .. automethod:: thaw
+
+    .. versionadded:: 2020.2
     """
 
     def empty(self, shape, dtype):
