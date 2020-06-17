@@ -210,10 +210,10 @@ class Discretization(object):
         :param actx: A :class:`ArrayContext` used to perform computation needed
             during initial set-up of the mesh.
         :param mesh: A :class:`meshmode.mesh.Mesh` over which the discretization is
-            built
-        :param group_factory: An :class:`ElementGroupFactory`
+            built.
+        :param group_factory: An :class:`ElementGroupFactory`.
         :param real_dtype: The :mod:`numpy` data type used for representing real
-            data, either :class:`numpy.float32` or :class:`numpy.float64`
+            data, either :class:`numpy.float32` or :class:`numpy.float64`.
         """
 
         if not isinstance(actx, ArrayContext):
