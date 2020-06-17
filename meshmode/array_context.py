@@ -60,8 +60,7 @@ class ArrayContext:
     .. automethod:: zeros
     .. automethod:: empty_like
     .. automethod:: zeros_like
-    .. automethod:: from_numpy_constant
-    .. automethod:: from_numpy_data
+    .. automethod:: from_numpy
     .. automethod:: to_numpy
     .. automethod:: call_loopy
     .. automethod:: special_func
