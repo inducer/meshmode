@@ -103,7 +103,7 @@ class ArrayContext:
         It must have :class:`loopy.Options.return_dict` set.
 
         :return: a :class:`dict` of outputs from the program, each an
-        array understood by the context.
+            array understood by the context.
         """
         raise NotImplementedError
 
