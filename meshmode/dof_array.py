@@ -201,7 +201,7 @@ def unflatten(actx: ArrayContext, discr: "_Discretization", ary) -> np.ndarray:
             "result[iel, idof] = ary[grp_start + iel*nunit_dofs + idof]",
             name="unflatten")
 
-    group_sizes = [grp.nelements*grp.nunit_dofs for grp in discr.groups]
+    group_sizes = [grp.ndofs for grp in discr.groups]
     if ary.size != sum(group_sizes):
         raise ValueError("array has size %d, expected %d"
                 % (ary.size, sum(group_sizes)))
