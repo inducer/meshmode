@@ -94,9 +94,9 @@ class ArrayContext:
         """
         raise NotImplementedError
 
-    def call_loopy(self, program, **args):
+    def call_loopy(self, program, **kwargs):
         """Execute the :mod:`loopy` program *program* on the arguments
-        *args*.
+        *kwargs*.
 
         *program* is a :class:`loopy.LoopKernel` or :class:`loopy.Program`.
         It is expected to not yet be transformed for execution speed.
@@ -205,12 +205,12 @@ class PyOpenCLArrayContext(ArrayContext):
     def to_numpy(self, array):
         return array.get(queue=self.queue)
 
-    def call_loopy(self, program, **args):
+    def call_loopy(self, program, **kwargs):
         program = self.transform_loopy_program(program)
         assert program.options.return_dict
         assert program.options.no_numpy
 
-        evt, result = program(self.queue, **args)
+        evt, result = program(self.queue, **kwargs)
         return result
 
     def freeze(self, array):
