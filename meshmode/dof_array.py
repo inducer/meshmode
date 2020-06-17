@@ -126,7 +126,7 @@ def thaw(actx: ArrayContext, ary: np.ndarray) -> np.ndarray:
 
 
 def freeze(ary: np.ndarray) -> np.ndarray:
-    r"""Call :meth:`~meshmode.array_context.arrayContext.freeze` on the element
+    r"""Call :meth:`~meshmode.array_context.ArrayContext.freeze` on the element
     group arrays making up the :class:`DOFArray`, using the
     :class:`~meshmode.array_context.ArrayContext` in *ary*.
 
