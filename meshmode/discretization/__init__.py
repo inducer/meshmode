@@ -92,10 +92,16 @@ class ElementGroupBase(object):
 
     @property
     def nunit_dofs(self):
+        """The number of (for now: nodal) degrees of freedom associated with a
+        single element.
+        """
         return self.unit_nodes.shape[-1]
 
     @property
     def ndofs(self):
+        """The total number of (for now: nodal) degrees of freedom associated with
+        the element group.
+        """
         return self.nunit_dofs * self.nelements
 
     @property
