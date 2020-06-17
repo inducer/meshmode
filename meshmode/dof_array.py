@@ -49,8 +49,10 @@ class DOFArray(np.ndarray):
     """This array type is a subclass of :class:`numpy.ndarray` intended to hold
     degree-of-freedom arrays for use with
     :class:`~meshmode.discretization.Discretization`,
-    with one entry in the :class:`DOFArray` per element group.
-    It is derived from :class:`numpy.ndarray` with dtype object ("an object array")
+    with one entry in the :class:`DOFArray` for each
+    :class:`~meshmode.discretization.ElementGroupBase`.
+    It is derived from :class:`numpy.ndarray` with dtype object ("an object array").
+    The entries in this array are further arrays managed by :attr:`array_context`.
 
     The main purpose of this class is to better describe the data structure,
     i.e. when a :class:`DOFArray` occurs inside of further numpy object array,
@@ -58,7 +60,14 @@ class DOFArray(np.ndarray):
     people and programs).
 
     .. attribute:: array_context
+
+        An :class:`meshmode.array_context.ArrayContext`.
+
     .. attribute:: entry_dtype
+
+        The (assumed uniform) :class:`numpy.dtype` of the group arrays
+        contained in this instance.
+
     .. automethod:: from_list
     """
 
@@ -86,7 +95,13 @@ class DOFArray(np.ndarray):
         return single_valued(subary.dtype for subary in self.flat)
 
     @classmethod
-    def from_list(cls, actx: Optional[ArrayContext], res_list):
+    def from_list(cls, actx: Optional[ArrayContext], res_list) -> "DOFArray":
+        r"""Create a :class:`DOFArray` from a list of arrays
+        (one per :class:`~meshmode.discretization.ElementGroupBase`).
+
+        :arg actx: If *None*, the arrays in *res_list* must be
+        :meth:`~meshmode.array_context.ArrayContext.thaw`\ ed.
+        """
         if not (actx is None or isinstance(actx, ArrayContext)):
             raise TypeError("actx must be of type ArrayContext")
 
