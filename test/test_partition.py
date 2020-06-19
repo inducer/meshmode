@@ -192,9 +192,9 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
 
     for (i, j), e in eoc_rec.items():
         if e is not None:
-            print("Error of connection from part %i to part %i." % (i, j))
             # TODO: Figure out how to deal with divide-by-zero and
             # not-enough-data-points errors
+            # print("Error of connection from part %i to part %i." % (i, j))
             # print(e)
             # assert(e.order_estimate() >= order - 0.5 or e.max_error() < 1e-11)
             assert(e.max_error() < 1e-11)
