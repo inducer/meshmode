@@ -446,7 +446,7 @@ def generate_icosphere(r, order, uniform_refinement_rounds=0):
     mesh = generate_icosahedron(r, order)
 
     if uniform_refinement_rounds:
-        # These come out conformal, so we're OK to use the faster refiner.
+        # These come out conforming, so we're OK to use the faster refiner.
         from meshmode.mesh.refinement import RefinerWithoutAdjacency
         refiner = RefinerWithoutAdjacency(mesh)
         for i in range(uniform_refinement_rounds):
