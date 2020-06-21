@@ -10,7 +10,7 @@ git+https://gitlab.tiker.net/inducer/islpy.git
 git+https://gitlab.tiker.net/inducer/pymbolic.git
 
 # also depends on pymbolic, so should come after it
-git+https://gitlab.tiker.net/inducer/loopy.git@empty-ndrange-enqueue
+git+https://gitlab.tiker.net/inducer/loopy.git
 
 # more pytential dependencies
 git+https://gitlab.tiker.net/inducer/boxtree.git
