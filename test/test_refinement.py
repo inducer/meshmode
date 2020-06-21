@@ -295,7 +295,7 @@ def test_refinement_connection(
 
 
 @pytest.mark.parametrize("with_adjacency", [True, False])
-def test_uniform_refinement(ctx_factory, with_adjacency):
+def test_uniform_refinement(with_adjacency):
     make_mesh = partial(generate_box_mesh, (
             np.linspace(0.0, 1.0, 2),
             np.linspace(0.0, 1.0, 3),
@@ -304,6 +304,18 @@ def test_uniform_refinement(ctx_factory, with_adjacency):
 
     from meshmode.mesh.refinement import refine_uniformly
     mesh = refine_uniformly(mesh, 1, with_adjacency=with_adjacency)
+
+
+@pytest.mark.parametrize("refinement_rounds", [0, 1, 2])
+def test_conformity_of_uniform_mesh(refinement_rounds):
+    from meshmode.mesh.generation import generate_icosphere
+    mesh = generate_icosphere(r=1.0, order=4,
+            uniform_refinement_rounds=refinement_rounds)
+
+    assert mesh.is_conforming
+
+    from meshmode.mesh import is_boundary_tag_empty, BTAG_ALL
+    assert is_boundary_tag_empty(mesh, BTAG_ALL)
 
 
 if __name__ == "__main__":
