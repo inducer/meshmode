@@ -59,11 +59,16 @@ class FinatLagrangeElementImporter(ExternalImportHandler):
 
         # Check types
         from finat.fiat_elements import DiscontinuousLagrange, Lagrange
-        if not isinstance(finat_element, (Lagrange, DiscontinuousLagrange)):
+        from finat.spectral import GaussLegendre, GaussLobattoLegendre
+        valid_types = (Lagrange, DiscontinuousLagrange,
+                      GaussLegendre, GaussLobattoLegendre)
+        if not isinstance(finat_element, valid_types):
             raise TypeError(":param:`finat_element` must be of type"
-                            " `finat.fiat_elements.Lagrange` or"
-                            " `finat.fiat_elements.DiscontinuousLagrange`",
-                            " not type `%s`" % type(finat_element))
+                            " `finat.fiat_elements.Lagrange`,"
+                            " `finat.fiat_elements.DiscontinuousLagrange`,"
+                            " or `finat.spectral.GaussLegendre` or"
+                            " `finat.spectral.GaussLobattoLegendre` in 1D,"
+                            " but is instead of type `%s`" % type(finat_element))
 
         if finat_element.mapping != 'affine':
             raise ValueError("FInAT element must use affine mappings"
@@ -90,6 +95,9 @@ class FinatLagrangeElementImporter(ExternalImportHandler):
             node_nr_to_coords = {}
             unit_vertex_indices = []
 
+            # FIXME : This works, but is very ad-hoc. It is probably better
+            #         to get permission from the FInAT people to reach into
+            #         the fiat element and get the nodes explicitly
             # Get unit nodes
             for dim, element_nrs in six.iteritems(
                     self.data.entity_support_dofs()):
@@ -100,7 +108,7 @@ class FinatLagrangeElementImporter(ExternalImportHandler):
                     # Record any new nodes
                     i = 0
                     for node_nr in node_list:
-                        if node_nr not in node_nr_to_coords:
+                        if node_nr not in node_nr_to_coords and i < len(pts_on_element):
                             node_nr_to_coords[node_nr] = pts_on_element[i]
                             i += 1
                             # If is a vertex, store the index
