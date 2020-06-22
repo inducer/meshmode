@@ -146,6 +146,7 @@ def reordering_array(mesh_importer, key, fspace_data):
             (order.shape[0]//nunit_nodes, nunit_nodes) + order.shape[1:])
 
     flip_mat = finat_element_importer.flip_matrix()
+    print("ORIENT=", mesh_importer._orient)
     reorder_nodes(mesh_importer.orientations(), new_order, flip_mat,
                   unflip=firedrake_to_meshmode)
     new_order = new_order.flatten()

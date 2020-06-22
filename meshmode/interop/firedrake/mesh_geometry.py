@@ -255,50 +255,72 @@ class FiredrakeMeshGeometryImporter(ExternalImportHandler):
 
         return self._nodes
 
-    def group(self):
+    def _get_unflipped_group(self):
         """
         Return an instance of :class:meshmode.mesh.SimplexElementGroup`
-        corresponding to the mesh :attr:`data`
+        but with elements which are not guaranteed to have a positive
+        orientation.
+
+        This is important because :meth:`group` requires
+        the result of :meth:`orientations` to guarantee each
+        element has positive orientations, and
+        :meth:`orientations` (usually) needs an unflipped group to compute
+        the orientations, so we need this function to prevent a recursive
+        loop of (orientations calling group calling orientations calling...etc.)
         """
-        if self._group is None:
+        # Cache the group we create since :meth:`group` and :meth:`orientations`
+        # may both use it. One should note that once :meth:`group` terminates,
+        # this attribute is deleted (once :attr:`_group` is computed then
+        # :attr:`_orient` must also have been computed, so we no longer have any
+        # use for :attr:`_unflipped_group`)
+        if not hasattr(self, "_unflipped_group"):
             from meshmode.mesh import SimplexElementGroup
-            from meshmode.mesh.processing import flip_simplex_element_group
 
             fspace_importer = self.coordinates_importer.function_space_importer()
             finat_element_importer = fspace_importer.finat_element_importer
 
-            # IMPORTANT that set :attr:`_group` because
-            # :meth:`orientations` may call :meth:`group`
-            self._group = SimplexElementGroup(
+            self._unflipped_group = SimplexElementGroup(
                 finat_element_importer.data.degree,
                 self.vertex_indices(),
                 self.nodes(),
                 dim=self.cell_dimension(),
                 unit_nodes=finat_element_importer.unit_nodes())
 
-            self._group = flip_simplex_element_group(self.vertices(), self._group,
+        return self._unflipped_group
+
+    def group(self):
+        """
+        Return an instance of :class:meshmode.mesh.SimplexElementGroup`
+        corresponding to the mesh :attr:`data`
+        """
+        if self._group is None:
+            from meshmode.mesh.processing import flip_simplex_element_group
+            self._group = flip_simplex_element_group(self.vertices(),
+                                                     self._get_unflipped_group(),
                                                      self.orientations() < 0)
+            # We don't need this anymore
+            del self._unflipped_group
 
         return self._group
 
     def orientations(self):
         """
-            Return the orientations of the mesh elements:
-            an array, the *i*th element is > 0 if the *ith* element
-            is positively oriented, < 0 if negatively oriented
+        Return the orientations of the mesh elements:
+        an array, the *i*th element is > 0 if the *ith* element
+        is positively oriented, < 0 if negatively oriented
 
-            :param normals: _Only_ used if :param:`mesh` is a 1-surface
-                embedded in 2-space. In this case,
-                - If *None* then
-                  all elements are assumed to be positively oriented.
-                - Else, should be a list/array whose *i*th entry
-                  is the normal for the *i*th element (*i*th
-                  in :param:`mesh`*.coordinate.function_space()*'s
-                  :attribute:`cell_node_list`)
+        :param normals: _Only_ used if :param:`mesh` is a 1-surface
+            embedded in 2-space. In this case,
+            - If *None* then
+              all elements are assumed to be positively oriented.
+            - Else, should be a list/array whose *i*th entry
+              is the normal for the *i*th element (*i*th
+              in :param:`mesh`*.coordinate.function_space()*'s
+              :attribute:`cell_node_list`)
 
-            :param no_normals_warn: If *True*, raises a warning
-                if :param:`mesh` is a 1-surface embedded in 2-space
-                and :param:`normals` is *None*.
+        :param no_normals_warn: If *True*, raises a warning
+            if :param:`mesh` is a 1-surface embedded in 2-space
+            and :param:`normals` is *None*.
         """
         if self._orient is None:
             # compute orientations
@@ -311,9 +333,9 @@ class FiredrakeMeshGeometryImporter(ExternalImportHandler):
                 from meshmode.mesh.processing import \
                     find_volume_mesh_element_group_orientation
 
-                orient = \
-                    find_volume_mesh_element_group_orientation(self.vertices(),
-                                                               self.group())
+                orient = find_volume_mesh_element_group_orientation(
+                    self.vertices(),
+                    self._get_unflipped_group())
 
             if tdim == 1 and gdim == 2:
                 # In this case we have a 1-surface embedded in 2-space
@@ -339,8 +361,8 @@ class FiredrakeMeshGeometryImporter(ExternalImportHandler):
             self._orient = orient
             #Make sure the mesh fell into one of the cases
             """
-          NOTE : This should be guaranteed by previous checks,
-                 but is here anyway in case of future development.
+            NOTE : This should be guaranteed by previous checks,
+                   but is here anyway in case of future development.
             """
             assert self._orient is not None
 

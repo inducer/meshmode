@@ -108,7 +108,8 @@ class FinatLagrangeElementImporter(ExternalImportHandler):
                     # Record any new nodes
                     i = 0
                     for node_nr in node_list:
-                        if node_nr not in node_nr_to_coords and i < len(pts_on_element):
+                        if node_nr not in node_nr_to_coords and \
+                                i < len(pts_on_element):
                             node_nr_to_coords[node_nr] = pts_on_element[i]
                             i += 1
                             # If is a vertex, store the index
