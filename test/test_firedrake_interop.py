@@ -62,6 +62,54 @@ def fdrake_degree(request):
     return request.param
 
 
+# {{{ Basic conversion tests
+
+def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
+    """
+    While nodes may change, vertex conversion should be *identical* up to
+    reordering, ensure this is the case. Also ensure the
+    meshes have the same basic properties and the function space/discretization
+    agree across firedrake vs meshmode
+    """
+    # get fdrake_verts (shaped like (nverts, dim))
+    fdrake_verts = fdrake_mesh.coordinates.dat.data
+    if fdrake_mesh.geometric_dimension() == 1:
+        fdrake_verts = fdrake_verts[:, np.newaxis]
+
+    # Get meshmode vertices (shaped like (dim, nverts))
+    fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fdrake_degree)
+    cl_ctx = ctx_factory()
+    fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
+    to_discr = fdrake_connection.to_discr()
+    meshmode_verts = to_discr.mesh.vertices
+
+    # Ensure the meshmode mesh has one group and make sure both
+    # meshes agree on some basic properties
+    assert len(to_discr.mesh.groups) == 1
+    fdrake_mesh_fspace = fdrake_mesh.coordinates.function_space()
+    fdrake_mesh_order = fdrake_mesh_fspace.finat_element.degree
+    assert to_discr.mesh.groups[0].order == fdrake_mesh_order
+    assert to_discr.mesh.groups[0].nelements == fdrake_mesh.num_cells()
+    assert to_discr.mesh.nvertices == fdrake_mesh.num_vertices()
+
+    # Ensure that the vertex sets are identical up to reordering
+    # Nb: I got help on this from stack overflow:
+    # https://stackoverflow.com/questions/38277143/sort-2d-numpy-array-lexicographically  # noqa: E501
+    lex_sorted_mm_verts = meshmode_verts[:, np.lexsort(meshmode_verts)]
+    lex_sorted_fdrake_verts = fdrake_verts[np.lexsort(fdrake_verts.T)]
+    np.testing.assert_array_equal(lex_sorted_mm_verts, lex_sorted_fdrake_verts.T)
+
+    # Ensure the discretization and the firedrake function space agree on
+    # some basic properties
+    finat_elt = fdrake_fspace.finat_element
+    assert len(to_discr.groups) == 1
+    assert to_discr.groups[0].order == finat_elt.degree
+    assert to_discr.groups[0].nunit_nodes == finat_elt.space_dimension()
+    assert to_discr.nnodes == fdrake_fspace.node_count
+
+# }}}
+
+
 # {{{ Idempotency tests fd->mm->fd and (fd->)mm->fd->mm for connection
 
 def check_idempotency(fdrake_connection, fdrake_function):
