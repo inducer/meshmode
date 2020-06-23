@@ -46,17 +46,6 @@ class ExternalDataHandler:
     def __init__(self, data):
         self.data = data
 
-    def __hash__(self):
-        return hash((type(self), self.data))
-
-    def __eq__(self, other):
-        return isinstance(other, type(self)) and \
-               isinstance(self, type(other)) and \
-               self.data == other.data
-
-    def __neq__(self, other):
-        return not self.__eq__(other)
-
 # }}}
 
 
