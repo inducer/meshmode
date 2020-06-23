@@ -21,6 +21,7 @@ THE SOFTWARE.
 """
 
 import numpy as np
+import pyopencl as cl
 
 from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
@@ -39,7 +40,7 @@ firedrake = pytest.importorskip("firedrake")
 from firedrake import (
     UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh,
     FunctionSpace, VectorFunctionSpace, Function,
-    SpatialCoordinate)
+    SpatialCoordinate, Constant)
 
 
 CLOSE_ATOL = 10**-12
@@ -57,17 +58,22 @@ def fdrake_mesh(request):
     return None
 
 
+@pytest.fixture(params=["CG", "DG"])
+def fdrake_family(request):
+    return request.param
+
+
 @pytest.fixture(params=[1, 2, 3], ids=["P^1", "P^2", "P^3"])
 def fdrake_degree(request):
     return request.param
 
 
-# {{{ Basic conversion tests
+# {{{ Basic conversion checks for the function space
 
 def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
     """
     While nodes may change, vertex conversion should be *identical* up to
-    reordering, ensure this is the case. Also ensure the
+    reordering, ensure this is the case for DG spaces. Also ensure the
     meshes have the same basic properties and the function space/discretization
     agree across firedrake vs meshmode
     """
@@ -110,6 +116,67 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
 # }}}
 
 
+# {{{  Double check functions are being transported correctly
+
+def alternating_sum_fd(spat_coord):
+    """
+    Return an expression x1 - x2 + x3 -+...
+    """
+    return sum(
+        [(-1)**i * spat_coord for i, spat_coord in enumerate(spat_coord)]
+    )
+
+
+def alternating_sum_mm(nodes):
+    """
+    Take the *(dim, nnodes)* array nodes and return an array
+    holding the alternating sum of the coordinates of each node
+    """
+    alternator = np.ones(nodes.shape[0])
+    alternator[1::2] *= -1
+    return np.matmul(alternator, nodes)
+
+
+# In 1D/2D/3D check constant 1,
+# projection to x1, x1/x1+x2/x1+x2+x3, and x1/x1-x2/x1-x2+x3.
+# This should show that projection to any coordinate in 1D/2D/3D
+# transfers correctly.
+test_functions = [
+    (lambda spat_coord: Constant(1.0), lambda nodes: np.ones(nodes.shape[1])),
+    (lambda spat_coord: spat_coord[0], lambda nodes: nodes[0, :]),
+    (sum, lambda nodes: np.sum(nodes, axis=0)),
+    (alternating_sum_fd, alternating_sum_mm)
+]
+
+
+@pytest.mark.parametrize("fdrake_f_expr,meshmode_f_eval", test_functions)
+def test_function_transfer(ctx_factory,
+                           fdrake_mesh, fdrake_family, fdrake_degree,
+                           fdrake_f_expr, meshmode_f_eval):
+    """
+    Make sure creating a function then transporting it is the same
+    (up to resampling error) as creating a function on the transported
+    mesh
+    """
+    fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fdrake_degree)
+    spat_coord = SpatialCoordinate(fdrake_mesh)
+
+    fdrake_f = Function(fdrake_fspace).interpolate(fdrake_f_expr(spat_coord))
+
+    cl_ctx = ctx_factory()
+    fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
+    transported_f = fdrake_connection.from_firedrake(fdrake_f)
+
+    to_discr = fdrake_connection.to_discr()
+    with cl.CommandQueue(cl_ctx) as queue:
+        nodes = to_discr.nodes().get(queue=queue)
+    meshmode_f = meshmode_f_eval(nodes)
+
+    np.testing.assert_allclose(transported_f, meshmode_f, atol=CLOSE_ATOL)
+
+# }}}
+
+
 # {{{ Idempotency tests fd->mm->fd and (fd->)mm->fd->mm for connection
 
 def check_idempotency(fdrake_connection, fdrake_function):
@@ -123,8 +190,6 @@ def check_idempotency(fdrake_connection, fdrake_function):
     fdrake_function_copy = Function(fdrake_fspace)
     fdrake_connection.from_meshmode(mm_field, fdrake_function_copy)
 
-    print(np.sum(np.abs(fdrake_function.dat.data - fdrake_function_copy.dat.data)))
-    print(type(fdrake_function.dat.data))
     np.testing.assert_allclose(fdrake_function_copy.dat.data,
                                fdrake_function.dat.data,
                                atol=CLOSE_ATOL)
