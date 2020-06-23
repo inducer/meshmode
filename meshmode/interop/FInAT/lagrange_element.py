@@ -22,7 +22,6 @@ THE SOFTWARE.
 
 import numpy as np
 import numpy.linalg as la
-import six
 
 from meshmode.interop import ExternalImportHandler
 from meshmode.interop.fiat import FIATSimplexCellImporter
@@ -44,6 +43,8 @@ class FinatLagrangeElementImporter(ExternalImportHandler):
         :param finat_element: A FInAT element of type
             :class:`finat.fiat_elements.Lagrange` or
             :class:`finat.fiat_elements.DiscontinuousLagrange`
+            (or :class:`finat.spectral.GaussLegendre` or
+            :class:`finat.spectral.GaussLobattoLegendre` in 1D)
             which uses affine mapping of the basis functions
             (i.e. ``finat_element.mapping`` must be
             ``"affine"``)
@@ -51,6 +52,7 @@ class FinatLagrangeElementImporter(ExternalImportHandler):
         :raises TypeError: If :param:`finat_element` is not of type
             :class:`finat.fiat_elements.Lagrange` or
             :class:`finat.fiat_elements.DiscontinuousLagrange`
+            (or the 1D classes listed above)
 
         :raises ValueError: If :param:`finat_element` does not
             use affine mappings of the basis functions
@@ -91,39 +93,33 @@ class FinatLagrangeElementImporter(ExternalImportHandler):
         if they have not already been computed.
         """
         if self._unit_nodes is None or self._unit_vertex_indices is None:
+            # FIXME : This should work, but uses some private info
             # {{{ Compute unit nodes
-            node_nr_to_coords = {}
-            unit_vertex_indices = []
 
-            # FIXME : This works, but is very ad-hoc. It is probably better
-            #         to get permission from the FInAT people to reach into
-            #         the fiat element and get the nodes explicitly
-            # Get unit nodes
-            for dim, element_nrs in six.iteritems(
-                    self.data.entity_support_dofs()):
-                for element_nr, node_list in six.iteritems(element_nrs):
-                    # Get the nodes on the element (in meshmode reference coords)
-                    pts_on_element = self.cell_importer.make_points(
-                        dim, element_nr, self.data.degree)
-                    # Record any new nodes
-                    i = 0
-                    for node_nr in node_list:
-                        if node_nr not in node_nr_to_coords and \
-                                i < len(pts_on_element):
-                            node_nr_to_coords[node_nr] = pts_on_element[i]
-                            i += 1
-                            # If is a vertex, store the index
-                            if dim == 0:
-                                unit_vertex_indices.append(node_nr)
+            # each point evaluator is a function p(f) evaluates f at a node,
+            # so we need to evaluate each point evaluator at the identity to
+            # recover the nodes
+            point_evaluators = self.data._element.dual.nodes
+            unit_nodes = [p(lambda x: x) for p in point_evaluators]
+            unit_nodes = np.array(unit_nodes).T
+            self._unit_nodes = \
+                self.cell_importer.affinely_map_firedrake_to_meshmode(unit_nodes)
 
-            # store vertex indices
-            self._unit_vertex_indices = np.array(sorted(unit_vertex_indices))
+            # Is this safe?, I think so bc on a reference element
+            close = 1e-8
+            # Get vertices as (dim, nunit_vertices)
+            unit_vertices = np.array(self.data.cell.vertices).T
+            unit_vertices = \
+                self.cell_importer.affinely_map_firedrake_to_meshmode(unit_vertices)
+            self._unit_vertex_indices = []
+            for n_ndx in range(self._unit_nodes.shape[1]):
+                for v_ndx in range(unit_vertices.shape[1]):
+                    diff = self._unit_nodes[:, n_ndx] - unit_vertices[:, v_ndx]
+                    if np.max(np.abs(diff)) < close:
+                        self._unit_vertex_indices.append(n_ndx)
+                        break
 
-            # Convert unit_nodes to array, then change to (dim, nunit_nodes)
-            # from (nunit_nodes, dim)
-            unit_nodes = np.array([node_nr_to_coords[i] for i in
-                                   range(len(node_nr_to_coords))])
-            self._unit_nodes = unit_nodes.T.copy()
+            self._unit_vertex_indices = np.array(self._unit_vertex_indices)
 
             # }}}
 
@@ -135,9 +131,10 @@ class FinatLagrangeElementImporter(ExternalImportHandler):
 
     def unit_vertex_indices(self):
         """
-        :return: An array of shape *(dim+1,)* of indices
+        :return: A numpy integer array of indices
                  so that *self.unit_nodes()[self.unit_vertex_indices()]*
-                 are the vertices of the reference element.
+                 are the nodes of the reference element which coincide
+                 with its vertices (this is possibly empty).
         """
         self._compute_unit_vertex_indices_and_nodes()
         return self._unit_vertex_indices
@@ -203,12 +200,12 @@ class FinatLagrangeElementImporter(ExternalImportHandler):
 
     def make_resampling_matrix(self, element_grp):
         """
-            :param element_grp: A
-                :class:`meshmode.discretization.InterpolatoryElementGroupBase` whose
-                basis functions span the same space as the FInAT element.
-            :return: A matrix which resamples a function sampled at
-                     the firedrake unit nodes to a function sampled at
-                     *element_grp.unit_nodes()* (by matrix multiplication)
+        :param element_grp: A
+            :class:`meshmode.discretization.InterpolatoryElementGroupBase` whose
+            basis functions span the same space as the FInAT element.
+        :return: A matrix which resamples a function sampled at
+                 the firedrake unit nodes to a function sampled at
+                 *element_grp.unit_nodes()* (by matrix multiplication)
         """
         from meshmode.discretization import InterpolatoryElementGroupBase
         assert isinstance(element_grp, InterpolatoryElementGroupBase), \

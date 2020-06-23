@@ -105,30 +105,18 @@ class FIATSimplexCellImporter(ExternalImportHandler):
         self._mat, self._shift = get_affine_mapping(reference_vertices,
                                                     self._unit_vertices)
 
-    def make_points(self, dim, entity_id, order):
+    def affinely_map_firedrake_to_meshmode(self, points):
         """
-        Constructs a lattice of points on the *entity_id*th facet
-        of dimension *dim*.
-
-        Args are exactly as in
-        :meth:`fiat.FIAT.reference_element.Cell.make_points`
-        (see `FIAT docs <fiat.FIAT.reference_element.Cell.make_points>`_),
-        but the unit nodes are (affinely) mapped to :mod:`modepy`
+        Map points on the firedrake reference simplex to
+        :mod:`modepy`
         `unit coordinates <https://documen.tician.de/modepy/nodes.html>`_.
 
-        :arg dim: Dimension of the facet we are constructing points on.
-        :arg entity_id: identifier to determine which facet of
-                        dimension *dim* to construct the points on.
-        :arg order: Number of points to include in each direction.
-
-        :return: an *np.array* of shape *(dim, npoints)* holding the
-                 coordinates of each of the ver
+        :arg points: *n* points on the reference simplex
+                     as a numpy array of shape *(dim, n)*
+        :return: A numpy array of shape *(dim, n)* wherein the
+                 firedrake refernece simplex has been affinely mapped
+                 to the modepy reference simplex
         """
-        points = self.data.make_points(dim, entity_id, order)
-        if not points:
-            return points
-        points = np.array(points)
-        # Points is (npoints, dim) so have to transpose
-        return (np.matmul(self._mat, points.T) + self._shift[:, np.newaxis]).T
+        return np.matmul(self._mat, points) + self._shift[:, np.newaxis]
 
 # }}}

@@ -180,6 +180,14 @@ class FiredrakeMeshGeometryImporter(ExternalImportHandler):
             fspace_importer = self.coordinates_importer.function_space_importer()
             finat_element_importer = fspace_importer.finat_element_importer
 
+            from finat.fiat_elements import Lagrange
+            from finat.spectral import GaussLobattoLegendre
+            if not isinstance(finat_element_importer.data,
+                              (Lagrange, GaussLobattoLegendre)):
+                raise TypeError("Coordinates must live in a continuous space "
+                                " (Lagrange or GaussLobattoLegendre), not %s"
+                                % type(finat_element_importer.data))
+
             # Convert cell node list of mesh to vertex list
             unit_vertex_indices = finat_element_importer.unit_vertex_indices()
             cfspace = self.data.coordinates.function_space()
