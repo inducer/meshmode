@@ -55,16 +55,16 @@ def cached(f, mesh_importer, key, *args, **kwargs):
 
 def reorder_nodes(orient, nodes, flip_matrix, unflip=False):
     """
-    :param orient: An array of shape (nelements) of orientations,
+    flips :param:`nodes` according to :param:`orient`
+
+    :param orient: An array of shape *(nelements)* of orientations,
                  >0 for positive, <0 for negative
-    :param nodes: a (nelements, nunit_nodes) or (dim, nelements, nunit_nodes)
-                shaped array of nodes
+    :param nodes: a *(nelements, nunit_nodes)* or
+                  *(dim, nelements, nunit_nodes)* shaped array of nodes
     :param flip_matrix: The matrix used to flip each negatively-oriented
                       element
     :param unflip: If *True*, use transpose of :param:`flip_matrix` to
                  flip negatively-oriented elements
-
-    flips :param:`nodes`
     """
     # reorder nodes (Code adapted from
     # meshmode.mesh.processing.flip_simplex_element_group)
@@ -106,7 +106,7 @@ def reorder_nodes(orient, nodes, flip_matrix, unflip=False):
 @cached
 def reordering_array(mesh_importer, key, fspace_data):
     """
-    :param key: A tuple (finat_element_anlog, firedrake_to_meshmode)
+    :param key: A tuple (finat_element_importer, firedrake_to_meshmode)
     where *firedrake_to_meshmode* is a *bool*, *True* indicating
     firedrake->meshmode reordering, *False* meshmode->firedrake
 
