@@ -78,14 +78,16 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
 
     for n in mesh_pars:
         from meshmode.mesh.generation import generate_warped_rect_mesh
-        meshes = [generate_warped_rect_mesh(dim, order=order, n=n)
-                                for _ in range(num_groups)]
+        base_mesh = generate_warped_rect_mesh(dim, order=order, n=n)
 
         if num_groups > 1:
-            from meshmode.mesh.processing import merge_disjoint_meshes
-            mesh = merge_disjoint_meshes(meshes)
+            from meshmode.mesh.processing import split_mesh_groups
+            # Group every Nth element
+            element_flags = np.arange(base_mesh.nelements,
+                        dtype=base_mesh.element_id_dtype) % num_groups
+            mesh = split_mesh_groups(base_mesh, element_flags)
         else:
-            mesh = meshes[0]
+            mesh = base_mesh
 
         if scramble_partitions:
             part_per_element = np.random.randint(num_parts, size=mesh.nelements)
