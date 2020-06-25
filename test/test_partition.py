@@ -73,9 +73,6 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
 
     order = 4
 
-    from pytools.convergence import EOCRecorder
-    eoc_rec = dict()
-
     def f(x):
         return 10.*actx.np.sin(50.*x)
 
@@ -109,10 +106,6 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
             neighbors = get_connected_partitions(part_mesh)
             for i_remote_part in neighbors:
                 connected_parts.add((i_local_part, i_remote_part))
-
-        for i_local_part, i_remote_part in connected_parts:
-            if (i_local_part, i_remote_part) not in eoc_rec:
-                eoc_rec[i_local_part, i_remote_part] = EOCRecorder()
 
         from meshmode.discretization import Discretization
         vol_discrs = [Discretization(actx, part_meshes[i], group_factory(order))
@@ -188,16 +181,11 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
             local_points = remote_to_local_conn(remote_points)
 
             err = flat_norm(true_local_points - local_points, np.inf)
-            eoc_rec[i_local_part, i_remote_part].add_data_point(1./n, err)
 
-    for (i, j), e in eoc_rec.items():
-        if e is not None:
-            # TODO: Figure out how to deal with divide-by-zero and
-            # not-enough-data-points errors
-            # print("Error of connection from part %i to part %i." % (i, j))
-            # print(e)
-            # assert(e.order_estimate() >= order - 0.5 or e.max_error() < 1e-11)
-            assert(e.max_error() < 1e-11)
+            # Can't currently expect exact results due to limitations of
+            # interpolation 'snapping' in DirectDiscretizationConnection's
+            # _resample_point_pick_indices
+            assert(err < 1e-11)
 
 # }}}
 
