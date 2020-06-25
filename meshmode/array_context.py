@@ -35,7 +35,8 @@ __doc__ = """
 """
 
 
-def make_loopy_program(domains, statements, kernel_data=["..."], name=None):
+def make_loopy_program(domains, statements, kernel_data=["..."],
+        name="mm_actx_kernel"):
     """Return a :class:`loopy.Program` suitable for use with
     :meth:`ArrayContext.call_loopy`.
     """
