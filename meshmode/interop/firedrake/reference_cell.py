@@ -32,7 +32,7 @@ __doc__ = """
 
 # {{{ Map between reference simplices
 
-def get_affine_reference_simplex_mapping(self, spat_dim, firedrake_to_meshmode=True):
+def get_affine_reference_simplex_mapping(spat_dim, firedrake_to_meshmode=True):
     """
     Returns a function which takes a numpy array points
     on one reference cell and maps each
@@ -115,12 +115,16 @@ def get_finat_element_unit_nodes(finat_element):
     (equivalently, FInAT/FIAT's) reference coordinates
 
     :param finat_element: A :class:`finat.finiteelementbase.FiniteElementBase`
-        instance (i.e. a firedrake function space's reference element)
+        instance (i.e. a firedrake function space's reference element).
+        The refernce element of the finat element *MUST* be a simplex
     :return: A numpy array of shape *(dim, nunit_nodes)* holding the unit
              nodes used by this element. *dim* is the dimension spanned
              by the finat element's reference element
              (see its ``cell`` attribute)
     """
+    from FIAT.reference_element import Simplex
+    assert isinstance(finat_element.cell, Simplex), \
+        "Reference element of the finat element MUST be a simplex"
     # point evaluators is a list of functions *p_0,...,p_{n-1}*.
     # *p_i(f)* evaluates function *f* at node *i* (stored as a tuple),
     # so to recover node *i* we need to evaluate *p_i* at the identity

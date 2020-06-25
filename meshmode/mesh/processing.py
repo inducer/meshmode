@@ -363,9 +363,48 @@ def test_volume_mesh_element_orientations(mesh):
 
 # {{{ flips
 
-def flip_simplex_element_group(vertices, grp, grp_flip_flags):
+
+def get_simplex_element_flip_matrix(order, unit_nodes):
+    """
+    Generate a resampling matrix that corresponds to the
+    first two barycentric coordinates being swapped.
+
+    :param order: The order of the function space on the simplex,
+                 (see second argument in
+                  :fun:`modepy.simplex_best_available_basis`)
+    :param unit_nodes: A np array of unit nodes with shape
+                       *(dim, nunit_nodes)*
+
+    :return: A numpy array of shape *(dim, dim)* which, when applied
+             to the matrix of nodes (shaped *(dim, nunit_nodes)*)
+             corresponds to the first two barycentric coordinates
+             being swapped
+    """
     from modepy.tools import barycentric_to_unit, unit_to_barycentric
 
+    bary_unit_nodes = unit_to_barycentric(unit_nodes)
+
+    flipped_bary_unit_nodes = bary_unit_nodes.copy()
+    flipped_bary_unit_nodes[0, :] = bary_unit_nodes[1, :]
+    flipped_bary_unit_nodes[1, :] = bary_unit_nodes[0, :]
+    flipped_unit_nodes = barycentric_to_unit(flipped_bary_unit_nodes)
+
+    dim = unit_nodes.shape[0]
+    flip_matrix = mp.resampling_matrix(
+            mp.simplex_best_available_basis(dim, order),
+            flipped_unit_nodes, unit_nodes)
+
+    flip_matrix[np.abs(flip_matrix) < 1e-15] = 0
+
+    # Flipping twice should be the identity
+    assert la.norm(
+            np.dot(flip_matrix, flip_matrix)
+            - np.eye(len(flip_matrix))) < 1e-13
+
+    return flip_matrix
+
+
+def flip_simplex_element_group(vertices, grp, grp_flip_flags):
     from meshmode.mesh import SimplexElementGroup
 
     if not isinstance(grp, SimplexElementGroup):
@@ -380,28 +419,8 @@ def flip_simplex_element_group(vertices, grp, grp_flip_flags):
     new_vertex_indices[grp_flip_flags, 1] \
             = grp.vertex_indices[grp_flip_flags, 0]
 
-    # Generate a resampling matrix that corresponds to the
-    # first two barycentric coordinates being swapped.
-
-    bary_unit_nodes = unit_to_barycentric(grp.unit_nodes)
-
-    flipped_bary_unit_nodes = bary_unit_nodes.copy()
-    flipped_bary_unit_nodes[0, :] = bary_unit_nodes[1, :]
-    flipped_bary_unit_nodes[1, :] = bary_unit_nodes[0, :]
-    flipped_unit_nodes = barycentric_to_unit(flipped_bary_unit_nodes)
-
-    flip_matrix = mp.resampling_matrix(
-            mp.simplex_best_available_basis(grp.dim, grp.order),
-            flipped_unit_nodes, grp.unit_nodes)
-
-    flip_matrix[np.abs(flip_matrix) < 1e-15] = 0
-
-    # Flipping twice should be the identity
-    assert la.norm(
-            np.dot(flip_matrix, flip_matrix)
-            - np.eye(len(flip_matrix))) < 1e-13
-
     # Apply the flip matrix to the nodes.
+    flip_matrix = get_simplex_element_flip_matrix(grp.order, grp.unit_nodes)
     new_nodes = grp.nodes.copy()
     new_nodes[:, grp_flip_flags] = np.einsum(
             "ij,dej->dei",
