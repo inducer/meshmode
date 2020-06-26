@@ -78,7 +78,6 @@ class DOFArray(np.ndarray):
         contained in this instance.
 
     .. automethod:: from_list
-
     """
 
     # Follows https://numpy.org/devdocs/user/basics.subclassing.html
