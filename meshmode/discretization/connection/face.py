@@ -86,11 +86,9 @@ def _build_boundary_connection(actx, vol_discr, bdry_discr, connection_data,
                 InterpolationBatch(
                     from_group_index=igrp,
                     from_element_indices=actx.freeze(actx.from_numpy(
-                        data.group_source_element_indices))
-                    .with_queue(None),
+                        data.group_source_element_indices)),
                     to_element_indices=actx.freeze(actx.from_numpy(
-                        data.group_target_element_indices))
-                    .with_queue(None),
+                        data.group_target_element_indices)),
                     result_unit_nodes=result_unit_nodes,
                     to_element_face=face_id
                     ))

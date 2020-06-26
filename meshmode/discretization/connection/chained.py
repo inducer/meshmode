@@ -187,7 +187,7 @@ def flatten_chained_connection(actx, connection):
         If a large number of connections is chained, the number of groups and
         batches can become very large.
 
-    :arg queue: An instance of :class:`pyopencl.CommandQueue`.
+    :arg actx: An instance of :class:`meshmode.array_contex.ArrayContext`.
     :arg connection: An instance of
         :class:`~meshmode.discretization.connection.DiscretizationConnection`.
     :return: An instance of

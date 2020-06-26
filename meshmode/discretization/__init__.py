@@ -197,11 +197,9 @@ class Discretization(object):
 
     .. automethod:: nodes()
 
-    .. method:: num_reference_derivative(queue, ref_axes, vec)
+    .. automethod:: num_reference_derivative
 
-    .. method:: quad_weights
-
-        A :class:`~meshmode.dof_array.DOFArray` with quadrature weights.
+    .. automethod:: quad_weights
     """
 
     def __init__(self, actx: ArrayContext, mesh, group_factory,
@@ -318,6 +316,8 @@ class Discretization(object):
 
     @memoize_method
     def quad_weights(self):
+        """:returns: A :class:`~meshmode.dof_array.DOFArray` with quadrature weights.
+        """
         actx = self._setup_actx
 
         @memoize_in(actx, (Discretization, "quad_weights_prg"))

@@ -51,10 +51,15 @@ class DOFArray(np.ndarray):
     :class:`~meshmode.discretization.Discretization`,
     with one entry in the :class:`DOFArray` for each
     :class:`~meshmode.discretization.ElementGroupBase`.
+    The arrays contained within a :class:`DOFArray`
+    are expected to be logically two-dimensional, with shape
+    ``(nelements, nunit_dofs)``, using
+    :class:`~meshmode.discretization.ElementGroupBase.nelements`
+    and :class:`~meshmode.discretization.ElementGroupBase.nunit_dofs`.
     It is derived from :class:`numpy.ndarray` with dtype object ("an object array").
     The entries in this array are further arrays managed by :attr:`array_context`.
 
-    The main purpose of this class is to better describe the data structure,
+    One main purpose of this class is to describe the data structure,
     i.e. when a :class:`DOFArray` occurs inside of further numpy object array,
     the level representing the array of element groups can be recognized (by
     people and programs).
