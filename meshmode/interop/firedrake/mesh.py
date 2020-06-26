@@ -221,9 +221,9 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh):
     from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL
     ext_neighbors = np.zeros(ext_elements.shape, dtype=np.int32)
     for ifac, marker in enumerate(top.exterior_facets.markers):
-        ext_neighbors[ifac] = boundary_tag_bit(BTAG_ALL) \
-                              | boundary_tag_bit(BTAG_REALLY_ALL) \
-                              | boundary_tag_bit(marker)
+        ext_neighbors[ifac] = -(boundary_tag_bit(BTAG_ALL) \
+                                | boundary_tag_bit(BTAG_REALLY_ALL) \
+                                | boundary_tag_bit(marker))
 
     exterior_grp = FacialAdjacencyGroup(igroup=0, ineighbor=None,
                                         elements=ext_elements,
@@ -409,12 +409,14 @@ def import_firedrake_mesh(fdrake_mesh):
     unflipped_facial_adjacency_groups = \
         _get_firedrake_facial_adjacency_groups(fdrake_mesh)
 
-    def flip_local_face_indices(arr, elements):
-        arr = np.copy(arr)
-        to_no_one = np.logical_and(orient[elements] < 0, arr == no_zero_face_ndx)
-        to_no_zero = np.logical_and(orient[elements] < 0, arr == no_one_face_ndx)
-        arr[to_no_one], arr[to_no_zero] = no_one_face_ndx, no_zero_face_ndx
-        return arr
+    def flip_local_face_indices(faces, elements):
+        faces = np.copy(faces)
+        to_no_one = np.logical_and(orient[elements] < 0,
+                                   faces == no_zero_face_ndx)
+        to_no_zero = np.logical_and(orient[elements] < 0,
+                                    faces == no_one_face_ndx)
+        faces[to_no_one], faces[to_no_zero] = no_one_face_ndx, no_zero_face_ndx
+        return faces
 
     facial_adjacency_groups = []
     from meshmode.mesh import FacialAdjacencyGroup
@@ -423,15 +425,19 @@ def import_firedrake_mesh(fdrake_mesh):
         for ineighbor_group, fagrp in six.iteritems(fagrps):
             new_element_faces = flip_local_face_indices(fagrp.element_faces,
                                                         fagrp.elements)
-            new_neighbor_faces = flip_local_face_indices(fagrp.neighbor_faces,
-                                                         fagrp.neighbors)
+            if ineighbor_group is None:
+                new_neighbor_faces = fagrp.neighbor_faces
+            else:
+                new_neighbor_faces = \
+                    flip_local_face_indices(fagrp.neighbor_faces,
+                                            fagrp.neighbors)
             new_fagrp = FacialAdjacencyGroup(igroup=igroup,
                                              ineighbor_group=ineighbor_group,
                                              elements=fagrp.elements,
                                              element_faces=new_element_faces,
                                              neighbors=fagrp.neighbors,
                                              neighbor_faces=new_neighbor_faces)
-        facial_adjacency_groups[igroup][ineighbor_group] = new_fagrp
+            facial_adjacency_groups[igroup][ineighbor_group] = new_fagrp
 
     from meshmode.mesh import Mesh
     return Mesh(vertices, [group],
@@ -440,9 +446,3 @@ def import_firedrake_mesh(fdrake_mesh):
                 facial_adjacency_groups=facial_adjacency_groups)
 
 # }}}
-
-
-from firedrake import UnitSquareMesh
-m = UnitSquareMesh(10, 10)
-m.init()
-mm_mesh = import_firedrake_mesh(m)
