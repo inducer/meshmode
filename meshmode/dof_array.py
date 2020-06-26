@@ -109,7 +109,7 @@ class DOFArray(np.ndarray):
         (one per :class:`~meshmode.discretization.ElementGroupBase`).
 
         :arg actx: If *None*, the arrays in *res_list* must be
-        :meth:`~meshmode.array_context.ArrayContext.thaw`\ ed.
+            :meth:`~meshmode.array_context.ArrayContext.thaw`\ ed.
         """
         if not (actx is None or isinstance(actx, ArrayContext)):
             raise TypeError("actx must be of type ArrayContext")
