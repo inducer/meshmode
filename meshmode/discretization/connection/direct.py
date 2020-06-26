@@ -146,7 +146,7 @@ class DiscretizationConnection(object):
 
         self.is_surjective = is_surjective
 
-    def __call__(self, queue, vec):
+    def __call__(self, ary):
         raise NotImplementedError()
 
 
