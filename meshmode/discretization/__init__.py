@@ -199,7 +199,7 @@ class Discretization(object):
 
     .. method:: num_reference_derivative(queue, ref_axes, vec)
 
-    .. method:: quad_weights(queue)
+    .. method:: quad_weights
 
         A :class:`~meshmode.dof_array.DOFArray` with quadrature weights.
     """
