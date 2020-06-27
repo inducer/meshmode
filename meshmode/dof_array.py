@@ -195,7 +195,8 @@ def flatten(ary: np.ndarray) -> np.ndarray:
     def prg():
         return make_loopy_program(
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
-            "result[grp_start + iel*ndofs_per_element + idof] = grp_ary[iel, idof]",  # noqa
+            """result[grp_start + iel*ndofs_per_element + idof] \
+                = grp_ary[iel, idof]""",
             name="flatten")
 
     result = actx.empty(group_starts[-1], dtype=ary.entry_dtype)
