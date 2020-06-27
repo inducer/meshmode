@@ -208,7 +208,7 @@ def flatten(ary: np.ndarray) -> np.ndarray:
 
 
 def unflatten(actx: ArrayContext, discr: "_Discretization", ary,
-        ndofs_per_element_per_group: Optional[Iterable[int]] = None) -> np.ndarray:
+        ndofs_per_element_by_group: Optional[Iterable[int]] = None) -> np.ndarray:
     r"""Convert a 'flat' array returned by :func:`flatten` back to a :class:`DOFArray`.
 
     Vectorizes over object arrays of :class:`DOFArray`\ s.
@@ -218,7 +218,7 @@ def unflatten(actx: ArrayContext, discr: "_Discretization", ary,
             and not isinstance(ary, DOFArray)):
         return obj_array_vectorize(
                 lambda subary: unflatten(
-                    actx, discr, subary, ndofs_per_element_per_group),
+                    actx, discr, subary, ndofs_per_element_by_group),
                 ary)
 
     @memoize_in(actx, (unflatten, "unflatten_prg"))
@@ -228,14 +228,14 @@ def unflatten(actx: ArrayContext, discr: "_Discretization", ary,
             "result[iel, idof] = ary[grp_start + iel*ndofs_per_element + idof]",
             name="unflatten")
 
-    if ndofs_per_element_per_group is None:
-        ndofs_per_element_per_group = [
+    if ndofs_per_element_by_group is None:
+        ndofs_per_element_by_group = [
                 grp.nunit_dofs for grp in discr.groups]
 
     group_sizes = [
             grp.nelements * ndofs_per_element
             for grp, ndofs_per_element
-            in zip(discr.groups, ndofs_per_element_per_group)]
+            in zip(discr.groups, ndofs_per_element_by_group)]
 
     if ary.size != sum(group_sizes):
         raise ValueError("array has size %d, expected %d"
@@ -254,7 +254,7 @@ def unflatten(actx: ArrayContext, discr: "_Discretization", ary,
             for grp_start, grp, ndofs_per_element in zip(
                     group_starts,
                     discr.groups,
-                    ndofs_per_element_per_group)])
+                    ndofs_per_element_by_group)])
 
 
 def flat_norm(ary: DOFArray, ord=2):
