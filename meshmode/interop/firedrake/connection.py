@@ -192,8 +192,8 @@ class FromFiredrakeConnection:
             ":param:`function` mesh must be the same mesh as used by " \
             "``self.from_fspace().mesh()``"
 
-        # Get function data as shape [dims][nnodes] or [nnodes]
-        function_data = function.dat.data.T
+        # Get function data as shape [nnodes][dims] or [nnodes]
+        function_data = function.dat.data
 
         if out is None:
             shape = (self.to_discr.nnodes,)
@@ -245,12 +245,14 @@ class FromFiredrakeConnection:
             mm_field = mm_field.reshape(mm_field.shape[1])
 
         # resample from nodes
-        resampled_view = self.to_discr.groups[0].view(out.dat.data.T)
-        np.matmul(resampled_view, self._resampling_mat_mm2fd.T, out=resampled_view)
+        # FIXME : we're still allocating new memory when :param:`out` is supplied
+        resampled = np.copy(mm_field)
+        by_cell_view = self.to_discr.groups[0].view(resampled)
+        np.matmul(by_cell_view, self._resampling_mat_mm2fd.T, out=by_cell_view)
         # reorder data
         if len(out.dat.data.shape) == 1:
-            out.dat.data[:] = out.dat.data[self._reordering_arr_mm2fd]
+            out.dat.data[:] = resampled[self._reordering_arr_mm2fd]
         else:
-            out.dat.data[:] = out.dat.data[self._reordering_arr_mm2fd, :]
+            out.dat.data[:] = resampled.T[self._reordering_arr_mm2fd, :]
 
         return out

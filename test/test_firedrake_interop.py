@@ -183,7 +183,10 @@ def check_idempotency(fdrake_connection, fdrake_function):
     """
     Make sure fd->mm->fd and mm->fd->mm are identity for DG spaces
     """
-    fdrake_fspace = fdrake_connection.from_fspace()
+    vdim = None
+    if len(fdrake_function.dat.data.shape) > 1:
+        vdim = fdrake_function.dat.data.shape[1]
+    fdrake_fspace = fdrake_connection.from_fspace(dim=vdim)
 
     # Test for idempotency fd->mm->fd
     mm_field = fdrake_connection.from_firedrake(fdrake_function)
