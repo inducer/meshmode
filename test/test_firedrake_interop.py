@@ -27,7 +27,7 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 
-from meshmode.interop.firedrake import FromFiredrakeConnection
+from meshmode.interop.firedrake.connection import FromFiredrakeConnection
 
 import pytest
 
@@ -86,7 +86,7 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
     fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fdrake_degree)
     cl_ctx = ctx_factory()
     fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
-    to_discr = fdrake_connection.to_discr()
+    to_discr = fdrake_connection.to_discr
     meshmode_verts = to_discr.mesh.vertices
 
     # Ensure the meshmode mesh has one group and make sure both
@@ -167,7 +167,7 @@ def test_function_transfer(ctx_factory,
     fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
     transported_f = fdrake_connection.from_firedrake(fdrake_f)
 
-    to_discr = fdrake_connection.to_discr()
+    to_discr = fdrake_connection.to_discr
     with cl.CommandQueue(cl_ctx) as queue:
         nodes = to_discr.nodes().get(queue=queue)
     meshmode_f = meshmode_f_eval(nodes)
@@ -183,7 +183,7 @@ def check_idempotency(fdrake_connection, fdrake_function):
     """
     Make sure fd->mm->fd and mm->fd->mm are identity for DG spaces
     """
-    fdrake_fspace = fdrake_connection.from_function_space()
+    fdrake_fspace = fdrake_connection.from_fspace()
 
     # Test for idempotency fd->mm->fd
     mm_field = fdrake_connection.from_firedrake(fdrake_function)

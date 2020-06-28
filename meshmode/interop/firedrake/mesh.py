@@ -308,6 +308,13 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
 
 def import_firedrake_mesh(fdrake_mesh):
     # FIXME : docs
+    """
+    :return: A tuple (meshmode mesh, firedrake_orient).
+             firedrake_orient < 0 is True for any negatively
+             oriented firedrake cell (which was flipped by meshmode)
+             and False for any positively oriented firedrake cell
+             (whcih was not flipped by meshmode)
+    """
     # Type validation
     from firedrake.mesh import MeshGeometry
     if not isinstance(fdrake_mesh, MeshGeometry):
@@ -440,9 +447,10 @@ def import_firedrake_mesh(fdrake_mesh):
             facial_adjacency_groups[igroup][ineighbor_group] = new_fagrp
 
     from meshmode.mesh import Mesh
-    return Mesh(vertices, [group],
-                boundary_tags=bdy_tags,
-                nodal_adjacency=nodal_adjacency,
-                facial_adjacency_groups=facial_adjacency_groups)
+    return (Mesh(vertices, [group],
+                 boundary_tags=bdy_tags,
+                 nodal_adjacency=nodal_adjacency,
+                 facial_adjacency_groups=facial_adjacency_groups),
+            orient)
 
 # }}}
