@@ -73,7 +73,6 @@ def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
 
 
 class FromFiredrakeConnection:
-    # FIXME : docs
     """
     A connection created from a :mod:`firedrake`
     ``"CG"`` or ``"DG"`` function space which creates a corresponding
@@ -83,10 +82,16 @@ class FromFiredrakeConnection:
     .. attribute:: to_discr
 
         The discretization corresponding to the firedrake function
-        space (DESCRIBE HERE)
+        space created with a
+        :class:`InterpolatoryQuadratureSimplexElementGroup`.
     """
     def __init__(self, cl_ctx, fdrake_fspace):
-        # FIXME : docs
+        """
+        :param cl_ctx: A :mod:`pyopencl` computing context
+        :param fdrake_fspace: A :mod:`firedrake` ``"CG"`` or ``"DG"``
+            function space (of class :class:`WithGeometry`) built on
+            a mesh which is importable by :func:`import_firedrake_mesh`.
+        """
         # Ensure fdrake_fspace is a function space with appropriate reference
         # element.
         from firedrake.functionspaceimpl import WithGeometry
@@ -176,7 +181,19 @@ class FromFiredrakeConnection:
         return self._fspace_cache[dim]
 
     def from_firedrake(self, function, out=None):
-        """transport fiiredrake function"""
+        """
+        transport firedrake function onto :attr:`to_discr`
+
+        :param function: A :mod:`firedrake` function to transfer onto
+            :attr:`to_discr`. Its function space must have
+            the same family, degree, and mesh as ``self.from_fspace()``.
+        :param out: If *None* then ignored, otherwise a numpy array of the
+            shape *function.dat.data.shape.T* (i.e.
+            *(dim, nnodes)* or *(nnodes,)* in which :param:`function`'s
+            transported data is stored.
+
+        :return: a numpy array holding the transported function
+        """
         # make sure function is a firedrake function in an appropriate
         # function space
         from firedrake.function import Function
@@ -212,7 +229,19 @@ class FromFiredrakeConnection:
         return out
 
     def from_meshmode(self, mm_field, out=None):
-        """transport meshmode field"""
+        """
+        transport meshmode field from :attr:`to_discr` into an
+        appropriate firedrake function space.
+
+        :param mm_field: A numpy array of shape *(nnodes,)* or *(dim, nnodes)*
+            representing a function on :attr:`to_distr`.
+        :param out: If *None* then ignored, otherwise a :mod:`firedrake`
+            function of the right function space for the transported data
+            to be stored in.
+
+        :return: a :mod:`firedrake` :class:`Function` holding the transported
+            data.
+        """
         if self._ufl_element.family() == 'Lagrange':
             raise ValueError("Cannot convert functions from discontinuous "
                              " space (meshmode) to continuous firedrake "

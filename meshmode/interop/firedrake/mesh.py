@@ -21,8 +21,7 @@ THE SOFTWARE.
 """
 
 __doc__ = """
-.. autofunction:: get_firedrake_nodal_adjacency_group
-.. autofunction:: get_firedrake_vertex_indices
+.. autofunction:: import_firedrake_mesh
 """
 
 from warnings import warn  # noqa
@@ -34,9 +33,25 @@ import six
 
 
 def _get_firedrake_nodal_info(fdrake_mesh_topology):
-    # FIXME: do docs
     """
-    Get nodal adjacency, and vertex indices from a firedrake mesh topology
+    Get nodal adjacency and vertex indices corresponding
+    to a firedrake mesh topology. Note that as we do not use
+    geometric information, there is no guarantee that elements
+    have a positive orientation.
+
+    The elements (in firedrake lingo, the cells)
+    are guaranteed to have the same numbering in :mod:`meshmode`
+    as :mod:`firedrdake`
+
+    :param fdrake_mesh_topology: A :mod:`firedrake` instance of class
+        :class:`MeshTopology` or :class:`MeshGeometry`.
+
+    :return: Returns *vertex_indices* as a numpy array of shape
+        *(nelements, ref_element.nvertices)* (as described by
+        the ``vertex_indices`` attribute of a :class:`MeshElementGroup`)
+        and a :class:`NodalAdjacency` constructed from
+        :param:`fdrake_mesh_topology`
+        as a tuple *(vertex_indices, nodal_adjacency)*.
     """
     top = fdrake_mesh_topology.topology
 
@@ -147,9 +162,19 @@ def _get_firedrake_boundary_tags(fdrake_mesh):
     return tuple(bdy_tags)
 
 
-def _get_firedrake_facial_adjacency_groups(fdrake_mesh):
-    # FIXME: do docs
-    top = fdrake_mesh.topology
+def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology):
+    """
+    Return facial_adjacency_groups corresponding to
+    the given firedrake mesh topology. Note that as we do not
+    have geometric information, elements may need to be
+    flipped later.
+
+    :param fdrake_mesh_topology: A :mod:`firedrake` instance of class
+        :class:`MeshTopology` or :class:`MeshGeometry`.
+    :return: A list of maps to :class:`FacialAdjacencyGroup`s as required
+        by a :mod:`meshmode` :class:`Mesh`
+    """
+    top = fdrake_mesh_topology.topology
     # We only need one group
     # for interconnectivity and one for boundary connectivity.
     # The tricky part is moving from firedrake local facet numbering
@@ -221,8 +246,8 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh):
     from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL
     ext_neighbors = np.zeros(ext_elements.shape, dtype=np.int32)
     for ifac, marker in enumerate(top.exterior_facets.markers):
-        ext_neighbors[ifac] = -(boundary_tag_bit(BTAG_ALL) \
-                                | boundary_tag_bit(BTAG_REALLY_ALL) \
+        ext_neighbors[ifac] = -(boundary_tag_bit(BTAG_ALL)
+                                | boundary_tag_bit(BTAG_REALLY_ALL)
                                 | boundary_tag_bit(marker))
 
     exterior_grp = FacialAdjacencyGroup(igroup=0, ineighbor=None,
@@ -240,12 +265,16 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh):
 
 def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
                                 normals=None, no_normals_warn=True):
-    # FIXME : Fix docs
     """
     Return the orientations of the mesh elements:
-    an array, the *i*th element is > 0 if the *ith* element
-    is positively oriented, < 0 if negatively oriented.
-    Mesh must have co-dimension 0 or 1.
+
+    :param fdrake_mesh: A :mod:`firedrake` instance of :class:`MeshGeometry`
+
+    :param unflipped_group: A :class:`SimplexElementGroup` instance with
+        (potentially) some negatively oriented elements.
+
+    :param vertices: The vertex coordinates as a numpy array of shape
+        *(ambient_dim, nvertices)*
 
     :param normals: _Only_ used if :param:`mesh` is a 1-surface
         embedded in 2-space. In this case,
@@ -259,6 +288,10 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
     :param no_normals_warn: If *True*, raises a warning
         if :param:`mesh` is a 1-surface embedded in 2-space
         and :param:`normals` is *None*.
+
+    :return: A numpy array, the *i*th element is > 0 if the *ith* element
+        is positively oriented, < 0 if negatively oriented.
+        Mesh must have co-dimension 0 or 1.
     """
     # compute orientations
     tdim = fdrake_mesh.topological_dimension()
@@ -309,11 +342,38 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
 def import_firedrake_mesh(fdrake_mesh):
     # FIXME : docs
     """
-    :return: A tuple (meshmode mesh, firedrake_orient).
-             firedrake_orient < 0 is True for any negatively
-             oriented firedrake cell (which was flipped by meshmode)
-             and False for any positively oriented firedrake cell
-             (whcih was not flipped by meshmode)
+    Create a :mod:`meshmode` :class:`Mesh` from a :mod:`firedrake`
+    :class:`MeshGeometry` with the same cells/elements, vertices, nodes,
+    mesh order, and facial adjacency.
+
+    The vertex and node coordinates will be the same, as well
+    as the cell/element ordering. However, :mod:`firedrake`
+    does not require elements to be positively oriented,
+    so any negative elements are flipped
+    as in :func:`meshmode.processing.flip_simplex_element_group`.
+
+    The flipped cells/elements are identified by the returned
+    *firedrake_orient* array
+
+    :param fdrake_mesh: A :mod:`firedrake` :class:`MeshGeometry`.
+        This mesh **must** be in a space of ambient dimension
+        1, 2, or 3 and have co-dimension of 0 or 1.
+        It must use a simplex as a reference element.
+
+        Finally, its ``coordinates`` attribute must have a function
+        space whose *finat_element* associates a degree
+        of freedom with each vertex. In particular,
+        this means that the vertices of the mesh must have well-defined
+        coordinates.
+        For those unfamiliar with :mod:`firedrake`, you can
+        verify this by looking at the ``[0]`` entry of
+        ``fdrake_mesh.coordinates.function_space().finat_element.entity_dofs()``.
+
+    :return: A tuple *(meshmode mesh, firedrake_orient)*.
+         ``firedrake_orient < 0`` is *True* for any negatively
+         oriented firedrake cell (which was flipped by meshmode)
+         and False for any positively oriented firedrake cell
+         (whcih was not flipped by meshmode).
     """
     # Type validation
     from firedrake.mesh import MeshGeometry
@@ -324,6 +384,7 @@ def import_firedrake_mesh(fdrake_mesh):
     assert fdrake_mesh.ufl_cell().is_simplex(), "Mesh must use simplex cells"
     gdim = fdrake_mesh.geometric_dimension()
     tdim = fdrake_mesh.topological_dimension()
+    assert gdim in [1, 2, 3], "Mesh must be in space of ambient dim 1, 2, or 3"
     assert gdim - tdim in [0, 1], "Mesh co-dimension must be 0 or 1"
     fdrake_mesh.init()
 
