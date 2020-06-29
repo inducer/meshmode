@@ -283,6 +283,6 @@ class FromFiredrakeConnection:
         if len(out.dat.data.shape) == 1:
             out.dat.data[:] = out.dat.data[self._reordering_arr_mm2fd]
         else:
-            out.dat.data[:] = out.dat.data.T[self._reordering_arr_mm2fd, :]
+            out.dat.data[:] = out.dat.data[self._reordering_arr_mm2fd, :]
 
         return out
