@@ -74,6 +74,9 @@ def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
         flip_mat, nodes[orient < 0])
 
 
+# {{{ Create connection from firedrake into meshmode
+
+
 class FromFiredrakeConnection:
     """
     A connection created from a :mod:`firedrake`
@@ -358,3 +361,22 @@ class FromFiredrakeConnection:
                                             dist, continuity_tolerance))
 
         return out
+
+# }}}
+
+
+# {{{ Create connection to firedrake from meshmode
+
+
+# TODO : implement this (should be easy using export_mesh_to_firedrake
+#        and similar styles)
+class ToFiredrakeConnection:
+    def __init__(self, discr, group_nr=None):
+        """
+        Create a connection from a firedrake discretization
+        into firedrake. Create a corresponding "DG" function
+        space and allow for conversion back and forth
+        by resampling at the nodes.
+        """
+
+# }}}

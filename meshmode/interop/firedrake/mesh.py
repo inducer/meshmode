@@ -28,6 +28,13 @@ from warnings import warn  # noqa
 import numpy as np
 import six
 
+from modepy import resampling_matrix
+
+from meshmode.mesh import (BTAG_ALL, BTAG_REALLY_ALL, FacialAdjacencyGroup,
+    Mesh, NodalAdjacency, SimplexElementGroup)
+from meshmode.interop.firedrake.reference_cell import (
+    get_affine_reference_simplex_mapping, get_finat_element_unit_nodes)
+
 
 # {{{ functions to extract information from Mesh Topology
 
@@ -128,7 +135,6 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology):
 
     neighbors = np.array(neighbors, dtype=np.int32)
 
-    from meshmode.mesh import NodalAdjacency
     nodal_adjacency = NodalAdjacency(neighbors_starts=neighbors_starts,
                                      neighbors=neighbors)
 
@@ -150,7 +156,6 @@ def _get_firedrake_boundary_tags(fdrake_mesh):
 
     :return: A tuple of boundary tags
     """
-    from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL
     bdy_tags = [BTAG_ALL, BTAG_REALLY_ALL]
 
     unique_markers = fdrake_mesh.topology.exterior_facets.unique_markers
@@ -179,7 +184,6 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology):
     # (ordered lexicographically by the vertex excluded from the face)
     # and meshmode's facet ordering: obtained from a simplex element
     # group
-    from meshmode.mesh import SimplexElementGroup
     mm_simp_group = SimplexElementGroup(1, None, None,
                                         dim=top.cell_dimension())
     mm_face_vertex_indices = mm_simp_group.face_vertex_indices()
@@ -205,7 +209,6 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology):
                   for fac_nrs in int_fac_loc_nr])
     # elements neighbors element_faces neighbor_faces are as required
     # for a :class:`FacialAdjacencyGroup`.
-    from meshmode.mesh import Mesh
 
     int_elements = int_facet_cell.flatten()
     int_neighbors = np.concatenate((int_facet_cell[:, 1], int_facet_cell[:, 0]))
@@ -214,7 +217,6 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology):
                                         int_fac_loc_nr[:, 0]))
     int_neighbor_faces = int_neighbor_faces.astype(Mesh.face_id_dtype)
 
-    from meshmode.mesh import FacialAdjacencyGroup
     interconnectivity_grp = FacialAdjacencyGroup(igroup=0, ineighbor_group=0,
                                                  elements=int_elements,
                                                  neighbors=int_neighbors,
@@ -241,7 +243,6 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology):
         except KeyError:
             raise 0
 
-    from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL
     ext_neighbors = np.zeros(ext_elements.shape, dtype=np.int32)
     for ifac, marker in enumerate(top.exterior_facets.markers):
         ext_neighbors[ifac] = -(boundary_tag_bit(BTAG_ALL)
@@ -323,7 +324,7 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
 # }}}
 
 
-# {{{ Mesh conversion
+# {{{ Mesh importing from firedrake
 
 def import_firedrake_mesh(fdrake_mesh, normals=None, no_normals_warn=None):
     """
@@ -424,7 +425,6 @@ def import_firedrake_mesh(fdrake_mesh, normals=None, no_normals_warn=None):
     nodes = np.transpose(nodes, (2, 0, 1))
 
     # make a group (possibly with some elements that need to be flipped)
-    from meshmode.mesh import SimplexElementGroup
     unflipped_group = SimplexElementGroup(coord_finat_elt.degree,
                                           vertex_indices,
                                           nodes,
@@ -472,7 +472,6 @@ def import_firedrake_mesh(fdrake_mesh, normals=None, no_normals_warn=None):
     # This changes the local facet nr, so we need to create and then
     # fix our facial adjacency groups. To do that, we need to figure
     # out which local facet numbers switched.
-    from meshmode.mesh import SimplexElementGroup
     mm_simp_group = SimplexElementGroup(1, None, None,
                                         dim=fdrake_mesh.cell_dimension())
     face_vertex_indices = mm_simp_group.face_vertex_indices()
@@ -498,7 +497,6 @@ def import_firedrake_mesh(fdrake_mesh, normals=None, no_normals_warn=None):
         return faces
 
     facial_adjacency_groups = []
-    from meshmode.mesh import FacialAdjacencyGroup
     for igroup, fagrps in enumerate(unflipped_facial_adjacency_groups):
         facial_adjacency_groups.append({})
         for ineighbor_group, fagrp in six.iteritems(fagrps):
@@ -518,11 +516,81 @@ def import_firedrake_mesh(fdrake_mesh, normals=None, no_normals_warn=None):
                                              neighbor_faces=new_neighbor_faces)
             facial_adjacency_groups[igroup][ineighbor_group] = new_fagrp
 
-    from meshmode.mesh import Mesh
     return (Mesh(vertices, [group],
                  boundary_tags=bdy_tags,
                  nodal_adjacency=nodal_adjacency,
                  facial_adjacency_groups=facial_adjacency_groups),
             orient)
+
+# }}}
+
+
+# {{{ Mesh exporting to firedrake
+
+def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
+    """
+    Create a firedrake mesh corresponding to one :class:`Mesh`'s
+    :class:`SimplexElementGroup`.
+
+    :param mesh: A :class:`meshmode.mesh.Mesh` to convert with
+        at least one :class:`SimplexElementGroup`
+    :param group_nr: The group number to be converted into a firedrake
+        mesh. The corresponding group must be of type
+        :class:`SimplexElementGroup`. If *None* and
+        *mesh* has only one group, that group is used. Otherwise,
+        a *ValueError* is raised.
+    :param comm: The communicator to build the dmplex mesh on
+    """
+    if not isinstance(mesh, Mesh):
+        raise TypeError(":arg:`mesh` must of type :class:`meshmode.mesh.Mesh`,"
+                        " not %s." % type(mesh))
+    if group_nr is None:
+        if len(mesh.groups) != 1:
+            raise ValueError(":arg:`group_nr` is *None* but :arg:`mesh` has "
+                             "more than one group.")
+        else:
+            group_nr = 0
+    assert group_nr >= 0 and group_nr < len(mesh.groups)
+    assert isinstance(mesh.groups[group_nr], SimplexElementGroup)
+    assert mesh.vertices is not None
+
+    # Get a dmplex object and then a mesh topology
+    group = mesh.groups[group_nr]
+    mm2fd_indices = np.unique(group.vertex_indices.flatten())
+    coords = mesh.vertices[:, mm2fd_indices].T
+    cells = mm2fd_indices[group.vertex_indices]
+
+    if comm is None:
+        from pyop2.mpi import COMM_WORLD
+        comm = COMM_WORLD
+    # FIXME : this is a private member...
+    import firedrake.mesh as fd_mesh
+    plex = fd_mesh._from_cell_list(group.dim, cells, coords, comm)
+
+    topology = fd_mesh.Mesh(plex, dim=mesh.ambient_dim, reorder=False)
+
+    # Now make a coordinates function
+    from firedrake import VectorFunctionSpace, Function
+    coords_fspace = VectorFunctionSpace(topology, 'CG', group.order,
+                                       dim=mesh.ambient_dim)
+    coords = Function(coords_fspace)
+
+    # get firedrake unit nodes and map onto meshmode reference element
+    fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(group.dim, True)
+    fd_unit_nodes = get_finat_element_unit_nodes(coords_fspace.finat_element)
+    fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
+
+    from meshmode.discretization.poly_element import (
+        InterpolatoryQuadratureSimplexElementGroup)
+    el_group = InterpolatoryQuadratureSimplexElementGroup(group, group.order,
+                                                          group.node_nr_base)
+    resampling_mat = resampling_matrix(el_group.basis(),
+                                       new_nodes=fd_unit_nodes,
+                                       old_nodes=group.unit_nodes)
+    # nodes is shaped *(ambient dim, nelements, nunit nodes)
+    coords.dat.data[coords_fspace.cell_node_list, :] = \
+        np.matmul(group.nodes, resampling_mat.T).transpose((1, 2, 0))
+
+    return fd_mesh.Mesh(coords, reorder=False)
 
 # }}}
