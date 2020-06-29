@@ -75,7 +75,6 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology):
     def vert_id_dmp_to_fd(ndx):
         return top._vertex_numbering.getOffset(ndx)
 
-    # FIXME : Is this the right integer type?
     # We will fill in the values as we go
     vertex_indices = -np.ones((top.num_cells(), top.ufl_cell().num_vertices()),
                               dtype=np.int32)
@@ -122,7 +121,6 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology):
     # Next go ahead and compute nodal adjacency by creating
     # neighbors and neighbor_starts as specified by :class:`NodalAdjacency`
     neighbors = []
-    # FIXME : Is this the right integer type to choose?
     neighbors_starts = np.zeros(top.num_cells() + 1, dtype=np.int32)
     for iel in range(len(cell_to_nodal_neighbors)):
         neighbors += cell_to_nodal_neighbors[iel]
@@ -340,7 +338,6 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
 # {{{ Mesh conversion
 
 def import_firedrake_mesh(fdrake_mesh):
-    # FIXME : docs
     """
     Create a :mod:`meshmode` :class:`Mesh` from a :mod:`firedrake`
     :class:`MeshGeometry` with the same cells/elements, vertices, nodes,
