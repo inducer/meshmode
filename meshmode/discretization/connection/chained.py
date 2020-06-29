@@ -23,8 +23,6 @@ THE SOFTWARE.
 """
 
 import numpy as np
-import pyopencl as cl
-import pyopencl.array  # noqa
 
 from pytools import Record
 
@@ -65,9 +63,9 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
 
         self.connections = connections
 
-    def __call__(self, queue, vec):
+    def __call__(self, vec):
         for cnx in self.connections:
-            vec = cnx(queue, vec)
+            vec = cnx(vec)
 
         return vec
 
@@ -86,13 +84,13 @@ def _iterbatches(groups):
             yield (igrp, ibatch), (grp, batch)
 
 
-def _build_element_lookup_table(queue, conn):
+def _build_element_lookup_table(actx, conn):
     el_table = [np.full(g.nelements, -1, dtype=np.int)
                 for g in conn.to_discr.groups]
 
     for (igrp, _), (_, batch) in _iterbatches(conn.groups):
-        el_table[igrp][batch.to_element_indices.get(queue)] = \
-                batch.from_element_indices.get(queue)
+        el_table[igrp][actx.to_numpy(batch.to_element_indices)] = \
+                actx.to_numpy(batch.from_element_indices)
 
     return el_table
 
@@ -146,12 +144,12 @@ def _build_new_group_table(from_conn, to_conn):
     return grp_to_grp, batch_info
 
 
-def _build_batches(queue, from_bins, to_bins, batch):
+def _build_batches(actx, from_bins, to_bins, batch):
     from meshmode.discretization.connection.direct import \
             InterpolationBatch
 
     def to_device(x):
-        return cl.array.to_device(queue, np.asarray(x))
+        return actx.freeze(actx.from_numpy(np.asarray(x)))
 
     for ibatch, (from_bin, to_bin) in enumerate(zip(from_bins, to_bins)):
         yield InterpolationBatch(
@@ -162,7 +160,7 @@ def _build_batches(queue, from_bins, to_bins, batch):
                 to_element_face=batch[ibatch].to_element_face)
 
 
-def flatten_chained_connection(queue, connection):
+def flatten_chained_connection(actx, connection):
     """Collapse a connection into a direct connection.
 
     If the given connection is already a
@@ -189,7 +187,7 @@ def flatten_chained_connection(queue, connection):
         If a large number of connections is chained, the number of groups and
         batches can become very large.
 
-    :arg queue: An instance of :class:`pyopencl.CommandQueue`.
+    :arg actx: An instance of :class:`meshmode.array_contex.ArrayContext`.
     :arg connection: An instance of
         :class:`~meshmode.discretization.connection.DiscretizationConnection`.
     :return: An instance of
@@ -211,12 +209,12 @@ def flatten_chained_connection(queue, connection):
     connections = connection.connections
     direct_connections = []
     for conn in connections:
-        direct_connections.append(flatten_chained_connection(queue, conn))
+        direct_connections.append(flatten_chained_connection(actx, conn))
 
     # merge all the direct connections
     from_conn = direct_connections[0]
     for to_conn in direct_connections[1:]:
-        el_table = _build_element_lookup_table(queue, from_conn)
+        el_table = _build_element_lookup_table(actx, from_conn)
         grp_to_grp, batch_info = _build_new_group_table(from_conn, to_conn)
 
         # distribute the indices to new groups and batches
@@ -224,13 +222,13 @@ def flatten_chained_connection(queue, connection):
         to_bins = [[np.empty(0, dtype=np.int) for _ in g] for g in batch_info]
 
         for (igrp, ibatch), (_, from_batch) in _iterbatches(from_conn.groups):
-            from_to_element_indices = from_batch.to_element_indices.get(queue)
+            from_to_element_indices = actx.to_numpy(from_batch.to_element_indices)
 
             for (jgrp, jbatch), (_, to_batch) in _iterbatches(to_conn.groups):
                 igrp_new, ibatch_new = grp_to_grp[igrp, ibatch, jgrp, jbatch]
 
-                jfrom = to_batch.from_element_indices.get(queue)
-                jto = to_batch.to_element_indices.get(queue)
+                jfrom = actx.to_numpy(to_batch.from_element_indices)
+                jto = actx.to_numpy(to_batch.to_element_indices)
 
                 mask = np.isin(jfrom, from_to_element_indices)
                 from_bins[igrp_new][ibatch_new] = \
@@ -244,7 +242,7 @@ def flatten_chained_connection(queue, connection):
         groups = []
         for igrp, (from_bin, to_bin) in enumerate(zip(from_bins, to_bins)):
             groups.append(DiscretizationConnectionElementGroup(
-                list(_build_batches(queue, from_bin, to_bin,
+                list(_build_batches(actx, from_bin, to_bin,
                                     batch_info[igrp]))))
 
         from_conn = DirectDiscretizationConnection(
@@ -260,7 +258,7 @@ def flatten_chained_connection(queue, connection):
 
 # {{{ build chained resample matrix
 
-def make_full_resample_matrix(queue, connection):
+def make_full_resample_matrix(actx, connection):
     """Build a dense matrix representing the discretization connection.
 
     This is based on
@@ -273,7 +271,7 @@ def make_full_resample_matrix(queue, connection):
         This method will be very slow, both in terms of speed and memory
         usage, and should only be used for testing or if absolutely necessary.
 
-    :arg queue: a :class:`pyopencl.CommandQueue`.
+    :arg actx: a :class:`meshmode.array_context.ArrayContext`.
     :arg connection: a
         :class:`~meshmode.discretization.connection.DiscretizationConnection`.
     :return: a :class:`pyopencl.array.Array` of shape
@@ -281,21 +279,22 @@ def make_full_resample_matrix(queue, connection):
     """
 
     if hasattr(connection, "full_resample_matrix"):
-        return connection.full_resample_matrix(queue)
+        return connection.full_resample_matrix(actx)
 
     if not hasattr(connection, 'connections'):
         raise TypeError('connection is not chained')
 
     if not connection.connections:
         result = np.eye(connection.to_discr.nnodes)
-        return cl.array.to_device(queue, result)
+        return actx.from_numpy(result)
 
-    acc = make_full_resample_matrix(queue, connection.connections[0]).get(queue)
+    acc = actx.to_numpy(
+            make_full_resample_matrix(actx, connection.connections[0]))
     for conn in connection.connections[1:]:
-        resampler = make_full_resample_matrix(queue, conn).get(queue)
-        acc = resampler.dot(acc)
+        resampler = actx.to_numpy(make_full_resample_matrix(actx, conn))
+        acc = resampler @ acc
 
-    return cl.array.to_device(queue, acc)
+    return actx.from_numpy(acc)
 
 # }}}
 

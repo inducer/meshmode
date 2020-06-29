@@ -1,5 +1,3 @@
-from __future__ import division, absolute_import
-
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
 __license__ = """
@@ -22,10 +20,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from six.moves import range
 import numpy as np
 from pytools import memoize_method, Record
-import pyopencl as cl
+from meshmode.dof_array import DOFArray, flatten, thaw
+
 
 __doc__ = """
 
@@ -39,48 +37,56 @@ __doc__ = """
 
 # {{{ helpers
 
-def separate_by_real_and_imag(data, real_only):
-    for name, field in data:
-        from pytools.obj_array import log_shape, is_obj_array
-        ls = log_shape(field)
+def separate_by_real_and_imag(names_and_fields, real_only):
+    """
+    :arg names_and_fields: input data array must be already flattened into a
+        single :mod:`numpy` array using :func:`resample_to_numpy`.
+    """
 
-        if is_obj_array(field):
-            assert len(ls) == 1
+    for name, field in names_and_fields:
+        if isinstance(field, np.ndarray) and field.dtype.char == "O":
+            assert len(field.shape) == 1
             from pytools.obj_array import (
-                    oarray_real_copy, oarray_imag_copy,
-                    with_object_array_or_scalar)
+                    obj_array_real_copy, obj_array_imag_copy,
+                    obj_array_vectorize)
 
             if field[0].dtype.kind == "c":
                 if real_only:
                     yield (name,
-                            with_object_array_or_scalar(oarray_real_copy, field))
+                            obj_array_vectorize(obj_array_real_copy, field))
                 else:
-                    yield (name+"_r",
-                            with_object_array_or_scalar(oarray_real_copy, field))
-                    yield (name+"_i",
-                            with_object_array_or_scalar(oarray_imag_copy, field))
+                    yield (f"{name}_r",
+                            obj_array_vectorize(obj_array_real_copy, field))
+                    yield (f"{name}_i",
+                            obj_array_vectorize(obj_array_imag_copy, field))
             else:
                 yield (name, field)
         else:
-            # ls == ()
             if field.dtype.kind == "c":
-                yield (name+"_r", field.real.copy())
-                yield (name+"_i", field.imag.copy())
+                if real_only:
+                    yield (name, field.real.copy())
+                else:
+                    yield (f"{name}_r", field.real.copy())
+                    yield (f"{name}_i", field.imag.copy())
             else:
                 yield (name, field)
 
 
-def resample_and_get(queue, conn, vec):
-    from pytools.obj_array import with_object_array_or_scalar
+def resample_to_numpy(conn, vec):
+    if (isinstance(vec, np.ndarray)
+            and vec.dtype.char == "O"
+            and not isinstance(vec, DOFArray)):
+        from pytools.obj_array import obj_array_vectorize
+        return obj_array_vectorize(resample_to_numpy, vec)
 
-    def resample_and_get_one(fld):
-        from numbers import Number
-        if isinstance(fld, Number):
-            return np.ones(conn.to_discr.nnodes) * fld
-        else:
-            return conn(queue, fld).get(queue=queue)
-
-    return with_object_array_or_scalar(resample_and_get_one, vec)
+    from numbers import Number
+    if isinstance(vec, Number):
+        nnodes = sum(grp.ndofs for grp in conn.to_discr.groups)
+        return np.ones(nnodes) * vec
+    else:
+        resampled = conn(vec)
+        actx = resampled.array_context
+        return actx.to_numpy(flatten(resampled))
 
 
 class _VisConnectivityGroup(Record):
@@ -204,12 +210,20 @@ class VTKVisualizer(object):
             raise NotImplementedError("visualization for element groups "
                     "of type '%s'" % type(grp.mesh_el_group).__name__)
 
-        assert len(node_tuples) == grp.nunit_nodes
+        assert len(node_tuples) == grp.nunit_dofs
         return el_connectivity, vtk_cell_type
+
+    @memoize_method
+    def vis_nodes_numpy(self):
+        actx = self.vis_discr._setup_actx
+        return np.array([
+            actx.to_numpy(flatten(thaw(actx, ary)))
+            for ary in self.vis_discr.nodes()
+            ])
 
     @property
     @memoize_method
-    def cells(self):
+    def vtk_cells(self):
         return np.hstack([
             vgrp.vis_connectivity.reshape(-1) for vgrp in self.groups
             ])
@@ -224,13 +238,16 @@ class VTKVisualizer(object):
 
         result = []
         subel_nr_base = 0
+        node_nr_base = 0
 
         for grp in self.vis_discr.groups:
             el_connectivity, vtk_cell_type = \
                     self.connectivity_for_element_group(grp)
 
-            offsets = grp.node_nr_base \
-                    + np.arange(0, grp.nnodes, grp.nunit_nodes).reshape(-1, 1, 1)
+            offsets = node_nr_base + np.arange(
+                    0,
+                    grp.nelements * grp.nunit_dofs,
+                    grp.nunit_dofs).reshape(-1, 1, 1)
             vis_connectivity = (offsets + el_connectivity).astype(np.intp)
 
             vgrp = _VisConnectivityGroup(
@@ -240,6 +257,7 @@ class VTKVisualizer(object):
             result.append(vgrp)
 
             subel_nr_base += vgrp.nsubelements
+            node_nr_base += grp.ndofs
 
         return result
 
@@ -252,13 +270,10 @@ class VTKVisualizer(object):
                 AppendedDataXMLGenerator,
                 VF_LIST_OF_COMPONENTS)
 
-        with cl.CommandQueue(self.vis_discr.cl_context) as queue:
-            nodes = self.vis_discr.nodes().get(queue)
-
-            names_and_fields = [
-                    (name, resample_and_get(queue, self.connection, f))
-                    for name, f in names_and_fields
-                    ]
+        nodes = self.vis_nodes_numpy()
+        names_and_fields = [
+                (name, resample_to_numpy(self.connection, fld))
+                for name, fld in names_and_fields]
 
         # {{{ create cell_types
 
@@ -279,25 +294,28 @@ class VTKVisualizer(object):
         # {{{ shrink elements
 
         if abs(self.element_shrink_factor - 1.0) > 1.0e-14:
+            node_nr_base = 0
             for vgrp in self.vis_discr.groups:
-                nodes_view = vgrp.view(nodes)
+                nodes_view = nodes[:, node_nr_base:node_nr_base + vgrp.ndofs]
                 el_centers = np.mean(nodes_view, axis=-1)
                 nodes_view[:] = (
                         (self.element_shrink_factor * nodes_view)
                         + (1-self.element_shrink_factor)
                         * el_centers[:, :, np.newaxis])
 
+                node_nr_base += vgrp.ndofs
+
         # }}}
 
         # {{{ create grid
 
-        points = DataArray("points",
-                nodes.reshape(self.vis_discr.ambient_dim, -1),
+        nodes = nodes.reshape(self.vis_discr.ambient_dim, -1)
+        points = DataArray("points", nodes,
                 vector_format=VF_LIST_OF_COMPONENTS)
 
         grid = UnstructuredGrid(
-                (self.vis_discr.nnodes, points),
-                cells=self.cells,
+                (nodes.shape[1], points),
+                cells=self.vtk_cells,
                 cell_types=cell_types)
 
         for name, field in separate_by_real_and_imag(names_and_fields, real_only):
@@ -372,20 +390,27 @@ class VTKLagrangeVisualizer(VTKVisualizer):
             raise NotImplementedError("visualization for element groups "
                     "of type '%s'" % type(grp.mesh_el_group).__name__)
 
-        assert len(node_tuples) == grp.nunit_nodes
+        assert len(node_tuples) == grp.nunit_dofs
         return el_connectivity, vtk_cell_type
 
     @property
     @memoize_method
-    def cells(self):
+    def vtk_cells(self):
         connectivity = np.hstack([
             grp.vis_connectivity.reshape(-1)
             for grp in self.groups
             ])
+
+        grp_offsets = np.cumsum([0] + [
+            grp.ndofs for grp in self.vis_discr.groups
+            ])
+
         offsets = np.hstack([
-                grp.node_nr_base
-                + np.arange(grp.nunit_nodes, grp.nnodes + 1, grp.nunit_nodes)
-                for grp in self.vis_discr.groups
+                grp_offset + np.arange(
+                    grp.nunit_dofs,
+                    grp.nelements * grp.nunit_dofs + 1,
+                    grp.nunit_dofs)
+                for grp_offset, grp in enumerate(grp_offsets, self.vis_discr.groups)
                 ])
 
         from pyvisfile.vtk import DataArray
@@ -428,10 +453,8 @@ class Visualizer(object):
 
         do_show = kwargs.pop("do_show", True)
 
-        with cl.CommandQueue(self.vis_discr.cl_context) as queue:
-            nodes = self.vis_discr.nodes().with_queue(queue).get()
-
-            field = resample_and_get(queue, self.connection, field)
+        nodes = self.vtk.vis_nodes_numpy()
+        field = resample_to_numpy(self.connection, field)
 
         assert nodes.shape[0] == self.vis_discr.ambient_dim
         #mlab.points3d(nodes[0], nodes[1], 0*nodes[0])
@@ -485,8 +508,6 @@ class Visualizer(object):
                 real_only=real_only,
                 overwrite=overwrite)
 
-    # }}}
-
     # {{{ matplotlib 3D
 
     def show_scalar_in_matplotlib_3d(self, field, **kwargs):
@@ -500,10 +521,8 @@ class Visualizer(object):
         vmax = kwargs.pop("vmax", None)
         norm = kwargs.pop("norm", None)
 
-        with cl.CommandQueue(self.vis_discr.cl_context) as queue:
-            nodes = self.vis_discr.nodes().with_queue(queue).get()
-
-            field = resample_and_get(queue, self.connection, field)
+        nodes = self.vtk.vis_nodes_numpy()
+        field = resample_to_numpy(field)
 
         assert nodes.shape[0] == self.vis_discr.ambient_dim
 
@@ -558,7 +577,7 @@ class Visualizer(object):
     # }}}
 
 
-def make_visualizer(queue, discr, vis_order,
+def make_visualizer(actx, discr, vis_order,
         element_shrink_factor=None, use_high_order_vtk=False):
     from meshmode.discretization import Discretization
 
@@ -573,7 +592,7 @@ def make_visualizer(queue, discr, vis_order,
 
     from meshmode.discretization.poly_element import OrderAndTypeBasedGroupFactory
     vis_discr = Discretization(
-            discr.cl_context, discr.mesh,
+            actx, discr.mesh,
             OrderAndTypeBasedGroupFactory(
                 vis_order,
                 simplex_group_class=SimplexElementGroup,
@@ -584,7 +603,7 @@ def make_visualizer(queue, discr, vis_order,
             make_same_mesh_connection
 
     return Visualizer(
-            make_same_mesh_connection(vis_discr, discr),
+            make_same_mesh_connection(actx, vis_discr, discr),
             element_shrink_factor=element_shrink_factor,
             use_high_order_vtk=use_high_order_vtk)
 
@@ -600,16 +619,18 @@ def draw_curve(discr):
     plt.plot(mesh.vertices[0], mesh.vertices[1], "o")
 
     color = plt.cm.rainbow(np.linspace(0, 1, len(discr.groups)))
-    with cl.CommandQueue(discr.cl_context) as queue:
-        for i, group in enumerate(discr.groups):
-            group_nodes = group.view(discr.nodes()).get(queue=queue)
-            artist_handles = plt.plot(
-                    group_nodes[0].T,
-                    group_nodes[1].T, "-x",
-                    color=color[i])
+    for igrp, group in enumerate(discr.groups):
+        group_nodes = np.array([
+            discr._setup_actx.to_numpy(discr.nodes()[iaxis][igrp])
+            for iaxis in range(discr.ambient_dim)
+            ])
+        artist_handles = plt.plot(
+                group_nodes[0].T,
+                group_nodes[1].T, "-x",
+                color=color[igrp])
 
-            if artist_handles:
-                artist_handles[0].set_label("Group %d" % i)
+        if artist_handles:
+            artist_handles[0].set_label("Group %d" % igrp)
 
 # }}}
 

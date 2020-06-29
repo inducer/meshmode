@@ -28,8 +28,6 @@ from six.moves import range, zip
 from pytools import Record
 
 import numpy as np
-import pyopencl as cl
-import pyopencl.array  # noqa
 import modepy as mp
 
 import logging
@@ -63,7 +61,7 @@ class _ConnectionBatchData(Record):
     pass
 
 
-def _build_boundary_connection(queue, vol_discr, bdry_discr, connection_data,
+def _build_boundary_connection(actx, vol_discr, bdry_discr, connection_data,
         per_face_groups):
     from meshmode.discretization.connection.direct import (
             InterpolationBatch,
@@ -87,14 +85,10 @@ def _build_boundary_connection(queue, vol_discr, bdry_discr, connection_data,
             batches.append(
                 InterpolationBatch(
                     from_group_index=igrp,
-                    from_element_indices=cl.array.to_device(
-                        queue,
-                        data.group_source_element_indices)
-                    .with_queue(None),
-                    to_element_indices=cl.array.to_device(
-                        queue,
-                        data.group_target_element_indices)
-                    .with_queue(None),
+                    from_element_indices=actx.freeze(actx.from_numpy(
+                        data.group_source_element_indices)),
+                    to_element_indices=actx.freeze(actx.from_numpy(
+                        data.group_target_element_indices)),
                     result_unit_nodes=result_unit_nodes,
                     to_element_face=face_id
                     ))
@@ -160,7 +154,7 @@ def _get_face_vertices(mesh, boundary_tag):
 # }}}
 
 
-def make_face_restriction(discr, group_factory, boundary_tag,
+def make_face_restriction(actx, discr, group_factory, boundary_tag,
         per_face_groups=False):
     """Create a mesh, a discretization and a connection to restrict
     a function on *discr* to its values on the edges of element faces
@@ -373,12 +367,11 @@ def make_face_restriction(discr, group_factory, boundary_tag,
 
     from meshmode.discretization import Discretization
     bdry_discr = Discretization(
-            discr.cl_context, bdry_mesh, group_factory)
+            actx, bdry_mesh, group_factory)
 
-    with cl.CommandQueue(discr.cl_context) as queue:
-        connection = _build_boundary_connection(
-                queue, discr, bdry_discr, connection_data,
-                per_face_groups)
+    connection = _build_boundary_connection(
+            actx, discr, bdry_discr, connection_data,
+            per_face_groups)
 
     logger.info("building face restriction: done")
 
@@ -389,7 +382,7 @@ def make_face_restriction(discr, group_factory, boundary_tag,
 
 # {{{ face -> all_faces connection
 
-def make_face_to_all_faces_embedding(faces_connection, all_faces_discr,
+def make_face_to_all_faces_embedding(actx, faces_connection, all_faces_discr,
         from_discr=None):
     """Return a
     :class:`meshmode.discretization.connection.DiscretizationConnection`
@@ -437,61 +430,59 @@ def make_face_to_all_faces_embedding(faces_connection, all_faces_discr,
 
     i_faces_grp = 0
 
-    with cl.CommandQueue(vol_discr.cl_context) as queue:
-        groups = []
-        for ivol_grp, vol_grp in enumerate(vol_discr.groups):
-            batches = []
+    groups = []
+    for ivol_grp, vol_grp in enumerate(vol_discr.groups):
+        batches = []
 
-            nfaces = vol_grp.mesh_el_group.nfaces
-            for iface in range(nfaces):
-                all_faces_grp = all_faces_discr.groups[i_faces_grp]
+        nfaces = vol_grp.mesh_el_group.nfaces
+        for iface in range(nfaces):
+            all_faces_grp = all_faces_discr.groups[i_faces_grp]
 
-                if per_face_groups:
-                    assert len(faces_connection.groups[i_faces_grp].batches) == 1
-                else:
-                    assert (len(faces_connection.groups[i_faces_grp].batches)
-                            == nfaces)
+            if per_face_groups:
+                assert len(faces_connection.groups[i_faces_grp].batches) == 1
+            else:
+                assert (len(faces_connection.groups[i_faces_grp].batches)
+                        == nfaces)
 
-                assert np.array_equal(
-                        from_discr.groups[i_faces_grp].unit_nodes,
-                        all_faces_grp.unit_nodes)
+            assert np.array_equal(
+                    from_discr.groups[i_faces_grp].unit_nodes,
+                    all_faces_grp.unit_nodes)
 
-                # {{{ find src_batch
+            # {{{ find src_batch
 
-                src_batches = faces_connection.groups[i_faces_grp].batches
-                if per_face_groups:
-                    src_batch, = src_batches
-                else:
-                    src_batch = src_batches[iface]
-                del src_batches
+            src_batches = faces_connection.groups[i_faces_grp].batches
+            if per_face_groups:
+                src_batch, = src_batches
+            else:
+                src_batch = src_batches[iface]
+            del src_batches
 
-                # }}}
+            # }}}
 
-                if per_face_groups:
-                    to_element_indices = src_batch.from_element_indices
-                else:
-                    assert all_faces_grp.nelements == nfaces * vol_grp.nelements
+            if per_face_groups:
+                to_element_indices = src_batch.from_element_indices
+            else:
+                assert all_faces_grp.nelements == nfaces * vol_grp.nelements
 
-                    to_element_indices = (
-                            vol_grp.nelements*iface
-                            + src_batch.from_element_indices.with_queue(queue)
-                            ).with_queue(None)
+                to_element_indices = actx.freeze(
+                        vol_grp.nelements*iface
+                        + actx.thaw(src_batch.from_element_indices))
 
-                batches.append(
-                        InterpolationBatch(
-                            from_group_index=i_faces_grp,
-                            from_element_indices=src_batch.to_element_indices,
-                            to_element_indices=to_element_indices,
-                            result_unit_nodes=all_faces_grp.unit_nodes,
-                            to_element_face=None))
+            batches.append(
+                    InterpolationBatch(
+                        from_group_index=i_faces_grp,
+                        from_element_indices=src_batch.to_element_indices,
+                        to_element_indices=to_element_indices,
+                        result_unit_nodes=all_faces_grp.unit_nodes,
+                        to_element_face=None))
 
-                is_last_face = iface + 1 == nfaces
-                if per_face_groups or is_last_face:
-                    groups.append(
-                            DiscretizationConnectionElementGroup(batches=batches))
-                    batches = []
+            is_last_face = iface + 1 == nfaces
+            if per_face_groups or is_last_face:
+                groups.append(
+                        DiscretizationConnectionElementGroup(batches=batches))
+                batches = []
 
-                    i_faces_grp += 1
+                i_faces_grp += 1
 
     return DirectDiscretizationConnection(
             from_discr,
