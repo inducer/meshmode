@@ -77,7 +77,7 @@ def resample_to_numpy(conn, vec):
             and vec.dtype.char == "O"
             and not isinstance(vec, DOFArray)):
         from pytools.obj_array import obj_array_vectorize
-        return obj_array_vectorize(resample_to_numpy, vec)
+        return obj_array_vectorize(lambda x: resample_to_numpy(conn, x), vec)
 
     from numbers import Number
     if isinstance(vec, Number):
@@ -168,9 +168,9 @@ class VTKVisualizer(object):
         if isinstance(grp.mesh_el_group, SimplexElementGroup):
             node_tuples = list(gnitstam(grp.order, grp.dim))
 
-            from modepy.tools import submesh
+            from modepy.tools import simplex_submesh
             el_connectivity = np.array(
-                    submesh(node_tuples),
+                    simplex_submesh(node_tuples),
                     dtype=np.intp)
 
             vtk_cell_type = self.simplex_cell_types[grp.dim]
@@ -296,7 +296,10 @@ class VTKVisualizer(object):
         if abs(self.element_shrink_factor - 1.0) > 1.0e-14:
             node_nr_base = 0
             for vgrp in self.vis_discr.groups:
-                nodes_view = nodes[:, node_nr_base:node_nr_base + vgrp.ndofs]
+                nodes_view = (
+                        nodes[:, node_nr_base:node_nr_base + vgrp.ndofs]
+                        .reshape(nodes.shape[0], vgrp.nelements, vgrp.nunit_dofs))
+
                 el_centers = np.mean(nodes_view, axis=-1)
                 nodes_view[:] = (
                         (self.element_shrink_factor * nodes_view)
@@ -410,7 +413,7 @@ class VTKLagrangeVisualizer(VTKVisualizer):
                     grp.nunit_dofs,
                     grp.nelements * grp.nunit_dofs + 1,
                     grp.nunit_dofs)
-                for grp_offset, grp in enumerate(grp_offsets, self.vis_discr.groups)
+                for grp_offset, grp in zip(grp_offsets, self.vis_discr.groups)
                 ])
 
         from pyvisfile.vtk import DataArray

@@ -654,11 +654,11 @@ def test_merge_and_map(ctx_factory, visualize=False):
         from meshmode.discretization import Discretization
         cl_ctx = ctx_factory()
         queue = cl.CommandQueue(cl_ctx)
-
-        discr = Discretization(cl_ctx, mesh3, discr_grp_factory)
+        actx = PyOpenCLArrayContext(queue)
+        discr = Discretization(actx, mesh3, discr_grp_factory)
 
         from meshmode.discretization.visualization import make_visualizer
-        vis = make_visualizer(queue, discr, 3, element_shrink_factor=0.8)
+        vis = make_visualizer(actx, discr, 3, element_shrink_factor=0.8)
         vis.write_vtk_file("merge_and_map.vtu", [])
 
 # }}}
@@ -943,12 +943,13 @@ def test_box_mesh(ctx_factory, visualize=False):
                 PolynomialWarpAndBlendGroupFactory
         cl_ctx = ctx_factory()
         queue = cl.CommandQueue(cl_ctx)
+        actx = PyOpenCLArrayContext(queue)
 
-        discr = Discretization(cl_ctx, mesh,
-                PolynomialWarpAndBlendGroupFactory(1))
+        discr = Discretization(actx, mesh,
+                PolynomialWarpAndBlendGroupFactory(7))
 
         from meshmode.discretization.visualization import make_visualizer
-        vis = make_visualizer(queue, discr, 1)
+        vis = make_visualizer(actx, discr, 7)
         vis.write_vtk_file("box_mesh.vtu", [])
 
 # }}}
@@ -1401,9 +1402,8 @@ def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
 
     if visualize:
         group_id = discr.empty(actx, dtype=np.int)
-        for igrp, grp in enumerate(discr.groups):
-            group_id_view = grp.view(group_id)
-            group_id_view.fill(igrp)
+        for igrp, vec in enumerate(group_id):
+            vec.fill(igrp)
 
         from meshmode.discretization.visualization import make_visualizer
         vis = make_visualizer(actx, discr, vis_order=order)
