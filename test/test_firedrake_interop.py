@@ -27,7 +27,7 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 
-from meshmode.interop.firedrake.connection import FromFiredrakeConnection
+from meshmode.interop.firedrake import FromFiredrakeConnection
 
 import pytest
 
