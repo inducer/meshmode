@@ -181,7 +181,7 @@ def test_function_transfer(ctx_factory,
 
 def check_idempotency(fdrake_connection, fdrake_function):
     """
-    Make sure fd->mm->fd and mm->fd->mm are identity for DG spaces
+    Make sure fd->mm->fd and mm->fd->mm are identity
     """
     vdim = None
     if len(fdrake_function.dat.data.shape) > 1:
@@ -191,7 +191,9 @@ def check_idempotency(fdrake_connection, fdrake_function):
     # Test for idempotency fd->mm->fd
     mm_field = fdrake_connection.from_firedrake(fdrake_function)
     fdrake_function_copy = Function(fdrake_fspace)
-    fdrake_connection.from_meshmode(mm_field, fdrake_function_copy)
+    fdrake_connection.from_meshmode(mm_field, fdrake_function_copy,
+                                    assert_fdrake_discontinuous=False,
+                                    continuity_tolerance=1e-8)
 
     np.testing.assert_allclose(fdrake_function_copy.dat.data,
                                fdrake_function.dat.data,
@@ -202,11 +204,12 @@ def check_idempotency(fdrake_connection, fdrake_function):
     np.testing.assert_allclose(mm_field_copy, mm_field, atol=CLOSE_ATOL)
 
 
-def test_scalar_idempotency(ctx_factory, fdrake_mesh, fdrake_degree):
+def test_scalar_idempotency(ctx_factory, fdrake_mesh,
+                            fdrake_family, fdrake_degree):
     """
-    Make sure fd->mm->fd and mm->fd->mm are identity for scalar DG spaces
+    Make sure fd->mm->fd and mm->fd->mm are identity for scalar spaces
     """
-    fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fdrake_degree)
+    fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fdrake_degree)
 
     # Make a function with unique values at each node
     fdrake_unique = Function(fdrake_fspace)
@@ -218,11 +221,12 @@ def test_scalar_idempotency(ctx_factory, fdrake_mesh, fdrake_degree):
     check_idempotency(fdrake_connection, fdrake_unique)
 
 
-def test_vector_idempotency(ctx_factory, fdrake_mesh, fdrake_degree):
+def test_vector_idempotency(ctx_factory, fdrake_mesh,
+                            fdrake_family, fdrake_degree):
     """
-    Make sure fd->mm->fd and mm->fd->mm are identity for vector DG spaces
+    Make sure fd->mm->fd and mm->fd->mm are identity for vector spaces
     """
-    fdrake_vfspace = VectorFunctionSpace(fdrake_mesh, 'DG', fdrake_degree)
+    fdrake_vfspace = VectorFunctionSpace(fdrake_mesh, fdrake_family, fdrake_degree)
 
     # Make a function with unique values at each node
     xx = SpatialCoordinate(fdrake_vfspace.mesh())

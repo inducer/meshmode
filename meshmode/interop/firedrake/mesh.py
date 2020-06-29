@@ -267,25 +267,13 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
     Return the orientations of the mesh elements:
 
     :param fdrake_mesh: A :mod:`firedrake` instance of :class:`MeshGeometry`
-
     :param unflipped_group: A :class:`SimplexElementGroup` instance with
         (potentially) some negatively oriented elements.
-
     :param vertices: The vertex coordinates as a numpy array of shape
         *(ambient_dim, nvertices)*
-
-    :param normals: _Only_ used if :param:`mesh` is a 1-surface
-        embedded in 2-space. In this case,
-        - If *None* then
-          all elements are assumed to be positively oriented.
-        - Else, should be a list/array whose *i*th entry
-          is the normal for the *i*th element (*i*th
-          in :param:`mesh`*.coordinate.function_space()*'s
-          :attribute:`cell_node_list`)
-
-    :param no_normals_warn: If *True*, raises a warning
-        if :param:`mesh` is a 1-surface embedded in 2-space
-        and :param:`normals` is *None*.
+    :param normals: As described in the kwargs of :func:`import_firedrake_mesh`
+    :param no_normals_warn: As described in the kwargs of
+        :func:`import_firedrake_mesh`
 
     :return: A numpy array, the *i*th element is > 0 if the *ith* element
         is positively oriented, < 0 if negatively oriented.
@@ -337,7 +325,7 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
 
 # {{{ Mesh conversion
 
-def import_firedrake_mesh(fdrake_mesh):
+def import_firedrake_mesh(fdrake_mesh, **kwargs):
     """
     Create a :mod:`meshmode` :class:`Mesh` from a :mod:`firedrake`
     :class:`MeshGeometry` with the same cells/elements, vertices, nodes,
@@ -357,7 +345,14 @@ def import_firedrake_mesh(fdrake_mesh):
         1, 2, or 3 and have co-dimension of 0 or 1.
         It must use a simplex as a reference element.
 
-        Finally, its ``coordinates`` attribute must have a function
+        In the case of a 2-dimensional mesh embedded in 3-space,
+        the method ``fdrake_mesh.init_cell_orientations`` must
+        have been called.
+
+        In the case of a 1-dimensional mesh embedded in 2-space,
+        see the keyword arguments below.
+
+        Finally, the ``coordinates`` attribute must have a function
         space whose *finat_element* associates a degree
         of freedom with each vertex. In particular,
         this means that the vertices of the mesh must have well-defined
@@ -365,6 +360,19 @@ def import_firedrake_mesh(fdrake_mesh):
         For those unfamiliar with :mod:`firedrake`, you can
         verify this by looking at the ``[0]`` entry of
         ``fdrake_mesh.coordinates.function_space().finat_element.entity_dofs()``.
+
+    :Keyword Arguments:
+        * *normals*: _Only_ used if :param:`fdrake_mesh` is a 1-surface
+          embedded in 2-space. In this case,
+            - If *None* then
+              all elements are assumed to be positively oriented.
+            - Else, should be a list/array whose *i*th entry
+              is the normal for the *i*th element (*i*th
+              in :param:`mesh`*.coordinate.function_space()*'s
+              :attribute:`cell_node_list`)
+        * *no_normals_warn: If *True* (the default), raises a warning
+          if :param:`fdrake_mesh` is a 1-surface embedded in 2-space
+          and :param:`normals` is *None*.
 
     :return: A tuple *(meshmode mesh, firedrake_orient)*.
          ``firedrake_orient < 0`` is *True* for any negatively
@@ -449,8 +457,11 @@ def import_firedrake_mesh(fdrake_mesh):
     vertices = np.array([vertices[i] for i in range(len(vertices))]).T
 
     # Use the vertices to compute the orientations and flip the group
-    # FIXME : Allow for passing in normals/no normals warn
-    orient = _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices)
+    normals = kwargs.get('normals', None)
+    no_normals_warn = kwargs.get('no_normals_warn', True)
+    orient = _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
+                                         normals=normals,
+                                         no_normals_warn=no_normals_warn)
     from meshmode.mesh.processing import flip_simplex_element_group
     group = flip_simplex_element_group(vertices, unflipped_group, orient < 0)
 

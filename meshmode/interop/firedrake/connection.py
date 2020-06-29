@@ -26,6 +26,9 @@ __doc__ = """
 
 import numpy as np
 import numpy.linalg as la
+import six
+
+from modepy import resampling_matrix
 
 from meshmode.interop.firedrake.mesh import import_firedrake_mesh
 from meshmode.interop.firedrake.reference_cell import (
@@ -36,8 +39,6 @@ from meshmode.mesh.processing import get_simplex_element_flip_matrix
 from meshmode.discretization.poly_element import \
     InterpolatoryQuadratureSimplexGroupFactory
 from meshmode.discretization import Discretization
-
-from modepy import resampling_matrix
 
 
 def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
@@ -130,19 +131,45 @@ class FromFiredrakeConnection:
                                                        new_nodes=fd_unit_nodes,
                                                        old_nodes=mm_unit_nodes)
 
-        # handle reordering fd->mm
+        # Flipping negative elements corresponds to reordering the nodes.
+        # We handle reordering by storing the permutation explicitly as
+        # a numpy array
+
+        # Get the reordering fd->mm.
+        #
+        # One should note there is something a bit more subtle going on
+        # in the continuous case. All meshmode discretizations use
+        # are discontinuous, so nodes are associated with elements(cells)
+        # not vertices. In a continuous firedrake space, some nodes
+        # are shared between multiple cells. In particular, while the
+        # below "reordering" is indeed a permutation if the firedrake space
+        # is discontinuous, if the firedrake space is continuous then
+        # some firedrake nodes correspond to nodes on multiple meshmode
+        # elements, i.e. those nodes appear multiple times
+        # in the "reordering" array
         flip_mat = get_simplex_element_flip_matrix(ufl_elt.degree(),
                                                    fd_unit_nodes)
         fd_cell_node_list = fdrake_fspace.cell_node_list
         _reorder_nodes(orient, fd_cell_node_list, flip_mat, unflip=False)
         self._reordering_arr_fd2mm = fd_cell_node_list.flatten()
 
-        # handle reordering mm->fd (this only works in the discontinuous
-        #                           case)
-        nnodes = self.to_discr.nnodes
-        mm_cell_node_list = self.to_discr.groups[0].view(np.arange(nnodes))
-        _reorder_nodes(orient, mm_cell_node_list, flip_mat, unflip=True)
-        self._reordering_arr_mm2fd = mm_cell_node_list.flatten()
+        # Now handle the possibility of duplicate nodes
+        unique_fd_nodes, counts = np.unique(self._reordering_arr_fd2mm,
+                                            return_counts=True)
+        # self._duplicate_nodes
+        # maps firedrake nodes associated to more than 1 meshmode node
+        # to all associated meshmode nodes.
+        self._duplicate_nodes = {}
+        if ufl_elt.family() == 'Discontinuous Lagrange':
+            assert np.all(counts == 1), \
+                "This error should never happen, some nodes in a firedrake " \
+                "discontinuous space were duplicated. Contact the developer "
+        else:
+            dup_fd_nodes = set(unique_fd_nodes[counts > 1])
+            for mm_inode, fd_inode in enumerate(self._reordering_arr_fd2mm):
+                if fd_inode in dup_fd_nodes:
+                    self._duplicate_nodes.setdefault(fd_inode, [])
+                    self._duplicate_nodes[fd_inode].append(mm_inode)
 
         # Store things that we need for *from_fspace*
         self._ufl_element = ufl_elt
@@ -228,7 +255,9 @@ class FromFiredrakeConnection:
         np.matmul(out_view, self._resampling_mat_fd2mm.T, out=out_view)
         return out
 
-    def from_meshmode(self, mm_field, out=None):
+    def from_meshmode(self, mm_field, out=None,
+                      assert_fdrake_discontinuous=True,
+                      continuity_tolerance=None):
         """
         transport meshmode field from :attr:`to_discr` into an
         appropriate firedrake function space.
@@ -238,15 +267,26 @@ class FromFiredrakeConnection:
         :param out: If *None* then ignored, otherwise a :mod:`firedrake`
             function of the right function space for the transported data
             to be stored in.
+        :param assert_fdrake_discontinuous: If *True*,
+            disallows conversion to a continuous firedrake function space
+            (i.e. this function checks that ``self.from_fspace()`` is
+             discontinuous and raises a *ValueError* otherwise)
+        :param continuity_tolerance: If converting to a continuous firedrake
+            function space (i.e. if ``self.from_fspace()`` is continuous),
+            assert that at any two meshmode nodes corresponding to the
+            same firedrake node (meshmode is a discontinuous space, so this
+            situation will almost certainly happen), the function being transported
+            has values at most :param:`continuity_tolerance` distance
+            apart. If *None*, no checks are performed.
 
         :return: a :mod:`firedrake` :class:`Function` holding the transported
             data.
         """
-        if self._ufl_element.family() == 'Lagrange':
-            raise ValueError("Cannot convert functions from discontinuous "
-                             " space (meshmode) to continuous firedrake "
-                             " space (reference element family %s)."
-                             % type(self._ufl_element.family()))
+        if self._ufl_element.family() == 'Lagrange' \
+                and assert_fdrake_discontinuous:
+            raise ValueError("Trying to convert to continuous function space "
+                             " with :param:`assert_fdrake_discontinuous` set "
+                             " to *True*")
         # make sure out is a firedrake function in an appropriate
         # function space
         if out is not None:
@@ -273,16 +313,47 @@ class FromFiredrakeConnection:
         if len(out.dat.data.shape) == 1 and len(mm_field.shape) > 1:
             mm_field = mm_field.reshape(mm_field.shape[1])
 
-        # resample from nodes
+        # resample from nodes on reordered view. Have to do this in
+        # a bit of a roundabout way to be careful about duplicated
+        # firedrake nodes.
         by_cell_field_view = self.to_discr.groups[0].view(mm_field)
-        by_cell_out_view = self.to_discr.groups[0].view(out.dat.data.T)
-        np.matmul(by_cell_field_view, self._resampling_mat_mm2fd.T,
-                  out=by_cell_out_view)
-
-        # reorder data
         if len(out.dat.data.shape) == 1:
-            out.dat.data[:] = out.dat.data[self._reordering_arr_mm2fd]
+            reordered_outdata = out.dat.data[self._reordering_arr_fd2mm]
         else:
-            out.dat.data[:] = out.dat.data[self._reordering_arr_mm2fd, :]
+            reordered_outdata = out.dat.data.T[:, self._reordering_arr_fd2mm]
+        by_cell_reordered_view = self.to_discr.groups[0].view(reordered_outdata)
+        np.matmul(by_cell_field_view, self._resampling_mat_mm2fd.T,
+                  out=by_cell_reordered_view)
+        out.dat.data[self._reordering_arr_fd2mm] = reordered_outdata.T
+
+        # Continuity checks
+        if self._ufl_element.family() == 'Lagrange' \
+                and continuity_tolerance is not None:
+            assert isinstance(continuity_tolerance, float)
+            assert continuity_tolerance >= 0
+            # Check each firedrake node which has been duplicated
+            # that all associated values are within the continuity
+            # tolerance
+            for fd_inode, duplicated_mm_nodes in \
+                    six.iteritems(self._duplicate_nodes):
+                mm_inode = duplicated_mm_nodes[0]
+                # Make sure to compare using reordered_outdata not mm_field,
+                # because two meshmode nodes associated to the same firedrake
+                # nodes may have been resampled to distinct nodes on different
+                # elements. reordered_outdata has undone that resampling.
+                for dup_mm_inode in duplicated_mm_nodes[1:]:
+                    if len(reordered_outdata.shape) > 1:
+                        dist = la.norm(reordered_outdata[:, mm_inode]
+                                       - reordered_outdata[:, dup_mm_inode])
+                    else:
+                        dist = la.norm(reordered_outdata[mm_inode]
+                                       - reordered_outdata[dup_mm_inode])
+                    if dist >= continuity_tolerance:
+                        raise ValueError("Meshmode nodes %s and %s represent "
+                                         "the same firedrake node %s, but "
+                                         ":param:`mm_field`'s values are "
+                                         " %s > %s apart)"
+                                         % (mm_inode, dup_mm_inode, fd_inode,
+                                            dist, continuity_tolerance))
 
         return out
