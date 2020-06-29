@@ -38,8 +38,8 @@ def get_affine_reference_simplex_mapping(spat_dim, firedrake_to_meshmode=True):
     on one reference cell and maps each
     point to another using a positive affine map.
 
-    :param spat_dim: The spatial dimension
-    :param firedrake_to_meshmode: If true, the returned function maps from
+    :arg spat_dim: The spatial dimension
+    :arg firedrake_to_meshmode: If true, the returned function maps from
         the firedrake reference element to
         meshmode, if false maps from
         meshmode to firedrake. More specifically,
@@ -114,7 +114,7 @@ def get_finat_element_unit_nodes(finat_element):
     Returns the unit nodes used by the FInAT element in firedrake's
     (equivalently, FInAT/FIAT's) reference coordinates
 
-    :param finat_element: A :class:`finat.finiteelementbase.FiniteElementBase`
+    :arg finat_element: A :class:`finat.finiteelementbase.FiniteElementBase`
         instance (i.e. a firedrake function space's reference element).
         The refernce element of the finat element *MUST* be a simplex
     :return: A numpy array of shape *(dim, nunit_nodes)* holding the unit

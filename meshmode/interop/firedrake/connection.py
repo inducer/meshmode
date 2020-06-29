@@ -22,6 +22,7 @@ THE SOFTWARE.
 
 __doc__ = """
 .. autoclass:: FromFiredrakeConnection
+    :members:
 """
 
 import numpy as np
@@ -43,14 +44,14 @@ from meshmode.discretization import Discretization
 
 def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
     """
-    flips :param:`nodes` in place according to :param:`orient`
+    flips *nodes* in place according to *orient*
 
-    :param orient: An array of shape *(nelements)* of orientations,
+    :arg orient: An array of shape *(nelements)* of orientations,
                  >0 for positive, <0 for negative
-    :param nodes: a *(nelements, nunit_nodes)* or shaped array of nodes
-    :param flip_matrix: The matrix used to flip each negatively-oriented
+    :arg nodes: a *(nelements, nunit_nodes)* or shaped array of nodes
+    :arg flip_matrix: The matrix used to flip each negatively-oriented
                       element
-    :param unflip: If *True*, use transpose of :param:`flip_matrix` to
+    :arg unflip: If *True*, use transpose of *flip_matrix* to
                  flip negatively-oriented elements
     """
     # reorder nodes (Code adapted from
@@ -88,8 +89,8 @@ class FromFiredrakeConnection:
     """
     def __init__(self, cl_ctx, fdrake_fspace):
         """
-        :param cl_ctx: A :mod:`pyopencl` computing context
-        :param fdrake_fspace: A :mod:`firedrake` ``"CG"`` or ``"DG"``
+        :arg cl_ctx: A :mod:`pyopencl` computing context
+        :arg fdrake_fspace: A :mod:`firedrake` ``"CG"`` or ``"DG"``
             function space (of class :class:`WithGeometry`) built on
             a mesh which is importable by :func:`import_firedrake_mesh`.
         """
@@ -97,14 +98,14 @@ class FromFiredrakeConnection:
         # element.
         from firedrake.functionspaceimpl import WithGeometry
         if not isinstance(fdrake_fspace, WithGeometry):
-            raise TypeError(":param:`fdrake_fspace` must be of firedrake type "
+            raise TypeError(":arg:`fdrake_fspace` must be of firedrake type "
                             ":class:`WithGeometry`, not `%s`."
                             % type(fdrake_fspace))
         ufl_elt = fdrake_fspace.ufl_element()
 
         if ufl_elt.family() not in ('Lagrange', 'Discontinuous Lagrange'):
             raise ValueError("the ``ufl_element().family()`` of "
-                             ":param:`fdrake_fspace` must "
+                             ":arg:`fdrake_fspace` must "
                              "be ``'Lagrange'`` or "
                              "``'Discontinuous Lagrange'``, not %s."
                              % ufl_elt.family())
@@ -180,7 +181,7 @@ class FromFiredrakeConnection:
         """
         Return a firedrake function space of the appropriate vector dimension
 
-        :param dim: Either *None*, in which case a function space which maps
+        :arg dim: Either *None*, in which case a function space which maps
                     to scalar values is returned, or a positive integer *n*,
                     in which case a function space which maps into *\\R^n*
                     is returned
@@ -211,12 +212,12 @@ class FromFiredrakeConnection:
         """
         transport firedrake function onto :attr:`to_discr`
 
-        :param function: A :mod:`firedrake` function to transfer onto
+        :arg function: A :mod:`firedrake` function to transfer onto
             :attr:`to_discr`. Its function space must have
             the same family, degree, and mesh as ``self.from_fspace()``.
-        :param out: If *None* then ignored, otherwise a numpy array of the
+        :arg out: If *None* then ignored, otherwise a numpy array of the
             shape *function.dat.data.shape.T* (i.e.
-            *(dim, nnodes)* or *(nnodes,)* in which :param:`function`'s
+            *(dim, nnodes)* or *(nnodes,)* in which *function*'s
             transported data is stored.
 
         :return: a numpy array holding the transported function
@@ -225,15 +226,15 @@ class FromFiredrakeConnection:
         # function space
         from firedrake.function import Function
         assert isinstance(function, Function), \
-            ":param:`function` must be a :mod:`firedrake` Function"
+            ":arg:`function` must be a :mod:`firedrake` Function"
         assert function.function_space().ufl_element().family() \
             == self._ufl_element.family() and \
             function.function_space().ufl_element().degree() \
             == self._ufl_element.degree(), \
-            ":param:`function` must live in a function space with the " \
+            ":arg:`function` must live in a function space with the " \
             "same family and degree as ``self.from_fspace()``"
         assert function.function_space().mesh() is self._mesh_geometry, \
-            ":param:`function` mesh must be the same mesh as used by " \
+            ":arg:`function` mesh must be the same mesh as used by " \
             "``self.from_fspace().mesh()``"
 
         # Get function data as shape [nnodes][dims] or [nnodes]
@@ -262,21 +263,21 @@ class FromFiredrakeConnection:
         transport meshmode field from :attr:`to_discr` into an
         appropriate firedrake function space.
 
-        :param mm_field: A numpy array of shape *(nnodes,)* or *(dim, nnodes)*
+        :arg mm_field: A numpy array of shape *(nnodes,)* or *(dim, nnodes)*
             representing a function on :attr:`to_distr`.
-        :param out: If *None* then ignored, otherwise a :mod:`firedrake`
+        :arg out: If *None* then ignored, otherwise a :mod:`firedrake`
             function of the right function space for the transported data
             to be stored in.
-        :param assert_fdrake_discontinuous: If *True*,
+        :arg assert_fdrake_discontinuous: If *True*,
             disallows conversion to a continuous firedrake function space
             (i.e. this function checks that ``self.from_fspace()`` is
              discontinuous and raises a *ValueError* otherwise)
-        :param continuity_tolerance: If converting to a continuous firedrake
+        :arg continuity_tolerance: If converting to a continuous firedrake
             function space (i.e. if ``self.from_fspace()`` is continuous),
             assert that at any two meshmode nodes corresponding to the
             same firedrake node (meshmode is a discontinuous space, so this
             situation will almost certainly happen), the function being transported
-            has values at most :param:`continuity_tolerance` distance
+            has values at most *continuity_tolerance* distance
             apart. If *None*, no checks are performed.
 
         :return: a :mod:`firedrake` :class:`Function` holding the transported
@@ -285,22 +286,22 @@ class FromFiredrakeConnection:
         if self._ufl_element.family() == 'Lagrange' \
                 and assert_fdrake_discontinuous:
             raise ValueError("Trying to convert to continuous function space "
-                             " with :param:`assert_fdrake_discontinuous` set "
+                             " with :arg:`assert_fdrake_discontinuous` set "
                              " to *True*")
         # make sure out is a firedrake function in an appropriate
         # function space
         if out is not None:
             from firedrake.function import Function
             assert isinstance(out, Function), \
-                ":param:`out` must be a :mod:`firedrake` Function or *None*"
+                ":arg:`out` must be a :mod:`firedrake` Function or *None*"
             assert out.function_space().ufl_element().family() \
                 == self._ufl_element.family() and \
                 out.function_space().ufl_element().degree() \
                 == self._ufl_element.degree(), \
-                ":param:`out` must live in a function space with the " \
+                ":arg:`out` must live in a function space with the " \
                 "same family and degree as ``self.from_fspace()``"
             assert out.function_space().mesh() is self._mesh_geometry, \
-                ":param:`out` mesh must be the same mesh as used by " \
+                ":arg:`out` mesh must be the same mesh as used by " \
                 "``self.from_fspace().mesh()`` or *None*"
         else:
             if len(mm_field.shape) == 1:
@@ -351,7 +352,7 @@ class FromFiredrakeConnection:
                     if dist >= continuity_tolerance:
                         raise ValueError("Meshmode nodes %s and %s represent "
                                          "the same firedrake node %s, but "
-                                         ":param:`mm_field`'s values are "
+                                         ":arg:`mm_field`'s values are "
                                          " %s > %s apart)"
                                          % (mm_inode, dup_mm_inode, fd_inode,
                                             dist, continuity_tolerance))

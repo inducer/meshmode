@@ -4,36 +4,66 @@ interop
 Interfacing with data outside of :mod:`meshmode`.
 
 
-fiat
-----
-
-.. automodule:: meshmode.interop.fiat.simplex_cell
-
-
-FInAT
------
-
-.. automodule:: meshmode.interop.FInAT.lagrange_element
-
-
 Firedrake
 ---------
 
-TODO include this
+Function Spaces/Discretizations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. automodule:: meshmode.interop.firedrake.connection
+
+Meshes
+^^^^^^
+
+.. automodule:: meshmode.interop.firedrake.mesh
+
+Reference Cells
+^^^^^^^^^^^^^^^
+
+.. automodule:: meshmode.interop.firedrake.reference_cell
 
 
 Implementation Details
-----------------------
+^^^^^^^^^^^^^^^^^^^^^^
 
+Converting between :mod:`firedrake` and :mod:`meshmode` is in general
+straightforward. Some language is different:
 
-Firedrake Function Space Design
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+* In a mesh, a :mod:`meshmode` "element" is a :mod:`firedrake` "cell"
+* A :mod:`meshmode` :class:`Discretization` is a :mod:`firedrake`
+  :class:`WithGeometry` created, usually
+  created to using the function :func:`FunctionSpace` and referred
+  to as a "function space"
+* In a mesh, any vertices, faces, cells, etc. are :mod:`firedrake`
+  "entities" (see `dmplex <https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/DMPLEX/index.html>`_
+  for more info on how topological mesh information is stored
+  in :mod:`firedrake`).
+
+Other than carefully tabulating how and which vertices/faces
+correspond to other vertices/faces/cells, there are two main difficulties.
+
+1. :mod:`meshmode` requires that all mesh elements be positively oriented,
+   :mod:`firedrake` does not.
+2. :mod:`meshmode` has discontinuous polynomial function spaces
+   which use different nodes than :mod:`firedrake`.
+
+Consequently, any :mod:`firedrake` :class:`firedrake.function.Function`
+whose data is converted onto a corresponding :class:`Discretization`
+using a :class:`FromFiredrakeConnection` instance is
+first reordered (as the converted mesh was reordered to have
+positively oriented elements) and then resampled at the :mod:`meshmode`
+nodes.
+
+For Developers: Firedrake Function Space Design Crash Course
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
 In firedrake, meshes and function spaces have a close relationship.
-In particular, due to some structure described in this
+In particular, this is  due to some structure described in this
 `firedrake pull request <http://github.com/firedrakeproject/firedrake/pull/627>`_.
-``fd2mm`` mimics this firedrake design style. 
+If you wish to develop on / add to the implementation of conversion
+between :mod:`meshmode` and :mod:`firedrake`, you will need
+to understand their design style. Below is a crash course.
 
 In short, it is the idea
 that every function space should have a mesh, and the coordinates of the mesh
