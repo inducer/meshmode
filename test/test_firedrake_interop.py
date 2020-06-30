@@ -46,16 +46,29 @@ from firedrake import (
 CLOSE_ATOL = 10**-12
 
 
-@pytest.fixture(params=[1, 2, 3], ids=["1D", "2D", "3D"])
+@pytest.fixture(params=["FiredrakeUnitIntervalMesh",
+                        "FiredrakeUnitSquareMesh",
+                        "FiredrakeUnitCubeMesh",
+                        "annulus.msh",
+                        "blob2d-order1-h4e-2.msh",
+                        "blob2d-order1-h6e-2.msh",
+                        "blob2d-order1-h8e-2.msh",
+                        ])
 def fdrake_mesh(request):
-    dim = request.param
-    if dim == 1:
+    mesh_name = request.param
+    if mesh_name == "FiredrakeUnitIntervalMesh":
         return UnitIntervalMesh(100)
-    if dim == 2:
+    if mesh_name == "FiredrakeUnitSquareMesh":
         return UnitSquareMesh(10, 10)
-    if dim == 3:
+    if mesh_name == "FiredrakeUnitCubeMesh":
         return UnitCubeMesh(5, 5, 5)
-    return None
+
+    # Firedrake can't read in higher order meshes from gmsh,
+    # so we can only use the order1 blobs
+    from firedrake import Mesh
+    fd_mesh = Mesh(mesh_name)
+    fd_mesh.init()
+    return fd_mesh
 
 
 @pytest.fixture(params=["CG", "DG"])
