@@ -31,7 +31,7 @@ Converting between :mod:`firedrake` and :mod:`meshmode` is in general
 straightforward. Some language is different:
 
 * In a mesh, a :mod:`meshmode` "element" is a :mod:`firedrake` "cell"
-* A :mod:`meshmode` :class:`Discretization` is a :mod:`firedrake`
+* A :class:`meshmode.Discretization` is a :mod:`firedrake`
   :class:`WithGeometry`, usually
   created by calling the function :func:`firedrake.functionspace.FunctionSpace`
   and referred to as a "function space"
