@@ -95,6 +95,7 @@ Python 3 POCL Firedrake:
   - source ~/firedrake/bin/activate
   - pip install -r requirements.txt
   - pip install pytest
+  - pip install .
   - cd test
   - python -m pytest --tb=native --junitxml=pytest.xml -rxsw test_firedrake_interop.py
   artifacts:
