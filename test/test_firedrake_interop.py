@@ -118,12 +118,13 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
 
 # {{{  Double check functions are being transported correctly
 
-def alternating_sum_fd(spat_coord):
+def alternating_sum_fd(spatial_coord):
     """
     Return an expression x1 - x2 + x3 -+...
     """
     return sum(
-        [(-1)**i * spat_coord for i, spat_coord in enumerate(spat_coord)]
+        [(-1)**i * spatial_coord
+         for i, spatial_coord in enumerate(spatial_coord)]
     )
 
 
@@ -142,8 +143,8 @@ def alternating_sum_mm(nodes):
 # This should show that projection to any coordinate in 1D/2D/3D
 # transfers correctly.
 test_functions = [
-    (lambda spat_coord: Constant(1.0), lambda nodes: np.ones(nodes.shape[1])),
-    (lambda spat_coord: spat_coord[0], lambda nodes: nodes[0, :]),
+    (lambda spatial_coord: Constant(1.0), lambda nodes: np.ones(nodes.shape[1])),
+    (lambda spatial_coord: spatial_coord[0], lambda nodes: nodes[0, :]),
     (sum, lambda nodes: np.sum(nodes, axis=0)),
     (alternating_sum_fd, alternating_sum_mm)
 ]
@@ -159,9 +160,9 @@ def test_function_transfer(ctx_factory,
     mesh
     """
     fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fdrake_degree)
-    spat_coord = SpatialCoordinate(fdrake_mesh)
+    spatial_coord = SpatialCoordinate(fdrake_mesh)
 
-    fdrake_f = Function(fdrake_fspace).interpolate(fdrake_f_expr(spat_coord))
+    fdrake_f = Function(fdrake_fspace).interpolate(fdrake_f_expr(spatial_coord))
 
     cl_ctx = ctx_factory()
     fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
