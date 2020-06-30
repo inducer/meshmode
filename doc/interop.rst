@@ -1,7 +1,8 @@
-interop
-=======
+Interoperability with Other Discretization Packages
+===================================================
 
-Interfacing with data outside of :mod:`meshmode`.
+Functionality in this subpackage helps import and export data to/from other
+pieces of software, typically PDE solvers.
 
 
 Firedrake
