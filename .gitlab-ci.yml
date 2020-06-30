@@ -85,6 +85,20 @@ Python 3 POCL Examples:
   except:
   - tags
 
+Python 3 POCL Firedrake:
+  tags:
+  - "docker-runner"
+  image: "firedrakeproject/firedrake"
+  script:
+  - source ~/firedrake/bin/activate
+  - pip install -r requirements.txt
+  - pip install pytest
+  - cd test
+  - python -m pytest --tb=native --junitxml=pytest.xml -rxsw test_firedrake_interop.py
+  artifacts:
+    reports:
+      junit: test/pytest.xml
+
 Documentation:
   script:
   - EXTRA_INSTALL="pybind11 cython numpy"
