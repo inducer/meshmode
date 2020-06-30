@@ -594,3 +594,5 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     return fd_mesh.Mesh(coords, reorder=False)
 
 # }}}
+
+# vim: foldmethod=marker
