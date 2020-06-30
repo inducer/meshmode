@@ -91,7 +91,7 @@ Python 3 POCL Firedrake:
   image: "firedrakeproject/firedrake"
   script:
   - sudo apt update
-  - sudo apt install pocl-opencl-icd ocl-icd-opencl-dev
+  - sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
   - source ~/firedrake/bin/activate
   - pip install -r requirements.txt
   - pip install pytest
