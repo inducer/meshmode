@@ -1382,7 +1382,7 @@ def is_boundary_tag_empty(mesh, boundary_tag):
 # }}}
 
 
-# {{{
+# {{{ is_affine_simplex_group
 
 def is_affine_simplex_group(group, abs_tol=None):
     if abs_tol is None:

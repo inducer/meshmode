@@ -238,6 +238,8 @@ class RefinerWithoutAdjacency(object):
                             global_midpoint = inew_vertex
                             additional_vertices.append(
                                     midpoints[old_iel][:, imidpoint])
+                            self.global_vertex_pair_to_midpoint[
+                                    global_v1, global_v2] = global_midpoint
                             inew_vertex += 1
 
                         refining_vertices[iref_midpoint] = global_midpoint

@@ -33,12 +33,13 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 
+from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
         PolynomialWarpAndBlendGroupFactory,
         PolynomialEquidistantSimplexGroupFactory,
         )
-from meshmode.mesh import BTAG_ALL
+from meshmode.mesh import Mesh, BTAG_ALL
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -119,6 +120,84 @@ def test_boundary_tags():
     # ensure boundary is covered
     from meshmode.mesh import check_bc_coverage
     check_bc_coverage(mesh, ['inner_bdy', 'outer_bdy'])
+
+# }}}
+
+
+# {{{ test custom boundary tags on box mesh
+
+@pytest.mark.parametrize(("dim", "nelem"), [
+    (1, 20),
+    (2, 20),
+    (3, 10),
+    ])
+@pytest.mark.parametrize("group_factory", [
+    SimplexElementGroup,
+
+    # FIXME: Not implemented: TPE.face_vertex_indices
+    # TensorProductElementGroup
+    ])
+def test_box_boundary_tags(dim, nelem, group_factory):
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    from meshmode.mesh import is_boundary_tag_empty
+    from meshmode.mesh import check_bc_coverage
+    if dim == 1:
+        a = (0,)
+        b = (1,)
+        n = (nelem,)
+        btag_to_face = {"btag_test_1": ["+x"],
+                        "btag_test_2": ["-x"]}
+    elif dim == 2:
+        a = (0, -1)
+        b = (1, 1)
+        n = (nelem, nelem)
+        btag_to_face = {"btag_test_1": ["+x", "-y"],
+                        "btag_test_2": ["+y", "-x"]}
+    elif dim == 3:
+        a = (0, -1, -1)
+        b = (1, 1, 1)
+        n = (nelem, nelem, nelem)
+        btag_to_face = {"btag_test_1": ["+x", "-y", "-z"],
+                        "btag_test_2": ["+y", "-x", "+z"]}
+    mesh = generate_regular_rect_mesh(a=a, b=b,
+                                      n=n, order=3,
+                                      boundary_tag_to_face=btag_to_face,
+                                      group_factory=group_factory)
+    # correct answer
+    if dim == 1:
+        num_on_bdy = 1
+    else:
+        num_on_bdy = dim*(dim-1)*(nelem-1)**(dim-1)
+
+    assert not is_boundary_tag_empty(mesh, "btag_test_1")
+    assert not is_boundary_tag_empty(mesh, "btag_test_2")
+    check_bc_coverage(mesh, ['btag_test_1', 'btag_test_2'])
+
+    # check how many elements are marked on each boundary
+    num_marked_bdy_1 = 0
+    num_marked_bdy_2 = 0
+    btag_1_bit = mesh.boundary_tag_bit("btag_test_1")
+    btag_2_bit = mesh.boundary_tag_bit("btag_test_2")
+    for igrp in range(len(mesh.groups)):
+        bdry_fagrp = mesh.facial_adjacency_groups[igrp].get(None, None)
+
+        if bdry_fagrp is None:
+            continue
+
+        for i, nbrs in enumerate(bdry_fagrp.neighbors):
+            if (-nbrs) & btag_1_bit:
+                num_marked_bdy_1 += 1
+            if (-nbrs) & btag_2_bit:
+                num_marked_bdy_2 += 1
+
+    # raise errors if wrong number of elements marked
+    if num_marked_bdy_1 != num_on_bdy:
+        raise ValueError("%i marked on custom boundary 1, should be %i" %
+                         (num_marked_bdy_1, num_on_bdy))
+    if num_marked_bdy_2 != num_on_bdy:
+        raise ValueError("%i marked on custom boundary 2, should be %i" %
+                         (num_marked_bdy_2, num_on_bdy))
+
 
 # }}}
 
@@ -527,7 +606,6 @@ def test_3d_orientation(ctx_factory, what, mesh_gen_func, visualize=False):
 def test_merge_and_map(ctx_factory, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
     from meshmode.mesh.generation import generate_box_mesh
-    from meshmode.mesh import TensorProductElementGroup
     from meshmode.discretization.poly_element import (
             PolynomialWarpAndBlendGroupFactory,
             LegendreGaussLobattoTensorProductGroupFactory)
@@ -1009,7 +1087,6 @@ def no_test_quad_mesh_3d():
 
 def test_quad_single_element():
     from meshmode.mesh.generation import make_group_from_vertices
-    from meshmode.mesh import Mesh, TensorProductElementGroup
 
     vertices = np.array([
                 [0.91, 1.10],
@@ -1037,7 +1114,6 @@ def test_quad_single_element():
 
 def test_quad_multi_element():
     from meshmode.mesh.generation import generate_box_mesh
-    from meshmode.mesh import TensorProductElementGroup
     mesh = generate_box_mesh(
             (
                 np.linspace(3, 8, 4),
@@ -1270,6 +1346,89 @@ def test_is_affine_group_check(mesh_name):
         raise ValueError("unknown mesh name: {}".format(mesh_name))
 
     assert all(grp.is_affine for grp in mesh.groups) == is_affine
+
+
+@pytest.mark.parametrize("ambient_dim", [1, 2, 3])
+def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
+    ctx = ctx_factory()
+    queue = cl.CommandQueue(ctx)
+
+    order = 4
+
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh = generate_regular_rect_mesh(
+            a=(-0.5,)*ambient_dim, b=(0.5,)*ambient_dim,
+            n=(8,)*ambient_dim, order=order)
+    assert len(mesh.groups) == 1
+
+    from meshmode.mesh.processing import split_mesh_groups
+    element_flags = np.any(
+            mesh.vertices[0, mesh.groups[0].vertex_indices] < 0.0,
+            axis=1).astype(np.int)
+    mesh = split_mesh_groups(mesh, element_flags)
+
+    assert len(mesh.groups) == 2
+    assert mesh.facial_adjacency_groups
+    assert mesh.nodal_adjacency
+
+    if visualize and ambient_dim == 2:
+        from meshmode.mesh.visualization import draw_2d_mesh
+        draw_2d_mesh(mesh,
+                draw_vertex_numbers=False,
+                draw_element_numbers=True,
+                draw_face_numbers=False,
+                set_bounding_box=True)
+
+        import matplotlib.pyplot as plt
+        plt.savefig("test_mesh_multiple_groups_2d_elements.png", dpi=300)
+
+    from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import \
+            PolynomialWarpAndBlendGroupFactory as GroupFactory
+    discr = Discretization(ctx, mesh, GroupFactory(order))
+
+    if visualize:
+        group_id = discr.empty(queue, dtype=np.int)
+        for igrp, grp in enumerate(discr.groups):
+            group_id_view = grp.view(group_id)
+            group_id_view.fill(igrp)
+
+        from meshmode.discretization.visualization import make_visualizer
+        vis = make_visualizer(queue, discr, vis_order=order)
+        vis.write_vtk_file("test_mesh_multiple_groups.vtu", [
+            ("group_id", group_id)
+            ], overwrite=True)
+
+    # check face restrictions
+    from meshmode.discretization.connection import (
+            make_face_restriction,
+            make_face_to_all_faces_embedding,
+            make_opposite_face_connection,
+            check_connection)
+    for boundary_tag in [BTAG_ALL, FACE_RESTR_INTERIOR, FACE_RESTR_ALL]:
+        conn = make_face_restriction(discr, GroupFactory(order),
+                boundary_tag=boundary_tag,
+                per_face_groups=False)
+        check_connection(conn)
+
+        bdry_f = conn.to_discr.empty(queue)
+        bdry_f.fill(1.0)
+
+        if boundary_tag == FACE_RESTR_INTERIOR:
+            opposite = make_opposite_face_connection(conn)
+            check_connection(opposite)
+
+            op_bdry_f = opposite(queue, bdry_f)
+            error = abs(cl.array.sum(bdry_f - op_bdry_f).get(queue))
+            assert error < 1.0e-11, error
+
+        if boundary_tag == FACE_RESTR_ALL:
+            embedding = make_face_to_all_faces_embedding(conn, conn.to_discr)
+            check_connection(embedding)
+
+            em_bdry_f = embedding(queue, bdry_f)
+            error = abs(cl.array.sum(bdry_f - em_bdry_f).get(queue))
+            assert error < 1.0e-11, error
 
 
 if __name__ == "__main__":
