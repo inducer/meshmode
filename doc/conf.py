@@ -33,6 +33,7 @@ extensions = [
     'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
     'sphinx.ext.mathjax',
+    'sphinx.ext.graphviz',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -281,5 +282,5 @@ intersphinx_mapping = {
     'https://documen.tician.de/meshpy': None,
     'https://documen.tician.de/modepy': None,
     'https://documen.tician.de/loopy': None,
-    'https://firedrakeproject.org/' : None
+    'https://firedrakeproject.org/': None
 }
