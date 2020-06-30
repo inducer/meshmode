@@ -239,3 +239,5 @@ def test_vector_idempotency(ctx_factory, fdrake_mesh,
     check_idempotency(fdrake_connection, fdrake_unique)
 
 # }}}
+
+# vim: foldmethod=marker

@@ -380,3 +380,5 @@ class ToFiredrakeConnection:
         """
 
 # }}}
+
+# vim: foldmethod=marker

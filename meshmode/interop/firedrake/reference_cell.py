@@ -136,3 +136,5 @@ def get_finat_element_unit_nodes(finat_element):
     return unit_nodes
 
 # }}}
+
+# vim: foldmethod=marker
