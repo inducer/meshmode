@@ -279,7 +279,6 @@ class PyOpenCLArrayContext(ArrayContext):
 
     @memoize_method
     def transform_loopy_program(self, program):
-        # FIXME: This assumes that the iname 'iel' exists.
         # FIXME: This could be much smarter.
         import loopy as lp
         all_inames = program.all_inames()
