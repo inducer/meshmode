@@ -62,7 +62,8 @@ class _FakeNumpyNamespace:
             actx = self._array_context
             # FIXME: Maybe involve loopy type inference?
             result = actx.empty(args[0].shape, args[0].dtype)
-            prg = actx._get_scalar_func_loopy_program(name, len(args))
+            prg = actx._get_scalar_func_loopy_program(
+                    name, nargs=len(args), naxes=len(args[0].shape))
             actx.call_loopy(prg, out=result,
                     **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result
@@ -147,17 +148,27 @@ class ArrayContext:
         raise NotImplementedError
 
     @memoize_method
-    def _get_scalar_func_loopy_program(self, name, nargs):
+    def _get_scalar_func_loopy_program(self, name, nargs, naxes):
         from pymbolic import var
-        iel = var("iel")
-        idof = var("idof")
+
+        var_names = ["i%d" % i for i in range(naxes)]
+        size_names = ["n%d" % i for i in range(naxes)]
+        subscript = tuple(var(vname) for vname in var_names)
+        from islpy import make_zero_and_vars
+        v = make_zero_and_vars(var_names, params=size_names)
+        domain = v[0].domain()
+        for vname, sname in zip(var_names, size_names):
+            domain = domain & v[0].le_set(v[vname]) & v[vname].le_set(v[sname])
+
+        domain_bset, = domain.get_basic_sets()
+
         return make_loopy_program(
-                "{[iel, idof]: 0<=iel<nelements and 0<=idof<ndofs}",
+                [domain_bset],
                 [
                     lp.Assignment(
-                        var("out")[iel, idof],
+                        var("out")[subscript],
                         var(name)(*[
-                            var("inp%d" % i)[iel, idof] for i in range(nargs)]))
+                            var("inp%d" % i)[subscript] for i in range(nargs)]))
                     ],
                 name="actx_special_%s" % name)
 
@@ -256,9 +267,23 @@ class PyOpenCLArrayContext(ArrayContext):
         # FIXME: This assumes that the iname 'iel' exists.
         # FIXME: This could be much smarter.
         import loopy as lp
-        if "idof" in program.all_inames():
-            program = lp.split_iname(program, "idof", 16, inner_tag="l.0")
-        return lp.tag_inames(program, dict(iel="g.0"))
+        all_inames = program.all_inames()
+
+        inner_iname = None
+        if "iel" not in all_inames and "i0" in all_inames:
+            outer_iname = "i0"
+
+            if "i1" in all_inames:
+                inner_iname = "i1"
+        else:
+            outer_iname = "iel"
+
+            if "idof" in all_inames:
+                inner_iname = "idof"
+
+        if inner_iname is not None:
+            program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
+        return lp.tag_inames(program, {outer_iname: "g.0"})
 
 # }}}
 
