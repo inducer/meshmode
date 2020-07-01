@@ -27,6 +27,7 @@ import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method
+from pytools.obj_array import obj_array_vectorized_n_args
 
 __doc__ = """
 .. autofunction:: make_loopy_program
@@ -69,7 +70,6 @@ class _BaseFakeNumpyNamespace:
                     **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result
 
-        from pytools.obj_array import obj_array_vectorized_n_args
         return obj_array_vectorized_n_args(f)
 
 
@@ -212,7 +212,7 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def __getattr__(self, name):
         if name in ["minimum", "maximum"]:
             import pyopencl.array as cl_array
-            return getattr(cl_array, name)
+            return obj_array_vectorized_n_args(getattr(cl_array, name))
 
         return super().__getattr__(name)
 
