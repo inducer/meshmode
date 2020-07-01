@@ -75,7 +75,8 @@ Python 3 POCL Firedrake:
   - sudo apt update
   - sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
   - source ~/firedrake/bin/activate
-  - pip install -r requirements.txt
+  - "grep -v loopy requirements.txt > myreq.txt"
+  - pip install -r myreq.txt
   - pip install pytest
   - pip install .
   - cd test
