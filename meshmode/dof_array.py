@@ -21,7 +21,7 @@ THE SOFTWARE.
 """
 
 import numpy as np
-from typing import Optional, Iterable, TYPE_CHECKING
+from typing import Optional, Iterable, TYPE_CHECKING, Any
 from functools import partial
 
 from pytools import single_valued, memoize_in
@@ -170,7 +170,7 @@ def freeze(ary: np.ndarray) -> np.ndarray:
         ])
 
 
-def flatten(ary: np.ndarray) -> np.ndarray:
+def flatten(ary: np.ndarray) -> Any:
     r"""Convert a :class:`DOFArray` into a "flat" array of degrees of freedom,
     where the resulting type of the array is given by the
     :attr:`DOFArray.array_context`.
