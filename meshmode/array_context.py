@@ -53,7 +53,7 @@ def make_loopy_program(domains, statements, kernel_data=["..."],
 
 # {{{ ArrayContext
 
-class _FakeNumpyNamespace:
+class _BaseFakeNumpyNamespace:
     def __init__(self, array_context):
         self._array_context = array_context
 
@@ -104,7 +104,10 @@ class ArrayContext:
     """
 
     def __init__(self):
-        self.np = _FakeNumpyNamespace(self)
+        self.np = self._get_fake_numpy_namespace()
+
+    def _get_fake_numpy_namespace(self):
+        return _BaseFakeNumpyNamespace(self)
 
     def empty(self, shape, dtype):
         raise NotImplementedError
@@ -204,6 +207,15 @@ class ArrayContext:
 
 # {{{ PyOpenCLArrayContext
 
+class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
+    def __getattr__(self, name):
+        if name in ["minimum", "maximum"]:
+            import pyopencl.array as cl_array
+            return getattr(cl_array, name)
+
+        return super().__getattr__(name)
+
+
 class PyOpenCLArrayContext(ArrayContext):
     """
     A :class:`ArrayContext` that uses :class:`pyopencl.array.Array` instances
@@ -225,6 +237,9 @@ class PyOpenCLArrayContext(ArrayContext):
         self.context = queue.context
         self.queue = queue
         self.allocator = allocator
+
+    def _get_fake_numpy_namespace(self):
+        return _PyOpenCLFakeNumpyNamespace(self)
 
     # {{{ ArrayContext interface
 
