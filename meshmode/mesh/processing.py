@@ -62,240 +62,262 @@ def find_group_indices(groups, meshwide_elems):
 
 # {{{ partition_mesh
 
-def partition_mesh(mesh, part_per_element, part_num):
+def _create_element_part_map(part_per_element, parts, element_id_dtype):
+    """Create a map from global elem to partition elem for a set of partitions."""
+    n_elems_in_part = {ipart: 0 for ipart in parts}
+    global_elem_to_part_elem = np.empty(len(part_per_element),
+                dtype=element_id_dtype)
+    global_elem_to_part_elem[:] = -1
+    for ielem, ipart in enumerate(part_per_element):
+        if ipart not in parts:
+            continue
+        global_elem_to_part_elem[ielem] = n_elems_in_part[ipart]
+        n_elems_in_part[ipart] += 1
+    return global_elem_to_part_elem
+
+
+def _split_by_group(groups, elements):
     """
-    :arg mesh: A :class:`~meshmode.mesh.Mesh` to be partitioned.
-    :arg part_per_element: A :class:`numpy.ndarray` containing one
-        integer per element of *mesh* indicating which part of the
-        partitioned mesh the element is to become a part of.
-    :arg part_num: The part number of the mesh to return.
-
-    :returns: A tuple ``(part_mesh, part_to_global)``, where *part_mesh*
-        is a :class:`~meshmode.mesh.Mesh` that is a partition of mesh, and
-        *part_to_global* is a :class:`numpy.ndarray` mapping element
-        numbers on *part_mesh* to ones in *mesh*.
-
-    .. versionadded:: 2017.1
+    Split a sorted list of elements according to group. Returns a compressed array
+    of index ranges (one per group).
     """
-    assert len(part_per_element) == mesh.nelements, (
-        "part_per_element must have shape (mesh.nelements,)")
+    group_elem_start = []
+    start_idx = 0
+    for grp in groups:
+        group_elem_start.append(start_idx)
+        # Find the index of first element in the next group.
+        end_idx = len(elements)
+        for idx in range(start_idx, len(elements)):
+            if elements[idx] - grp.element_nr_base >= grp.nelements:
+                end_idx = idx
+                break
+        start_idx = end_idx
+    group_elem_start.append(start_idx)
+    return group_elem_start
 
-    # Contains the indices of the elements requested.
-    queried_elems = np.where(np.array(part_per_element) == part_num)[0]
+
+def _filter_mesh_groups(groups, selected_elements):
+    """Create new mesh groups containing a selected subset of elements."""
+    group_elem_start = _split_by_group(groups, selected_elements)
+
+    n_new_groups = 0
+    group_to_new_group = [None for _ in groups]
+    for igrp in range(len(groups)):
+        start_idx = group_elem_start[igrp]
+        end_idx = group_elem_start[igrp+1]
+        if end_idx == start_idx:
+            continue
+        group_to_new_group[igrp] = n_new_groups
+        n_new_groups += 1
 
     new_indices = []
     new_nodes = []
 
     # The set of vertex indices we need.
-    # NOTE: There are two methods for producing required_indices.
+    # NOTE: There are two methods for producing required_vertex_indices.
     #   Optimizations may come from further exploring these options.
     #index_set = np.array([], dtype=int)
     index_sets = np.array([], dtype=set)
 
-    global_group_to_part_group = [None for _ in mesh.groups]
-    global_elem_to_part_elem = np.empty(mesh.nelements,
-                dtype=mesh.element_id_dtype)
-    global_elem_to_part_elem[:] = -1
-    start_idx = 0
-    for igrp, grp in enumerate(mesh.groups):
-
-        # Find the index of first element in the next group.
-        end_idx = len(queried_elems)
-        for idx in range(start_idx, len(queried_elems)):
-            if queried_elems[idx] - grp.element_nr_base >= grp.nelements:
-                end_idx = idx
-                break
-
-        if start_idx == end_idx:
+    for igrp, grp in enumerate(groups):
+        if group_to_new_group[igrp] is None:
             continue
-
-        elems = queried_elems[start_idx:end_idx]
-
-        global_elem_to_part_elem[elems] = np.arange(start=start_idx, stop=end_idx,
-                    dtype=mesh.element_id_dtype)
-
-        new_indices.append(grp.vertex_indices[elems - grp.element_nr_base])
-
-        global_group_to_part_group[igrp] = len(new_indices)-1
-
+        start_idx = group_elem_start[igrp]
+        end_idx = group_elem_start[igrp+1]
+        group_elements = selected_elements[start_idx:end_idx]
+        new_indices.append(grp.vertex_indices[group_elements - grp.element_nr_base])
+        ambient_dim = grp.nodes.shape[0]
         new_nodes.append(
             np.zeros(
-                (mesh.ambient_dim, end_idx - start_idx, grp.nunit_nodes)))
-        for i in range(mesh.ambient_dim):
+                (ambient_dim, end_idx - start_idx, grp.nunit_nodes)))
+        for i in range(ambient_dim):
             for j in range(start_idx, end_idx):
                 new_idx = j - start_idx
-                elem = elems[new_idx] - grp.element_nr_base
+                elem = group_elements[new_idx] - grp.element_nr_base
                 new_nodes[-1][i, new_idx, :] = grp.nodes[i, elem, :]
-
-        #index_set = np.append(index_set, new_indices[-1].ravel())
         index_sets = np.append(index_sets, set(new_indices[-1].ravel()))
 
-        start_idx = end_idx
-
     # A sorted np.array of vertex indices we need (without duplicates).
-    #required_indices = np.unique(np.sort(index_set))
-    required_indices = np.array(list(set.union(*index_sets)))
-
-    part_vertices = np.zeros((mesh.ambient_dim, len(required_indices)))
-    for dim in range(mesh.ambient_dim):
-        part_vertices[dim] = mesh.vertices[dim][required_indices]
+    #required_vertex_indices = np.unique(np.sort(index_set))
+    required_vertex_indices = np.array(list(set.union(*index_sets)))
 
     # Our indices need to be in range [0, len(mesh.nelements)].
     for indices in new_indices:
         for i in range(len(indices)):
             for j in range(len(indices[0])):
                 original_index = indices[i, j]
-                indices[i, j] = np.where(required_indices == original_index)[0]
+                indices[i, j] = np.where(required_vertex_indices
+                            == original_index)[0]
 
-    part_mesh_groups = []
-    for igrp, grp in enumerate(mesh.groups):
-        i_part_group = global_group_to_part_group[igrp]
-        if i_part_group is not None:
-            part_mesh_groups.append(
+    new_groups = []
+    for igrp, grp in enumerate(groups):
+        i_new_group = group_to_new_group[igrp]
+        if i_new_group is not None:
+            new_groups.append(
                 type(grp)(
-                    grp.order, new_indices[i_part_group], new_nodes[i_part_group],
+                    grp.order, new_indices[i_new_group], new_nodes[i_new_group],
                     unit_nodes=grp.unit_nodes))
 
-    part_mesh_group_elem_base = [0 for _ in part_mesh_groups]
-    el_nr = 0
-    for i_part_grp, grp in enumerate(part_mesh_groups):
-        part_mesh_group_elem_base[i_part_grp] = el_nr
-        el_nr += grp.nelements
+    return new_groups, group_to_new_group, required_vertex_indices
 
-    part_facial_adjacency_groups = [dict() for _ in part_mesh_groups]
 
-    nonlocal_adj_data = [None for _ in part_mesh_groups]
-    bdry_data = [None for _ in part_mesh_groups]
+def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
+            part_mesh_groups, global_group_to_part_group,
+            part_mesh_group_elem_base):
+    """Create local-to-local facial adjacency groups for partitioned mesh."""
+    local_to_local_adjacency_groups = [dict() for _ in part_mesh_groups]
 
-    from meshmode.mesh import FacialAdjacencyGroup
-    part_per_element_array = np.array(part_per_element)
     for igrp, facial_adj_dict in enumerate(mesh.facial_adjacency_groups):
         i_part_grp = global_group_to_part_group[igrp]
         if i_part_grp is None:
             continue
+
         for jgrp, facial_adj in facial_adj_dict.items():
-            if jgrp is not None:
+            if jgrp is None:
+                continue
 
-                global_elem_base_i = mesh.groups[igrp].element_nr_base
-                global_elem_base_j = mesh.groups[jgrp].element_nr_base
+            j_part_grp = global_group_to_part_group[jgrp]
+            if j_part_grp is None:
+                continue
 
-                element_parts = part_per_element_array[facial_adj.elements
-                            + global_elem_base_i]
-                connected_parts = part_per_element_array[facial_adj.neighbors
-                            + global_elem_base_j]
+            elem_base_i = mesh.groups[igrp].element_nr_base
+            elem_base_j = mesh.groups[jgrp].element_nr_base
 
-                # Can create local-to-local adjacency now
-                local_adj_indices = np.where(np.logical_and(element_parts
-                            == part_num, connected_parts == part_num))[0]
-                if len(local_adj_indices) > 0:
-                    j_part_grp = global_group_to_part_group[jgrp]
-                    part_elem_base_i = part_mesh_group_elem_base[i_part_grp]
-                    part_elem_base_j = part_mesh_group_elem_base[j_part_grp]
-                    elements = global_elem_to_part_elem[facial_adj.elements[
-                                local_adj_indices] + global_elem_base_i]\
-                                - part_elem_base_i
-                    element_faces = facial_adj.element_faces[local_adj_indices]
-                    neighbors = global_elem_to_part_elem[facial_adj.neighbors[
-                                local_adj_indices] + global_elem_base_j]\
-                                - part_elem_base_j
-                    neighbor_faces = facial_adj.neighbor_faces[local_adj_indices]
-                    part_facial_adjacency_groups[i_part_grp][j_part_grp] =\
-                                FacialAdjacencyGroup(igroup=i_part_grp,
-                                            ineighbor_group=j_part_grp,
-                                            elements=elements,
-                                            element_faces=element_faces,
-                                            neighbors=neighbors,
-                                            neighbor_faces=neighbor_faces)
+            elements_are_local = global_elem_to_part_elem[facial_adj.elements
+                        + elem_base_i] >= 0
+            neighbors_are_local = global_elem_to_part_elem[facial_adj.neighbors
+                        + elem_base_j] >= 0
 
-                # Save non-local adjacency to be merged with boundary data below
-                nonlocal_adj_indices = np.where(np.logical_and(element_parts
-                            == part_num, connected_parts != part_num))[0]
-                if len(nonlocal_adj_indices) > 0:
-                    part_elem_base_i = part_mesh_group_elem_base[i_part_grp]
-                    elements = global_elem_to_part_elem[facial_adj.elements[
-                                nonlocal_adj_indices] + global_elem_base_i]\
-                                - part_elem_base_i
-                    element_faces = facial_adj.element_faces[nonlocal_adj_indices]
-                    neighbor_parts = connected_parts[nonlocal_adj_indices]
-                    # Store global element indices here; will remap to neighbor
-                    # partition index space (as needed by inter-partition adjacency
-                    # group) below
-                    neighbors = facial_adj.neighbors[nonlocal_adj_indices]\
-                                + global_elem_base_j
-                    neighbor_faces = facial_adj.neighbor_faces[nonlocal_adj_indices]
-                    if nonlocal_adj_data[i_part_grp] is None:
-                        nonlocal_adj_data[i_part_grp] = (elements, element_faces,
-                                    neighbor_parts, neighbors, neighbor_faces)
-                    else:
-                        adj_elements, adj_element_faces, adj_neighbor_parts,\
-                                    adj_neighbors, adj_neighbor_faces =\
-                                    nonlocal_adj_data[i_part_grp]
-                        adj_elements = np.concatenate((adj_elements, elements))
-                        adj_element_faces = np.concatenate((adj_element_faces,
-                                    element_faces))
-                        adj_neighbor_parts = np.concatenate((adj_neighbor_parts,
-                                    neighbor_parts))
-                        adj_neighbors = np.concatenate((adj_neighbors, neighbors))
-                        adj_neighbor_faces = np.concatenate((adj_neighbor_faces,
-                                    neighbor_faces))
-                        nonlocal_adj_data[i_part_grp] = (adj_elements,
-                                    adj_element_faces, adj_neighbor_parts,
-                                    adj_neighbors, adj_neighbor_faces)
-            else:  # jgrp is None
-                # Save boundary data to be merged with non-local adjacency below
-                global_elem_base = mesh.groups[igrp].element_nr_base
-                element_parts = part_per_element_array[facial_adj.elements
-                            + global_elem_base]
-                local_bdry_indices = np.where(element_parts == part_num)[0]
-                if len(local_bdry_indices) > 0:
-                    part_elem_base = part_mesh_group_elem_base[i_part_grp]
-                    elements = global_elem_to_part_elem[facial_adj.elements[
-                                local_bdry_indices] + global_elem_base]\
-                                - part_elem_base
-                    element_faces = facial_adj.element_faces[local_bdry_indices]
-                    neighbors = facial_adj.neighbors[local_bdry_indices]
-                    bdry_data[i_part_grp] = (elements, element_faces, neighbors)
+            adj_indices = np.where(np.logical_and(elements_are_local,
+                        neighbors_are_local))[0]
 
-    all_neighbor_parts = set()
-    for adj in nonlocal_adj_data:
-        if adj is not None:
-            _, _, grp_neighbor_parts, _, _ = adj
-            for i_neighbor_part in grp_neighbor_parts:
-                all_neighbor_parts.add(i_neighbor_part)
+            if len(adj_indices) > 0:
+                part_elem_base_i = part_mesh_group_elem_base[i_part_grp]
+                part_elem_base_j = part_mesh_group_elem_base[j_part_grp]
 
-    boundary_tags = mesh.boundary_tags[:]
-    btag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
+                elements = global_elem_to_part_elem[facial_adj.elements[
+                            adj_indices] + elem_base_i] - part_elem_base_i
+                element_faces = facial_adj.element_faces[adj_indices]
+                neighbors = global_elem_to_part_elem[facial_adj.neighbors[
+                            adj_indices] + elem_base_j] - part_elem_base_j
+                neighbor_faces = facial_adj.neighbor_faces[adj_indices]
 
-    def boundary_tag_bit(boundary_tag):
-        from meshmode.mesh import _boundary_tag_bit
-        return _boundary_tag_bit(boundary_tags, btag_to_index, boundary_tag)
+                from meshmode.mesh import FacialAdjacencyGroup
+                local_to_local_adjacency_groups[i_part_grp][j_part_grp] =\
+                            FacialAdjacencyGroup(igroup=i_part_grp,
+                                        ineighbor_group=j_part_grp,
+                                        elements=elements,
+                                        element_faces=element_faces,
+                                        neighbors=neighbors,
+                                        neighbor_faces=neighbor_faces)
 
-    from meshmode.mesh import BTAG_PARTITION, BTAG_REALLY_ALL
-    for i_neighbor_part in all_neighbor_parts:
-        part_tag = BTAG_PARTITION(i_neighbor_part)
-        boundary_tags.append(part_tag)
-        btag_to_index[part_tag] = len(boundary_tags)-1
+    return local_to_local_adjacency_groups
 
-    # Will need to map neighbor element indices from global mesh-wide to partition
-    # mesh-wide
-    n_elems_in_neighbor_part = {i_neighbor_part: 0 for i_neighbor_part in
-                all_neighbor_parts}
-    global_elem_to_neighbor_elem = np.empty(mesh.nelements,
-                dtype=mesh.element_id_dtype)
-    global_elem_to_neighbor_elem[:] = -1
-    for ielem, ipart in enumerate(part_per_element):
-        if ipart in all_neighbor_parts:
-            global_elem_to_neighbor_elem[ielem] = n_elems_in_neighbor_part[ipart]
-            n_elems_in_neighbor_part[ipart] = n_elems_in_neighbor_part[ipart] + 1
 
-    def map_global_to_neighbor_local(global_elements):
-        neighbor_local_elements = np.empty_like(global_elements)
-        for ielem in range(len(global_elements)):
-            neighbor_local_elements[ielem] = global_elem_to_neighbor_elem[
-                        global_elements[ielem]]
-        return neighbor_local_elements
+def _collect_nonlocal_adjacency_data(mesh, part_per_elem, global_elem_to_part_elem,
+            part_mesh_groups, global_group_to_part_group,
+            part_mesh_group_elem_base):
+    """
+    Collect nonlocal adjacency data for partitioned mesh, and store it in an
+    intermediate data structure to use when constructing inter-partition adjacency
+    groups.
+    """
+    nonlocal_adj_data = [None for _ in part_mesh_groups]
 
-    from meshmode.mesh import InterPartitionAdjacencyGroup
+    for igrp, facial_adj_dict in enumerate(mesh.facial_adjacency_groups):
+        i_part_grp = global_group_to_part_group[igrp]
+        if i_part_grp is None:
+            continue
+
+        for jgrp, facial_adj in facial_adj_dict.items():
+            if jgrp is None:
+                continue
+
+            elem_base_i = mesh.groups[igrp].element_nr_base
+            elem_base_j = mesh.groups[jgrp].element_nr_base
+
+            elements_are_local = global_elem_to_part_elem[facial_adj.elements
+                        + elem_base_i] >= 0
+            neighbors_are_nonlocal = global_elem_to_part_elem[facial_adj.neighbors
+                        + elem_base_j] < 0
+            adj_indices = np.where(np.logical_and(elements_are_local,
+                        neighbors_are_nonlocal))[0]
+
+            if len(adj_indices) > 0:
+                part_elem_base_i = part_mesh_group_elem_base[i_part_grp]
+                elements = global_elem_to_part_elem[facial_adj.elements[
+                            adj_indices] + elem_base_i] - part_elem_base_i
+                element_faces = facial_adj.element_faces[adj_indices]
+                global_neighbors = facial_adj.neighbors[adj_indices] + elem_base_j
+                neighbor_parts = part_per_elem[global_neighbors]
+                neighbor_faces = facial_adj.neighbor_faces[adj_indices]
+
+                if nonlocal_adj_data[i_part_grp] is None:
+                    nonlocal_adj_data[i_part_grp] = (elements, element_faces,
+                                neighbor_parts, global_neighbors, neighbor_faces)
+                else:
+                    adj_elements, adj_element_faces, adj_neighbor_parts,\
+                                adj_global_neighbors, adj_neighbor_faces =\
+                                nonlocal_adj_data[i_part_grp]
+                    adj_elements = np.concatenate((adj_elements, elements))
+                    adj_element_faces = np.concatenate((adj_element_faces,
+                                element_faces))
+                    adj_neighbor_parts = np.concatenate((adj_neighbor_parts,
+                                neighbor_parts))
+                    adj_global_neighbors = np.concatenate((adj_global_neighbors,
+                                global_neighbors))
+                    adj_neighbor_faces = np.concatenate((adj_neighbor_faces,
+                                neighbor_faces))
+                    nonlocal_adj_data[i_part_grp] = (adj_elements,
+                                adj_element_faces, adj_neighbor_parts,
+                                adj_global_neighbors, adj_neighbor_faces)
+
+    return nonlocal_adj_data
+
+
+def _collect_bdry_data(mesh, global_elem_to_part_elem, part_mesh_groups,
+            global_group_to_part_group, part_mesh_group_elem_base):
+    """
+    Collect boundary data for partitioned mesh, and store it in an intermediate
+    data structure to use when constructing inter-partition adjacency groups.
+    """
+    bdry_data = [None for _ in part_mesh_groups]
+
+    for igrp, facial_adj_dict in enumerate(mesh.facial_adjacency_groups):
+        i_part_grp = global_group_to_part_group[igrp]
+        if i_part_grp is None:
+            continue
+
+        facial_adj = facial_adj_dict[None]
+
+        elem_base = mesh.groups[igrp].element_nr_base
+
+        adj_indices = np.where(global_elem_to_part_elem[facial_adj.elements
+                    + elem_base] >= 0)[0]
+
+        if len(adj_indices) > 0:
+            part_elem_base = part_mesh_group_elem_base[i_part_grp]
+            elements = global_elem_to_part_elem[facial_adj.elements[adj_indices]
+                        + elem_base] - part_elem_base
+            element_faces = facial_adj.element_faces[adj_indices]
+            neighbors = facial_adj.neighbors[adj_indices]
+            bdry_data[i_part_grp] = (elements, element_faces, neighbors)
+
+    return bdry_data
+
+
+def _create_inter_partition_adjacency_groups(mesh, part_per_element,
+            part_mesh_groups, all_neighbor_parts, nonlocal_adj_data, bdry_data,
+            boundary_tag_bit):
+    """
+    Combine non-local adjacency data and boundary data into inter-partition
+    adjacency groups.
+    """
+    global_elem_to_neighbor_elem = _create_element_part_map(part_per_element,
+                all_neighbor_parts, element_id_dtype=mesh.element_id_dtype)
+
+    inter_partition_adj_groups = []
+
     for i_part_grp in range(len(part_mesh_groups)):
         has_nonlocal = nonlocal_adj_data[i_part_grp] is not None
         has_bdry = bdry_data[i_part_grp] is not None
@@ -314,11 +336,14 @@ def partition_mesh(mesh, part_per_element, part_num):
             neighbors = np.empty_like(elements)
             for inonlocal in range(len(neighbors)):
                 i_neighbor_part = neighbor_parts[inonlocal]
+                from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
                 neighbors[inonlocal] = -(
                                 boundary_tag_bit(BTAG_REALLY_ALL)
                                 | boundary_tag_bit(BTAG_PARTITION(i_neighbor_part)))
-            neighbor_elements = map_global_to_neighbor_local(
-                        global_neighbor_elements)
+            neighbor_elements = np.empty_like(global_neighbor_elements)
+            for ielem in range(len(global_neighbor_elements)):
+                neighbor_elements[ielem] = global_elem_to_neighbor_elem[
+                            global_neighbor_elements[ielem]]
 
         elif not has_nonlocal:
             # Boundary only
@@ -347,8 +372,11 @@ def partition_mesh(mesh, part_per_element, part_num):
             nonlocal_elements, nonlocal_element_faces, nonlocal_neighbor_parts,\
                         nonlocal_global_neighbor_elements, nonlocal_neighbor_faces =\
                         nonlocal_adj_data[i_part_grp]
-            nonlocal_neighbor_elements = map_global_to_neighbor_local(
+            nonlocal_neighbor_elements = np.empty_like(
                         nonlocal_global_neighbor_elements)
+            for ielem in range(len(nonlocal_global_neighbor_elements)):
+                nonlocal_neighbor_elements[ielem] = global_elem_to_neighbor_elem[
+                            nonlocal_global_neighbor_elements[ielem]]
             bdry_elements, bdry_element_faces, bdry_neighbors =\
                         bdry_data[i_part_grp]
             combined_elements = np.concatenate((nonlocal_elements, bdry_elements))
@@ -366,6 +394,7 @@ def partition_mesh(mesh, part_per_element, part_num):
                     element_faces[imerged] = nonlocal_element_faces[inonlocal]
                     neighbor_parts[imerged] = nonlocal_neighbor_parts[inonlocal]
                     i_neighbor_part = neighbor_parts[imerged]
+                    from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
                     neighbors[imerged] = -(
                                 boundary_tag_bit(BTAG_REALLY_ALL)
                                 | boundary_tag_bit(BTAG_PARTITION(i_neighbor_part)))
@@ -383,19 +412,103 @@ def partition_mesh(mesh, part_per_element, part_num):
                     neighbor_faces[imerged] = -1
                 imerged = imerged + 1
 
-        part_facial_adjacency_groups[i_part_grp][None] =\
-                    InterPartitionAdjacencyGroup(igroup=i_part_grp,
-                                ineighbor_group=None, elements=elements,
-                                element_faces=element_faces, neighbors=neighbors,
-                                neighbor_partitions=neighbor_parts,
-                                global_neighbors=neighbor_elements,
-                                neighbor_faces=neighbor_faces)
+        from meshmode.mesh import InterPartitionAdjacencyGroup
+        inter_partition_adj_groups.append(InterPartitionAdjacencyGroup(
+                    igroup=i_part_grp, ineighbor_group=None, elements=elements,
+                    element_faces=element_faces, neighbors=neighbors,
+                    neighbor_partitions=neighbor_parts,
+                    global_neighbors=neighbor_elements,
+                    neighbor_faces=neighbor_faces))
+
+    return inter_partition_adj_groups
+
+
+def partition_mesh(mesh, part_per_element, part_num):
+    """
+    :arg mesh: A :class:`~meshmode.mesh.Mesh` to be partitioned.
+    :arg part_per_element: A :class:`numpy.ndarray` containing one
+        integer per element of *mesh* indicating which part of the
+        partitioned mesh the element is to become a part of.
+    :arg part_num: The part number of the mesh to return.
+
+    :returns: A tuple ``(part_mesh, part_to_global)``, where *part_mesh*
+        is a :class:`~meshmode.mesh.Mesh` that is a partition of mesh, and
+        *part_to_global* is a :class:`numpy.ndarray` mapping element
+        numbers on *part_mesh* to ones in *mesh*.
+
+    .. versionadded:: 2017.1
+    """
+    assert len(part_per_element) == mesh.nelements, (
+        "part_per_element must have shape (mesh.nelements,)")
+
+    # Contains the indices of the elements requested.
+    queried_elems = np.where(np.array(part_per_element) == part_num)[0]
+
+    global_elem_to_part_elem = _create_element_part_map(part_per_element,
+                {part_num}, element_id_dtype=mesh.element_id_dtype)
+
+    # Create new mesh groups that mimick the original mesh's groups but only contain
+    # the local partition's elements
+    part_mesh_groups, global_group_to_part_group, required_vertex_indices =\
+                _filter_mesh_groups(mesh.groups, queried_elems)
+
+    part_vertices = np.zeros((mesh.ambient_dim, len(required_vertex_indices)))
+    for dim in range(mesh.ambient_dim):
+        part_vertices[dim] = mesh.vertices[dim][required_vertex_indices]
+
+    part_mesh_group_elem_base = [0 for _ in part_mesh_groups]
+    el_nr = 0
+    for i_part_grp, grp in enumerate(part_mesh_groups):
+        part_mesh_group_elem_base[i_part_grp] = el_nr
+        el_nr += grp.nelements
+
+    local_to_local_adj_groups = _create_local_to_local_adjacency_groups(mesh,
+                global_elem_to_part_elem, part_mesh_groups,
+                global_group_to_part_group, part_mesh_group_elem_base)
+
+    nonlocal_adj_data = _collect_nonlocal_adjacency_data(mesh,
+                np.array(part_per_element), global_elem_to_part_elem,
+                part_mesh_groups, global_group_to_part_group,
+                part_mesh_group_elem_base)
+
+    bdry_data = _collect_bdry_data(mesh, global_elem_to_part_elem, part_mesh_groups,
+                global_group_to_part_group, part_mesh_group_elem_base)
+
+    # Assemble full set of neighbors
+    all_neighbor_parts = set()
+    for adj in nonlocal_adj_data:
+        if adj is not None:
+            _, _, grp_neighbor_parts, _, _ = adj
+            for i_neighbor_part in grp_neighbor_parts:
+                all_neighbor_parts.add(i_neighbor_part)
+
+    boundary_tags = mesh.boundary_tags[:]
+    btag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
+
+    def boundary_tag_bit(boundary_tag):
+        from meshmode.mesh import _boundary_tag_bit
+        return _boundary_tag_bit(boundary_tags, btag_to_index, boundary_tag)
+
+    from meshmode.mesh import BTAG_PARTITION
+    for i_neighbor_part in all_neighbor_parts:
+        part_tag = BTAG_PARTITION(i_neighbor_part)
+        boundary_tags.append(part_tag)
+        btag_to_index[part_tag] = len(boundary_tags)-1
+
+    inter_partition_adj_groups = _create_inter_partition_adjacency_groups(mesh,
+                part_per_element, part_mesh_groups, all_neighbor_parts,
+                nonlocal_adj_data, bdry_data, boundary_tag_bit)
+
+    # Combine local and inter-partition/boundary adjacency groups
+    part_facial_adj_groups = local_to_local_adj_groups
+    for igrp, facial_adj in enumerate(inter_partition_adj_groups):
+        part_facial_adj_groups[igrp][None] = facial_adj
 
     from meshmode.mesh import Mesh
     part_mesh = Mesh(
             part_vertices,
             part_mesh_groups,
-            facial_adjacency_groups=part_facial_adjacency_groups,
+            facial_adjacency_groups=part_facial_adj_groups,
             boundary_tags=boundary_tags,
             is_conforming=mesh.is_conforming)
 
