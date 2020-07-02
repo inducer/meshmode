@@ -81,6 +81,9 @@ def fdrake_degree(request):
     return request.param
 
 
+# TODO : make some tests to verify boundary tagging
+
+
 # {{{ Basic conversion checks for the function space
 
 def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
@@ -99,17 +102,17 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
     fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fdrake_degree)
     cl_ctx = ctx_factory()
     fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
-    to_discr = fdrake_connection.to_discr
-    meshmode_verts = to_discr.mesh.vertices
+    discr = fdrake_connection.discr
+    meshmode_verts = discr.mesh.vertices
 
     # Ensure the meshmode mesh has one group and make sure both
     # meshes agree on some basic properties
-    assert len(to_discr.mesh.groups) == 1
+    assert len(discr.mesh.groups) == 1
     fdrake_mesh_fspace = fdrake_mesh.coordinates.function_space()
     fdrake_mesh_order = fdrake_mesh_fspace.finat_element.degree
-    assert to_discr.mesh.groups[0].order == fdrake_mesh_order
-    assert to_discr.mesh.groups[0].nelements == fdrake_mesh.num_cells()
-    assert to_discr.mesh.nvertices == fdrake_mesh.num_vertices()
+    assert discr.mesh.groups[0].order == fdrake_mesh_order
+    assert discr.mesh.groups[0].nelements == fdrake_mesh.num_cells()
+    assert discr.mesh.nvertices == fdrake_mesh.num_vertices()
 
     # Ensure that the vertex sets are identical up to reordering
     # Nb: I got help on this from stack overflow:
@@ -121,10 +124,11 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
     # Ensure the discretization and the firedrake function space agree on
     # some basic properties
     finat_elt = fdrake_fspace.finat_element
-    assert len(to_discr.groups) == 1
-    assert to_discr.groups[0].order == finat_elt.degree
-    assert to_discr.groups[0].nunit_nodes == finat_elt.space_dimension()
-    assert to_discr.nnodes == fdrake_fspace.node_count
+    assert len(discr.groups) == 1
+    assert discr.groups[0].order == finat_elt.degree
+    assert discr.groups[0].nunit_nodes == finat_elt.space_dimension()
+    assert discr.nnodes == fdrake_fspace.node_count
+
 
 # }}}
 
@@ -181,9 +185,9 @@ def test_function_transfer(ctx_factory,
     fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
     transported_f = fdrake_connection.from_firedrake(fdrake_f)
 
-    to_discr = fdrake_connection.to_discr
+    discr = fdrake_connection.discr
     with cl.CommandQueue(cl_ctx) as queue:
-        nodes = to_discr.nodes().get(queue=queue)
+        nodes = discr.nodes().get(queue=queue)
     meshmode_f = meshmode_f_eval(nodes)
 
     np.testing.assert_allclose(transported_f, meshmode_f, atol=CLOSE_ATOL)
@@ -200,7 +204,7 @@ def check_idempotency(fdrake_connection, fdrake_function):
     vdim = None
     if len(fdrake_function.dat.data.shape) > 1:
         vdim = fdrake_function.dat.data.shape[1]
-    fdrake_fspace = fdrake_connection.from_fspace(dim=vdim)
+    fdrake_fspace = fdrake_connection.firedrake_fspace(vdim=vdim)
 
     # Test for idempotency fd->mm->fd
     mm_field = fdrake_connection.from_firedrake(fdrake_function)
