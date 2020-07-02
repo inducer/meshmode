@@ -340,8 +340,7 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
     :arg no_normals_warn: As described in the kwargs of
         :func:`import_firedrake_mesh`
     :arg cells_to_use: If *None*, then ignored. Otherwise, a numpy array
-        of unique firedrake cell indices. In this case, *cells_to_use* should
-        have also been used in the creation *unflipped_group*.
+        of unique firedrake cell indices indicating which cells to use.
 
     :return: A numpy array, the *i*th element is > 0 if the *i*th element
         is positively oriented, < 0 if negatively oriented.
@@ -450,6 +449,11 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
         becomes the element index in the resultant mesh element group.
         Any faces or vertices which do not touch a cell in
         *cells_to_use* are also ignored.
+        Note that in this later case, some faces that are not
+        boundaries in *fdrake_mesh* may become boundaries in the
+        returned mesh. These "induced" boundaries are marked with
+        :class:`BTAG_NO_BOUNDARY` (and :class:`BTAG_REALLY_ALL`)
+        instead of :class:`BTAG_ALL`.
     :arg normals: **Only** used if *fdrake_mesh* is a 1-surface
         embedded in 2-space. In this case,
             - If *None* then

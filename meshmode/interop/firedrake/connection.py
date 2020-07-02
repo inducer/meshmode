@@ -517,6 +517,87 @@ class FromFiredrakeConnection(FiredrakeConnection):
                 "Somehow a firedrake node in a 'DG' space got duplicated..." \
                 "contact the developer."
 
+
+def _compute_cells_near_bdy(mesh, bdy_id):
+    """
+    Returns an array of the cell ids with >= 1 vertex on the
+    given bdy_id
+    """
+    cfspace = mesh.coordinates.function_space()
+    cell_node_list = cfspace.cell_node_list
+
+    boundary_nodes = cfspace.boundary_nodes(bdy_id, 'topological')
+    # Reduce along each cell: Is a vertex of the cell in boundary nodes?
+    cell_is_near_bdy = np.any(np.isin(cell_node_list, boundary_nodes), axis=1)
+
+    return np.arange(cell_node_list.shape[0], dtype=np.int32)[cell_is_near_bdy]
+
+
+class FromBdyFiredrakeConnection(FiredrakeConnection):
+    """
+    A connection created from a :mod:`firedrake`
+    ``"CG"`` or ``"DG"`` function space which creates a
+    meshmode discretization corresponding to all cells with a face on
+    the given boundary and allows
+    transfer of functions to and from :mod:`firedrake`.
+    """
+    def __init__(self, cl_ctx, fdrake_fspace, bdy_id):
+        """
+        :arg cl_ctx: A :mod:`pyopencl` computing context
+        :arg fdrake_fspace: A :mod:`firedrake` ``"CG"`` or ``"DG"``
+            function space (of class :class:`WithGeometry`) built on
+            a mesh which is importable by :func:`import_firedrake_mesh`.
+        :arg bdy_id: A boundary marker of *fdrake_fspace.mesh()* as accepted by
+            the *boundary_nodes* method of a firedrake
+            :class:`firedrake.functionspaceimpl.WithGeometry`.
+        """
+        # Ensure fdrake_fspace is a function space with appropriate reference
+        # element.
+        from firedrake.functionspaceimpl import WithGeometry
+        if not isinstance(fdrake_fspace, WithGeometry):
+            raise TypeError(":arg:`fdrake_fspace` must be of firedrake type "
+                            ":class:`WithGeometry`, not `%s`."
+                            % type(fdrake_fspace))
+        ufl_elt = fdrake_fspace.ufl_element()
+
+        if ufl_elt.family() not in ('Lagrange', 'Discontinuous Lagrange'):
+            raise ValueError("the ``ufl_element().family()`` of "
+                             ":arg:`fdrake_fspace` must "
+                             "be ``'Lagrange'`` or "
+                             "``'Discontinuous Lagrange'``, not %s."
+                             % ufl_elt.family())
+
+        # Create to_discr
+        cells_to_use = _compute_cells_near_bdy(fdrake_fspace.mesh(), bdy_id)
+        mm_mesh, orient = import_firedrake_mesh(fdrake_fspace.mesh(),
+                                                cells_to_use=cells_to_use)
+        factory = InterpolatoryQuadratureSimplexGroupFactory(ufl_elt.degree())
+        to_discr = Discretization(cl_ctx, mm_mesh, factory)
+
+        # get firedrake unit nodes and map onto meshmode reference element
+        group = to_discr.groups[0]
+        fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(group.dim,
+                                                                 True)
+        fd_unit_nodes = get_finat_element_unit_nodes(fdrake_fspace.finat_element)
+        fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
+
+        # Get the reordering fd->mm, see the note in
+        # :class:`FromFiredrakeConnection` for a comment on what this is
+        # doing in continuous spaces.
+        flip_mat = get_simplex_element_flip_matrix(ufl_elt.degree(),
+                                                   fd_unit_nodes)
+        fd_cell_node_list = fdrake_fspace.cell_node_list[cells_to_use]
+        _reorder_nodes(orient, fd_cell_node_list, flip_mat, unflip=False)
+        mm2fd_node_mapping = fd_cell_node_list.flatten()
+
+        super(FromBdyFiredrakeConnection, self).__init__(to_discr,
+                                                         fdrake_fspace,
+                                                         mm2fd_node_mapping)
+        if fdrake_fspace.ufl_element().family() == 'Discontinuous Lagrange':
+            assert len(self._duplicate_nodes) == 0, \
+                "Somehow a firedrake node in a 'DG' space got duplicated..." \
+                "contact the developer."
+
 # }}}
 
 
