@@ -25,6 +25,8 @@ __doc__ = """
     :members:
 .. autoclass:: FromFiredrakeConnection
     :members:
+.. autoclass:: ToFiredrakeConnection
+    :members:
 """
 
 import numpy as np
@@ -86,6 +88,9 @@ class FiredrakeConnection:
     a meshmode discretization and a firedrake "CG" or "DG"
     function space.
 
+    Users should instantiate this using a
+    :class:`FromFiredrakeConnection` or :class:`ToFiredrakeConnection`.
+
     .. autoattribute:: discr
 
         A meshmode discretization
@@ -105,6 +110,8 @@ class FiredrakeConnection:
         node associated to a :mod:`meshmode` may have different coordinates.
         However, after resampling to the other system's unit nodes,
         two associated nodes should have identical coordinates.
+
+    .. automethod:: __init__
     """
     def __init__(self, discr, fdrake_fspace, mm2fd_node_mapping, group_nr=None):
         """
@@ -125,10 +132,10 @@ class FiredrakeConnection:
         :raises TypeError: If any input arguments are of the wrong type,
             if the designated group is of the wrong type,
             or if *fdrake_fspace* is of the wrong family.
-        :raises ValueError: If:
-            * *mm2fd_node_mapping* is of the wrong shape
-              or dtype, if *group_nr* is an invalid index
-            * If *group_nr* is *None* when *discr* has more than one group.
+        :raises ValueError: If
+            *mm2fd_node_mapping* is of the wrong shape
+            or dtype, if *group_nr* is an invalid index, or
+            if *group_nr* is *None* when *discr* has more than one group.
         """
         # {{{ Validate input
         if not isinstance(discr, Discretization):
@@ -516,6 +523,8 @@ class ToFiredrakeConnection(FiredrakeConnection):
     into firedrake. Create a corresponding "DG" function
     space and allow for conversion back and forth
     by resampling at the nodes.
+
+    .. automethod:: __init__
     """
     def __init__(self, discr, group_nr=None, comm=None):
         """
