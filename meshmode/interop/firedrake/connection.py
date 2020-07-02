@@ -337,6 +337,11 @@ class FiredrakeConnection:
         transport meshmode field from :attr:`discr` into an
         appropriate firedrake function space.
 
+        If *out* is *None*, values at any firedrake
+        nodes associated to NO meshmode nodes are zeroed out.
+        If *out* is supplied, values at nodes associated to NO meshmode nodes
+        are not modified.
+
         :arg mm_field: A numpy array of shape *(nnodes,)* or *(..., nnodes)*
             representing a function on :attr:`to_distr`.
         :arg out: If *None* then ignored, otherwise a :mod:`firedrake`
@@ -385,6 +390,7 @@ class FiredrakeConnection:
             else:
                 vdim = mm_field.shape[:-1]
             out = Function(self.firedrake_fspace(vdim))
+            out.dat.data[:] = 0.0
 
         # Handle 1-D case
         if len(out.dat.data.shape) == 1 and len(mm_field.shape) > 1:
