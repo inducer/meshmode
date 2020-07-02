@@ -65,15 +65,15 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology):
     # If you don't understand dmplex, look at the PETSc reference
     # here: https://cse.buffalo.edu/~knepley/classes/caam519/CSBook.pdf
     # used to get topology info
-    # TODO... not sure how to get around the private access
-    plex = top._plex
+    # FIXME... not sure how to get around the private access
+    dm = top._topology_dm
 
     # Get range of dmplex ids for cells, facets, and vertices
-    c_start, c_end = plex.getHeightStratum(0)
-    f_start, f_end = plex.getHeightStratum(1)
-    v_start, v_end = plex.getDepthStratum(0)
+    c_start, c_end = dm.getHeightStratum(0)
+    f_start, f_end = dm.getHeightStratum(1)
+    v_start, v_end = dm.getDepthStratum(0)
 
-    # TODO... not sure how to get around the private accesses
+    # FIXME... not sure how to get around the private accesses
     # Maps dmplex cell id -> firedrake cell index
     def cell_id_dmp_to_fd(ndx):
         return top._cell_numbering.getOffset(ndx)
@@ -527,6 +527,7 @@ def import_firedrake_mesh(fdrake_mesh, normals=None, no_normals_warn=None):
 
 # {{{ Mesh exporting to firedrake
 
+# TODO : Keep boundary tagging
 def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     """
     Create a firedrake mesh corresponding to one :class:`Mesh`'s
@@ -567,12 +568,18 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     import firedrake.mesh as fd_mesh
     plex = fd_mesh._from_cell_list(group.dim, cells, coords, comm)
 
-    topology = fd_mesh.Mesh(plex, dim=mesh.ambient_dim, reorder=False)
+    # TODO : Allow reordering? This makes the connection slower
+    #        but (in principle) firedrake is reordering nodes
+    #        to speed up cache access for their computations.
+    #        Users might want to be able to choose whether
+    #        or not to reorder based on if caching/conversion
+    #        is bottle-necking
+    topology = fd_mesh.Mesh(plex, reorder=False)
 
     # Now make a coordinates function
     from firedrake import VectorFunctionSpace, Function
     coords_fspace = VectorFunctionSpace(topology, 'CG', group.order,
-                                       dim=mesh.ambient_dim)
+                                        dim=mesh.ambient_dim)
     coords = Function(coords_fspace)
 
     # get firedrake unit nodes and map onto meshmode reference element
