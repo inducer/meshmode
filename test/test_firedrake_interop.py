@@ -27,7 +27,8 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 
-from meshmode.interop.firedrake import FromFiredrakeConnection
+from meshmode.interop.firedrake import (
+    FromFiredrakeConnection, import_firedrake_mesh)
 
 import pytest
 
@@ -129,6 +130,82 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
     assert discr.groups[0].nunit_nodes == finat_elt.space_dimension()
     assert discr.nnodes == fdrake_fspace.node_count
 
+
+# }}}
+
+
+# {{{ Boundary tags checking
+
+bdy_tests = [(UnitSquareMesh(10, 10),
+             [1, 2, 3, 4],
+             [0, 0, 1, 1],
+             [0.0, 1.0, 0.0, 1.0]),
+             (UnitCubeMesh(5, 5, 5),
+              [1, 2, 3, 4, 5, 6],
+              [0, 0, 1, 1, 2, 2],
+              [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]),
+             ]
+
+
+@pytest.mark.parametrize("square_or_cube_mesh,bdy_ids,coord_indices,coord_values",
+                         bdy_tests)
+def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values):
+    """
+    Make sure the given boundary ids cover the converted mesh.
+    Make sure that the given coordinate have the given value for the
+    corresponding boundary tag (see :mod:`firedrake`'s documentation
+    to see how the boundary tags for its utility meshes are defined)
+    """
+    from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL, check_bc_coverage
+    mm_mesh, orient = import_firedrake_mesh(square_or_cube_mesh)
+    # Ensure meshmode required boundary tags are there
+    assert set([BTAG_ALL, BTAG_REALLY_ALL]) <= set(mm_mesh.boundary_tags)
+    # Check disjoint coverage of bdy ids and BTAG_ALL
+    check_bc_coverage(mm_mesh, [BTAG_ALL])
+    check_bc_coverage(mm_mesh, bdy_ids)
+
+    # count number of times the boundary tag appears in the meshmode mesh,
+    # should be the same as in the firedrake mesh
+    bdy_id_to_mm_count = {}
+    # Now make sure we have identified the correct faces
+    face_vertex_indices = mm_mesh.groups[0].face_vertex_indices()
+    ext_grp = mm_mesh.facial_adjacency_groups[0][None]
+    for iel, ifac, bdy_flags in zip(
+            ext_grp.elements, ext_grp.element_faces, ext_grp.neighbors):
+        el_vert_indices = mm_mesh.groups[0].vertex_indices[iel]
+        # numpy nb: have to have comma to use advanced indexing
+        face_vert_indices = el_vert_indices[face_vertex_indices[ifac], ]
+        # shape: *(ambient dim, num vertices on face)*
+        face_verts = mm_mesh.vertices[:, face_vert_indices]
+        print("Face vertex indices=", face_vertex_indices)
+        print("iel=", iel)
+        print("ifac=", ifac)
+        print("el verts =", mm_mesh.groups[0].vertex_indices[iel])
+        print("orient=", orient[iel])
+        print()
+        # Figure out which coordinate should have a fixed value, and what
+        # that value is. Also, count how many times each boundary tag appears
+        coord_index, val = None, None
+        for bdy_id_index, bdy_id in enumerate(bdy_ids):
+            if mm_mesh.boundary_tag_bit(bdy_id) & -bdy_flags:
+                bdy_id_to_mm_count.setdefault(bdy_id, 0)
+                bdy_id_to_mm_count[bdy_id] += 1
+                coord_index = coord_indices[bdy_id_index]
+                val = coord_values[bdy_id_index]
+                break
+        print('vert indices =', face_vert_indices)
+        print("Verts=", face_verts)
+        print("val=", val)
+        print("coord=", coord_index)
+        assert np.max(np.abs(face_verts[coord_index, :] - val)) < CLOSE_ATOL
+
+    # Verify that the number of meshes tagged with a boundary tag
+    # is the same in meshmode and firedrake for each tag in *bdy_ids*
+    fdrake_bdy_ids, fdrake_counts = \
+        np.unique(square_or_cube_mesh.exterior_facets.markers, return_counts=True)
+    assert set(fdrake_bdy_ids) == set(bdy_ids)
+    for bdy_id, fdrake_count in zip(fdrake_bdy_ids, fdrake_counts):
+        assert fdrake_count == bdy_id_to_mm_count[bdy_id]
 
 # }}}
 
