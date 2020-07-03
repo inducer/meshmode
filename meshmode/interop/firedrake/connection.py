@@ -24,9 +24,8 @@ __doc__ = """
 .. autoclass:: FiredrakeConnection
     :members:
 .. autoclass:: FromFiredrakeConnection
-    :members:
+.. autoclass:: FromBdyFiredrakeConnection
 .. autoclass:: ToFiredrakeConnection
-    :members:
 """
 
 import numpy as np
@@ -537,8 +536,8 @@ class FromBdyFiredrakeConnection(FiredrakeConnection):
     """
     A connection created from a :mod:`firedrake`
     ``"CG"`` or ``"DG"`` function space which creates a
-    meshmode discretization corresponding to all cells with a face on
-    the given boundary and allows
+    meshmode discretization corresponding to all cells with at
+    least one vertex on the given boundary and allows
     transfer of functions to and from :mod:`firedrake`.
     """
     def __init__(self, cl_ctx, fdrake_fspace, bdy_id):
