@@ -211,7 +211,11 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     # We only need one group
     # for interconnectivity and one for boundary connectivity.
     # The tricky part is moving from firedrake local facet numbering
-    # (ordered lexicographically by the vertex excluded from the face)
+    # (ordered lexicographically by the vertex excluded from the face,
+    #  search for "local facet number" in the following paper for
+    #  a reference on this...
+    # https://spiral.imperial.ac.uk/bitstream/10044/1/28819/2/mlange-firedrake-dmplex-accepted.pdf  # noqa : E501
+    # )
     # and meshmode's facet ordering: obtained from a simplex element
     # group
     mm_simp_group = SimplexElementGroup(1, None, None,
@@ -239,6 +243,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
             return 1 << boundary_tag_to_index[boundary_tag]
         except KeyError:
             raise 0
+
     # Now do the interconnectivity group
 
     # Get the firedrake cells associated to each interior facet
@@ -286,12 +291,13 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                                  element_faces=int_element_faces,
                                                  neighbor_faces=int_neighbor_faces)
 
-    # First look at exterior facets
+    # Then look at exterior facets
 
     # We can get the elements directly from exterior facets
     ext_elements = top.exterior_facets.facet_cell.flatten()
 
-    ext_element_faces = top.exterior_facets.local_facet_dat.data
+    ext_element_faces = np.array([fd_loc_fac_nr_to_mm[fac_nr] for fac_nr in
+                                  top.exterior_facets.local_facet_dat.data])
     ext_element_faces = ext_element_faces.astype(Mesh.face_id_dtype)
     ext_neighbor_faces = np.zeros(ext_element_faces.shape, dtype=np.int32)
     ext_neighbor_faces = ext_neighbor_faces.astype(Mesh.face_id_dtype)
@@ -574,9 +580,7 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
     # This changes the local facet nr, so we need to create and then
     # fix our facial adjacency groups. To do that, we need to figure
     # out which local facet numbers switched.
-    mm_simp_group = SimplexElementGroup(1, None, None,
-                                        dim=fdrake_mesh.cell_dimension())
-    face_vertex_indices = mm_simp_group.face_vertex_indices()
+    face_vertex_indices = group.face_vertex_indices()
     # face indices of the faces not containing vertex 0 and not
     # containing vertex 1, respectively
     no_zero_face_ndx, no_one_face_ndx = None, None
@@ -590,6 +594,9 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
         _get_firedrake_facial_adjacency_groups(fdrake_mesh,
                                                cells_to_use=cells_to_use)
 
+    # applied below to take elements and element_faces
+    # (or neighbors and neighbor_faces) and flip in any faces that need to
+    # be flipped.
     def flip_local_face_indices(faces, elements):
         faces = np.copy(faces)
         to_no_one = np.logical_and(orient[elements] < 0,
@@ -599,6 +606,7 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
         faces[to_no_one], faces[to_no_zero] = no_one_face_ndx, no_zero_face_ndx
         return faces
 
+    # Create new facial adjacency groups that have been flipped
     facial_adjacency_groups = []
     for igroup, fagrps in enumerate(unflipped_facial_adjacency_groups):
         facial_adjacency_groups.append({})
