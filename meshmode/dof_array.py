@@ -21,7 +21,7 @@ THE SOFTWARE.
 """
 
 import numpy as np
-from typing import Optional, Iterable, TYPE_CHECKING
+from typing import Optional, Iterable, TYPE_CHECKING, Any
 from functools import partial
 
 from pytools import single_valued, memoize_in
@@ -170,7 +170,7 @@ def freeze(ary: np.ndarray) -> np.ndarray:
         ])
 
 
-def flatten(ary: np.ndarray) -> np.ndarray:
+def flatten(ary: np.ndarray) -> Any:
     r"""Convert a :class:`DOFArray` into a "flat" array of degrees of freedom,
     where the resulting type of the array is given by the
     :attr:`DOFArray.array_context`.
@@ -244,17 +244,16 @@ def unflatten(actx: ArrayContext, discr: "_Discretization", ary,
     group_starts = np.cumsum([0] + group_sizes)
 
     return DOFArray.from_list(actx, [
-            actx.freeze(
-                actx.call_loopy(
-                    prg(),
-                    grp_start=grp_start, ary=ary,
-                    nelements=grp.nelements,
-                    ndofs_per_element=ndofs_per_element,
-                    )["result"])
-            for grp_start, grp, ndofs_per_element in zip(
-                    group_starts,
-                    discr.groups,
-                    ndofs_per_element_per_group)])
+        actx.call_loopy(
+            prg(),
+            grp_start=grp_start, ary=ary,
+            nelements=grp.nelements,
+            ndofs_per_element=ndofs_per_element,
+            )["result"]
+        for grp_start, grp, ndofs_per_element in zip(
+            group_starts,
+            discr.groups,
+            ndofs_per_element_per_group)])
 
 
 def flat_norm(ary: DOFArray, ord=2):

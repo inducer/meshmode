@@ -188,6 +188,8 @@ class Discretization(object):
 
     .. attribute:: ambient_dim
 
+    .. attribute:: ndofs
+
     .. attribute :: groups
 
     .. automethod:: empty
@@ -240,6 +242,10 @@ class Discretization(object):
     @property
     def ambient_dim(self):
         return self.mesh.ambient_dim
+
+    @property
+    def ndofs(self):
+        return sum(grp.ndofs for grp in self.groups)
 
     def _new_array(self, actx, creation_func, dtype=None):
         if dtype is None:
