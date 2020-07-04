@@ -202,7 +202,7 @@ def flatten_chained_connection(actx, connection):
         return connection
 
     if not connection.connections:
-        return make_same_mesh_connection(connection.to_discr,
+        return make_same_mesh_connection(actx, connection.to_discr,
                                          connection.from_discr)
 
     # recursively build direct connections
