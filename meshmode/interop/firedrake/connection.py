@@ -539,6 +539,10 @@ class FromBdyFiredrakeConnection(FiredrakeConnection):
     meshmode discretization corresponding to all cells with at
     least one vertex on the given boundary and allows
     transfer of functions to and from :mod:`firedrake`.
+
+    Use the same bdy_id as one would for a
+    :class:`firedrake.bcs.DirichletBC`.
+    ``"on_boundary"`` corresponds to the entire boundary.
     """
     def __init__(self, cl_ctx, fdrake_fspace, bdy_id):
         """

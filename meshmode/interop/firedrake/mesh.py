@@ -460,6 +460,9 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
         returned mesh. These "induced" boundaries are marked with
         :class:`BTAG_NO_BOUNDARY` (and :class:`BTAG_REALLY_ALL`)
         instead of :class:`BTAG_ALL`.
+
+        This argument is primarily intended for use by a
+        :class:`meshmode.interop.firedrake.FromBdyFiredrakeConnection`.
     :arg normals: **Only** used if *fdrake_mesh* is a 1-surface
         embedded in 2-space. In this case,
             - If *None* then
