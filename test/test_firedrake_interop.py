@@ -84,9 +84,6 @@ def fdrake_degree(request):
     return request.param
 
 
-# TODO : make some tests to verify boundary tagging
-
-
 # {{{ Basic conversion checks for the function space
 
 def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
@@ -314,9 +311,11 @@ test_functions = [
 
 
 @pytest.mark.parametrize("fdrake_f_expr,meshmode_f_eval", test_functions)
+@pytest.mark.parametrize("only_convert_bdy", (False, True))
 def test_function_transfer(ctx_factory,
                            fdrake_mesh, fdrake_family, fdrake_degree,
-                           fdrake_f_expr, meshmode_f_eval):
+                           fdrake_f_expr, meshmode_f_eval,
+                           only_convert_bdy):
     """
     Make sure creating a function then transporting it is the same
     (up to resampling error) as creating a function on the transported
@@ -328,7 +327,12 @@ def test_function_transfer(ctx_factory,
     fdrake_f = Function(fdrake_fspace).interpolate(fdrake_f_expr(spatial_coord))
 
     cl_ctx = ctx_factory()
-    fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
+    if only_convert_bdy:
+        fdrake_connection = FromBdyFiredrakeConnection(cl_ctx, fdrake_fspace,
+                                                       'on_boundary')
+    else:
+        fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
+
     transported_f = fdrake_connection.from_firedrake(fdrake_f)
 
     discr = fdrake_connection.discr
@@ -340,6 +344,9 @@ def test_function_transfer(ctx_factory,
 
 # }}}
 
+# TODO : Add idempotency test for FromBdyFiredrakeConnection
+# TODO : Add idempotency test for tensor function spaces
+
 
 # {{{ Idempotency tests fd->mm->fd and (fd->)mm->fd->mm for connection
 
@@ -348,8 +355,10 @@ def check_idempotency(fdrake_connection, fdrake_function):
     Make sure fd->mm->fd and mm->fd->mm are identity
     """
     vdim = None
-    if len(fdrake_function.dat.data.shape) > 1:
+    if len(fdrake_function.dat.data.shape) == 2:
         vdim = fdrake_function.dat.data.shape[1]
+    elif len(fdrake_function.dat.data.shape) > 2:
+        vdim = fdrake_function.dat.data.shape[1:]
     fdrake_fspace = fdrake_connection.firedrake_fspace(vdim=vdim)
 
     # Test for idempotency fd->mm->fd
