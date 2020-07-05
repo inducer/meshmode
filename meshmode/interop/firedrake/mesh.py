@@ -142,7 +142,11 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
     # Next go ahead and compute nodal adjacency by creating
     # neighbors and neighbor_starts as specified by :class:`NodalAdjacency`
     neighbors = []
-    neighbors_starts = np.zeros(top.num_cells() + 1, dtype=np.int32)
+    if cells_to_use is None:
+        num_cells = top.num_cells()
+    else:
+        num_cells = np.size(cells_to_use)
+    neighbors_starts = np.zeros(num_cells + 1, dtype=np.int32)
     for iel in range(len(cell_to_nodal_neighbors)):
         neighbors += cell_to_nodal_neighbors[iel]
         neighbors_starts[iel+1] = len(neighbors)
@@ -270,11 +274,11 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                     np.arange(np.size(cells_to_use))))
 
         # Only keep cells that using, and change to new cell index
-        int_elements = [cells_to_use_inv[icell]
-                        for icell in int_elements[to_keep]]
+        int_elements = np.vectorize(cells_to_use_inv.__getitem__)(
+                int_elements[to_keep])
         int_element_faces = int_element_faces[to_keep]
-        int_neighbors = int_elements[to_keep]
-        int_neighbor_faces = int_element_faces[to_keep]
+        int_neighbors = int_neighbors[to_keep]
+        int_neighbor_faces = int_neighbor_faces[to_keep]
         # For neighbor cells, change to new cell index or mark
         # as a new boundary (if the neighbor cell is not being used)
         for ndx, icell in enumerate(int_neighbors):
@@ -299,17 +303,16 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     ext_element_faces = np.array([fd_loc_fac_nr_to_mm[fac_nr] for fac_nr in
                                   top.exterior_facets.local_facet_dat.data])
     ext_element_faces = ext_element_faces.astype(Mesh.face_id_dtype)
-    ext_neighbor_faces = np.zeros(ext_element_faces.shape, dtype=np.int32)
-    ext_neighbor_faces = ext_neighbor_faces.astype(Mesh.face_id_dtype)
+    ext_neighbor_faces = np.zeros(ext_element_faces.shape,
+                                  dtype=Mesh.face_id_dtype)
     # If only using some of the cells, throw away unused cells and
     # move to new cell index
     if cells_to_use is not None:
         to_keep = np.isin(ext_elements, cells_to_use)
-        ext_elements = [cells_to_use_inv[icell]
-                        for icell in ext_elements[to_keep]]
+        ext_elements = np.vectorize(cells_to_use_inv.__getitem__)(
+                ext_elements[to_keep])
         ext_element_faces = ext_element_faces[to_keep]
-        ext_neighbors = ext_elements[to_keep]
-        ext_neighbor_faces = ext_element_faces[to_keep]
+        ext_neighbor_faces = ext_neighbor_faces[to_keep]
 
     # tag the boundary
     ext_neighbors = np.zeros(ext_elements.shape, dtype=np.int32)
@@ -510,6 +513,15 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
     bdy_tags = _get_firedrake_boundary_tags(fdrake_mesh, no_boundary=no_boundary)
     vertex_indices, nodal_adjacency = \
         _get_firedrake_nodal_info(fdrake_mesh, cells_to_use=cells_to_use)
+    # If only using some cells, vertices may need new indices as many
+    # will be removed
+    if cells_to_use is not None:
+        vert_ndx_new2old = np.unique(vertex_indices.flatten())
+        vert_ndx_old2new = dict(zip(vert_ndx_new2old,
+                                    np.arange(np.size(vert_ndx_new2old),
+                                              dtype=vertex_indices.dtype)))
+        vertex_indices = \
+            np.vectorize(vert_ndx_old2new.__getitem__)(vertex_indices)
 
     # Grab the mesh reference element and cell dimension
     coord_finat_elt = fdrake_mesh.coordinates.function_space().finat_element
@@ -602,11 +614,14 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
     # be flipped.
     def flip_local_face_indices(faces, elements):
         faces = np.copy(faces)
-        to_no_one = np.logical_and(orient[elements] < 0,
-                                   faces == no_zero_face_ndx)
-        to_no_zero = np.logical_and(orient[elements] < 0,
-                                    faces == no_one_face_ndx)
-        faces[to_no_one], faces[to_no_zero] = no_one_face_ndx, no_zero_face_ndx
+        neg_elements = np.full(elements.shape, False)
+        # To handle neighbor case, we only need to flip at elements
+        # who have a neighbor, i.e. where neighbors is not a negative
+        # bitmask of bdy tags
+        neg_elements[elements >= 0] = (orient[elements[elements >= 0]] < 0)
+        no_zero = np.logical_and(neg_elements, faces == no_zero_face_ndx)
+        no_one = np.logical_and(neg_elements, faces == no_one_face_ndx)
+        faces[no_zero], faces[no_one] = no_one_face_ndx, no_zero_face_ndx
         return faces
 
     # Create new facial adjacency groups that have been flipped
@@ -616,12 +631,8 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
         for ineighbor_group, fagrp in six.iteritems(fagrps):
             new_element_faces = flip_local_face_indices(fagrp.element_faces,
                                                         fagrp.elements)
-            if ineighbor_group is None:
-                new_neighbor_faces = fagrp.neighbor_faces
-            else:
-                new_neighbor_faces = \
-                    flip_local_face_indices(fagrp.neighbor_faces,
-                                            fagrp.neighbors)
+            new_neighbor_faces = flip_local_face_indices(fagrp.neighbor_faces,
+                                                         fagrp.neighbors)
             new_fagrp = FacialAdjacencyGroup(igroup=igroup,
                                              ineighbor_group=ineighbor_group,
                                              elements=fagrp.elements,

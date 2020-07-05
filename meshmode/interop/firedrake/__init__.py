@@ -22,10 +22,13 @@ THE SOFTWARE.
 
 
 import numpy as np
-from meshmode.interop.firedrake.connection import FromFiredrakeConnection
+from meshmode.interop.firedrake.connection import (
+    FromBdyFiredrakeConnection, FromFiredrakeConnection)
 from meshmode.interop.firedrake.mesh import import_firedrake_mesh
 
-__all__ = ["FromFiredrakeConnection", "import_firedrake_mesh"]
+__all__ = ["FromBdyFiredrakeConnection", "FromFiredrakeConnection",
+           "import_firedrake_mesh",
+           ]
 
 
 def _compute_cells_near_bdy(mesh, bdy_id):

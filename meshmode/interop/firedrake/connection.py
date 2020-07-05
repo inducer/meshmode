@@ -529,7 +529,7 @@ def _compute_cells_near_bdy(mesh, bdy_id):
     # Reduce along each cell: Is a vertex of the cell in boundary nodes?
     cell_is_near_bdy = np.any(np.isin(cell_node_list, boundary_nodes), axis=1)
 
-    return np.arange(cell_node_list.shape[0], dtype=np.int32)[cell_is_near_bdy]
+    return np.nonzero(cell_is_near_bdy)[0].astype(np.int32)
 
 
 class FromBdyFiredrakeConnection(FiredrakeConnection):
