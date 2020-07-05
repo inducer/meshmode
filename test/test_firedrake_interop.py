@@ -27,8 +27,10 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 
+from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL, check_bc_coverage
 from meshmode.interop.firedrake import (
-    FromFiredrakeConnection, import_firedrake_mesh)
+    FromFiredrakeConnection, FromBdyFiredrakeConnection, import_firedrake_mesh)
+from meshmode.interop.firedrake.connection import _compute_cells_near_bdy
 
 import pytest
 
@@ -95,6 +97,8 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
     agree across firedrake vs meshmode
     """
     # get fdrake_verts (shaped like (nverts, dim))
+    # Nb : Mesh must be order 1 for these to be vertices
+    assert fdrake_mesh.coordinates.function_space().finat_element.degree == 1
     fdrake_verts = fdrake_mesh.coordinates.dat.data
     if fdrake_mesh.geometric_dimension() == 1:
         fdrake_verts = fdrake_verts[:, np.newaxis]
@@ -111,6 +115,7 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
     assert len(discr.mesh.groups) == 1
     fdrake_mesh_fspace = fdrake_mesh.coordinates.function_space()
     fdrake_mesh_order = fdrake_mesh_fspace.finat_element.degree
+    assert discr.mesh.groups[0].dim == fdrake_mesh.topological_dimension()
     assert discr.mesh.groups[0].order == fdrake_mesh_order
     assert discr.mesh.groups[0].nelements == fdrake_mesh.num_cells()
     assert discr.mesh.nvertices == fdrake_mesh.num_vertices()
@@ -134,6 +139,65 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
 # }}}
 
 
+# {{{ Now check the FromBdyFiredrakeConnection
+
+def test_from_bdy_consistency(ctx_factory,
+                              fdrake_mesh,
+                              fdrake_family,
+                              fdrake_degree):
+    """
+    Make basic checks that FiredrakeFromBdyConnection is not doing something
+    obviouisly wrong, i.e. that it has proper tagging, that it has
+    the right number of cells, etc.
+    """
+    fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fdrake_degree)
+    cl_ctx = ctx_factory()
+    frombdy_conn = FromBdyFiredrakeConnection(cl_ctx,
+                                              fdrake_fspace,
+                                              "on_boundary")
+
+    # Ensure the meshmode mesh has one group and make sure both
+    # meshes agree on some basic properties
+    discr = frombdy_conn.discr
+    assert len(discr.mesh.groups) == 1
+    fdrake_mesh_fspace = fdrake_mesh.coordinates.function_space()
+    fdrake_mesh_order = fdrake_mesh_fspace.finat_element.degree
+    assert discr.mesh.groups[0].dim == fdrake_mesh.topological_dimension()
+    assert discr.mesh.groups[0].order == fdrake_mesh_order
+
+    # get fdrake_verts (shaped like (nverts, dim))
+    # Nb : Mesh must be order 1 for these to be vertices
+    assert fdrake_mesh.coordinates.function_space().finat_element.degree == 1
+    fdrake_verts = fdrake_mesh.coordinates.dat.data
+    if fdrake_mesh.geometric_dimension() == 1:
+        fdrake_verts = fdrake_verts[:, np.newaxis]
+    # only look at cells "near" bdy (with >= 1 vertex on)
+    cells_near_bdy = _compute_cells_near_bdy(fdrake_mesh, 'on_boundary')
+    verts_near_bdy = np.unique(
+        fdrake_mesh_fspace.cell_node_list[cells_near_bdy, :].flatten())
+    fdrake_verts = fdrake_verts[verts_near_bdy, :]
+    # Get meshmode vertices (shaped like (dim, nverts))
+    meshmode_verts = discr.mesh.vertices
+
+    # Ensure that the vertices of firedrake elements on
+    # the boundary are identical to the resultant meshes' vertices up to
+    # reordering
+    # Nb: I got help on this from stack overflow:
+    # https://stackoverflow.com/questions/38277143/sort-2d-numpy-array-lexicographically  # noqa: E501
+    lex_sorted_mm_verts = meshmode_verts[:, np.lexsort(meshmode_verts)]
+    lex_sorted_fdrake_verts = fdrake_verts[np.lexsort(fdrake_verts.T)]
+    np.testing.assert_array_equal(lex_sorted_mm_verts, lex_sorted_fdrake_verts.T)
+
+    # Ensure the discretization and the firedrake function space reference element
+    # agree on some basic properties
+    finat_elt = fdrake_fspace.finat_element
+    assert len(discr.groups) == 1
+    assert discr.groups[0].order == finat_elt.degree
+    assert discr.groups[0].nunit_nodes == finat_elt.space_dimension()
+
+# }}}
+
+
 # {{{ Boundary tags checking
 
 bdy_tests = [(UnitSquareMesh(10, 10),
@@ -149,15 +213,20 @@ bdy_tests = [(UnitSquareMesh(10, 10),
 
 @pytest.mark.parametrize("square_or_cube_mesh,bdy_ids,coord_indices,coord_values",
                          bdy_tests)
-def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values):
+@pytest.mark.parametrize("only_convert_bdy", (True, False))
+def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
+                  only_convert_bdy):
     """
     Make sure the given boundary ids cover the converted mesh.
     Make sure that the given coordinate have the given value for the
     corresponding boundary tag (see :mod:`firedrake`'s documentation
     to see how the boundary tags for its utility meshes are defined)
     """
-    from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL, check_bc_coverage
-    mm_mesh, orient = import_firedrake_mesh(square_or_cube_mesh)
+    cells_to_use = None
+    if only_convert_bdy:
+        cells_to_use = _compute_cells_near_bdy(square_or_cube_mesh, 'on_boundary')
+    mm_mesh, orient = import_firedrake_mesh(square_or_cube_mesh,
+                                            cells_to_use=cells_to_use)
     # Ensure meshmode required boundary tags are there
     assert set([BTAG_ALL, BTAG_REALLY_ALL]) <= set(mm_mesh.boundary_tags)
     # Check disjoint coverage of bdy ids and BTAG_ALL
