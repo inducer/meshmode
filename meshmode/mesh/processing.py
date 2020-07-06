@@ -365,18 +365,25 @@ def test_volume_mesh_element_orientations(mesh):
 # {{{ flips
 
 
-def get_simplex_element_flip_matrix(order, unit_nodes):
+def get_simplex_element_flip_matrix(order, unit_nodes, permutation=None):
     """
-    Generate a resampling matrix that corresponds to the
-    first two barycentric coordinates being swapped.
+    Generate a resampling matrix that corresponds to a
+    permutation of the barycentric coordinates being applied.
+    The default permutation is to swap the
+    first two barycentric coordinates.
 
     :param order: The order of the function space on the simplex,
                  (see second argument in
                   :fun:`modepy.simplex_best_available_basis`)
     :param unit_nodes: A np array of unit nodes with shape
                        *(dim, nunit_nodes)*
+    :param permutation: Either *None*, or a tuple of shape
+                        storing a permutation:
+                        the *i*th barycentric coordinate gets mapped to
+                        the *permutation[i]*th coordinate.
 
-    :return: A numpy array of shape *(dim, dim)* which, when applied
+    :return: A numpy array of shape *(nunit_nodes, nunit_nodes)*
+             which, when applied
              to the matrix of nodes (shaped *(dim, nunit_nodes)*)
              corresponds to the first two barycentric coordinates
              being swapped
@@ -386,8 +393,11 @@ def get_simplex_element_flip_matrix(order, unit_nodes):
     bary_unit_nodes = unit_to_barycentric(unit_nodes)
 
     flipped_bary_unit_nodes = bary_unit_nodes.copy()
-    flipped_bary_unit_nodes[0, :] = bary_unit_nodes[1, :]
-    flipped_bary_unit_nodes[1, :] = bary_unit_nodes[0, :]
+    if permutation is None:
+        flipped_bary_unit_nodes[0, :] = bary_unit_nodes[1, :]
+        flipped_bary_unit_nodes[1, :] = bary_unit_nodes[0, :]
+    else:
+        flipped_bary_unit_nodes[:] = bary_unit_nodes[permutation, :]
     flipped_unit_nodes = barycentric_to_unit(flipped_bary_unit_nodes)
 
     dim = unit_nodes.shape[0]
@@ -398,9 +408,10 @@ def get_simplex_element_flip_matrix(order, unit_nodes):
     flip_matrix[np.abs(flip_matrix) < 1e-15] = 0
 
     # Flipping twice should be the identity
-    assert la.norm(
-            np.dot(flip_matrix, flip_matrix)
-            - np.eye(len(flip_matrix))) < 1e-13
+    if permutation is None:
+        assert la.norm(
+                np.dot(flip_matrix, flip_matrix)
+                - np.eye(len(flip_matrix))) < 1e-13
 
     return flip_matrix
 
