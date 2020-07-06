@@ -23,11 +23,11 @@ THE SOFTWARE.
 
 import numpy as np
 from meshmode.interop.firedrake.connection import (
-    FromBdyFiredrakeConnection, FromFiredrakeConnection)
+    FromBdyFiredrakeConnection, FromFiredrakeConnection, ToFiredrakeConnection)
 from meshmode.interop.firedrake.mesh import import_firedrake_mesh
 
 __all__ = ["FromBdyFiredrakeConnection", "FromFiredrakeConnection",
-           "import_firedrake_mesh",
+           "ToFiredrakeConnection", "import_firedrake_mesh",
            ]
 
 

@@ -103,7 +103,8 @@ class FiredrakeConnection:
 
         A numpy array of shape *(self.discr.groups[group_nr].nnodes,)*
         whose *i*th entry is the :mod:`firedrake` node index associated
-        to the *i*th node in *self.discr.groups[group_nr]*.
+        to the *i*th node in *self.discr.groups[group_nr]*
+        (where *i* is the group-local node index).
         It is important to note that, due to :mod:`meshmode`
         and :mod:`firedrake` using different unit nodes, a :mod:`firedrake`
         node associated to a :mod:`meshmode` may have different coordinates.
@@ -282,10 +283,16 @@ class FiredrakeConnection:
         :arg function: A :mod:`firedrake` function to transfer onto
             :attr:`discr`. Its function space must have
             the same family, degree, and mesh as ``self.from_fspace()``.
-        :arg out: If *None* then ignored, otherwise a numpy array of the
-            shape (i.e.
+        :arg out: Either *None* or a numpy array of
+            shape
             *(..., num meshmode nodes)* or *(num meshmode nodes,)* and of the
-            same dtype in which *function*'s transported data will be stored
+            same dtype as *function*.
+            *function*'s transported data will be stored in *out*
+            and *out* will be returned.
+            Note that number of nodes referenced here is
+            the number of nodes in the whole discretization.
+            If *out* is *None*, then a numpy array of the correct size
+            filled with zeros is created to take its place.
 
         :return: a numpy array holding the transported function
         """
@@ -309,21 +316,23 @@ class FiredrakeConnection:
 
         # Check that out is supplied correctly, or create out if it is
         # not supplied
-        shape = (self.discr.groups[self.group_nr].nnodes,)
+        shape = (self.discr.nnodes,)
         if len(function_data.shape) > 1:
             shape = function_data.shape[1:] + shape
         if out is not None:
             if not isinstance(out, np.ndarray):
                 raise TypeError(":param:`out` must of type *np.ndarray* or "
                                 "be *None*")
-                assert out.shape == shape, \
-                    ":param:`out` must have shape %s." % shape
-                assert out.dtype == function.dat.data.dtype
+            assert out.shape == shape, \
+                ":param:`out` must have shape %s." % shape
+            assert out.dtype == function.dat.data.dtype
         else:
-            out = np.ndarray(shape, dtype=function_data.dtype)
+            out = np.zeros(shape, dtype=function_data.dtype)
 
         # Reorder nodes
-        out[:] = np.moveaxis(function_data, 0, -1)[..., self.mm2fd_node_mapping]
+        group = self.discr.groups[self.group_nr]
+        out[..., group.node_nr_base:group.nnodes] = \
+            np.moveaxis(function_data, 0, -1)[..., self.mm2fd_node_mapping]
         # Resample at the appropriate nodes
         out_view = self.discr.groups[self.group_nr].view(out)
         np.matmul(out_view, self._resampling_mat_fd2mm.T, out=out_view)
@@ -342,7 +351,10 @@ class FiredrakeConnection:
         are not modified.
 
         :arg mm_field: A numpy array of shape *(nnodes,)* or *(..., nnodes)*
-            representing a function on :attr:`to_distr`.
+            representing a function on :attr:`to_distr`
+            (where nnodes is the number of nodes in *self.discr*. Note
+             that only data from group number *self.group_nr* will be
+             transported).
         :arg out: If *None* then ignored, otherwise a :mod:`firedrake`
             function of the right function space for the transported data
             to be stored in.
@@ -632,11 +644,36 @@ class ToFiredrakeConnection(FiredrakeConnection):
         el_group = discr.groups[group_nr]
 
         from firedrake.functionspace import FunctionSpace
-        fd_mesh = export_mesh_to_firedrake(discr.mesh, group_nr, comm)
+        fd_mesh, fd_cell_order, perm2cells = \
+            export_mesh_to_firedrake(discr.mesh, group_nr, comm)
         fspace = FunctionSpace(fd_mesh, 'DG', el_group.order)
+        # To get the meshmode to firedrake node assocation, we need to handle
+        # local vertex reordering and cell reordering.
+        #
+        # Get a copy of cell_node_list with local vertex reordering undone
+        reordered_cell_node_list = np.copy(fspace.cell_node_list)
+        for perm, cells in six.iteritems(perm2cells):
+            perm_inv = tuple(np.argsort(perm))
+            flip_mat = get_simplex_element_flip_matrix(el_group.order,
+                                                       el_group.unit_nodes,
+                                                       perm_inv)
+            reordered_cell_node_list[cells] = \
+                np.einsum("ij,jk->ik",
+                          fspace.cell_node_list[cells],
+                          np.rint(flip_mat))
+
+        # making reordering_arr using the discr then assign using a view of it
+        reordering_arr = np.arange(discr.nnodes,
+                                   dtype=fspace.cell_node_list.dtype)
+        by_cell_view = el_group.view(reordering_arr)
+        by_cell_view = reordered_cell_node_list[fd_cell_order]  # noqa : F841
+        # we only want to keep the part relevant to el_group, the rest of the
+        # array was just there so we could use *el_group.view*
+        reordering_arr = reordering_arr[el_group.node_nr_base:el_group.nnodes]
+
         super(ToFiredrakeConnection, self).__init__(discr,
                                                     fspace,
-                                                    np.arange(el_group.nnodes),
+                                                    reordering_arr,
                                                     group_nr=group_nr)
 
 # }}}

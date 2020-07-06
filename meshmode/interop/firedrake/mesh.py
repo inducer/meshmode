@@ -659,13 +659,36 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     :class:`SimplexElementGroup`.
 
     :param mesh: A :class:`meshmode.mesh.Mesh` to convert with
-        at least one :class:`SimplexElementGroup`
+        at least one :class:`SimplexElementGroup`.
     :param group_nr: The group number to be converted into a firedrake
         mesh. The corresponding group must be of type
         :class:`SimplexElementGroup`. If *None* and
         *mesh* has only one group, that group is used. Otherwise,
         a *ValueError* is raised.
     :param comm: The communicator to build the dmplex mesh on
+
+    :return: A tuple *(fdrake_mesh, fdrake_cell_ordering, perm2cell)*
+        where
+
+        * *fdrake_mesh* is a :mod:`firedrake`
+          :class:`firedrake.mesh.MeshGeometry` corresponding to
+          *mesh*
+        * *fdrake_cell_ordering* is a numpy array: the *i*th
+          element in *mesh* (i.e. the *i*th element in
+          *mesh.groups[group_nr].vertex_indices*) corresponds to the
+          *fdrake_cell_ordering[i]*th :mod:`firedrake` cell
+        * *perm2cell* is a dictionary, mapping tuples to
+          lists of meshmode element indices. Each meshmode element index
+          appears in exactly one of these lists. The corresponding
+          tuple describes how firedrake reordered the local vertex
+          indices on that cell. In particular, if *c*
+          is in the list *perm2cell[p]* for a tuple *p*, then
+          the *p[i]*th local vertex of the *fdrake_cell_ordering[c]*th
+          firedrake cell corresponds to the *i*th local vertex
+          of the *c*th meshmode element.
+
+    .. warning::
+        Currently, no boundary tags are exported along with the mesh.
     """
     if not isinstance(mesh, Mesh):
         raise TypeError(":arg:`mesh` must of type :class:`meshmode.mesh.Mesh`,"
@@ -680,30 +703,70 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     assert isinstance(mesh.groups[group_nr], SimplexElementGroup)
     assert mesh.vertices is not None
 
-    # Get a dmplex object and then a mesh topology
+    # Get the vertices and vertex indices of the requested group
     group = mesh.groups[group_nr]
-    mm2fd_indices = np.unique(group.vertex_indices.flatten())
-    coords = mesh.vertices[:, mm2fd_indices].T
-    cells = mm2fd_indices[group.vertex_indices]
+    fd2mm_indices = np.unique(group.vertex_indices.flatten())
+    coords = mesh.vertices[:, fd2mm_indices].T
+    mm2fd_indices = dict(zip(fd2mm_indices, np.arange(np.size(fd2mm_indices))))
+    cells = np.vectorize(mm2fd_indices.__getitem__)(group.vertex_indices)
 
+    # Get a dmplex object and then a mesh topology
     if comm is None:
         from pyop2.mpi import COMM_WORLD
         comm = COMM_WORLD
-    # FIXME : this is a private member...
+    # FIXME : this is a private member..., and there are some below
     import firedrake.mesh as fd_mesh
     plex = fd_mesh._from_cell_list(group.dim, cells, coords, comm)
+    # Nb : One might be tempted to pass reorder=False and thereby save some
+    #      hassle in exchange for forcing firedrake to have slightly
+    #      less efficient caching. Unfortunately, that only prevents
+    #      the cells from being reordered, and does not prevent the
+    #      vertices from being (locally) reordered on each cell...
+    #      the tl;dr is we don't actually save any hassle
+    top = fd_mesh.Mesh(plex, dim=mesh.ambient_dim)  # mesh topology
+    top.init()
 
-    # TODO : Allow reordering? This makes the connection slower
-    #        but (in principle) firedrake is reordering nodes
-    #        to speed up cache access for their computations.
-    #        Users might want to be able to choose whether
-    #        or not to reorder based on if caching/conversion
-    #        is bottle-necking
-    topology = fd_mesh.Mesh(plex, reorder=False)
+    # Get new element ordering:
+    c_start, c_end = top._topology_dm.getHeightStratum(0)
+    cell_index_mm2fd = np.vectorize(top._cell_numbering.getOffset)(
+        np.arange(c_start, c_end))
+    v_start, v_end = top._topology_dm.getDepthStratum(0)
+
+    # Firedrake goes crazy reordering local vertex numbers,
+    # we've got to work to figure out what changes they made.
+    #
+    # *perm2cells* will map each permutation of local vertex numbers to
+    #              a list of the meshmode cells to which that permutation
+    #              has been applied
+    perm2cells = {}
+    for mm_cell_id, dmp_ids in enumerate(top.cell_closure[cell_index_mm2fd]):
+        # look at order of vertices in firedrake cell
+        vert_dmp_ids = dmp_ids[np.logical_and(v_start <= dmp_ids, dmp_ids < v_end)]
+        fdrake_order = vert_dmp_ids - v_start
+        # get original order
+        mm_order = mesh.groups[group_nr].vertex_indices[mm_cell_id]
+        # want permutation p so that mm_order[p] = fdrake_order
+        # To do so, look at permutations acting by composition.
+        #
+        # mm_order \circ argsort(mm_order) =
+        #     fdrake_order \circ argsort(fdrake_order)
+        # so
+        # mm_order \circ argsort(mm_order) \circ inv(argsort(fdrake_order))
+        #  = fdrake_order
+        #
+        # argsort acts as an inverse, so the desired permutation is:
+        perm = tuple(np.argsort(mm_order)[np.argsort(np.argsort(fdrake_order))])
+        perm2cells.setdefault(perm, [])
+        perm2cells[perm].append(mm_cell_id)
 
     # Now make a coordinates function
     from firedrake import VectorFunctionSpace, Function
-    coords_fspace = VectorFunctionSpace(topology, 'CG', group.order,
+    if mesh.is_conforming:
+        family = 'CG'
+    else:
+        warn("Non-conforming meshes are untested,... I think they should work")
+        family = 'DG'
+    coords_fspace = VectorFunctionSpace(top, family, group.order,
                                         dim=mesh.ambient_dim)
     coords = Function(coords_fspace)
 
@@ -719,11 +782,24 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     resampling_mat = resampling_matrix(el_group.basis(),
                                        new_nodes=fd_unit_nodes,
                                        old_nodes=group.unit_nodes)
-    # nodes is shaped *(ambient dim, nelements, nunit nodes)
-    coords.dat.data[coords_fspace.cell_node_list, :] = \
-        np.matmul(group.nodes, resampling_mat.T).transpose((1, 2, 0))
 
-    return fd_mesh.Mesh(coords, reorder=False)
+    # nodes is shaped *(ambient dim, nelements, nunit nodes)*
+    # flip nodes
+    from meshmode.mesh.processing import get_simplex_element_flip_matrix
+    flipped_group_nodes = np.copy(group.nodes)
+    for perm, cells in six.iteritems(perm2cells):
+        flip_mat = get_simplex_element_flip_matrix(group.order,
+                                                   group.unit_nodes,
+                                                   perm)
+        flipped_group_nodes[:, cells, :] = \
+            np.einsum("ijk,ke->ije", group.nodes[:, cells, :], flip_mat)
+
+    # reorder to firedrake cell ordering
+    reordered_cell_node_list = coords_fspace.cell_node_list[cell_index_mm2fd]
+    coords.dat.data[reordered_cell_node_list, :] = \
+        np.matmul(flipped_group_nodes, resampling_mat.T).transpose((1, 2, 0))
+
+    return fd_mesh.Mesh(coords), cell_index_mm2fd, perm2cells
 
 # }}}
 
