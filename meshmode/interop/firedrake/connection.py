@@ -368,8 +368,8 @@ class FiredrakeConnection:
                              " to *True*")
         # make sure out is a firedrake function in an appropriate
         # function space
+        from firedrake.function import Function
         if out is not None:
-            from firedrake.function import Function
             assert isinstance(out, Function), \
                 ":arg:`out` must be a :mod:`firedrake` Function or *None*"
             assert out.function_space().ufl_element().family() \

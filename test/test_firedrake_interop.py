@@ -42,8 +42,8 @@ firedrake = pytest.importorskip("firedrake")
 
 from firedrake import (
     UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh,
-    FunctionSpace, VectorFunctionSpace, Function,
-    SpatialCoordinate, Constant)
+    FunctionSpace, VectorFunctionSpace, TensorFunctionSpace,
+    Function, SpatialCoordinate, Constant, as_tensor)
 
 
 CLOSE_ATOL = 10**-12
@@ -136,7 +136,7 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
 # }}}
 
 
-# {{{ Now check the FromBdyFiredrakeConnection
+# {{{ Now check the FromBdyFiredrakeConnection consistency
 
 def test_from_bdy_consistency(ctx_factory,
                               fdrake_mesh,
@@ -345,70 +345,75 @@ def test_function_transfer(ctx_factory,
 # }}}
 
 # TODO : Add idempotency test for FromBdyFiredrakeConnection
-# TODO : Add idempotency test for tensor function spaces
 
 
 # {{{ Idempotency tests fd->mm->fd and (fd->)mm->fd->mm for connection
 
-def check_idempotency(fdrake_connection, fdrake_function):
+
+@pytest.mark.parametrize("fspace_type", ("scalar", "vector", "tensor"))
+@pytest.mark.parametrize("only_convert_bdy", (False, True))
+def test_idempotency(ctx_factory,
+                     fdrake_mesh, fdrake_family, fdrake_degree,
+                     fspace_type, only_convert_bdy):
     """
     Make sure fd->mm->fd and mm->fd->mm are identity
     """
-    vdim = None
-    if len(fdrake_function.dat.data.shape) == 2:
-        vdim = fdrake_function.dat.data.shape[1]
-    elif len(fdrake_function.dat.data.shape) > 2:
-        vdim = fdrake_function.dat.data.shape[1:]
-    fdrake_fspace = fdrake_connection.firedrake_fspace(vdim=vdim)
+    # Make a function space and a function with unique values at each node
+    if fspace_type == "scalar":
+        fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fdrake_degree)
+        # Just use the node nr
+        fdrake_unique = Function(fdrake_fspace)
+        fdrake_unique.dat.data[:] = np.arange(fdrake_unique.dat.data.shape[0])
+    elif fspace_type == "vector":
+        fdrake_fspace = VectorFunctionSpace(fdrake_mesh, fdrake_family,
+                                             fdrake_degree)
+        # use the coordinates
+        xx = SpatialCoordinate(fdrake_fspace.mesh())
+        fdrake_unique = Function(fdrake_fspace).interpolate(xx)
+    elif fspace_type == "tensor":
+        fdrake_fspace = TensorFunctionSpace(fdrake_mesh,
+                                            fdrake_family,
+                                            fdrake_degree)
+        # use the coordinates, duplicated into the right tensor shape
+        xx = SpatialCoordinate(fdrake_fspace.mesh())
+        dim = fdrake_fspace.mesh().geometric_dimension()
+        unique_expr = as_tensor([xx for _ in range(dim)])
+        fdrake_unique = Function(fdrake_fspace).interpolate(unique_expr)
+
+    # Make connection
+    cl_ctx = ctx_factory()
+
+    # If only converting boundary, first go ahead and do one round of
+    # fd->mm->fd. This will zero out any degrees of freedom absent in
+    # the meshmode mesh (because they are not associated to cells
+    #                    with >= 1 node on the boundary)
+    #
+    # Otherwise, just continue as normal
+    if only_convert_bdy:
+        fdrake_connection = FromBdyFiredrakeConnection(cl_ctx, fdrake_fspace,
+                                                       'on_boundary')
+        temp = fdrake_connection.from_firedrake(fdrake_unique)
+        fdrake_unique = \
+            fdrake_connection.from_meshmode(temp,
+                                            assert_fdrake_discontinuous=False,
+                                            continuity_tolerance=1e-8)
+    else:
+        fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
 
     # Test for idempotency fd->mm->fd
-    mm_field = fdrake_connection.from_firedrake(fdrake_function)
-    fdrake_function_copy = Function(fdrake_fspace)
-    fdrake_connection.from_meshmode(mm_field, fdrake_function_copy,
+    mm_field = fdrake_connection.from_firedrake(fdrake_unique)
+    fdrake_unique_copy = Function(fdrake_fspace)
+    fdrake_connection.from_meshmode(mm_field, fdrake_unique_copy,
                                     assert_fdrake_discontinuous=False,
                                     continuity_tolerance=1e-8)
 
-    np.testing.assert_allclose(fdrake_function_copy.dat.data,
-                               fdrake_function.dat.data,
+    np.testing.assert_allclose(fdrake_unique_copy.dat.data,
+                               fdrake_unique.dat.data,
                                atol=CLOSE_ATOL)
 
     # Test for idempotency (fd->)mm->fd->mm
-    mm_field_copy = fdrake_connection.from_firedrake(fdrake_function_copy)
+    mm_field_copy = fdrake_connection.from_firedrake(fdrake_unique_copy)
     np.testing.assert_allclose(mm_field_copy, mm_field, atol=CLOSE_ATOL)
-
-
-def test_scalar_idempotency(ctx_factory, fdrake_mesh,
-                            fdrake_family, fdrake_degree):
-    """
-    Make sure fd->mm->fd and mm->fd->mm are identity for scalar spaces
-    """
-    fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fdrake_degree)
-
-    # Make a function with unique values at each node
-    fdrake_unique = Function(fdrake_fspace)
-    fdrake_unique.dat.data[:] = np.arange(fdrake_unique.dat.data.shape[0])
-
-    # test idempotency
-    cl_ctx = ctx_factory()
-    fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
-    check_idempotency(fdrake_connection, fdrake_unique)
-
-
-def test_vector_idempotency(ctx_factory, fdrake_mesh,
-                            fdrake_family, fdrake_degree):
-    """
-    Make sure fd->mm->fd and mm->fd->mm are identity for vector spaces
-    """
-    fdrake_vfspace = VectorFunctionSpace(fdrake_mesh, fdrake_family, fdrake_degree)
-
-    # Make a function with unique values at each node
-    xx = SpatialCoordinate(fdrake_vfspace.mesh())
-    fdrake_unique = Function(fdrake_vfspace).interpolate(xx)
-
-    # test idempotency
-    cl_ctx = ctx_factory()
-    fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_vfspace)
-    check_idempotency(fdrake_connection, fdrake_unique)
 
 # }}}
 
