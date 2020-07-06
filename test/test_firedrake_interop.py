@@ -27,9 +27,15 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 
+from meshmode.discretization import Discretization
+from meshmode.discretization.poly_element import (
+    InterpolatoryQuadratureSimplexGroupFactory)
+
 from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL, check_bc_coverage
+
 from meshmode.interop.firedrake import (
-    FromFiredrakeConnection, FromBdyFiredrakeConnection, import_firedrake_mesh)
+    FromFiredrakeConnection, FromBdyFiredrakeConnection, ToFiredrakeConnection,
+    import_firedrake_mesh)
 from meshmode.interop.firedrake.connection import _compute_cells_near_bdy
 
 import pytest
@@ -47,6 +53,16 @@ from firedrake import (
 
 
 CLOSE_ATOL = 10**-12
+
+
+@pytest.fixture(params=["annulus.msh",
+                        "blob2d-order1-h4e-2.msh",
+                        "blob2d-order1-h6e-2.msh",
+                        "blob2d-order1-h8e-2.msh",
+                        ])
+def mm_mesh(request):
+    from meshmode.mesh.io import read_gmsh
+    return read_gmsh(request.param)
 
 
 @pytest.fixture(params=["FiredrakeUnitIntervalMesh",
@@ -80,19 +96,20 @@ def fdrake_family(request):
 
 
 @pytest.fixture(params=[1, 2, 3], ids=["P^1", "P^2", "P^3"])
-def fdrake_degree(request):
+def fspace_degree(request):
     return request.param
 
 
 # {{{ Basic conversion checks for the function space
 
-def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
+def check_consistency(fdrake_fspace, discr, group_nr=0):
     """
     While nodes may change, vertex conversion should be *identical* up to
     reordering, ensure this is the case for DG spaces. Also ensure the
     meshes have the same basic properties and the function space/discretization
     agree across firedrake vs meshmode
     """
+    fdrake_mesh = fdrake_fspace.mesh()
     # get fdrake_verts (shaped like (nverts, dim))
     # Nb : Mesh must be order 1 for these to be vertices
     assert fdrake_mesh.coordinates.function_space().finat_element.degree == 1
@@ -100,11 +117,6 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
     if fdrake_mesh.geometric_dimension() == 1:
         fdrake_verts = fdrake_verts[:, np.newaxis]
 
-    # Get meshmode vertices (shaped like (dim, nverts))
-    fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fdrake_degree)
-    cl_ctx = ctx_factory()
-    fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
-    discr = fdrake_connection.discr
     meshmode_verts = discr.mesh.vertices
 
     # Ensure the meshmode mesh has one group and make sure both
@@ -112,9 +124,9 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
     assert len(discr.mesh.groups) == 1
     fdrake_mesh_fspace = fdrake_mesh.coordinates.function_space()
     fdrake_mesh_order = fdrake_mesh_fspace.finat_element.degree
-    assert discr.mesh.groups[0].dim == fdrake_mesh.topological_dimension()
-    assert discr.mesh.groups[0].order == fdrake_mesh_order
-    assert discr.mesh.groups[0].nelements == fdrake_mesh.num_cells()
+    assert discr.mesh.groups[group_nr].dim == fdrake_mesh.topological_dimension()
+    assert discr.mesh.groups[group_nr].order == fdrake_mesh_order
+    assert discr.mesh.groups[group_nr].nelements == fdrake_mesh.num_cells()
     assert discr.mesh.nvertices == fdrake_mesh.num_vertices()
 
     # Ensure that the vertex sets are identical up to reordering
@@ -128,10 +140,32 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
     # some basic properties
     finat_elt = fdrake_fspace.finat_element
     assert len(discr.groups) == 1
-    assert discr.groups[0].order == finat_elt.degree
-    assert discr.groups[0].nunit_nodes == finat_elt.space_dimension()
+    assert discr.groups[group_nr].order == finat_elt.degree
+    assert discr.groups[group_nr].nunit_nodes == finat_elt.space_dimension()
     assert discr.nnodes == fdrake_fspace.node_count
 
+
+def test_fd2mm_consistency(ctx_factory, fdrake_mesh, fspace_degree):
+    """
+    Check basic consistency with a FromFiredrakeConnection
+    """
+    # make discretization from firedrake
+    fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fspace_degree)
+    cl_ctx = ctx_factory()
+    fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
+    discr = fdrake_connection.discr
+    # Check consistency
+    check_consistency(fdrake_fspace, discr)
+
+
+def test_mm2fd_consistency(ctx_factory, mm_mesh, fspace_degree):
+    cl_ctx = ctx_factory()
+    factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
+    discr = Discretization(cl_ctx, mm_mesh, factory)
+    fdrake_connection = ToFiredrakeConnection(discr)
+    fdrake_fspace = fdrake_connection.firedrake_fspace()
+    # Check consistency
+    check_consistency(fdrake_fspace, discr)
 
 # }}}
 
@@ -141,13 +175,13 @@ def test_discretization_consistency(ctx_factory, fdrake_mesh, fdrake_degree):
 def test_from_bdy_consistency(ctx_factory,
                               fdrake_mesh,
                               fdrake_family,
-                              fdrake_degree):
+                              fspace_degree):
     """
     Make basic checks that FiredrakeFromBdyConnection is not doing something
     obviouisly wrong, i.e. that it has proper tagging, that it has
     the right number of cells, etc.
     """
-    fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fdrake_degree)
+    fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fspace_degree)
     cl_ctx = ctx_factory()
     frombdy_conn = FromBdyFiredrakeConnection(cl_ctx,
                                               fdrake_fspace,
@@ -243,12 +277,6 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
         face_vert_indices = el_vert_indices[face_vertex_indices[ifac], ]
         # shape: *(ambient dim, num vertices on face)*
         face_verts = mm_mesh.vertices[:, face_vert_indices]
-        print("Face vertex indices=", face_vertex_indices)
-        print("iel=", iel)
-        print("ifac=", ifac)
-        print("el verts =", mm_mesh.groups[0].vertex_indices[iel])
-        print("orient=", orient[iel])
-        print()
         # Figure out which coordinate should have a fixed value, and what
         # that value is. Also, count how many times each boundary tag appears
         coord_index, val = None, None
@@ -259,10 +287,6 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
                 coord_index = coord_indices[bdy_id_index]
                 val = coord_values[bdy_id_index]
                 break
-        print('vert indices =', face_vert_indices)
-        print("Verts=", face_verts)
-        print("val=", val)
-        print("coord=", coord_index)
         assert np.max(np.abs(face_verts[coord_index, :] - val)) < CLOSE_ATOL
 
     # Verify that the number of meshes tagged with a boundary tag
@@ -276,6 +300,8 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
 # }}}
 
 
+# TODO : Add function transfer test for ToFiredrakeConnection
+# TODO : Add idempotency test for ToFiredrakeConnection
 # {{{  Double check functions are being transported correctly
 
 def alternating_sum_fd(spatial_coord):
@@ -313,7 +339,7 @@ test_functions = [
 @pytest.mark.parametrize("fdrake_f_expr,meshmode_f_eval", test_functions)
 @pytest.mark.parametrize("only_convert_bdy", (False, True))
 def test_function_transfer(ctx_factory,
-                           fdrake_mesh, fdrake_family, fdrake_degree,
+                           fdrake_mesh, fdrake_family, fspace_degree,
                            fdrake_f_expr, meshmode_f_eval,
                            only_convert_bdy):
     """
@@ -321,7 +347,7 @@ def test_function_transfer(ctx_factory,
     (up to resampling error) as creating a function on the transported
     mesh
     """
-    fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fdrake_degree)
+    fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fspace_degree)
     spatial_coord = SpatialCoordinate(fdrake_mesh)
 
     fdrake_f = Function(fdrake_fspace).interpolate(fdrake_f_expr(spatial_coord))
@@ -344,36 +370,33 @@ def test_function_transfer(ctx_factory,
 
 # }}}
 
-# TODO : Add idempotency test for FromBdyFiredrakeConnection
-
 
 # {{{ Idempotency tests fd->mm->fd and (fd->)mm->fd->mm for connection
-
 
 @pytest.mark.parametrize("fspace_type", ("scalar", "vector", "tensor"))
 @pytest.mark.parametrize("only_convert_bdy", (False, True))
 def test_idempotency(ctx_factory,
-                     fdrake_mesh, fdrake_family, fdrake_degree,
+                     fdrake_mesh, fdrake_family, fspace_degree,
                      fspace_type, only_convert_bdy):
     """
     Make sure fd->mm->fd and mm->fd->mm are identity
     """
     # Make a function space and a function with unique values at each node
     if fspace_type == "scalar":
-        fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fdrake_degree)
+        fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fspace_degree)
         # Just use the node nr
         fdrake_unique = Function(fdrake_fspace)
         fdrake_unique.dat.data[:] = np.arange(fdrake_unique.dat.data.shape[0])
     elif fspace_type == "vector":
         fdrake_fspace = VectorFunctionSpace(fdrake_mesh, fdrake_family,
-                                             fdrake_degree)
+                                             fspace_degree)
         # use the coordinates
         xx = SpatialCoordinate(fdrake_fspace.mesh())
         fdrake_unique = Function(fdrake_fspace).interpolate(xx)
     elif fspace_type == "tensor":
         fdrake_fspace = TensorFunctionSpace(fdrake_mesh,
                                             fdrake_family,
-                                            fdrake_degree)
+                                            fspace_degree)
         # use the coordinates, duplicated into the right tensor shape
         xx = SpatialCoordinate(fdrake_fspace.mesh())
         dim = fdrake_fspace.mesh().geometric_dimension()
