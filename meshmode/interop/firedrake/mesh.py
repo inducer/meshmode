@@ -652,7 +652,6 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
 
 # {{{ Mesh exporting to firedrake
 
-# TODO : Keep boundary tagging
 def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     """
     Create a firedrake mesh corresponding to one :class:`Mesh`'s
@@ -689,7 +688,9 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
           of the *c*th meshmode element.
 
     .. warning::
-        Currently, no boundary tags are exported along with the mesh.
+        Currently, no custom boundary tags are exported along with the mesh.
+        :mod:`firedrake` seems to only allow one marker on each facet, whereas
+        :mod:`meshmode` allows many.
     """
     if not isinstance(mesh, Mesh):
         raise TypeError(":arg:`mesh` must of type :class:`meshmode.mesh.Mesh`,"
