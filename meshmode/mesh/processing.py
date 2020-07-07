@@ -383,10 +383,9 @@ def get_simplex_element_flip_matrix(order, unit_nodes, permutation=None):
                         the *permutation[i]*th coordinate.
 
     :return: A numpy array of shape *(nunit_nodes, nunit_nodes)*
-             which, when applied
-             to the matrix of nodes (shaped *(dim, nunit_nodes)*)
-             corresponds to the first two barycentric coordinates
-             being swapped
+             which, when its transpose is right-applied
+             to the matrix of nodes (shaped *(dim, nunit_nodes)*),
+             corresponds to the permutation being applied
     """
     from modepy.tools import barycentric_to_unit, unit_to_barycentric
 
@@ -397,7 +396,7 @@ def get_simplex_element_flip_matrix(order, unit_nodes, permutation=None):
         flipped_bary_unit_nodes[0, :] = bary_unit_nodes[1, :]
         flipped_bary_unit_nodes[1, :] = bary_unit_nodes[0, :]
     else:
-        flipped_bary_unit_nodes[:] = bary_unit_nodes[permutation, :]
+        flipped_bary_unit_nodes[permutation, :] = bary_unit_nodes
     flipped_unit_nodes = barycentric_to_unit(flipped_bary_unit_nodes)
 
     dim = unit_nodes.shape[0]
