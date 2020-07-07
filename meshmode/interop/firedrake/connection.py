@@ -53,7 +53,7 @@ def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
 
     :arg orient: An array of shape *(nelements)* of orientations,
                  >0 for positive, <0 for negative
-    :arg nodes: a *(nelements, nunit_nodes)* or shaped array of nodes
+    :arg nodes: a *(nelements, nunit_nodes)* shaped array of nodes
     :arg flip_matrix: The matrix used to flip each negatively-oriented
                       element
     :arg unflip: If *True*, use transpose of *flip_matrix* to
@@ -647,29 +647,42 @@ class ToFiredrakeConnection(FiredrakeConnection):
         fd_mesh, fd_cell_order, perm2cells = \
             export_mesh_to_firedrake(discr.mesh, group_nr, comm)
         fspace = FunctionSpace(fd_mesh, 'DG', el_group.order)
+        # get firedrake unit nodes and map onto meshmode reference element
+        dim = fspace.mesh().topological_dimension()
+        fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(dim, True)
+        fd_unit_nodes = get_finat_element_unit_nodes(fspace.finat_element)
+        fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
+
         # To get the meshmode to firedrake node assocation, we need to handle
         # local vertex reordering and cell reordering.
         #
-        # Get a copy of cell_node_list with local vertex reordering undone
-        reordered_cell_node_list = np.copy(fspace.cell_node_list)
+        # **_cell_node holds the node nrs in shape *(ncells, nunit_nodes)*
+        fd_cell_node = fspace.cell_node_list
+        mm_cell_node = el_group.view(np.arange(discr.nnodes))
+        reordering_arr = np.arange(el_group.nnodes, dtype=fd_cell_node.dtype)
         for perm, cells in six.iteritems(perm2cells):
-            perm_inv = tuple(np.argsort(perm))
+            # reordering_arr[i] should be the fd node corresponding to meshmode
+            # node i
+            #
+            # The jth meshmode cell corresponds to the fd_cell_order[j]th
+            # firedrake cell. If *nodeperm* is the permutation of local nodes
+            # applied to the *j*th meshmode cell, the firedrake node
+            # fd_cell_node[fd_cell_order[j]][k] corresponds to the
+            # mm_cell_node[j, nodeperm[k]]th meshmode node.
+            #
+            # Note that the permutation on the unit nodes may not be the
+            # same as the permutation on the barycentric coordinates (*perm*).
+            # Importantly, the permutation is derived from getting a flip
+            # matrix from the Firedrake unit nodes, not necessarily the meshmode
+            # unit nodes
+            #
             flip_mat = get_simplex_element_flip_matrix(el_group.order,
-                                                       el_group.unit_nodes,
-                                                       perm_inv)
-            reordered_cell_node_list[cells] = \
-                np.einsum("ij,jk->ik",
-                          fspace.cell_node_list[cells],
-                          np.rint(flip_mat))
-
-        # making reordering_arr using the discr then assign using a view of it
-        reordering_arr = np.arange(discr.nnodes,
-                                   dtype=fspace.cell_node_list.dtype)
-        by_cell_view = el_group.view(reordering_arr)
-        by_cell_view = reordered_cell_node_list[fd_cell_order]  # noqa : F841
-        # we only want to keep the part relevant to el_group, the rest of the
-        # array was just there so we could use *el_group.view*
-        reordering_arr = reordering_arr[el_group.node_nr_base:el_group.nnodes]
+                                                       fd_unit_nodes,
+                                                       np.argsort(perm))
+            flip_mat = np.rint(flip_mat).astype(np.int32)
+            fd_permuted_cell_node = np.matmul(fd_cell_node[fd_cell_order[cells]],
+                                              flip_mat.T)
+            reordering_arr[mm_cell_node[cells]] = fd_permuted_cell_node
 
         super(ToFiredrakeConnection, self).__init__(discr,
                                                     fspace,

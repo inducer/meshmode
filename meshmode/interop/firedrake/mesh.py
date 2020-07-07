@@ -75,14 +75,14 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
     # If you don't understand dmplex, look at the PETSc reference
     # here: https://cse.buffalo.edu/~knepley/classes/caam519/CSBook.pdf
     # used to get topology info
-    # FIXME... not sure how to get around the private access
+    # FIXME : not sure how to get around the private access
     top_dm = top._topology_dm
 
     # Get range of dmplex ids for cells, facets, and vertices
     f_start, f_end = top_dm.getHeightStratum(1)
     v_start, v_end = top_dm.getDepthStratum(0)
 
-    # FIXME... not sure how to get around the private accesses
+    # FIXME : not sure how to get around the private accesses
     # Maps dmplex vert id -> firedrake vert index
     vert_id_dmp_to_fd = top._vertex_numbering.getOffset
 
@@ -678,8 +678,9 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
           *mesh.groups[group_nr].vertex_indices*) corresponds to the
           *fdrake_cell_ordering[i]*th :mod:`firedrake` cell
         * *perm2cell* is a dictionary, mapping tuples to
-          lists of meshmode element indices. Each meshmode element index
-          appears in exactly one of these lists. The corresponding
+          1-D numpy arrays of meshmode element indices.
+          Each meshmode element index
+          appears in exactly one of these arrays. The corresponding
           tuple describes how firedrake reordered the local vertex
           indices on that cell. In particular, if *c*
           is in the list *perm2cell[p]* for a tuple *p*, then
@@ -714,7 +715,7 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     if comm is None:
         from pyop2.mpi import COMM_WORLD
         comm = COMM_WORLD
-    # FIXME : this is a private member..., and there are some below
+    # FIXME : not sure how to get around the private accesses
     import firedrake.mesh as fd_mesh
     plex = fd_mesh._from_cell_list(group.dim, cells, coords, comm)
     # Nb : One might be tempted to pass reorder=False and thereby save some
@@ -758,6 +759,8 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
         perm = tuple(np.argsort(mm_order)[np.argsort(np.argsort(fdrake_order))])
         perm2cells.setdefault(perm, [])
         perm2cells[perm].append(mm_cell_id)
+    perm2cells = {perm: np.array(cells)
+                  for perm, cells in six.iteritems(perm2cells)}
 
     # Now make a coordinates function
     from firedrake import VectorFunctionSpace, Function
@@ -791,8 +794,8 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
         flip_mat = get_simplex_element_flip_matrix(group.order,
                                                    group.unit_nodes,
                                                    perm)
-        flipped_group_nodes[:, cells, :] = \
-            np.einsum("ijk,ke->ije", group.nodes[:, cells, :], flip_mat)
+        flipped_group_nodes[:, cells, :] = np.matmul(group.nodes[:, cells, :],
+                                                     flip_mat.T)
 
     # reorder to firedrake cell ordering
     reordered_cell_node_list = coords_fspace.cell_node_list[cell_index_mm2fd]
