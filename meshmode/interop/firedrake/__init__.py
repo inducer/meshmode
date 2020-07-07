@@ -21,7 +21,6 @@ THE SOFTWARE.
 """
 
 
-import numpy as np
 from meshmode.interop.firedrake.connection import (
     FromBdyFiredrakeConnection, FromFiredrakeConnection, ToFiredrakeConnection)
 from meshmode.interop.firedrake.mesh import import_firedrake_mesh
@@ -29,18 +28,3 @@ from meshmode.interop.firedrake.mesh import import_firedrake_mesh
 __all__ = ["FromBdyFiredrakeConnection", "FromFiredrakeConnection",
            "ToFiredrakeConnection", "import_firedrake_mesh",
            ]
-
-
-def _compute_cells_near_bdy(mesh, bdy_id):
-    """
-    Returns an array of the cell ids with >= 1 vertex on the
-    given bdy_id
-    """
-    cfspace = mesh.coordinates.function_space()
-    cell_node_list = cfspace.cell_node_list
-
-    boundary_nodes = cfspace.boundary_nodes(bdy_id, 'topological')
-    # Reduce along each cell: Is a vertex of the cell in boundary nodes?
-    cell_is_near_bdy = np.any(np.isin(cell_node_list, boundary_nodes), axis=1)
-
-    return np.arange(cell_node_list.shape[0], dtype=np.int32)[cell_is_near_bdy]
