@@ -300,7 +300,6 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
 # }}}
 
 
-# TODO : Add idempotency test for ToFiredrakeConnection
 # TODO : Add test for ToFiredrakeConnection where group_nr != 0
 # {{{  Double check functions are being transported correctly
 
@@ -419,11 +418,11 @@ def test_to_fd_transfer(ctx_factory, mm_mesh, fspace_degree,
 
 @pytest.mark.parametrize("fspace_type", ("scalar", "vector", "tensor"))
 @pytest.mark.parametrize("only_convert_bdy", (False, True))
-def test_idempotency(ctx_factory,
-                     fdrake_mesh, fdrake_family, fspace_degree,
-                     fspace_type, only_convert_bdy):
+def test_from_fd_idempotency(ctx_factory,
+                             fdrake_mesh, fdrake_family, fspace_degree,
+                             fspace_type, only_convert_bdy):
     """
-    Make sure fd->mm->fd and mm->fd->mm are identity
+    Make sure fd->mm->fd and (fd->)->mm->fd->mm are identity
     """
     # Make a function space and a function with unique values at each node
     if fspace_type == "scalar":
@@ -481,6 +480,31 @@ def test_idempotency(ctx_factory,
     # Test for idempotency (fd->)mm->fd->mm
     mm_field_copy = fdrake_connection.from_firedrake(fdrake_unique_copy)
     np.testing.assert_allclose(mm_field_copy, mm_field, atol=CLOSE_ATOL)
+
+
+def test_to_fd_idempotency(ctx_factory, mm_mesh, fspace_degree):
+    """
+    Make sure mm->fd->mm and (mm->)->fd->mm->fd are identity
+    """
+    # Make a function space and a function with unique values at each node
+    cl_ctx = ctx_factory()
+    factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
+    discr = Discretization(cl_ctx, mm_mesh, factory)
+    fdrake_connection = ToFiredrakeConnection(discr)
+    mm_unique = np.arange(discr.nnodes, dtype=np.float64)
+    mm_unique_copy = np.copy(mm_unique)
+
+    # Test for idempotency mm->fd->mm
+    fdrake_unique = fdrake_connection.from_meshmode(mm_unique)
+    fdrake_connection.from_firedrake(fdrake_unique, mm_unique_copy)
+
+    np.testing.assert_allclose(mm_unique_copy, mm_unique, atol=CLOSE_ATOL)
+
+    # Test for idempotency (mm->)fd->mm->fd
+    fdrake_unique_copy = fdrake_connection.from_meshmode(mm_unique_copy)
+    np.testing.assert_allclose(fdrake_unique_copy.dat.data,
+                               fdrake_unique.dat.data,
+                               atol=CLOSE_ATOL)
 
 # }}}
 
