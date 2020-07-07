@@ -86,13 +86,14 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
     # Maps dmplex vert id -> firedrake vert index
     vert_id_dmp_to_fd = top._vertex_numbering.getOffset
 
-    # We will fill in the values as we go
+    # We will fill in the values of vertex indices as we go
     if cells_to_use is None:
         num_cells = top.num_cells()
     else:
         num_cells = np.size(cells_to_use)
+    from pyop2.datatypes import IntType
     vertex_indices = -np.ones((num_cells, top.ufl_cell().num_vertices()),
-                              dtype=np.int32)
+                              dtype=IntType)
     # This will map fd cell ndx (or its new index as dictated by
     #                            *cells_to_use* if *cells_to_use*
     #                            is not *None*)
@@ -146,12 +147,12 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
         num_cells = top.num_cells()
     else:
         num_cells = np.size(cells_to_use)
-    neighbors_starts = np.zeros(num_cells + 1, dtype=np.int32)
+    neighbors_starts = np.zeros(num_cells + 1, dtype=IntType)
     for iel in range(len(cell_to_nodal_neighbors)):
         neighbors += cell_to_nodal_neighbors[iel]
         neighbors_starts[iel+1] = len(neighbors)
 
-    neighbors = np.array(neighbors, dtype=np.int32)
+    neighbors = np.array(neighbors, dtype=IntType)
 
     nodal_adjacency = NodalAdjacency(neighbors_starts=neighbors_starts,
                                      neighbors=neighbors)
@@ -268,10 +269,12 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                          int_fac_loc_nr[:, 0]))
     int_neighbor_faces = int_neighbor_faces.astype(Mesh.face_id_dtype)
     # If only using some of the cells
+    from pyop2.datatypes import IntType
     if cells_to_use is not None:
         to_keep = np.isin(int_elements, cells_to_use)
         cells_to_use_inv = dict(zip(cells_to_use,
-                                    np.arange(np.size(cells_to_use))))
+                                    np.arange(np.size(cells_to_use),
+                                              dtype=IntType)))
 
         # Only keep cells that using, and change to new cell index
         int_elements = np.vectorize(cells_to_use_inv.__getitem__)(
@@ -301,8 +304,8 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     ext_elements = top.exterior_facets.facet_cell.flatten()
 
     ext_element_faces = np.array([fd_loc_fac_nr_to_mm[fac_nr] for fac_nr in
-                                  top.exterior_facets.local_facet_dat.data])
-    ext_element_faces = ext_element_faces.astype(Mesh.face_id_dtype)
+                                  top.exterior_facets.local_facet_dat.data],
+                                 dtype=Mesh.face_id_dtype)
     ext_neighbor_faces = np.zeros(ext_element_faces.shape,
                                   dtype=Mesh.face_id_dtype)
     # If only using some of the cells, throw away unused cells and
@@ -315,7 +318,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         ext_neighbor_faces = ext_neighbor_faces[to_keep]
 
     # tag the boundary
-    ext_neighbors = np.zeros(ext_elements.shape, dtype=np.int32)
+    ext_neighbors = np.zeros(ext_elements.shape, dtype=IntType)
     for ifac, marker in enumerate(top.exterior_facets.markers):
         ext_neighbors[ifac] = -(boundary_tag_bit(BTAG_ALL)
                                 | boundary_tag_bit(BTAG_REALLY_ALL)

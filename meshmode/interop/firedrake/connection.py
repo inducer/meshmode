@@ -541,7 +541,8 @@ def _compute_cells_near_bdy(mesh, bdy_id):
     # Reduce along each cell: Is a vertex of the cell in boundary nodes?
     cell_is_near_bdy = np.any(np.isin(cell_node_list, boundary_nodes), axis=1)
 
-    return np.nonzero(cell_is_near_bdy)[0].astype(np.int32)
+    from pyop2.datatypes import IntType
+    return np.nonzero(cell_is_near_bdy)[0].astype(IntType)
 
 
 class FromBdyFiredrakeConnection(FiredrakeConnection):
@@ -653,13 +654,14 @@ class ToFiredrakeConnection(FiredrakeConnection):
         fd_unit_nodes = get_finat_element_unit_nodes(fspace.finat_element)
         fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
 
-        # To get the meshmode to firedrake node assocation, we need to handle
-        # local vertex reordering and cell reordering.
-        #
         # **_cell_node holds the node nrs in shape *(ncells, nunit_nodes)*
         fd_cell_node = fspace.cell_node_list
         mm_cell_node = el_group.view(np.arange(discr.nnodes))
-        reordering_arr = np.arange(el_group.nnodes, dtype=fd_cell_node.dtype)
+
+        # To get the meshmode to firedrake node assocation, we need to handle
+        # local vertex reordering and cell reordering.
+        from pyop2.datatypes import IntType
+        reordering_arr = np.arange(el_group.nnodes, dtype=IntType)
         for perm, cells in six.iteritems(perm2cells):
             # reordering_arr[i] should be the fd node corresponding to meshmode
             # node i
@@ -679,7 +681,7 @@ class ToFiredrakeConnection(FiredrakeConnection):
             flip_mat = get_simplex_element_flip_matrix(el_group.order,
                                                        fd_unit_nodes,
                                                        np.argsort(perm))
-            flip_mat = np.rint(flip_mat).astype(np.int32)
+            flip_mat = np.rint(flip_mat).astype(IntType)
             fd_permuted_cell_node = np.matmul(fd_cell_node[fd_cell_order[cells]],
                                               flip_mat.T)
             reordering_arr[mm_cell_node[cells]] = fd_permuted_cell_node
