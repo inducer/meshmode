@@ -321,6 +321,9 @@ def make_group_from_vertices(vertices, vertex_indices, order,
         group_factory = SimplexElementGroup
 
     if issubclass(group_factory, SimplexElementGroup):
+        if order < 1:
+            raise ValueError("can't represent simplices with mesh order < 1")
+
         el_origins = el_vertices[:, :, 0][:, :, np.newaxis]
         # ambient_dim, nelements, nspan_vectors
         spanning_vectors = (

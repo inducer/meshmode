@@ -212,7 +212,11 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
     @memoize_method
     def unit_nodes(self):
         dim = self.mesh_el_group.dim
-        result = mp.warp_and_blend_nodes(dim, self.order)
+        if self.order == 0:
+            result = mp.warp_and_blend_nodes(dim, 1)
+            result = np.mean(result, axis=1).reshape(-1, 1)
+        else:
+            result = mp.warp_and_blend_nodes(dim, self.order)
 
         dim2, nunit_nodes = result.shape
         assert dim2 == dim
