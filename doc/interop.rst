@@ -11,6 +11,14 @@ Firedrake
 Function Spaces/Discretizations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Users wishing to interact with :mod:`meshmode` from :mod:`firedrake`
+will primarily interact with the :class:`FromFiredrakeConnection` and
+:class:`FromBdyFiredrakeConnection` classes, while users wishing
+to interact with :mod:`firedrake` from :mod:`meshmode` will use
+the :class:`ToFiredrakeConnection` class. All of these classes inherit from
+the :class:`FiredrakeConnection` class, which provides the interface.
+It is not recommended to create a :class:`FiredrakeConnection` directly.
+
 .. automodule:: meshmode.interop.firedrake.connection
 
 Meshes
@@ -31,8 +39,8 @@ Converting between :mod:`firedrake` and :mod:`meshmode` is in general
 straightforward. Some language is different:
 
 * In a mesh, a :mod:`meshmode` "element" is a :mod:`firedrake` "cell"
-* A :class:`meshmode.Discretization` is a :mod:`firedrake`
-  :class:`WithGeometry`, usually
+* A :class:`meshmode.discretization.Discretization` is a :mod:`firedrake`
+  :class:`firedrake.functionspaceimpl.WithGeometry`, usually
   created by calling the function :func:`firedrake.functionspace.FunctionSpace`
   and referred to as a "function space"
 * In a mesh, any vertices, faces, cells, etc. are :mod:`firedrake`
@@ -43,21 +51,92 @@ straightforward. Some language is different:
 Other than carefully tabulating how and which vertices/faces
 correspond to other vertices/faces/cells, there are two main difficulties.
 
-1. :mod:`meshmode` requires that all mesh elements be positively oriented,
-   :mod:`firedrake` does not.
-2. :mod:`meshmode` has discontinuous polynomial function spaces
-   which use different nodes than :mod:`firedrake`.
+1. :mod:`meshmode` has discontinuous polynomial function spaces
+   which use different unit nodes than :mod:`firedrake`.
+2. :mod:`meshmode` requires that all mesh elements be positively oriented,
+   :mod:`firedrake` does not. Meanwhile, when :mod:`firedrake` creates
+   a mesh, it changes the element ordering and the local vertex ordering.
 
-Consequently, any :mod:`firedrake` :class:`firedrake.function.Function`
-whose data is converted onto a corresponding :class:`Discretization`
-using a :class:`FromFiredrakeConnection` instance is
-first reordered (as the converted mesh was reordered to have
-positively oriented elements) and then resampled at the :mod:`meshmode`
-nodes.
+(1.) is easily handled by insisting that the :mod:`firedrake`
+:class:`firedrake.functionspaceimpl.WithGeometry` uses polynomial elements
+and that the group of the :class:`meshmode.discretization.Discretization`
+being converted is a
+:class:`meshmode.discretization.poly_element.InterpolatoryQuadratureSimplexElementGroup`
+of the same order. Then, on each element, the function space being
+represented is the same in :mod:`firedrake` or :mod:`meshmode`.
+We may simply resample to one system or another's unit nodes.
+
+To handle (2.),
+once we associate a :mod:`meshmode`
+element to the correct :mod:`firedrake` cell, we have something
+like this picture:
+
+.. graphviz::
+
+    digraph{
+        // created with graphviz2.38 dot
+        // NODES
+
+        mmNodes [label="Meshmode\nnodes"];
+        mmRef   [label="Meshmode\nunit nodes"];
+        fdRef   [label="Firedrake\nunit nodes"];
+        fdNodes [label="Firedrake\nnodes"];
+
+        // EDGES
+
+        mmRef -> mmNodes [label=" f "];
+        fdRef -> fdNodes [label=" g "];
+    }
+
+(Assume we have already
+ensured that :mod:`meshmode` and :mod:`firedrake` use the
+same reference element by mapping :mod:`firedrake`'s reference
+element onto :mod:`meshmode`'s).
+If :math:`f=g`, then we can resample function values from
+one node set to the other. However, if :mod:`firedrake`
+has reordered the vertices or if we flipped their order to
+ensure :mod:`meshmode` has positively-oriented elements,
+there is some map :math:`A` applied to the reference element
+which implements this permutation of barycentric coordinates.
+In this case, :math:`f=g\circ A`. Now, we have a connected diagram:
+
+.. graphviz::
+
+    digraph{
+        // created with graphviz2.38 dot
+        // NODES
+
+        mmNodes [label="Meshmode\nnodes"];
+        mmRef   [label="Meshmode\nunit nodes"];
+        fdRef   [label="Firedrake\nunit nodes"];
+        fdRef2  [label="Firedrake\nunit nodes"];
+        fdNodes [label="Firedrake\nnodes"];
+
+        // EDGES
+
+        {rank=same; mmRef; fdRef;}
+        {rank=same; mmNodes; fdNodes;}
+        mmRef -> fdRef [label="Resampling", dir="both"];
+        mmRef -> mmNodes [label=" f "];
+        fdRef -> fdRef2 [label=" A "];
+        fdRef2 -> fdNodes [label=" g "];
+    }
+
+In short, once we reorder the :mod:`firedrake` nodes so
+that the mapping from the :mod:`meshmode` and :mod:`firedrake`
+reference elements are the same, we can resample function values
+at nodes from one set of unit nodes to another (and then undo
+the reordering if converting function values
+from :mod:`meshmode` to :mod:`firedrake`). The
+information for this whole reordering process is
+stored in :attr:`FiredrakeConnection.mm2fd_node_mapping`,
+an array which associates each :mod:`meshmode` node
+to the :mod:`firedrake` node found by tracing the
+above diagram (i.e. it stores
+:math:`g\circ A\circ Resampling \circ f^{-1}`).
 
 For Developers: Firedrake Function Space Design Crash Course
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
 
 In firedrake, meshes and function spaces have a close relationship.
 In particular, this is  due to some structure described in this
