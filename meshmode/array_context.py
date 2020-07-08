@@ -162,7 +162,7 @@ class ArrayContext:
         v = make_zero_and_vars(var_names, params=size_names)
         domain = v[0].domain()
         for vname, sname in zip(var_names, size_names):
-            domain = domain & v[0].le_set(v[vname]) & v[vname].le_set(v[sname])
+            domain = domain & v[0].le_set(v[vname]) & v[vname].lt_set(v[sname])
 
         domain_bset, = domain.get_basic_sets()
 
