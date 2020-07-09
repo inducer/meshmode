@@ -29,6 +29,12 @@ import pyopencl as cl
 #     written by Andreas Klockner:
 #    https://gitlab.tiker.net/inducer/meshmode/-/blob/7826fa5e13854bf1dae425b4226865acc10ee01f/examples/simple-dg.py  # noqa : E501
 def main():
+    # If can't import firedrake, do nothing
+    try:
+        import firedrake
+    except ImportError:
+        return 0
+
     # For this example, imagine we wish to solve the Laplace equation
     # on a meshmode mesh with some given Dirichlet boundary conditions,
     # and decide to use firedrake.
