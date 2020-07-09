@@ -31,7 +31,7 @@ import pyopencl as cl
 def main():
     # If can't import firedrake, do nothing
     try:
-        import firedrake
+        import firedrake  # noqa : F401
     except ImportError:
         return 0
 
