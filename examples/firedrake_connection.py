@@ -34,7 +34,7 @@ def main():
     # and decide to use firedrake.
     #
     # To verify this is working, we use a solution to the wave equation
-    # (see :func:`bump`) to get our boundary conditions
+    # to get our boundary conditions
 
     # {{{ First we make a discretization in meshmode and get our bcs
 
