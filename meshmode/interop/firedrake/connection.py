@@ -378,6 +378,9 @@ class FiredrakeConnection:
             raise ValueError("Trying to convert to continuous function space "
                              " with :arg:`assert_fdrake_discontinuous` set "
                              " to *True*")
+        if not isinstance(mm_field, np.ndarray):
+            raise TypeError(":param:`mm_field` must be of type "
+                            ":class:`np.ndarray`, not %s." % type(mm_field))
         # make sure out is a firedrake function in an appropriate
         # function space
         from firedrake.function import Function
