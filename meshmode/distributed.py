@@ -128,15 +128,14 @@ class MPIBoundaryCommSetupHelper(object):
     .. automethod:: __call__
     .. automethod:: is_ready
     """
-    def __init__(self, mpi_comm, queue, local_bdry_conn, i_remote_part,
+    def __init__(self, mpi_comm, actx, local_bdry_conn, i_remote_part,
             bdry_grp_factory):
         """
         :arg mpi_comm: A :class:`MPI.Intracomm`
-        :arg queue:
         :arg i_remote_part: The part number of the remote partition
         """
         self.mpi_comm = mpi_comm
-        self.queue = queue
+        self.array_context = actx
         self.i_local_part = mpi_comm.Get_rank()
         self.i_remote_part = i_remote_part
         self.local_bdry_conn = local_bdry_conn
@@ -151,9 +150,11 @@ class MPIBoundaryCommSetupHelper(object):
                          for i in range(len(local_mesh.groups))]
         local_to_elem_faces = [[batch.to_element_face for batch in grp_batches]
                                 for grp_batches in local_batches]
-        local_to_elem_indices = [[batch.to_element_indices.get(queue=self.queue)
-                                        for batch in grp_batches]
-                                    for grp_batches in local_batches]
+        local_to_elem_indices = [
+                [
+                    self.array_context.to_numpy(batch.to_element_indices)
+                    for batch in grp_batches]
+                for grp_batches in local_batches]
 
         local_data = {'bdry_mesh': local_bdry.mesh,
                       'adj': local_adj_groups,
@@ -190,7 +191,7 @@ class MPIBoundaryCommSetupHelper(object):
 
         from meshmode.discretization import Discretization
         remote_bdry_mesh = remote_data['bdry_mesh']
-        remote_bdry = Discretization(self.queue.context, remote_bdry_mesh,
+        remote_bdry = Discretization(self.array_context, remote_bdry_mesh,
                                      self.bdry_grp_factory)
         remote_adj_groups = remote_data['adj']
         remote_to_elem_faces = remote_data['to_elem_faces']
@@ -198,12 +199,11 @@ class MPIBoundaryCommSetupHelper(object):
 
         # Connect local_mesh to remote_mesh
         from meshmode.discretization.connection import make_partition_connection
-        remote_to_local_bdry_conn = make_partition_connection(self.local_bdry_conn,
-                                                              self.i_local_part,
-                                                              remote_bdry,
-                                                              remote_adj_groups,
-                                                              remote_to_elem_faces,
-                                                              remote_to_elem_indices)
+        remote_to_local_bdry_conn = make_partition_connection(
+                self.array_context, self.local_bdry_conn, self.i_local_part,
+                remote_bdry, remote_adj_groups, remote_to_elem_faces,
+                remote_to_elem_indices)
+
         self.send_req.wait()
         return remote_to_local_bdry_conn
 

@@ -321,6 +321,9 @@ def make_group_from_vertices(vertices, vertex_indices, order,
         group_factory = SimplexElementGroup
 
     if issubclass(group_factory, SimplexElementGroup):
+        if order < 1:
+            raise ValueError("can't represent simplices with mesh order < 1")
+
         el_origins = el_vertices[:, :, 0][:, :, np.newaxis]
         # ambient_dim, nelements, nspan_vectors
         spanning_vectors = (
@@ -811,10 +814,9 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     axes = ["x", "y", "z", "w"]
 
     if boundary_tags:
-        from pytools import indices_in_shape
         vert_index_to_tuple = {
                 vertex_indices[itup]: itup
-                for itup in indices_in_shape(shape)}
+                for itup in np.ndindex(shape)}
 
     for tag_idx, tag in enumerate(boundary_tags):
         # Need to map the correct face vertices to the boundary tags
