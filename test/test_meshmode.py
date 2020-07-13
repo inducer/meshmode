@@ -39,7 +39,7 @@ from meshmode.discretization.poly_element import (
         )
 from meshmode.mesh import Mesh, BTAG_ALL
 from meshmode.array_context import PyOpenCLArrayContext
-from meshmode.dof_array import thaw, flat_norm, flatten
+from meshmode.dof_array import thaw, flat_norm, flatten, unflatten
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -1445,6 +1445,38 @@ def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
             em_bdry_f = embedding(bdry_f)
             error = flat_norm(bdry_f - em_bdry_f)
             assert error < 1.0e-11, error
+
+
+def test_array_context_np_workalike(ctx_factory):
+    ctx = ctx_factory()
+    queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
+
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh = generate_regular_rect_mesh(
+            a=(-0.5,)*2, b=(0.5,)*2, n=(8,)*2, order=3)
+
+    from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import \
+            PolynomialWarpAndBlendGroupFactory as GroupFactory
+    discr = Discretization(actx, mesh, GroupFactory(3))
+
+    for sym_name, n_args in [
+            ("sin", 1),
+            ("exp", 1),
+            ("arctan2", 2),
+            ("minimum", 2),
+            ("maximum", 2),
+            ]:
+        args = [np.random.randn(discr.ndofs) for i in range(n_args)]
+        ref_result = getattr(np, sym_name)(*args)
+
+        actx_args = [unflatten(actx, discr, actx.from_numpy(arg)) for arg in args]
+
+        actx_result = actx.to_numpy(
+                flatten(getattr(actx.np, sym_name)(*actx_args)))
+
+        assert np.allclose(actx_result, ref_result)
 
 
 if __name__ == "__main__":
