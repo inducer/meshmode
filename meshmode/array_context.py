@@ -153,6 +153,14 @@ class ArrayContext:
 
     @memoize_method
     def _get_scalar_func_loopy_program(self, name, nargs, naxes):
+        if name == "arctan2":
+            name = "atan2"
+        elif name == "atan2":
+            from warnings import warn
+            warn("'atan2' in ArrayContext.np is deprecated. Use 'arctan2', "
+                    "as in numpy2. This will be disallowed in 2021.",
+                    DeprecationWarning, stacklevel=3)
+
         from pymbolic import var
 
         var_names = ["i%d" % i for i in range(naxes)]
