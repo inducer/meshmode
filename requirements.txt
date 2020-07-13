@@ -13,9 +13,9 @@ git+https://gitlab.tiker.net/inducer/pymbolic.git
 git+https://gitlab.tiker.net/inducer/loopy.git
 
 # more pytential dependencies
-git+https://gitlab.tiker.net/inducer/boxtree.git
-git+https://gitlab.tiker.net/inducer/sumpy.git
-git+https://gitlab.tiker.net/inducer/pytential.git@array-context
+git+https://github.com/inducer/boxtree.git
+git+https://github.com/inducer/sumpy.git
+git+https://github.com/inducer/pytential.git
 
 # requires pymetis for tests for partition_mesh
 git+https://gitlab.tiker.net/inducer/pymetis.git
