@@ -1483,9 +1483,10 @@ def test_array_context_np_workalike(ctx_factory):
         ref_result = np.where(((args[0] - args[1]) > 0), args[0], args[1])
 
         actx_args = [unflatten(actx, discr, actx.from_numpy(arg)) for arg in args]
-        actx_result = actx.to_numpy(
-            flatten(actx.np.where(((args[0] - args[1]) > 0), args[0], args[1]))
-        )
+        actx_cond = actx.from_numpy((args[0] - args[1]) > 0)
+        actx_result = actx.to_numpy(flatten(actx.np.where(actx_cond,
+                                                          actx_args[0],
+                                                          actx_args[1])))
 
         assert np.allclose(actx_result, ref_result)
 
