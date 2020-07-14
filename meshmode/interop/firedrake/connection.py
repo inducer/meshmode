@@ -368,7 +368,8 @@ class FiredrakeConnection:
             same firedrake node (meshmode is a discontinuous space, so this
             situation will almost certainly happen), the function being transported
             has values at most *continuity_tolerance* distance
-            apart. If *None*, no checks are performed.
+            apart. If *None*, no checks are performed. Does nothing if
+            the firedrake function space is discontinuous
 
         :return: a :mod:`firedrake` :class:`Function` holding the transported
             data.
@@ -637,7 +638,9 @@ class ToFiredrakeConnection(FiredrakeConnection):
         :param discr: A :class:`Discretization` to intialize the connection with
         :param group_nr: The group number of the discretization to convert.
             If *None* there must be only one group. The selected group
-            must be of type :class:`InterpolatoryQuadratureSimplexElementGroup`
+            must be of type :class:`InterpolatoryQuadratureSimplexElementGroup`.
+            The mesh group ``discr.mesh.groups[group_nr]`` must have
+            order less than or equal to the order of ``discr.groups[group_nr]``.
         :param comm: Communicator to build a dmplex object on for the created
             firedrake mesh
         """
@@ -645,6 +648,10 @@ class ToFiredrakeConnection(FiredrakeConnection):
             assert len(discr.groups) == 1, ":arg:`group_nr` is *None*, but " \
                     ":arg:`discr` has %s != 1 groups." % len(discr.groups)
             group_nr = 0
+        if discr.groups[group_nr].order < discr.mesh.groups[group_nr].order:
+            raise ValueError("Discretization group order must be greater than "
+                             "or equal to the corresponding mesh group's "
+                             "order.")
         el_group = discr.groups[group_nr]
 
         from firedrake.functionspace import FunctionSpace
@@ -693,6 +700,9 @@ class ToFiredrakeConnection(FiredrakeConnection):
                                                     fspace,
                                                     reordering_arr,
                                                     group_nr=group_nr)
+        assert len(self._duplicate_nodes) == 0, \
+            "Somehow a firedrake node in a 'DG' space got duplicated..." \
+            "contact the developer."
 
 # }}}
 
