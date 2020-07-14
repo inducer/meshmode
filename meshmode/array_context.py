@@ -227,7 +227,7 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     @obj_array_vectorized_n_args
     def where(self, criterion, then, else_):
         import pyopencl.array as cl_array
-        return cl_array.if_positive(criterion.astype(np.bool), then, else_)
+        return cl_array.if_positive(criterion != 0, then, else_)
 
 
 class PyOpenCLArrayContext(ArrayContext):
