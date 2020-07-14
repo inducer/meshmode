@@ -1,3 +1,9 @@
+# TODO:
+#      * Make sure from_meshmode and from_firedrake receive
+#        DOFArrays
+#      * Make sure output of from_firedrake is treated as
+#        DOFArray
+#      * Run tests and debug
 __copyright__ = "Copyright (C) 2020 Benjamin Sepanski"
 
 __license__ = """
@@ -27,6 +33,8 @@ import six
 from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
+
+from meshmode.array_tools import PyOpenCLArrayContext
 
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import (
@@ -171,8 +179,12 @@ def test_fd2mm_consistency(ctx_factory, fdrake_mesh, fspace_degree):
     """
     # make discretization from firedrake
     fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fspace_degree)
+
     cl_ctx = ctx_factory()
-    fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
+    queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
+
+    fdrake_connection = FromFiredrakeConnection(actx, fdrake_fspace)
     discr = fdrake_connection.discr
     # Check consistency
     check_consistency(fdrake_fspace, discr)
@@ -180,9 +192,13 @@ def test_fd2mm_consistency(ctx_factory, fdrake_mesh, fspace_degree):
 
 def test_mm2fd_consistency(ctx_factory, mm_mesh, fspace_degree):
     fspace_degree += mm_mesh.groups[0].order
+
     cl_ctx = ctx_factory()
+    queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
+
     factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
-    discr = Discretization(cl_ctx, mm_mesh, factory)
+    discr = Discretization(actx, mm_mesh, factory)
     fdrake_connection = ToFiredrakeConnection(discr)
     fdrake_fspace = fdrake_connection.firedrake_fspace()
     # Check consistency
@@ -203,8 +219,12 @@ def test_from_bdy_consistency(ctx_factory,
     the right number of cells, etc.
     """
     fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fspace_degree)
+
     cl_ctx = ctx_factory()
-    frombdy_conn = FromBdyFiredrakeConnection(cl_ctx,
+    queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
+
+    frombdy_conn = FromBdyFiredrakeConnection(actx,
                                               fdrake_fspace,
                                               "on_boundary")
 
@@ -386,19 +406,21 @@ def test_from_fd_transfer(ctx_factory,
 
     # build connection
     cl_ctx = ctx_factory()
+    queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
+
     if only_convert_bdy:
-        fdrake_connection = FromBdyFiredrakeConnection(cl_ctx, fdrake_fspace,
+        fdrake_connection = FromBdyFiredrakeConnection(actx, fdrake_fspace,
                                                        'on_boundary')
     else:
-        fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
+        fdrake_connection = FromFiredrakeConnection(actx, fdrake_fspace)
 
     # transport fdrake function
     fd2mm_f = fdrake_connection.from_firedrake(fdrake_f)
 
     # build same function in meshmode
     discr = fdrake_connection.discr
-    with cl.CommandQueue(cl_ctx) as queue:
-        nodes = discr.nodes().get(queue=queue)
+    nodes = discr.nodes().get(queue=queue)
     meshmode_f = meshmode_f_eval(nodes)
 
     # fd -> mm should be same as creating in meshmode
@@ -409,7 +431,7 @@ def test_from_fd_transfer(ctx_factory,
         mm2fd_f = \
             fdrake_connection.from_meshmode(meshmode_f,
                                             assert_fdrake_discontinuous=False,
-                                           continuity_tolerance=1e-8)
+                                            continuity_tolerance=1e-8)
         # mm -> fd should be same as creating in firedrake
         np.testing.assert_allclose(fdrake_f.dat.data, mm2fd_f.dat.data,
                                    atol=CLOSE_ATOL)
@@ -426,11 +448,13 @@ def test_to_fd_transfer(ctx_factory, mm_mesh, fspace_degree,
     fspace_degree += mm_mesh.groups[0].order
     # Make discr and evaluate function in meshmode
     cl_ctx = ctx_factory()
-    factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
-    discr = Discretization(cl_ctx, mm_mesh, factory)
+    queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
 
-    with cl.CommandQueue(cl_ctx) as queue:
-        nodes = discr.nodes().get(queue=queue)
+    factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
+    discr = Discretization(actx, mm_mesh, factory)
+
+    nodes = discr.nodes().get(queue=queue)
     meshmode_f = meshmode_f_eval(nodes)
 
     # connect to firedrake and evaluate expr in firedrake
@@ -482,6 +506,8 @@ def test_from_fd_idempotency(ctx_factory,
 
     # Make connection
     cl_ctx = ctx_factory()
+    queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
 
     # If only converting boundary, first go ahead and do one round of
     # fd->mm->fd. This will zero out any degrees of freedom absent in
@@ -490,7 +516,7 @@ def test_from_fd_idempotency(ctx_factory,
     #
     # Otherwise, just continue as normal
     if only_convert_bdy:
-        fdrake_connection = FromBdyFiredrakeConnection(cl_ctx, fdrake_fspace,
+        fdrake_connection = FromBdyFiredrakeConnection(actx, fdrake_fspace,
                                                        'on_boundary')
         temp = fdrake_connection.from_firedrake(fdrake_unique)
         fdrake_unique = \
@@ -498,7 +524,7 @@ def test_from_fd_idempotency(ctx_factory,
                                             assert_fdrake_discontinuous=False,
                                             continuity_tolerance=1e-8)
     else:
-        fdrake_connection = FromFiredrakeConnection(cl_ctx, fdrake_fspace)
+        fdrake_connection = FromFiredrakeConnection(actx, fdrake_fspace)
 
     # Test for idempotency fd->mm->fd
     mm_field = fdrake_connection.from_firedrake(fdrake_unique)
@@ -520,11 +546,16 @@ def test_to_fd_idempotency(ctx_factory, mm_mesh, fspace_degree):
     """
     Make sure mm->fd->mm and (mm->)->fd->mm->fd are identity
     """
-    # Make a function space and a function with unique values at each node
-    fspace_degree += mm_mesh.groups[0].order
     cl_ctx = ctx_factory()
+    queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
+
+    # make sure degree is higher order than mesh
+    fspace_degree += mm_mesh.groups[0].order
+
+    # Make a function space and a function with unique values at each node
     factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
-    discr = Discretization(cl_ctx, mm_mesh, factory)
+    discr = Discretization(actx, mm_mesh, factory)
     fdrake_connection = ToFiredrakeConnection(discr)
     mm_unique = np.arange(discr.nnodes, dtype=np.float64)
     mm_unique_copy = np.copy(mm_unique)
