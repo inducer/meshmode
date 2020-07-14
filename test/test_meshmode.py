@@ -1467,6 +1467,7 @@ def test_array_context_np_workalike(ctx_factory):
             ("arctan2", 2),
             ("minimum", 2),
             ("maximum", 2),
+            ("where", 3),
             ]:
         args = [np.random.randn(discr.ndofs) for i in range(n_args)]
         ref_result = getattr(np, sym_name)(*args)
