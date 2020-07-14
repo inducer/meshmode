@@ -53,15 +53,6 @@ Group factories
 .. autoclass:: LegendreGaussLobattoTensorProductGroupFactory
 """
 
-# FIXME Most of the loopy kernels will break as soon as we start using multiple
-# element groups. That's because then the dimension-to-dimension stride will no
-# longer just be the long axis of the array, but something entirely
-# independent.  The machinery for this on the loopy end is there, in the form
-# of the "stride:auto" dim tag, it just needs to be pushed through all the
-# kernels.  Fortunately, this will fail in an obvious and noisy way, because
-# loopy sees strides that it doesn't expect and complains.
-
-
 from meshmode.discretization import ElementGroupBase, InterpolatoryElementGroupBase
 
 
@@ -221,7 +212,11 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
     @memoize_method
     def unit_nodes(self):
         dim = self.mesh_el_group.dim
-        result = mp.warp_and_blend_nodes(dim, self.order)
+        if self.order == 0:
+            result = mp.warp_and_blend_nodes(dim, 1)
+            result = np.mean(result, axis=1).reshape(-1, 1)
+        else:
+            result = mp.warp_and_blend_nodes(dim, self.order)
 
         dim2, nunit_nodes = result.shape
         assert dim2 == dim
@@ -300,12 +295,12 @@ class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
     def __init__(self, order):
         self.order = order
 
-    def __call__(self, mesh_el_group, node_nr_base):
+    def __call__(self, mesh_el_group, index):
         if not isinstance(mesh_el_group, self.mesh_group_class):
             raise TypeError("only mesh element groups of type '%s' "
                     "are supported" % self.mesh_group_class.__name__)
 
-        return self.group_class(mesh_el_group, self.order, node_nr_base)
+        return self.group_class(mesh_el_group, self.order, index)
 
 
 class OrderAndTypeBasedGroupFactory(ElementGroupFactory):
@@ -314,7 +309,7 @@ class OrderAndTypeBasedGroupFactory(ElementGroupFactory):
         self.simplex_group_class = simplex_group_class
         self.tensor_product_group_class = tensor_product_group_class
 
-    def __call__(self, mesh_el_group, node_nr_base):
+    def __call__(self, mesh_el_group, index):
         if isinstance(mesh_el_group, _MeshSimplexElementGroup):
             group_class = self.simplex_group_class
         elif isinstance(mesh_el_group, _MeshTensorProductElementGroup):
@@ -325,7 +320,7 @@ class OrderAndTypeBasedGroupFactory(ElementGroupFactory):
                         _MeshSimplexElementGroup.__name__,
                         _MeshTensorProductElementGroup.__name__))
 
-        return group_class(mesh_el_group, self.order, node_nr_base)
+        return group_class(mesh_el_group, self.order, index)
 
 
 # {{{ group factories for simplices

@@ -25,11 +25,10 @@ THE SOFTWARE.
 from six.moves import range, zip
 
 import numpy as np
-import pyopencl as cl
-import pyopencl.array  # noqa
 
-from loopy.version import MOST_RECENT_LANGUAGE_VERSION
-from pytools import memoize_method, memoize_in
+import loopy as lp
+from pytools import memoize_in, keyed_memoize_method
+from meshmode.array_context import ArrayContext, make_loopy_program
 
 
 # {{{ interpolation batch
@@ -134,12 +133,6 @@ class DiscretizationConnection(object):
     .. automethod:: __call__
     """
     def __init__(self, from_discr, to_discr, is_surjective):
-        if from_discr.cl_context != to_discr.cl_context:
-            raise ValueError("from_discr and to_discr must live in the "
-                    "same OpenCL context")
-
-        self.cl_context = from_discr.cl_context
-
         if from_discr.mesh.vertex_id_dtype != to_discr.mesh.vertex_id_dtype:
             raise ValueError("from_discr and to_discr must agree on the "
                     "vertex_id_dtype")
@@ -153,7 +146,7 @@ class DiscretizationConnection(object):
 
         self.is_surjective = is_surjective
 
-    def __call__(self, queue, vec):
+    def __call__(self, ary):
         raise NotImplementedError()
 
 
@@ -188,8 +181,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         self.groups = groups
 
-    @memoize_method
-    def _resample_matrix(self, to_group_index, ibatch_index):
+    @keyed_memoize_method(key=lambda actx, to_group_index, ibatch_index:
+            (to_group_index, ibatch_index))
+    def _resample_matrix(self, actx: ArrayContext, to_group_index, ibatch_index):
         import modepy as mp
         ibatch = self.groups[to_group_index].batches[ibatch_index]
         from_grp = self.from_discr.groups[ibatch.from_group_index]
@@ -214,11 +208,12 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     from_grp.basis(),
                     ibatch.result_unit_nodes, from_grp.unit_nodes)
 
-        with cl.CommandQueue(self.cl_context) as queue:
-            return cl.array.to_device(queue, result).with_queue(None)
+        return actx.freeze(actx.from_numpy(result))
 
-    @memoize_method
-    def _resample_point_pick_indices(self, to_group_index, ibatch_index,
+    @keyed_memoize_method(lambda actx, to_group_index, ibatch_index,
+            tol_multiplier=None: (to_group_index, ibatch_index, tol_multiplier))
+    def _resample_point_pick_indices(self, actx: ArrayContext,
+            to_group_index, ibatch_index,
             tol_multiplier=None):
         """If :meth:`_resample_matrix` *R* is a row subset of a permutation matrix *P*,
         return the index subset I so that, loosely, ``x[I] == R @ x``.
@@ -227,9 +222,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         :class:`pyopencl.array.Array` containing the index subset.
         """
 
-        with cl.CommandQueue(self.cl_context) as queue:
-            mat = self._resample_matrix(to_group_index, ibatch_index).get(
-                    queue=queue)
+        mat = actx.to_numpy(actx.thaw(
+                self._resample_matrix(actx, to_group_index, ibatch_index)))
 
         nrows, ncols = mat.shape
         result = np.zeros(nrows, dtype=self.to_discr.mesh.element_id_dtype)
@@ -251,30 +245,34 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             one_index, = one_indices
             result[irow] = one_index
 
-        with cl.CommandQueue(self.cl_context) as queue:
-            return cl.array.to_device(queue, result).with_queue(None)
+        return actx.freeze(actx.from_numpy(result))
 
-    def full_resample_matrix(self, queue):
+    def full_resample_matrix(self, actx):
         """Build a dense matrix representing this discretization connection.
 
         .. warning::
 
             On average, this will be exceedingly expensive (:math:`O(N^2)` in
             the number *N* of discretization points) in terms of memory usage
-            and thus not what you'd typically want.
+            and thus not what you'd typically want, other than maybe for
+            testing.
+
+        .. note::
+
+            This function assumes a flattened DOF array, as produced by
+            :class:`~meshmode.dof_array.flatten`.
         """
 
-        @memoize_in(self, "oversample_mat_knl")
+        @memoize_in(actx, (DirectDiscretizationConnection, "oversample_mat_knl"))
         def knl():
-            import loopy as lp
-            knl = lp.make_kernel(
-                """{[k,i,j]:
-                    0<=k<nelements and
-                    0<=i<n_to_nodes and
+            return make_loopy_program(
+                """{[iel, idof, j]:
+                    0<=iel<nelements and
+                    0<=idof<n_to_nodes and
                     0<=j<n_from_nodes}""",
-                "result[itgt_base + to_element_indices[k]*n_to_nodes + i, \
-                        isrc_base + from_element_indices[k]*n_from_nodes + j] \
-                    = resample_mat[i, j]",
+                "result[itgt_base + to_element_indices[iel]*n_to_nodes + idof, \
+                        isrc_base + from_element_indices[iel]*n_from_nodes + j] \
+                    = resample_mat[idof, j]",
                 [
                     lp.GlobalArg("result", None,
                         shape="nnodes_tgt, nnodes_src",
@@ -283,78 +281,87 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("nnodes_tgt,nnodes_src", np.int32),
                     "...",
                     ],
-                name="oversample_mat",
-                lang_version=MOST_RECENT_LANGUAGE_VERSION)
+                name="oversample_mat")
 
-            knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
-            return lp.tag_inames(knl, dict(k="g.0"))
+        to_discr_ndofs = sum(grp.nelements*grp.nunit_dofs
+                for grp in self.to_discr.groups)
+        from_discr_ndofs = sum(grp.nelements*grp.nunit_dofs
+                for grp in self.from_discr.groups)
 
-        result = cl.array.zeros(
-                queue,
-                (self.to_discr.nnodes, self.from_discr.nnodes),
+        result = actx.zeros(
+                (to_discr_ndofs, from_discr_ndofs),
                 dtype=self.to_discr.real_dtype)
 
+        from_group_sizes = [
+                grp.nelements*grp.nunit_dofs
+                for grp in self.from_discr.groups]
+        from_group_starts = np.cumsum([0] + from_group_sizes)
+
+        tgt_node_nr_base = 0
         for i_tgrp, (tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.groups)):
             for i_batch, batch in enumerate(cgrp.batches):
                 if not len(batch.from_element_indices):
                     continue
 
-                sgrp = self.from_discr.groups[batch.from_group_index]
+                actx.call_loopy(knl(),
+                        resample_mat=self._resample_matrix(actx, i_tgrp, i_batch),
+                        result=result,
+                        itgt_base=tgt_node_nr_base,
+                        isrc_base=from_group_starts[batch.from_group_index],
+                        from_element_indices=batch.from_element_indices,
+                        to_element_indices=batch.to_element_indices)
 
-                knl()(queue,
-                      resample_mat=self._resample_matrix(i_tgrp, i_batch),
-                      result=result,
-                      itgt_base=tgrp.node_nr_base,
-                      isrc_base=sgrp.node_nr_base,
-                      from_element_indices=batch.from_element_indices,
-                      to_element_indices=batch.to_element_indices)
+            tgt_node_nr_base += tgrp.nelements*tgrp.nunit_dofs
 
         return result
 
-    def __call__(self, queue, vec):
-        @memoize_in(self, "resample_by_mat_knl")
+    def __call__(self, ary):
+        from meshmode.dof_array import DOFArray
+        if not isinstance(ary, DOFArray):
+            raise TypeError("non-array passed to discretization connection")
+
+        actx = ary.array_context
+
+        @memoize_in(actx, (DirectDiscretizationConnection, "resample_by_mat_knl"))
         def mat_knl():
-            import loopy as lp
-            knl = lp.make_kernel(
-                """{[k,i,j]:
-                    0<=k<nelements and
-                    0<=i<n_to_nodes and
+            knl = make_loopy_program(
+                """{[iel, idof, j]:
+                    0<=iel<nelements and
+                    0<=idof<n_to_nodes and
                     0<=j<n_from_nodes}""",
-                "result[to_element_indices[k], i] \
-                    = sum(j, resample_mat[i, j] \
-                    * vec[from_element_indices[k], j])",
+                "result[to_element_indices[iel], idof] \
+                    = sum(j, resample_mat[idof, j] \
+                    * ary[from_element_indices[iel], j])",
                 [
                     lp.GlobalArg("result", None,
                         shape="nelements_result, n_to_nodes",
                         offset=lp.auto),
-                    lp.GlobalArg("vec", None,
+                    lp.GlobalArg("ary", None,
                         shape="nelements_vec, n_from_nodes",
                         offset=lp.auto),
                     lp.ValueArg("nelements_result", np.int32),
                     lp.ValueArg("nelements_vec", np.int32),
                     "...",
                     ],
-                name="resample_by_mat",
-                lang_version=MOST_RECENT_LANGUAGE_VERSION)
+                name="resample_by_mat")
 
-            knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
-            return lp.tag_inames(knl, dict(k="g.0"))
+            return knl
 
-        @memoize_in(self, "resample_by_picking_knl")
+        @memoize_in(actx,
+                (DirectDiscretizationConnection, "resample_by_picking_knl"))
         def pick_knl():
-            import loopy as lp
-            knl = lp.make_kernel(
-                """{[k,i,j]:
-                    0<=k<nelements and
-                    0<=i<n_to_nodes}""",
-                "result[to_element_indices[k], i] \
-                    = vec[from_element_indices[k], pick_list[i]]",
+            knl = make_loopy_program(
+                """{[iel, idof, j]:
+                    0<=iel<nelements and
+                    0<=idof<n_to_nodes}""",
+                "result[to_element_indices[iel], idof] \
+                    = ary[from_element_indices[iel], pick_list[idof]]",
                 [
                     lp.GlobalArg("result", None,
                         shape="nelements_result, n_to_nodes",
                         offset=lp.auto),
-                    lp.GlobalArg("vec", None,
+                    lp.GlobalArg("ary", None,
                         shape="nelements_vec, n_from_nodes",
                         offset=lp.auto),
                     lp.ValueArg("nelements_result", np.int32),
@@ -362,45 +369,41 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("n_from_nodes", np.int32),
                     "...",
                     ],
-                name="resample_by_picking",
-                lang_version=MOST_RECENT_LANGUAGE_VERSION)
+                name="resample_by_picking")
 
-            knl = lp.split_iname(knl, "i", 16, inner_tag="l.0")
-            return lp.tag_inames(knl, dict(k="g.0"))
-
-        if not isinstance(vec, cl.array.Array):
-            raise TypeError("non-array passed to discretization connection")
+            return knl
 
         if self.is_surjective:
-            result = self.to_discr.empty(queue, dtype=vec.dtype)
+            result = self.to_discr.empty(actx, dtype=ary.entry_dtype)
         else:
-            result = self.to_discr.zeros(queue, dtype=vec.dtype)
+            result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
 
-        if vec.shape != (self.from_discr.nnodes,):
+        if ary.shape != (len(self.from_discr.groups),):
             raise ValueError("invalid shape of incoming resampling data")
 
         for i_tgrp, (tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.groups)):
             for i_batch, batch in enumerate(cgrp.batches):
-                sgrp = self.from_discr.groups[batch.from_group_index]
-
                 if not len(batch.from_element_indices):
                     continue
 
                 point_pick_indices = self._resample_point_pick_indices(
-                        i_tgrp, i_batch)
+                        actx, i_tgrp, i_batch)
 
                 if point_pick_indices is None:
-                    mat_knl()(queue,
-                            resample_mat=self._resample_matrix(i_tgrp, i_batch),
-                            result=tgrp.view(result), vec=sgrp.view(vec),
+                    actx.call_loopy(mat_knl(),
+                            resample_mat=self._resample_matrix(
+                                actx, i_tgrp, i_batch),
+                            result=result[i_tgrp],
+                            ary=ary[batch.from_group_index],
                             from_element_indices=batch.from_element_indices,
                             to_element_indices=batch.to_element_indices)
 
                 else:
-                    pick_knl()(queue,
+                    actx.call_loopy(pick_knl(),
                             pick_list=point_pick_indices,
-                            result=tgrp.view(result), vec=sgrp.view(vec),
+                            result=result[i_tgrp],
+                            ary=ary[batch.from_group_index],
                             from_element_indices=batch.from_element_indices,
                             to_element_indices=batch.to_element_indices)
 
