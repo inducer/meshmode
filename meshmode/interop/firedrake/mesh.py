@@ -33,7 +33,7 @@ from modepy import resampling_matrix
 from meshmode.mesh import (BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
     FacialAdjacencyGroup, Mesh, NodalAdjacency, SimplexElementGroup)
 from meshmode.interop.firedrake.reference_cell import (
-    get_affine_reference_simplex_mapping, get_finat_element_unit_dofs)
+    get_affine_reference_simplex_mapping, get_finat_element_unit_nodes)
 
 
 # {{{ functions to extract information from Mesh Topology
@@ -531,9 +531,7 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
     cell_dim = fdrake_mesh.cell_dimension()
 
     # Get finat unit nodes and map them onto the meshmode reference simplex
-    from meshmode.interop.firedrake.reference_cell import (
-        get_affine_reference_simplex_mapping, get_finat_element_unit_dofs)
-    finat_unit_nodes = get_finat_element_unit_dofs(coord_finat_elt)
+    finat_unit_nodes = get_finat_element_unit_nodes(coord_finat_elt)
     fd_ref_to_mm = get_affine_reference_simplex_mapping(cell_dim, True)
     finat_unit_nodes = fd_ref_to_mm(finat_unit_nodes)
 
@@ -779,7 +777,7 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
 
     # get firedrake unit nodes and map onto meshmode reference element
     fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(group.dim, True)
-    fd_unit_nodes = get_finat_element_unit_dofs(coords_fspace.finat_element)
+    fd_unit_nodes = get_finat_element_unit_nodes(coords_fspace.finat_element)
     fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
 
     from meshmode.discretization.poly_element import (
