@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from functools import partial
 from six.moves import range
 import numpy as np
 import numpy.linalg as la
@@ -35,6 +36,7 @@ from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
         PolynomialWarpAndBlendGroupFactory,
+        PolynomialRecursiveNodesGroupFactory,
         PolynomialEquidistantSimplexGroupFactory,
         )
 from meshmode.mesh import Mesh, BTAG_ALL
@@ -207,7 +209,9 @@ def test_box_boundary_tags(dim, nelem, group_factory):
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory
+    PolynomialWarpAndBlendGroupFactory,
+    partial(PolynomialRecursiveNodesGroupFactory, family="lgl"),
+    #partial(PolynomialRecursiveNodesGroupFactory, family="gc"),
     ])
 @pytest.mark.parametrize("boundary_tag", [
     BTAG_ALL,
@@ -300,7 +304,7 @@ def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
     print(eoc_rec)
     assert (
             eoc_rec.order_estimate() >= order-order_slack
-            or eoc_rec.max_error() < 1e-14)
+            or eoc_rec.max_error() < 3e-14)
 
 # }}}
 
