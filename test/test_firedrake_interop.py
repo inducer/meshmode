@@ -86,8 +86,8 @@ def fdrake_mesh(request):
         return UnitSquareMesh(10, 10)
     if mesh_name == "FiredrakeUnitSquareMesh-order2":
         m = UnitSquareMesh(10, 10)
-        V = VectorFunctionSpace(m, 'CG', 2)
-        coords = Function(V).interpolate(SpatialCoordinate(m))
+        fspace = VectorFunctionSpace(m, 'CG', 2)
+        coords = Function(fspace).interpolate(SpatialCoordinate(m))
         from firedrake.mesh import Mesh
         return Mesh(coords)
     if mesh_name == "FiredrakeUnitCubeMesh":
