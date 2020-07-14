@@ -22,6 +22,7 @@ THE SOFTWARE.
 
 import numpy as np
 import pyopencl as cl
+import six
 
 from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
@@ -59,6 +60,9 @@ CLOSE_ATOL = 10**-12
                         "blob2d-order1-h4e-2.msh",
                         "blob2d-order1-h6e-2.msh",
                         "blob2d-order1-h8e-2.msh",
+                        "blob2d-order4-h4e-2.msh",
+                        "blob2d-order4-h6e-2.msh",
+                        "blob2d-order4-h8e-2.msh",
                         ])
 def mm_mesh(request):
     from meshmode.mesh.io import read_gmsh
@@ -67,6 +71,7 @@ def mm_mesh(request):
 
 @pytest.fixture(params=["FiredrakeUnitIntervalMesh",
                         "FiredrakeUnitSquareMesh",
+                        "FiredrakeUnitSquareMesh-order2",
                         "FiredrakeUnitCubeMesh",
                         "annulus.msh",
                         "blob2d-order1-h4e-2.msh",
@@ -79,6 +84,12 @@ def fdrake_mesh(request):
         return UnitIntervalMesh(100)
     if mesh_name == "FiredrakeUnitSquareMesh":
         return UnitSquareMesh(10, 10)
+    if mesh_name == "FiredrakeUnitSquareMesh-order2":
+        m = UnitSquareMesh(10, 10)
+        V = VectorFunctionSpace(m, 'CG', 2)
+        coords = Function(V).interpolate(SpatialCoordinate(m))
+        from firedrake.mesh import Mesh
+        return Mesh(coords)
     if mesh_name == "FiredrakeUnitCubeMesh":
         return UnitCubeMesh(5, 5, 5)
 
@@ -95,7 +106,7 @@ def fdrake_family(request):
     return request.param
 
 
-@pytest.fixture(params=[1, 2, 3], ids=["P^1", "P^2", "P^3"])
+@pytest.fixture(params=[1, 3], ids=["P^1", "P^3"])
 def fspace_degree(request):
     return request.param
 
@@ -109,11 +120,19 @@ def check_consistency(fdrake_fspace, discr, group_nr=0):
     meshes have the same basic properties and the function space/discretization
     agree across firedrake vs meshmode
     """
+    # Get the unit vertex indices (in each cell)
     fdrake_mesh = fdrake_fspace.mesh()
-    # get fdrake_verts (shaped like (nverts, dim))
-    # Nb : Mesh must be order 1 for these to be vertices
-    assert fdrake_mesh.coordinates.function_space().finat_element.degree == 1
-    fdrake_verts = fdrake_mesh.coordinates.dat.data
+    cfspace = fdrake_mesh.coordinates.function_space()
+    entity_dofs = cfspace.finat_element.entity_dofs()[0]
+    fdrake_unit_vert_indices = []
+    for _, local_node_nrs in sorted(six.iteritems(entity_dofs)):
+        assert len(local_node_nrs) == 1
+        fdrake_unit_vert_indices.append(local_node_nrs[0])
+
+    # get the firedrake vertices, in no particular order
+    fdrake_vert_indices = cfspace.cell_node_list[:, fdrake_unit_vert_indices]
+    fdrake_vert_indices = np.unique(fdrake_vert_indices)
+    fdrake_verts = fdrake_mesh.coordinates.dat.data[fdrake_vert_indices, ...]
     if fdrake_mesh.geometric_dimension() == 1:
         fdrake_verts = fdrake_verts[:, np.newaxis]
 
@@ -134,7 +153,8 @@ def check_consistency(fdrake_fspace, discr, group_nr=0):
     # https://stackoverflow.com/questions/38277143/sort-2d-numpy-array-lexicographically  # noqa: E501
     lex_sorted_mm_verts = meshmode_verts[:, np.lexsort(meshmode_verts)]
     lex_sorted_fdrake_verts = fdrake_verts[np.lexsort(fdrake_verts.T)]
-    np.testing.assert_array_equal(lex_sorted_mm_verts, lex_sorted_fdrake_verts.T)
+    np.testing.assert_allclose(lex_sorted_mm_verts, lex_sorted_fdrake_verts.T,
+                               atol=1e-15)
 
     # Ensure the discretization and the firedrake function space agree on
     # some basic properties
@@ -159,6 +179,7 @@ def test_fd2mm_consistency(ctx_factory, fdrake_mesh, fspace_degree):
 
 
 def test_mm2fd_consistency(ctx_factory, mm_mesh, fspace_degree):
+    fspace_degree += mm_mesh.groups[0].order
     cl_ctx = ctx_factory()
     factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
     discr = Discretization(cl_ctx, mm_mesh, factory)
@@ -196,17 +217,27 @@ def test_from_bdy_consistency(ctx_factory,
     assert discr.mesh.groups[0].dim == fdrake_mesh.topological_dimension()
     assert discr.mesh.groups[0].order == fdrake_mesh_order
 
-    # get fdrake_verts (shaped like (nverts, dim))
-    # Nb : Mesh must be order 1 for these to be vertices
-    assert fdrake_mesh.coordinates.function_space().finat_element.degree == 1
-    fdrake_verts = fdrake_mesh.coordinates.dat.data
-    if fdrake_mesh.geometric_dimension() == 1:
-        fdrake_verts = fdrake_verts[:, np.newaxis]
+    # Get the unit vertex indices (in each cell)
+    fdrake_mesh = fdrake_fspace.mesh()
+    cfspace = fdrake_mesh.coordinates.function_space()
+    entity_dofs = cfspace.finat_element.entity_dofs()[0]
+    fdrake_unit_vert_indices = []
+    for _, local_node_nrs in sorted(six.iteritems(entity_dofs)):
+        assert len(local_node_nrs) == 1
+        fdrake_unit_vert_indices.append(local_node_nrs[0])
+    fdrake_unit_vert_indices = np.array(fdrake_unit_vert_indices)
+
     # only look at cells "near" bdy (with >= 1 vertex on)
     cells_near_bdy = _compute_cells_near_bdy(fdrake_mesh, 'on_boundary')
-    verts_near_bdy = np.unique(
-        fdrake_mesh_fspace.cell_node_list[cells_near_bdy, :].flatten())
-    fdrake_verts = fdrake_verts[verts_near_bdy, :]
+    # get the firedrake vertices of cells near the boundary,
+    # in no particular order
+    fdrake_vert_indices = \
+        cfspace.cell_node_list[cells_near_bdy,
+                               fdrake_unit_vert_indices[:, np.newaxis]]
+    fdrake_vert_indices = np.unique(fdrake_vert_indices)
+    fdrake_verts = fdrake_mesh.coordinates.dat.data[fdrake_vert_indices, ...]
+    if fdrake_mesh.geometric_dimension() == 1:
+        fdrake_verts = fdrake_verts[:, np.newaxis]
     # Get meshmode vertices (shaped like (dim, nverts))
     meshmode_verts = discr.mesh.vertices
 
@@ -217,7 +248,8 @@ def test_from_bdy_consistency(ctx_factory,
     # https://stackoverflow.com/questions/38277143/sort-2d-numpy-array-lexicographically  # noqa: E501
     lex_sorted_mm_verts = meshmode_verts[:, np.lexsort(meshmode_verts)]
     lex_sorted_fdrake_verts = fdrake_verts[np.lexsort(fdrake_verts.T)]
-    np.testing.assert_array_equal(lex_sorted_mm_verts, lex_sorted_fdrake_verts.T)
+    np.testing.assert_allclose(lex_sorted_mm_verts, lex_sorted_fdrake_verts.T,
+                               atol=CLOSE_ATOL)
 
     # Ensure the discretization and the firedrake function space reference element
     # agree on some basic properties
@@ -391,6 +423,7 @@ def test_to_fd_transfer(ctx_factory, mm_mesh, fspace_degree,
     (up to resampling error) as creating a function on the transported
     mesh
     """
+    fspace_degree += mm_mesh.groups[0].order
     # Make discr and evaluate function in meshmode
     cl_ctx = ctx_factory()
     factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
@@ -408,6 +441,7 @@ def test_to_fd_transfer(ctx_factory, mm_mesh, fspace_degree,
 
     # transport to firedrake and make sure this is the same
     mm2fd_f = fdrake_connection.from_meshmode(meshmode_f)
+
     np.testing.assert_allclose(mm2fd_f.dat.data, fdrake_f.dat.data,
                                atol=CLOSE_ATOL)
 
@@ -487,6 +521,7 @@ def test_to_fd_idempotency(ctx_factory, mm_mesh, fspace_degree):
     Make sure mm->fd->mm and (mm->)->fd->mm->fd are identity
     """
     # Make a function space and a function with unique values at each node
+    fspace_degree += mm_mesh.groups[0].order
     cl_ctx = ctx_factory()
     factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
     discr = Discretization(cl_ctx, mm_mesh, factory)
