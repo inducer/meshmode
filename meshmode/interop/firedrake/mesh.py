@@ -784,27 +784,31 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
 
     from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexElementGroup)
-    el_group = InterpolatoryQuadratureSimplexElementGroup(group, group.order,
+    el_group = InterpolatoryQuadratureSimplexElementGroup(group,
+                                                          group.order,
                                                           group.node_nr_base)
     resampling_mat = resampling_matrix(el_group.basis(),
                                        new_nodes=fd_unit_nodes,
                                        old_nodes=group.unit_nodes)
+    # Store the meshmode data resampled to firedrake unit nodes
+    # (but still in meshmode order)
+    resampled_group_nodes = np.matmul(group.nodes, resampling_mat.T)
 
+    # Now put the nodes in the right local order
     # nodes is shaped *(ambient dim, nelements, nunit nodes)*
-    # flip nodes
     from meshmode.mesh.processing import get_simplex_element_flip_matrix
-    flipped_group_nodes = np.copy(group.nodes)
     for perm, cells in six.iteritems(perm2cells):
         flip_mat = get_simplex_element_flip_matrix(group.order,
-                                                   group.unit_nodes,
+                                                   fd_unit_nodes,
                                                    perm)
-        flipped_group_nodes[:, cells, :] = np.matmul(group.nodes[:, cells, :],
-                                                     flip_mat.T)
+        flip_mat = np.rint(flip_mat).astype(np.int32)
+        resampled_group_nodes[:, cells, :] = \
+            np.matmul(resampled_group_nodes[:, cells, :], flip_mat.T)
 
-    # reorder to firedrake cell ordering
+    # store resampled data in right cell ordering
     reordered_cell_node_list = coords_fspace.cell_node_list[cell_index_mm2fd]
     coords.dat.data[reordered_cell_node_list, :] = \
-        np.matmul(flipped_group_nodes, resampling_mat.T).transpose((1, 2, 0))
+        resampled_group_nodes.transpose((1, 2, 0))
 
     return fd_mesh.Mesh(coords), cell_index_mm2fd, perm2cells
 
