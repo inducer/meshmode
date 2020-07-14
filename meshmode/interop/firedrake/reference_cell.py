@@ -26,7 +26,7 @@ import numpy.linalg as la
 
 __doc__ = """
 .. autofunction:: get_affine_reference_simplex_mapping
-.. autofunction:: get_finat_element_unit_nodes
+.. autofunction:: get_finat_element_unit_dofs
 """
 
 
@@ -109,7 +109,7 @@ def get_affine_reference_simplex_mapping(spat_dim, firedrake_to_meshmode=True):
 
 # {{{ Get firedrake unit nodes
 
-def get_finat_element_unit_nodes(finat_element):
+def get_finat_element_unit_dofs(finat_element):
     """
     Returns the unit nodes used by the FInAT element in firedrake's
     (equivalently, FInAT/FIAT's) reference coordinates
@@ -117,7 +117,7 @@ def get_finat_element_unit_nodes(finat_element):
     :arg finat_element: A :class:`finat.finiteelementbase.FiniteElementBase`
         instance (i.e. a firedrake function space's reference element).
         The refernce element of the finat element *MUST* be a simplex
-    :return: A numpy array of shape *(dim, nunit_nodes)* holding the unit
+    :return: A numpy array of shape *(dim, nunit_dofs)* holding the unit
              nodes used by this element. *dim* is the dimension spanned
              by the finat element's reference element
              (see its ``cell`` attribute)
@@ -130,10 +130,8 @@ def get_finat_element_unit_nodes(finat_element):
     # so to recover node *i* we need to evaluate *p_i* at the identity
     # function
     point_evaluators = finat_element._element.dual.nodes
-    unit_nodes = [p(lambda x: x) for p in point_evaluators]
-    unit_nodes = np.array(unit_nodes).T
-
-    return unit_nodes
+    unit_dofs = [p(lambda x: x) for p in point_evaluators]
+    return np.array(unit_dofs).T
 
 # }}}
 

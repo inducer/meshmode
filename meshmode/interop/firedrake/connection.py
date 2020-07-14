@@ -37,7 +37,7 @@ from modepy import resampling_matrix
 from meshmode.interop.firedrake.mesh import (
     import_firedrake_mesh, export_mesh_to_firedrake)
 from meshmode.interop.firedrake.reference_cell import (
-    get_affine_reference_simplex_mapping, get_finat_element_unit_nodes)
+    get_affine_reference_simplex_mapping, get_finat_element_unit_dofs)
 
 from meshmode.mesh.processing import get_simplex_element_flip_matrix
 
@@ -101,15 +101,24 @@ class FiredrakeConnection:
 
     .. autoattribute:: mm2fd_node_mapping
 
-        A numpy array of shape *(self.discr.groups[group_nr].nnodes,)*
-        whose *i*th entry is the :mod:`firedrake` node index associated
-        to the *i*th node in *self.discr.groups[group_nr]*
-        (where *i* is the group-local node index).
-        It is important to note that, due to :mod:`meshmode`
-        and :mod:`firedrake` using different unit nodes, a :mod:`firedrake`
-        node associated to a :mod:`meshmode` may have different coordinates.
-        However, after resampling to the other system's unit nodes,
-        two associated nodes should have identical coordinates.
+        Letting *element_grp = self.discr.groups[self.group_nr]*,
+        *mm2fd_node_mapping* is a numpy array of shape
+        *(element_grp.nelements, element_grp.nunit_dofs)*
+        whose *(i, j)*th entry is the :mod:`firedrake` node
+        index associated to the *j*th degree of freedom of the
+        *i*th element in *element_grp*.
+
+        degrees of freedom should be associated so that
+        the implicit mapping from a reference element to element *i*
+        which maps meshmode unit dofs *0,1,...,n-1* to actual
+        dofs *(i, 0), (i, 1), ..., (i, n-1)*
+        is the same mapping which maps firedrake unit dofs
+        *0,1,...,n-1* to firedrake dofs
+        *mm2fd_node_mapping[i,0], mm2fd_node_mapping[i,1],...,
+        mm2fd_node_mapping[i,n-1]*.
+
+        (See :mod:`meshmode.interop.firedrake.reference_cell` to
+         obtain firedrake unit dofs on the meshmode reference cell)
 
     .. automethod:: __init__
     """
@@ -121,7 +130,7 @@ class FiredrakeConnection:
             Must have ufl family ``'Lagrange'`` or
             ``'Discontinuous Lagrange'``.
         :param mm2fd_node_mapping: Used as attribute :attr:`mm2fd_node_mapping`.
-            A numpy integer array with the same dtype as
+            A 2-D numpy integer array with the same dtype as
             ``fdrake_fspace.cell_node_list.dtype``
         :param group_nr: The index of the group in *discr* which is
             being connected to *fdrake_fspace*. The group must be
@@ -160,25 +169,29 @@ class FiredrakeConnection:
                 raise ValueError(":param:`group_nr` is *None* but :param:`discr` "
                                  "has %s != 1 groups." % len(discr.groups))
             group_nr = 0
+        # store element_grp as variable for convenience
+        element_grp = discr.groups[group_nr]
+
         if group_nr < 0 or group_nr >= len(discr.groups):
             raise ValueError(":param:`group_nr` has value %s, which an invalid "
                              "index into list *discr.groups* of length %s."
-                             % (group_nr, len(discr.gropus)))
-        if not isinstance(discr.groups[group_nr],
+                             % (group_nr, len(discr.groups)))
+        if not isinstance(element_grp,
                           InterpolatoryQuadratureSimplexElementGroup):
             raise TypeError("*discr.groups[group_nr]* must be of type "
                             ":class:`InterpolatoryQuadratureSimplexElementGroup`"
-                            ", not :class:`%s`." % type(discr.groups[group_nr]))
+                            ", not :class:`%s`." % type(element_grp))
         allowed_families = ('Discontinuous Lagrange', 'Lagrange')
         if fdrake_fspace.ufl_element().family() not in allowed_families:
             raise TypeError(":param:`fdrake_fspace` must have ufl family "
                            "be one of %s, not %s."
                             % (allowed_families,
                                fdrake_fspace.ufl_element().family()))
-        if mm2fd_node_mapping.shape != (discr.groups[group_nr].nnodes,):
+        if mm2fd_node_mapping.shape != (element_grp.nelements,
+                                        element_grp.nunit_dofs):
             raise ValueError(":param:`mm2fd_node_mapping` must be of shape ",
                              "(%s,), not %s"
-                             % ((discr.groups[group_nr].nnodes,),
+                             % ((discr.groups[group_nr].ndofs,),
                                 mm2fd_node_mapping.shape))
         if mm2fd_node_mapping.dtype != fdrake_fspace.cell_node_list.dtype:
             raise ValueError(":param:`mm2fd_node_mapping` must have dtype "
@@ -187,12 +200,11 @@ class FiredrakeConnection:
         # }}}
 
         # Get meshmode unit nodes
-        element_grp = discr.groups[group_nr]
-        mm_unit_nodes = element_grp.unit_nodes
+        mm_unit_nodes = element_grp.unit_nodes()
         # get firedrake unit nodes and map onto meshmode reference element
-        dim = fdrake_fspace.mesh().topological_dimension()
-        fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(dim, True)
-        fd_unit_nodes = get_finat_element_unit_nodes(fdrake_fspace.finat_element)
+        tdim = fdrake_fspace.mesh().topological_dimension()
+        fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(tdim, True)
+        fd_unit_nodes = get_finat_element_unit_dofs(fdrake_fspace.finat_element)
         fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
 
         # compute and store resampling matrices
@@ -228,13 +240,13 @@ class FiredrakeConnection:
         # duplication.
         self._fspace_cache = {}
 
-    def firedrake_fspace(self, vdim=None):
+    def firedrake_fspace(self, shape=None):
         """
         Return a firedrake function space that
         *self.discr.groups[self.group_nr]* is connected to
         of the appropriate vector dimension
 
-        :arg vdim: Either *None*, in which case a function space which maps
+        :arg shape: Either *None*, in which case a function space which maps
                    to scalar values is returned, a positive integer *n*,
                    in which case a function space which maps into *\\R^n*
                    is returned, or a tuple of integers defining
@@ -244,98 +256,195 @@ class FiredrakeConnection:
                  *self.discr.groups[self.group_nr]* of the appropriate vector
                  dimension
 
-        :raises TypeError: If *vdim* is of the wrong type
+        :raises TypeError: If *shape* is of the wrong type
         """
         # Cache the function spaces created to avoid high overhead.
         # Note that firedrake is smart about re-using shared information,
         # so this is not duplicating mesh/reference element information
-        if vdim not in self._fspace_cache:
-            if vdim is None:
+        if shape not in self._fspace_cache:
+            if shape is None:
                 from firedrake import FunctionSpace
-                self._fspace_cache[vdim] = \
+                self._fspace_cache[shape] = \
                     FunctionSpace(self._mesh_geometry,
                                   self._ufl_element.family(),
                                   degree=self._ufl_element.degree())
-            elif isinstance(vdim, int):
+            elif isinstance(shape, int):
                 from firedrake import VectorFunctionSpace
-                self._fspace_cache[vdim] = \
+                self._fspace_cache[shape] = \
                     VectorFunctionSpace(self._mesh_geometry,
                                         self._ufl_element.family(),
                                         degree=self._ufl_element.degree(),
-                                        dim=vdim)
-            elif isinstance(vdim, tuple):
+                                        dim=shape)
+            elif isinstance(shape, tuple):
                 from firedrake import TensorFunctionSpace
-                self._fspace_cache[vdim] = \
+                self._fspace_cache[shape] = \
                     TensorFunctionSpace(self._mesh_geometry,
                                         self._ufl_element.family(),
                                         degree=self._ufl_element.degree(),
-                                        shape=vdim)
+                                        shape=shape)
             else:
-                raise TypeError(":param:`vdim` must be *None*, an integer, "
+                raise TypeError(":param:`shape` must be *None*, an integer, "
                                 " or a tuple of integers, not of type %s."
-                                % type(vdim))
-        return self._fspace_cache[vdim]
+                                % type(shape))
+        return self._fspace_cache[shape]
 
-    def from_firedrake(self, function, out=None):
+    def _validate_function(function, function_name, shape=None, dtype=None):
+        """
+        Handy helper function to validate that a firedrake function
+        is convertible (or can be the recipient of a conversion).
+        Raises error messages if wrong types, shape, dtype found
+        etc.
+        """
+        # Validate that *function* is convertible
+        from firedrake.function import Function
+        if not isinstance(function, Function):
+            raise TypeError(function_name + " must be a :mod:`firedrake` "
+                            "Function")
+        ufl_elt = function.function_space().ufl_element()
+        if ufl_elt.family() != self._ufl_element.family():
+            raise ValueError(function_name + "'s function_space's ufl element"
+                             " must have family %s, not %s"
+                             % (self._ufl_element.family(), ufl_elt.family()))
+        if ufl_elt.degree() != self._ufl_element.degree():
+            raise ValueError(function_name + "'s function_space's ufl element"
+                             " must have degree %s, not %s"
+                             % (self._ufl_element.degree(), ufl_elt.degree())
+        if function.function_space().mesh() is not self._mesh_geometry:
+            raise ValueError(function_name + "'s mesh must be the same as "
+                            "`self.from_fspace().mesh()``")
+        if dtype is not None and function.dat.data.dtype != dtype:
+            raise ValueError(function_name + ".dat.dtype must be %s, not %s."
+                             % (dtype, function.dat.data.dtype))
+        if shape is not None and function.function_space().shape != shape:
+            raise ValueError(function_name + ".function_space().shape must be "
+                             "%s, not %s" % (shape,
+                                             function.function_space().shape))
+
+    def _validate_field(field, field_name, shape=None, dtype=None):
+        """
+        Handy helper function to validate that a meshmode field
+        is convertible (or can be the recipient of a conversion).
+        Raises error messages if wrong types, shapes, dtypes found
+        etc.
+        """
+        from meshmode.dof_array import DOFArray
+        element_grp = self.discr.groups[self.group_nr]
+        group_shape = (element_grp.nelements, element_grp.nunit_dofs)
+
+        def check_dof_array(arr, arr_name):
+            if not isinstance(arr, DOFArray):
+                raise TypeError(arr_name + " must be of type "
+                                ":class:`meshmode.dof_array.DOFArray`, "
+                                "not :class:`%s`." % type(arr))
+            if arr.shape != self.discr.groups.shape:
+                raise ValueError(arr_name + " shape must be %s, not %s."
+                                 % (self.discr.groups.shape, arr.shape))
+            if arr[self.group_nr].shape != group_shape:
+                raise VaueError(arr_name + "[%s].shape must be %s, not %s"
+                                % (self.group_nr,
+                                   group_shape,
+                                   arr[self.group_nr].shape))
+            if dtype is not None and arr.entry_dtype != dtype:
+                raise ValueError(arr_name + ".entry_dtype must be %s, not %s."
+                                 % (dtype, arr.entry_dtype))
+
+        if isinstance(field, DOFArray):
+            if shape is not None and shape != tuple():
+                raise ValueError("shape != tuple() and %s is of type DOFArray"
+                                 " instead of np.ndarray." % field_name)
+            check_dof_array(field, field_name)
+        elif isinstance(field, np.ndarray):
+            if shape is not None and field.shape != shape:
+                raise ValueError(field_name + ".shape must be %s, not %s"
+                                 % (shape, field.shape))
+            for i, arr in np.flatten(field):
+                arr_name = "%s[%s]" % (field_name, np.unravel_index(i, shape))
+                check_dof_array(arr, arr_name)
+        else:
+            raise TypeError("field must be of type DOFArray or np.ndarray",
+                            "not %s." % type(field))
+
+    def from_firedrake(self, function, out=None, actx=None):
         """
         transport firedrake function onto :attr:`discr`
 
         :arg function: A :mod:`firedrake` function to transfer onto
             :attr:`discr`. Its function space must have
             the same family, degree, and mesh as ``self.from_fspace()``.
-        :arg out: Either *None* or a numpy array of
-            shape
-            *(..., num meshmode nodes)* or *(num meshmode nodes,)* and of the
-            same dtype as *function*.
-            *function*'s transported data will be stored in *out*
-            and *out* will be returned.
-            Note that number of nodes referenced here is
-            the number of nodes in the whole discretization.
-            If *out* is *None*, then a numpy array of the correct size
-            filled with zeros is created to take its place.
+        :arg out: Either
+            1.) A :class:`meshmode.dof_array.DOFArray`
+            2.) A :class:`np.ndarray` object array, each of whose
+                entries is a :class:`meshmode.dof_array.DOFArray`
+            3.) *None*
+            In the case of (1.), *function* must be in a
+            scalar function space
+            (i.e. `function.function_space().shape == (,)`).
+            In the case of (2.), the shape of *out* must match
+            `function.function_space().shape`.
 
-        :return: a numpy array holding the transported function
+            In either case, each `DOFArray` must be a `DOFArray`
+            defined on :attr:`discr` (as described in
+            the documentation for :class:`meshmode.dof_array.DOFArray`).
+            Also, each `DOFArray`'s *entry_dtype* must match the
+            *function.dat.data.dtype*, and be of shape
+            *(nelements, nunit_dofs)*.
+
+            In case (3.), an array is created satisfying
+            the above requirements.
+
+            The data in *function* is transported to :attr:`discr`
+            and stored in *out*, which is then returned.
+        :arg actx:
+            * If *out* is *None*, then *actx* is a
+              :class:`meshmode.array_context.ArrayContext` on which
+              to create the :class:`DOFArray`
+            * If *out* is not *None*, *actx* must be *None* or *out*'s
+              *array_context*.
+
+        :return: *out*, with the converted data from *function* stored in it
         """
-        # Check function is convertible
-        from firedrake.function import Function
-        if not isinstance(function, Function):
-            raise TypeError(":arg:`function` must be a :mod:`firedrake` "
-                            "Function")
-        assert function.function_space().ufl_element().family() \
-            == self._ufl_element.family() and \
-            function.function_space().ufl_element().degree() \
-            == self._ufl_element.degree(), \
-            ":arg:`function` must live in a function space with the " \
-            "same family and degree as ``self.from_fspace()``"
-        assert function.function_space().mesh() is self._mesh_geometry, \
-            ":arg:`function` mesh must be the same mesh as used by " \
-            "``self.from_fspace().mesh()``"
-
+        self._validate_function(function, "function")
         # Get function data as shape *(nnodes, ...)* or *(nnodes,)*
         function_data = function.dat.data
+        # get the shape needed in each DOFArray and the data shape
+        element_grp = self.discr.groups[self.group_nr]
+        group_shape = (element_grp.nelements, element_grp.nunit_dofs)
+        fspace_shape = function.function_space().shape
 
-        # Check that out is supplied correctly, or create out if it is
-        # not supplied
-        shape = (self.discr.nnodes,)
-        if len(function_data.shape) > 1:
-            shape = function_data.shape[1:] + shape
+        # Handle :arg:`out`
         if out is not None:
-            if not isinstance(out, np.ndarray):
-                raise TypeError(":param:`out` must of type *np.ndarray* or "
-                                "be *None*")
-            assert out.shape == shape, \
-                ":param:`out` must have shape %s." % shape
-            assert out.dtype == function.dat.data.dtype
+            self._validate_field(out, "out", fspace_shape, function_data.dtype)
+            # If out is supplied, check type, shape, and dtype
+            assert actx in (None, out.array_context), \
+                "If :param:`out` is not *None*, :param:`actx` must be" \
+                " *None* or *out.array_context*".
         else:
-            out = np.zeros(shape, dtype=function_data.dtype)
+            # If `out` is not supplied, create it
+            from meshmode.array_context import ArrayContext
+            assert actx isinstance(actx, ArrayContext)
+            if fspace_shape == tuple():
+                out = self.discr.zeros(actx, dtype=function_data.dtype)
+            else:
+                out = \
+                    np.array([self.discr.zeros(actx, dtype=function_data.dtype)
+                              for _ in np.prod(fspace_shape)]
+                             ).reshape(fspace_shape)
 
-        # Reorder nodes
-        group = self.discr.groups[self.group_nr]
-        out[..., group.node_nr_base:group.nnodes] = \
-            np.moveaxis(function_data, 0, -1)[..., self.mm2fd_node_mapping]
-        # Resample at the appropriate nodes
-        out_view = self.discr.groups[self.group_nr].view(out)
-        np.matmul(out_view, self._resampling_mat_fd2mm.T, out=out_view)
+        def reorder_and_resample(dof_array, fd_data):
+            dof_array[self.group_nr] = fd_data[self.mm2fd_node_mapping]
+            np.matmul(dof_array[self.group_nr], self._resampling_mat_fd2mm.T,
+                      out=dof_array[self.group_nr]
+        # If scalar, just reorder and resample out
+        if fspace_shape == tuple():
+            reorder_and_resample(out, function_data)
+        else:
+            # otherwise, have to grab each dofarray and the corresponding
+            # data from *function_data*
+            with np.nditer(out, op_flags=['readwrite', 'multi_index'] as it:
+                for dof_array in it:
+                    fd_data = function_data[:, it.multi_index]
+                    reorder_and_resample(dof_array, function_data)
+
         return out
 
     def from_meshmode(self, mm_field, out=None,
@@ -379,32 +488,25 @@ class FiredrakeConnection:
             raise ValueError("Trying to convert to continuous function space "
                              " with :arg:`assert_fdrake_discontinuous` set "
                              " to *True*")
-        if not isinstance(mm_field, np.ndarray):
-            raise TypeError(":param:`mm_field` must be of type "
-                            ":class:`np.ndarray`, not %s." % type(mm_field))
+        dtype = self.firedrake_fspace().mesh().coordinates.dat.dat.dtype
+        self._validate_field(mm_field, "mm_field", dtype=dtype)
         # make sure out is a firedrake function in an appropriate
         # function space
-        from firedrake.function import Function
         if out is not None:
-            assert isinstance(out, Function), \
-                ":arg:`out` must be a :mod:`firedrake` Function or *None*"
-            assert out.function_space().ufl_element().family() \
-                == self._ufl_element.family() and \
-                out.function_space().ufl_element().degree() \
-                == self._ufl_element.degree(), \
-                ":arg:`out` must live in a function space with the " \
-                "same family and degree as ``self.firedrake_fspace()``"
-            assert out.function_space().mesh() is self._mesh_geometry, \
-                ":arg:`out` mesh must be the same mesh as used by " \
-                "``self.firedrake_fspace().mesh()`` or *None*"
-        else:
-            if len(mm_field.shape) == 1:
-                vdim = None
-            elif len(mm_field.shape) == 2:
-                vdim = mm_field.shape[0]
+            if isinstance(mm_field, np.ndarray):
+                shape = mm_field.shape
             else:
-                vdim = mm_field.shape[:-1]
-            out = Function(self.firedrake_fspace(vdim))
+                shape = tuple()
+            self._validate_function(out, "out", shape, dtype)
+        else:
+            from firedrake.function import Function
+            if len(mm_field.shape) == 1:
+                shape = None
+            elif len(mm_field.shape) == 2:
+                shape = mm_field.shape[0]
+            else:
+                shape = mm_field.shape[:-1]
+            out = Function(self.firedrake_fspace(shape))
             out.dat.data[:] = 0.0
 
         # Handle 1-D case
