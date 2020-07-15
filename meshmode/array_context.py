@@ -153,6 +153,14 @@ class ArrayContext:
 
     @memoize_method
     def _get_scalar_func_loopy_program(self, name, nargs, naxes):
+        if name == "arctan2":
+            name = "atan2"
+        elif name == "atan2":
+            from warnings import warn
+            warn("'atan2' in ArrayContext.np is deprecated. Use 'arctan2', "
+                    "as in numpy2. This will be disallowed in 2021.",
+                    DeprecationWarning, stacklevel=3)
+
         from pymbolic import var
 
         var_names = ["i%d" % i for i in range(naxes)]
@@ -215,6 +223,11 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
             return obj_array_vectorized_n_args(getattr(cl_array, name))
 
         return super().__getattr__(name)
+
+    @obj_array_vectorized_n_args
+    def where(self, criterion, then, else_):
+        import pyopencl.array as cl_array
+        return cl_array.if_positive(criterion != 0, then, else_)
 
 
 class PyOpenCLArrayContext(ArrayContext):

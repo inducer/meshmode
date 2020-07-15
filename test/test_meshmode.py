@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from functools import partial
 from six.moves import range
 import numpy as np
 import numpy.linalg as la
@@ -35,11 +36,12 @@ from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
         PolynomialWarpAndBlendGroupFactory,
+        PolynomialRecursiveNodesGroupFactory,
         PolynomialEquidistantSimplexGroupFactory,
         )
 from meshmode.mesh import Mesh, BTAG_ALL
 from meshmode.array_context import PyOpenCLArrayContext
-from meshmode.dof_array import thaw, flat_norm, flatten
+from meshmode.dof_array import thaw, flat_norm, flatten, unflatten
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -207,7 +209,9 @@ def test_box_boundary_tags(dim, nelem, group_factory):
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory
+    PolynomialWarpAndBlendGroupFactory,
+    partial(PolynomialRecursiveNodesGroupFactory, family="lgl"),
+    #partial(PolynomialRecursiveNodesGroupFactory, family="gc"),
     ])
 @pytest.mark.parametrize("boundary_tag", [
     BTAG_ALL,
@@ -300,7 +304,7 @@ def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
     print(eoc_rec)
     assert (
             eoc_rec.order_estimate() >= order-order_slack
-            or eoc_rec.max_error() < 1e-14)
+            or eoc_rec.max_error() < 3e-14)
 
 # }}}
 
@@ -1440,6 +1444,39 @@ def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
             em_bdry_f = embedding(bdry_f)
             error = flat_norm(bdry_f - em_bdry_f)
             assert error < 1.0e-11, error
+
+
+def test_array_context_np_workalike(ctx_factory):
+    ctx = ctx_factory()
+    queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
+
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh = generate_regular_rect_mesh(
+            a=(-0.5,)*2, b=(0.5,)*2, n=(8,)*2, order=3)
+
+    from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import \
+            PolynomialWarpAndBlendGroupFactory as GroupFactory
+    discr = Discretization(actx, mesh, GroupFactory(3))
+
+    for sym_name, n_args in [
+            ("sin", 1),
+            ("exp", 1),
+            ("arctan2", 2),
+            ("minimum", 2),
+            ("maximum", 2),
+            ("where", 3),
+            ]:
+        args = [np.random.randn(discr.ndofs) for i in range(n_args)]
+        ref_result = getattr(np, sym_name)(*args)
+
+        actx_args = [unflatten(actx, discr, actx.from_numpy(arg)) for arg in args]
+
+        actx_result = actx.to_numpy(
+                flatten(getattr(actx.np, sym_name)(*actx_args)))
+
+        assert np.allclose(actx_result, ref_result)
 
 
 if __name__ == "__main__":
