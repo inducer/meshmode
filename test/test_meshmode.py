@@ -54,9 +54,9 @@ logger = logging.getLogger(__name__)
 
 # {{{ circle mesh
 
-def test_circle_mesh(do_plot=False):
+def test_circle_mesh(visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
-    print("BEGIN GEN")
+    logger.info("BEGIN GEN")
     mesh = generate_gmsh(
             FileSource("circle.step"), 2, order=2,
             force_ambient_dim=2,
@@ -64,18 +64,22 @@ def test_circle_mesh(do_plot=False):
                 "-string", "Mesh.CharacteristicLengthMax = 0.05;"],
             target_unit="MM",
             )
-    print("END GEN")
-    print(mesh.nelements)
+    logger.info("END GEN")
+    logger.info("nelements: %d", mesh.nelements)
 
     from meshmode.mesh.processing import affine_map
     mesh = affine_map(mesh, A=3*np.eye(2))
 
-    if do_plot:
+    if visualize:
         from meshmode.mesh.visualization import draw_2d_mesh
-        draw_2d_mesh(mesh, fill=None, draw_nodal_adjacency=True,
+        draw_2d_mesh(mesh,
+                fill=None,
+                draw_vertex_numbers=False,
+                draw_nodal_adjacency=True,
                 set_bounding_box=True)
         import matplotlib.pyplot as pt
-        pt.show()
+        pt.axis("equal")
+        pt.savefig("circle_mesh", dpi=300)
 
 # }}}
 
@@ -926,11 +930,11 @@ def test_sanity_balls(ctx_factory, src_file, dim, mesh_order, visualize=False):
 
 # {{{ rect/box mesh generation
 
-def test_rect_mesh(do_plot=False):
+def test_rect_mesh(visualize=False):
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh()
 
-    if do_plot:
+    if visualize:
         from meshmode.mesh.visualization import draw_2d_mesh
         draw_2d_mesh(mesh, fill=None, draw_nodal_adjacency=True)
         import matplotlib.pyplot as pt
@@ -991,7 +995,7 @@ def test_as_python():
 
 # {{{ test lookup tree for element finding
 
-def test_lookup_tree(do_plot=False):
+def test_lookup_tree(visualize=False):
     from meshmode.mesh.generation import make_curve_mesh, cloverleaf
     mesh = make_curve_mesh(cloverleaf, np.linspace(0, 1, 1000), order=3)
 
@@ -1009,7 +1013,7 @@ def test_lookup_tree(do_plot=False):
         for igrp, iel in tree.generate_matches(pt):
             print(igrp, iel)
 
-    if do_plot:
+    if visualize:
         with open("tree.dat", "w") as outf:
             tree.visualize(outf)
 
