@@ -112,10 +112,12 @@ class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase,
 
     @memoize_method
     def _mode_ids_and_basis(self):
+        # for now, see https://gitlab.tiker.net/inducer/modepy/-/merge_requests/14
+        import modepy.modes as modes
         if self.dim <= 3:
-            return mp.simplex_onb_with_mode_ids(self.dim, self.order)
+            return modes.simplex_onb_with_mode_ids(self.dim, self.order)
         else:
-            return mp.simplex_monomial_basis_with_mode_ids(self.dim, self.order)
+            return modes.simplex_monomial_basis_with_mode_ids(self.dim, self.order)
 
     def basis(self):
         mode_ids, basis = self._mode_ids_and_basis()
