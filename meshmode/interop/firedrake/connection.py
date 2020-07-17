@@ -200,7 +200,7 @@ class FiredrakeConnection:
         # }}}
 
         # Get meshmode unit nodes
-        mm_unit_nodes = element_grp.unit_nodes()
+        mm_unit_nodes = element_grp.unit_nodes
         # get firedrake unit nodes and map onto meshmode reference element
         tdim = fdrake_fspace.mesh().topological_dimension()
         fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(tdim, True)
@@ -219,15 +219,25 @@ class FiredrakeConnection:
         # to the same firedrake node
         unique_fd_nodes, counts = np.unique(mm2fd_node_mapping,
                                             return_counts=True)
-        # self._duplicate_nodes
-        # maps firedrake nodes associated to more than 1 meshmode node
+        # map firedrake nodes associated to more than 1 meshmode node
         # to all associated meshmode nodes.
-        self._duplicate_nodes = {}
+        # fd node index -> (meshmode cell index, meshmode local node index)
+        fd_to_dupes = {}
         dup_fd_nodes = set(unique_fd_nodes[counts > 1])
-        for mm_inode, fd_inode in enumerate(mm2fd_node_mapping):
-            if fd_inode in dup_fd_nodes:
-                self._duplicate_nodes.setdefault(fd_inode, [])
-                self._duplicate_nodes[fd_inode].append(mm_inode)
+        for icell, cell in enumerate(mm2fd_node_mapping):
+            for local_mm_inode, fd_inode in enumerate(cell):
+                if fd_inode in dup_fd_nodes:
+                    fd_to_dupes.setdefault(fd_inode, [])
+                    fd_to_dupes[fd_inode] = (icell, local_mm_inode)
+        # A list of tuples, each tuple represents an equivalence class
+        # of meshmode nodes
+        # (represented as tuples
+        #  *(meshmode_cell_index, meshmode local node index)*)
+        # which associate to the same firedrake node under
+        # *mm2fd_node_mapping*. Only equivalence classes of size > 1
+        # are included.
+        self._mm_node_equiv_classes = [tuple(equiv_class) for equiv_class
+                                       in six.itervalues(fd_to_dupes)]
 
         # Store input
         self.discr = discr
@@ -337,9 +347,9 @@ class FiredrakeConnection:
                 raise TypeError(arr_name + " must be of type "
                                 ":class:`meshmode.dof_array.DOFArray`, "
                                 "not :class:`%s`." % type(arr))
-            if arr.shape != self.discr.groups.shape:
+            if arr.shape != tuple([len(self.discr.groups)]):
                 raise ValueError(arr_name + " shape must be %s, not %s."
-                                 % (self.discr.groups.shape, arr.shape))
+                                 % (tuple([len(self.discr.groups)]), arr.shape))
             if arr[self.group_nr].shape != group_shape:
                 raise ValueError(arr_name + "[%s].shape must be %s, not %s"
                                  % (self.group_nr,
@@ -358,9 +368,25 @@ class FiredrakeConnection:
             if shape is not None and field.shape != shape:
                 raise ValueError(field_name + ".shape must be %s, not %s"
                                  % (shape, field.shape))
-            for i, arr in np.flatten(field):
-                arr_name = "%s[%s]" % (field_name, np.unravel_index(i, shape))
-                check_dof_array(arr, arr_name)
+            for i, arr in enumerate(field.flatten()):
+                arr_name = "%s[%s]" % (field_name, np.unravel_index(i, field.shape))
+                try:
+                    check_dof_array(arr, arr_name)
+                except TypeError as e:
+                    msg = e.args[0]
+                    prefix = "%s is a numpy array of shape %s, which is " \
+                        "interpreted as a mapping into a space of shape " \
+                        "%s. For each multi-index *mi*, the " \
+                        "*mi*th coordinate values of %s should be " \
+                        "represented as a DOFArray stored in %s[mi]. If you " \
+                        "are not trying to represent a mapping into a space " \
+                        "of shape %s, look at the documentation for " \
+                        "FiredrakeConnection.from_meshmode or " \
+                        "FiredrakeConnection.from_firedrake to see how " \
+                        "fields in a discretization are represented." \
+                        % (field_name, field.shape, field.shape, field_name,
+                           field_name, field.shape)
+                    raise TypeError(prefix + "\n" + msg)
         else:
             raise TypeError("field must be of type DOFArray or np.ndarray",
                             "not %s." % type(field))
@@ -423,26 +449,34 @@ class FiredrakeConnection:
             if fspace_shape == tuple():
                 out = self.discr.zeros(actx, dtype=function_data.dtype)
             else:
-                out = \
-                    np.array([self.discr.zeros(actx, dtype=function_data.dtype)
-                              for _ in np.prod(fspace_shape)]
-                             ).reshape(fspace_shape)
+                out = np.ndarray(fspace_shape, dtype=np.object)
+                for multi_index in np.ndindex(fspace_shape):
+                    out[multi_index] = \
+                        self.discr.zeros(actx, dtype=function_data.dtype)
 
         def reorder_and_resample(dof_array, fd_data):
-            dof_array[self.group_nr] = fd_data[self.mm2fd_node_mapping]
-            np.matmul(dof_array[self.group_nr], self._resampling_mat_fd2mm.T,
-                      out=dof_array[self.group_nr])
+            # put the firedrake data in meshmode order and then resample,
+            # storing in dof_array
+            dof_array[self.group_nr].set(
+                    np.matmul(fd_data[self.mm2fd_node_mapping],
+                              self._resampling_mat_fd2mm.T)
+                    )
 
         # If scalar, just reorder and resample out
         if fspace_shape == tuple():
             reorder_and_resample(out, function_data)
         else:
+            # firedrake drops extra dimensions
+            if len(function_data.shape) != 1 + len(fspace_shape):
+                shape = (function_data.shape[0],) + fspace_shape
+                function_data = function_data.reshape(shape)
             # otherwise, have to grab each dofarray and the corresponding
             # data from *function_data*
-            with np.nditer(out, op_flags=['readwrite', 'multi_index']) as it:
-                for dof_array in it:
-                    fd_data = function_data[:, it.multi_index]
-                    reorder_and_resample(dof_array, fd_data)
+            for multi_index in np.ndindex(fspace_shape):
+                dof_array = out[multi_index]
+                index = (np.s_[:],) + multi_index
+                fd_data = function_data[index]
+                reorder_and_resample(dof_array, fd_data)
 
         return out
 
@@ -486,7 +520,8 @@ class FiredrakeConnection:
             assert that at any two meshmode nodes corresponding to the
             same firedrake node (meshmode is a discontinuous space, so this
             situation will almost certainly happen), the function being transported
-            has values at most *continuity_tolerance* distance
+            has values less than *continuity_tolerance* distance (in
+            :math:`\\ell^\\infty` distance)
             apart. If *None*, no checks are performed. Does nothing if
             the firedrake function space is discontinuous
 
@@ -503,7 +538,8 @@ class FiredrakeConnection:
         self._validate_field(mm_field, "mm_field", dtype=dtype)
 
         # get the shape of mm_field
-        if isinstance(mm_field, np.ndarray):
+        from meshmode.dof_array import DOFArray
+        if not isinstance(mm_field, DOFArray):
             fspace_shape = mm_field.shape
         else:
             fspace_shape = tuple()
@@ -526,54 +562,53 @@ class FiredrakeConnection:
             out = Function(self.firedrake_fspace(shape))
             out.dat.data[:] = 0.0
 
-        # Handle 1-D case
-        if len(out.dat.data.shape) == 1 and isinstance(mm_field, np.ndarray):
-            mm_field = mm_field[0]
+        out_data = out.dat.data
+        # Handle firedrake dropping dimensions
+        if len(out.dat.data.shape) != 1 + len(fspace_shape):
+            shape = (out.dat.data.shape[0],) + fspace_shape
+            out_data = out_data.reshape(shape)
 
         def resample_and_reorder(fd_data, dof_array):
-            # Resample to firedrake
-            resampled_dof_arr = np.matmul(dof_array[self.group_nr],
-                                          self._resampling_mat_mm2fd.T)
-            # store using correct ordering
-            fd_data[self.mm2fd_node_mapping] = resampled_dof_arr
+            # pull data into numpy
+            dof_np = dof_array.array_context.to_numpy(dof_array[self.group_nr])
+            # resample the data data (keep this for continuity checks)
+            resampled_data = np.matmul(dof_np, self._resampling_mat_mm2fd.T)
+            # store resampled data in firedrake ordering
+            fd_data[self.mm2fd_node_mapping] = resampled_data
 
-        # If scalar, just reorder and resample out
-        if fspace_shape == tuple():
-            resample_and_reorder(out.dat.data, mm_field)
-        else:
-            # otherwise, have to grab each dofarray and the corresponding
-            # data from *function_data*
-            with np.nditer(mm_field, op_flags=['readwrite', 'multi_index']) as it:
-                for dof_array in it:
-                    fd_data = out.dat.data[:, it.multi_index]
-                    resample_and_reorder(fd_data, dof_array)
-
-        # Continuity checks if requested
-        if self._ufl_element.family() == 'Lagrange' \
-                and continuity_tolerance is not None:
-            raise NotImplementedError("This got harder with DOFArrays")
-            assert isinstance(continuity_tolerance, float)
-            assert continuity_tolerance >= 0
-            # Check each firedrake node which has been duplicated
-            # that all associated values are within the continuity
-            # tolerance
-            for fd_inode, duplicated_mm_nodes in \
-                    six.iteritems(self._duplicate_nodes):
-                mm_inode = duplicated_mm_nodes[0]
+            # Continuity checks if requested
+            if self._ufl_element.family() == 'Lagrange' \
+                    and continuity_tolerance is not None:
+                assert isinstance(continuity_tolerance, float)
+                assert continuity_tolerance >= 0
                 # Make sure not to compare using mm_field,
                 # because two meshmode nodes associated to the same firedrake
                 # nodes may have been resampled to distinct nodes on different
                 # elements.
-                for dup_mm_inode in duplicated_mm_nodes[1:]:
-                    dist = la.norm(mm_field[..., mm_inode]
-                                   - mm_field[..., dup_mm_inode])
-                    if dist >= continuity_tolerance:
-                        raise ValueError("Meshmode nodes %s and %s represent "
-                                         "the same firedrake node %s, but "
-                                         ":arg:`mm_field`'s values are "
-                                         " %s > %s apart)"
-                                         % (mm_inode, dup_mm_inode, fd_inode,
-                                            dist, continuity_tolerance))
+                for mm_equiv_class in self._mm_node_equiv_classes:
+                    l_inf = np.ptp(resampled_data[mm_equiv_class])
+                    if l_inf >= continuity_tolerance:
+                        fd_inode = self.mm2fd_node_mapping[mm_equiv_class[0]]
+                        raise ValueError("Meshmode nodes %s (written as "
+                                         " *(element index, local node index)*)"
+                                         " represent the same firedrake node %s"
+                                         ", but :arg:`mm_field`'s resampled "
+                                         " values are %s > %s apart)"
+                                         % (mm_equiv_class, fd_inode,
+                                            l_inf, continuity_tolerance))
+
+        # If scalar, just reorder and resample out
+        if fspace_shape == tuple():
+            resample_and_reorder(out_data, mm_field)
+        else:
+            # otherwise, have to grab each dofarray and the corresponding
+            # data from *function_data*
+            for multi_index in np.ndindex(fspace_shape):
+                # have to be careful to take view and not copy
+                index = (np.s_[:],) + multi_index
+                fd_data = out_data[index]
+                dof_array = mm_field[multi_index]
+                resample_and_reorder(fd_data, dof_array)
 
         return out
 
@@ -649,7 +684,7 @@ class FromFiredrakeConnection(FiredrakeConnection):
                                                       fdrake_fspace,
                                                       fd_cell_node_list)
         if fdrake_fspace.ufl_element().family() == 'Discontinuous Lagrange':
-            assert len(self._duplicate_nodes) == 0, \
+            assert len(self._mm_node_equiv_classes) == 0, \
                 "Somehow a firedrake node in a 'DG' space got duplicated..." \
                 "contact the developer."
 
@@ -735,7 +770,7 @@ class FromBdyFiredrakeConnection(FiredrakeConnection):
                                                          fdrake_fspace,
                                                          fd_cell_node_list)
         if fdrake_fspace.ufl_element().family() == 'Discontinuous Lagrange':
-            assert len(self._duplicate_nodes) == 0, \
+            assert len(self._mm_node_equiv_classes) == 0, \
                 "Somehow a firedrake node in a 'DG' space got duplicated..." \
                 "contact the developer."
 
@@ -821,7 +856,7 @@ class ToFiredrakeConnection(FiredrakeConnection):
                                                     fspace,
                                                     mm2fd_node_mapping,
                                                     group_nr=group_nr)
-        assert len(self._duplicate_nodes) == 0, \
+        assert len(self._mm_node_equiv_classes) == 0, \
             "Somehow a firedrake node in a 'DG' space got duplicated..." \
             "contact the developer."
 
