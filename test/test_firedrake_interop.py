@@ -1,9 +1,3 @@
-# TODO:
-#      * Make sure from_meshmode and from_firedrake receive
-#        DOFArrays
-#      * Make sure output of from_firedrake is treated as
-#        DOFArray
-#      * Run tests and debug
 __copyright__ = "Copyright (C) 2020 Benjamin Sepanski"
 
 __license__ = """
@@ -583,15 +577,21 @@ def test_to_fd_idempotency(ctx_factory, mm_mesh, fspace_degree):
     factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
     discr = Discretization(actx, mm_mesh, factory)
     fdrake_connection = ToFiredrakeConnection(discr)
-    mm_unique = discr.zeros(actx, dtype=np.float64)
-    mm_unique[0][:] = np.arange(np.size(mm_unique[0]))
-    mm_unique_copy = actx.np.copy(mm_unique)
+    fdrake_mesh = fdrake_connection.firedrake_fspace().mesh()
+    dtype = fdrake_mesh.coordinates.dat.data.dtype
+
+    mm_unique = discr.zeros(actx, dtype=dtype)
+    unique_vals = np.arange(np.size(mm_unique[0]), dtype=dtype)
+    mm_unique[0].set(unique_vals.reshape(mm_unique[0].shape))
+    mm_unique_copy = DOFArray.from_list(actx, [mm_unique[0].copy()])
 
     # Test for idempotency mm->fd->mm
     fdrake_unique = fdrake_connection.from_meshmode(mm_unique)
     fdrake_connection.from_firedrake(fdrake_unique, out=mm_unique_copy)
 
-    np.testing.assert_allclose(mm_unique_copy, mm_unique, atol=CLOSE_ATOL)
+    np.testing.assert_allclose(actx.to_numpy(mm_unique_copy[0]),
+                               actx.to_numpy(mm_unique[0]),
+                               atol=CLOSE_ATOL)
 
     # Test for idempotency (mm->)fd->mm->fd
     fdrake_unique_copy = fdrake_connection.from_meshmode(mm_unique_copy)
