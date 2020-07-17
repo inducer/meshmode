@@ -40,6 +40,7 @@ Group types
 .. autoclass:: InterpolatoryQuadratureSimplexElementGroup
 .. autoclass:: QuadratureSimplexElementGroup
 .. autoclass:: PolynomialWarpAndBlendElementGroup
+.. autoclass:: PolynomialRecursiveNodesElementGroup
 .. autoclass:: PolynomialEquidistantSimplexElementGroup
 .. autoclass:: LegendreGaussLobattoTensorProductElementGroup
 
@@ -49,6 +50,7 @@ Group factories
 .. autoclass:: InterpolatoryQuadratureSimplexGroupFactory
 .. autoclass:: QuadratureSimplexGroupFactory
 .. autoclass:: PolynomialWarpAndBlendGroupFactory
+.. autoclass:: PolynomialRecursiveNodesGroupFactory
 .. autoclass:: PolynomialEquidistantSimplexGroupFactory
 .. autoclass:: LegendreGaussLobattoTensorProductGroupFactory
 """
@@ -207,6 +209,8 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
     polynomials in :math:`P^k`, hence usable for differentiation and
     interpolation. Interpolation nodes edge-clustered for avoidance of Runge
     phenomena. Nodes are present on the boundary of the simplex.
+
+    Uses :func:`modepy.warp_and_blend_nodes`.
     """
     @property
     @memoize_method
@@ -217,6 +221,42 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
             result = np.mean(result, axis=1).reshape(-1, 1)
         else:
             result = mp.warp_and_blend_nodes(dim, self.order)
+
+        dim2, nunit_nodes = result.shape
+        assert dim2 == dim
+        return result
+
+
+class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
+    """Elemental discretization with a number of nodes matching the number of
+    polynomials in :math:`P^k`, hence usable for differentiation and
+    interpolation. Interpolation nodes edge-clustered for avoidance of Runge
+    phenomena. Depending on the *family* argument, nodes may be present on the
+    boundary of the simplex.
+
+    Supports a choice of the base *family* of 1D nodes, see the documentation
+    of the *family* argument to :func:`recursivenodes.recursive_nodes`.
+
+    Requires :mod:`recursivenodes` to be installed.
+
+    .. [Isaac20] Tobin Isaac. Recursive, parameter-free, explicitly defined
+        interpolation nodes for simplices.
+        `Arxiv preprint <https://arxiv.org/abs/2002.09421>`__.
+
+    .. versionadded:: 2020.2
+    """
+    def __init__(self, mesh_el_group, order, family, index):
+        super().__init__(mesh_el_group, order, index)
+        self.family = family
+
+    @property
+    @memoize_method
+    def unit_nodes(self):
+        dim = self.mesh_el_group.dim
+
+        from recursivenodes import recursive_nodes
+        result = recursive_nodes(dim, self.order, self.family,
+                domain="biunit").T.copy()
 
         dim2, nunit_nodes = result.shape
         assert dim2 == dim
@@ -338,6 +378,20 @@ class QuadratureSimplexGroupFactory(HomogeneousOrderBasedGroupFactory):
 class PolynomialWarpAndBlendGroupFactory(HomogeneousOrderBasedGroupFactory):
     mesh_group_class = _MeshSimplexElementGroup
     group_class = PolynomialWarpAndBlendElementGroup
+
+
+class PolynomialRecursiveNodesGroupFactory(HomogeneousOrderBasedGroupFactory):
+    def __init__(self, order, family):
+        self.order = order
+        self.family = family
+
+    def __call__(self, mesh_el_group, index):
+        if not isinstance(mesh_el_group, _MeshSimplexElementGroup):
+            raise TypeError("only mesh element groups of type '%s' "
+                    "are supported" % _MeshSimplexElementGroup.__name__)
+
+        return PolynomialRecursiveNodesElementGroup(
+                mesh_el_group, self.order, self.family, index)
 
 
 class PolynomialEquidistantSimplexGroupFactory(HomogeneousOrderBasedGroupFactory):

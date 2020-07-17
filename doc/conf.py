@@ -282,5 +282,6 @@ intersphinx_mapping = {
     'https://documen.tician.de/meshpy': None,
     'https://documen.tician.de/modepy': None,
     'https://documen.tician.de/loopy': None,
-    'https://firedrakeproject.org/': None
+    'https://firedrakeproject.org/': None,
+    'https://tisaac.gitlab.io/recursivenodes/': None,
 }
