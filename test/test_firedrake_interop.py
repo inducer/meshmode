@@ -34,11 +34,13 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 
-from meshmode.array_tools import PyOpenCLArrayContext
+from meshmode.array_context import PyOpenCLArrayContext
 
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import (
     InterpolatoryQuadratureSimplexGroupFactory)
+
+from meshmode.dof_array import DOFArray
 
 from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL, check_bc_coverage
 
@@ -169,8 +171,8 @@ def check_consistency(fdrake_fspace, discr, group_nr=0):
     finat_elt = fdrake_fspace.finat_element
     assert len(discr.groups) == 1
     assert discr.groups[group_nr].order == finat_elt.degree
-    assert discr.groups[group_nr].nunit_nodes == finat_elt.space_dimension()
-    assert discr.nnodes == fdrake_fspace.node_count
+    assert discr.groups[group_nr].nunit_dofs == finat_elt.space_dimension()
+    assert discr.ndofs == fdrake_fspace.node_count
 
 
 def test_fd2mm_consistency(ctx_factory, fdrake_mesh, fspace_degree):
@@ -276,7 +278,7 @@ def test_from_bdy_consistency(ctx_factory,
     finat_elt = fdrake_fspace.finat_element
     assert len(discr.groups) == 1
     assert discr.groups[0].order == finat_elt.degree
-    assert discr.groups[0].nunit_nodes == finat_elt.space_dimension()
+    assert discr.groups[0].nunit_dofs == finat_elt.space_dimension()
 
 # }}}
 
@@ -355,6 +357,7 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
 # TODO : Add test for ToFiredrakeConnection where group_nr != 0
 # {{{  Double check functions are being transported correctly
 
+
 def alternating_sum_fd(spatial_coord):
     """
     Return an expression x1 - x2 + x3 -+...
@@ -365,14 +368,15 @@ def alternating_sum_fd(spatial_coord):
     )
 
 
-def alternating_sum_mm(nodes):
+def alternating_sum_mm(group_nodes):
     """
-    Take the *(dim, nnodes)* array nodes and return an array
-    holding the alternating sum of the coordinates of each node
+    Take the *(dim, nelements, nunit_dofs)* np array group_nodes and return
+    an *(nelements, nunit_dofs)*
+    array holding the alternating sum of the coordinates of each node
     """
-    alternator = np.ones(nodes.shape[0])
+    alternator = np.ones(group_nodes.shape[0])
     alternator[1::2] *= -1
-    return np.matmul(alternator, nodes)
+    return np.einsum("i,ijk->jk", alternator, group_nodes)
 
 
 # In 1D/2D/3D check constant 1,
@@ -380,9 +384,11 @@ def alternating_sum_mm(nodes):
 # This should show that projection to any coordinate in 1D/2D/3D
 # transfers correctly.
 test_functions = [
-    (lambda spatial_coord: Constant(1.0), lambda nodes: np.ones(nodes.shape[1])),
-    (lambda spatial_coord: spatial_coord[0], lambda nodes: nodes[0, :]),
-    (sum, lambda nodes: np.sum(nodes, axis=0)),
+    (lambda spatial_coord: Constant(1.0),
+     lambda grp_nodes: np.ones(grp_nodes.shape[1:])),
+    (lambda spatial_coord: spatial_coord[0],
+     lambda grp_nodes: grp_nodes[0, ...]),
+    (sum, lambda grp_nodes: np.sum(grp_nodes, axis=0)),
     (alternating_sum_fd, alternating_sum_mm)
 ]
 
@@ -415,21 +421,28 @@ def test_from_fd_transfer(ctx_factory,
     else:
         fdrake_connection = FromFiredrakeConnection(actx, fdrake_fspace)
 
-    # transport fdrake function
-    fd2mm_f = fdrake_connection.from_firedrake(fdrake_f)
+    # transport fdrake function and put in numpy
+    fd2mm_f = fdrake_connection.from_firedrake(fdrake_f, actx=actx)
+    fd2mm_f = actx.to_numpy(fd2mm_f[0])
 
     # build same function in meshmode
     discr = fdrake_connection.discr
-    nodes = discr.nodes().get(queue=queue)
-    meshmode_f = meshmode_f_eval(nodes)
+    # nodes is np array (ambient_dim,) of DOFArray (ngroups,)
+    # of arrays (nelements, nunit_dofs), we want a single np array
+    # of shape (ambient_dim, nelements, nunit_dofs)
+    nodes = discr.nodes()
+    group_nodes = np.array([actx.to_numpy(dof_arr[0]) for dof_arr in nodes])
+    meshmode_f = meshmode_f_eval(group_nodes)
 
     # fd -> mm should be same as creating in meshmode
     np.testing.assert_allclose(fd2mm_f, meshmode_f, atol=CLOSE_ATOL)
 
     if not only_convert_bdy:
         # now transport mm -> fd
+        meshmode_f_dofarr = discr.zeros(actx)
+        meshmode_f_dofarr[0][:] = meshmode_f
         mm2fd_f = \
-            fdrake_connection.from_meshmode(meshmode_f,
+            fdrake_connection.from_meshmode(meshmode_f_dofarr,
                                             assert_fdrake_discontinuous=False,
                                             continuity_tolerance=1e-8)
         # mm -> fd should be same as creating in firedrake
@@ -454,8 +467,10 @@ def test_to_fd_transfer(ctx_factory, mm_mesh, fspace_degree,
     factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
     discr = Discretization(actx, mm_mesh, factory)
 
-    nodes = discr.nodes().get(queue=queue)
-    meshmode_f = meshmode_f_eval(nodes)
+    nodes = discr.nodes()
+    group_nodes = np.array([actx.to_numpy(dof_arr[0]) for dof_arr in nodes])
+    meshmode_f = discr.zeros(actx)
+    meshmode_f[0][:] = meshmode_f_eval(group_nodes)
 
     # connect to firedrake and evaluate expr in firedrake
     fdrake_connection = ToFiredrakeConnection(discr)
@@ -518,7 +533,7 @@ def test_from_fd_idempotency(ctx_factory,
     if only_convert_bdy:
         fdrake_connection = FromBdyFiredrakeConnection(actx, fdrake_fspace,
                                                        'on_boundary')
-        temp = fdrake_connection.from_firedrake(fdrake_unique)
+        temp = fdrake_connection.from_firedrake(fdrake_unique, actx=actx)
         fdrake_unique = \
             fdrake_connection.from_meshmode(temp,
                                             assert_fdrake_discontinuous=False,
@@ -527,9 +542,10 @@ def test_from_fd_idempotency(ctx_factory,
         fdrake_connection = FromFiredrakeConnection(actx, fdrake_fspace)
 
     # Test for idempotency fd->mm->fd
-    mm_field = fdrake_connection.from_firedrake(fdrake_unique)
+    mm_field = fdrake_connection.from_firedrake(fdrake_unique, actx=actx)
     fdrake_unique_copy = Function(fdrake_fspace)
-    fdrake_connection.from_meshmode(mm_field, fdrake_unique_copy,
+    fdrake_connection.from_meshmode(mm_field,
+                                    out=fdrake_unique_copy,
                                     assert_fdrake_discontinuous=False,
                                     continuity_tolerance=1e-8)
 
@@ -538,8 +554,18 @@ def test_from_fd_idempotency(ctx_factory,
                                atol=CLOSE_ATOL)
 
     # Test for idempotency (fd->)mm->fd->mm
-    mm_field_copy = fdrake_connection.from_firedrake(fdrake_unique_copy)
-    np.testing.assert_allclose(mm_field_copy, mm_field, atol=CLOSE_ATOL)
+    mm_field_copy = fdrake_connection.from_firedrake(fdrake_unique_copy,
+                                                     actx=actx)
+    if fspace_type == "scalar":
+        np.testing.assert_allclose(actx.to_numpy(mm_field_copy[0]),
+                                   actx.to_numpy(mm_field[0]),
+                                   atol=CLOSE_ATOL)
+    else:
+        for dof_arr_cp, dof_arr in zip(mm_field_copy.flatten(),
+                                       mm_field.flatten()):
+            np.testing.assert_allclose(actx.to_numpy(dof_arr_cp[0]),
+                                       actx.to_numpy(dof_arr[0]),
+                                       atol=CLOSE_ATOL)
 
 
 def test_to_fd_idempotency(ctx_factory, mm_mesh, fspace_degree):
@@ -557,12 +583,13 @@ def test_to_fd_idempotency(ctx_factory, mm_mesh, fspace_degree):
     factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
     discr = Discretization(actx, mm_mesh, factory)
     fdrake_connection = ToFiredrakeConnection(discr)
-    mm_unique = np.arange(discr.nnodes, dtype=np.float64)
-    mm_unique_copy = np.copy(mm_unique)
+    mm_unique = discr.zeros(actx, dtype=np.float64)
+    mm_unique[0][:] = np.arange(np.size(mm_unique[0]))
+    mm_unique_copy = actx.np.copy(mm_unique)
 
     # Test for idempotency mm->fd->mm
     fdrake_unique = fdrake_connection.from_meshmode(mm_unique)
-    fdrake_connection.from_firedrake(fdrake_unique, mm_unique_copy)
+    fdrake_connection.from_firedrake(fdrake_unique, out=mm_unique_copy)
 
     np.testing.assert_allclose(mm_unique_copy, mm_unique, atol=CLOSE_ATOL)
 
