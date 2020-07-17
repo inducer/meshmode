@@ -347,6 +347,9 @@ class FiredrakeConnection:
                 raise TypeError(arr_name + " must be of type "
                                 ":class:`meshmode.dof_array.DOFArray`, "
                                 "not :class:`%s`." % type(arr))
+            if arr.array_context is None:
+                raise ValueError(arr_name + " must have a non-*None* "
+                                 "array_context")
             if arr.shape != tuple([len(self.discr.groups)]):
                 raise ValueError(arr_name + " shape must be %s, not %s."
                                  % (tuple([len(self.discr.groups)]), arr.shape))
