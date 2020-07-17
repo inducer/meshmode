@@ -126,6 +126,12 @@ class InterpolatoryElementGroupBase(ElementGroupBase):
     """A subclass of :class:`ElementGroupBase` that is equipped with a
     function space.
 
+    .. method:: mode_ids()
+
+        Return an immutable sequence of opaque (hashable) mode identifiers,
+        one per element of the :meth:`basis`. The meaning of the mode
+        identifiers is defined by the concrete element group.
+
     .. method:: basis()
 
         Returns a :class:`list` of basis functions that take arrays
