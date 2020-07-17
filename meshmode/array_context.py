@@ -276,8 +276,13 @@ class PyOpenCLArrayContext(ArrayContext):
 
     def call_loopy(self, program, **kwargs):
         program = self.transform_loopy_program(program)
-        assert program.options.return_dict
-        assert program.options.no_numpy
+
+        try:
+            options = program.options
+        except AttributeError:
+            options = program.root_kernel.options
+        assert options.return_dict
+        assert options.no_numpy
 
         evt, result = program(self.queue, **kwargs, allocator=self.allocator)
         return result
@@ -295,7 +300,10 @@ class PyOpenCLArrayContext(ArrayContext):
     def transform_loopy_program(self, program):
         # FIXME: This could be much smarter.
         import loopy as lp
-        all_inames = program.all_inames()
+        try:
+            all_inames = program.all_inames()
+        except AttributeError:
+            all_inames = program.root_kernel.all_inames()
 
         inner_iname = None
         if "iel" not in all_inames and "i0" in all_inames:
