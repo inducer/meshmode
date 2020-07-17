@@ -47,8 +47,12 @@ def main():
 
     # Make connections
     cl_ctx = cl.create_some_context()
-    fd_connection = FromFiredrakeConnection(cl_ctx, fd_fspace)
-    fd_bdy_connection = FromBdyFiredrakeConnection(cl_ctx,
+    queue = cl.CommandQueue(cl_ctx)
+    from meshmode.array_context import PyOpenCLArrayContext
+    actx = PyOpenCLArrayContext(queue)
+
+    fd_connection = FromFiredrakeConnection(actx, fd_fspace)
+    fd_bdy_connection = FromBdyFiredrakeConnection(actx,
                                                    fd_fspace,
                                                    'on_boundary')
 
@@ -72,11 +76,9 @@ def main():
 
     # Plot fd_fntn using FromFiredrakeConnection
     from meshmode.discretization.visualization import make_visualizer
-    queue = cl.CommandQueue(cl_ctx)
     discr = fd_connection.discr
-    vis = make_visualizer(queue, discr, discr.groups[0].order+3)
-    field = fd_connection.from_firedrake(fd_fntn)
-    field = cl.array.to_device(queue, field)
+    vis = make_visualizer(actx, discr, discr.groups[0].order+3)
+    field = fd_connection.from_firedrake(fd_fntn, actx=actx)
 
     fig = plt.figure()
     ax1 = fig.add_subplot(1, 2, 1, projection='3d')
@@ -85,9 +87,8 @@ def main():
 
     # Now repeat using FromBdyFiredrakeConnection
     bdy_discr = fd_bdy_connection.discr
-    bdy_vis = make_visualizer(queue, bdy_discr, bdy_discr.groups[0].order+3)
-    bdy_field = fd_bdy_connection.from_firedrake(fd_fntn)
-    bdy_field = cl.array.to_device(queue, bdy_field)
+    bdy_vis = make_visualizer(actx, bdy_discr, bdy_discr.groups[0].order+3)
+    bdy_field = fd_bdy_connection.from_firedrake(fd_fntn, actx=actx)
 
     ax2 = fig.add_subplot(1, 2, 2, projection='3d')
     plt.sca(ax2)

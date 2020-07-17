@@ -46,6 +46,8 @@ def main():
 
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
+    from meshmode.array_context import PyOpenCLArrayContext
+    actx = PyOpenCLArrayContext(queue)
 
     nel_1d = 16
     from meshmode.mesh.generation import generate_regular_rect_mesh
@@ -60,14 +62,18 @@ def main():
     from meshmode.discretization.poly_element import \
         InterpolatoryQuadratureSimplexGroupFactory
     group_factory = InterpolatoryQuadratureSimplexGroupFactory(order=order)
-    discr = Discretization(cl_ctx, mesh, group_factory)
+    discr = Discretization(actx, mesh, group_factory)
 
     # Get our solution: we will use
     # Real(e^z) = Real(e^{x+iy})
     #           = e^x Real(e^{iy})
     #           = e^x cos(y)
-    nodes = discr.nodes().with_queue(queue).get(queue=queue)
-    candidate_sol = np.exp(nodes[0, :]) * np.cos(nodes[1, :])
+    nodes = discr.nodes()
+    from meshmode.dof_array import thaw
+    for i in range(len(nodes)):
+        nodes[i] = thaw(actx, nodes[i])
+    # First index is dimension
+    candidate_sol = actx.np.exp(nodes[0]) * actx.np.cos(nodes[1])
 
     # }}}
 
@@ -107,7 +113,10 @@ def main():
 
     # {{{ Take the solution from firedrake and compare it to candidate_sol
 
-    true_sol = fd_connection.from_firedrake(sol)
+    true_sol = fd_connection.from_firedrake(sol, actx=actx)
+    # pull back into numpy
+    true_sol = actx.to_numpy(true_sol[0])
+    candidate_sol = actx.to_numpy(candidate_sol[0])
     print("l^2 difference between candidate solution and firedrake solution=",
           np.linalg.norm(true_sol - candidate_sol))
 
