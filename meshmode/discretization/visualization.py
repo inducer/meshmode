@@ -119,7 +119,7 @@ class _VisConnectivityGroup(Record):
 # }}}
 
 
-# {{{ vtk visualizers
+# {{{ vtk connectivity
 
 class VTKConnectivity:
     """Connectivity for standard linear VTK element types.
@@ -341,8 +341,7 @@ class Visualizer(object):
     .. automethod:: write_vtk_file
     """
 
-    def __init__(self, connection,
-            element_shrink_factor=None):
+    def __init__(self, connection, element_shrink_factor=None):
         self.connection = connection
         self.discr = connection.from_discr
         self.vis_discr = connection.to_discr
@@ -478,8 +477,7 @@ class Visualizer(object):
         # {{{ create grid
 
         nodes = nodes.reshape(self.vis_discr.ambient_dim, -1)
-        points = DataArray("points", nodes,
-                vector_format=VF_LIST_OF_COMPONENTS)
+        points = DataArray("points", nodes, vector_format=VF_LIST_OF_COMPONENTS)
 
         grid = UnstructuredGrid(
                 (nodes.shape[1], points),
@@ -587,16 +585,17 @@ def make_visualizer(actx, discr, vis_order, element_shrink_factor=None):
     from meshmode.discretization import Discretization
 
     from meshmode.discretization.poly_element import (
-            PolynomialEquidistantSimplexElementGroup as SimplexElementGroup,
-            EquidistantTensorProductElementGroup as TensorElementGroup)
+            PolynomialEquidistantSimplexElementGroup,
+            EquidistantTensorProductElementGroup,
+            OrderAndTypeBasedGroupFactory
+            )
 
-    from meshmode.discretization.poly_element import OrderAndTypeBasedGroupFactory
     vis_discr = Discretization(
             actx, discr.mesh,
             OrderAndTypeBasedGroupFactory(
                 vis_order,
-                simplex_group_class=SimplexElementGroup,
-                tensor_product_group_class=TensorElementGroup),
+                simplex_group_class=PolynomialEquidistantSimplexElementGroup,
+                tensor_product_group_class=EquidistantTensorProductElementGroup),
             real_dtype=discr.real_dtype)
 
     from meshmode.discretization.connection import \
