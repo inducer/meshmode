@@ -110,11 +110,22 @@ class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase,
     def is_orthogonal_basis(self):
         return self.dim <= 3
 
-    def basis(self):
+    @memoize_method
+    def _mode_ids_and_basis(self):
+        # for now, see https://gitlab.tiker.net/inducer/modepy/-/merge_requests/14
+        import modepy.modes as modes
         if self.dim <= 3:
-            return mp.simplex_onb(self.dim, self.order)
+            return modes.simplex_onb_with_mode_ids(self.dim, self.order)
         else:
-            return mp.simplex_monomial_basis(self.dim, self.order)
+            return modes.simplex_monomial_basis_with_mode_ids(self.dim, self.order)
+
+    def basis(self):
+        mode_ids, basis = self._mode_ids_and_basis()
+        return basis
+
+    def mode_ids(self):
+        mode_ids, basis = self._mode_ids_and_basis()
+        return mode_ids
 
     def grad_basis(self):
         if self.dim <= 3:
@@ -129,6 +140,10 @@ class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBa
     hence usable for differentiation and interpolation.
 
     No interpolation nodes are present on the boundary of the simplex.
+
+    The :meth:`~meshmode.discretization.InterpolatoryElementGroupBase.mode_ids`
+    are a tuple (one entry per dimension) of directional polynomial degrees
+    on the reference element.
     """
 
     @memoize_method
@@ -165,6 +180,10 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
     quadarature, but is not necessarily usable for interpolation.
 
     No interpolation nodes are present on the boundary of the simplex.
+
+    The :meth:`~meshmode.discretization.InterpolatoryElementGroupBase.mode_ids`
+    are a tuple (one entry per dimension) of directional polynomial degrees
+    on the reference element.
     """
 
     @memoize_method
@@ -211,6 +230,10 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
     phenomena. Nodes are present on the boundary of the simplex.
 
     Uses :func:`modepy.warp_and_blend_nodes`.
+
+    The :meth:`~meshmode.discretization.InterpolatoryElementGroupBase.mode_ids`
+    are a tuple (one entry per dimension) of directional polynomial degrees
+    on the reference element.
     """
     @property
     @memoize_method
@@ -237,6 +260,10 @@ class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
     of the *family* argument to :func:`recursivenodes.recursive_nodes`.
 
     Requires :mod:`recursivenodes` to be installed.
+
+    The :meth:`~meshmode.discretization.InterpolatoryElementGroupBase.mode_ids`
+    are a tuple (one entry per dimension) of directional polynomial degrees
+    on the reference element.
 
     .. [Isaac20] Tobin Isaac. Recursive, parameter-free, explicitly defined
         interpolation nodes for simplices.
@@ -267,6 +294,10 @@ class PolynomialEquidistantSimplexElementGroup(_MassMatrixQuadratureElementGroup
     polynomials in :math:`P^k`, hence usable for differentiation and
     interpolation. Interpolation nodes are present on the boundary of the
     simplex.
+
+    The :meth:`~meshmode.discretization.InterpolatoryElementGroupBase.mode_ids`
+    are a tuple (one entry per dimension) of directional polynomial degrees
+    on the reference element.
 
     .. versionadded:: 2016.1
     """
