@@ -84,6 +84,61 @@ def test_circle_mesh(visualize=False):
 # }}}
 
 
+# {{{ test visualizer
+
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_visualizers(ctx_factory, dim):
+    logging.basicConfig(level=logging.INFO)
+
+    cl_ctx = ctx_factory()
+    queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
+
+    nelements = 64
+    target_order = 4
+
+    if dim == 1:
+        mesh = mgen.make_curve_mesh(
+                mgen.NArmedStarfish(5, 0.25),
+                np.linspace(0.0, 1.0, nelements + 1),
+                target_order)
+    elif dim == 2:
+        mesh = mgen.generate_torus(5.0, 1.0, order=target_order)
+    elif dim == 3:
+        mesh = mgen.generate_warped_rect_mesh(dim, target_order, 5)
+    else:
+        raise ValueError("unknown dimensionality")
+
+    from meshmode.discretization import Discretization
+    discr = Discretization(actx, mesh,
+            InterpolatoryQuadratureSimplexGroupFactory(target_order))
+
+    from meshmode.discretization.visualization import make_visualizer
+    vis = make_visualizer(actx, discr, target_order)
+
+    vis.write_vtk_file(f"visualizer_vtk_lagrange_{dim}.vtu", [],
+            use_lagrange_elements=True, overwrite=True)
+    vis.write_vtk_file(f"visualizer_vtk_linear_{dim}.vtu", [],
+            use_lagrange_elements=False, overwrite=True)
+
+    if mesh.dim <= 2:
+        field = thaw(actx, discr.nodes()[0])
+
+    if mesh.dim == 2:
+        try:
+            vis.show_scalar_in_matplotlib_3d(field, do_show=False)
+        except ImportError:
+            logger.info("matplotlib not available")
+
+    if mesh.dim <= 2:
+        try:
+            vis.show_scalar_in_mayavi(field, do_show=False)
+        except ImportError:
+            logger.info("mayavi not avaiable")
+
+# }}}
+
+
 # {{{ test boundary tags
 
 def test_boundary_tags():
