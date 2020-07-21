@@ -57,7 +57,7 @@ from firedrake import (
     Function, SpatialCoordinate, as_tensor)
 
 
-CLOSE_ATOL = 10**-12
+CLOSE_ATOL = 1e-14
 
 
 @pytest.fixture(params=["annulus.msh",
@@ -169,7 +169,7 @@ def check_consistency(fdrake_fspace, discr, group_nr=0):
     assert discr.ndofs == fdrake_fspace.node_count
 
 
-def test_fd2mm_consistency(ctx_factory, fdrake_mesh, fspace_degree):
+def test_from_fd_consistency(ctx_factory, fdrake_mesh, fspace_degree):
     """
     Check basic consistency with a FromFiredrakeConnection
     """
@@ -186,7 +186,7 @@ def test_fd2mm_consistency(ctx_factory, fdrake_mesh, fspace_degree):
     check_consistency(fdrake_fspace, discr)
 
 
-def test_mm2fd_consistency(ctx_factory, mm_mesh, fspace_degree):
+def test_to_fd_consistency(ctx_factory, mm_mesh, fspace_degree):
     fspace_degree += mm_mesh.groups[0].order
 
     cl_ctx = ctx_factory()
