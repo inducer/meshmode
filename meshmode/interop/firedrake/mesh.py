@@ -317,12 +317,19 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         ext_element_faces = ext_element_faces[to_keep]
         ext_neighbor_faces = ext_neighbor_faces[to_keep]
 
-    # tag the boundary
-    ext_neighbors = np.zeros(ext_elements.shape, dtype=IntType)
-    for ifac, marker in enumerate(top.exterior_facets.markers):
-        ext_neighbors[ifac] = -(boundary_tag_bit(BTAG_ALL)
-                                | boundary_tag_bit(BTAG_REALLY_ALL)
-                                | boundary_tag_bit(marker))
+    # tag the boundary, making sure to record custom tags
+    # (firedrake "markers") if present
+    if top.exterior_facets.markers is not None:
+        ext_neighbors = np.zeros(ext_elements.shape, dtype=IntType)
+        for ifac, marker in enumerate(top.exterior_facets.markers):
+            ext_neighbors[ifac] = -(boundary_tag_bit(BTAG_ALL)
+                                    | boundary_tag_bit(BTAG_REALLY_ALL)
+                                    | boundary_tag_bit(marker))
+    else:
+        ext_neighbors = np.full(ext_elements.shape,
+                                -(boundary_tag_bit(BTAG_ALL)
+                                  | boundary_tag_bit(BTAG_REALLY_ALL)),
+                                dtype=IntType)
 
     exterior_grp = FacialAdjacencyGroup(igroup=0, ineighbor=None,
                                         elements=ext_elements,
