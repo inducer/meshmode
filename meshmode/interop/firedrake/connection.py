@@ -807,8 +807,6 @@ class ToFiredrakeConnection(FiredrakeConnection):
         :param group_nr: The group number of the discretization to convert.
             If *None* there must be only one group. The selected group
             must be of type :class:`InterpolatoryQuadratureSimplexElementGroup`.
-            The mesh group ``discr.mesh.groups[group_nr]`` must have
-            order less than or equal to the order of ``discr.groups[group_nr]``.
         :param comm: Communicator to build a dmplex object on for the created
             firedrake mesh
         """
@@ -816,10 +814,6 @@ class ToFiredrakeConnection(FiredrakeConnection):
             assert len(discr.groups) == 1, ":arg:`group_nr` is *None*, but " \
                     ":arg:`discr` has %s != 1 groups." % len(discr.groups)
             group_nr = 0
-        if discr.groups[group_nr].order < discr.mesh.groups[group_nr].order:
-            raise ValueError("Discretization group order must be greater than "
-                             "or equal to the corresponding mesh group's "
-                             "order.")
         el_group = discr.groups[group_nr]
 
         from firedrake.functionspace import FunctionSpace
