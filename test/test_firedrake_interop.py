@@ -54,7 +54,7 @@ firedrake = pytest.importorskip("firedrake")
 from firedrake import (
     UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh,
     FunctionSpace, VectorFunctionSpace, TensorFunctionSpace,
-    Function, SpatialCoordinate, Constant, as_tensor)
+    Function, SpatialCoordinate, as_tensor)
 
 
 CLOSE_ATOL = 10**-12
@@ -110,7 +110,7 @@ def fdrake_family(request):
     return request.param
 
 
-@pytest.fixture(params=[1, 3], ids=["P^1", "P^3"])
+@pytest.fixture(params=[1, 4], ids=["P^1", "P^4"])
 def fspace_degree(request):
     return request.param
 
@@ -352,131 +352,201 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
 # {{{  Double check functions are being transported correctly
 
 
-def alternating_sum_fd(spatial_coord):
+@pytest.mark.parametrize("fdrake_mesh_name,fdrake_mesh_pars,dim",
+    [("UnitInterval", [10, 20, 30], 1),
+     ("UnitSquare", [10, 20, 30], 2),
+     ("UnitCube", [10, 20, 30], 3),
+     ("blob2d-order1", ["8e-2", "6e-2", "4e-2"], 2),
+     ("blob2d-order4", ["8e-2", "6e-2", "4e-2"], 2),
+     ("warp", [10, 20, 30], 2),
+     ("warp", [10, 20, 30], 3),
+     ])
+@pytest.mark.parametrize("fdrake_family", ['DG', 'CG'])
+@pytest.mark.parametrize("only_convert_bdy", [False, True])
+def test_from_fd_transfer(ctx_factory, fspace_degree,
+                          fdrake_mesh_name, fdrake_mesh_pars, dim,
+                          fdrake_family, only_convert_bdy):
     """
-    Return an expression x1 - x2 + x3 -+...
+    Make sure creating a function which projects onto
+    one dimension then transports it is the same
+    (up to resampling error) as projecting to one
+    dimension on the transported mesh
     """
-    return sum(
-        [(-1)**i * spatial_coord
-         for i, spatial_coord in enumerate(spatial_coord)]
-    )
-
-
-def alternating_sum_mm(group_nodes):
-    """
-    Take the *(dim, nelements, nunit_dofs)* np array group_nodes and return
-    an *(nelements, nunit_dofs)*
-    array holding the alternating sum of the coordinates of each node
-    """
-    alternator = np.ones(group_nodes.shape[0])
-    alternator[1::2] *= -1
-    return np.einsum("i,ijk->jk", alternator, group_nodes)
-
-
-# In 1D/2D/3D check constant 1,
-# projection to x1, x1/x1+x2/x1+x2+x3, and x1/x1-x2/x1-x2+x3.
-# This should show that projection to any coordinate in 1D/2D/3D
-# transfers correctly.
-test_functions = [
-    (lambda spatial_coord: Constant(1.0),
-     lambda grp_nodes: np.ones(grp_nodes.shape[1:])),
-    (lambda spatial_coord: spatial_coord[0],
-     lambda grp_nodes: grp_nodes[0, ...]),
-    (sum, lambda grp_nodes: np.sum(grp_nodes, axis=0)),
-    (alternating_sum_fd, alternating_sum_mm)
-]
-
-
-@pytest.mark.parametrize("fdrake_f_expr,meshmode_f_eval", test_functions)
-@pytest.mark.parametrize("only_convert_bdy", (False, True))
-def test_from_fd_transfer(ctx_factory,
-                          fdrake_mesh, fdrake_family, fspace_degree,
-                          fdrake_f_expr, meshmode_f_eval,
-                          only_convert_bdy):
-    """
-    Make sure creating a function then transporting it is the same
-    (up to resampling error) as creating a function on the transported
-    mesh
-    """
-    # make function space and function
-    fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fspace_degree)
-    spatial_coord = SpatialCoordinate(fdrake_mesh)
-
-    fdrake_f = Function(fdrake_fspace).interpolate(fdrake_f_expr(spatial_coord))
-
-    # build connection
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
-
-    if only_convert_bdy:
-        fdrake_connection = FromBdyFiredrakeConnection(actx, fdrake_fspace,
-                                                       'on_boundary')
-    else:
-        fdrake_connection = FromFiredrakeConnection(actx, fdrake_fspace)
-
-    # transport fdrake function and put in numpy
-    fd2mm_f = fdrake_connection.from_firedrake(fdrake_f, actx=actx)
-    fd2mm_f = actx.to_numpy(fd2mm_f[0])
-
-    # build same function in meshmode
-    discr = fdrake_connection.discr
-    # nodes is np array (ambient_dim,) of DOFArray (ngroups,)
-    # of arrays (nelements, nunit_dofs), we want a single np array
-    # of shape (ambient_dim, nelements, nunit_dofs)
-    nodes = discr.nodes()
-    group_nodes = np.array([actx.to_numpy(dof_arr[0]) for dof_arr in nodes])
-    meshmode_f = meshmode_f_eval(group_nodes)
-
-    # fd -> mm should be same as creating in meshmode
-    np.testing.assert_allclose(fd2mm_f, meshmode_f, atol=CLOSE_ATOL)
-
+    # build estimate-of-convergence recorder
+    from pytools.convergence import EOCRecorder
+    # (fd -> mm ? True : False, dimension projecting onto)
+    eoc_recorders = {(True, d): EOCRecorder() for d in range(dim)}
     if not only_convert_bdy:
-        # now transport mm -> fd
-        meshmode_f_dofarr = discr.zeros(actx)
-        meshmode_f_dofarr[0][:] = meshmode_f
-        mm2fd_f = \
-            fdrake_connection.from_meshmode(meshmode_f_dofarr,
-                                            assert_fdrake_discontinuous=False,
-                                            continuity_tolerance=1e-8)
-        # mm -> fd should be same as creating in firedrake
-        np.testing.assert_allclose(fdrake_f.dat.data, mm2fd_f.dat.data,
-                                   atol=CLOSE_ATOL)
+        for d in range(dim):
+            eoc_recorders[(False, d)] = EOCRecorder()
 
-
-@pytest.mark.parametrize("fdrake_f_expr,meshmode_f_eval", test_functions)
-def test_to_fd_transfer(ctx_factory, mm_mesh, fspace_degree,
-                        fdrake_f_expr, meshmode_f_eval):
-    """
-    Make sure creating a function then transporting it is the same
-    (up to resampling error) as creating a function on the transported
-    mesh
-    """
-    fspace_degree += mm_mesh.groups[0].order
-    # Make discr and evaluate function in meshmode
+    # make a computing context
     cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(queue)
 
-    factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
-    discr = Discretization(actx, mm_mesh, factory)
+    # Get each refinements of the meshmeshes, do conversions,
+    # and record errors
+    for mesh_par in fdrake_mesh_pars:
+        if fdrake_mesh_name == "UnitInterval":
+            assert dim == 1
+            n = mesh_par
+            fdrake_mesh = UnitIntervalMesh(n)
+            h = 1/n
+        elif fdrake_mesh_name == "UnitSquare":
+            assert dim == 2
+            n = mesh_par
+            fdrake_mesh = UnitSquareMesh(n, n)
+            h = 1/n
+        elif fdrake_mesh_name == "UnitCube":
+            assert dim == 3
+            n = mesh_par
+            fdrake_mesh = UnitCubeMesh(n, n, n)
+            h = 1/n
+        elif fdrake_mesh_name in ("blob2d-order1", "blob2d-order4"):
+            assert dim == 2
+            if fdrake_mesh_name == "blob2d-order1":
+                from firedrake import Mesh
+                fdrake_mesh = Mesh("%s-h%s.msh" % (fdrake_mesh_name, mesh_par),
+                                   dim=dim)
+            else:
+                from meshmode.mesh.io import read_gmsh
+                from meshmode.interop.firedrake import export_mesh_to_firedrake
+                mm_mesh = read_gmsh("%s-h%s.msh" % (fdrake_mesh_name, mesh_par),
+                                    force_ambient_dim=dim)
+                fdrake_mesh, _, _ = export_mesh_to_firedrake(mm_mesh)
+            h = float(mesh_par)
+        elif fdrake_mesh_name == "warp":
+            from meshmode.mesh.generation import generate_warped_rect_mesh
+            from meshmode.interop.firedrake import export_mesh_to_firedrake
+            mm_mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par)
+            fdrake_mesh, _, _ = export_mesh_to_firedrake(mm_mesh)
+            h = 1/mesh_par
+        else:
+            raise ValueError("fdrake_mesh_name not recognized")
 
-    nodes = discr.nodes()
-    group_nodes = np.array([actx.to_numpy(dof_arr[0]) for dof_arr in nodes])
-    meshmode_f = discr.zeros(actx)
-    meshmode_f[0][:] = meshmode_f_eval(group_nodes)
+        # make function space and build connection
+        fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fspace_degree)
+        if only_convert_bdy:
+            fdrake_connection = FromBdyFiredrakeConnection(actx, fdrake_fspace,
+                                                           'on_boundary')
+        else:
+            fdrake_connection = FromFiredrakeConnection(actx, fdrake_fspace)
+        # get this for making functions in firedrake
+        spatial_coord = SpatialCoordinate(fdrake_mesh)
 
-    # connect to firedrake and evaluate expr in firedrake
-    fdrake_connection = ToFiredrakeConnection(discr)
-    fdrake_fspace = fdrake_connection.firedrake_fspace()
-    spatial_coord = SpatialCoordinate(fdrake_fspace.mesh())
-    fdrake_f = Function(fdrake_fspace).interpolate(fdrake_f_expr(spatial_coord))
+        # get nodes in handier format for making meshmode functions
+        discr = fdrake_connection.discr
+        # nodes is np array (ambient_dim,) of DOFArray (ngroups,)
+        # of arrays (nelements, nunit_dofs), we want a single np array
+        # of shape (ambient_dim, nelements, nunit_dofs)
+        nodes = discr.nodes()
+        group_nodes = np.array([actx.to_numpy(dof_arr[0]) for dof_arr in nodes])
 
-    # transport to firedrake and make sure this is the same
-    mm2fd_f = fdrake_connection.from_meshmode(meshmode_f)
+        # Now, for each coordinate d, test transferring the function
+        # x -> dth component of x
+        for d in range(dim):
+            fdrake_f = Function(fdrake_fspace).interpolate(spatial_coord[d])
+            # transport fdrake function and put in numpy
+            fd2mm_f = fdrake_connection.from_firedrake(fdrake_f, actx=actx)
+            fd2mm_f = actx.to_numpy(fd2mm_f[0])
+            meshmode_f = group_nodes[d, :, :]
 
-    np.testing.assert_allclose(mm2fd_f.dat.data, fdrake_f.dat.data,
-                               atol=CLOSE_ATOL)
+            # record fd -> mm error
+            err = np.max(np.abs(fd2mm_f - meshmode_f))
+            eoc_recorders[(True, d)].add_data_point(h, err)
+
+            if not only_convert_bdy:
+                # now transport mm -> fd
+                meshmode_f_dofarr = discr.zeros(actx)
+                meshmode_f_dofarr[0][:] = meshmode_f
+                mm2fd_f = fdrake_connection.from_meshmode(
+                    meshmode_f_dofarr,
+                    assert_fdrake_discontinuous=False,
+                    continuity_tolerance=1e-8)
+                # record mm -> fd error
+                err = np.max(np.abs(fdrake_f.dat.data - mm2fd_f.dat.data))
+                eoc_recorders[(False, d)].add_data_point(h, err)
+
+    # assert that order is correct or error is "low enough"
+    for ((fd2mm, d), eoc_rec) in six.iteritems(eoc_recorders):
+        print("\nfiredrake -> meshmode: %s\nvector *x* -> *x[%s]*\n"
+              % (fd2mm, d), eoc_rec)
+        assert (
+            eoc_rec.order_estimate() >= fspace_degree
+            or eoc_rec.max_error() < 1e-14)
+
+
+@pytest.mark.parametrize("mesh_name,mesh_pars,dim",
+    [("blob2d-order1", ["8e-2", "6e-2", "4e-2"], 2),
+     ("blob2d-order4", ["8e-2", "6e-2", "4e-2"], 2),
+     ("warp", [10, 20, 30], 2),
+     ("warp", [10, 20, 30], 3),
+     ])
+def test_to_fd_transfer(ctx_factory, fspace_degree, mesh_name, mesh_pars, dim):
+    """
+    Make sure creating a function which projects onto
+    one dimension then transports it is the same
+    (up to resampling error) as projecting to one
+    dimension on the transported mesh
+    """
+    # build estimate-of-convergence recorder
+    from pytools.convergence import EOCRecorder
+    # dimension projecting onto -> EOCRecorder
+    eoc_recorders = {d: EOCRecorder() for d in range(dim)}
+
+    # make a computing context
+    cl_ctx = ctx_factory()
+    queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
+
+    # Get each of the refinements of the meshmeshes and record
+    # conversions errors
+    for mesh_par in mesh_pars:
+        if mesh_name in ("blob2d-order1", "blob2d-order4"):
+            assert dim == 2
+            from meshmode.mesh.io import read_gmsh
+            mm_mesh = read_gmsh("%s-h%s.msh" % (mesh_name, mesh_par),
+                                force_ambient_dim=dim)
+            h = float(mesh_par)
+        elif mesh_name == "warp":
+            from meshmode.mesh.generation import generate_warped_rect_mesh
+            mm_mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par)
+            h = 1/mesh_par
+        else:
+            raise ValueError("mesh_name not recognized")
+
+        # Make discr and connect it to firedrake
+        factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
+        discr = Discretization(actx, mm_mesh, factory)
+
+        fdrake_connection = ToFiredrakeConnection(discr)
+        fdrake_fspace = fdrake_connection.firedrake_fspace()
+        spatial_coord = SpatialCoordinate(fdrake_fspace.mesh())
+
+        # get the group's nodes in a numpy array
+        nodes = discr.nodes()
+        group_nodes = np.array([actx.to_numpy(dof_arr[0]) for dof_arr in nodes])
+
+        for d in range(dim):
+            meshmode_f = discr.zeros(actx)
+            meshmode_f[0][:] = group_nodes[d, :, :]
+
+            # connect to firedrake and evaluate expr in firedrake
+            fdrake_f = Function(fdrake_fspace).interpolate(spatial_coord[d])
+
+            # transport to firedrake and record error
+            mm2fd_f = fdrake_connection.from_meshmode(meshmode_f)
+
+            err = np.max(np.abs(fdrake_f.dat.data - mm2fd_f.dat.data))
+            eoc_recorders[d].add_data_point(h, err)
+
+    # assert that order is correct or error is "low enough"
+    for d, eoc_rec in six.iteritems(eoc_recorders):
+        print("\nvector *x* -> *x[%s]*\n" % d, eoc_rec)
+        assert (
+            eoc_rec.order_estimate() >= fspace_degree
+            or eoc_rec.max_error() < 2e-14)
 
 # }}}
 
