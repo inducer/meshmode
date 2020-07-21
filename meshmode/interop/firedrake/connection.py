@@ -49,7 +49,7 @@ from meshmode.discretization import Discretization
 
 def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
     """
-    flips *nodes* in place according to *orient*
+    return a flipped copy of *nodes* according to *orient*
 
     :arg orient: An array of shape *(nelements)* of orientations,
                  >0 for positive, <0 for negative
@@ -74,9 +74,12 @@ def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
 
     # flip nodes that need to be flipped, note that this point we act
     # like we are in a DG space
-    nodes[orient < 0] = np.einsum(
+    flipped_nodes = np.copy(nodes)
+    flipped_nodes[orient < 0] = np.einsum(
         "ij,ej->ei",
         flip_mat, nodes[orient < 0])
+
+    return flipped_nodes
 
 
 # {{{ Most basic connection between a fd function space and mm discretization
@@ -681,11 +684,14 @@ class FromFiredrakeConnection(FiredrakeConnection):
                                                    fd_unit_nodes)
         fd_cell_node_list = fdrake_fspace.cell_node_list
         # flip fd_cell_node_list
-        _reorder_nodes(orient, fd_cell_node_list, flip_mat, unflip=False)
+        flipped_cell_node_list = _reorder_nodes(orient,
+                                                fd_cell_node_list,
+                                                flip_mat,
+                                                unflip=False)
 
         super(FromFiredrakeConnection, self).__init__(to_discr,
                                                       fdrake_fspace,
-                                                      fd_cell_node_list)
+                                                      flipped_cell_node_list)
         if fdrake_fspace.ufl_element().family() == 'Discontinuous Lagrange':
             assert len(self._mm_node_equiv_classes) == 0, \
                 "Somehow a firedrake node in a 'DG' space got duplicated..." \
@@ -767,11 +773,14 @@ class FromBdyFiredrakeConnection(FiredrakeConnection):
                                                    fd_unit_nodes)
         fd_cell_node_list = fdrake_fspace.cell_node_list[cells_to_use]
         # flip fd_cell_node_list
-        _reorder_nodes(orient, fd_cell_node_list, flip_mat, unflip=False)
+        flipped_cell_node_list = _reorder_nodes(orient,
+                                                fd_cell_node_list,
+                                                flip_mat,
+                                                unflip=False)
 
         super(FromBdyFiredrakeConnection, self).__init__(to_discr,
                                                          fdrake_fspace,
-                                                         fd_cell_node_list)
+                                                         flipped_cell_node_list)
         if fdrake_fspace.ufl_element().family() == 'Discontinuous Lagrange':
             assert len(self._mm_node_equiv_classes) == 0, \
                 "Somehow a firedrake node in a 'DG' space got duplicated..." \
