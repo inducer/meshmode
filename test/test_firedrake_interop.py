@@ -57,7 +57,7 @@ from firedrake import (
     Function, SpatialCoordinate, as_tensor)
 
 
-CLOSE_ATOL = 1e-14
+CLOSE_ATOL = 1e-12
 
 
 @pytest.fixture(params=["annulus.msh",
