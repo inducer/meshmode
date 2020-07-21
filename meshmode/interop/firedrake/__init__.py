@@ -23,8 +23,10 @@ THE SOFTWARE.
 
 from meshmode.interop.firedrake.connection import (
     FromBdyFiredrakeConnection, FromFiredrakeConnection, ToFiredrakeConnection)
-from meshmode.interop.firedrake.mesh import import_firedrake_mesh
+from meshmode.interop.firedrake.mesh import (
+    import_firedrake_mesh, export_mesh_to_firedrake)
 
 __all__ = ["FromBdyFiredrakeConnection", "FromFiredrakeConnection",
            "ToFiredrakeConnection", "import_firedrake_mesh",
+           "export_mesh_to_firedrake"
            ]
