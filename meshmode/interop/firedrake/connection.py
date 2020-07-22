@@ -41,10 +41,11 @@ from meshmode.interop.firedrake.reference_cell import (
 
 from meshmode.mesh.processing import get_simplex_element_flip_matrix
 
-from meshmode.discretization.poly_element import \
-    InterpolatoryQuadratureSimplexGroupFactory, \
-    InterpolatoryQuadratureSimplexElementGroup
-from meshmode.discretization import Discretization
+from meshmode.discretization.poly_element import (
+    InterpolatoryQuadratureSimplexGroupFactory,
+    PolynomialRecursiveNodesGroupFactory)
+from meshmode.discretization import (
+    Discretization, InterpolatoryElementGroupBase, ElementGroupFactory)
 
 
 def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
@@ -136,8 +137,8 @@ class FiredrakeConnection:
             A 2-D numpy integer array with the same dtype as
             ``fdrake_fspace.cell_node_list.dtype``
         :param group_nr: The index of the group in *discr* which is
-            being connected to *fdrake_fspace*. The group must be
-            a :class:`InterpolatoryQuadratureSimplexElementGroup`
+            being connected to *fdrake_fspace*. The group must be a
+            :class:`~meshmode.discretization.InterpolatoryElementGroupBase`
             of the same topological dimension as *fdrake_fspace*.
             If *discr* has only one group, *group_nr=None* may be supplied.
 
@@ -152,7 +153,7 @@ class FiredrakeConnection:
         # {{{ Validate input
         if not isinstance(discr, Discretization):
             raise TypeError(":param:`discr` must be of type "
-                            ":class:`meshmode.discretization.Discretization`, "
+                            ":class:`~meshmode.discretization.Discretization`, "
                             "not :class:`%s`." % type(discr))
         from firedrake.functionspaceimpl import WithGeometry
         if not isinstance(fdrake_fspace, WithGeometry):
@@ -179,10 +180,9 @@ class FiredrakeConnection:
             raise ValueError(":param:`group_nr` has value %s, which an invalid "
                              "index into list *discr.groups* of length %s."
                              % (group_nr, len(discr.groups)))
-        if not isinstance(element_grp,
-                          InterpolatoryQuadratureSimplexElementGroup):
+        if not isinstance(element_grp, InterpolatoryElementGroupBase):
             raise TypeError("*discr.groups[group_nr]* must be of type "
-                            ":class:`InterpolatoryQuadratureSimplexElementGroup`"
+                            ":class:`InterpolatoryElementGroupBase`"
                             ", not :class:`%s`." % type(element_grp))
         allowed_families = ('Discontinuous Lagrange', 'Lagrange')
         if fdrake_fspace.ufl_element().family() not in allowed_families:
@@ -348,7 +348,7 @@ class FiredrakeConnection:
         def check_dof_array(arr, arr_name):
             if not isinstance(arr, DOFArray):
                 raise TypeError(arr_name + " must be of type "
-                                ":class:`meshmode.dof_array.DOFArray`, "
+                                ":class:`~meshmode.dof_array.DOFArray`, "
                                 "not :class:`%s`." % type(arr))
             if arr.array_context is None:
                 raise ValueError(arr_name + " must have a non-*None* "
@@ -405,9 +405,9 @@ class FiredrakeConnection:
             :attr:`discr`. Its function space must have
             the same family, degree, and mesh as ``self.from_fspace()``.
         :arg out: Either
-            1.) A :class:`meshmode.dof_array.DOFArray`
+            1.) A :class:`~meshmode.dof_array.DOFArray`
             2.) A :class:`np.ndarray` object array, each of whose
-                entries is a :class:`meshmode.dof_array.DOFArray`
+                entries is a :class:`~meshmode.dof_array.DOFArray`
             3.) *None*
             In the case of (1.), *function* must be in a
             scalar function space
@@ -417,7 +417,7 @@ class FiredrakeConnection:
 
             In either case, each `DOFArray` must be a `DOFArray`
             defined on :attr:`discr` (as described in
-            the documentation for :class:`meshmode.dof_array.DOFArray`).
+            the documentation for :class:`~meshmode.dof_array.DOFArray`).
             Also, each `DOFArray`'s *entry_dtype* must match the
             *function.dat.data.dtype*, and be of shape
             *(nelements, nunit_dofs)*.
@@ -429,7 +429,7 @@ class FiredrakeConnection:
             and stored in *out*, which is then returned.
         :arg actx:
             * If *out* is *None*, then *actx* is a
-              :class:`meshmode.array_context.ArrayContext` on which
+              :class:`~meshmode.array_context.ArrayContext` on which
               to create the :class:`DOFArray`
             * If *out* is not *None*, *actx* must be *None* or *out*'s
               *array_context*.
@@ -499,13 +499,13 @@ class FiredrakeConnection:
         are not modified.
 
         :arg mm_field: Either
-            * A :class:`meshmode.dof_array.DOFArray` representing
+            * A :class:`~meshmode.dof_array.DOFArray` representing
               a field of shape *tuple()* on :attr:`discr`
-            * A :class:`numpy.ndarray` of :class:`meshmode.dof_array.DOFArray`s
+            * A :class:`numpy.ndarray` of :class:`~meshmode.dof_array.DOFArray`s
               representing a field of shape *mm_field.shape*
               on :attr:`discr`
 
-            See :class:`meshmode.dof.DOFArray` for further requirements.
+            See :class:`~meshmode.dof.DOFArray` for further requirements.
             The :attr:`group_nr`th entry of each :class:`DOFArray`
             must be of shape *(nelements, nunit_dofs)* and
             the *element_dtype* must match that used for
@@ -623,19 +623,33 @@ class FiredrakeConnection:
 
 # {{{ Create connection from firedrake into meshmode
 
+
 class FromFiredrakeConnection(FiredrakeConnection):
     """
     A connection created from a :mod:`firedrake`
     ``"CG"`` or ``"DG"`` function space which creates a corresponding
     meshmode discretization and allows
     transfer of functions to and from :mod:`firedrake`.
+
+    .. automethod:: __init__
     """
-    def __init__(self, actx, fdrake_fspace):
+    def __init__(self, actx, fdrake_fspace, grp_factory=None):
         """
-        :arg actx: A :class:`meshmode.array_context.ArrayContext`
+        :arg actx: A :class:`~meshmode.array_context.ArrayContext`
         :arg fdrake_fspace: A :mod:`firedrake` ``"CG"`` or ``"DG"``
             function space (of class :class:`WithGeometry`) built on
             a mesh which is importable by :func:`import_firedrake_mesh`.
+        :arg grp_factory: (optional) If not *None*, should be
+            a :class:`~meshmode.discretization.ElementGroupFactory`
+            whose group class is a subclass of
+            :class:`~meshmode.discretization.InterpolatoryElementGroupBase`.
+            If *None*, uses
+
+            * A :class:`~meshmode.discretization.poly_element.\
+              PolynomialRecursiveNodesGroupFactory` if :mod:`recursivenodes` is
+              installed
+            * A :class:`~meshmode.discretization.poly_element.\
+              PolynomialWarpAndBlendGroupFactory`
         """
         # Ensure fdrake_fspace is a function space with appropriate reference
         # element.
@@ -652,11 +666,39 @@ class FromFiredrakeConnection(FiredrakeConnection):
                              "be ``'Lagrange'`` or "
                              "``'Discontinuous Lagrange'``, not %s."
                              % ufl_elt.family())
+        # Make sure grp_factory is the right type if provided, and
+        # uses an interpolatory class.
+        if grp_factory is not None:
+            if not isinstance(grp_factory, ElementGroupFactory):
+                raise TypeError(":arg:`grp_factory` must inherit from "
+                                ":class:`meshmode.discretization."
+                                "ElementGroupFactory`, but is instead of type "
+                                "%s." % type(grp_factory))
+                if not issubclass(grp_factory.group_class,
+                                  InterpolatoryElementGroupBase):
+                    raise TypeError(":arg:`grp_factory` must use a *group_class"
+                                    "* which inherits from"
+                                    ":class:`meshmode.discretization."
+                                    "InterpolatoryElementGroupBase, but instead uses"
+                                    " *group_class* of type %s."
+                                    % type(grp_factory.group_class))
+        # If not provided, make one
+        else:
+            degree = ufl_elt.degree()
+            try:
+                import recursivenodes  # noqa : F401
+                family = 'lgl'  # L-G-Legendre
+                grp_factory = PolynomialRecursiveNodesGroupFactory(degree, family)
+            except ImportError:
+                grp_factory = InterpolatoryQuadratureSimplexGroupFactory(degree)
 
+        # In case this class is really a FromBdyFiredrakeConnection,
+        # get *cells_to_use*
+        cells_to_use = self._get_cells_to_use(fdrake_fspace.mesh())
         # Create to_discr
-        mm_mesh, orient = import_firedrake_mesh(fdrake_fspace.mesh())
-        factory = InterpolatoryQuadratureSimplexGroupFactory(ufl_elt.degree())
-        to_discr = Discretization(actx, mm_mesh, factory)
+        mm_mesh, orient = import_firedrake_mesh(fdrake_fspace.mesh(),
+                                                cells_to_use=cells_to_use)
+        to_discr = Discretization(actx, mm_mesh, grp_factory)
 
         # get firedrake unit nodes and map onto meshmode reference element
         group = to_discr.groups[0]
@@ -683,6 +725,8 @@ class FromFiredrakeConnection(FiredrakeConnection):
         flip_mat = get_simplex_element_flip_matrix(ufl_elt.degree(),
                                                    fd_unit_nodes)
         fd_cell_node_list = fdrake_fspace.cell_node_list
+        if cells_to_use is not None:
+            fd_cell_node_list = fd_cell_node_list[cells_to_use]
         # flip fd_cell_node_list
         flipped_cell_node_list = _reorder_nodes(orient,
                                                 fd_cell_node_list,
@@ -697,24 +741,14 @@ class FromFiredrakeConnection(FiredrakeConnection):
                 "Somehow a firedrake node in a 'DG' space got duplicated..." \
                 "contact the developer."
 
-
-def _compute_cells_near_bdy(mesh, bdy_id):
-    """
-    Returns an array of the cell ids with >= 1 vertex on the
-    given bdy_id
-    """
-    cfspace = mesh.coordinates.function_space()
-    cell_node_list = cfspace.cell_node_list
-
-    boundary_nodes = cfspace.boundary_nodes(bdy_id, 'topological')
-    # Reduce along each cell: Is a vertex of the cell in boundary nodes?
-    cell_is_near_bdy = np.any(np.isin(cell_node_list, boundary_nodes), axis=1)
-
-    from pyop2.datatypes import IntType
-    return np.nonzero(cell_is_near_bdy)[0].astype(IntType)
+    def _get_cells_to_use(self, mesh):
+        """
+        For compatability with :class:`FromFiredrakeBdyConnection`
+        """
+        return None
 
 
-class FromBdyFiredrakeConnection(FiredrakeConnection):
+class FromBdyFiredrakeConnection(FromFiredrakeConnection):
     """
     A connection created from a :mod:`firedrake`
     ``"CG"`` or ``"DG"`` function space which creates a
@@ -725,66 +759,40 @@ class FromBdyFiredrakeConnection(FiredrakeConnection):
     Use the same bdy_id as one would for a
     :class:`firedrake.bcs.DirichletBC`.
     ``"on_boundary"`` corresponds to the entire boundary.
+
+    .. attribute:: bdy_id
+
+        the boundary id of the boundary being connecting from
+
+    .. automethod:: __init__
     """
-    def __init__(self, actx, fdrake_fspace, bdy_id):
+    def __init__(self, actx, fdrake_fspace, bdy_id, grp_factory=None):
         """
-        :arg actx: A :class:`meshmode.array_context.ArrayContext`
-        :arg fdrake_fspace: A :mod:`firedrake` ``"CG"`` or ``"DG"``
-            function space (of class :class:`WithGeometry`) built on
-            a mesh which is importable by :func:`import_firedrake_mesh`.
         :arg bdy_id: A boundary marker of *fdrake_fspace.mesh()* as accepted by
             the *boundary_nodes* method of a firedrake
             :class:`firedrake.functionspaceimpl.WithGeometry`.
+
+        Other arguments are as in
+        :class:`~meshmode.interop.firedrake.FromFiredrakeConnection`.
         """
-        # Ensure fdrake_fspace is a function space with appropriate reference
-        # element.
-        from firedrake.functionspaceimpl import WithGeometry
-        if not isinstance(fdrake_fspace, WithGeometry):
-            raise TypeError(":arg:`fdrake_fspace` must be of firedrake type "
-                            ":class:`WithGeometry`, not `%s`."
-                            % type(fdrake_fspace))
-        ufl_elt = fdrake_fspace.ufl_element()
+        self.bdy_id = bdy_id
+        super(FromBdyFiredrakeConnection, self).__init__(actx, fdrake_fspace,
+                                                         grp_factory=grp_factory)
 
-        if ufl_elt.family() not in ('Lagrange', 'Discontinuous Lagrange'):
-            raise ValueError("the ``ufl_element().family()`` of "
-                             ":arg:`fdrake_fspace` must "
-                             "be ``'Lagrange'`` or "
-                             "``'Discontinuous Lagrange'``, not %s."
-                             % ufl_elt.family())
+    def _get_cells_to_use(self, mesh):
+        """
+        Returns an array of the cell ids with >= 1 vertex on the
+        given bdy_id
+        """
+        cfspace = mesh.coordinates.function_space()
+        cell_node_list = cfspace.cell_node_list
 
-        # Create to_discr
-        cells_to_use = _compute_cells_near_bdy(fdrake_fspace.mesh(), bdy_id)
-        mm_mesh, orient = import_firedrake_mesh(fdrake_fspace.mesh(),
-                                                cells_to_use=cells_to_use)
-        factory = InterpolatoryQuadratureSimplexGroupFactory(ufl_elt.degree())
-        to_discr = Discretization(actx, mm_mesh, factory)
+        boundary_nodes = cfspace.boundary_nodes(self.bdy_id, 'topological')
+        # Reduce along each cell: Is a vertex of the cell in boundary nodes?
+        cell_is_near_bdy = np.any(np.isin(cell_node_list, boundary_nodes), axis=1)
 
-        # get firedrake unit nodes and map onto meshmode reference element
-        group = to_discr.groups[0]
-        fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(group.dim,
-                                                                 True)
-        fd_unit_nodes = get_finat_element_unit_nodes(fdrake_fspace.finat_element)
-        fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
-
-        # Get the reordering fd->mm, see the note in
-        # :class:`FromFiredrakeConnection` for a comment on what this is
-        # doing in continuous spaces.
-        flip_mat = get_simplex_element_flip_matrix(ufl_elt.degree(),
-                                                   fd_unit_nodes)
-        fd_cell_node_list = fdrake_fspace.cell_node_list[cells_to_use]
-        # flip fd_cell_node_list
-        flipped_cell_node_list = _reorder_nodes(orient,
-                                                fd_cell_node_list,
-                                                flip_mat,
-                                                unflip=False)
-
-        super(FromBdyFiredrakeConnection, self).__init__(to_discr,
-                                                         fdrake_fspace,
-                                                         flipped_cell_node_list)
-        if fdrake_fspace.ufl_element().family() == 'Discontinuous Lagrange':
-            assert len(self._mm_node_equiv_classes) == 0, \
-                "Somehow a firedrake node in a 'DG' space got duplicated..." \
-                "contact the developer."
+        from pyop2.datatypes import IntType
+        return np.nonzero(cell_is_near_bdy)[0].astype(IntType)
 
 # }}}
 

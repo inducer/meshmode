@@ -41,7 +41,6 @@ from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL, check_bc_coverage
 from meshmode.interop.firedrake import (
     FromFiredrakeConnection, FromBdyFiredrakeConnection, ToFiredrakeConnection,
     import_firedrake_mesh)
-from meshmode.interop.firedrake.connection import _compute_cells_near_bdy
 
 import pytest
 
@@ -244,7 +243,7 @@ def test_from_bdy_consistency(ctx_factory,
     fdrake_unit_vert_indices = np.array(fdrake_unit_vert_indices)
 
     # only look at cells "near" bdy (with >= 1 vertex on)
-    cells_near_bdy = _compute_cells_near_bdy(fdrake_mesh, 'on_boundary')
+    cells_near_bdy = frombdy_conn._get_cells_to_use(fdrake_mesh)
     # get the firedrake vertices of cells near the boundary,
     # in no particular order
     fdrake_vert_indices = \
@@ -303,7 +302,11 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
     """
     cells_to_use = None
     if only_convert_bdy:
-        cells_to_use = _compute_cells_near_bdy(square_or_cube_mesh, 'on_boundary')
+        # make a dummy connection which just has a bdy_id
+        class DummyConnection(FromBdyFiredrakeConnection):
+            def __init__(self):
+                self.bdy_id = 'on_boundary'
+        cells_to_use = DummyConnection()._get_cells_to_use(square_or_cube_mesh)
     mm_mesh, orient = import_firedrake_mesh(square_or_cube_mesh,
                                             cells_to_use=cells_to_use)
     # Ensure meshmode required boundary tags are there
