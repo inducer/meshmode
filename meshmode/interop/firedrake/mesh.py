@@ -28,7 +28,7 @@ from warnings import warn  # noqa
 import numpy as np
 import six
 
-from modepy import resampling_matrix
+from modepy import resampling_matrix, simplex_best_available_basis
 
 from meshmode.mesh import (BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
     FacialAdjacencyGroup, Mesh, NodalAdjacency, SimplexElementGroup)
@@ -787,12 +787,8 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     fd_unit_nodes = get_finat_element_unit_nodes(coords_fspace.finat_element)
     fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
 
-    from meshmode.discretization.poly_element import (
-        InterpolatoryQuadratureSimplexElementGroup)
-    el_group = InterpolatoryQuadratureSimplexElementGroup(group,
-                                                          group.order,
-                                                          group_nr)
-    resampling_mat = resampling_matrix(el_group.basis(),
+    basis = simplex_best_available_basis(group.dim, group.order)
+    resampling_mat = resampling_matrix(basis,
                                        new_nodes=fd_unit_nodes,
                                        old_nodes=group.unit_nodes)
     # Store the meshmode data resampled to firedrake unit nodes
