@@ -558,14 +558,14 @@ def make_periodic_face_connection(actx, v2b_trg_conn, v2b_src_conn,
                     print("FVE", src_vol_element_indices)
                     from meshmode.mesh.visualization import draw_2d_mesh
                     import matplotlib.pyplot as pt
-                    draw_2d_mesh(vol_discr.mesh, draw_element_numbers=True,
+                    draw_2d_mesh(trg_vol_discr.mesh, draw_element_numbers=True,
                             set_bounding_box=True,
                             draw_vertex_numbers=False,
                             draw_face_numbers=True,
                             fill=None)
                     pt.figure()
 
-                    draw_2d_mesh(bdry_discr.mesh, draw_element_numbers=True,
+                    draw_2d_mesh(trg_bdry_discr.mesh, draw_element_numbers=True,
                             set_bounding_box=True,
                             draw_vertex_numbers=False,
                             draw_face_numbers=True,
@@ -575,21 +575,21 @@ def make_periodic_face_connection(actx, v2b_trg_conn, v2b_src_conn,
 
                 # }}}
                 batches = _make_cross_face_batches(actx,
-                                                   bdry_discr, bdry_discr,
+                                                   trg_bdry_discr, src_bdry_discr,
                                                    i_tgt_grp, i_src_grp,
                                                    tgt_bdry_element_indices,
                                                    src_bdry_element_indices,
                                                    periodic_offset)
-                groups[i_tgt_grp].extend(batches)
+                trg_groups[i_tgt_grp].extend(batches)
 
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
     return DirectDiscretizationConnection(
-            from_discr=bdry_discr,
-            to_discr=bdry_discr,
+            from_discr=src_bdry_discr,
+            to_discr=trg_bdry_discr,
             groups=[
                 DiscretizationConnectionElementGroup(batches=batches)
-                for batches in groups],
+                for batches in trg_groups],
             is_surjective=True)
 # }}}
 
