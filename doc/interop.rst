@@ -40,8 +40,8 @@ straightforward. Some language is different:
 
 * In a mesh, a :mod:`meshmode` "element" is a :mod:`firedrake` "cell"
 * A :class:`meshmode.discretization.Discretization` is a :mod:`firedrake`
-  :class:`firedrake.functionspaceimpl.WithGeometry`, usually
-  created by calling the function :func:`firedrake.functionspace.FunctionSpace`
+  :class:`~firedrake.functionspaceimpl.WithGeometry`, usually
+  created by calling the function :func:`~firedrake.functionspace.FunctionSpace`
   and referred to as a "function space"
 * In a mesh, any vertices, faces, cells, etc. are :mod:`firedrake`
   "entities" (see `dmplex <https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/DMPLEX/index.html>`_
@@ -58,7 +58,7 @@ correspond to other vertices/faces/cells, there are two main difficulties.
    a mesh, it changes the element ordering and the local vertex ordering.
 
 (1.) is easily handled by insisting that the :mod:`firedrake`
-:class:`firedrake.functionspaceimpl.WithGeometry` uses polynomial elements
+:class:`~firedrake.functionspaceimpl.WithGeometry` uses polynomial elements
 and that the group of the :class:`meshmode.discretization.Discretization`
 being converted is a
 :class:`meshmode.discretization.poly_element.InterpolatoryQuadratureSimplexElementGroup`
@@ -158,65 +158,65 @@ roughly as so
     not require a positive orientation of elements and that its
     reference traingle is different than specified in :mod:`modepy`. 
 
-(2) A :class:`firedrake.mesh.MeshTopology`
+(2) A :class:`~firedrake.mesh.MeshTopology`
     which holds information about connectivity
     and other topological properties, but nothing about geometry/coordinates
     etc.
 
-(3) A class :class:`firedrake.functionspaceimpl.FunctionSpace`
+(3) A class :class:`~firedrake.functionspaceimpl.FunctionSpace`
     created from a :mod:`FInAT` element and a
-    :class:`firedrake.mesh.MeshTopology` which allows us to
+    :class:`~firedrake.mesh.MeshTopology` which allows us to
     define functions mapping the nodes (defined by the
     :mod:`FInAT` element) of each element in the
-    :class:`firedrake.mesh.MeshTopology` to some values.
-    Note that the function :func:`firedrake.functionspace.FunctionSpace`
+    :class:`~firedrake.mesh.MeshTopology` to some values.
+    Note that the function :func:`~firedrake.functionspace.FunctionSpace`
     in the firedrake API is used to create objects of class
-    :class:`firedrake.functionspaceimpl.FunctionSpace` s
-    and :class:`firedrake.functionspaceimpl.WithGeometry` (see
+    :class:`~firedrake.functionspaceimpl.FunctionSpace` s
+    and :class:`~firedrake.functionspaceimpl.WithGeometry` (see
     (6)).
 
-(4) A :class:`firedrake.function.CoordinatelessFunction`
+(4) A :class:`~firedrake.function.CoordinatelessFunction`
     (in the sense that its *domain* has no coordinates)
     which is a function in a
-    :class:`firedrake.functionspaceimpl.FunctionSpace`
+    :class:`~firedrake.functionspaceimpl.FunctionSpace`
 
-(5) A :class:`firedrake.mesh.MeshGeometry` created from a
-    :class:`firedrake.functionspaceimpl.FunctionSpace`
-    and a :class:`firedrake.function.CoordinatelessFunction`
-    in that :class:`firedrake.functionspaceimpl.FunctionSpace`
+(5) A :class:`~firedrake.mesh.MeshGeometry` created from a
+    :class:`~firedrake.functionspaceimpl.FunctionSpace`
+    and a :class:`~firedrake.function.CoordinatelessFunction`
+    in that :class:`~firedrake.functionspaceimpl.FunctionSpace`
     which maps each dof to its geometric coordinates.
 
-(6) A :class:`firedrake.functionspaceimpl.WithGeometry` which is a
-    :class:`firedrake.functionspaceimpl.FunctionSpace` together
-    with a :class:`firedrake.mesh.MeshGeometry`.
+(6) A :class:`~firedrake.functionspaceimpl.WithGeometry` which is a
+    :class:`~firedrake.functionspaceimpl.FunctionSpace` together
+    with a :class:`~firedrake.mesh.MeshGeometry`.
     This is the object returned
     usually returned to the user by a call
     to the :mod:`firedrake` function
-    :func:`firedrake.functionspace.FunctionSpace`.
+    :func:`~firedrake.functionspace.FunctionSpace`.
 
-(7) A :class:`firedrake.function.Function` is defined on a
-    :class:`firedrake.functionspaceimpl.WithGeometry`
+(7) A :class:`~firedrake.function.Function` is defined on a
+    :class:`~firedrake.functionspaceimpl.WithGeometry`
 
 Thus, by the coordinates of a mesh geometry we mean
 
-(a) On the hidden back-end: a :class:`firedrake.function.CoordinatelessFunction`
+(a) On the hidden back-end: a :class:`~firedrake.function.CoordinatelessFunction`
     *f* on some function space defined only on the mesh topology
-(b) On the front-end: A :class:`firedrake.function.Function`
+(b) On the front-end: A :class:`~firedrake.function.Function`
     with the values of *f* but defined
-    on a :class:`firedrake.functionspaceimpl.WithGeometry`
-    created from the :class:`firedrake.functionspaceimpl.FunctionSpace`
-    *f* lives in and the :class:`firedrake.mesh.MeshGeometry` *f* defines.
+    on a :class:`~firedrake.functionspaceimpl.WithGeometry`
+    created from the :class:`~firedrake.functionspaceimpl.FunctionSpace`
+    *f* lives in and the :class:`~firedrake.mesh.MeshGeometry` *f* defines.
 
 Basically, it's this picture (where a->b if b depends on a)
 
 .. warning::
 
-    In general, the :class:`firedrake.functionspaceimpl.FunctionSpace`
+    In general, the :class:`~firedrake.functionspaceimpl.FunctionSpace`
     of the coordinates function
-    of a :class:`firedrake.functionspaceimpl.WithGeometry` may not be the same
-    :class:`firedrake.functionspaceimpl.FunctionSpace`
+    of a :class:`~firedrake.functionspaceimpl.WithGeometry` may not be the same
+    :class:`~firedrake.functionspaceimpl.FunctionSpace`
     as for functions which live in the
-    :class:`firedrake.functionspaceimpl.WithGeometry`.
+    :class:`~firedrake.functionspaceimpl.WithGeometry`.
     This picture
     only shows how the class definitions depend on each other.
             
