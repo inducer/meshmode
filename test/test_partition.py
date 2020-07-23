@@ -195,12 +195,20 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
 # {{{ partition_mesh
 
 @pytest.mark.parametrize("dim", [2, 3])
-@pytest.mark.parametrize("num_parts", [4, 5, 7])
+@pytest.mark.parametrize(("mesh_size", "num_parts", "scramble_partitions"),
+        [
+            (5, 4, False),
+            (5, 4, True),
+            (5, 5, False),
+            (5, 5, True),
+            (5, 7, False),
+            (5, 7, True),
+            (8, 32, False)
+        ])
 @pytest.mark.parametrize("num_groups", [1, 2, 7])
-@pytest.mark.parametrize("scramble_partitions", [True, False])
-def test_partition_mesh(num_parts, num_groups, dim, scramble_partitions):
+def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitions):
     np.random.seed(42)
-    n = (5,) * dim
+    n = (mesh_size,) * dim
     from meshmode.mesh.generation import generate_regular_rect_mesh
     meshes = [generate_regular_rect_mesh(a=(0 + i,) * dim, b=(1 + i,) * dim, n=n)
                         for i in range(num_groups)]
