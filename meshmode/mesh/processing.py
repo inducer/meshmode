@@ -63,7 +63,17 @@ def find_group_indices(groups, meshwide_elems):
 # {{{ partition_mesh
 
 def _create_element_part_map(part_per_element, parts, element_id_dtype):
-    """Create a map from global elem to partition elem for a set of partitions."""
+    """
+    Create a map from global elem to partition elem for a set of partitions.
+
+    :arg part_per_element: A :class:`numpy.ndarray` mapping element indices to
+        partition numbers.
+    :arg parts: A `set` of partition numbers.
+    :arg element_id_dtype: The element index data type.
+    :returns: A :class:`numpy.ndarray` that maps an element's global index
+        to its corresponding partition-wide index if that partition belongs to
+        *parts* (and if not, to -1).
+    """
     n_elems_in_part = {ipart: 0 for ipart in parts}
     global_elem_to_part_elem = np.empty(len(part_per_element),
                 dtype=element_id_dtype)
@@ -78,8 +88,12 @@ def _create_element_part_map(part_per_element, parts, element_id_dtype):
 
 def _split_by_group(groups, elements):
     """
-    Split a sorted list of elements according to group. Returns a compressed array
-    of index ranges (one per group).
+    Split a sorted array of elements according to group.
+
+    :arg groups: An array of `~meshmode.mesh.ElementGroup` instances.
+    :arg elements: A sorted array of element indices.
+    :returns: A (CSR-style) compressed :class:`numpy.ndarray` that indicates for
+        each group the subrange of *elements* that belongs to it.
     """
     group_elem_start = []
     start_idx = 0
@@ -97,7 +111,19 @@ def _split_by_group(groups, elements):
 
 
 def _filter_mesh_groups(groups, selected_elements):
-    """Create new mesh groups containing a selected subset of elements."""
+    """
+    Create new mesh groups containing a selected subset of elements.
+
+    :arg groups: An array of `~meshmode.mesh.ElementGroup` instances.
+    :arg selected_elements: An array of indices of elements to be included in the
+        filtered groups.
+    :returns: A tuple ``(new_groups, group_to_new_group, required_vertex_indices)``,
+        where *new_groups* is made up of groups from *groups* with elements not in
+        *selected_elements* removed (Note: empty groups are omitted),
+        *group_to_new_group* maps groups in *groups* to their corresponding location
+        in *new_groups*, and *required_vertex_indices* contains indices of all
+        vertices required for elements belonging to *new_groups*.
+    """
     group_elem_start = _split_by_group(groups, selected_elements)
 
     n_new_groups = 0
@@ -164,7 +190,24 @@ def _filter_mesh_groups(groups, selected_elements):
 def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
             part_mesh_groups, global_group_to_part_group,
             part_mesh_group_elem_base):
-    """Create local-to-local facial adjacency groups for partitioned mesh."""
+    """
+    Create local-to-local facial adjacency groups for partitioned mesh.
+
+    :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
+    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` mapping from global
+        element index to local partition-wide element index for local elements (and
+        -1 otherwise).
+    :arg part_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
+        representing the partitioned mesh groups.
+    :arg global_group_to_part_group: An array mapping groups in *mesh* to groups in
+        *part_mesh_groups* (or `None` if the group is not local).
+    :arg part_mesh_group_elem_base: An array containing the starting partition-wide
+        element index for each group in *part_mesh_groups*.
+
+    :returns: A list of `dict`s, `local_to_local_adjacency_groups`, that maps pairs
+        of partitioned group indices to `~meshmode.mesh.FacialAdjacencyGroup`
+        instances if they have local-to-local adjacency.
+    """
     local_to_local_adjacency_groups = [dict() for _ in part_mesh_groups]
 
     for igrp, facial_adj_dict in enumerate(mesh.facial_adjacency_groups):
@@ -221,6 +264,28 @@ def _collect_nonlocal_adjacency_data(mesh, part_per_elem, global_elem_to_part_el
     Collect nonlocal adjacency data for partitioned mesh, and store it in an
     intermediate data structure to use when constructing inter-partition adjacency
     groups.
+
+    :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
+    :arg part_per_element: A :class:`numpy.ndarray` mapping element indices to
+        partition numbers.
+    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` mapping from global
+        element index to local partition-wide element index for local elements (and
+        -1 otherwise).
+    :arg part_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
+        representing the partitioned mesh groups.
+    :arg global_group_to_part_group: An array mapping groups in *mesh* to groups in
+        *part_mesh_groups* (or `None` if the group is not local).
+    :arg part_mesh_group_elem_base: An array containing the starting partition-wide
+        element index for each group in *part_mesh_groups*.
+
+    :returns: A tuple `(elements, element_faces, neighbor_parts, global_neighbors,
+        neighbor_faces)`, where each component is a :class:`numpy.ndarray` storing
+        an entry for every local element face that is shared with a remote element.
+        *elements* stores the group-relative element index, *element_faces* the
+        index of the shared face in the local element, *neighbor_parts* the
+        partition containing the remote element, *global_neighbors* the global
+        element index of the remote element, and *neighbor_faces* the index of the
+        shared face in the remote element.
     """
     nonlocal_adj_data = [None for _ in part_mesh_groups]
 
@@ -280,6 +345,23 @@ def _collect_bdry_data(mesh, global_elem_to_part_elem, part_mesh_groups,
     """
     Collect boundary data for partitioned mesh, and store it in an intermediate
     data structure to use when constructing inter-partition adjacency groups.
+
+    :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
+    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` mapping from global
+        element index to local partition-wide element index for local elements (and
+        -1 otherwise).
+    :arg part_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
+        representing the partitioned mesh groups.
+    :arg global_group_to_part_group: An array mapping groups in *mesh* to groups in
+        *part_mesh_groups* (or `None` if the group is not local).
+    :arg part_mesh_group_elem_base: An array containing the starting partition-wide
+        element index for each group in *part_mesh_groups*.
+
+    :returns: A tuple `(elements, element_faces, neighbors)`, where each component
+        is a :class:`numpy.ndarray` storing an entry for every local element face
+        that is a boundary. *elements* stores the group-relative element index,
+        *element_faces* the index of the boundary face in the element, and
+        *neighbors* the inherited `neighbors` value from the global mesh.
     """
     bdry_data = [None for _ in part_mesh_groups]
 
@@ -312,6 +394,22 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
     """
     Combine non-local adjacency data and boundary data into inter-partition
     adjacency groups.
+
+    :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
+    :arg part_per_element: A :class:`numpy.ndarray` mapping element indices to
+        partition numbers.
+    :arg part_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
+        representing the partitioned mesh groups.
+    :arg all_neighbor_parts: A `set` containing all partition numbers that neighbor
+        the current one.
+    :arg nonlocal_adj_data: Non-local adjacency data for the current partition (see
+        :func:`_collect_nonlocal_adjacency_data`).
+    :arg bdry_data: Boundary data for the current partition (see
+        :func:`_collect_bdry_data`).
+
+    :returns: A list of `~meshmode.mesh.InterPartitionAdjacencyGroup` instances, one
+        for each group in *part_mesh_groups*, containing the aggregated non-local
+        adjacency and boundary information from *nonlocal_adj_data* and *bdry_data*.
     """
     global_elem_to_neighbor_elem = _create_element_part_map(part_per_element,
                 all_neighbor_parts, element_id_dtype=mesh.element_id_dtype)
