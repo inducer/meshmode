@@ -580,16 +580,15 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
         dof, = dofs
         unit_vertex_indices.append(dof)
 
-    # Now get the vertex coordinates
-    vertices = {}
+    # Now get the vertex coordinates as *(dim, nvertices)*-shaped array
+    vertices = np.array((gdim, fdrake_mesh.num_vertices()), dtype=nodes.dtype)
+    recorded_verts = set()
     for icell, cell_vertex_indices in enumerate(vertex_indices):
         for local_vert_id, global_vert_id in enumerate(cell_vertex_indices):
-            if global_vert_id in vertices:
-                continue
-            local_node_nr = unit_vertex_indices[local_vert_id]
-            vertices[global_vert_id] = nodes[:, icell, local_node_nr]
-    # Stuff the vertices in a *(dim, nvertices)*-shaped numpy array
-    vertices = np.array([vertices[i] for i in range(len(vertices))]).T
+            if global_vert_id not in recorded_verts:
+                recorded_verts.add(global_vert_id)
+                local_node_nr = unit_vertex_indices[local_vert_id]
+                vertices[:, global_vert_id] = nodes[:, icell, local_node_nr]
 
     # Use the vertices to compute the orientations and flip the group
     orient = _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
