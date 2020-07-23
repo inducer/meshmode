@@ -514,6 +514,118 @@ def test_opposite_face_interpolation(ctx_factory, group_factory,
             eoc_rec.order_estimate() >= order-0.5
             or eoc_rec.max_error() < 1e-13)
 
+
+@pytest.mark.parametrize(("dim", "nelems"), [(1, [8, 16, 32]),
+                                            (2, [4, 8, 16]),
+                                            (3, [4, 5, 8])])
+@pytest.mark.parametrize("per_face_groups", [False, True])
+def test_periodic_face_interpolation(ctx_factory, dim, nelems, per_face_groups):
+    logging.basicConfig(level=logging.INFO)
+    cl_ctx = ctx_factory()
+    queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
+
+    from meshmode.discretization import Discretization
+    from meshmode.discretization.connection import (
+            make_face_restriction, make_periodic_connection,
+            check_connection)
+    from meshmode.discretization.poly_element import \
+            PolynomialWarpAndBlendGroupFactory as GroupFactory
+
+
+    from pytools.convergence import EOCRecorder
+    eoc_rec_left = EOCRecorder()
+    eoc_rec_right = EOCRecorder()
+
+    order = 5
+
+    def f(x):
+        return actx.np.sin(2.0 * np.pi * x)
+
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    x_btags = {"left_btag": ["-x"],
+               "rght_btag": ["+x"]}
+    y_btags = {"bottom_btag": ["-y"],
+               "top_btag": ["+y"]}
+    z_btags = {"back_btag": ["-z"],
+               "front_btag": ["+z"]}
+
+    for nelem in nelems:
+        if dim == 1:
+            a = (0,)
+            b = (1,)
+            n = (nelem,)
+            btag_to_face = x_btags
+        elif dim == 2:
+            a = (0, 0)
+            b = (1, 1)
+            n = (nelem, nelem)
+            btag_to_face = dict(x_btags.items()
+                                + y_btags.items())
+        elif dim == 3:
+            a = (0, 0, 0)
+            b = (1, 1, 1)
+            n = (nelem, nelem, nelem)
+            btag_to_face = x_btags
+            mesh = generate_regular_rect_mesh(a=a, b=b,
+                                              n=n, order=order,
+                                              boundary_tag_to_face=btag_to_face)
+
+            h = 2.0 * np.pi / nelem
+
+            vol_discr = Discretization(actx, mesh, GroupFactory(order))
+            print("h=%s -> %d elements" % (
+                h, sum(mgrp.nelements for mgrp in mesh.groups)))
+
+            btag_left = mesh.boundary_tag_bit("left_btag")
+            left_bdry_connection = make_face_restriction(
+                actx, vol_discr, GroupFactory(order),
+                "left_btag", per_face_groups=per_face_groups)
+            check_connection(actx, left_bdry_connection)
+            left_bdry_discr = left_bdry_connection.to_discr
+
+            btag_right = mesh.boundary_tag_bit("rght_btag")
+            rght_bdry_connection = make_face_restriction(
+                actx, vol_discr, GroupFactory(order),
+                "rght_btag", per_face_groups=per_face_groups)
+            check_connection(actx, rght_bdry_connection)
+            rght_bdry_discr = rght_bdry_connection.to_discr
+
+            periodic_offset = np.zeros((dim, 1))
+            periodic_offset[0] = 1.0
+            left_opp_face = make_periodic_connection(actx, left_bdry_connection,
+                                                     rght_bdry_connection,
+                                                     periodic_offset)
+            check_connection(actx, left_opp_face)
+
+            rght_opp_face = make_periodic_connection(actx, rght_bdry_connection,
+                                                     left_bdry_connection,
+                                                     -1.0*periodic_offset)
+            check_connection(actx, rght_opp_face)
+
+            bdry_x = thaw(actx, left_bdry_discr.nodes()[0])
+            bdry_f = f(bdry_x)
+            bdry_f_2 = left_opp_face(bdry_f)
+
+            err = flat_norm(bdry_f-bdry_f_2, np.inf)
+            eoc_rec_left.add_data_point(h, err)
+
+            bdry_x = thaw(actx, rght_bdry_discr.nodes()[0])
+            bdry_f = f(bdry_x)
+            bdry_f_2 = rght_opp_face(bdry_f)
+
+            err = flat_norm(bdry_f-bdry_f_2, np.inf)
+            eoc_rec_right.add_data_point(h, err)
+
+    print(eoc_rec_left)
+    print(eoc_rec_right)
+    assert (
+            eoc_rec_left.order_estimate() >= order-0.5
+            or eoc_rec_left.max_error() < 1e-13)
+    assert (
+            eoc_rec_right.order_estimate() >= order-0.5
+            or eoc_rec_right.max_error() < 1e-13)
+
 # }}}
 
 

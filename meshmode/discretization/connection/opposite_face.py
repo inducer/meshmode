@@ -442,8 +442,8 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
             is_surjective=True)
 
 
-def make_periodic_face_connection(actx, v2b_trg_conn, v2b_src_conn,
-                                  periodic_offset):
+def make_periodic_connection(actx, v2b_trg_conn, v2b_src_conn,
+                             periodic_offset):
     """Given a left and right boundary restriction connections
     *v2b_src_conn* and *v2b_trg_conn*,
     return a :class:`DirectDiscretizationConnection` that performs data

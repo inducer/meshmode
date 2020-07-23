@@ -43,7 +43,8 @@ from meshmode.discretization.connection.face import (
         make_face_restriction,
         make_face_to_all_faces_embedding)
 from meshmode.discretization.connection.opposite_face import \
-        make_opposite_face_connection, make_partition_connection
+        make_opposite_face_connection, make_partition_connection,\
+        make_periodic_connection
 from meshmode.discretization.connection.refinement import \
         make_refinement_connection
 from meshmode.discretization.connection.chained import \
@@ -65,6 +66,7 @@ __all__ = [
         "make_face_to_all_faces_embedding",
         "make_opposite_face_connection",
         "make_partition_connection",
+        "make_periodic_connection",
         "make_refinement_connection",
         "flatten_chained_connection",
 
@@ -94,6 +96,7 @@ Restriction to faces
 .. autofunction:: make_face_to_all_faces_embedding
 
 .. autofunction:: make_opposite_face_connection
+.. autofunction:: make_periodic_connection
 
 Mesh partitioning
 -----------------
