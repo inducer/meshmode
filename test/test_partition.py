@@ -187,7 +187,7 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
             # Can't currently expect exact results due to limitations of
             # interpolation 'snapping' in DirectDiscretizationConnection's
             # _resample_point_pick_indices
-            assert(err < 1e-11)
+            assert err < 1e-11
 
 # }}}
 
@@ -196,14 +196,14 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
 
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("num_parts", [4, 5, 7])
-@pytest.mark.parametrize("num_meshes", [1, 2, 7])
+@pytest.mark.parametrize("num_groups", [1, 2, 7])
 @pytest.mark.parametrize("scramble_partitions", [True, False])
-def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions):
+def test_partition_mesh(num_parts, num_groups, dim, scramble_partitions):
     np.random.seed(42)
     n = (5,) * dim
     from meshmode.mesh.generation import generate_regular_rect_mesh
     meshes = [generate_regular_rect_mesh(a=(0 + i,) * dim, b=(1 + i,) * dim, n=n)
-                        for i in range(num_meshes)]
+                        for i in range(num_groups)]
 
     from meshmode.mesh.processing import merge_disjoint_meshes
     mesh = merge_disjoint_meshes(meshes)

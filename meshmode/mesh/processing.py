@@ -95,10 +95,10 @@ def _split_by_group(groups, elements):
     :returns: A (CSR-style) compressed :class:`numpy.ndarray` that indicates for
         each group the subrange of *elements* that belongs to it.
     """
-    group_elem_start = []
+    group_elem_starts = []
     start_idx = 0
     for grp in groups:
-        group_elem_start.append(start_idx)
+        group_elem_starts.append(start_idx)
         # Find the index of first element in the next group.
         end_idx = len(elements)
         for idx in range(start_idx, len(elements)):
@@ -106,8 +106,8 @@ def _split_by_group(groups, elements):
                 end_idx = idx
                 break
         start_idx = end_idx
-    group_elem_start.append(start_idx)
-    return group_elem_start
+    group_elem_starts.append(start_idx)
+    return group_elem_starts
 
 
 def _filter_mesh_groups(groups, selected_elements):
@@ -124,19 +124,19 @@ def _filter_mesh_groups(groups, selected_elements):
         in *new_groups*, and *required_vertex_indices* contains indices of all
         vertices required for elements belonging to *new_groups*.
     """
-    group_elem_start = _split_by_group(groups, selected_elements)
+    group_elem_starts = _split_by_group(groups, selected_elements)
 
     n_new_groups = 0
     group_to_new_group = [None for _ in groups]
     for igrp in range(len(groups)):
-        start_idx = group_elem_start[igrp]
-        end_idx = group_elem_start[igrp+1]
+        start_idx = group_elem_starts[igrp]
+        end_idx = group_elem_starts[igrp+1]
         if end_idx == start_idx:
             continue
         group_to_new_group[igrp] = n_new_groups
         n_new_groups += 1
 
-    new_indices = []
+    new_vertex_indices = []
     new_nodes = []
 
     # The set of vertex indices we need.
@@ -148,10 +148,11 @@ def _filter_mesh_groups(groups, selected_elements):
     for igrp, grp in enumerate(groups):
         if group_to_new_group[igrp] is None:
             continue
-        start_idx = group_elem_start[igrp]
-        end_idx = group_elem_start[igrp+1]
+        start_idx = group_elem_starts[igrp]
+        end_idx = group_elem_starts[igrp+1]
         group_elements = selected_elements[start_idx:end_idx]
-        new_indices.append(grp.vertex_indices[group_elements - grp.element_nr_base])
+        new_vertex_indices.append(grp.vertex_indices[group_elements
+                    - grp.element_nr_base])
         ambient_dim = grp.nodes.shape[0]
         new_nodes.append(
             np.zeros(
@@ -161,14 +162,14 @@ def _filter_mesh_groups(groups, selected_elements):
                 new_idx = j - start_idx
                 elem = group_elements[new_idx] - grp.element_nr_base
                 new_nodes[-1][i, new_idx, :] = grp.nodes[i, elem, :]
-        index_sets = np.append(index_sets, set(new_indices[-1].ravel()))
+        index_sets = np.append(index_sets, set(new_vertex_indices[-1].ravel()))
 
     # A sorted np.array of vertex indices we need (without duplicates).
     #required_vertex_indices = np.unique(np.sort(index_set))
     required_vertex_indices = np.array(list(set.union(*index_sets)))
 
     # Our indices need to be in range [0, len(mesh.nelements)].
-    for indices in new_indices:
+    for indices in new_vertex_indices:
         for i in range(len(indices)):
             for j in range(len(indices[0])):
                 original_index = indices[i, j]
@@ -181,8 +182,8 @@ def _filter_mesh_groups(groups, selected_elements):
         if i_new_group is not None:
             new_groups.append(
                 type(grp)(
-                    grp.order, new_indices[i_new_group], new_nodes[i_new_group],
-                    unit_nodes=grp.unit_nodes))
+                    grp.order, new_vertex_indices[i_new_group],
+                        new_nodes[i_new_group], unit_nodes=grp.unit_nodes))
 
     return new_groups, group_to_new_group, required_vertex_indices
 
@@ -208,7 +209,7 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
         of partitioned group indices to `~meshmode.mesh.FacialAdjacencyGroup`
         instances if they have local-to-local adjacency.
     """
-    local_to_local_adjacency_groups = [dict() for _ in part_mesh_groups]
+    local_to_local_adjacency_groups = [{} for _ in part_mesh_groups]
 
     for igrp, facial_adj_dict in enumerate(mesh.facial_adjacency_groups):
         i_part_grp = global_group_to_part_group[igrp]
@@ -231,8 +232,7 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
             neighbors_are_local = global_elem_to_part_elem[facial_adj.neighbors
                         + elem_base_j] >= 0
 
-            adj_indices = np.where(np.logical_and(elements_are_local,
-                        neighbors_are_local))[0]
+            adj_indices = np.where(elements_are_local & neighbors_are_local)[0]
 
             if len(adj_indices) > 0:
                 part_elem_base_i = part_mesh_group_elem_base[i_part_grp]
@@ -305,8 +305,7 @@ def _collect_nonlocal_adjacency_data(mesh, part_per_elem, global_elem_to_part_el
                         + elem_base_i] >= 0
             neighbors_are_nonlocal = global_elem_to_part_elem[facial_adj.neighbors
                         + elem_base_j] < 0
-            adj_indices = np.where(np.logical_and(elements_are_local,
-                        neighbors_are_nonlocal))[0]
+            adj_indices = np.where(elements_are_local & neighbors_are_nonlocal)[0]
 
             if len(adj_indices) > 0:
                 part_elem_base_i = part_mesh_group_elem_base[i_part_grp]
