@@ -339,6 +339,7 @@ class Visualizer(object):
     .. automethod:: show_scalar_in_mayavi
     .. automethod:: show_scalar_in_matplotlib_3d
     .. automethod:: write_vtk_file
+    .. automethod:: write_high_order_vtk_file
     """
 
     def __init__(self, connection,
@@ -423,6 +424,10 @@ class Visualizer(object):
 
     def write_high_order_vtk_file(self, file_name, names_and_fields,
             compressor=None, real_only=False, overwrite=False):
+        """Writes arbitrary order Lagrange VTK elements. These elements are
+        described in `this blog post <https://blog.kitware.com/modeling-arbitrary-order-lagrange-finite-elements-in-the-visualization-toolkit/>`_
+        and are available in VTK 8.1 and newer.
+        """     # noqa
         if not self.is_equidistant:
             raise RuntimeError("cannot visualize high-order Lagrange elements. "
                     "call 'make_visualizer' with 'force_equidistant=True'.")
