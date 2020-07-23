@@ -581,7 +581,7 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
         unit_vertex_indices.append(dof)
 
     # Now get the vertex coordinates as *(dim, nvertices)*-shaped array
-    vertices = np.array((gdim, fdrake_mesh.num_vertices()), dtype=nodes.dtype)
+    vertices = np.ndarray((gdim, fdrake_mesh.num_vertices()), dtype=nodes.dtype)
     recorded_verts = set()
     for icell, cell_vertex_indices in enumerate(vertex_indices):
         for local_vert_id, global_vert_id in enumerate(cell_vertex_indices):
