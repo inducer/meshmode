@@ -116,10 +116,12 @@ def test_visualizers(ctx_factory, dim):
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order)
 
-    vis.write_vtk_file(f"visualizer_vtk_lagrange_{dim}.vtu", [],
-            use_lagrange_elements=True, overwrite=True)
-    vis.write_vtk_file(f"visualizer_vtk_linear_{dim}.vtu", [],
-            use_lagrange_elements=False, overwrite=True)
+    vis.write_vtk_file(f"visualizer_vtk_linear_{dim}.vtu",
+            [], overwrite=True)
+
+    with pytest.raises(RuntimeError):
+        vis.write_high_order_vtk_file(f"visualizer_vtk_lagrange_{dim}.vtu",
+                [], overwrite=True)
 
     if mesh.dim <= 2:
         field = thaw(actx, discr.nodes()[0])
@@ -135,6 +137,11 @@ def test_visualizers(ctx_factory, dim):
             vis.show_scalar_in_mayavi(field, do_show=False)
         except ImportError:
             logger.info("mayavi not avaiable")
+
+    vis = make_visualizer(actx, discr, target_order,
+            force_equidistant=True)
+    vis.write_high_order_vtk_file(f"visualizer_vtk_lagrange_{dim}.vtu",
+            [], overwrite=True)
 
 # }}}
 

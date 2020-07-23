@@ -341,7 +341,8 @@ class Visualizer(object):
     .. automethod:: write_vtk_file
     """
 
-    def __init__(self, connection, element_shrink_factor=None):
+    def __init__(self, connection,
+            element_shrink_factor=None, is_equidistant=False):
         self.connection = connection
         self.discr = connection.from_discr
         self.vis_discr = connection.to_discr
@@ -349,6 +350,7 @@ class Visualizer(object):
         if element_shrink_factor is None:
             element_shrink_factor = 1.0
         self.element_shrink_factor = element_shrink_factor
+        self.is_equidistant = is_equidistant
 
     @memoize_method
     def _vis_nodes_numpy(self):
@@ -419,20 +421,32 @@ class Visualizer(object):
     def _vtk_lagrange_connectivity(self):
         return VTKLagrangeConnectivity(self.connection)
 
+    def write_high_order_vtk_file(self, file_name, names_and_fields,
+            compressor=None, real_only=False, overwrite=False):
+        if not self.is_equidistant:
+            raise RuntimeError("cannot visualize high-order Lagrange elements. "
+                    "call 'make_visualizer' with 'force_equidistant=True'.")
+
+        self._write_vtk_file(file_name, names_and_fields,
+                connectivity=self._vtk_lagrange_connectivity,
+                compressor=compressor,
+                real_only=real_only,
+                overwrite=overwrite)
+
     def write_vtk_file(self, file_name, names_and_fields,
-                       compressor=None,
-                       real_only=False,
-                       overwrite=False,
-                       use_lagrange_elements=False):
+            compressor=None, real_only=False, overwrite=False):
+        self._write_vtk_file(file_name, names_and_fields,
+                connectivity=self._vtk_connectivity,
+                compressor=compressor,
+                real_only=real_only,
+                overwrite=overwrite)
+
+    def _write_vtk_file(self, file_name, names_and_fields, connectivity,
+            compressor=None, real_only=False, overwrite=False):
         from pyvisfile.vtk import (
                 UnstructuredGrid, DataArray,
                 AppendedDataXMLGenerator,
                 VF_LIST_OF_COMPONENTS)
-
-        if use_lagrange_elements:
-            connectivity = self._vtk_lagrange_connectivity
-        else:
-            connectivity = self._vtk_connectivity
 
         nodes = self._vis_nodes_numpy()
         names_and_fields = [
@@ -581,21 +595,33 @@ class Visualizer(object):
     # }}}
 
 
-def make_visualizer(actx, discr, vis_order, element_shrink_factor=None):
+def make_visualizer(actx, discr, vis_order,
+        element_shrink_factor=None, force_equidistant=False):
+    """
+    :arg vis_order: order of the visualization DOFs.
+    :arg element_shrink_factor: number in :math:`(0, 1]`.
+    :arg force_equidistant: if *True*, the visualization is done on
+        equidistant nodes. If plotting high-order Lagrange VTK elements, this
+        needs to be set to *True*.
+    """
     from meshmode.discretization import Discretization
 
-    from meshmode.discretization.poly_element import (
-            PolynomialEquidistantSimplexElementGroup,
-            EquidistantTensorProductElementGroup,
-            OrderAndTypeBasedGroupFactory
-            )
+    if force_equidistant:
+        from meshmode.discretization.poly_element import (
+                PolynomialEquidistantSimplexElementGroup as SimplexElementGroup,
+                EquidistantTensorProductElementGroup as TensorElementGroup)
+    else:
+        from meshmode.discretization.poly_element import (
+                PolynomialWarpAndBlendElementGroup as SimplexElementGroup,
+                LegendreGaussLobattoTensorProductElementGroup as TensorElementGroup)
 
+    from meshmode.discretization.poly_element import OrderAndTypeBasedGroupFactory
     vis_discr = Discretization(
             actx, discr.mesh,
             OrderAndTypeBasedGroupFactory(
                 vis_order,
-                simplex_group_class=PolynomialEquidistantSimplexElementGroup,
-                tensor_product_group_class=EquidistantTensorProductElementGroup),
+                simplex_group_class=SimplexElementGroup,
+                tensor_product_group_class=TensorElementGroup),
             real_dtype=discr.real_dtype)
 
     from meshmode.discretization.connection import \
@@ -603,7 +629,8 @@ def make_visualizer(actx, discr, vis_order, element_shrink_factor=None):
 
     return Visualizer(
             make_same_mesh_connection(actx, vis_discr, discr),
-            element_shrink_factor=element_shrink_factor)
+            element_shrink_factor=element_shrink_factor,
+            is_equidistant=force_equidistant)
 
 # }}}
 
