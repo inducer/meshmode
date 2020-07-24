@@ -87,7 +87,7 @@ def _create_element_part_map(part_per_element, parts, element_id_dtype):
     return global_elem_to_part_elem
 
 
-def _filter_mesh_groups(groups, selected_elements):
+def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
     """
     Create new mesh groups containing a selected subset of elements.
 
@@ -101,59 +101,55 @@ def _filter_mesh_groups(groups, selected_elements):
         in *new_groups*, and *required_vertex_indices* contains indices of all
         vertices required for elements belonging to *new_groups*.
     """
+
     group_elem_starts = [np.searchsorted(selected_elements, grp.element_nr_base)
                 for grp in groups]
     group_elem_starts.append(len(selected_elements))
 
     n_new_groups = 0
     group_to_new_group = [None for _ in groups]
-    for igrp in range(len(groups)):
+    filtered_group_elements = []
+    for igrp, grp in enumerate(groups):
         start_idx = group_elem_starts[igrp]
         end_idx = group_elem_starts[igrp+1]
         if end_idx == start_idx:
             continue
         group_to_new_group[igrp] = n_new_groups
+        filtered_group_elements.append(selected_elements[start_idx:end_idx]
+                    - grp.element_nr_base)
         n_new_groups += 1
 
-    new_vertex_indices = []
-    new_nodes = []
-
-    # The set of vertex indices we need.
-    # NOTE: There are two methods for producing required_vertex_indices.
-    #   Optimizations may come from further exploring these options.
-    #index_set = np.array([], dtype=int)
-    index_sets = np.array([], dtype=set)
-
+    filtered_vertex_indices = []
     for igrp, grp in enumerate(groups):
-        if group_to_new_group[igrp] is None:
+        i_new_grp = group_to_new_group[igrp]
+        if i_new_grp is None:
             continue
-        start_idx = group_elem_starts[igrp]
-        end_idx = group_elem_starts[igrp+1]
-        group_elements = selected_elements[start_idx:end_idx]
-        new_vertex_indices.append(grp.vertex_indices[group_elements
-                    - grp.element_nr_base])
-        ambient_dim = grp.nodes.shape[0]
-        new_nodes.append(
-            np.zeros(
-                (ambient_dim, end_idx - start_idx, grp.nunit_nodes)))
-        for i in range(ambient_dim):
-            for j in range(start_idx, end_idx):
-                new_idx = j - start_idx
-                elem = group_elements[new_idx] - grp.element_nr_base
-                new_nodes[-1][i, new_idx, :] = grp.nodes[i, elem, :]
-        index_sets = np.append(index_sets, set(new_vertex_indices[-1].ravel()))
+        filtered_vertex_indices.append(grp.vertex_indices[
+                    filtered_group_elements[i_new_grp], :])
 
-    # A sorted np.array of vertex indices we need (without duplicates).
-    #required_vertex_indices = np.unique(np.sort(index_set))
-    required_vertex_indices = np.array(list(set.union(*index_sets)))
+    if n_new_groups > 0:
+        filtered_vertex_indices_flat = np.concatenate([indices.ravel() for indices
+                    in filtered_vertex_indices])
+    else:
+        filtered_vertex_indices_flat = np.empty(0, dtype=vertex_id_dtype)
 
-    # Our indices need to be in range [0, len(mesh.nelements)].
-    for indices in new_vertex_indices:
-        for i in range(len(indices)):
-            for j in range(len(indices[0])):
-                original_index = indices[i, j]
-                indices[i, j] = np.where(required_vertex_indices
-                            == original_index)[0]
+    required_vertex_indices, new_vertex_indices_flat = np.unique(
+                filtered_vertex_indices_flat, return_inverse=True)
+
+    new_vertex_indices = []
+    start_idx = 0
+    for filtered_indices in filtered_vertex_indices:
+        end_idx = start_idx + filtered_indices.size
+        new_vertex_indices.append(new_vertex_indices_flat[start_idx:end_idx]
+                    .reshape(filtered_indices.shape).astype(vertex_id_dtype))
+        start_idx = end_idx
+
+    new_nodes = []
+    for igrp, grp in enumerate(groups):
+        i_new_grp = group_to_new_group[igrp]
+        if i_new_grp is None:
+            continue
+        new_nodes.append(grp.nodes[:, filtered_group_elements[i_new_grp], :])
 
     new_groups = []
     for igrp, grp in enumerate(groups):
@@ -565,7 +561,7 @@ def partition_mesh(mesh, part_per_element, part_num):
     # Create new mesh groups that mimick the original mesh's groups but only contain
     # the local partition's elements
     part_mesh_groups, global_group_to_part_group, required_vertex_indices =\
-                _filter_mesh_groups(mesh.groups, queried_elems)
+                _filter_mesh_groups(mesh.groups, queried_elems, mesh.vertex_id_dtype)
 
     part_vertices = np.zeros((mesh.ambient_dim, len(required_vertex_indices)))
     for dim in range(mesh.ambient_dim):
