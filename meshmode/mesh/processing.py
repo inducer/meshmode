@@ -181,9 +181,8 @@ def _filter_mesh_groups(groups, selected_elements):
         i_new_group = group_to_new_group[igrp]
         if i_new_group is not None:
             new_groups.append(
-                type(grp)(
-                    grp.order, new_vertex_indices[i_new_group],
-                        new_nodes[i_new_group], unit_nodes=grp.unit_nodes))
+                grp.copy(vertex_indices=new_vertex_indices[i_new_group],
+                        nodes=new_nodes[i_new_group]))
 
     return new_groups, group_to_new_group, required_vertex_indices
 
