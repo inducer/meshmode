@@ -86,30 +86,6 @@ def _create_element_part_map(part_per_element, parts, element_id_dtype):
     return global_elem_to_part_elem
 
 
-def _split_by_group(groups, elements):
-    """
-    Split a sorted array of elements according to group.
-
-    :arg groups: An array of `~meshmode.mesh.ElementGroup` instances.
-    :arg elements: A sorted array of element indices.
-    :returns: A (CSR-style) compressed :class:`numpy.ndarray` that indicates for
-        each group the subrange of *elements* that belongs to it.
-    """
-    group_elem_starts = []
-    start_idx = 0
-    for grp in groups:
-        group_elem_starts.append(start_idx)
-        # Find the index of first element in the next group.
-        end_idx = len(elements)
-        for idx in range(start_idx, len(elements)):
-            if elements[idx] - grp.element_nr_base >= grp.nelements:
-                end_idx = idx
-                break
-        start_idx = end_idx
-    group_elem_starts.append(start_idx)
-    return group_elem_starts
-
-
 def _filter_mesh_groups(groups, selected_elements):
     """
     Create new mesh groups containing a selected subset of elements.
@@ -124,7 +100,9 @@ def _filter_mesh_groups(groups, selected_elements):
         in *new_groups*, and *required_vertex_indices* contains indices of all
         vertices required for elements belonging to *new_groups*.
     """
-    group_elem_starts = _split_by_group(groups, selected_elements)
+    group_elem_starts = [np.searchsorted(selected_elements, grp.element_nr_base)
+                for grp in groups]
+    group_elem_starts.append(len(selected_elements))
 
     n_new_groups = 0
     group_to_new_group = [None for _ in groups]
