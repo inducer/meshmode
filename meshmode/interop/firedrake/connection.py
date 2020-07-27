@@ -451,7 +451,8 @@ class FiredrakeConnection:
         else:
             # If `out` is not supplied, create it
             from meshmode.array_context import ArrayContext
-            assert isinstance(actx, ArrayContext)
+            assert isinstance(actx, ArrayContext), "If :arg:`out` is *None*, " \
+                ":arg:`actx` must be of type ArrayContext, not %s." % type(actx)
             if fspace_shape == tuple():
                 out = self.discr.zeros(actx, dtype=function_data.dtype)
             else:
