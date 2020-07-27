@@ -160,7 +160,7 @@ def _filter_mesh_groups(groups, selected_elements):
         if i_new_group is not None:
             new_groups.append(
                 grp.copy(vertex_indices=new_vertex_indices[i_new_group],
-                        nodes=new_nodes[i_new_group]))
+                    nodes=new_nodes[i_new_group]))
 
     return new_groups, group_to_new_group, required_vertex_indices
 
