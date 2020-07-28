@@ -492,36 +492,30 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             combined_element_faces = np.concatenate((nl.element_faces,
                         bdry.element_faces))
             perm = np.lexsort([combined_element_faces, combined_elements])
+            nonlocal_indices = np.where(perm < nnonlocal)[0]
+            bdry_indices = np.where(perm >= nnonlocal)[0]
 
-            nonlocal_neighbor_elements = global_elem_to_neighbor_elem[
+            # Merge non-local part
+            elements[nonlocal_indices] = nl.elements
+            element_faces[nonlocal_indices] = nl.element_faces
+            neighbor_parts[nonlocal_indices] = nl.neighbor_parts
+            for imerged in nonlocal_indices:
+                i_neighbor_part = neighbor_parts[imerged]
+                from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
+                neighbors[imerged] = -(
+                            boundary_tag_bit(BTAG_REALLY_ALL)
+                            | boundary_tag_bit(BTAG_PARTITION(i_neighbor_part)))
+            neighbor_elements[nonlocal_indices] = global_elem_to_neighbor_elem[
                         nl.global_neighbors]
+            neighbor_faces[nonlocal_indices] = nl.neighbor_faces
 
-            # Merge
-            imerged = 0
-            for icombined in perm:
-                if icombined < nnonlocal:
-                    # Next entry is a non-local adjacency
-                    inonlocal = icombined
-                    elements[imerged] = nl.elements[inonlocal]
-                    element_faces[imerged] = nl.element_faces[inonlocal]
-                    neighbor_parts[imerged] = nl.neighbor_parts[inonlocal]
-                    i_neighbor_part = neighbor_parts[imerged]
-                    from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
-                    neighbors[imerged] = -(
-                                boundary_tag_bit(BTAG_REALLY_ALL)
-                                | boundary_tag_bit(BTAG_PARTITION(i_neighbor_part)))
-                    neighbor_elements[imerged] = nonlocal_neighbor_elements[inonlocal]
-                    neighbor_faces[imerged] = nl.neighbor_faces[inonlocal]
-                else:
-                    # Next entry is a boundary
-                    ibdry = icombined - nnonlocal
-                    elements[imerged] = bdry.elements[ibdry]
-                    element_faces[imerged] = bdry.element_faces[ibdry]
-                    neighbor_parts[imerged] = -1
-                    neighbors[imerged] = bdry.neighbors[ibdry]
-                    neighbor_elements[imerged] = -1
-                    neighbor_faces[imerged] = -1
-                imerged = imerged + 1
+            # Merge boundary part
+            elements[bdry_indices] = bdry.elements
+            element_faces[bdry_indices] = bdry.element_faces
+            neighbors[bdry_indices] = bdry.neighbors
+            neighbor_parts[bdry_indices] = -1
+            neighbor_elements[bdry_indices] = -1
+            neighbor_faces[bdry_indices] = -1
 
         from meshmode.mesh import InterPartitionAdjacencyGroup
         inter_partition_adj_groups.append(InterPartitionAdjacencyGroup(
