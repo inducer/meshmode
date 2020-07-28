@@ -429,8 +429,9 @@ class Visualizer(object):
         and are available in VTK 8.1 and newer.
         """     # noqa
         if not self.is_equidistant:
-            raise RuntimeError("cannot visualize high-order Lagrange elements. "
-                    "call 'make_visualizer' with 'force_equidistant=True'.")
+            raise RuntimeError("Cannot visualize high-order Lagrange elements "
+                    "using a non-equidistant visualizer. "
+                    "Call 'make_visualizer' with 'force_equidistant=True'.")
 
         self._write_vtk_file(file_name, names_and_fields,
                 connectivity=self._vtk_lagrange_connectivity,
