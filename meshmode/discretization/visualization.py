@@ -420,6 +420,7 @@ class Visualizer(object):
     @property
     @memoize_method
     def _vtk_lagrange_connectivity(self):
+        assert self.is_equidistant
         return VTKLagrangeConnectivity(self.connection)
 
     def write_high_order_vtk_file(self, file_name, names_and_fields,
