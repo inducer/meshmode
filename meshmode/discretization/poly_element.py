@@ -43,6 +43,7 @@ Group types
 .. autoclass:: PolynomialRecursiveNodesElementGroup
 .. autoclass:: PolynomialEquidistantSimplexElementGroup
 .. autoclass:: LegendreGaussLobattoTensorProductElementGroup
+.. autoclass:: EquidistantTensorProductElementGroup
 
 Group factories
 ^^^^^^^^^^^^^^^
@@ -342,16 +343,21 @@ class LegendreGaussLobattoTensorProductElementGroup(PolynomialElementGroupBase):
 
     @memoize_method
     def from_mesh_interp_matrix(self):
-        from modepy.modes import tensor_product_basis, jacobi
-        from functools import partial
         meg = self.mesh_el_group
+        return mp.resampling_matrix(
+                self.basis(),
+                self.unit_nodes,
+                meg.unit_nodes)
 
-        basis = tensor_product_basis(
-                self.dim, tuple(
-                    partial(jacobi, 0, 0, i)
-                    for i in range(meg.order+1)))
 
-        return mp.resampling_matrix(basis, self.unit_nodes, meg.unit_nodes)
+class EquidistantTensorProductElementGroup(
+        LegendreGaussLobattoTensorProductElementGroup):
+    @property
+    @memoize_method
+    def unit_nodes(self):
+        from modepy.nodes import tensor_product_nodes, equidistant_nodes
+        return tensor_product_nodes(
+                self.dim, equidistant_nodes(1, self.order))
 
 # }}}
 
