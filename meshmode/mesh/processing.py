@@ -63,7 +63,7 @@ def find_group_indices(groups, meshwide_elems):
 
 # {{{ partition_mesh
 
-def _create_element_part_map(part_per_element, parts, element_id_dtype):
+def _compute_global_elem_to_part_elem(part_per_element, parts, element_id_dtype):
     """
     Create a map from global elem to partition elem for a set of partitions.
 
@@ -430,8 +430,8 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
         for each group in *part_mesh_groups*, containing the aggregated non-local
         adjacency and boundary information from *nonlocal_adj_data* and *bdry_data*.
     """
-    global_elem_to_neighbor_elem = _create_element_part_map(part_per_element,
-                all_neighbor_parts, element_id_dtype=mesh.element_id_dtype)
+    global_elem_to_neighbor_elem = _compute_global_elem_to_part_elem(
+                part_per_element, all_neighbor_parts, mesh.element_id_dtype)
 
     inter_partition_adj_groups = []
 
@@ -549,8 +549,8 @@ def partition_mesh(mesh, part_per_element, part_num):
     # Contains the indices of the elements requested.
     queried_elems = np.where(np.array(part_per_element) == part_num)[0]
 
-    global_elem_to_part_elem = _create_element_part_map(part_per_element,
-                {part_num}, element_id_dtype=mesh.element_id_dtype)
+    global_elem_to_part_elem = _compute_global_elem_to_part_elem(part_per_element,
+                {part_num}, mesh.element_id_dtype)
 
     # Create new mesh groups that mimick the original mesh's groups but only contain
     # the local partition's elements
