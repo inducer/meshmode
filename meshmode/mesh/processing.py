@@ -149,7 +149,7 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
         i_new_grp = group_to_new_group[igrp]
         if i_new_grp is None:
             continue
-        new_nodes.append(grp.nodes[:, filtered_group_elements[i_new_grp], :])
+        new_nodes.append(grp.nodes[:, filtered_group_elements[i_new_grp], :].copy())
 
     new_groups = []
     for igrp, grp in enumerate(groups):
