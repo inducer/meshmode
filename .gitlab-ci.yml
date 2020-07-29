@@ -1,20 +1,3 @@
-Python 3 Nvidia K40:
-  script:
-  - export PY_EXE=python3
-  - export PYOPENCL_TEST=nvi:k40
-  - export EXTRA_INSTALL="pybind11 cython numpy mako"
-  # cython is here because pytential (for now, for TS) depends on it
-  - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
-  - ". ./build-and-test-py-project.sh"
-  tags:
-  - python3
-  - nvidia-k40
-  except:
-  - tags
-  artifacts:
-    reports:
-      junit: test/pytest.xml
-
 Python 3 POCL:
   script:
   - export PY_EXE=python3
@@ -27,6 +10,23 @@ Python 3 POCL:
   - python3
   - pocl
   - mpi
+  except:
+  - tags
+  artifacts:
+    reports:
+      junit: test/pytest.xml
+
+Python 3 Nvidia K40:
+  script:
+  - export PY_EXE=python3
+  - export PYOPENCL_TEST=nvi:k40
+  - export EXTRA_INSTALL="pybind11 cython numpy mako"
+  # cython is here because pytential (for now, for TS) depends on it
+  - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
+  - ". ./build-and-test-py-project.sh"
+  tags:
+  - python3
+  - nvidia-k40
   except:
   - tags
   artifacts:
