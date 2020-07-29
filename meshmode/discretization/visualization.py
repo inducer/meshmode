@@ -441,11 +441,11 @@ class Visualizer(object):
                 overwrite=overwrite)
 
     def write_vtk_file(self, file_name, names_and_fields,
-                       par_filename=None,
+                       par_filename=None, par_namelist=None,
                        compressor=None, mpicomm=None,
                        real_only=False, overwrite=False):
         self._write_vtk_file(file_name, names_and_fields,
-                par_filename=par_filename,
+                 par_filename=par_filename, par_namelist=par_namelist,
                 connectivity=self._vtk_connectivity,
                 compressor=compressor,
                 mpicomm=mpicomm,
@@ -453,7 +453,7 @@ class Visualizer(object):
                 overwrite=overwrite)
 
     def _write_vtk_file(self, file_name, names_and_fields, connectivity,
-                        par_filename=None,
+                        par_filename=None, par_namelist=None,
                         compressor=None, mpicomm=None,
                         real_only=False, overwrite=False):
         from pyvisfile.vtk import (
@@ -540,7 +540,6 @@ class Visualizer(object):
             rank = mpicomm.Get_rank()
             nproc = mpicomm.Get_size()
             if nproc > 1:  # don't bother for serial runs
-                part_filenames = mpicomm.Gather(file_name, root=0)
                 if rank == 0:
                     if par_filename is None:
                         par_filename = file_name+'.pvtu'
@@ -551,7 +550,7 @@ class Visualizer(object):
                             raise FileExistsError(f'output file {par_filename}'
                                                   f' already exists.')
                     with open(par_filename, "w") as outf:
-                        generator = ParallelXMLGenerator(part_filenames)
+                        generator = ParallelXMLGenerator(par_namelist)
                         generator(grid).write(outf)
 
         # }}}
