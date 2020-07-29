@@ -443,6 +443,17 @@ class Visualizer(object):
     def write_vtk_file(self, file_name, names_and_fields,
                 compressor=None, real_only=False,
                 overwrite=False, par_namelist=None):
+        r"""
+        Parameters
+        ----------
+        par_namelist
+
+            If par_namelist is given by the caller (and non-empty),
+            it is expected to be a list of filenames wherein the
+            PVTU-format filename and the part source filenames are given.
+            When used by a parallel application, only one rank should
+            write the PVTU file.
+        """
         self._write_vtk_file(file_name, names_and_fields,
                 par_namelist=par_namelist,
                 connectivity=self._vtk_connectivity,
