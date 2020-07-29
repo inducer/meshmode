@@ -56,6 +56,7 @@ Python 3 Conda:
     . ./build-and-test-py-project-within-miniconda.sh
   tags:
   # - docker-runner
+  - linux
   - large-node
   except:
   - tags
