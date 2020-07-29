@@ -554,8 +554,8 @@ class Visualizer(object):
                     if overwrite:
                         os.remove(par_filename)
                     else:
-                        raise FileExistsError(f"parallel output file {par_filename}"
-                                              f" already exists.")
+                        raise FileExistsError(f"parallel output file "
+                                              f"'{par_filename}' already exists.")
                 with open(par_filename, "w") as outf:
                     generator = ParallelXMLGenerator(part_namelist)
                     generator(grid).write(outf)
