@@ -492,10 +492,9 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             combined_element_faces = np.concatenate((nl.element_faces,
                         bdry.element_faces))
             perm = np.lexsort([combined_element_faces, combined_elements])
-            nonlocal_indices = np.where(perm < nnonlocal)[0]
-            bdry_indices = np.where(perm >= nnonlocal)[0]
 
             # Merge non-local part
+            nonlocal_indices = np.where(perm < nnonlocal)[0]
             elements[nonlocal_indices] = nl.elements
             element_faces[nonlocal_indices] = nl.element_faces
             neighbor_parts[nonlocal_indices] = nl.neighbor_parts
@@ -510,6 +509,7 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbor_faces[nonlocal_indices] = nl.neighbor_faces
 
             # Merge boundary part
+            bdry_indices = np.where(perm >= nnonlocal)[0]
             elements[bdry_indices] = bdry.elements
             element_faces[bdry_indices] = bdry.element_faces
             neighbors[bdry_indices] = bdry.neighbors
