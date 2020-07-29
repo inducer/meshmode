@@ -441,21 +441,18 @@ class Visualizer(object):
                 overwrite=overwrite)
 
     def write_vtk_file(self, file_name, names_and_fields,
-                       par_filename=None, par_namelist=None,
-                       compressor=None, mpicomm=None,
-                       real_only=False, overwrite=False):
+                compressor=None, real_only=False,
+                overwrite=False, par_namelist=None):
         self._write_vtk_file(file_name, names_and_fields,
-                 par_filename=par_filename, par_namelist=par_namelist,
+                par_namelist=par_namelist,
                 connectivity=self._vtk_connectivity,
                 compressor=compressor,
-                mpicomm=mpicomm,
                 real_only=real_only,
                 overwrite=overwrite)
 
     def _write_vtk_file(self, file_name, names_and_fields, connectivity,
-                        par_filename=None, par_namelist=None,
-                        compressor=None, mpicomm=None,
-                        real_only=False, overwrite=False):
+                compressor=None, real_only=False, overwrite=False,
+                par_namelist=None):
         from pyvisfile.vtk import (
                 UnstructuredGrid, DataArray,
                 AppendedDataXMLGenerator,
@@ -527,7 +524,8 @@ class Visualizer(object):
             if overwrite:
                 os.remove(file_name)
             else:
-                raise FileExistsError(f'output file {file_name} already exists')
+                raise FileExistsError("output file '{%s}' already exists"
+                                      % file_name)
 
         with open(file_name, "w") as outf:
             generator = AppendedDataXMLGenerator(
@@ -536,22 +534,20 @@ class Visualizer(object):
 
             generator(grid).write(outf)
 
-        if mpicomm is not None:
-            rank = mpicomm.Get_rank()
-            nproc = mpicomm.Get_size()
-            if nproc > 1:  # don't bother for serial runs
-                if rank == 0:
-                    if par_filename is None:
-                        par_filename = file_name+'.pvtu'
-                    if os.path.exists(par_filename):
-                        if overwrite:
-                            os.remove(par_filename)
-                        else:
-                            raise FileExistsError(f'output file {par_filename}'
-                                                  f' already exists.')
-                    with open(par_filename, "w") as outf:
-                        generator = ParallelXMLGenerator(par_namelist)
-                        generator(grid).write(outf)
+        if par_namelist is not None:
+            num_part = len(par_namelist)
+            if num_part > 1:  # don't bother unless the list is long enough
+                par_filename = par_namelist[0]
+                part_namelist = par_namelist[1:]
+                if os.path.exists(par_filename):
+                    if overwrite:
+                        os.remove(par_filename)
+                    else:
+                        raise FileExistsError(f"parallel output file {par_filename}"
+                                              f" already exists.")
+                with open(par_filename, "w") as outf:
+                    generator = ParallelXMLGenerator(part_namelist)
+                    generator(grid).write(outf)
 
         # }}}
 
