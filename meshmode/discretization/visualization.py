@@ -535,7 +535,7 @@ class Visualizer(object):
             if overwrite:
                 os.remove(file_name)
             else:
-                raise FileExistsError("output file '{%s}' already exists"
+                raise FileExistsError("output file '%s' already exists"
                                       % file_name)
 
         with open(file_name, "w") as outf:
