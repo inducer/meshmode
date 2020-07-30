@@ -1545,6 +1545,44 @@ def test_array_context_np_workalike(ctx_factory):
         assert np.allclose(actx_result, ref_result)
 
 
+def test_dof_array_comparison(ctx_factory):
+    ctx = ctx_factory()
+    queue = cl.CommandQueue(ctx)
+    actx = PyOpenCLArrayContext(queue)
+
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh = generate_regular_rect_mesh(
+            a=(-0.5,)*2, b=(0.5,)*2, n=(8,)*2, order=3)
+
+    from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import \
+            PolynomialWarpAndBlendGroupFactory as GroupFactory
+    discr = Discretization(actx, mesh, GroupFactory(3))
+
+    import operator
+    for op in [
+            operator.lt,
+            operator.le,
+            operator.gt,
+            operator.ge,
+            ]:
+        np_arg = np.random.randn(discr.ndofs)
+        arg = unflatten(actx, discr, actx.from_numpy(np_arg))
+        zeros = discr.zeros(actx)
+
+        comp = op(arg, zeros)
+        np_comp = actx.to_numpy(flatten(comp))
+        assert np.array_equal(np_comp, op(np_arg, 0))
+
+        comp = op(arg, 0)
+        np_comp = actx.to_numpy(flatten(comp))
+        assert np.array_equal(np_comp, op(np_arg, 0))
+
+        comp = op(0, arg)
+        np_comp = actx.to_numpy(flatten(comp))
+        assert np.array_equal(np_comp, op(0, np_arg))
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
