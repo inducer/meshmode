@@ -442,16 +442,19 @@ class Visualizer(object):
 
     def write_vtk_file(self, file_name, names_and_fields,
                 compressor=None, real_only=False,
-                overwrite=False, par_namelist=None):
+                overwrite=False, pvtu_filename=None,
+                part_nameformat=None, nranks=1):
         r"""
-        :arg par_namelist: If par_namelist is given by the caller (and non-empty),
-            it is expected to be a list of filenames wherein the
-            PVTU-format filename and the part source filenames are given.
-            When used by a parallel application, only one rank should
-            write the PVTU file.
+        :arg par_nameformat: If pvtu_filename and par_nameformat are given
+            by the caller (and non-empty), they are expected to be PVTU file
+            name to be written and a format string used to generate a rank-specific
+            filename for the part source in the PVTU format, respectively.
+            When used by a parallel application, only one rank should write
+            the PVTU file.
         """
         self._write_vtk_file(file_name, names_and_fields,
-                par_namelist=par_namelist,
+                part_nameformat=part_nameformat, nranks=nranks,
+                pvtu_filename=pvtu_filename,
                 connectivity=self._vtk_connectivity,
                 compressor=compressor,
                 real_only=real_only,
@@ -459,7 +462,7 @@ class Visualizer(object):
 
     def _write_vtk_file(self, file_name, names_and_fields, connectivity,
                 compressor=None, real_only=False, overwrite=False,
-                par_namelist=None):
+                pvtu_filename=None, part_nameformat=None, nranks=1):
         from pyvisfile.vtk import (
                 UnstructuredGrid, DataArray,
                 AppendedDataXMLGenerator,
@@ -541,20 +544,20 @@ class Visualizer(object):
 
             generator(grid).write(outf)
 
-        if par_namelist is not None:
-            num_part = len(par_namelist)
-            if num_part > 1:  # don't bother unless the list is long enough
-                par_filename = par_namelist[0]
-                part_namelist = par_namelist[1:]
-                if os.path.exists(par_filename):
-                    if overwrite:
-                        os.remove(par_filename)
-                    else:
-                        raise FileExistsError(f"parallel output file "
-                                              f"'{par_filename}' already exists.")
-                with open(par_filename, "w") as outf:
-                    generator = ParallelXMLGenerator(part_namelist)
-                    generator(grid).write(outf)
+        if pvtu_filename is not None:
+            if part_nameformat is None:
+                raise ValueError("Expected non-empty part_nameformat argument")
+            part_namelist = [part_nameformat.format(rank=rank)
+                             for rank in range(nranks)]
+            if os.path.exists(pvtu_filename):
+                if overwrite:
+                    os.remove(pvtu_filename)
+                else:
+                    raise FileExistsError(f"parallel output file "
+                                          f"'{pvtu_filename}' already exists.")
+            with open(pvtu_filename, "w") as outf:
+                generator = ParallelXMLGenerator(part_namelist)
+                generator(grid).write(outf)
 
         # }}}
 

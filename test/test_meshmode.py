@@ -125,20 +125,22 @@ def test_parallel_vtk_file(ctx_factory, dim):
     io_fields = []
     io_fields.append(("scalar", scalar))
     io_fields.append(("vector", vector))
-    pfilename = f"test_{dim}.pvtu"
-    par_filenames = [pfilename, "test1.vtu", "test2.vtu"]
+    pvtu_filename = f"test_{dim}.pvtu"
+    part_nameformat = "test{rank}.vtu"
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order)
 
     vis.write_vtk_file(f"visualizer_vtk_linear_{dim}.vtu",
-                       io_fields, par_namelist=par_filenames, overwrite=True)
+                       io_fields, pvtu_filename=pvtu_filename,
+                       part_nameformat=part_nameformat, nranks=2,
+                       overwrite=True)
     import os
-    assert(os.path.exists(pfilename))
+    assert(os.path.exists(pvtu_filename))
 
     import filecmp
     vfile = f"test{dim}.pvtu"
-    assert(filecmp.cmp(vfile, pfilename))
+    assert(filecmp.cmp(vfile, pvtu_filename))
 
 
 @pytest.mark.parametrize("dim", [1, 2, 3])
