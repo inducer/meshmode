@@ -1,3 +1,21 @@
+Python 3 POCL:
+  script:
+  - export PY_EXE=python3
+  - export PYOPENCL_TEST=portable:pthread
+  # cython is here because pytential (for now, for TS) depends on it
+  - export EXTRA_INSTALL="pybind11 cython numpy mako mpi4py"
+  - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
+  - ". ./build-and-test-py-project.sh"
+  tags:
+  - python3
+  - pocl
+  - mpi
+  except:
+  - tags
+  artifacts:
+    reports:
+      junit: test/pytest.xml
+
 Python 3 Nvidia K40:
   script:
   - export PY_EXE=python3
@@ -15,54 +33,30 @@ Python 3 Nvidia K40:
     reports:
       junit: test/pytest.xml
 
-Python 3 POCL:
-  script:
-  - export PY_EXE=python3
-  - export PYOPENCL_TEST=portable:pthread
-  # cython is here because pytential (for now, for TS) depends on it
-  - export EXTRA_INSTALL="pybind11 cython numpy mako mpi4py"
-  - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
-  - ". ./build-and-test-py-project.sh"
-  tags:
-  - python3
-  - pocl
-  - mpi
-  except:
-  - tags
-  artifacts:
-    reports:
-      junit: test/pytest.xml
-
-Python 3 POCL:
-  script:
-  - export PY_EXE=python3
-  - export PYOPENCL_TEST=portable:pthread
-  # cython is here because pytential (for now, for TS) depends on it
-  - export EXTRA_INSTALL="pybind11 cython numpy mako mpi4py"
-  - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
-  - ". ./build-and-test-py-project.sh"
-  tags:
-  - python3
-  - pocl
-  - mpi
-  except:
-  - tags
-  artifacts:
-    reports:
-      junit: test/pytest.xml
-
 Python 3 POCL Examples:
   script:
   - test -n "$SKIP_EXAMPLES" && exit
   - export PY_EXE=python3
   - export PYOPENCL_TEST=portable:pthread
   # cython is here because pytential (for now, for TS) depends on it
-  - export EXTRA_INSTALL="pybind11 cython numpy mako pyvisfile matplotlib"
+  - export EXTRA_INSTALL="pybind11 cython numpy mako matplotlib"
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-py-project-and-run-examples.sh
   - ". ./build-py-project-and-run-examples.sh"
   tags:
   - python3
   - pocl
+  - large-node
+  except:
+  - tags
+
+Python 3 Conda:
+  script: |
+    CONDA_ENVIRONMENT=.test-conda-env-py3.yml
+    curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project-within-miniconda.sh
+    . ./build-and-test-py-project-within-miniconda.sh
+  tags:
+  # - docker-runner
+  - linux
   - large-node
   except:
   - tags
