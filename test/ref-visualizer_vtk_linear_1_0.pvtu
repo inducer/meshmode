@@ -13,7 +13,7 @@
 <PDataArray type="Int64" Name="offsets" NumberOfComponents="1"/>
 <PDataArray type="UInt8" Name="types" NumberOfComponents="1"/>
 </PCells>
-<Piece Source="test0.vtu"/>
-<Piece Source="test1.vtu"/>
+<Piece Source="visualizer_vtk_linear_1_0.vtu"/>
+<Piece Source="visualizer_vtk_linear_1_1.vtu"/>
 </PUnstructuredGrid>
 </VTKFile>

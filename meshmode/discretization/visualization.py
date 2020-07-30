@@ -339,7 +339,7 @@ class Visualizer(object):
     .. automethod:: show_scalar_in_mayavi
     .. automethod:: show_scalar_in_matplotlib_3d
     .. automethod:: write_vtk_file
-    .. automethod:: write_high_order_vtk_file
+    .. automethod:: write_par_vtk_file
     """
 
     def __init__(self, connection,
@@ -423,46 +423,94 @@ class Visualizer(object):
         assert self.is_equidistant
         return VTKLagrangeConnectivity(self.connection)
 
-    def write_high_order_vtk_file(self, file_name, names_and_fields,
-            compressor=None, real_only=False, overwrite=False):
-        """Writes arbitrary order Lagrange VTK elements. These elements are
-        described in `this blog post <https://blog.kitware.com/modeling-arbitrary-order-lagrange-finite-elements-in-the-visualization-toolkit/>`_
-        and are available in VTK 8.1 and newer.
-        """     # noqa
-        if not self.is_equidistant:
-            raise RuntimeError("Cannot visualize high-order Lagrange elements "
-                    "using a non-equidistant visualizer. "
-                    "Call 'make_visualizer' with 'force_equidistant=True'.")
+    def write_par_vtk_file(self, mpi_comm, file_name_pattern, names_and_fields,
+                compressor=None, real_only=False,
+                overwrite=False, use_high_order=None):
+        r"""A convenience wrapper around :meth:`write_vtk_file` for
+        distributed-memory visualization. The file name of the manife
 
-        self._write_vtk_file(file_name, names_and_fields,
-                connectivity=self._vtk_lagrange_connectivity,
+        :arg mpi_comm: An object that supports ``mpi_comm.Get_rank()``
+            and ``mpi_comm.Get_size()`` method calls, typically (but not
+            necessarily) an instance of ``mpi4py.Comm``. This is used
+            to determine the current rank as well as the total number
+            of files being written.
+        :arg file_name_pattern: A file name pattern (required to end in ``.vtu``)
+            that will be used with :meth:`str.format` with an (integer)
+            argument of ``rank`` to obtain the per-rank file name.
+
+        *par_manifest_filename* is synthesized by substituting rank 0
+        into *file_name_pattern* and replacing the file extension with
+        ``.pvtu``.
+
+        See :meth:`write_vtk_file` for the meaning of the remainder of the
+        arguments.
+
+        .. versionadded:: 2020.2
+        """
+        par_manifest_filename = file_name_pattern.format(rank=0)
+        if not par_manifest_filename.endswith(".vtu"):
+            raise ValueError("file_name_pattern must produce file names "
+                    "ending in '.vtu'")
+
+        par_manifest_filename = par_manifest_filename[:-4] + '.pvtu'
+
+        self.write_vtk_file(
+                file_name=file_name_pattern.format(rank=mpi_comm.Get_rank()),
+                names_and_fields=names_and_fields,
                 compressor=compressor,
                 real_only=real_only,
-                overwrite=overwrite)
+                overwrite=overwrite,
+                use_high_order=use_high_order,
+                par_manifest_filename=par_manifest_filename,
+                par_file_names=[
+                    file_name_pattern.format(rank=rank)
+                    for rank in range(mpi_comm.Get_size())
+                    ]
+                )
 
     def write_vtk_file(self, file_name, names_and_fields,
-                compressor=None, real_only=False,
-                overwrite=False, pvtu_filename=None,
-                part_nameformat=None, nranks=1):
-        r"""
-        :arg par_nameformat: If pvtu_filename and par_nameformat are given
-            by the caller (and non-empty), they are expected to be PVTU file
-            name to be written and a format string used to generate a rank-specific
-            filename for the part source in the PVTU format, respectively.
-            When used by a parallel application, only one rank should write
-            the PVTU file.
-        """
-        self._write_vtk_file(file_name, names_and_fields,
-                part_nameformat=part_nameformat, nranks=nranks,
-                pvtu_filename=pvtu_filename,
-                connectivity=self._vtk_connectivity,
-                compressor=compressor,
-                real_only=real_only,
-                overwrite=overwrite)
+            compressor=None, real_only=False, overwrite=False,
+            use_high_order=None,
+            par_manifest_filename=None, par_file_names=None):
+        """Write a Vtk XML file (typical extension ``.vtu``) containing
+        the visualization data in *names_and_fields*. Can optionally also write
+        manifests for distributed memory simulation (typical extension
+        ``.pvtu``). See also :meth:`write_par_vtk_file` for a convenience
+        wrapper.
 
-    def _write_vtk_file(self, file_name, names_and_fields, connectivity,
-                compressor=None, real_only=False, overwrite=False,
-                pvtu_filename=None, part_nameformat=None, nranks=1):
+        :arg names_and_fields: A list of tuples ``(name, value)``, where
+            *name* is a string and *value* is a
+            :class:`~meshmode.dof_array.DOFArray` or a constant,
+            or an object array of those.
+        :arg overwrite: If *True*, silently overwrite existing
+            files.
+        :arg use_high_order: Writes arbitrary order Lagrange VTK elements.
+            These elements are described in
+            `this blog post <https://blog.kitware.com/modeling-arbitrary-order-lagrange-finite-elements-in-the-visualization-toolkit/>`__
+            and are available in VTK 8.1 and newer.
+        :arg par_manifest_filename: If not *None* write a distributed-memory
+            manifest with this file name if *file_name* matches the first entry in
+            *par_file_names*.
+        :arg par_file_names
+
+        .. versionchanged:: 2020.2
+
+            - Added *par_manifest_filename* and *par_file_names*.
+            - Added *use_high_order*.
+        """ # noqa
+
+        if use_high_order is None:
+            use_high_order = False
+        if use_high_order:
+            if not self.is_equidistant:
+                raise RuntimeError("Cannot visualize high-order Lagrange elements "
+                        "using a non-equidistant visualizer. "
+                        "Call 'make_visualizer' with 'force_equidistant=True'.")
+
+            connectivity = self._vtk_lagrange_connectivity
+        else:
+            connectivity = self._vtk_connectivity
+
         from pyvisfile.vtk import (
                 UnstructuredGrid, DataArray,
                 AppendedDataXMLGenerator,
@@ -530,12 +578,29 @@ class Visualizer(object):
 
         import os
         from meshmode import FileExistsError
+
+        # {{{ write either both the vis file and the manifest, or neither
+
         if os.path.exists(file_name):
             if overwrite:
-                os.remove(file_name)
+                # we simply overwrite below, no need to remove
+                pass
             else:
                 raise FileExistsError("output file '%s' already exists"
                                       % file_name)
+
+        if par_manifest_filename is not None:
+            if os.path.exists(par_manifest_filename):
+                if overwrite:
+                    # we simply overwrite below, no need to remove
+                    pass
+                else:
+                    raise FileExistsError("output file '%s' already exists"
+                            % par_manifest_filename)
+            else:
+                pass
+
+        # }}}
 
         with open(file_name, "w") as outf:
             generator = AppendedDataXMLGenerator(
@@ -544,20 +609,15 @@ class Visualizer(object):
 
             generator(grid).write(outf)
 
-        if pvtu_filename is not None:
-            if part_nameformat is None:
-                raise ValueError("Expected non-empty part_nameformat argument")
-            part_namelist = [part_nameformat.format(rank=rank)
-                             for rank in range(nranks)]
-            if os.path.exists(pvtu_filename):
-                if overwrite:
-                    os.remove(pvtu_filename)
-                else:
-                    raise FileExistsError(f"parallel output file "
-                                          f"'{pvtu_filename}' already exists.")
-            with open(pvtu_filename, "w") as outf:
-                generator = ParallelXMLGenerator(part_namelist)
-                generator(grid).write(outf)
+        if par_file_names is not None:
+            if par_manifest_filename is None:
+                raise ValueError("must specify par_manifest_filename if "
+                        "par_file_names are given")
+
+            if par_file_names[0] == file_name:
+                with open(par_manifest_filename, "w") as outf:
+                    generator = ParallelXMLGenerator(par_file_names)
+                    generator(grid).write(outf)
 
         # }}}
 
