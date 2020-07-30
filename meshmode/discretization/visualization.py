@@ -444,11 +444,7 @@ class Visualizer(object):
                 compressor=None, real_only=False,
                 overwrite=False, par_namelist=None):
         r"""
-        Parameters
-        ----------
-        par_namelist
-
-            If par_namelist is given by the caller (and non-empty),
+        :arg par_namelist: If par_namelist is given by the caller (and non-empty),
             it is expected to be a list of filenames wherein the
             PVTU-format filename and the part source filenames are given.
             When used by a parallel application, only one rank should
