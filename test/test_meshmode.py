@@ -28,6 +28,8 @@ import numpy as np
 import numpy.linalg as la
 import pyopencl as cl
 
+from pytools.obj_array import make_obj_array
+
 from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
@@ -85,6 +87,59 @@ def test_circle_mesh(visualize=False):
 
 
 # {{{ test visualizer
+
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_parallel_vtk_file(ctx_factory, dim):
+    r"""
+    Simple test just generates a sample parallel PVTU file
+    and checks it against the expected result.  The expected
+    result is just a file in the tests directory.
+    """
+    logging.basicConfig(level=logging.INFO)
+
+    cl_ctx = ctx_factory()
+    queue = cl.CommandQueue(cl_ctx)
+    actx = PyOpenCLArrayContext(queue)
+
+    nelements = 64
+    target_order = 4
+
+    if dim == 1:
+        mesh = mgen.make_curve_mesh(
+                mgen.NArmedStarfish(5, 0.25),
+                np.linspace(0.0, 1.0, nelements + 1),
+                target_order)
+    elif dim == 2:
+        mesh = mgen.generate_torus(5.0, 1.0, order=target_order)
+    elif dim == 3:
+        mesh = mgen.generate_warped_rect_mesh(dim, target_order, 5)
+    else:
+        raise ValueError("unknown dimensionality")
+
+    from meshmode.discretization import Discretization
+    discr = Discretization(actx, mesh,
+            InterpolatoryQuadratureSimplexGroupFactory(target_order))
+
+    scalar = discr.zeros(actx)
+    vector = make_obj_array([discr.zeros(actx) for i in range(dim)])
+    io_fields = []
+    io_fields.append(("scalar", scalar))
+    io_fields.append(("vector", vector))
+    pfilename = f"test_{dim}.pvtu"
+    par_filenames = [pfilename, "test1.vtu", "test2.vtu"]
+
+    from meshmode.discretization.visualization import make_visualizer
+    vis = make_visualizer(actx, discr, target_order)
+
+    vis.write_vtk_file(f"visualizer_vtk_linear_{dim}.vtu",
+                       io_fields, par_namelist=par_filenames, overwrite=True)
+    import os
+    assert(os.path.exists(pfilename))
+
+    import filecmp
+    vfile = f"test{dim}.pvtu"
+    assert(filecmp.cmp(vfile, pfilename))
+
 
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_visualizers(ctx_factory, dim):
