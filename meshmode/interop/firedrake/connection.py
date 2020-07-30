@@ -43,9 +43,10 @@ from meshmode.mesh.processing import get_simplex_element_flip_matrix
 
 from meshmode.discretization.poly_element import (
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialRecursiveNodesGroupFactory)
+    PolynomialRecursiveNodesGroupFactory,
+    ElementGroupFactory)
 from meshmode.discretization import (
-    Discretization, InterpolatoryElementGroupBase, ElementGroupFactory)
+    Discretization, InterpolatoryElementGroupBase)
 
 
 def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
