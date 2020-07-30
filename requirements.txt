@@ -7,7 +7,6 @@ git+https://github.com/inducer/modepy.git#egg=modepy
 git+https://github.com/inducer/pyopencl.git#egg=pyopencl
 git+https://github.com/inducer/islpy.git#egg=islpy
 
-
 # required by pytential, which is in turn needed for some tests
 git+https://github.com/inducer/pymbolic.git#egg=pymbolic
 
