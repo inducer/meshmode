@@ -427,7 +427,7 @@ class Visualizer(object):
                 compressor=None, real_only=False,
                 overwrite=False, use_high_order=None):
         r"""A convenience wrapper around :meth:`write_vtk_file` for
-        distributed-memory visualization. The file name of the manife
+        distributed-memory visualization.
 
         :arg mpi_comm: An object that supports ``mpi_comm.Get_rank()``
             and ``mpi_comm.Get_size()`` method calls, typically (but not
