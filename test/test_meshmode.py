@@ -120,27 +120,33 @@ def test_parallel_vtk_file(ctx_factory, dim):
     discr = Discretization(actx, mesh,
             InterpolatoryQuadratureSimplexGroupFactory(target_order))
 
-    scalar = discr.zeros(actx)
-    vector = make_obj_array([discr.zeros(actx) for i in range(dim)])
-    io_fields = []
-    io_fields.append(("scalar", scalar))
-    io_fields.append(("vector", vector))
-    pvtu_filename = f"test_{dim}.pvtu"
-    part_nameformat = "test{rank}.vtu"
-
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order)
 
-    vis.write_vtk_file(f"visualizer_vtk_linear_{dim}.vtu",
-                       io_fields, pvtu_filename=pvtu_filename,
-                       part_nameformat=part_nameformat, nranks=2,
-                       overwrite=True)
+    class FakeComm:
+        def Get_rank(self):  # noqa: N802
+            return 0
+
+        def Get_size(self):  # noqa: N802
+            return 2
+
+    file_name_pattern = f"visualizer_vtk_linear_{dim}_{{rank}}.vtu"
+    pvtu_filename = file_name_pattern.format(rank=0).replace("vtu", "pvtu")
+
+    vis.write_parallel_vtk_file(
+            FakeComm(),
+            file_name_pattern,
+            [
+                ("scalar", discr.zeros(actx)),
+                ("vector", make_obj_array([discr.zeros(actx) for i in range(dim)]))
+                ],
+            overwrite=True)
+
     import os
     assert(os.path.exists(pvtu_filename))
 
     import filecmp
-    vfile = f"test{dim}.pvtu"
-    assert(filecmp.cmp(vfile, pvtu_filename))
+    assert(filecmp.cmp("ref-"+pvtu_filename, pvtu_filename))
 
 
 @pytest.mark.parametrize("dim", [1, 2, 3])
@@ -177,8 +183,8 @@ def test_visualizers(ctx_factory, dim):
             [], overwrite=True)
 
     with pytest.raises(RuntimeError):
-        vis.write_high_order_vtk_file(f"visualizer_vtk_lagrange_{dim}.vtu",
-                [], overwrite=True)
+        vis.write_vtk_file(f"visualizer_vtk_lagrange_{dim}.vtu",
+                [], overwrite=True, use_high_order=True)
 
     if mesh.dim <= 2:
         field = thaw(actx, discr.nodes()[0])
@@ -197,8 +203,8 @@ def test_visualizers(ctx_factory, dim):
 
     vis = make_visualizer(actx, discr, target_order,
             force_equidistant=True)
-    vis.write_high_order_vtk_file(f"visualizer_vtk_lagrange_{dim}.vtu",
-            [], overwrite=True)
+    vis.write_vtk_file(f"visualizer_vtk_lagrange_{dim}.vtu",
+            [], overwrite=True, use_high_order=True)
 
 # }}}
 
