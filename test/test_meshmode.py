@@ -133,7 +133,7 @@ def test_parallel_vtk_file(ctx_factory, dim):
     file_name_pattern = f"visualizer_vtk_linear_{dim}_{{rank}}.vtu"
     pvtu_filename = file_name_pattern.format(rank=0).replace("vtu", "pvtu")
 
-    vis.write_par_vtk_file(
+    vis.write_parallel_vtk_file(
             FakeComm(),
             file_name_pattern,
             [

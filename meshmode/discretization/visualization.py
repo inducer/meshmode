@@ -339,7 +339,7 @@ class Visualizer(object):
     .. automethod:: show_scalar_in_mayavi
     .. automethod:: show_scalar_in_matplotlib_3d
     .. automethod:: write_vtk_file
-    .. automethod:: write_par_vtk_file
+    .. automethod:: write_parallel_vtk_file
     """
 
     def __init__(self, connection,
@@ -423,7 +423,7 @@ class Visualizer(object):
         assert self.is_equidistant
         return VTKLagrangeConnectivity(self.connection)
 
-    def write_par_vtk_file(self, mpi_comm, file_name_pattern, names_and_fields,
+    def write_parallel_vtk_file(self, mpi_comm, file_name_pattern, names_and_fields,
                 compressor=None, real_only=False,
                 overwrite=False, use_high_order=None):
         r"""A convenience wrapper around :meth:`write_vtk_file` for
@@ -475,7 +475,7 @@ class Visualizer(object):
         """Write a Vtk XML file (typical extension ``.vtu``) containing
         the visualization data in *names_and_fields*. Can optionally also write
         manifests for distributed memory simulation (typical extension
-        ``.pvtu``). See also :meth:`write_par_vtk_file` for a convenience
+        ``.pvtu``). See also :meth:`write_parallel_vtk_file` for a convenience
         wrapper.
 
         :arg names_and_fields: A list of tuples ``(name, value)``, where
