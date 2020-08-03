@@ -48,6 +48,7 @@ Group types
 Group factories
 ^^^^^^^^^^^^^^^
 
+.. autoclass:: ElementGroupFactory
 .. autoclass:: InterpolatoryQuadratureSimplexGroupFactory
 .. autoclass:: QuadratureSimplexGroupFactory
 .. autoclass:: PolynomialWarpAndBlendGroupFactory
@@ -365,6 +366,9 @@ class EquidistantTensorProductElementGroup(
 # {{{ group factories
 
 class ElementGroupFactory(object):
+    """
+    .. function:: __call__(mesh_ele_group, node_nr_base)
+    """
     pass
 
 

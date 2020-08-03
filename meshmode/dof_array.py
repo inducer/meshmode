@@ -20,12 +20,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import operator
 import numpy as np
 from typing import Optional, Iterable, TYPE_CHECKING, Any
 from functools import partial
 
 from pytools import single_valued, memoize_in
-from pytools.obj_array import obj_array_vectorize
+from pytools.obj_array import obj_array_vectorize, obj_array_vectorize_n_args
 
 from meshmode.array_context import ArrayContext, make_loopy_program
 
@@ -78,6 +79,11 @@ class DOFArray(np.ndarray):
         contained in this instance.
 
     .. automethod:: from_list
+
+    .. note::
+
+        :class:`DOFArray` instances support elementwise ``<``, ``>``,
+        ``<=``, ``>=``. (:mod:`numpy` object arrays containing arrays do not.)
     """
 
     # Follows https://numpy.org/devdocs/user/basics.subclassing.html
@@ -125,6 +131,36 @@ class DOFArray(np.ndarray):
             result[igrp] = res_list[igrp]
 
         return result
+
+    # {{{ work around numpy failing to compare obj arrays of arrays
+
+    def _comparison(self, operator_func, other):
+        from numbers import Number
+        if isinstance(other, DOFArray):
+            return obj_array_vectorize_n_args(operator_func, self, other)
+
+        elif isinstance(other, Number):
+            return obj_array_vectorize(
+                    lambda self_entry: operator_func(self_entry, other),
+                    self)
+
+        else:
+            # fall back to "best effort" (i.e. likley failure)
+            return operator_func(self, other)
+
+    def __lt__(self, other):
+        return self._comparison(operator.lt, other)
+
+    def __gt__(self, other):
+        return self._comparison(operator.gt, other)
+
+    def __le__(self, other):
+        return self._comparison(operator.le, other)
+
+    def __ge__(self, other):
+        return self._comparison(operator.ge, other)
+
+    # }}}
 
 # }}}
 
