@@ -65,11 +65,12 @@ def find_group_indices(groups, meshwide_elems):
 
 def _compute_global_elem_to_part_elem(part_per_element, parts, element_id_dtype):
     """
-    Create a map from global elem to partition elem for a set of partitions.
+    Create a map from global element index to partition-wide element index for
+    a set of partitions.
 
     :arg part_per_element: A :class:`numpy.ndarray` mapping element indices to
         partition numbers.
-    :arg parts: A `set` of partition numbers.
+    :arg parts: A :class:`set` of partition numbers.
     :arg element_id_dtype: The element index data type.
     :returns: A :class:`numpy.ndarray` that maps an element's global index
         to its corresponding partition-wide index if that partition belongs to
@@ -92,8 +93,8 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
     Create new mesh groups containing a selected subset of elements.
 
     :arg groups: An array of `~meshmode.mesh.ElementGroup` instances.
-    :arg selected_elements: An array of indices of elements to be included in the
-        filtered groups.
+    :arg selected_elements: A sorted array of indices of elements to be included in
+        the filtered groups.
     :returns: A tuple ``(new_groups, group_to_new_group, required_vertex_indices)``,
         where *new_groups* is made up of groups from *groups* with elements not in
         *selected_elements* removed (Note: empty groups are omitted),
@@ -165,23 +166,24 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
 def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
             part_mesh_groups, global_group_to_part_group,
             part_mesh_group_elem_base):
-    """
-    Create local-to-local facial adjacency groups for partitioned mesh.
+    r"""
+    Create local-to-local facial adjacency groups for a partitioned mesh.
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
     :arg global_elem_to_part_elem: A :class:`numpy.ndarray` mapping from global
         element index to local partition-wide element index for local elements (and
         -1 otherwise).
-    :arg part_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
+    :arg part_mesh_groups: An array of :class:`~meshmode.mesh.ElementGroup` instances
         representing the partitioned mesh groups.
     :arg global_group_to_part_group: An array mapping groups in *mesh* to groups in
         *part_mesh_groups* (or `None` if the group is not local).
     :arg part_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *part_mesh_groups*.
 
-    :returns: A list of `dict`s, `local_to_local_adjacency_groups`, that maps pairs
-        of partitioned group indices to `~meshmode.mesh.FacialAdjacencyGroup`
-        instances if they have local-to-local adjacency.
+    :returns: A list of :class:`dict`\ s, `local_to_local_adjacency_groups`, that
+        maps pairs of partitioned group indices to
+        :clas:`~meshmode.mesh.FacialAdjacencyGroup` instances if they have
+        local-to-local adjacency.
     """
     local_to_local_adjacency_groups = [{} for _ in part_mesh_groups]
 
