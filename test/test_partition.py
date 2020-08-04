@@ -73,27 +73,21 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
 
     order = 4
 
-    from pytools.convergence import EOCRecorder
-    eoc_rec = dict()
-    for i in range(num_parts):
-        for j in range(num_parts):
-            if i == j:
-                continue
-            eoc_rec[i, j] = EOCRecorder()
-
     def f(x):
         return 10.*actx.np.sin(50.*x)
 
     for n in mesh_pars:
         from meshmode.mesh.generation import generate_warped_rect_mesh
-        meshes = [generate_warped_rect_mesh(dim, order=order, n=n)
-                                for _ in range(num_groups)]
+        base_mesh = generate_warped_rect_mesh(dim, order=order, n=n)
 
         if num_groups > 1:
-            from meshmode.mesh.processing import merge_disjoint_meshes
-            mesh = merge_disjoint_meshes(meshes)
+            from meshmode.mesh.processing import split_mesh_groups
+            # Group every Nth element
+            element_flags = np.arange(base_mesh.nelements,
+                        dtype=base_mesh.element_id_dtype) % num_groups
+            mesh = split_mesh_groups(base_mesh, element_flags)
         else:
-            mesh = meshes[0]
+            mesh = base_mesh
 
         if scramble_partitions:
             part_per_element = np.random.randint(num_parts, size=mesh.nelements)
@@ -108,6 +102,13 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
         part_meshes = [
             partition_mesh(mesh, part_per_element, i)[0] for i in range(num_parts)]
 
+        connected_parts = set()
+        for i_local_part, part_mesh in enumerate(part_meshes):
+            from meshmode.distributed import get_connected_partitions
+            neighbors = get_connected_partitions(part_mesh)
+            for i_remote_part in neighbors:
+                connected_parts.add((i_local_part, i_remote_part))
+
         from meshmode.discretization import Discretization
         vol_discrs = [Discretization(actx, part_meshes[i], group_factory(order))
                         for i in range(num_parts)]
@@ -117,27 +118,19 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
                                                         make_partition_connection,
                                                         check_connection)
 
-        for i_local_part, i_remote_part in eoc_rec.keys():
-            if eoc_rec[i_local_part, i_remote_part] is None:
-                continue
-
+        for i_local_part, i_remote_part in connected_parts:
             # Mark faces within local_mesh that are connected to remote_mesh
             local_bdry_conn = make_face_restriction(actx, vol_discrs[i_local_part],
                                                     group_factory(order),
                                                     BTAG_PARTITION(i_remote_part))
-
-            # If these parts are not connected, don't bother checking the error
-            bdry_nelements = sum(
-                    grp.nelements for grp in local_bdry_conn.to_discr.groups)
-            if bdry_nelements == 0:
-                eoc_rec[i_local_part, i_remote_part] = None
-                continue
 
             # Mark faces within remote_mesh that are connected to local_mesh
             remote_bdry_conn = make_face_restriction(actx, vol_discrs[i_remote_part],
                                                      group_factory(order),
                                                      BTAG_PARTITION(i_local_part))
 
+            bdry_nelements = sum(
+                    grp.nelements for grp in local_bdry_conn.to_discr.groups)
             remote_bdry_nelements = sum(
                     grp.nelements for grp in remote_bdry_conn.to_discr.groups)
             assert bdry_nelements == remote_bdry_nelements, \
@@ -190,13 +183,11 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
             local_points = remote_to_local_conn(remote_points)
 
             err = flat_norm(true_local_points - local_points, np.inf)
-            eoc_rec[i_local_part, i_remote_part].add_data_point(1./n, err)
 
-    for (i, j), e in eoc_rec.items():
-        if e is not None:
-            print("Error of connection from part %i to part %i." % (i, j))
-            print(e)
-            assert(e.order_estimate() >= order - 0.5 or e.max_error() < 1e-11)
+            # Can't currently expect exact results due to limitations of
+            # interpolation 'snapping' in DirectDiscretizationConnection's
+            # _resample_point_pick_indices
+            assert err < 1e-11
 
 # }}}
 
@@ -204,15 +195,23 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
 # {{{ partition_mesh
 
 @pytest.mark.parametrize("dim", [2, 3])
-@pytest.mark.parametrize("num_parts", [4, 5, 7])
-@pytest.mark.parametrize("num_meshes", [1, 2, 7])
-@pytest.mark.parametrize("scramble_partitions", [True, False])
-def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions):
+@pytest.mark.parametrize(("mesh_size", "num_parts", "scramble_partitions"),
+        [
+            (5, 4, False),
+            (5, 4, True),
+            (5, 5, False),
+            (5, 5, True),
+            (5, 7, False),
+            (5, 7, True),
+            (8, 32, False)
+        ])
+@pytest.mark.parametrize("num_groups", [1, 2, 7])
+def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitions):
     np.random.seed(42)
-    n = (5,) * dim
+    n = (mesh_size,) * dim
     from meshmode.mesh.generation import generate_regular_rect_mesh
     meshes = [generate_regular_rect_mesh(a=(0 + i,) * dim, b=(1 + i,) * dim, n=n)
-                        for i in range(num_meshes)]
+                        for i in range(num_groups)]
 
     from meshmode.mesh.processing import merge_disjoint_meshes
     mesh = merge_disjoint_meshes(meshes)
@@ -240,6 +239,13 @@ def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions):
     assert count_tags(mesh, BTAG_ALL) == np.sum(
         [count_tags(new_meshes[i][0], BTAG_ALL) for i in range(num_parts)]), \
         "part_mesh has the wrong number of BTAG_ALL boundaries"
+
+    connected_parts = set()
+    for i_local_part, (part_mesh, _) in enumerate(new_meshes):
+        from meshmode.distributed import get_connected_partitions
+        neighbors = get_connected_partitions(part_mesh)
+        for i_remote_part in neighbors:
+            connected_parts.add((i_local_part, i_remote_part))
 
     from meshmode.mesh import BTAG_PARTITION, InterPartitionAdjacencyGroup
     from meshmode.mesh.processing import find_group_indices
@@ -309,11 +315,12 @@ def test_partition_mesh(num_parts, num_meshes, dim, scramble_partitions):
                             assert n_face == p_bnd_adj.neighbor_faces[idx],\
                                     "Tag does not give correct neighbor"
 
-    for i_tag in range(num_parts):
+    for i_remote_part in range(num_parts):
         tag_sum = 0
-        for mesh, _ in new_meshes:
-            tag_sum += count_tags(mesh, BTAG_PARTITION(i_tag))
-        assert num_tags[i_tag] == tag_sum,\
+        for i_local_part, (mesh, _) in enumerate(new_meshes):
+            if (i_local_part, i_remote_part) in connected_parts:
+                tag_sum += count_tags(mesh, BTAG_PARTITION(i_remote_part))
+        assert num_tags[i_remote_part] == tag_sum,\
                 "part_mesh has the wrong number of BTAG_PARTITION boundaries"
 
 
