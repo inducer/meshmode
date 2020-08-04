@@ -49,9 +49,9 @@ def main():
               "pytest>=2.3",
               "loo.py>=2014.1",
               ],
-            extras_require={
-                'recursivenodes':  ["recursivenodes"],
-                },
+          extras_require={
+              'recursivenodes':  ["recursivenodes"],
+              },
           )
 
 
