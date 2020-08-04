@@ -65,11 +65,12 @@ def find_group_indices(groups, meshwide_elems):
 
 def _compute_global_elem_to_part_elem(part_per_element, parts, element_id_dtype):
     """
-    Create a map from global elem to partition elem for a set of partitions.
+    Create a map from global element index to partition-wide element index for
+    a set of partitions.
 
     :arg part_per_element: A :class:`numpy.ndarray` mapping element indices to
         partition numbers.
-    :arg parts: A `set` of partition numbers.
+    :arg parts: A :class:`set` of partition numbers.
     :arg element_id_dtype: The element index data type.
     :returns: A :class:`numpy.ndarray` that maps an element's global index
         to its corresponding partition-wide index if that partition belongs to
@@ -92,8 +93,8 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
     Create new mesh groups containing a selected subset of elements.
 
     :arg groups: An array of `~meshmode.mesh.ElementGroup` instances.
-    :arg selected_elements: An array of indices of elements to be included in the
-        filtered groups.
+    :arg selected_elements: A sorted array of indices of elements to be included in
+        the filtered groups.
     :returns: A tuple ``(new_groups, group_to_new_group, required_vertex_indices)``,
         where *new_groups* is made up of groups from *groups* with elements not in
         *selected_elements* removed (Note: empty groups are omitted),
@@ -102,30 +103,38 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
         vertices required for elements belonging to *new_groups*.
     """
 
-    group_elem_starts = [np.searchsorted(selected_elements, grp.element_nr_base)
-                for grp in groups]
-    group_elem_starts.append(len(selected_elements))
+    # {{{ find n_new_groups, group_to_new_group, filtered_group_elements
 
-    n_new_groups = 0
-    group_to_new_group = [None for _ in groups]
+    group_elem_starts = [np.searchsorted(selected_elements, grp.element_nr_base)
+                for grp in groups] + [len(selected_elements)]
+
+    new_group_to_old_group = []
     filtered_group_elements = []
     for igrp, grp in enumerate(groups):
-        start_idx = group_elem_starts[igrp]
-        end_idx = group_elem_starts[igrp+1]
+        start_idx, end_idx = group_elem_starts[igrp:igrp+2]
         if end_idx == start_idx:
             continue
-        group_to_new_group[igrp] = n_new_groups
+
+        new_group_to_old_group.append(igrp)
         filtered_group_elements.append(selected_elements[start_idx:end_idx]
                     - grp.element_nr_base)
-        n_new_groups += 1
 
-    filtered_vertex_indices = []
-    for igrp, grp in enumerate(groups):
-        i_new_grp = group_to_new_group[igrp]
-        if i_new_grp is None:
-            continue
-        filtered_vertex_indices.append(grp.vertex_indices[
-                    filtered_group_elements[i_new_grp], :])
+    n_new_groups = len(new_group_to_old_group)
+
+    group_to_new_group = [None] * len(groups)
+    for i_new_grp, i_old_grp in enumerate(new_group_to_old_group):
+        group_to_new_group[i_old_grp] = i_new_grp
+
+    del grp
+
+    # }}}
+
+    # {{{ filter vertex indices
+
+    filtered_vertex_indices = [
+            groups[i_old_grp].vertex_indices[
+                    filtered_group_elements[i_new_grp], :]
+            for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
 
     if n_new_groups > 0:
         filtered_vertex_indices_flat = np.concatenate([indices.ravel() for indices
@@ -144,20 +153,14 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
                     .reshape(filtered_indices.shape).astype(vertex_id_dtype))
         start_idx = end_idx
 
-    new_nodes = []
-    for igrp, grp in enumerate(groups):
-        i_new_grp = group_to_new_group[igrp]
-        if i_new_grp is None:
-            continue
-        new_nodes.append(grp.nodes[:, filtered_group_elements[i_new_grp], :].copy())
+    # }}}
 
-    new_groups = []
-    for igrp, grp in enumerate(groups):
-        i_new_group = group_to_new_group[igrp]
-        if i_new_group is not None:
-            new_groups.append(
-                grp.copy(vertex_indices=new_vertex_indices[i_new_group],
-                    nodes=new_nodes[i_new_group]))
+    new_groups = [
+            groups[i_old_grp].copy(
+                vertex_indices=new_vertex_indices[i_new_grp],
+                nodes=groups[i_old_grp].nodes[
+                    :, filtered_group_elements[i_new_grp], :].copy())
+            for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
 
     return new_groups, group_to_new_group, required_vertex_indices
 
@@ -165,23 +168,24 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
 def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
             part_mesh_groups, global_group_to_part_group,
             part_mesh_group_elem_base):
-    """
-    Create local-to-local facial adjacency groups for partitioned mesh.
+    r"""
+    Create local-to-local facial adjacency groups for a partitioned mesh.
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
     :arg global_elem_to_part_elem: A :class:`numpy.ndarray` mapping from global
         element index to local partition-wide element index for local elements (and
         -1 otherwise).
-    :arg part_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
+    :arg part_mesh_groups: An array of :class:`~meshmode.mesh.ElementGroup` instances
         representing the partitioned mesh groups.
     :arg global_group_to_part_group: An array mapping groups in *mesh* to groups in
         *part_mesh_groups* (or `None` if the group is not local).
     :arg part_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *part_mesh_groups*.
 
-    :returns: A list of `dict`s, `local_to_local_adjacency_groups`, that maps pairs
-        of partitioned group indices to `~meshmode.mesh.FacialAdjacencyGroup`
-        instances if they have local-to-local adjacency.
+    :returns: A list of :class:`dict`\ s, `local_to_local_adjacency_groups`, that
+        maps pairs of partitioned group indices to
+        :clas:`~meshmode.mesh.FacialAdjacencyGroup` instances if they have
+        local-to-local adjacency.
     """
     local_to_local_adjacency_groups = [{} for _ in part_mesh_groups]
 
