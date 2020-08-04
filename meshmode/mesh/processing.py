@@ -103,30 +103,33 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
         vertices required for elements belonging to *new_groups*.
     """
 
+    # {{{ find n_new_groups, group_to_new_group, filtered_group_elements
+
     group_elem_starts = [np.searchsorted(selected_elements, grp.element_nr_base)
-                for grp in groups]
-    group_elem_starts.append(len(selected_elements))
+                for grp in groups] + [len(selected_elements)]
 
     n_new_groups = 0
-    group_to_new_group = [None for _ in groups]
+    group_to_new_group = [None] * len(groups)
     filtered_group_elements = []
     for igrp, grp in enumerate(groups):
-        start_idx = group_elem_starts[igrp]
-        end_idx = group_elem_starts[igrp+1]
+        start_idx, end_idx = group_elem_starts[igrp:igrp+2]
         if end_idx == start_idx:
             continue
+
         group_to_new_group[igrp] = n_new_groups
         filtered_group_elements.append(selected_elements[start_idx:end_idx]
                     - grp.element_nr_base)
         n_new_groups += 1
 
-    filtered_vertex_indices = []
-    for igrp, grp in enumerate(groups):
-        i_new_grp = group_to_new_group[igrp]
-        if i_new_grp is None:
-            continue
-        filtered_vertex_indices.append(grp.vertex_indices[
-                    filtered_group_elements[i_new_grp], :])
+    # }}}
+
+    # {{{ filter vertex indices
+
+    filtered_vertex_indices = [
+            grp.vertex_indices[
+                    filtered_group_elements[group_to_new_group[igrp]], :]
+            for igrp, grp in enumerate(groups)
+            if group_to_new_group[igrp] is not None]
 
     if n_new_groups > 0:
         filtered_vertex_indices_flat = np.concatenate([indices.ravel() for indices
@@ -144,6 +147,8 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
         new_vertex_indices.append(new_vertex_indices_flat[start_idx:end_idx]
                     .reshape(filtered_indices.shape).astype(vertex_id_dtype))
         start_idx = end_idx
+
+    # }}}
 
     new_nodes = []
     for igrp, grp in enumerate(groups):
