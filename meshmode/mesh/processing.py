@@ -108,28 +108,33 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
     group_elem_starts = [np.searchsorted(selected_elements, grp.element_nr_base)
                 for grp in groups] + [len(selected_elements)]
 
-    n_new_groups = 0
-    group_to_new_group = [None] * len(groups)
+    new_group_to_old_group = []
     filtered_group_elements = []
     for igrp, grp in enumerate(groups):
         start_idx, end_idx = group_elem_starts[igrp:igrp+2]
         if end_idx == start_idx:
             continue
 
-        group_to_new_group[igrp] = n_new_groups
+        new_group_to_old_group.append(igrp)
         filtered_group_elements.append(selected_elements[start_idx:end_idx]
                     - grp.element_nr_base)
-        n_new_groups += 1
+
+    n_new_groups = len(new_group_to_old_group)
+
+    group_to_new_group = [None] * len(groups)
+    for i_new_grp, i_old_grp in enumerate(new_group_to_old_group):
+        group_to_new_group[i_old_grp] = i_new_grp
+
+    del grp
 
     # }}}
 
     # {{{ filter vertex indices
 
     filtered_vertex_indices = [
-            grp.vertex_indices[
-                    filtered_group_elements[group_to_new_group[igrp]], :]
-            for igrp, grp in enumerate(groups)
-            if group_to_new_group[igrp] is not None]
+            groups[i_old_grp].vertex_indices[
+                    filtered_group_elements[i_new_grp], :]
+            for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
 
     if n_new_groups > 0:
         filtered_vertex_indices_flat = np.concatenate([indices.ravel() for indices
@@ -150,20 +155,12 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
 
     # }}}
 
-    new_nodes = []
-    for igrp, grp in enumerate(groups):
-        i_new_grp = group_to_new_group[igrp]
-        if i_new_grp is None:
-            continue
-        new_nodes.append(grp.nodes[:, filtered_group_elements[i_new_grp], :].copy())
-
-    new_groups = []
-    for igrp, grp in enumerate(groups):
-        i_new_group = group_to_new_group[igrp]
-        if i_new_group is not None:
-            new_groups.append(
-                grp.copy(vertex_indices=new_vertex_indices[i_new_group],
-                    nodes=new_nodes[i_new_group]))
+    new_groups = [
+            groups[i_old_grp].copy(
+                vertex_indices=new_vertex_indices[i_new_grp],
+                nodes=groups[i_old_grp].nodes[
+                    :, filtered_group_elements[i_new_grp], :].copy())
+            for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
 
     return new_groups, group_to_new_group, required_vertex_indices
 
