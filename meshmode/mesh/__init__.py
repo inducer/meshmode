@@ -637,8 +637,8 @@ class Mesh(Record):
                 }
             ]
 
-        (Note that element groups are not necessarily contiguous like the figure
-        may suggest.)
+        (Note that element groups are not necessarily geometrically contiguous
+        like the figure may suggest.)
 
     .. attribute:: boundary_tags
 

@@ -55,16 +55,16 @@ TAG_SEND_LOCAL_NODES = TAG_BASE + 4
 
 # {{{ partition_interpolation
 
-@pytest.mark.parametrize("num_parts", [2, 3])
-@pytest.mark.parametrize("num_groups", [1, 2])
-@pytest.mark.parametrize("scramble_partitions", [False])
+@pytest.mark.parametrize("num_parts", [3])
+@pytest.mark.parametrize("num_groups", [2])
+@pytest.mark.parametrize("part_method", ["random", "facial", "nodal"])
 @pytest.mark.parametrize(("dim", "mesh_pars"),
         [
          (2, [3, 4, 7]),
          (3, [3, 4])
         ])
 def test_partition_interpolation(ctx_factory, dim, mesh_pars,
-                                 num_parts, num_groups, scramble_partitions):
+                                 num_parts, num_groups, part_method):
     np.random.seed(42)
     group_factory = PolynomialWarpAndBlendGroupFactory
     cl_ctx = ctx_factory()
@@ -89,14 +89,14 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
         else:
             mesh = base_mesh
 
-        if scramble_partitions:
+        if part_method == "random":
             part_per_element = np.random.randint(num_parts, size=mesh.nelements)
         else:
-            from pymetis import part_graph
-            _, p = part_graph(num_parts,
-                              xadj=mesh.nodal_adjacency.neighbors_starts.tolist(),
-                              adjncy=mesh.nodal_adjacency.neighbors.tolist())
-            part_per_element = np.array(p)
+            pytest.importorskip('pymetis')
+
+            from meshmode.distributed import get_partition_by_pymetis
+            part_per_element = get_partition_by_pymetis(mesh, num_parts,
+                    connectivity=part_method)
 
         from meshmode.mesh.processing import partition_mesh
         part_meshes = [
@@ -194,16 +194,16 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
 
 # {{{ partition_mesh
 
-@pytest.mark.parametrize("dim", [2, 3])
-@pytest.mark.parametrize(("mesh_size", "num_parts", "scramble_partitions"),
+@pytest.mark.parametrize(("dim", "mesh_size", "num_parts", "scramble_partitions"),
         [
-            (5, 4, False),
-            (5, 4, True),
-            (5, 5, False),
-            (5, 5, True),
-            (5, 7, False),
-            (5, 7, True),
-            (8, 32, False)
+            (2, 5, 4, False),
+            (2, 5, 4, True),
+            (2, 5, 5, False),
+            (2, 5, 5, True),
+            (2, 5, 7, False),
+            (2, 5, 7, True),
+            (2, 10, 32, False),
+            (3, 8, 32, False),
         ])
 @pytest.mark.parametrize("num_groups", [1, 2, 7])
 def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitions):
@@ -219,12 +219,10 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
     if scramble_partitions:
         part_per_element = np.random.randint(num_parts, size=mesh.nelements)
     else:
-        pymetis = pytest.importorskip('pymetis')
+        pytest.importorskip('pymetis')
 
-        _, p = pymetis.part_graph(num_parts,
-                          xadj=mesh.nodal_adjacency.neighbors_starts.tolist(),
-                          adjncy=mesh.nodal_adjacency.neighbors.tolist())
-        part_per_element = np.array(p)
+        from meshmode.distributed import get_partition_by_pymetis
+        part_per_element = get_partition_by_pymetis(mesh, num_parts)
 
     from meshmode.mesh.processing import partition_mesh
     # TODO: The same part_per_element array must be used to partition each mesh.
