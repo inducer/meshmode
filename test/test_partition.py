@@ -194,16 +194,16 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
 
 # {{{ partition_mesh
 
-@pytest.mark.parametrize("dim", [2, 3])
-@pytest.mark.parametrize(("mesh_size", "num_parts", "scramble_partitions"),
+@pytest.mark.parametrize(("dim", "mesh_size", "num_parts", "scramble_partitions"),
         [
-            (5, 4, False),
-            (5, 4, True),
-            (5, 5, False),
-            (5, 5, True),
-            (5, 7, False),
-            (5, 7, True),
-            (8, 32, False)
+            (2, 5, 4, False),
+            (2, 5, 4, True),
+            (2, 5, 5, False),
+            (2, 5, 5, True),
+            (2, 5, 7, False),
+            (2, 5, 7, True),
+            (2, 10, 32, False),
+            (3, 8, 32, False),
         ])
 @pytest.mark.parametrize("num_groups", [1, 2, 7])
 def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitions):
