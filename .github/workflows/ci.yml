@@ -35,6 +35,33 @@ jobs:
                 curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project-within-miniconda.sh
                 . ./build-and-test-py-project-within-miniconda.sh
 
+    pytest3:
+        name: Pytest Firedrake
+        runs-on: ubuntu-latest
+        steps:
+        -   uses: docker://firedrakeproject/firedrake
+        -   uses: actions/checkout@v2
+        -   name: "APT dependencies"
+            run: |
+              sudo apt update
+              sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
+        -   name: "PIP dependencies"
+            run: |
+              source ~/firedrake/bin/activate
+              "grep -v loopy requirements.txt > myreq.txt"
+              pip install -r myreq.txt
+              # The Firedrake container is based on Py3.6 as of 2020-10-10, which
+              # doesn't have dataclasses.
+              pip install pytest dataclasses
+              pip install .
+        -   name: "Test"
+            run: |
+              cd test
+              python -m pytest --tb=native --junitxml=pytest.xml -rxsw test_firedrake_interop.py
+                            CONDA_ENVIRONMENT=.test-conda-env-py3.yml
+                            curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project-within-miniconda.sh
+                            . ./build-and-test-py-project-within-miniconda.sh
+
     examples3:
         name: Examples Conda Py3
         runs-on: ubuntu-latest
