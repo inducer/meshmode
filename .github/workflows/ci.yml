@@ -45,7 +45,7 @@ jobs:
               sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
         -   name: "PIP dependencies"
             run: |
-              source ~/firedrake/bin/activate
+              source /home/firedrake/firedrake/bin/activate
               "grep -v loopy requirements.txt > myreq.txt"
               pip install -r myreq.txt
               pip install git+https://github.com/benSepanski/loopy.git@firedrake-reinstate_program_executor_cache
