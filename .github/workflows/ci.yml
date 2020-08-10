@@ -44,9 +44,10 @@ jobs:
             run: |
                 sudo apt update
                 sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
+
                 . /home/firedrake/firedrake/bin/activate
-                grep -v loopy requirements.txt > myreq.txt
-                pip install -r myreq.txt
+                grep -v loopy requirements.txt > /tmp/myreq.txt
+                pip install -r /tmp/myreq.txt
                 pip install git+https://github.com/benSepanski/loopy.git@firedrake-reinstate_program_executor_cache
                 # The Firedrake container is based on Py3.6 as of 2020-10-10, which
                 # doesn't have dataclasses.
@@ -54,6 +55,7 @@ jobs:
                 pip install .
         -   name: "Test"
             run: |
+                . /home/firedrake/firedrake/bin/activate
                 cd test
                 python -m pytest --tb=native --junitxml=pytest.xml -rxsw test_firedrake_interop.py
 
