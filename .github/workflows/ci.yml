@@ -52,7 +52,6 @@ jobs:
                 pip install pytest dataclasses
                 pip install .
         -   name: "Test"
-        -   name: "Dependencies"
             uses: docker://firedrakeproject/firedrake
             run: |
                 cd test
