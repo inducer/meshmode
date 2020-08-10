@@ -35,9 +35,9 @@ jobs:
 
     firedrake:
         name: Pytest Firedrake
-        runs:
-            using: 'docker'
-            image: 'docker://firedrakeproject/firedrake'
+        runs-on: ubuntu-latest
+        container:
+            image: 'firedrakeproject/firedrake'
         steps:
         -   uses: actions/checkout@v2
         -   name: "Dependencies"
