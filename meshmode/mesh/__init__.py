@@ -642,8 +642,8 @@ class Mesh(Record):
 
     .. attribute:: boundary_tags
 
-        A tuple of boundary tag identifiers. :class:`BTAG_ALL` and
-        :class:`BTAG_REALLY_ALL` are guranateed to exist.
+        A list of boundary tag identifiers. :class:`BTAG_ALL` and
+        :class:`BTAG_REALLY_ALL` are guaranteed to exist.
 
     .. attribute:: btag_to_index
 
