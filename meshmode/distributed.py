@@ -210,21 +210,51 @@ class MPIBoundaryCommSetupHelper(object):
 # }}}
 
 
-def get_partition_by_pymetis(mesh, num_parts, **kwargs):
+def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs):
     """Return a mesh partition created by :mod:`pymetis`.
 
     :arg mesh: A :class:`meshmode.mesh.Mesh` instance
     :arg num_parts: the number of parts in the mesh partition
+    :arg connectivity: the adjacency graph to be used for partitioning. Either
+        ``"facial"`` or ``"nodal"`` (based on vertices).
     :arg kwargs: Passed unmodified to :func:`pymetis.part_graph`.
     :returns: a :class:`numpy.ndarray` with one entry per element indicating
         to which partition each element belongs, with entries between ``0`` and
         ``num_parts-1``.
+
+    .. versionchanged:: 2020.2
+
+        *connectivity* was added.
     """
+
+    if connectivity == "facial":
+        # shape: (2, n_el_pairs)
+        neighbor_el_pairs = np.hstack([
+                np.array([
+                    fagrp.elements
+                    + mesh.groups[fagrp.igroup].element_nr_base,
+                    fagrp.neighbors
+                    + mesh.groups[fagrp.ineighbor_group].element_nr_base])
+                for fadj in mesh.facial_adjacency_groups
+                for to_grp, fagrp in fadj.items()
+                if fagrp.ineighbor_group is not None
+                ])
+        sorted_neighbor_el_pairs = neighbor_el_pairs[
+                :, np.argsort(neighbor_el_pairs[0])]
+        xadj = np.searchsorted(
+                sorted_neighbor_el_pairs[0],
+                np.arange(mesh.nelements+1))
+        adjncy = sorted_neighbor_el_pairs[1]
+
+    elif connectivity == "nodal":
+        xadj = mesh.nodal_adjacency.neighbors_starts.tolist()
+        adjncy = mesh.nodal_adjacency.neighbors.tolist()
+
+    else:
+        raise ValueError("invalid value of connectivity")
+
     from pymetis import part_graph
-    _, p = part_graph(num_parts,
-                      xadj=mesh.nodal_adjacency.neighbors_starts.tolist(),
-                      adjncy=mesh.nodal_adjacency.neighbors.tolist(),
-                      **kwargs)
+    _, p = part_graph(num_parts, xadj=xadj, adjncy=adjncy, **kwargs)
 
     return np.array(p)
 

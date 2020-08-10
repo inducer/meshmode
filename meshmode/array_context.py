@@ -283,6 +283,11 @@ class PyOpenCLArrayContext(ArrayContext):
             options = program.root_kernel.options
         assert options.return_dict
         assert options.no_numpy
+        if not (options.return_dict and options.no_numpy):
+            raise ValueError("Loopy program passed to call_loopy must "
+                    "have return_dict and no_numpy options set. "
+                    "Did you use meshmode.array_context.make_loopy_program "
+                    "to create this program?")
 
         evt, result = program(self.queue, **kwargs, allocator=self.allocator)
         return result

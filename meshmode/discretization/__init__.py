@@ -32,7 +32,6 @@ from meshmode.dof_array import DOFArray as _DOFArray
 __doc__ = """
 .. autoclass:: ElementGroupBase
 .. autoclass:: InterpolatoryElementGroupBase
-.. autoclass:: ElementGroupFactory
 .. autoclass:: Discretization
 """
 
@@ -154,29 +153,6 @@ class InterpolatoryElementGroupBase(ElementGroupBase):
         when applied to an array of nodal values, take derivatives
         in the reference (r,s,t) directions.
     """
-
-# }}}
-
-
-# {{{ group factories
-
-class ElementGroupFactory(object):
-    """
-    .. function:: __call__(mesh_ele_group, node_nr_base)
-    """
-
-
-class OrderBasedGroupFactory(ElementGroupFactory):
-    def __init__(self, order):
-        self.order = order
-
-    def __call__(self, mesh_el_group, node_nr_base):
-        if not isinstance(mesh_el_group, self.mesh_group_class):
-            raise TypeError("only mesh element groups of type '%s' "
-                    "are supported" % self.mesh_group_class.__name__)
-
-        return self.group_class(mesh_el_group, self.order, node_nr_base)
-
 
 # }}}
 
