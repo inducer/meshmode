@@ -59,7 +59,9 @@ Python 3 POCL Firedrake:
   - source ~/firedrake/bin/activate
   - "grep -v loopy requirements.txt > myreq.txt"
   - pip install -r myreq.txt
-  - pip install pytest
+  # The Firedrake container is based on Py3.6 as of 2020-10-10, which
+  # doesn't have dataclasses.
+  - pip install pytest dataclasses
   - pip install .
   - cd test
   - python -m pytest --tb=native --junitxml=pytest.xml -rxsw test_firedrake_interop.py
