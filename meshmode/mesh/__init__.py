@@ -34,12 +34,8 @@ from pytools import Record, memoize_method
 __doc__ = """
 
 .. autoclass:: MeshElementGroup
-    :members:
-    :undoc-members:
 
 .. autoclass:: Mesh
-    :members:
-    :undoc-members:
 
 .. autoclass:: NodalAdjacency
 .. autoclass:: FacialAdjacencyGroup
