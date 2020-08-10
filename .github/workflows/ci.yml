@@ -35,11 +35,12 @@ jobs:
 
     firedrake:
         name: Pytest Firedrake
-        runs-on: ubuntu-latest
+        runs:
+            using: 'docker'
+            image: 'docker://firedrakeproject/firedrake'
         steps:
         -   uses: actions/checkout@v2
         -   name: "Dependencies"
-            uses: docker://firedrakeproject/firedrake
             run: |
                 sudo apt update
                 sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
@@ -52,7 +53,6 @@ jobs:
                 pip install pytest dataclasses
                 pip install .
         -   name: "Test"
-            uses: docker://firedrakeproject/firedrake
             run: |
                 cd test
                 python -m pytest --tb=native --junitxml=pytest.xml -rxsw test_firedrake_interop.py
