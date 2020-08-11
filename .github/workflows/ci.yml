@@ -57,7 +57,7 @@ jobs:
             run: |
                 . /home/firedrake/firedrake/bin/activate
                 cd test
-                python -m pytest --tb=native --junitxml=pytest.xml -rxsw test_firedrake_interop.py
+                python -m pytest --tb=native -rxsw test_firedrake_interop.py
 
     examples3:
         name: Examples Conda Py3
