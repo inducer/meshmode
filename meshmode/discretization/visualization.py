@@ -491,7 +491,8 @@ class Visualizer(object):
         :arg par_manifest_filename: If not *None* write a distributed-memory
             manifest with this file name if *file_name* matches the first entry in
             *par_file_names*.
-        :arg par_file_names
+        :arg par_file_names: A list of file names of visualization files to
+            include in the distributed-memory manifest.
 
         .. versionchanged:: 2020.2
 
