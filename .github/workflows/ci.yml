@@ -44,7 +44,7 @@ jobs:
             run: |
                 sudo apt update
                 sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
-                sudo chown -R /github/home $(whoami)
+                sudo chown -R $(whoami) /github/home
 
                 . /home/firedrake/firedrake/bin/activate
                 grep -v loopy requirements.txt > /tmp/myreq.txt
