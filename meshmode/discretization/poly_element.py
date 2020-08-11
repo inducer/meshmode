@@ -257,7 +257,7 @@ class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
     polynomials in :math:`P^k`, hence usable for differentiation and
     interpolation. Interpolation nodes edge-clustered for avoidance of Runge
     phenomena. Depending on the *family* argument, nodes may be present on the
-    boundary of the simplex.
+    boundary of the simplex. See [Isaac20]_ for details.
 
     Supports a choice of the base *family* of 1D nodes, see the documentation
     of the *family* argument to :func:`recursivenodes.recursive_nodes`.

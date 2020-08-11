@@ -251,7 +251,6 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         if self.tags:
             boundary_tags += [tag for tag, dim in self.tags if
                               dim == mesh_bulk_dim-1]
-        boundary_tags = tuple(boundary_tags)
 
         # compute facial adjacency for Mesh if there is tag information
         facial_adjacency_groups = None

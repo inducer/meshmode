@@ -6,7 +6,7 @@ Common infrastructure
 Mesh management
 ===============
 
-.. automodule:: meshmode.mesh
+.. currentmodule:: meshmode.mesh
 
 Design of the Data Structure
 ----------------------------
@@ -44,13 +44,7 @@ Consider the following picture:
 Mesh Data Structure
 -------------------
 
-.. autoclass:: MeshElementGroup
-    :members:
-    :undoc-members:
-
-.. autoclass:: Mesh
-    :members:
-    :undoc-members:
+.. automodule:: meshmode.mesh
 
 Mesh generation
 ---------------
