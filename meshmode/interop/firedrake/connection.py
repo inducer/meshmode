@@ -24,7 +24,7 @@ __doc__ = """
 .. autoclass:: FiredrakeConnection
     :members:
 .. autoclass:: FromFiredrakeConnection
-.. autoclass:: FromBdyFiredrakeConnection
+.. autoclass:: FromBoundaryFiredrakeConnection
 .. autoclass:: ToFiredrakeConnection
 """
 
@@ -697,7 +697,7 @@ class FromFiredrakeConnection(FiredrakeConnection):
             except ImportError:
                 grp_factory = InterpolatoryQuadratureSimplexGroupFactory(degree)
 
-        # In case this class is really a FromBdyFiredrakeConnection,
+        # In case this class is really a FromBoundaryFiredrakeConnection,
         # get *cells_to_use*
         cells_to_use = self._get_cells_to_use(fdrake_fspace.mesh())
         # Create to_discr
@@ -753,7 +753,7 @@ class FromFiredrakeConnection(FiredrakeConnection):
         return None
 
 
-class FromBdyFiredrakeConnection(FromFiredrakeConnection):
+class FromBoundaryFiredrakeConnection(FromFiredrakeConnection):
     """
     A connection created from a :mod:`firedrake`
     ``"CG"`` or ``"DG"`` function space which creates a
@@ -781,8 +781,8 @@ class FromBdyFiredrakeConnection(FromFiredrakeConnection):
         :class:`~meshmode.interop.firedrake.FromFiredrakeConnection`.
         """
         self.bdy_id = bdy_id
-        super(FromBdyFiredrakeConnection, self).__init__(actx, fdrake_fspace,
-                                                         grp_factory=grp_factory)
+        super(FromBoundaryFiredrakeConnection, self).__init__(
+            actx, fdrake_fspace, grp_factory=grp_factory)
 
     def _get_cells_to_use(self, mesh):
         """

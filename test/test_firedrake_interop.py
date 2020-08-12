@@ -39,8 +39,8 @@ from meshmode.dof_array import DOFArray
 from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL, check_bc_coverage
 
 from meshmode.interop.firedrake import (
-    FromFiredrakeConnection, FromBdyFiredrakeConnection, ToFiredrakeConnection,
-    import_firedrake_mesh)
+    FromFiredrakeConnection, FromBoundaryFiredrakeConnection,
+    ToFiredrakeConnection, import_firedrake_mesh)
 
 import pytest
 
@@ -202,15 +202,15 @@ def test_to_fd_consistency(ctx_factory, mm_mesh, fspace_degree):
 # }}}
 
 
-# {{{ Now check the FromBdyFiredrakeConnection consistency
+# {{{ Now check the FromBoundaryFiredrakeConnection consistency
 
 def test_from_bdy_consistency(ctx_factory,
                               fdrake_mesh,
                               fdrake_family,
                               fspace_degree):
     """
-    Make basic checks that FiredrakeFromBdyConnection is not doing something
-    obviouisly wrong, i.e. that it has proper tagging, that it has
+    Make basic checks that FiredrakeFromBoundaryConnection is not doing
+    something obviously wrong, i.e. that it has proper tagging, that it has
     the right number of cells, etc.
     """
     fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fspace_degree)
@@ -219,9 +219,9 @@ def test_from_bdy_consistency(ctx_factory,
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(queue)
 
-    frombdy_conn = FromBdyFiredrakeConnection(actx,
-                                              fdrake_fspace,
-                                              "on_boundary")
+    frombdy_conn = FromBoundaryFiredrakeConnection(actx,
+                                                   fdrake_fspace,
+                                                   "on_boundary")
 
     # Ensure the meshmode mesh has one group and make sure both
     # meshes agree on some basic properties
@@ -303,7 +303,7 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
     cells_to_use = None
     if only_convert_bdy:
         # make a dummy connection which just has a bdy_id
-        class DummyConnection(FromBdyFiredrakeConnection):
+        class DummyConnection(FromBoundaryFiredrakeConnection):
             def __init__(self):
                 self.bdy_id = 'on_boundary'
         cells_to_use = DummyConnection()._get_cells_to_use(square_or_cube_mesh)
@@ -431,8 +431,9 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
         # make function space and build connection
         fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fspace_degree)
         if only_convert_bdy:
-            fdrake_connection = FromBdyFiredrakeConnection(actx, fdrake_fspace,
-                                                           'on_boundary')
+            fdrake_connection = FromBoundaryFiredrakeConnection(actx,
+                                                                fdrake_fspace,
+                                                                'on_boundary')
         else:
             fdrake_connection = FromFiredrakeConnection(actx, fdrake_fspace)
         # get this for making functions in firedrake
@@ -598,8 +599,9 @@ def test_from_fd_idempotency(ctx_factory,
     #
     # Otherwise, just continue as normal
     if only_convert_bdy:
-        fdrake_connection = FromBdyFiredrakeConnection(actx, fdrake_fspace,
-                                                       'on_boundary')
+        fdrake_connection = FromBoundaryFiredrakeConnection(actx,
+                                                            fdrake_fspace,
+                                                            'on_boundary')
         temp = fdrake_connection.from_firedrake(fdrake_unique, actx=actx)
         fdrake_unique = \
             fdrake_connection.from_meshmode(temp,

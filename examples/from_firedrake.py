@@ -25,7 +25,7 @@ import pyopencl as cl
 
 # This example provides a brief template for bringing information in
 # from firedrake and makes some plots to help you better understand
-# what a FromBdyFiredrakeConnection does
+# what a FromBoundaryFiredrakeConnection does
 def main():
     # If can't import firedrake, do nothing
     try:
@@ -34,7 +34,7 @@ def main():
         return 0
 
     from meshmode.interop.firedrake import (
-        FromFiredrakeConnection, FromBdyFiredrakeConnection)
+        FromFiredrakeConnection, FromBoundaryFiredrakeConnection)
     from firedrake import (
         UnitSquareMesh, FunctionSpace, SpatialCoordinate, Function, cos
         )
@@ -52,7 +52,7 @@ def main():
     actx = PyOpenCLArrayContext(queue)
 
     fd_connection = FromFiredrakeConnection(actx, fd_fspace)
-    fd_bdy_connection = FromBdyFiredrakeConnection(actx,
+    fd_bdy_connection = FromBoundaryFiredrakeConnection(actx,
                                                    fd_fspace,
                                                    'on_boundary')
 
@@ -66,7 +66,7 @@ def main():
                  draw_vertex_numbers=False,
                  draw_element_numbers=False,
                  set_bounding_box=True)
-    ax2.set_title("FromBdyFiredrakeConnection")
+    ax2.set_title("FromBoundaryFiredrakeConnection")
     plt.sca(ax2)
     draw_2d_mesh(fd_bdy_connection.discr.mesh,
                  draw_vertex_numbers=False,
@@ -85,14 +85,14 @@ def main():
     ax1.set_title("cos(x+y) in\nFromFiredrakeConnection")
     vis.show_scalar_in_matplotlib_3d(field, do_show=False)
 
-    # Now repeat using FromBdyFiredrakeConnection
+    # Now repeat using FromBoundaryFiredrakeConnection
     bdy_discr = fd_bdy_connection.discr
     bdy_vis = make_visualizer(actx, bdy_discr, bdy_discr.groups[0].order+3)
     bdy_field = fd_bdy_connection.from_firedrake(fd_fntn, actx=actx)
 
     ax2 = fig.add_subplot(1, 2, 2, projection='3d')
     plt.sca(ax2)
-    ax2.set_title("cos(x+y) in\nFromBdyFiredrakeConnection")
+    ax2.set_title("cos(x+y) in\nFromBoundaryFiredrakeConnection")
     bdy_vis.show_scalar_in_matplotlib_3d(bdy_field, do_show=False)
 
     import matplotlib.cm as cm
