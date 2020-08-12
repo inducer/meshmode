@@ -239,16 +239,22 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         (fd_local_facet_nr,) = fd_local_facet_nr  # extract id from set({id})
         fd_loc_fac_nr_to_mm[fd_local_facet_nr] = mm_local_facet_nr
 
-    # We need boundary tags to tag the boundary
+    # build a look-up table from firedrake markers to the appropriate values
+    # in the neighbors array for the external and internal facial adjacency
+    # groups
     bdy_tags = _get_firedrake_boundary_tags(top,
                                             no_boundary=cells_to_use is not None)
     boundary_tag_to_index = {bdy_tag: i for i, bdy_tag in enumerate(bdy_tags)}
-
-    def boundary_tag_bit(boundary_tag):
-        try:
-            return 1 << boundary_tag_to_index[boundary_tag]
-        except KeyError:
-            raise 0
+    marker_to_neighbor_value = {}
+    from meshmode.mesh import _boundary_tag_bit
+    # None for no marker
+    marker_to_neighbor_value[None] = \
+        -(_boundary_tag_bit(bdy_tags, boundary_tag_to_index, BTAG_REALLY_ALL)
+          | _boundary_tag_bit(bdy_tags, boundary_tag_to_index, BTAG_ALL))
+    for marker in top.exterior_facets.unique_markers:
+        marker_to_neighbor_value[marker] = \
+            -(_boundary_tag_bit(bdy_tags, boundary_tag_to_index, marker)
+              | -marker_to_neighbor_value[None])
 
     # {{{ build the FacialAdjacencyGroup for internal connectivity
 
@@ -285,13 +291,18 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         int_neighbor_faces = int_neighbor_faces[to_keep]
         # For neighbor cells, change to new cell index or mark
         # as a new boundary (if the neighbor cell is not being used)
+        no_bdy_neighbor_tag = -(_boundary_tag_bit(bdy_tags,
+                                                  boundary_tag_to_index,
+                                                  BTAG_REALLY_ALL)
+                                | _boundary_tag_bit(bdy_tags,
+                                                    boundary_tag_to_index,
+                                                    BTAG_NO_BOUNDARY))
         for ndx, icell in enumerate(int_neighbors):
             try:
                 int_neighbors[ndx] = cells_to_use_inv[icell]
             except KeyError:
-                int_neighbors[ndx] = -(boundary_tag_bit(BTAG_REALLY_ALL)
-                                       | boundary_tag_bit(BTAG_NO_BOUNDARY))
-                int_neighbor_faces[ndx] = 0.0
+                int_neighbors[ndx] = no_bdy_neighbor_tag
+                int_neighbor_faces[ndx] = 0
 
     interconnectivity_grp = FacialAdjacencyGroup(igroup=0, ineighbor_group=0,
                                                  elements=int_elements,
@@ -325,13 +336,10 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     if top.exterior_facets.markers is not None:
         ext_neighbors = np.zeros(ext_elements.shape, dtype=IntType)
         for ifac, marker in enumerate(top.exterior_facets.markers):
-            ext_neighbors[ifac] = -(boundary_tag_bit(BTAG_ALL)
-                                    | boundary_tag_bit(BTAG_REALLY_ALL)
-                                    | boundary_tag_bit(marker))
+            ext_neighbors[ifac] = marker_to_neighbor_value[marker]
     else:
         ext_neighbors = np.full(ext_elements.shape,
-                                -(boundary_tag_bit(BTAG_ALL)
-                                  | boundary_tag_bit(BTAG_REALLY_ALL)),
+                                marker_to_neighbor_value[None],
                                 dtype=IntType)
 
     exterior_grp = FacialAdjacencyGroup(igroup=0, ineighbor=None,
