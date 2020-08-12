@@ -162,7 +162,7 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
     return vertex_indices, nodal_adjacency
 
 
-def _get_firedrake_boundary_tags(fdrake_mesh, no_boundary=False):
+def _get_firedrake_boundary_tags(fdrake_mesh, include_no_boundary=False):
     """
     Return a tuple of bdy tags as requested in
     the construction of a :mod:`meshmode` :class:`Mesh`
@@ -174,12 +174,12 @@ def _get_firedrake_boundary_tags(fdrake_mesh, no_boundary=False):
 
     :arg fdrake_mesh: A :mod:`firedrake` :class:`MeshTopology` or
         :class:`MeshGeometry`
-    :arg no_boundary: If *True*, include :class:`BTAG_NO_BOUNDARY`
+    :arg include_no_boundary: If *True*, include :class:`BTAG_NO_BOUNDARY`
 
     :return: A tuple of boundary tags
     """
     bdy_tags = [BTAG_ALL, BTAG_REALLY_ALL]
-    if no_boundary:
+    if include_no_boundary:
         bdy_tags.append(BTAG_NO_BOUNDARY)
 
     unique_markers = fdrake_mesh.topology.exterior_facets.unique_markers
@@ -242,8 +242,10 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     # build a look-up table from firedrake markers to the appropriate values
     # in the neighbors array for the external and internal facial adjacency
     # groups
-    bdy_tags = _get_firedrake_boundary_tags(top,
-                                            no_boundary=cells_to_use is not None)
+    include_no_boundary = cells_to_use is not None
+    bdy_tags = \
+        _get_firedrake_boundary_tags(top,
+                                     include_no_boundary=include_no_boundary)
     boundary_tag_to_index = {bdy_tag: i for i, bdy_tag in enumerate(bdy_tags)}
     marker_to_neighbor_value = {}
     from meshmode.mesh import _boundary_tag_bit
@@ -536,8 +538,10 @@ FromBoundaryFiredrakeConnection`.
     fdrake_mesh.init()
 
     # Get all the nodal information we can from the topology
-    bdy_tags = _get_firedrake_boundary_tags(fdrake_mesh,
-                                            no_boundary=cells_to_use is not None)
+    include_no_boundary = cells_to_use is not None
+    bdy_tags = \
+        _get_firedrake_boundary_tags(fdrake_mesh,
+                                     include_no_boundary=include_no_boundary)
     vertex_indices, nodal_adjacency = \
         _get_firedrake_nodal_info(fdrake_mesh, cells_to_use=cells_to_use)
     # If only using some cells, vertices may need new indices as many
