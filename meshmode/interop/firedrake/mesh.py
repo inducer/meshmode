@@ -285,9 +285,10 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                     np.arange(np.size(cells_to_use),
                                               dtype=IntType)))
 
-        # Only keep cells that using, and change to new cell index
+        # Keep the cells that we are using and change old cell index
+        # to new cell index
         int_elements = np.vectorize(cells_to_use_inv.__getitem__)(
-                int_elements[to_keep])
+            int_elements[to_keep])
         int_element_faces = int_element_faces[to_keep]
         int_neighbors = int_neighbors[to_keep]
         int_neighbor_faces = int_neighbor_faces[to_keep]
