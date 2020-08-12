@@ -724,11 +724,21 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
         if len(mesh.groups) != 1:
             raise ValueError(":arg:`group_nr` is *None* but :arg:`mesh` has "
                              "more than one group.")
-        else:
-            group_nr = 0
-    assert group_nr >= 0 and group_nr < len(mesh.groups)
-    assert isinstance(mesh.groups[group_nr], SimplexElementGroup)
-    assert mesh.vertices is not None
+        group_nr = 0
+    if not isinstance(group_nr, int):
+        raise TypeError("Expecting :arg:`group_nr` to be of type *int*, not "
+                        f"{type(group_nr)}")
+    if group_nr < 0 or group_nr >= len(mesh.groups):
+        raise ValueError(":arg:`group_nr` is an invalid group index:"
+                         f" {group_nr} fails to satisfy "
+                         f"0 <= {group_nr} < {len(mesh.groups)}")
+    if not isinstance(mesh.groups[group_nr], SimplexElementGroup):
+        raise TypeError("Expecting *mesh.groups[group_nr] to be of type "
+                        ":class:`meshmode.mesh.SimplexElementGroup`, not "
+                        f"{type(mesh.groups[group_nr])}")
+    if mesh.vertices is None:
+        raise ValueError(":arg:`mesh` has no vertices "
+                         "(*mesh.vertices* is *None*)")
 
     # Get the vertices and vertex indices of the requested group
     group = mesh.groups[group_nr]
