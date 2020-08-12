@@ -580,7 +580,7 @@ FromBoundaryFiredrakeConnection`.
         cell_node_list = cell_node_list[cells_to_use]
     nodes = np.real(coords.dat.data[cell_node_list])
     # Add extra dim in 1D for shape (nelements, nunit_nodes, dim)
-    if len(nodes.shape) == 2:
+    if tdim == 1:
         nodes = np.reshape(nodes, nodes.shape + (1,))
     # Transpose nodes to have shape (dim, nelements, nunit_nodes)
     nodes = np.transpose(nodes, (2, 0, 1))
