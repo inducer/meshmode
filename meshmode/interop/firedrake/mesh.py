@@ -536,6 +536,15 @@ FromBoundaryFiredrakeConnection`.
     tdim = fdrake_mesh.topological_dimension()
     assert gdim in [1, 2, 3], "Mesh must be in space of ambient dim 1, 2, or 3"
     assert gdim - tdim in [0, 1], "Mesh co-dimension must be 0 or 1"
+    # firedrake meshes are not guaranteed be fully instantiated until
+    # the .init() method is called. In particular, the coordinates function
+    # may not be accessible if we do not call init(). If the mesh has
+    # already been initialized, nothing will change. For more details
+    # on why we need a second initialization, see
+    # this pull request:
+    # https://github.com/firedrakeproject/firedrake/pull/627
+    # which details how Firedrake implements a mesh's coordinates
+    # as a function on that very same mesh
     fdrake_mesh.init()
 
     # Get all the nodal information we can from the topology
