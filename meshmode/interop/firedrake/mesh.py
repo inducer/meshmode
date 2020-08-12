@@ -462,6 +462,7 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
             vertex_entity_dofs = coords_fspace.finat_element.entity_dofs()[0]
             for entity, dof_list in six.iteritems(vertex_entity_dofs):
                 assert len(dof_list) > 0
+
     :arg cells_to_use: Either *None*, in which case this argument is ignored,
         or a numpy array of unique firedrake cell indexes. In the latter case,
         only cells whose index appears in *cells_to_use* are included
@@ -477,14 +478,17 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
 
         This argument is primarily intended for use by a
         :class:`meshmode.interop.firedrake.FromBdyFiredrakeConnection`.
+
     :arg normals: **Only** used if *fdrake_mesh* is a 1-surface
         embedded in 2-space. In this case,
+
             - If *None* then
               all elements are assumed to be positively oriented.
             - Else, should be a list/array whose *i*th entry
               is the normal for the *i*th element (*i*th
               in *mesh.coordinate.function_space()*'s
               :attr:`cell_node_list`)
+
     :arg no_normals_warn: If *True* (the default), raises a warning
         if *fdrake_mesh* is a 1-surface embedded in 2-space
         and *normals* is *None*.

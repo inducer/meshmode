@@ -95,16 +95,16 @@ class FiredrakeConnection:
     Users should instantiate this using a
     :class:`FromFiredrakeConnection` or :class:`ToFiredrakeConnection`.
 
-    .. autoattribute:: discr
+    .. attribute:: discr
 
         A meshmode discretization
 
-    .. autoattribute:: group_nr
+    .. attribute:: group_nr
 
         The group number identifying which element group of
         :attr:`discr` is being connected to a firedrake function space
 
-    .. autoattribute:: mm2fd_node_mapping
+    .. attribute:: mm2fd_node_mapping
 
         Letting *element_grp = self.discr.groups[self.group_nr]*,
         *mm2fd_node_mapping* is a numpy array of shape
@@ -406,10 +406,12 @@ class FiredrakeConnection:
             :attr:`discr`. Its function space must have
             the same family, degree, and mesh as ``self.from_fspace()``.
         :arg out: Either
-            1.) A :class:`~meshmode.dof_array.DOFArray`
-            2.) A :class:`np.ndarray` object array, each of whose
-                entries is a :class:`~meshmode.dof_array.DOFArray`
-            3.) *None*
+
+            1. A :class:`~meshmode.dof_array.DOFArray`
+            2. A :class:`np.ndarray` object array, each of whose
+               entries is a :class:`~meshmode.dof_array.DOFArray`
+            3. *None*
+
             In the case of (1.), *function* must be in a
             scalar function space
             (i.e. `function.function_space().shape == (,)`).
@@ -501,6 +503,7 @@ class FiredrakeConnection:
         are not modified.
 
         :arg mm_field: Either
+
             * A :class:`~meshmode.dof_array.DOFArray` representing
               a field of shape *tuple()* on :attr:`discr`
             * A :class:`numpy.ndarray` of :class:`~meshmode.dof_array.DOFArray`s
@@ -521,7 +524,7 @@ class FiredrakeConnection:
         :arg assert_fdrake_discontinuous: If *True*,
             disallows conversion to a continuous firedrake function space
             (i.e. this function checks that ``self.firedrake_fspace()`` is
-             discontinuous and raises a *ValueError* otherwise)
+            discontinuous and raises a *ValueError* otherwise)
 
         :arg continuity_tolerance: If converting to a continuous firedrake
             function space (i.e. if ``self.firedrake_fspace()`` is continuous),
