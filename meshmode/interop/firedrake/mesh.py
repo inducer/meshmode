@@ -185,7 +185,7 @@ def _get_firedrake_boundary_tags(fdrake_mesh, no_boundary=False):
     if unique_markers is not None:
         bdy_tags.extend(unique_markers)
 
-    return tuple(bdy_tags)
+    return bdy_tags
 
 
 def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
