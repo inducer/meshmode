@@ -235,6 +235,8 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     all_local_facet_nrs = set(range(top.ufl_cell().num_vertices()))
     for mm_local_facet_nr, face in enumerate(mm_face_vertex_indices):
         fd_local_facet_nr = all_local_facet_nrs - set(face)
+        assert len(fd_local_facet_nr) == 1
+        (fd_local_facet_nr,) = fd_local_facet_nr  # extract id from set({id})
         fd_loc_fac_nr_to_mm[fd_local_facet_nr] = mm_local_facet_nr
 
     # We need boundary tags to tag the boundary
