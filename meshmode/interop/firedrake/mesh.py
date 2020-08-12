@@ -22,6 +22,7 @@ THE SOFTWARE.
 
 __doc__ = """
 .. autofunction:: import_firedrake_mesh
+.. autofunction:: export_mesh_to_firedrake
 """
 
 from warnings import warn  # noqa
@@ -581,7 +582,11 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
         unit_vertex_indices.append(dof)
 
     # Now get the vertex coordinates as *(dim, nvertices)*-shaped array
-    vertices = np.ndarray((gdim, fdrake_mesh.num_vertices()), dtype=nodes.dtype)
+    if cells_to_use is not None:
+        nvertices = np.size(vert_ndx_new2old)
+    else:
+        nvertices = fdrake_mesh.num_vertices()
+    vertices = np.ndarray((gdim, nvertices), dtype=nodes.dtype)
     recorded_verts = set()
     for icell, cell_vertex_indices in enumerate(vertex_indices):
         for local_vert_id, global_vert_id in enumerate(cell_vertex_indices):
