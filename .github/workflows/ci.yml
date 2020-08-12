@@ -49,7 +49,7 @@ jobs:
                 . /home/firedrake/firedrake/bin/activate
                 grep -v loopy requirements.txt > /tmp/myreq.txt
                 pip install -r /tmp/myreq.txt
-                pip install git+https://github.com/benSepanski/loopy.git@firedrake-reinstate_program_executor_cache
+                pip install git+https://github.com/benSepanski/loopy.git@firedrake-usable_for_potentials
                 # The Firedrake container is based on Py3.6 as of 2020-10-10, which
                 # doesn't have dataclasses.
                 pip install pytest dataclasses
