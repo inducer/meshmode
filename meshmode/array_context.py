@@ -277,6 +277,7 @@ class PyOpenCLArrayContext(ArrayContext):
     def call_loopy(self, program, **kwargs):
         program = self.transform_loopy_program(program)
 
+        # accommodate loopy with and without kernel callables
         try:
             options = program.options
         except AttributeError:
@@ -305,6 +306,7 @@ class PyOpenCLArrayContext(ArrayContext):
     def transform_loopy_program(self, program):
         # FIXME: This could be much smarter.
         import loopy as lp
+        # accommodate loopy with and without kernel callables
         try:
             all_inames = program.all_inames()
         except AttributeError:
