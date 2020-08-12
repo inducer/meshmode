@@ -141,6 +141,9 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
                 cell_to_nodal_neighbors[other_cell_ndx].append(fd_cell_ndx)
             vert_to_cells[dmp_vert_id].append(fd_cell_ndx)
 
+    # make sure that no -1s remain in vertex_indices (i.e. none are left unset)
+    assert np.all(vertex_indices >= 0)
+
     # Next go ahead and compute nodal adjacency by creating
     # neighbors and neighbor_starts as specified by :class:`NodalAdjacency`
     neighbors = []
