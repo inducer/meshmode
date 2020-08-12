@@ -117,18 +117,15 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
         # Store the vertex indices
         dmp_verts = closure_dmp_ids[np.logical_and(v_start <= closure_dmp_ids,
                                                    closure_dmp_ids < v_end)]
-        fd_verts = np.array([vert_id_dmp_to_fd(dmp_vert)
-                             for dmp_vert in dmp_verts])
-        vertex_indices[fd_cell_ndx][:] = fd_verts[:]
+        vertex_indices[fd_cell_ndx][:] = np.array([
+            vert_id_dmp_to_fd(dmp_vert) for dmp_vert in dmp_verts])
 
         # Record this cell as touching the facet and remember its local
-        # facet number (the order it appears)
+        # facet number (the index at which it appears)
         dmp_fac_ids = closure_dmp_ids[np.logical_and(f_start <= closure_dmp_ids,
                                                      closure_dmp_ids < f_end)]
         for loc_fac_nr, dmp_fac_id in enumerate(dmp_fac_ids):
-            # make sure there is a list to append to and append
-            facet_to_cells.setdefault(dmp_fac_id, [])
-            facet_to_cells[dmp_fac_id].append((fd_cell_ndx, loc_fac_nr))
+            facet_to_cells.setdefault(dmp_fac_id, []).append((fd_cell_ndx, loc_fac_nr))
 
         # Record this vertex as touching the cell, and mark this cell
         # as nodally adjacent (in cell_to_nodal_neighbors) to any
@@ -161,7 +158,7 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
     nodal_adjacency = NodalAdjacency(neighbors_starts=neighbors_starts,
                                      neighbors=neighbors)
 
-    return (vertex_indices, nodal_adjacency)
+    return vertex_indices, nodal_adjacency
 
 
 def _get_firedrake_boundary_tags(fdrake_mesh, no_boundary=False):
@@ -186,7 +183,7 @@ def _get_firedrake_boundary_tags(fdrake_mesh, no_boundary=False):
 
     unique_markers = fdrake_mesh.topology.exterior_facets.unique_markers
     if unique_markers is not None:
-        bdy_tags += list(unique_markers)
+        bdy_tags.extend(unique_markers)
 
     return tuple(bdy_tags)
 
@@ -241,10 +238,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                 break
 
     # We need boundary tags to tag the boundary
-    no_boundary = False
-    if cells_to_use is not None:
-        no_boundary = True
-    bdy_tags = _get_firedrake_boundary_tags(top, no_boundary=no_boundary)
+    bdy_tags = _get_firedrake_boundary_tags(top, no_boundary=cells_to_use is not None)
     boundary_tag_to_index = {bdy_tag: i for i, bdy_tag in enumerate(bdy_tags)}
 
     def boundary_tag_bit(boundary_tag):
@@ -253,7 +247,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         except KeyError:
             raise 0
 
-    # Now do the interconnectivity group
+    # {{{ build the FacialAdjacencyGroup for internal connectivity
 
     # Get the firedrake cells associated to each interior facet
     int_facet_cell = top.interior_facets.facet_cell
@@ -302,7 +296,9 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                                  element_faces=int_element_faces,
                                                  neighbor_faces=int_neighbor_faces)
 
-    # Then look at exterior facets
+    # }}}
+    
+    # {{{ build the FacialAdjacencyGroup for boundary faces
 
     # We can get the elements directly from exterior facets
     ext_elements = top.exterior_facets.facet_cell.flatten()
@@ -341,6 +337,8 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                         neighbors=ext_neighbors,
                                         neighbor_faces=ext_neighbor_faces)
 
+    # }}}
+    
     return [{0: interconnectivity_grp, None: exterior_grp}]
 
 # }}}
@@ -360,8 +358,7 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
     :arg vertices: The vertex coordinates as a numpy array of shape
         *(ambient_dim, nvertices)* (the vertices of *unflipped_group*)
     :arg normals: As described in the kwargs of :func:`import_firedrake_mesh`
-    :arg no_normals_warn: As described in the kwargs of
-        :func:`import_firedrake_mesh`
+    :arg no_normals_warn: As described in :func:`import_firedrake_mesh`
     :arg cells_to_use: If *None*, then ignored. Otherwise, a numpy array
         of unique firedrake cell indices indicating which cells to use.
 
@@ -414,7 +411,7 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
     #Make sure the mesh fell into one of the cases
     #Nb : This should be guaranteed by previous checks,
     #       but is here anyway in case of future development.
-    assert orient is not None, "something went wrong, contact the developer"
+    assert orient is not None
     return orient
 
 # }}}
@@ -425,9 +422,8 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
 def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
                           normals=None, no_normals_warn=None):
     """
-    Create a :mod:`meshmode` :class:`~meshmode.mesh.Mesh`
-    from a :mod:`firedrake`
-    :class:`~firedrake.mesh.MeshGeometry`
+    Create a :class:`meshmode.mesh.Mesh`
+    from a :class:`firedrake.mesh.MeshGeometry`
     with the same cells/elements, vertices, nodes,
     mesh order, and facial adjacency.
 
@@ -440,8 +436,7 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
     The flipped cells/elements are identified by the returned
     *firedrake_orient* array
 
-    :arg fdrake_mesh: A :mod:`firedrake`
-        :class:`~firedrake.mesh.MeshGeometry`.
+    :arg fdrake_mesh: :class:`firedrake.mesh.MeshGeometry`.
         This mesh **must** be in a space of ambient dimension
         1, 2, or 3 and have co-dimension of 0 or 1.
         It must use a simplex as a reference element.
@@ -530,10 +525,7 @@ FromBoundaryFiredrakeConnection`.
     fdrake_mesh.init()
 
     # Get all the nodal information we can from the topology
-    no_boundary = False
-    if cells_to_use is not None:
-        no_boundary = True
-    bdy_tags = _get_firedrake_boundary_tags(fdrake_mesh, no_boundary=no_boundary)
+    bdy_tags = _get_firedrake_boundary_tags(fdrake_mesh, no_boundary=cells_to_use is not None)
     vertex_indices, nodal_adjacency = \
         _get_firedrake_nodal_info(fdrake_mesh, cells_to_use=cells_to_use)
     # If only using some cells, vertices may need new indices as many
@@ -561,10 +553,10 @@ FromBoundaryFiredrakeConnection`.
     if cells_to_use is not None:
         cell_node_list = cell_node_list[cells_to_use]
     nodes = np.real(coords.dat.data[cell_node_list])
-    # Add extra dim in 1D so that have [nelements][nunit_nodes][dim]
+    # Add extra dim in 1D for shape (nelements, nunit_nodes, dim)
     if len(nodes.shape) == 2:
         nodes = np.reshape(nodes, nodes.shape + (1,))
-    # Now we want the nodes to actually have shape [dim][nelements][nunit_nodes]
+    # Transpose nodes to have shape (dim, nelements, nunit_nodes)
     nodes = np.transpose(nodes, (2, 0, 1))
 
     # make a group (possibly with some elements that need to be flipped)
