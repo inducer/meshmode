@@ -49,7 +49,7 @@ straightforward. Some language is different:
   created by calling the function :func:`~firedrake.functionspace.FunctionSpace`
   and referred to as a "function space"
 * In a mesh, any vertices, faces, cells, etc. are :mod:`firedrake`
-  "entities" (see `dmplex <https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/DMPLEX/index.html>`_
+  "entities" (see `the PETSc documentation on dmplex <https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/DMPLEX/index.html>`__
   for more info on how topological mesh information is stored
   in :mod:`firedrake`).
 
@@ -57,7 +57,7 @@ Other than carefully tabulating how and which vertices/faces
 correspond to other vertices/faces/cells, there are two main difficulties.
 
 1. :mod:`meshmode` has discontinuous polynomial function spaces
-   which use different unit nodes than :mod:`firedrake`.
+   which may use different unit nodes than :mod:`firedrake`.
 2. :mod:`meshmode` requires that all mesh elements be positively oriented,
    :mod:`firedrake` does not. Meanwhile, when :mod:`firedrake` creates
    a mesh, it changes the element ordering and the local vertex ordering.
@@ -68,7 +68,7 @@ and that the group of the :class:`meshmode.discretization.Discretization`
 being converted is a
 :class:`~meshmode.discretization.poly_element.InterpolatoryQuadratureSimplexElementGroup`
 of the same order. Then, on each element, the function space being
-represented is the same in :mod:`firedrake` or :mod:`meshmode`.
+represented is the same in :mod:`firedrake` and :mod:`meshmode`.
 We may simply resample to one system or another's unit nodes.
 
 To handle (2.),
@@ -139,14 +139,14 @@ stored in
 an array which associates each :mod:`meshmode` node
 to the :mod:`firedrake` node found by tracing the
 above diagram (i.e. it stores
-:math:`g\circ A\circ Resampling \circ f^{-1}`).
+:math:`g\circ A\circ \text{Resampling} \circ f^{-1}`).
 
 For Developers: Firedrake Function Space Design Crash Course
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In firedrake, meshes and function spaces have a close relationship.
+In Firedrake, meshes and function spaces have a close relationship.
 In particular, this is  due to some structure described in this
-`firedrake pull request <http://github.com/firedrakeproject/firedrake/pull/627>`_.
+`Firedrake pull request <http://github.com/firedrakeproject/firedrake/pull/627>`_.
 If you wish to develop on / add to the implementation of conversion
 between :mod:`meshmode` and :mod:`firedrake`, you will need
 to understand their design style. Below is a crash course.
@@ -156,7 +156,7 @@ that every function space should have a mesh, and the coordinates of the mesh
 should be representable as a function on that same mesh, which must live
 on some function space on the mesh... etc.
 Under the hood, we divide between topological and geometric objects,
-roughly as so
+roughly as so:
 
 (1) A reference element defined using :mod:`FInAT` and :mod:`fiat`
     is used to define what meshmode calls the unit nodes and unit
@@ -213,7 +213,7 @@ Thus, by the coordinates of a mesh geometry we mean
     created from the :class:`~firedrake.functionspaceimpl.FunctionSpace`
     *f* lives in and the :class:`~firedrake.mesh.MeshGeometry` *f* defines.
 
-Basically, it's this picture (where a->b if b depends on a)
+Basically, it's this picture (where :math:`a\to b` if :math:`b` depends on :math:`a`)
 
 .. warning::
 
