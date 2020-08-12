@@ -125,7 +125,8 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
         dmp_fac_ids = closure_dmp_ids[np.logical_and(f_start <= closure_dmp_ids,
                                                      closure_dmp_ids < f_end)]
         for loc_fac_nr, dmp_fac_id in enumerate(dmp_fac_ids):
-            facet_to_cells.setdefault(dmp_fac_id, []).append((fd_cell_ndx, loc_fac_nr))
+            facet_to_cells.setdefault(dmp_fac_id, []).append((fd_cell_ndx,
+                                                              loc_fac_nr))
 
         # Record this vertex as touching the cell, and mark this cell
         # as nodally adjacent (in cell_to_nodal_neighbors) to any
@@ -231,14 +232,14 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     fd_loc_fac_nr_to_mm = {}
     # Figure out which vertex is excluded to get the corresponding
     # firedrake local index
-    for mm_loc_fac_nr, face in enumerate(mm_face_vertex_indices):
-        for fd_loc_fac_nr in range(top.ufl_cell().num_vertices()):
-            if fd_loc_fac_nr not in face:
-                fd_loc_fac_nr_to_mm[fd_loc_fac_nr] = mm_loc_fac_nr
-                break
+    all_local_facet_nrs = set(range(top.ufl_cell().num_vertices()))
+    for mm_local_facet_nr, face in enumerate(mm_face_vertex_indices):
+        fd_local_facet_nr = all_local_facet_nrs - set(face)
+        fd_loc_fac_nr_to_mm[fd_local_facet_nr] = mm_local_facet_nr
 
     # We need boundary tags to tag the boundary
-    bdy_tags = _get_firedrake_boundary_tags(top, no_boundary=cells_to_use is not None)
+    bdy_tags = _get_firedrake_boundary_tags(top,
+                                            no_boundary=cells_to_use is not None)
     boundary_tag_to_index = {bdy_tag: i for i, bdy_tag in enumerate(bdy_tags)}
 
     def boundary_tag_bit(boundary_tag):
@@ -297,7 +298,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                                  neighbor_faces=int_neighbor_faces)
 
     # }}}
-    
+
     # {{{ build the FacialAdjacencyGroup for boundary faces
 
     # We can get the elements directly from exterior facets
@@ -338,7 +339,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                         neighbor_faces=ext_neighbor_faces)
 
     # }}}
-    
+
     return [{0: interconnectivity_grp, None: exterior_grp}]
 
 # }}}
@@ -525,7 +526,8 @@ FromBoundaryFiredrakeConnection`.
     fdrake_mesh.init()
 
     # Get all the nodal information we can from the topology
-    bdy_tags = _get_firedrake_boundary_tags(fdrake_mesh, no_boundary=cells_to_use is not None)
+    bdy_tags = _get_firedrake_boundary_tags(fdrake_mesh,
+                                            no_boundary=cells_to_use is not None)
     vertex_indices, nodal_adjacency = \
         _get_firedrake_nodal_info(fdrake_mesh, cells_to_use=cells_to_use)
     # If only using some cells, vertices may need new indices as many
