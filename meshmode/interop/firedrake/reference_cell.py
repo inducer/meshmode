@@ -32,13 +32,13 @@ __doc__ = """
 
 # {{{ Map between reference simplices
 
-def get_affine_reference_simplex_mapping(spat_dim, firedrake_to_meshmode=True):
+def get_affine_reference_simplex_mapping(ambient_dim, firedrake_to_meshmode=True):
     """
     Returns a function which takes a numpy array points
     on one reference cell and maps each
     point to another using a positive affine map.
 
-    :arg spat_dim: The spatial dimension
+    :arg ambient_dim: The spatial dimension
     :arg firedrake_to_meshmode: If true, the returned function maps from
         the firedrake reference element to
         meshmode, if false maps from
@@ -54,16 +54,16 @@ def get_affine_reference_simplex_mapping(spat_dim, firedrake_to_meshmode=True):
              no input validation.
     """
     # validate input
-    assert isinstance(spat_dim, int)
-    assert spat_dim >= 0
+    assert isinstance(ambient_dim, int)
+    assert ambient_dim >= 0
     assert isinstance(firedrake_to_meshmode, bool)
 
     from FIAT.reference_element import ufc_simplex
     from modepy.tools import unit_vertices
     # Get the unit vertices from each system,
     # each stored with shape *(dim, nunit_vertices)*
-    firedrake_unit_vertices = np.array(ufc_simplex(spat_dim).vertices).T
-    modepy_unit_vertices = unit_vertices(spat_dim).T
+    firedrake_unit_vertices = np.array(ufc_simplex(ambient_dim).vertices).T
+    modepy_unit_vertices = unit_vertices(ambient_dim).T
 
     if firedrake_to_meshmode:
         from_verts = firedrake_unit_vertices
@@ -77,7 +77,7 @@ def get_affine_reference_simplex_mapping(spat_dim, firedrake_to_meshmode=True):
     assert from_verts.shape == to_verts.shape
     dim, nvects = from_verts.shape
 
-    # If only have on vertex, have A = I and b = to_vert - from_vert
+    # If only have one vertex, have A = I and b = to_vert - from_vert
     if nvects == 1:
         shift = to_verts[:, 0] - from_verts[:, 0]
 
@@ -116,7 +116,7 @@ def get_finat_element_unit_nodes(finat_element):
 
     :arg finat_element: A :class:`~finat.finiteelementbase.FiniteElementBase`
         instance (i.e. a firedrake function space's reference element).
-        The refernce element of the finat element *MUST* be a simplex
+        The reference element of the finat element *MUST* be a simplex.
     :return: A numpy array of shape *(dim, nunit_dofs)* holding the unit
              nodes used by this element. *dim* is the dimension spanned
              by the finat element's reference element
