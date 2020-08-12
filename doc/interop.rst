@@ -12,12 +12,17 @@ Function Spaces/Discretizations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Users wishing to interact with :mod:`meshmode` from :mod:`firedrake`
-will primarily interact with the :class:`FromFiredrakeConnection` and
-:class:`FromBdyFiredrakeConnection` classes, while users wishing
+will primarily interact with the
+:class:`~meshmode.interop.firedrake.connection.FromFiredrakeConnection` and
+:class:`~meshmode.interop.firedrake.connection.FromBdyFiredrakeConnection`
+classes, while users wishing
 to interact with :mod:`firedrake` from :mod:`meshmode` will use
-the :class:`ToFiredrakeConnection` class. All of these classes inherit from
-the :class:`FiredrakeConnection` class, which provides the interface.
-It is not recommended to create a :class:`FiredrakeConnection` directly.
+the :class:`~meshmode.interop.firedrake.connection.ToFiredrakeConnection` class.
+All of these classes inherit from
+the :class:`~meshmode.interop.firedrake.connection.FiredrakeConnection`
+class, which provides the interface.
+It is not recommended to create a
+:class:`~meshmode.interop.firedrake.connection.FiredrakeConnection` directly.
 
 .. automodule:: meshmode.interop.firedrake.connection
 
@@ -39,7 +44,7 @@ Converting between :mod:`firedrake` and :mod:`meshmode` is in general
 straightforward. Some language is different:
 
 * In a mesh, a :mod:`meshmode` "element" is a :mod:`firedrake` "cell"
-* A :class:`meshmode.discretization.Discretization` is a :mod:`firedrake`
+* A :class:`~meshmode.discretization.Discretization` is a :mod:`firedrake`
   :class:`~firedrake.functionspaceimpl.WithGeometry`, usually
   created by calling the function :func:`~firedrake.functionspace.FunctionSpace`
   and referred to as a "function space"
@@ -61,7 +66,7 @@ correspond to other vertices/faces/cells, there are two main difficulties.
 :class:`~firedrake.functionspaceimpl.WithGeometry` uses polynomial elements
 and that the group of the :class:`meshmode.discretization.Discretization`
 being converted is a
-:class:`meshmode.discretization.poly_element.InterpolatoryQuadratureSimplexElementGroup`
+:class:`~meshmode.discretization.poly_element.InterpolatoryQuadratureSimplexElementGroup`
 of the same order. Then, on each element, the function space being
 represented is the same in :mod:`firedrake` or :mod:`meshmode`.
 We may simply resample to one system or another's unit nodes.
@@ -129,7 +134,8 @@ at nodes from one set of unit nodes to another (and then undo
 the reordering if converting function values
 from :mod:`meshmode` to :mod:`firedrake`). The
 information for this whole reordering process is
-stored in :attr:`FiredrakeConnection.mm2fd_node_mapping`,
+stored in
+:attr:`~meshmode.interop.firedrake.FiredrakeConnection.mm2fd_node_mapping`,
 an array which associates each :mod:`meshmode` node
 to the :mod:`firedrake` node found by tracing the
 above diagram (i.e. it stores
