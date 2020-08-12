@@ -422,8 +422,10 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
 def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
                           normals=None, no_normals_warn=None):
     """
-    Create a :mod:`meshmode` :class:`Mesh` from a :mod:`firedrake`
-    :class:`MeshGeometry` with the same cells/elements, vertices, nodes,
+    Create a :mod:`meshmode` :class:`~meshmode.mesh.Mesh`
+    from a :mod:`firedrake`
+    :class:`~firedrake.mesh.MeshGeometry`
+    with the same cells/elements, vertices, nodes,
     mesh order, and facial adjacency.
 
     The vertex and node coordinates will be the same, as well
@@ -435,7 +437,8 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
     The flipped cells/elements are identified by the returned
     *firedrake_orient* array
 
-    :arg fdrake_mesh: A :mod:`firedrake` :class:`MeshGeometry`.
+    :arg fdrake_mesh: A :mod:`firedrake`
+        :class:`~firedrake.mesh.MeshGeometry`.
         This mesh **must** be in a space of ambient dimension
         1, 2, or 3 and have co-dimension of 0 or 1.
         It must use a simplex as a reference element.
@@ -473,11 +476,13 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
         Note that in this later case, some faces that are not
         boundaries in *fdrake_mesh* may become boundaries in the
         returned mesh. These "induced" boundaries are marked with
-        :class:`BTAG_NO_BOUNDARY` (and :class:`BTAG_REALLY_ALL`)
-        instead of :class:`BTAG_ALL`.
+        :class:`~meshmode.mesh.BTAG_NO_BOUNDARY`
+        (and :class:`~meshmode.mesh.BTAG_REALLY_ALL`)
+        instead of :class:`~meshmode.mesh.BTAG_ALL`.
 
         This argument is primarily intended for use by a
-        :class:`meshmode.interop.firedrake.FromBoundaryFiredrakeConnection`.
+        :class:`~meshmode.interop.firedrake.connection.\
+FromBoundaryFiredrakeConnection`.
 
     :arg normals: **Only** used if *fdrake_mesh* is a 1-surface
         embedded in 2-space. In this case,
@@ -670,14 +675,15 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
 
 def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     """
-    Create a firedrake mesh corresponding to one :class:`Mesh`'s
-    :class:`SimplexElementGroup`.
+    Create a firedrake mesh corresponding to one
+    :class:`~meshmode.mesh.Mesh`'s
+    :class:`~meshmode.mesh.SimplexElementGroup`.
 
-    :param mesh: A :class:`meshmode.mesh.Mesh` to convert with
-        at least one :class:`SimplexElementGroup`.
+    :param mesh: A :class:`~meshmode.mesh.Mesh` to convert with
+        at least one :class:`~meshmode.mesh.SimplexElementGroup`.
     :param group_nr: The group number to be converted into a firedrake
         mesh. The corresponding group must be of type
-        :class:`SimplexElementGroup`. If *None* and
+        :class:`~meshmode.mesh.SimplexElementGroup`. If *None* and
         *mesh* has only one group, that group is used. Otherwise,
         a *ValueError* is raised.
     :param comm: The communicator to build the dmplex mesh on
@@ -686,7 +692,7 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
         where
 
         * *fdrake_mesh* is a :mod:`firedrake`
-          :class:`firedrake.mesh.MeshGeometry` corresponding to
+          :class:`~firedrake.mesh.MeshGeometry` corresponding to
           *mesh*
         * *fdrake_cell_ordering* is a numpy array: the *i*th
           element in *mesh* (i.e. the *i*th element in

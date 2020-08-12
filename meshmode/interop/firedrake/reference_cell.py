@@ -114,7 +114,7 @@ def get_finat_element_unit_nodes(finat_element):
     Returns the unit nodes used by the FInAT element in firedrake's
     (equivalently, FInAT/FIAT's) reference coordinates
 
-    :arg finat_element: A :class:`finat.finiteelementbase.FiniteElementBase`
+    :arg finat_element: A :class:`~finat.finiteelementbase.FiniteElementBase`
         instance (i.e. a firedrake function space's reference element).
         The refernce element of the finat element *MUST* be a simplex
     :return: A numpy array of shape *(dim, nunit_dofs)* holding the unit

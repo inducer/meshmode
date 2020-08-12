@@ -129,7 +129,8 @@ class FiredrakeConnection:
     """
     def __init__(self, discr, fdrake_fspace, mm2fd_node_mapping, group_nr=None):
         """
-        :param discr: A :mod:`meshmode` :class:`Discretization`
+        :param discr: A :mod:`meshmode`
+            :class:`~meshmode.discretization.Discretization`
         :param fdrake_fspace: A :mod:`firedrake`
             :class:`firedrake.functionspaceimpl.WithGeometry`.
             Must have ufl family ``'Lagrange'`` or
@@ -163,7 +164,7 @@ class FiredrakeConnection:
                             "not :class:`%s`." % type(fdrake_fspace))
         if not isinstance(mm2fd_node_mapping, np.ndarray):
             raise TypeError(":param:`mm2fd_node_mapping` must be of type "
-                            ":class:`np.ndarray`, "
+                            ":class:`numpy.ndarray`, "
                             "not :class:`%s`." % type(mm2fd_node_mapping))
         if not isinstance(group_nr, int) and group_nr is not None:
             raise TypeError(":param:`group_nr` must be of type *int* or be "
@@ -266,8 +267,9 @@ class FiredrakeConnection:
                    is returned, or a tuple of integers defining
                    the shape of values in a tensor function space,
                    in which case a tensor function space is returned
-        :return: A :mod:`firedrake` :class:`WithGeometry` which corresponds to
-                 *self.discr.groups[self.group_nr]* of the appropriate vector
+        :return: A :mod:`firedrake`
+                 :class:`~firedrake.functionspaceimpl.WithGeometry` which corresponds
+                 to *self.discr.groups[self.group_nr]* of the appropriate vector
                  dimension
 
         :raises TypeError: If *shape* is of the wrong type
@@ -408,7 +410,7 @@ class FiredrakeConnection:
         :arg out: Either
 
             1. A :class:`~meshmode.dof_array.DOFArray`
-            2. A :class:`np.ndarray` object array, each of whose
+            2. A :class:`numpy.ndarray` object array, each of whose
                entries is a :class:`~meshmode.dof_array.DOFArray`
             3. *None*
 
@@ -418,11 +420,12 @@ class FiredrakeConnection:
             In the case of (2.), the shape of *out* must match
             `function.function_space().shape`.
 
-            In either case, each `DOFArray` must be a `DOFArray`
+            In either case, each :class:`~meshmode.dof_array.DOFArray`
+            must be a :class:`~meshmode.dof_array.DOFArray`
             defined on :attr:`discr` (as described in
             the documentation for :class:`~meshmode.dof_array.DOFArray`).
-            Also, each `DOFArray`'s *entry_dtype* must match the
-            *function.dat.data.dtype*, and be of shape
+            Also, each :class:`~meshmode.dof_array.DOFArray`'s *entry_dtype* must
+            match the *function.dat.data.dtype*, and be of shape
             *(nelements, nunit_dofs)*.
 
             In case (3.), an array is created satisfying
@@ -433,7 +436,7 @@ class FiredrakeConnection:
         :arg actx:
             * If *out* is *None*, then *actx* is a
               :class:`~meshmode.array_context.ArrayContext` on which
-              to create the :class:`DOFArray`
+              to create the :class:`~meshmode.dof_array.DOFArray`
             * If *out* is not *None*, *actx* must be *None* or *out*'s
               *array_context*.
 
@@ -506,12 +509,14 @@ class FiredrakeConnection:
 
             * A :class:`~meshmode.dof_array.DOFArray` representing
               a field of shape *tuple()* on :attr:`discr`
-            * A :class:`numpy.ndarray` of :class:`~meshmode.dof_array.DOFArray`s
+            * A :class:`numpy.ndarray` with
+              entries of class :class:`~meshmode.dof_array.DOFArray`
               representing a field of shape *mm_field.shape*
               on :attr:`discr`
 
             See :class:`~meshmode.dof.DOFArray` for further requirements.
-            The :attr:`group_nr`th entry of each :class:`DOFArray`
+            The :attr:`group_nr` entry of each
+            :class:`~meshmode.dof_array.DOFArray`
             must be of shape *(nelements, nunit_dofs)* and
             the *element_dtype* must match that used for
             :mod:`firedrake` :class:`Function`s
@@ -642,19 +647,21 @@ class FromFiredrakeConnection(FiredrakeConnection):
         """
         :arg actx: A :class:`~meshmode.array_context.ArrayContext`
         :arg fdrake_fspace: A :mod:`firedrake` ``"CG"`` or ``"DG"``
-            function space (of class :class:`WithGeometry`) built on
-            a mesh which is importable by :func:`import_firedrake_mesh`.
+            function space (of class
+            :class:`~firedrake.functionspaceimpl.WithGeometry`) built on
+            a mesh which is importable by
+            :func:`~meshmode.interop.firedrake.mesh.import_firedrake_mesh`.
         :arg grp_factory: (optional) If not *None*, should be
-            a :class:`~meshmode.discretization.ElementGroupFactory`
+            a :class:`~meshmode.discretization.poly_element.ElementGroupFactory`
             whose group class is a subclass of
             :class:`~meshmode.discretization.InterpolatoryElementGroupBase`.
             If *None*, uses
 
             * A :class:`~meshmode.discretization.poly_element.\
-              PolynomialRecursiveNodesGroupFactory` if :mod:`recursivenodes` is
+PolynomialRecursiveNodesGroupFactory` if :mod:`recursivenodes` is
               installed
             * A :class:`~meshmode.discretization.poly_element.\
-              PolynomialWarpAndBlendGroupFactory`
+PolynomialWarpAndBlendGroupFactory`
         """
         # Ensure fdrake_fspace is a function space with appropriate reference
         # element.
@@ -761,8 +768,8 @@ class FromBoundaryFiredrakeConnection(FromFiredrakeConnection):
     least one vertex on the given boundary and allows
     transfer of functions to and from :mod:`firedrake`.
 
-    Use the same bdy_id as one would for a
-    :class:`firedrake.bcs.DirichletBC`.
+    Use the same bdy_id as one would for a :mod:`firedrake`
+    :class:`~firedrake.bcs.DirichletBC` instance.
     ``"on_boundary"`` corresponds to the entire boundary.
 
     .. attribute:: bdy_id
@@ -774,11 +781,11 @@ class FromBoundaryFiredrakeConnection(FromFiredrakeConnection):
     def __init__(self, actx, fdrake_fspace, bdy_id, grp_factory=None):
         """
         :arg bdy_id: A boundary marker of *fdrake_fspace.mesh()* as accepted by
-            the *boundary_nodes* method of a firedrake
-            :class:`firedrake.functionspaceimpl.WithGeometry`.
+            the *boundary_nodes* method of a :mod:`firedrake`
+            :class:`~firedrake.functionspaceimpl.WithGeometry`.
 
         Other arguments are as in
-        :class:`~meshmode.interop.firedrake.FromFiredrakeConnection`.
+        :class:`~meshmode.interop.firedrake.connection.FromFiredrakeConnection`.
         """
         self.bdy_id = bdy_id
         super(FromBoundaryFiredrakeConnection, self).__init__(
@@ -816,10 +823,14 @@ class ToFiredrakeConnection(FiredrakeConnection):
     """
     def __init__(self, discr, group_nr=None, comm=None):
         """
-        :param discr: A :class:`Discretization` to intialize the connection with
+        :param discr: A :class:`~meshmode.discretization.Discretization`
+            to intialize the connection with
         :param group_nr: The group number of the discretization to convert.
             If *None* there must be only one group. The selected group
-            must be of type :class:`InterpolatoryQuadratureSimplexElementGroup`.
+            must be of type
+            :class:`~meshmode.discretization.poly_element.\
+InterpolatoryQuadratureSimplexElementGroup`.
+
         :param comm: Communicator to build a dmplex object on for the created
             firedrake mesh
         """

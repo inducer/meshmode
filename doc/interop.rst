@@ -64,7 +64,7 @@ correspond to other vertices/faces/cells, there are two main difficulties.
 
 (1.) is easily handled by insisting that the :mod:`firedrake`
 :class:`~firedrake.functionspaceimpl.WithGeometry` uses polynomial elements
-and that the group of the :class:`meshmode.discretization.Discretization`
+and that the group of the :class:`~meshmode.discretization.Discretization`
 being converted is a
 :class:`~meshmode.discretization.poly_element.InterpolatoryQuadratureSimplexElementGroup`
 of the same order. Then, on each element, the function space being
@@ -135,7 +135,7 @@ the reordering if converting function values
 from :mod:`meshmode` to :mod:`firedrake`). The
 information for this whole reordering process is
 stored in
-:attr:`~meshmode.interop.firedrake.FiredrakeConnection.mm2fd_node_mapping`,
+:attr:`~meshmode.interop.firedrake.connection.FiredrakeConnection.mm2fd_node_mapping`,
 an array which associates each :mod:`meshmode` node
 to the :mod:`firedrake` node found by tracing the
 above diagram (i.e. it stores
@@ -177,14 +177,14 @@ roughly as so:
     :class:`~firedrake.mesh.MeshTopology` to some values.
     Note that the function :func:`~firedrake.functionspace.FunctionSpace`
     in the firedrake API is used to create objects of class
-    :class:`~firedrake.functionspaceimpl.FunctionSpace` s
+    :class:`~firedrake.functionspaceimpl.FunctionSpace`
     and :class:`~firedrake.functionspaceimpl.WithGeometry` (see
     (6)).
 
 (4) A :class:`~firedrake.function.CoordinatelessFunction`
     (in the sense that its *domain* has no coordinates)
     which is a function in a
-    :class:`~firedrake.functionspaceimpl.FunctionSpace`
+    :class:`~firedrake.functionspaceimpl.FunctionSpace`.
 
 (5) A :class:`~firedrake.mesh.MeshGeometry` created from a
     :class:`~firedrake.functionspaceimpl.FunctionSpace`
@@ -201,12 +201,12 @@ roughly as so:
     :func:`~firedrake.functionspace.FunctionSpace`.
 
 (7) A :class:`~firedrake.function.Function` is defined on a
-    :class:`~firedrake.functionspaceimpl.WithGeometry`
+    :class:`~firedrake.functionspaceimpl.WithGeometry`.
 
 Thus, by the coordinates of a mesh geometry we mean
 
 (a) On the hidden back-end: a :class:`~firedrake.function.CoordinatelessFunction`
-    *f* on some function space defined only on the mesh topology
+    *f* on some function space defined only on the mesh topology.
 (b) On the front-end: A :class:`~firedrake.function.Function`
     with the values of *f* but defined
     on a :class:`~firedrake.functionspaceimpl.WithGeometry`
