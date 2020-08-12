@@ -158,7 +158,7 @@ on some function space on the mesh... etc.
 Under the hood, we divide between topological and geometric objects,
 roughly as so:
 
-(1) A reference element defined using :mod:`FInAT` and :mod:`fiat`
+(1) A reference element defined using :mod:`FInAT` and :mod:`FIAT`
     is used to define what meshmode calls the unit nodes and unit
     vertices. It is worth noting that :mod:`firedrake` does
     not require a positive orientation of elements and that its

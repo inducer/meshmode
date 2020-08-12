@@ -284,4 +284,5 @@ intersphinx_mapping = {
     'https://documen.tician.de/loopy': None,
     'https://firedrakeproject.org/': None,
     'https://tisaac.gitlab.io/recursivenodes/': None,
+    'https://fenics.readthedocs.io/projects/fiat/en/latest/': None,
 }
