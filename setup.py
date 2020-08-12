@@ -48,10 +48,8 @@ def main():
               "pytools>=2020.3",
               "pytest>=2.3",
               "loo.py>=2014.1",
+              "recursivenodes",
               ],
-          extras_require={
-              'recursivenodes':  ["recursivenodes"],
-              },
           )
 
 
