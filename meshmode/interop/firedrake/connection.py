@@ -441,15 +441,16 @@ class FiredrakeConnection:
         if out is not None:
             self._validate_field(out, "out", fspace_shape, function_data.dtype)
             # If out is supplied, check type, shape, and dtype
-            assert actx in (None, out.array_context), \
-                "If :param:`out` is not *None*, :param:`actx` must be" \
-                " *None* or *out.array_context*"
+            if actx not in (None, out.array_context):
+                raise ValueError("If 'out' is not *None*, 'actx' must be"
+                                 " *None* or 'out.array_context'")
         else:
-            # If `out` is not supplied, create it
+            # If 'out' is not supplied, create it
             from meshmode.array_context import ArrayContext
-            assert isinstance(actx, ArrayContext), "If :arg:`out` is *None*, " \
-                ":arg:`actx` must be of type ArrayContext, not %s." % type(actx)
-            if fspace_shape == tuple():
+            if not isinstance(actx, ArrayContext):
+                raise TypeError("If 'out' is *None*, 'actx' must be of type "
+                                "ArrayContext, not '%s'." % type(actx))
+            if fspace_shape == ():
                 out = self.discr.zeros(actx, dtype=function_data.dtype)
             else:
                 out = np.ndarray(fspace_shape, dtype=np.object)
@@ -822,8 +823,9 @@ InterpolatoryQuadratureSimplexElementGroup`.
             firedrake mesh
         """
         if group_nr is None:
-            assert len(discr.groups) == 1, ":arg:`group_nr` is *None*, but " \
-                    ":arg:`discr` has %s != 1 groups." % len(discr.groups)
+            if len(discr.groups) != 1:
+                raise ValueError("'group_nr' is *None*, but 'discr' has '%s' "
+                                 "!= 1 groups." % len(discr.groups))
             group_nr = 0
         el_group = discr.groups[group_nr]
 
