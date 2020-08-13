@@ -528,12 +528,12 @@ FromBoundaryFiredrakeConnection`.
     # Type validation
     from firedrake.mesh import MeshGeometry
     if not isinstance(fdrake_mesh, MeshGeometry):
-        raise TypeError(":arg:`fdrake_mesh_topology` must be a "
-                        ":mod:`firedrake` :class:`MeshGeometry`, "
-                        "not %s." % type(fdrake_mesh))
+        raise TypeError("'fdrake_mesh_topology' must be an instance of "
+                        "firedrake.mesh.MeshGeometry, "
+                        "not '%s'." % type(fdrake_mesh))
     if cells_to_use is not None:
         if not isinstance(cells_to_use, np.ndarray):
-            raise TypeError(":arg:`cells_to_use` must be a np.ndarray or "
+            raise TypeError("'cells_to_use' must be a np.ndarray or "
                             "*None*")
         assert len(cells_to_use.shape) == 1
         assert np.size(np.unique(cells_to_use)) == np.size(cells_to_use), \
@@ -745,27 +745,27 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
         :mod:`meshmode` allows many.
     """
     if not isinstance(mesh, Mesh):
-        raise TypeError(":arg:`mesh` must of type :class:`meshmode.mesh.Mesh`,"
-                        " not %s." % type(mesh))
+        raise TypeError("'mesh' must of type meshmode.mesh.Mesh,"
+                        " not '%s'." % type(mesh))
     if group_nr is None:
         if len(mesh.groups) != 1:
-            raise ValueError(":arg:`group_nr` is *None* but :arg:`mesh` has "
+            raise ValueError("'group_nr' is *None* but 'mesh' has "
                              "more than one group.")
         group_nr = 0
     if not isinstance(group_nr, int):
-        raise TypeError("Expecting :arg:`group_nr` to be of type *int*, not "
-                        f"{type(group_nr)}")
+        raise TypeError("Expecting 'group_nr' to be of type int, not "
+                        f"'{type(group_nr)}'")
     if group_nr < 0 or group_nr >= len(mesh.groups):
-        raise ValueError(":arg:`group_nr` is an invalid group index:"
-                         f" {group_nr} fails to satisfy "
+        raise ValueError("'group_nr' is an invalid group index:"
+                         f" '{group_nr}' fails to satisfy "
                          f"0 <= {group_nr} < {len(mesh.groups)}")
     if not isinstance(mesh.groups[group_nr], SimplexElementGroup):
-        raise TypeError("Expecting *mesh.groups[group_nr] to be of type "
-                        ":class:`meshmode.mesh.SimplexElementGroup`, not "
-                        f"{type(mesh.groups[group_nr])}")
+        raise TypeError("Expecting 'mesh.groups[group_nr]' to be of type "
+                        "meshmode.mesh.SimplexElementGroup, not "
+                        f"'{type(mesh.groups[group_nr])}'")
     if mesh.vertices is None:
-        raise ValueError(":arg:`mesh` has no vertices "
-                         "(*mesh.vertices* is *None*)")
+        raise ValueError("'mesh' has no vertices "
+                         "('mesh.vertices' is *None*)")
 
     # Get the vertices and vertex indices of the requested group
     group = mesh.groups[group_nr]

@@ -151,53 +151,53 @@ class FiredrakeConnection:
         """
         # {{{ Validate input
         if not isinstance(discr, Discretization):
-            raise TypeError(":param:`discr` must be of type "
-                            ":class:`~meshmode.discretization.Discretization`, "
-                            "not :class:`%s`." % type(discr))
+            raise TypeError("'discr' must be of type "
+                            "meshmode.discretization.Discretization, "
+                            "not '%s'`." % type(discr))
         from firedrake.functionspaceimpl import WithGeometry
         if not isinstance(fdrake_fspace, WithGeometry):
-            raise TypeError(":param:`fdrake_fspace` must be of type "
-                            ":class:`firedrake.functionspaceimpl.WithGeometry`, "
-                            "not :class:`%s`." % type(fdrake_fspace))
+            raise TypeError("'fdrake_fspace' must be of type "
+                            "firedrake.functionspaceimpl.WithGeometry, "
+                            "not '%s'." % type(fdrake_fspace))
         if not isinstance(mm2fd_node_mapping, np.ndarray):
-            raise TypeError(":param:`mm2fd_node_mapping` must be of type "
-                            ":class:`numpy.ndarray`, "
-                            "not :class:`%s`." % type(mm2fd_node_mapping))
+            raise TypeError("'mm2fd_node_mapping' must be of type "
+                            "numpy.ndarray, "
+                            "not '%s'." % type(mm2fd_node_mapping))
         if not isinstance(group_nr, int) and group_nr is not None:
-            raise TypeError(":param:`group_nr` must be of type *int* or be "
-                            "*None*, not of type %s." % type(group_nr))
+            raise TypeError("'group_nr' must be of type int or be "
+                            "*None*, not of type '%s'." % type(group_nr))
         # Convert group_nr to an integer if *None*
         if group_nr is None:
             if len(discr.groups) != 1:
-                raise ValueError(":param:`group_nr` is *None* but :param:`discr` "
-                                 "has %s != 1 groups." % len(discr.groups))
+                raise ValueError("'group_nr' is *None* but 'discr' "
+                                 "has '%s' != 1 groups." % len(discr.groups))
             group_nr = 0
         # store element_grp as variable for convenience
         element_grp = discr.groups[group_nr]
 
         if group_nr < 0 or group_nr >= len(discr.groups):
-            raise ValueError(":param:`group_nr` has value %s, which an invalid "
-                             "index into list *discr.groups* of length %s."
+            raise ValueError("'group_nr' has value '%s', which an invalid "
+                             "index into list 'discr.groups' of length '%s'."
                              % (group_nr, len(discr.groups)))
         if not isinstance(element_grp, InterpolatoryElementGroupBase):
-            raise TypeError("*discr.groups[group_nr]* must be of type "
-                            ":class:`InterpolatoryElementGroupBase`"
-                            ", not :class:`%s`." % type(element_grp))
+            raise TypeError("'discr.groups[group_nr]' must be of type "
+                            "InterpolatoryElementGroupBase"
+                            ", not '%s'." % type(element_grp))
         allowed_families = ('Discontinuous Lagrange', 'Lagrange')
         if fdrake_fspace.ufl_element().family() not in allowed_families:
-            raise TypeError(":param:`fdrake_fspace` must have ufl family "
-                           "be one of %s, not %s."
+            raise TypeError("'fdrake_fspace' must have ufl family "
+                           "be one of %s, not '%s'."
                             % (allowed_families,
                                fdrake_fspace.ufl_element().family()))
         if mm2fd_node_mapping.shape != (element_grp.nelements,
                                         element_grp.nunit_dofs):
-            raise ValueError(":param:`mm2fd_node_mapping` must be of shape ",
-                             "(%s,), not %s"
+            raise ValueError("'mm2fd_node_mapping' must be of shape ",
+                             "(%s,), not '%s'"
                              % ((discr.groups[group_nr].ndofs,),
                                 mm2fd_node_mapping.shape))
         if mm2fd_node_mapping.dtype != fdrake_fspace.cell_node_list.dtype:
-            raise ValueError(":param:`mm2fd_node_mapping` must have dtype "
-                             "%s, not %s" % (fdrake_fspace.cell_node_list.dtype,
+            raise ValueError("'mm2fd_node_mapping' must have dtype "
+                             "%s, not '%s'" % (fdrake_fspace.cell_node_list.dtype,
                                              mm2fd_node_mapping.dtype))
         # }}}
 
@@ -300,8 +300,8 @@ class FiredrakeConnection:
                                         degree=self._ufl_element.degree(),
                                         shape=shape)
             else:
-                raise TypeError(":param:`shape` must be *None*, an integer, "
-                                " or a tuple of integers, not of type %s."
+                raise TypeError("'shape' must be *None*, an integer, "
+                                " or a tuple of integers, not of type '%s'."
                                 % type(shape))
         return self._fspace_cache[shape]
 
@@ -316,27 +316,27 @@ class FiredrakeConnection:
         # Validate that *function* is convertible
         from firedrake.function import Function
         if not isinstance(function, Function):
-            raise TypeError(function_name + " must be a :mod:`firedrake` "
-                            "Function")
+            raise TypeError(f"'{function_name} must be a firedrake Function"
+                            f" but is of unexpected type '{type(function)}'")
         ufl_elt = function.function_space().ufl_element()
         if ufl_elt.family() != self._ufl_element.family():
-            raise ValueError(function_name + "'s function_space's ufl element"
-                             " must have family %s, not %s"
-                             % (self._ufl_element.family(), ufl_elt.family()))
+            raise ValueError(f"'{function_name}.function_space().ufl_element()"
+                             f".family()' must be {self._ufl_element.family()}"
+                             f", not '{type(ufl_elt.family())}'")
         if ufl_elt.degree() != self._ufl_element.degree():
-            raise ValueError(function_name + "'s function_space's ufl element"
-                             " must have degree %s, not %s"
-                             % (self._ufl_element.degree(), ufl_elt.degree()))
+            raise ValueError(f"'{function_name}.function_space().ufl_element()"
+                             f".degree()' must be {self._ufl_element.degree()}"
+                             f", not '{ufl_elt.degree()}'")
         if function.function_space().mesh() is not self._mesh_geometry:
-            raise ValueError(function_name + "'s mesh must be the same as "
-                            "`self.from_fspace().mesh()``")
+            raise ValueError(f"'{function_name}.function_space().mesh()' must"
+                             " be the same mesh used by this connection")
         if dtype is not None and function.dat.data.dtype != dtype:
-            raise ValueError(function_name + ".dat.dtype must be %s, not %s."
-                             % (dtype, function.dat.data.dtype))
+            raise ValueError(f"'{function_name}.dat.dtype' must be "
+                             f"{dtype}, not '{function.dat.data.dtype}'")
         if shape is not None and function.function_space().shape != shape:
-            raise ValueError(function_name + ".function_space().shape must be "
-                             "%s, not %s" % (shape,
-                                             function.function_space().shape))
+            raise ValueError("'{function_name}.function_space().shape' must be"
+                             " {shape}, not '{function.function_space().shape}"
+                             "'")
 
     def _validate_field(self, field, field_name, shape=None, dtype=None):
         """
@@ -351,23 +351,23 @@ class FiredrakeConnection:
 
         def check_dof_array(arr, arr_name):
             if not isinstance(arr, DOFArray):
-                raise TypeError(arr_name + " must be of type "
-                                ":class:`~meshmode.dof_array.DOFArray`, "
-                                "not :class:`%s`." % type(arr))
+                raise TypeError(f"'{arr_name}' must be of type "
+                                f"meshmode.dof_array.DOFArray, not "
+                                f"{type(arr)}")
             if arr.array_context is None:
-                raise ValueError(arr_name + " must have a non-*None* "
+                raise ValueError(f"'{arr_name}' must have a non-*None* "
                                  "array_context")
             if arr.shape != tuple([len(self.discr.groups)]):
-                raise ValueError(arr_name + " shape must be %s, not %s."
-                                 % (tuple([len(self.discr.groups)]), arr.shape))
+                raise ValueError(f"'{arr_name}' shape must be "
+                                 f"{tuple([len(self.discr.groups)])}, not "
+                                 f"'{arr.shape}'")
             if arr[self.group_nr].shape != group_shape:
-                raise ValueError(arr_name + "[%s].shape must be %s, not %s"
-                                 % (self.group_nr,
-                                    group_shape,
-                                    arr[self.group_nr].shape))
+                raise ValueError(f"'{arr_name}[{self.group_nr}].shape' must be"
+                                 f" {group_shape}, not "
+                                 f"'{arr[self.group_nr].shape}'")
             if dtype is not None and arr.entry_dtype != dtype:
-                raise ValueError(arr_name + ".entry_dtype must be %s, not %s."
-                                 % (dtype, arr.entry_dtype))
+                raise ValueError(f"'{arr_name}.entry_dtype' must be {dtype},"
+                                 f" not '{arr.entry_dtype}'")
 
         if isinstance(field, DOFArray):
             if shape is not None and shape != ():
@@ -376,26 +376,25 @@ class FiredrakeConnection:
             check_dof_array(field, field_name)
         elif isinstance(field, np.ndarray):
             if shape is not None and field.shape != shape:
-                raise ValueError(field_name + ".shape must be %s, not %s"
-                                 % (shape, field.shape))
+                raise ValueError(f"'{field_name}.shape' must be {shape}, not "
+                                 f"'{field.shape}'")
             for i, arr in enumerate(field.flatten()):
                 arr_name = "%s[%s]" % (field_name, np.unravel_index(i, field.shape))
                 try:
                     check_dof_array(arr, arr_name)
-                except TypeError as e:
-                    msg = e.args[0]
-                    prefix = "%s is a numpy array of shape %s, which is " \
-                        "interpreted as a mapping into a space of shape " \
-                        "%s. For each multi-index *mi*, the " \
-                        "*mi*th coordinate values of %s should be " \
-                        "represented as a DOFArray stored in %s[mi]. If you " \
-                        "are not trying to represent a mapping into a space " \
-                        "of shape %s, look at the documentation for " \
-                        "FiredrakeConnection.from_meshmode or " \
+                except TypeError as type_err:
+                    msg = type_err.args[0]
+                    prefix = f"{field_name} is a numpy array of shape " \
+                        f"{field.shape}, which is interpreted as a mapping" \
+                        f" into a space of sahpe {field.shape}. For each " \
+                        " multi-index *mi*, the *mi*th coordinate values " \
+                        f" of {field_name} should be represented as a " \
+                        f"DOFArray stored in {field_name}[mi]. If you are " \
+                        " not trying to represent a mapping into a space of " \
+                        f" shape {field.shape}, look at the documentation " \
+                        " for FiredrakeConnection.from_meshmode or " \
                         "FiredrakeConnection.from_firedrake to see how " \
-                        "fields in a discretization are represented." \
-                        % (field_name, field.shape, field.shape, field_name,
-                           field_name, field.shape)
+                        "fields in a discretization are represented."
                     raise TypeError(prefix + "\n" + msg)
         else:
             raise TypeError("field must be of type DOFArray or a numpy object array "
@@ -548,7 +547,7 @@ class FiredrakeConnection:
         if self._ufl_element.family() == 'Lagrange' \
                 and assert_fdrake_discontinuous:
             raise ValueError("Trying to convert to continuous function space "
-                             " with :arg:`assert_fdrake_discontinuous` set "
+                             " with 'assert_fdrake_discontinuous' set "
                              " to *True*")
         # All firedrake functions are the same dtype
         dtype = self.firedrake_fspace().mesh().coordinates.dat.data.dtype
@@ -609,7 +608,7 @@ class FiredrakeConnection:
                         raise ValueError("Meshmode nodes %s (written as "
                                          " *(element index, local node index)*)"
                                          " represent the same firedrake node %s"
-                                         ", but :arg:`mm_field`'s resampled "
+                                         ", but 'mm_field's resampled "
                                          " values are %s > %s apart)"
                                          % (mm_equiv_class, fd_inode,
                                             l_inf, continuity_tolerance))
@@ -667,32 +666,30 @@ PolynomialWarpAndBlendGroupFactory`
         # element.
         from firedrake.functionspaceimpl import WithGeometry
         if not isinstance(fdrake_fspace, WithGeometry):
-            raise TypeError(":arg:`fdrake_fspace` must be of firedrake type "
-                            ":class:`WithGeometry`, not `%s`."
+            raise TypeError("'fdrake_fspace' must be of firedrake type "
+                            "WithGeometry, not '%s'."
                             % type(fdrake_fspace))
         ufl_elt = fdrake_fspace.ufl_element()
 
         if ufl_elt.family() not in ('Lagrange', 'Discontinuous Lagrange'):
-            raise ValueError("the ``ufl_element().family()`` of "
-                             ":arg:`fdrake_fspace` must "
-                             "be ``'Lagrange'`` or "
-                             "``'Discontinuous Lagrange'``, not %s."
+            raise ValueError("the 'fdrake_fspace.ufl_element().family()' of "
+                             "must be be 'Lagrange' or "
+                             "'Discontinuous Lagrange', not '%s'."
                              % ufl_elt.family())
         # Make sure grp_factory is the right type if provided, and
         # uses an interpolatory class.
         if grp_factory is not None:
             if not isinstance(grp_factory, ElementGroupFactory):
-                raise TypeError(":arg:`grp_factory` must inherit from "
-                                ":class:`meshmode.discretization."
-                                "ElementGroupFactory`, but is instead of type "
-                                "%s." % type(grp_factory))
+                raise TypeError("'grp_factory' must inherit from "
+                                "meshmode.discretization.ElementGroupFactory,"
+                                "but is instead of type "
+                                "'%s'." % type(grp_factory))
                 if not issubclass(grp_factory.group_class,
                                   InterpolatoryElementGroupBase):
-                    raise TypeError(":arg:`grp_factory` must use a *group_class"
-                                    "* which inherits from"
-                                    ":class:`meshmode.discretization."
-                                    "InterpolatoryElementGroupBase, but instead uses"
-                                    " *group_class* of type %s."
+                    raise TypeError("'grp_factory.group_class' must inherit from"
+                                    "meshmode.discretization."
+                                    "InterpolatoryElementGroupBase, but"
+                                    " is instead of type '%s'"
                                     % type(grp_factory.group_class))
         # If not provided, make one
         else:

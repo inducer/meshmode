@@ -55,13 +55,13 @@ def get_affine_reference_simplex_mapping(ambient_dim, firedrake_to_meshmode=True
     """
     # validate input
     if not isinstance(ambient_dim, int):
-        raise TypeError(":arg:`ambient_dim` must be of type *int*, not "
-                        f"{type(ambient_dim)}")
+        raise TypeError("'ambient_dim' must be an int, not "
+                        f"'{type(ambient_dim)}'")
     if ambient_dim < 0:
-        raise ValueError(":arg:`ambient_dim` must be non-negative")
+        raise ValueError("'ambient_dim' must be non-negative")
     if not isinstance(firedrake_to_meshmode, bool):
-        raise TypeError(":arg:`firedrake_to_meshmode` must be of type *bool*, not "
-                        f"{type(firedrake_to_meshmode)}")
+        raise TypeError("'firedrake_to_meshmode' must be a bool, not "
+                        f"'{type(firedrake_to_meshmode)}'")
 
     from FIAT.reference_element import ufc_simplex
     from modepy.tools import unit_vertices
@@ -130,9 +130,9 @@ def get_finat_element_unit_nodes(finat_element):
     from FIAT.reference_element import Simplex
     if not isinstance(finat_element.cell, Simplex):
         raise TypeError("Reference element of the finat element MUST be a"
-                        " simplex, i.e. :arg:`finat_element`'s *cell* attribute must"
-                        " be of type :class:`FIAT.reference_element.Simplex`, not "
-                        f"{type(finat_element.cell)}")
+                        " simplex, i.e. 'finat_element's *cell* attribute must"
+                        " be of type FIAT.reference_element.Simplex, not "
+                        f"'{type(finat_element.cell)}'")
     # point evaluators is a list of functions *p_0,...,p_{n-1}*.
     # *p_i(f)* evaluates function *f* at node *i* (stored as a tuple),
     # so to recover node *i* we need to evaluate *p_i* at the identity
