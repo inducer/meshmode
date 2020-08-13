@@ -462,9 +462,10 @@ class FiredrakeConnection:
             # put the firedrake data in meshmode order and then resample,
             # storing in dof_array
             dof_array[self.group_nr].set(
-                    np.matmul(fd_data[self.mm2fd_node_mapping],
-                              self._resampling_mat_fd2mm.T)
-                    )
+                np.einsum("ij,kj->ik",
+                          fd_data[self.mm2fd_node_mapping],
+                          self._resampling_mat_fd2mm)
+                )
 
         # If scalar, just reorder and resample out
         if fspace_shape == ():
