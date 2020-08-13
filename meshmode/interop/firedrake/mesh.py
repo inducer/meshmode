@@ -799,9 +799,19 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     # Firedrake goes crazy reordering local vertex numbers,
     # we've got to work to figure out what changes they made.
     #
-    # *perm2cells* will map each permutation of local vertex numbers to
-    #              a list of the meshmode cells to which that permutation
-    #              has been applied
+    # *perm2cells* will map permutations of local vertex numbers to
+    #              the list of all the meshmode cells
+    #              which firedrake reordered according to that permutation
+    #
+    #              Permutations on *n* vertices are stored as a tuple
+    #              containing all of the integers *0*, *1*, *2*, ..., *n-1*
+    #              exactly once. A permutation *p*
+    #              represents relabeling the *i*th local vertex
+    #              of a meshmode element as the *p[i]*th local vertex
+    #              in the corresponding firedrake cell.
+    #
+    #              *perm2cells[p]* is a list of all the meshmode element indices
+    #              for which *p* represents the reordering applied by firedrake
     perm2cells = {}
     for mm_cell_id, dmp_ids in enumerate(top.cell_closure[cell_index_mm2fd]):
         # look at order of vertices in firedrake cell
@@ -822,6 +832,8 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
         perm = tuple(np.argsort(mm_order)[np.argsort(np.argsort(fdrake_order))])
         perm2cells.setdefault(perm, [])
         perm2cells[perm].append(mm_cell_id)
+
+    # Make perm2cells map to numpy arrays instead of lists
     perm2cells = {perm: np.array(cells)
                   for perm, cells in perm2cells.items()}
 
