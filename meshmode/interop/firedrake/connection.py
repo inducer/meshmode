@@ -374,12 +374,12 @@ class FiredrakeConnection:
                     check_dof_array(arr, arr_name)
                 except TypeError as type_err:
                     msg = type_err.args[0]
-                    prefix = f"{field_name} is a numpy array of shape " \
+                    prefix = f"'{field_name}' is a numpy array of shape " \
                         f"{field.shape}, which is interpreted as a mapping" \
                         f" into a space of sahpe {field.shape}. For each " \
                         " multi-index *mi*, the *mi*th coordinate values " \
-                        f" of {field_name} should be represented as a " \
-                        f"DOFArray stored in {field_name}[mi]. If you are " \
+                        f" of '{field_name}' should be represented as a " \
+                        f"DOFArray stored in '{field_name}[mi]'. If you are " \
                         " not trying to represent a mapping into a space of " \
                         f" shape {field.shape}, look at the documentation " \
                         " for FiredrakeConnection.from_meshmode or " \
