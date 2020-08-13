@@ -128,7 +128,7 @@ class FiredrakeConnection:
     def __init__(self, discr, fdrake_fspace, mm2fd_node_mapping, group_nr=None):
         """
         :param discr: A :class:`meshmode.discretization.Discretization`
-        :param fdrake_fspace: A :mod:`firedrake`
+        :param fdrake_fspace: A
             :class:`firedrake.functionspaceimpl.WithGeometry`.
             Must have ufl family ``'Lagrange'`` or
             ``'Discontinuous Lagrange'``.
@@ -268,10 +268,9 @@ class FiredrakeConnection:
                    is returned, or a tuple of integers defining
                    the shape of values in a tensor function space,
                    in which case a tensor function space is returned
-        :return: A :mod:`firedrake`
-                 :class:`~firedrake.functionspaceimpl.WithGeometry` which corresponds
-                 to *self.discr.groups[self.group_nr]* of the appropriate vector
-                 dimension
+        :return: A :class:`firedrake.functionspaceimpl.WithGeometry` which
+                corresponds to *self.discr.groups[self.group_nr]* of the appropriate
+                vector dimension
 
         :raises TypeError: If *shape* is of the wrong type
         """
@@ -404,7 +403,7 @@ class FiredrakeConnection:
         """
         Transport firedrake function onto :attr:`discr`
 
-        :arg function: A :mod:`firedrake` function to transfer onto
+        :arg function: A :class:`firedrake.function.Function` to transfer onto
             :attr:`discr`. Its function space must have
             the same family, degree, and mesh as ``self.from_fspace()``.
         :arg out: Either
@@ -519,10 +518,11 @@ class FiredrakeConnection:
             :class:`~meshmode.dof_array.DOFArray`
             must be of shape *(nelements, nunit_dofs)* and
             the *element_dtype* must match that used for
-            :mod:`firedrake` :class:`Function`\ s
+            :class:`firedrake.function.Function`\ s
 
-        :arg out: If *None* then ignored, otherwise a :mod:`firedrake`
-            function of the right function space for the transported data
+        :arg out: If *None* then ignored, otherwise a
+            :class:`firedrake.function.Function`
+            of the right function space for the transported data
             to be stored in. The shape of its function space must
             match the shape of *mm_field*
 
@@ -541,7 +541,7 @@ class FiredrakeConnection:
             apart. If *None*, no checks are performed. Does nothing if
             the firedrake function space is discontinuous
 
-        :return: a :mod:`firedrake` :class:`Function` holding the transported
+        :return: a :class:`firedrake.function.Function` holding the transported
             data (*out*, if *out* was not *None*)
         """
         if self._ufl_element.family() == 'Lagrange' \
@@ -764,8 +764,8 @@ class FromBoundaryFiredrakeConnection(FromFiredrakeConnection):
     least one vertex on the given boundary and allows
     transfer of functions to and from :mod:`firedrake`.
 
-    Use the same bdy_id as one would for a :mod:`firedrake`
-    :class:`~firedrake.bcs.DirichletBC` instance.
+    Use the same bdy_id as one would for a
+    :class:`firedrake.bcs.DirichletBC` instance.
     ``"on_boundary"`` corresponds to the entire boundary.
 
     .. attribute:: bdy_id
@@ -777,8 +777,8 @@ class FromBoundaryFiredrakeConnection(FromFiredrakeConnection):
     def __init__(self, actx, fdrake_fspace, bdy_id, grp_factory=None):
         """
         :arg bdy_id: A boundary marker of *fdrake_fspace.mesh()* as accepted by
-            the *boundary_nodes* method of a :mod:`firedrake`
-            :class:`~firedrake.functionspaceimpl.WithGeometry`.
+            the *boundary_nodes* method of a
+            :class:`firedrake.functionspaceimpl.WithGeometry`.
 
         Other arguments are as in
         :class:`~meshmode.interop.firedrake.connection.FromFiredrakeConnection`.
@@ -810,7 +810,7 @@ class FromBoundaryFiredrakeConnection(FromFiredrakeConnection):
 
 class ToFiredrakeConnection(FiredrakeConnection):
     """
-    Create a connection from a firedrake discretization
+    Create a connection from a meshmode discretization
     into firedrake. Create a corresponding "DG" function
     space and allow for conversion back and forth
     by resampling at the nodes.
