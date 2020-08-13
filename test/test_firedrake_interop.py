@@ -396,9 +396,7 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(queue)
 
-    # Get each refinements of the meshmeshes, do conversions,
-    # and record errors
-    for mesh_par in fdrake_mesh_pars:
+    def get_fdrake_mesh_and_h_from_par(mesh_par):
         if fdrake_mesh_name == "UnitInterval":
             assert dim == 1
             n = mesh_par
@@ -436,6 +434,11 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
         else:
             raise ValueError("fdrake_mesh_name not recognized")
 
+        return (fdrake_mesh, h)
+
+    # Record error for each refinement of each mesh
+    for mesh_par in fdrake_mesh_pars:
+        fdrake_mesh, h = get_fdrake_mesh_and_h_from_par(mesh_par)
         # make function space and build connection
         fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fspace_degree)
         if only_convert_bdy:
