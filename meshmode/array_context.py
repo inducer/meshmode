@@ -250,7 +250,13 @@ class PyOpenCLArrayContext(ArrayContext):
         super().__init__()
         self.context = queue.context
         self.queue = queue
-        self.allocator = allocator
+        self.allocator = allocator if allocator else None
+        if allocator == None:
+            from warnings import warn
+            warn("PyOpenCLArrayContext created without an allocator. "
+                 "This can lead to high numbers of memory allocations. "
+                 "Please consider using a pyopencl.tools.MemoryPool. "
+                 "Run with allocator=False to disable this warning.")
 
     def _get_fake_numpy_namespace(self):
         return _PyOpenCLFakeNumpyNamespace(self)
