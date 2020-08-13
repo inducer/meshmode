@@ -478,7 +478,7 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
               % (fd2mm, d), eoc_rec)
         assert (
             eoc_rec.order_estimate() >= fspace_degree
-            or eoc_rec.max_error() < 1e-14)
+            or eoc_rec.max_error() < 2e-14)
 
 
 @pytest.mark.parametrize("mesh_name,mesh_pars,dim",
