@@ -243,7 +243,7 @@ class FiredrakeConnection:
         self._mm_node_equiv_classes = [tuple(equiv_class) for equiv_class
                                        in fd_to_dupes.values()]
 
-                # }}}
+        # }}}
 
         # Store input
         self.discr = discr
@@ -398,8 +398,8 @@ class FiredrakeConnection:
                            field_name, field.shape)
                     raise TypeError(prefix + "\n" + msg)
         else:
-            raise TypeError("field must be of type DOFArray or a numpy object array of those",
-                            "not %s." % type(field))
+            raise TypeError("field must be of type DOFArray or a numpy object array "
+                            "of those not %s." % type(field))
 
     def from_firedrake(self, function, out=None, actx=None):
         """
