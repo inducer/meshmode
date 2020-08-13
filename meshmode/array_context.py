@@ -244,6 +244,11 @@ class PyOpenCLArrayContext(ArrayContext):
         A :class:`pyopencl.CommandQueue`.
 
     .. attribute:: allocator
+        A PyOpenCL memory allocator. Can also be `None` (default) or `False` to
+        use the default allocator. Please note that running with the default
+        allocator will cause large numbers of memory allocations, and will
+        print a warning at runtime. Specify `False` to avoid the warning.
+        Please consider using a pyopencl.tools.MemoryPool.
     """
 
     def __init__(self, queue, allocator=None):
