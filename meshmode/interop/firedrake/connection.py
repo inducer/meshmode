@@ -451,12 +451,12 @@ class FiredrakeConnection:
                 raise TypeError("If 'out' is *None*, 'actx' must be of type "
                                 "ArrayContext, not '%s'." % type(actx))
             if fspace_shape == ():
-                out = self.discr.zeros(actx, dtype=function_data.dtype)
+                out = self.discr.empty(actx, dtype=function_data.dtype)
             else:
                 out = np.ndarray(fspace_shape, dtype=np.object)
                 for multi_index in np.ndindex(fspace_shape):
                     out[multi_index] = \
-                        self.discr.zeros(actx, dtype=function_data.dtype)
+                        self.discr.empty(actx, dtype=function_data.dtype)
 
         def reorder_and_resample(dof_array, fd_data):
             # put the firedrake data in meshmode order and then resample,
