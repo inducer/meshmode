@@ -366,12 +366,12 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
     """
     Return the orientations of the mesh elements:
 
-    :arg fdrake_mesh: A :mod:`firedrake` instance of :class:`MeshGeometry`
+    :arg fdrake_mesh: As described in :func:`import_firedrake_mesh`
     :arg unflipped_group: A :class:`SimplexElementGroup` instance with
         (potentially) some negatively oriented elements.
     :arg vertices: The vertex coordinates as a numpy array of shape
         *(ambient_dim, nvertices)* (the vertices of *unflipped_group*)
-    :arg normals: As described in the kwargs of :func:`import_firedrake_mesh`
+    :arg normals: As described in :func:`import_firedrake_mesh`
     :arg no_normals_warn: As described in :func:`import_firedrake_mesh`
     :arg cells_to_use: If *None*, then ignored. Otherwise, a numpy array
         of unique firedrake cell indices indicating which cells to use.
@@ -388,15 +388,19 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
 
     orient = None
     if gdim == tdim:
-        # We use :mod:`meshmode` to check our orientations
+        # If the co-dimension is 0, :mod:`meshmode` has a convenient
+        # function to compute cell orientations
         from meshmode.mesh.processing import \
             find_volume_mesh_element_group_orientation
 
         orient = find_volume_mesh_element_group_orientation(vertices,
                                                             unflipped_group)
 
-    if tdim == 1 and gdim == 2:
-        # In this case we have a 1-surface embedded in 2-space
+    elif tdim == 1 and gdim == 2:
+        # In this case we have a 1-surface embedded in 2-space.
+        # Firedrake does not provide any convenient way of
+        # letting the user set cell orientations in this case, so we
+        # have to ask the user for cell normals directly.
         if cells_to_use is None:
             num_cells = fdrake_mesh.num_cells()
         else:
@@ -412,7 +416,14 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
             warn("Assuming all elements are positively-oriented.")
 
     elif tdim == 2 and gdim == 3:
-        # In this case we have a 2-surface embedded in 3-space
+        # In this case we have a 2-surface embedded in 3-space.
+        # In this case, we assume the user has called
+        # :func:`firedrake.mesh.MeshGeometry.init_cell_orientations`, see
+        # https://www.firedrakeproject.org/variational-problems.html#ensuring-consistent-cell-orientations  # noqa : E501
+        # for a tutorial on how these are usually initialized.
+        #
+        # Unfortunately, *init_cell_orientations* is currently only implemented
+        # in 3D, so we can't use this in the 1/2 case.
         orient = fdrake_mesh.cell_orientations().dat.data
         if cells_to_use is not None:
             orient = orient[cells_to_use]
@@ -422,9 +433,9 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
         """
         orient *= 2
         orient -= 1
-    #Make sure the mesh fell into one of the cases
-    #Nb : This should be guaranteed by previous checks,
-    #       but is here anyway in case of future development.
+    # Make sure the mesh fell into one of the cases
+    # Nb : This should be guaranteed by previous checks,
+    #      but is here anyway in case of future development.
     assert orient is not None
     return orient
 
