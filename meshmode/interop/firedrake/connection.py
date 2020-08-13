@@ -364,7 +364,7 @@ class FiredrakeConnection:
                 raise ValueError("shape != () and '%s' is of type DOFArray"
                                  " instead of np.ndarray." % field_name)
             check_dof_array(field, field_name)
-        elif isinstance(field, np.ndarray):
+        elif isinstance(field, np.ndarray) and field.dtype == np.object:
             if shape is not None and field.shape != shape:
                 raise ValueError(f"'{field_name}.shape' must be {shape}, not "
                                  f"'{field.shape}'")
@@ -387,8 +387,8 @@ class FiredrakeConnection:
                         "fields in a discretization are represented."
                     raise TypeError(prefix + "\n" + msg)
         else:
-            raise TypeError("field must be of type DOFArray or a numpy object array "
-                            "of those not %s." % type(field))
+            raise TypeError("'field' must be of type DOFArray or a numpy object "
+                            "array of those, not '%s'." % type(field))
 
     def from_firedrake(self, function, out=None, actx=None):
         """
