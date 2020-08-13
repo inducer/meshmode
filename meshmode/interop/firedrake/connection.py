@@ -30,7 +30,6 @@ __doc__ = """
 
 import numpy as np
 import numpy.linalg as la
-import six
 
 from modepy import resampling_matrix
 
@@ -242,7 +241,7 @@ class FiredrakeConnection:
         # *mm2fd_node_mapping*. Only equivalence classes of size > 1
         # are included.
         self._mm_node_equiv_classes = [tuple(equiv_class) for equiv_class
-                                       in six.itervalues(fd_to_dupes)]
+                                       in fd_to_dupes.values()]
 
         # Store input
         self.discr = discr
@@ -858,7 +857,7 @@ InterpolatoryQuadratureSimplexElementGroup`.
         from pyop2.datatypes import IntType
         mm2fd_node_mapping = np.ndarray((el_group.nelements, el_group.nunit_dofs),
                                         dtype=IntType)
-        for perm, cells in six.iteritems(perm2cells):
+        for perm, cells in perm2cells.items():
             # reordering_arr[i] should be the fd node corresponding to meshmode
             # node i
             #

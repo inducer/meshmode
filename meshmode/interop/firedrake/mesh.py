@@ -27,7 +27,6 @@ __doc__ = """
 
 from warnings import warn  # noqa
 import numpy as np
-import six
 
 from modepy import resampling_matrix, simplex_best_available_basis
 
@@ -483,10 +482,9 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
 
         .. code-block:: python
 
-            import six
             coords_fspace = fdrake_mesh.coordinates.function_space()
             vertex_entity_dofs = coords_fspace.finat_element.entity_dofs()[0]
-            for entity, dof_list in six.iteritems(vertex_entity_dofs):
+            for entity, dof_list in vertex_entity_dofs.items():
                 assert len(dof_list) > 0
 
     :arg cells_to_use: Either *None*, in which case this argument is ignored,
@@ -614,7 +612,7 @@ FromBoundaryFiredrakeConnection`.
     unit_vertex_indices = []
     # iterate through the dofs associated to each vertex on the
     # reference element
-    for _, dofs in sorted(six.iteritems(coord_finat.entity_dofs()[0])):
+    for _, dofs in sorted(coord_finat.entity_dofs()[0].items()):
         assert len(dofs) == 1, \
             "The function space of the mesh coordinates must have" \
             " exactly one degree of freedom associated with " \
@@ -681,7 +679,7 @@ FromBoundaryFiredrakeConnection`.
     facial_adjacency_groups = []
     for igroup, fagrps in enumerate(unflipped_facial_adjacency_groups):
         facial_adjacency_groups.append({})
-        for ineighbor_group, fagrp in six.iteritems(fagrps):
+        for ineighbor_group, fagrp in fagrps.items():
             new_element_faces = flip_local_face_indices(fagrp.element_faces,
                                                         fagrp.elements)
             new_neighbor_faces = flip_local_face_indices(fagrp.neighbor_faces,
@@ -825,7 +823,7 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
         perm2cells.setdefault(perm, [])
         perm2cells[perm].append(mm_cell_id)
     perm2cells = {perm: np.array(cells)
-                  for perm, cells in six.iteritems(perm2cells)}
+                  for perm, cells in perm2cells.items()}
 
     # Now make a coordinates function
     from firedrake import VectorFunctionSpace, Function
@@ -854,7 +852,7 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     # Now put the nodes in the right local order
     # nodes is shaped *(ambient dim, nelements, nunit nodes)*
     from meshmode.mesh.processing import get_simplex_element_flip_matrix
-    for perm, cells in six.iteritems(perm2cells):
+    for perm, cells in perm2cells.items():
         flip_mat = get_simplex_element_flip_matrix(group.order,
                                                    fd_unit_nodes,
                                                    perm)
