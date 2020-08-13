@@ -53,7 +53,7 @@ firedrake = pytest.importorskip("firedrake")
 from firedrake import (
     UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh,
     FunctionSpace, VectorFunctionSpace, TensorFunctionSpace,
-    Function, SpatialCoordinate, as_tensor)
+    Function, SpatialCoordinate, as_tensor, sin)
 
 
 CLOSE_ATOL = 1e-12
@@ -85,16 +85,19 @@ def fdrake_mesh(request):
     mesh_name = request.param
     if mesh_name == "FiredrakeUnitIntervalMesh":
         return UnitIntervalMesh(100)
-    if mesh_name == "FiredrakeUnitSquareMesh":
+    elif mesh_name == "FiredrakeUnitSquareMesh":
         return UnitSquareMesh(10, 10)
-    if mesh_name == "FiredrakeUnitSquareMesh-order2":
+    elif mesh_name == "FiredrakeUnitSquareMesh-order2":
         m = UnitSquareMesh(10, 10)
         fspace = VectorFunctionSpace(m, 'CG', 2)
         coords = Function(fspace).interpolate(SpatialCoordinate(m))
         from firedrake.mesh import Mesh
         return Mesh(coords)
-    if mesh_name == "FiredrakeUnitCubeMesh":
+    elif mesh_name == "FiredrakeUnitCubeMesh":
         return UnitCubeMesh(5, 5, 5)
+    elif mesh_name not in ("annulus.msh", "blob2d-order1-h4e-2.msh",
+                           "blob2d-order1-h6e-2.msh", "blob2d-order1-h8e-2.msh"):
+        raise ValueError("Unexpected value for request.param")
 
     # Firedrake can't read in higher order meshes from gmsh,
     # so we can only use the order1 blobs
@@ -204,14 +207,18 @@ def test_to_fd_consistency(ctx_factory, mm_mesh, fspace_degree):
 
 # {{{ Now check the FromBoundaryFiredrakeConnection consistency
 
-def test_from_bdy_consistency(ctx_factory,
-                              fdrake_mesh,
-                              fdrake_family,
-                              fspace_degree):
+def test_from_boundary_consistency(ctx_factory,
+                                   fdrake_mesh,
+                                   fdrake_family,
+                                   fspace_degree):
     """
     Make basic checks that FiredrakeFromBoundaryConnection is not doing
-    something obviously wrong, i.e. that it has proper tagging, that it has
-    the right number of cells, etc.
+    something obviously wrong,
+    i.e. that the firedrake boundary tags partition the converted meshmode mesh,
+    that the firedrake boundary tags correspond to the same physical
+    regions in the converted meshmode mesh as in the original firedrake mesh,
+    and that each boundary tag is associated to the same number of facets
+    in the converted meshmode mesh as in the original firedrake mesh.
     """
     fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fspace_degree)
 
@@ -297,8 +304,9 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
     """
     Make sure the given boundary ids cover the converted mesh.
     Make sure that the given coordinate have the given value for the
-    corresponding boundary tag (see :mod:`firedrake`'s documentation
-    to see how the boundary tags for its utility meshes are defined)
+    corresponding boundary tag (see :mod:`firedrake.utility_meshes`'s
+    documentation to see how the boundary tags for its utility meshes are
+    defined)
     """
     cells_to_use = None
     if only_convert_bdy:
@@ -448,13 +456,13 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
         group_nodes = np.array([actx.to_numpy(dof_arr[0]) for dof_arr in nodes])
 
         # Now, for each coordinate d, test transferring the function
-        # x -> dth component of x
+        # x -> sin(dth component of x)
         for d in range(dim):
-            fdrake_f = Function(fdrake_fspace).interpolate(spatial_coord[d])
+            fdrake_f = Function(fdrake_fspace).interpolate(sin(spatial_coord[d]))
             # transport fdrake function and put in numpy
             fd2mm_f = fdrake_connection.from_firedrake(fdrake_f, actx=actx)
             fd2mm_f = actx.to_numpy(fd2mm_f[0])
-            meshmode_f = group_nodes[d, :, :]
+            meshmode_f = np.sin(group_nodes[d, :, :])
 
             # record fd -> mm error
             err = np.max(np.abs(fd2mm_f - meshmode_f))
