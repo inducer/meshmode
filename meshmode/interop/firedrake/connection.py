@@ -46,6 +46,8 @@ from meshmode.discretization.poly_element import (
 from meshmode.discretization import (
     Discretization, InterpolatoryElementGroupBase)
 
+from pytools import memoize_method
+
 
 def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
     """
@@ -251,11 +253,8 @@ class FiredrakeConnection:
         self.mm2fd_node_mapping = mm2fd_node_mapping
         self._mesh_geometry = fdrake_fspace.mesh()
         self._ufl_element = fdrake_fspace.ufl_element()
-        # Cache firedrake function spaces of each vector dimension to
-        # avoid overhead. Firedrake takes care of avoiding memory
-        # duplication.
-        self._fspace_cache = {}
 
+    @memoize_method
     def firedrake_fspace(self, shape=None):
         """
         Return a firedrake function space that
@@ -274,35 +273,27 @@ class FiredrakeConnection:
 
         :raises TypeError: If *shape* is of the wrong type
         """
-        # Cache the function spaces created to avoid high overhead.
-        # Note that firedrake is smart about re-using shared information,
-        # so this is not duplicating mesh/reference element information
-        if shape not in self._fspace_cache:
-            if shape is None:
-                from firedrake import FunctionSpace
-                self._fspace_cache[shape] = \
-                    FunctionSpace(self._mesh_geometry,
-                                  self._ufl_element.family(),
-                                  degree=self._ufl_element.degree())
-            elif isinstance(shape, int):
-                from firedrake import VectorFunctionSpace
-                self._fspace_cache[shape] = \
-                    VectorFunctionSpace(self._mesh_geometry,
-                                        self._ufl_element.family(),
-                                        degree=self._ufl_element.degree(),
-                                        dim=shape)
-            elif isinstance(shape, tuple):
-                from firedrake import TensorFunctionSpace
-                self._fspace_cache[shape] = \
-                    TensorFunctionSpace(self._mesh_geometry,
-                                        self._ufl_element.family(),
-                                        degree=self._ufl_element.degree(),
-                                        shape=shape)
-            else:
-                raise TypeError("'shape' must be *None*, an integer, "
-                                " or a tuple of integers, not of type '%s'."
-                                % type(shape))
-        return self._fspace_cache[shape]
+        if shape is None:
+            from firedrake import FunctionSpace
+            return FunctionSpace(self._mesh_geometry,
+                                 self._ufl_element.family(),
+                                 degree=self._ufl_element.degree())
+        elif isinstance(shape, int):
+            from firedrake import VectorFunctionSpace
+            return VectorFunctionSpace(self._mesh_geometry,
+                                       self._ufl_element.family(),
+                                       degree=self._ufl_element.degree(),
+                                       dim=shape)
+        elif isinstance(shape, tuple):
+            from firedrake import TensorFunctionSpace
+            return TensorFunctionSpace(self._mesh_geometry,
+                                       self._ufl_element.family(),
+                                       degree=self._ufl_element.degree(),
+                                       shape=shape)
+        else:
+            raise TypeError("'shape' must be *None*, an integer, "
+                            " or a tuple of integers, not of type '%s'."
+                            % type(shape))
 
     def _validate_function(self, function, function_name,
                            shape=None, dtype=None):
