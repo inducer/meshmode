@@ -251,7 +251,7 @@ class PyOpenCLArrayContext(ArrayContext):
         self.context = queue.context
         self.queue = queue
         self.allocator = allocator if allocator else None
-        if allocator == None:
+        if allocator is None:
             from warnings import warn
             warn("PyOpenCLArrayContext created without an allocator. "
                  "This can lead to high numbers of memory allocations. "
