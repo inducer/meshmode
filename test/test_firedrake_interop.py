@@ -485,7 +485,7 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
 
     # assert that order is correct or error is "low enough"
     for ((fd2mm, d), eoc_rec) in six.iteritems(eoc_recorders):
-        print("\nfiredrake -> meshmode: %s\nvector *x* -> *x[%s]*\n"
+        print("\nfiredrake -> meshmode: %s\nvector *x* -> *sin(x[%s])*\n"
               % (fd2mm, d), eoc_rec)
         assert (
             eoc_rec.order_estimate() >= fspace_degree
