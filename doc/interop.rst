@@ -158,7 +158,7 @@ on some function space on the mesh... etc.
 Under the hood, we divide between topological and geometric objects,
 roughly as so:
 
-(1) A reference element defined using :mod:`FInAT` and :mod:`FIAT`
+(1) A reference element defined using :mod:`finat` and :mod:`FIAT`
     is used to define what meshmode calls the unit nodes and unit
     vertices. It is worth noting that :mod:`firedrake` does
     not require a positive orientation of elements and that its
@@ -170,10 +170,10 @@ roughly as so:
     etc.
 
 (3) A class :class:`~firedrake.functionspaceimpl.FunctionSpace`
-    created from a :mod:`FInAT` element and a
+    created from a :mod:`finat` element and a
     :class:`~firedrake.mesh.MeshTopology` which allows us to
     define functions mapping the nodes (defined by the
-    :mod:`FInAT` element) of each element in the
+    :mod:`finat` element) of each element in the
     :class:`~firedrake.mesh.MeshTopology` to some values.
     Note that the function :func:`~firedrake.functionspace.FunctionSpace`
     in the firedrake API is used to create objects of class

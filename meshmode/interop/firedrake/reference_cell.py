@@ -116,8 +116,8 @@ def get_affine_reference_simplex_mapping(ambient_dim, firedrake_to_meshmode=True
 
 def get_finat_element_unit_nodes(finat_element):
     """
-    Returns the unit nodes used by the FInAT element in firedrake's
-    (equivalently, FInAT/FIAT's) reference coordinates
+    Returns the unit nodes used by the :mod:`finat` element in firedrake's
+    (equivalently, :mod:`finat`/:mod:`FIAT`'s) reference coordinates
 
     :arg finat_element: A :class:`~finat.finiteelementbase.FiniteElementBase`
         instance (i.e. a firedrake function space's reference element).
