@@ -639,6 +639,7 @@ class FromFiredrakeConnection(FiredrakeConnection):
     def __init__(self, actx, fdrake_fspace, grp_factory=None):
         """
         :arg actx: A :class:`~meshmode.array_context.ArrayContext`
+            used to instantiate :attr:`FiredrakeConnection.discr`.
         :arg fdrake_fspace: A :mod:`firedrake` ``"CG"`` or ``"DG"``
             function space (of class
             :class:`~firedrake.functionspaceimpl.WithGeometry`) built on
