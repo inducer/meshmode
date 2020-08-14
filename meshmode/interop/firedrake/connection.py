@@ -40,7 +40,7 @@ from meshmode.interop.firedrake.reference_cell import (
 from meshmode.mesh.processing import get_simplex_element_flip_matrix
 
 from meshmode.discretization.poly_element import (
-    InterpolatoryQuadratureSimplexGroupFactory,
+    PolynomialWarpAndBlendGroupFactory,
     PolynomialRecursiveNodesGroupFactory,
     ElementGroupFactory)
 from meshmode.discretization import (
@@ -674,18 +674,24 @@ PolynomialRecursiveNodesGroupFactory` with ``'lgl'`` nodes
                                 "meshmode.discretization.ElementGroupFactory,"
                                 "but is instead of type "
                                 "'%s'." % type(grp_factory))
-                if not issubclass(grp_factory.group_class,
-                                  InterpolatoryElementGroupBase):
-                    raise TypeError("'grp_factory.group_class' must inherit from"
-                                    "meshmode.discretization."
-                                    "InterpolatoryElementGroupBase, but"
-                                    " is instead of type '%s'"
-                                    % type(grp_factory.group_class))
+            if not issubclass(grp_factory.group_class,
+                              InterpolatoryElementGroupBase):
+                raise TypeError("'grp_factory.group_class' must inherit from"
+                                "meshmode.discretization."
+                                "InterpolatoryElementGroupBase, but"
+                                " is instead of type '%s'"
+                                % type(grp_factory.group_class))
         # If not provided, make one
         else:
             degree = ufl_elt.degree()
-            family = 'lgl'  # L-G-Legendre
-            grp_factory = PolynomialRecursiveNodesGroupFactory(degree, family)
+            try:
+                # recursivenodes is only importable in Python 3.8, so still have
+                # to check
+                import recursivenodes  # noqa : F401
+                family = 'lgl'  # L-G-Legendre
+                grp_factory = PolynomialRecursiveNodesGroupFactory(degree, family)
+            except ImportError:
+                grp_factory = PolynomialWarpAndBlendGroupFactory(degree)
 
         # In case this class is really a FromBoundaryFiredrakeConnection,
         # get *cells_to_use*
