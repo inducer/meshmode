@@ -244,13 +244,25 @@ class PyOpenCLArrayContext(ArrayContext):
         A :class:`pyopencl.CommandQueue`.
 
     .. attribute:: allocator
+        A PyOpenCL memory allocator. Can also be `None` (default) or `False` to
+        use the default allocator. Please note that running with the default
+        allocator allocates and deallocates OpenCL buffers directly. If lots
+        of arrays are created (e.g. as results of computation), the associated cost
+        may become significant. Using e.g. :class:`pyopencl.tools.MemoryPool`
+        as the allocator can help avoid this cost.
     """
 
     def __init__(self, queue, allocator=None):
         super().__init__()
         self.context = queue.context
         self.queue = queue
-        self.allocator = allocator
+        self.allocator = allocator if allocator else None
+        if allocator is None:
+            from warnings import warn
+            warn("PyOpenCLArrayContext created without an allocator. "
+                 "This can lead to high numbers of memory allocations. "
+                 "Please consider using a pyopencl.tools.MemoryPool. "
+                 "Run with allocator=False to disable this warning.")
 
     def _get_fake_numpy_namespace(self):
         return _PyOpenCLFakeNumpyNamespace(self)
