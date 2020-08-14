@@ -246,9 +246,10 @@ class PyOpenCLArrayContext(ArrayContext):
     .. attribute:: allocator
         A PyOpenCL memory allocator. Can also be `None` (default) or `False` to
         use the default allocator. Please note that running with the default
-        allocator will cause large numbers of memory allocations, and will
-        print a warning at runtime. Specify `False` to avoid the warning.
-        Please consider using a pyopencl.tools.MemoryPool.
+        allocator allocates and deallocates OpenCL buffers directly. If lots
+        of arrays are created (e.g. as results of computation), the associated cost
+        may become significant. Using e.g. :class:`pyopencl.tools.MemoryPool`
+        as the allocator can help avoid this cost.
     """
 
     def __init__(self, queue, allocator=None):
