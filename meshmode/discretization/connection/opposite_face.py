@@ -163,7 +163,7 @@ def _make_cross_face_batches(actx,
 
     # }}}
 
-    logger.info("make_opposite_face_connection: begin gauss-newton")
+    logger.debug("_make_cross_face_batches: begin gauss-newton")
 
     niter = 0
     while True:
@@ -222,17 +222,16 @@ def _make_cross_face_batches(actx,
         # }}}
 
         max_resid = np.max(np.abs(resid))
-        logger.debug("gauss-newton residual: %g" % max_resid)
 
         if max_resid < tol:
-            logger.info("make_opposite_face_connection: gauss-newton: done, "
+            logger.debug("_make_cross_face_batches: gauss-newton: done, "
                     "final residual: %g" % max_resid)
             break
 
         niter += 1
         if niter > 10:
             raise RuntimeError("Gauss-Newton (for finding opposite-face reference "
-                    "coordinates) did not converge")
+                    "coordinates) did not converge (residual: %g)" % max_resid)
 
     # }}}
 
