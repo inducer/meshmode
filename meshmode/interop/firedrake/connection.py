@@ -649,11 +649,8 @@ class FromFiredrakeConnection(FiredrakeConnection):
             whose group class is a subclass of
             :class:`~meshmode.discretization.InterpolatoryElementGroupBase`.
             If *None*, uses
-
-            * A :class:`~meshmode.discretization.poly_element.\
-PolynomialRecursiveNodesGroupFactory`
-            * A :class:`~meshmode.discretization.poly_element.\
-PolynomialWarpAndBlendGroupFactory`
+            a :class:`~meshmode.discretization.poly_element.\
+PolynomialRecursiveNodesGroupFactory` with ``'lgl'`` nodes
         """
         # Ensure fdrake_fspace is a function space with appropriate reference
         # element.
@@ -687,12 +684,8 @@ PolynomialWarpAndBlendGroupFactory`
         # If not provided, make one
         else:
             degree = ufl_elt.degree()
-            try:
-                import recursivenodes  # noqa : F401
-                family = 'lgl'  # L-G-Legendre
-                grp_factory = PolynomialRecursiveNodesGroupFactory(degree, family)
-            except ImportError:
-                grp_factory = InterpolatoryQuadratureSimplexGroupFactory(degree)
+            family = 'lgl'  # L-G-Legendre
+            grp_factory = PolynomialRecursiveNodesGroupFactory(degree, family)
 
         # In case this class is really a FromBoundaryFiredrakeConnection,
         # get *cells_to_use*
