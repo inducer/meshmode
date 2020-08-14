@@ -649,9 +649,14 @@ class FromFiredrakeConnection(FiredrakeConnection):
             a :class:`~meshmode.discretization.poly_element.ElementGroupFactory`
             whose group class is a subclass of
             :class:`~meshmode.discretization.InterpolatoryElementGroupBase`.
-            If *None*, uses
+            If *None*, and :mod:`recursivenodes` can be imported,
             a :class:`~meshmode.discretization.poly_element.\
-PolynomialRecursiveNodesGroupFactory` with ``'lgl'`` nodes
+PolynomialRecursiveNodesGroupFactory` with ``'lgl'`` nodes is used.
+            Note that :mod:`recursivenodes` may not be importable
+            as it uses :func:`math.comb`, which is new in Python 3.8.
+            In the case that :mod:`recursivenodes` cannot be successfully
+            imported, a :class:`~meshmode.discretization.poly_element.\
+PolynomialWarpAndBlendGroupFactory` is used.
         """
         # Ensure fdrake_fspace is a function space with appropriate reference
         # element.
@@ -686,12 +691,14 @@ PolynomialRecursiveNodesGroupFactory` with ``'lgl'`` nodes
         else:
             degree = ufl_elt.degree()
             try:
-                # recursivenodes is only importable in Python 3.8, so still have
-                # to check
+                # recursivenodes is only importable in Python 3.8 since
+                # it uses :func:`math.comb`, so need to check if it can
+                # be imported
                 import recursivenodes  # noqa : F401
                 family = 'lgl'  # L-G-Legendre
                 grp_factory = PolynomialRecursiveNodesGroupFactory(degree, family)
             except ImportError:
+                # If cannot be imported, uses warp-and-blend nodes
                 grp_factory = PolynomialWarpAndBlendGroupFactory(degree)
 
         # In case this class is really a FromBoundaryFiredrakeConnection,
