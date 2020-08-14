@@ -41,7 +41,8 @@ def thaw_to_numpy(actx, array):
 
 # {{{ _make_cross_face_batches
 
-def _make_cross_face_batches(actx,
+def 
+(actx,
         tgt_bdry_discr, src_bdry_discr,
         i_tgt_grp, i_src_grp,
         tgt_bdry_element_indices, src_bdry_element_indices):
@@ -163,7 +164,7 @@ def _make_cross_face_batches(actx,
 
     # }}}
 
-    logger.info("make_opposite_face_connection: begin gauss-newton")
+    logger.debug("_make_cross_face_batches: begin gauss-newton")
 
     niter = 0
     while True:
@@ -222,17 +223,16 @@ def _make_cross_face_batches(actx,
         # }}}
 
         max_resid = np.max(np.abs(resid))
-        logger.debug("gauss-newton residual: %g" % max_resid)
 
         if max_resid < tol:
-            logger.info("make_opposite_face_connection: gauss-newton: done, "
+            logger.debug("_make_cross_face_batches: gauss-newton: done, "
                     "final residual: %g" % max_resid)
             break
 
         niter += 1
         if niter > 10:
             raise RuntimeError("Gauss-Newton (for finding opposite-face reference "
-                    "coordinates) did not converge")
+                    "coordinates) did not converge (residual: %g)" % max_resid)
 
     # }}}
 
