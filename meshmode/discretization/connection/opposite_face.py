@@ -41,8 +41,7 @@ def thaw_to_numpy(actx, array):
 
 # {{{ _make_cross_face_batches
 
-def 
-(actx,
+def _make_cross_face_batches(actx,
         tgt_bdry_discr, src_bdry_discr,
         i_tgt_grp, i_src_grp,
         tgt_bdry_element_indices, src_bdry_element_indices):
