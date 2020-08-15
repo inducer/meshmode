@@ -29,11 +29,10 @@ from six.moves import range
 import numpy as np
 import pyopencl as cl
 
-from meshmode.array_context import PyOpenCLArrayContext
 from meshmode.dof_array import thaw, flatten, unflatten, flat_norm
 
-from pyopencl.tools import (  # noqa
-        pytest_generate_tests_for_pyopencl
+from meshmode.array_context import (  # noqa
+        pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
 from meshmode.discretization.poly_element import (
@@ -63,13 +62,11 @@ TAG_SEND_LOCAL_NODES = TAG_BASE + 4
          (2, [3, 4, 7]),
          (3, [3, 4])
         ])
-def test_partition_interpolation(ctx_factory, dim, mesh_pars,
+def test_partition_interpolation(actx_factory, dim, mesh_pars,
                                  num_parts, num_groups, part_method):
     np.random.seed(42)
     group_factory = PolynomialWarpAndBlendGroupFactory
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     order = 4
 
@@ -146,9 +143,10 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
             local_from_elem_faces = [[batch.to_element_face
                                             for batch in grp_batches]
                                         for grp_batches in local_batches]
-            local_from_elem_indices = [[batch.to_element_indices.get(queue=queue)
-                                            for batch in grp_batches]
-                                        for grp_batches in local_batches]
+            local_from_elem_indices = [[
+                batch.to_element_indices.get(queue=actx.queue)
+                for batch in grp_batches
+                ] for grp_batches in local_batches]
 
             remote_bdry = remote_bdry_conn.to_discr
             remote_mesh = part_meshes[i_remote_part]
@@ -159,9 +157,10 @@ def test_partition_interpolation(ctx_factory, dim, mesh_pars,
             remote_from_elem_faces = [[batch.to_element_face
                                             for batch in grp_batches]
                                         for grp_batches in remote_batches]
-            remote_from_elem_indices = [[batch.to_element_indices.get(queue=queue)
-                                            for batch in grp_batches]
-                                        for grp_batches in remote_batches]
+            remote_from_elem_indices = [[
+                batch.to_element_indices.get(queue=actx.queue)
+                for batch in grp_batches
+                ] for grp_batches in remote_batches]
 
             # Connect from remote_mesh to local_mesh
             remote_to_local_conn = make_partition_connection(
@@ -365,6 +364,8 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
         local_mesh = mesh_dist.receive_mesh_part()
 
     group_factory = PolynomialWarpAndBlendGroupFactory(order)
+
+    from meshmode.array_context import PyOpenCLArrayContext
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(queue)
