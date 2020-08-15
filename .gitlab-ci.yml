@@ -55,6 +55,8 @@ Python 3 POCL Firedrake:
   image: "firedrakeproject/firedrake"
   script:
   - sudo apt update
+  - sudo apt upgrade
+  - sudo apt install time
   - sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
   - source ~/firedrake/bin/activate
   - "grep -v loopy requirements.txt > myreq.txt"
@@ -64,18 +66,11 @@ Python 3 POCL Firedrake:
   # doesn't have dataclasses.
   - pip install pytest dataclasses
   - pip install .
+  # run examples
+  - . ./.github/workflows/run_firedrake_examples.sh
+  # run tests
   - cd test
   - python -m pytest --tb=native --junitxml=pytest.xml -rxsw test_firedrake_interop.py
-  - cd ../examples
-  - echo -e
-    'for i in $(find . -name "*firedrake*.py" -exec grep -q __main__ "{}" \; -print ); do
-        echo "-----------------------------------------------------------------------"
-        echo "RUNNING $i"
-        echo "-----------------------------------------------------------------------"
-        dn=$(dirname "$i")
-        bn=$(basename "$i")
-        (cd $dn; time ${PY_EXE} "$bn")
-    done'
   artifacts:
     reports:
       junit: test/pytest.xml
