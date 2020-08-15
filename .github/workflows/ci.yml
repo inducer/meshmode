@@ -57,7 +57,7 @@ jobs:
         -   name: "Examples"
             run: |
                 . /home/firedrake/firedrake/bin/activate
-                . ./run_firedrake_examples.sh
+                . ./.github/workflows/run_firedrake_examples.sh
         -   name: "Test"
             run: |
                 . /home/firedrake/firedrake/bin/activate
