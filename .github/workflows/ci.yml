@@ -59,6 +59,18 @@ jobs:
                 . /home/firedrake/firedrake/bin/activate
                 cd test
                 python -m pytest --tb=native -rxsw test_firedrake_interop.py
+        -   name: "Examples"
+            run: |
+                . /home/firedrake/firedrake/bin/activate
+                cd examples
+		for i in $(find . -name '*firedrake*.py' -exec grep -q __main__ '{}' \; -print ); do
+                    echo "-----------------------------------------------------------------------"
+                    echo "RUNNING $i"
+                    echo "-----------------------------------------------------------------------"
+                    dn=$(dirname "$i")
+                    bn=$(basename "$i")
+                    (cd $dn; time ${PY_EXE} "$bn")
+                done
 
     examples3:
         name: Examples Conda Py3

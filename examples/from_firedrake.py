@@ -28,6 +28,9 @@ import pyopencl as cl
 # what a FromBoundaryFiredrakeConnection does
 def main():
     # If can't import firedrake, do nothing
+    #
+    # filename MUST include "firedrake" (i.e. match *firedrake*.py) in order
+    # to be run during CI
     try:
         import firedrake  # noqa : F401
     except ImportError:
