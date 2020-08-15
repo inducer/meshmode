@@ -63,8 +63,8 @@ jobs:
             run: |
                 . /home/firedrake/firedrake/bin/activate
                 cd examples
-                >
-                for i in $(find . -name '*firedrake*.py' -exec grep -q __main__ '{}' \; -print ); do
+                for i in $(find . -name '*firedrake*.py' -exec grep -q __main__ '{}' \; -print )
+                do
                     echo "-----------------------------------------------------------------------"
                     echo "RUNNING $i"
                     echo "-----------------------------------------------------------------------"
