@@ -330,6 +330,96 @@ class PyOpenCLArrayContext(ArrayContext):
             program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
         return lp.tag_inames(program, {outer_iname: "g.0"})
 
+
+def pytest_generate_tests_for_pyopencl_array_context(metafunc):
+    # NOTE: this is wholesale copied from
+    #   pyopencl.tools.pytest_generate_tests_for_pyopencl
+    # with the small addition of also supporting `actx_factory` to automatically
+    # construct a PyOpenCLArrayContext for each platform/device/context
+
+    import pyopencl as cl
+
+    class ContextFactory:
+        def __init__(self, device):
+            self.device = device
+
+        def __call__(self):
+            # Get rid of leftovers from past tests.
+            # CL implementations are surprisingly limited in how many
+            # simultaneous contexts they allow...
+
+            from pyopencl.tools import clear_first_arg_caches
+            clear_first_arg_caches()
+
+            from gc import collect
+            collect()
+
+            return cl.Context([self.device])
+
+        def __str__(self):
+            # Don't show address, so that parallel test collection works
+            return ("<context factory for <pyopencl.Device '%s' on '%s'>" %
+                    (self.device.name.strip(),
+                     self.device.platform.name.strip()))
+
+    class ArrayContextFactory(ContextFactory):
+        def __call__(self):
+            ctx = super().__call__()
+            return PyOpenCLArrayContext(cl.CommandQueue(ctx))
+
+        def __str__(self):
+            return ("<array context factory for <pyopencl.Device '%s' on '%s'>" %
+                    (self.device.name.strip(),
+                     self.device.platform.name.strip()))
+
+    from pyopencl.tools import get_test_platforms_and_devices
+    test_plat_and_dev = get_test_platforms_and_devices()
+
+    arg_names = []
+    for arg in ("platform", "device", "ctx_factory", "ctx_getter", "actx_factory"):
+        if arg not in metafunc.fixturenames:
+            continue
+
+        if arg == "ctx_getter":
+            from warnings import warn
+            warn("The 'ctx_getter' arg is deprecated in "
+                    "favor of 'ctx_factory'.",
+                    DeprecationWarning)
+
+        arg_names.append(arg)
+
+    if "actx_factory" in arg_names:
+        for ctx_factory in ["ctx_factory", "ctx_getter"]:
+            if ctx_factory in arg_names:
+                raise RuntimeError("Cannot use both an 'actx_factory' and a "
+                    f"'{ctx_factory}' as arguments.")
+
+    arg_values = []
+    for platform, plat_devs in test_plat_and_dev:
+        if arg_names == ["platform"]:
+            arg_values.append((platform,))
+            continue
+
+        arg_dict = {"platform": platform}
+
+        for device in plat_devs:
+            arg_dict["device"] = device
+            arg_dict["ctx_factory"] = ContextFactory(device)
+            arg_dict["ctx_getter"] = ContextFactory(device)
+            arg_dict["actx_factory"] = ArrayContextFactory(device)
+
+            arg_values.append(tuple(arg_dict[name] for name in arg_names))
+
+    def idfn(val):
+        if isinstance(val, cl.Platform):
+            # Don't show address, so that parallel test collection works
+            return f"<pyopencl.Platform '{val.name}'>"
+        else:
+            return str(val)
+
+    if arg_names:
+        metafunc.parametrize(arg_names, arg_values, ids=idfn)
+
 # }}}
 
 
