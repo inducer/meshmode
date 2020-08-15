@@ -107,11 +107,6 @@ def fdrake_mesh(request):
     return fd_mesh
 
 
-@pytest.fixture(params=["CG", "DG"])
-def fdrake_family(request):
-    return request.param
-
-
 @pytest.fixture(params=[1, 4], ids=["P^1", "P^4"])
 def fspace_degree(request):
     return request.param
@@ -209,7 +204,6 @@ def test_to_fd_consistency(ctx_factory, mm_mesh, fspace_degree):
 
 def test_from_boundary_consistency(ctx_factory,
                                    fdrake_mesh,
-                                   fdrake_family,
                                    fspace_degree):
     """
     Make basic checks that FiredrakeFromBoundaryConnection is not doing
@@ -220,7 +214,7 @@ def test_from_boundary_consistency(ctx_factory,
     and that each boundary tag is associated to the same number of facets
     in the converted meshmode mesh as in the original firedrake mesh.
     """
-    fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fspace_degree)
+    fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fspace_degree)
 
     cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
@@ -372,11 +366,10 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
      ("warp", [10, 20, 30], 2),
      ("warp", [10, 20, 30], 3),
      ])
-@pytest.mark.parametrize("fdrake_family", ['DG', 'CG'])
 @pytest.mark.parametrize("only_convert_bdy", [False, True])
 def test_from_fd_transfer(ctx_factory, fspace_degree,
                           fdrake_mesh_name, fdrake_mesh_pars, dim,
-                          fdrake_family, only_convert_bdy):
+                          only_convert_bdy):
     """
     Make sure creating a function which projects onto
     one dimension then transports it is the same
@@ -440,7 +433,7 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
     for mesh_par in fdrake_mesh_pars:
         fdrake_mesh, h = get_fdrake_mesh_and_h_from_par(mesh_par)
         # make function space and build connection
-        fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fspace_degree)
+        fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fspace_degree)
         if only_convert_bdy:
             fdrake_connection = FromBoundaryFiredrakeConnection(actx,
                                                                 fdrake_fspace,
@@ -475,10 +468,7 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
                 # now transport mm -> fd
                 meshmode_f_dofarr = discr.zeros(actx)
                 meshmode_f_dofarr[0][:] = meshmode_f
-                mm2fd_f = fdrake_connection.from_meshmode(
-                    meshmode_f_dofarr,
-                    assert_fdrake_discontinuous=False,
-                    continuity_tolerance=1e-8)
+                mm2fd_f = fdrake_connection.from_meshmode(meshmode_f_dofarr)
                 # record mm -> fd error
                 err = np.max(np.abs(fdrake_f.dat.data - mm2fd_f.dat.data))
                 eoc_recorders[(False, d)].add_data_point(h, err)
@@ -571,27 +561,24 @@ def test_to_fd_transfer(ctx_factory, fspace_degree, mesh_name, mesh_pars, dim):
 @pytest.mark.parametrize("fspace_type", ("scalar", "vector", "tensor"))
 @pytest.mark.parametrize("only_convert_bdy", (False, True))
 def test_from_fd_idempotency(ctx_factory,
-                             fdrake_mesh, fdrake_family, fspace_degree,
+                             fdrake_mesh, fspace_degree,
                              fspace_type, only_convert_bdy):
     """
     Make sure fd->mm->fd and (fd->)->mm->fd->mm are identity
     """
     # Make a function space and a function with unique values at each node
     if fspace_type == "scalar":
-        fdrake_fspace = FunctionSpace(fdrake_mesh, fdrake_family, fspace_degree)
+        fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fspace_degree)
         # Just use the node nr
         fdrake_unique = Function(fdrake_fspace)
         fdrake_unique.dat.data[:] = np.arange(fdrake_unique.dat.data.shape[0])
     elif fspace_type == "vector":
-        fdrake_fspace = VectorFunctionSpace(fdrake_mesh, fdrake_family,
-                                             fspace_degree)
+        fdrake_fspace = VectorFunctionSpace(fdrake_mesh, 'DG', fspace_degree)
         # use the coordinates
         xx = SpatialCoordinate(fdrake_fspace.mesh())
         fdrake_unique = Function(fdrake_fspace).interpolate(xx)
     elif fspace_type == "tensor":
-        fdrake_fspace = TensorFunctionSpace(fdrake_mesh,
-                                            fdrake_family,
-                                            fspace_degree)
+        fdrake_fspace = TensorFunctionSpace(fdrake_mesh, 'DG', fspace_degree)
         # use the coordinates, duplicated into the right tensor shape
         xx = SpatialCoordinate(fdrake_fspace.mesh())
         dim = fdrake_fspace.mesh().geometric_dimension()
@@ -614,20 +601,14 @@ def test_from_fd_idempotency(ctx_factory,
                                                             fdrake_fspace,
                                                             'on_boundary')
         temp = fdrake_connection.from_firedrake(fdrake_unique, actx=actx)
-        fdrake_unique = \
-            fdrake_connection.from_meshmode(temp,
-                                            assert_fdrake_discontinuous=False,
-                                            continuity_tolerance=1e-8)
+        fdrake_unique = fdrake_connection.from_meshmode(temp)
     else:
         fdrake_connection = FromFiredrakeConnection(actx, fdrake_fspace)
 
     # Test for idempotency fd->mm->fd
     mm_field = fdrake_connection.from_firedrake(fdrake_unique, actx=actx)
     fdrake_unique_copy = Function(fdrake_fspace)
-    fdrake_connection.from_meshmode(mm_field,
-                                    out=fdrake_unique_copy,
-                                    assert_fdrake_discontinuous=False,
-                                    continuity_tolerance=1e-8)
+    fdrake_connection.from_meshmode(mm_field, out=fdrake_unique_copy)
 
     np.testing.assert_allclose(fdrake_unique_copy.dat.data,
                                fdrake_unique.dat.data,

@@ -113,6 +113,10 @@ class FiredrakeConnection:
         index associated to the *j*th degree of freedom of the
         *i*th element in *element_grp*.
 
+        :attr:`mm2fd_node_mapping` must encode an embedding
+        into the :mod:`firedrake` mesh, i.e. no two :mod:`meshmode` nodes
+        may be associated to the same :mod:`firedrake` node
+
         Degrees of freedom should be associated so that
         the implicit mapping from a reference element to element *i*
         which maps meshmode unit dofs *0,1,...,n-1* to actual
@@ -132,8 +136,7 @@ class FiredrakeConnection:
         :param discr: A :class:`meshmode.discretization.Discretization`
         :param fdrake_fspace: A
             :class:`firedrake.functionspaceimpl.WithGeometry`.
-            Must have ufl family ``'Lagrange'`` or
-            ``'Discontinuous Lagrange'``.
+            Must use ufl family ``'Discontinuous Lagrange'``.
         :param mm2fd_node_mapping: Used as attribute :attr:`mm2fd_node_mapping`.
             A 2-D numpy integer array with the same dtype as
             ``fdrake_fspace.cell_node_list.dtype``
@@ -185,12 +188,10 @@ class FiredrakeConnection:
             raise TypeError("'discr.groups[group_nr]' must be of type "
                             "InterpolatoryElementGroupBase"
                             ", not '%s'." % type(element_grp))
-        allowed_families = ('Discontinuous Lagrange', 'Lagrange')
-        if fdrake_fspace.ufl_element().family() not in allowed_families:
-            raise TypeError("'fdrake_fspace' must have ufl family "
-                           "be one of %s, not '%s'."
-                            % (allowed_families,
-                               fdrake_fspace.ufl_element().family()))
+        if fdrake_fspace.ufl_element().family() != 'Discontinuous Lagrange':
+            raise TypeError("'fdrake_fspace.ufl_element().family()' must be"
+                            "'Discontinuous Lagrange', not "
+                            f"'{fdrake_fspace.ufl_element().family()}'")
         if mm2fd_node_mapping.shape != (element_grp.nelements,
                                         element_grp.nunit_dofs):
             raise ValueError("'mm2fd_node_mapping' must be of shape ",
@@ -201,6 +202,10 @@ class FiredrakeConnection:
             raise ValueError("'mm2fd_node_mapping' must have dtype "
                              "%s, not '%s'" % (fdrake_fspace.cell_node_list.dtype,
                                              mm2fd_node_mapping.dtype))
+        if np.size(np.unique(mm2fd_node_mapping)) != np.size(mm2fd_node_mapping):
+            raise ValueError("'mm2fd_node_mapping' must have unique entries; "
+                             "no two meshmode nodes may be associated to the "
+                             "same Firedrake node")
         # }}}
 
         # Get meshmode unit nodes
@@ -218,34 +223,6 @@ class FiredrakeConnection:
         self._resampling_mat_mm2fd = resampling_matrix(element_grp.basis(),
                                                        new_nodes=fd_unit_nodes,
                                                        old_nodes=mm_unit_nodes)
-
-        # {{{ compute meshmode node equivalence classes for continuity check
-
-        # Now handle the possibility of multiple meshmode nodes being associated
-        # to the same firedrake node
-        unique_fd_nodes, counts = np.unique(mm2fd_node_mapping,
-                                            return_counts=True)
-        # map firedrake nodes associated to more than 1 meshmode node
-        # to all associated meshmode nodes.
-        # fd node index -> (meshmode cell index, meshmode local node index)
-        fd_to_dupes = {}
-        dup_fd_nodes = set(unique_fd_nodes[counts > 1])
-        for icell, cell in enumerate(mm2fd_node_mapping):
-            for local_mm_inode, fd_inode in enumerate(cell):
-                if fd_inode in dup_fd_nodes:
-                    fd_to_dupes.setdefault(fd_inode, [])
-                    fd_to_dupes[fd_inode] = (icell, local_mm_inode)
-        # A list of tuples, each tuple represents an equivalence class
-        # of meshmode nodes
-        # (represented as tuples
-        #  *(meshmode_cell_index, meshmode local node index)*)
-        # which associate to the same firedrake node under
-        # *mm2fd_node_mapping*. Only equivalence classes of size > 1
-        # are included.
-        self._mm_node_equiv_classes = [tuple(equiv_class) for equiv_class
-                                       in fd_to_dupes.values()]
-
-        # }}}
 
         # Store input
         self.discr = discr
@@ -485,9 +462,7 @@ class FiredrakeConnection:
 
         return out
 
-    def from_meshmode(self, mm_field, out=None,
-                      assert_fdrake_discontinuous=True,
-                      continuity_tolerance=None):
+    def from_meshmode(self, mm_field, out=None):
         r"""
         Transport meshmode field from :attr:`discr` into an
         appropriate firedrake function space.
@@ -519,29 +494,9 @@ class FiredrakeConnection:
             to be stored in. The shape of its function space must
             match the shape of *mm_field*
 
-        :arg assert_fdrake_discontinuous: If *True*,
-            disallows conversion to a continuous firedrake function space
-            (i.e. this function checks that ``self.firedrake_fspace()`` is
-            discontinuous and raises a *ValueError* otherwise)
-
-        :arg continuity_tolerance: If converting to a continuous firedrake
-            function space (i.e. if ``self.firedrake_fspace()`` is continuous),
-            assert that at any two meshmode nodes corresponding to the
-            same firedrake node (meshmode is a discontinuous space, so this
-            situation will almost certainly happen), the function being transported
-            has values less than *continuity_tolerance* distance (in
-            :math:`\\ell^\\infty` distance)
-            apart. If *None*, no checks are performed. Does nothing if
-            the firedrake function space is discontinuous
-
         :return: a :class:`firedrake.function.Function` holding the transported
             data (*out*, if *out* was not *None*)
         """
-        if self._ufl_element.family() == 'Lagrange' \
-                and assert_fdrake_discontinuous:
-            raise ValueError("Trying to convert to continuous function space "
-                             " with 'assert_fdrake_discontinuous' set "
-                             " to *True*")
         # All firedrake functions are the same dtype
         dtype = self.firedrake_fspace().mesh().coordinates.dat.data.dtype
         self._validate_field(mm_field, "mm_field", dtype=dtype)
@@ -580,31 +535,10 @@ class FiredrakeConnection:
         def resample_and_reorder(fd_data, dof_array):
             # pull data into numpy
             dof_np = dof_array.array_context.to_numpy(dof_array[self.group_nr])
-            # resample the data data (keep this for continuity checks)
-            resampled_data = np.matmul(dof_np, self._resampling_mat_mm2fd.T)
+            # resample the data and store in firedrake ordering
             # store resampled data in firedrake ordering
-            fd_data[self.mm2fd_node_mapping] = resampled_data
-
-            # Continuity checks if requested
-            if self._ufl_element.family() == 'Lagrange' \
-                    and continuity_tolerance is not None:
-                assert isinstance(continuity_tolerance, float)
-                assert continuity_tolerance >= 0
-                # Make sure not to compare using mm_field,
-                # because two meshmode nodes associated to the same firedrake
-                # nodes may have been resampled to distinct nodes on different
-                # elements.
-                for mm_equiv_class in self._mm_node_equiv_classes:
-                    l_inf = np.ptp(resampled_data[mm_equiv_class])
-                    if l_inf >= continuity_tolerance:
-                        fd_inode = self.mm2fd_node_mapping[mm_equiv_class[0]]
-                        raise ValueError("Meshmode nodes %s (written as "
-                                         " *(element index, local node index)*)"
-                                         " represent the same firedrake node %s"
-                                         ", but 'mm_field's resampled "
-                                         " values are %s > %s apart)"
-                                         % (mm_equiv_class, fd_inode,
-                                            l_inf, continuity_tolerance))
+            fd_data[self.mm2fd_node_mapping] = \
+                np.einsum("ij,kj->ik", dof_np, self._resampling_mat_mm2fd)
 
         # If scalar, just reorder and resample out
         if fspace_shape == ():
@@ -667,9 +601,9 @@ PolynomialWarpAndBlendGroupFactory` is used.
                             % type(fdrake_fspace))
         ufl_elt = fdrake_fspace.ufl_element()
 
-        if ufl_elt.family() not in ('Lagrange', 'Discontinuous Lagrange'):
+        if ufl_elt.family() != 'Discontinuous Lagrange':
             raise ValueError("the 'fdrake_fspace.ufl_element().family()' of "
-                             "must be be 'Lagrange' or "
+                             "must be be "
                              "'Discontinuous Lagrange', not '%s'."
                              % ufl_elt.family())
         # Make sure grp_factory is the right type if provided, and
@@ -720,17 +654,6 @@ PolynomialWarpAndBlendGroupFactory` is used.
         # a numpy array
 
         # Get the reordering fd->mm.
-        #
-        # One should note there is something a bit more subtle going on
-        # in the continuous case. All meshmode discretizations use
-        # are discontinuous, so nodes are associated with elements(cells)
-        # not vertices. In a continuous firedrake space, some nodes
-        # are shared between multiple cells. In particular, while the
-        # below "reordering" is indeed a permutation if the firedrake space
-        # is discontinuous, if the firedrake space is continuous then
-        # some firedrake nodes correspond to nodes on multiple meshmode
-        # elements, i.e. those nodes appear multiple times
-        # in the "reordering" array
         flip_mat = get_simplex_element_flip_matrix(ufl_elt.degree(),
                                                    fd_unit_nodes)
         fd_cell_node_list = fdrake_fspace.cell_node_list
@@ -742,12 +665,12 @@ PolynomialWarpAndBlendGroupFactory` is used.
                                                 flip_mat,
                                                 unflip=False)
 
+        assert np.size(np.unique(flipped_cell_node_list)) == \
+            np.size(flipped_cell_node_list), \
+            "A firedrake node in a 'DG' space got duplicated"
         super(FromFiredrakeConnection, self).__init__(to_discr,
                                                       fdrake_fspace,
                                                       flipped_cell_node_list)
-        if fdrake_fspace.ufl_element().family() == 'Discontinuous Lagrange':
-            assert len(self._mm_node_equiv_classes) == 0, \
-                "A firedrake node in a 'DG' space got duplicated"
 
     def _get_cells_to_use(self, mesh):
         """
@@ -879,12 +802,13 @@ InterpolatoryQuadratureSimplexElementGroup`.
                                               flip_mat.T)
             mm2fd_node_mapping[cells] = fd_permuted_cell_node
 
+        assert np.size(np.unique(mm2fd_node_mapping)) == \
+            np.size(mm2fd_node_mapping), \
+            "A firedrake node in a 'DG' space got duplicated"
         super(ToFiredrakeConnection, self).__init__(discr,
                                                     fspace,
                                                     mm2fd_node_mapping,
                                                     group_nr=group_nr)
-        assert len(self._mm_node_equiv_classes) == 0, \
-            "A firedrake node in a 'DG' space got duplicated"
 
 # }}}
 
