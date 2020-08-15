@@ -67,14 +67,15 @@ Python 3 POCL Firedrake:
   - cd test
   - python -m pytest --tb=native --junitxml=pytest.xml -rxsw test_firedrake_interop.py
   - cd ../examples
-  - for i in $(find . -name '*firedrake*.py' -exec grep -q __main__ '{}' \; -print ); do \
-        echo "-----------------------------------------------------------------------" \
-        echo "RUNNING $i" \
-        echo "-----------------------------------------------------------------------" \
-        dn=$(dirname "$i") \
-        bn=$(basename "$i") \
-        (cd $dn; time ${PY_EXE} "$bn") \
-    done
+  - echo -e
+    'for i in $(find . -name "*firedrake*.py" -exec grep -q __main__ "{}" \; -print ); do
+        echo "-----------------------------------------------------------------------"
+        echo "RUNNING $i"
+        echo "-----------------------------------------------------------------------"
+        dn=$(dirname "$i")
+        bn=$(basename "$i")
+        (cd $dn; time ${PY_EXE} "$bn")
+    done'
   artifacts:
     reports:
       junit: test/pytest.xml
