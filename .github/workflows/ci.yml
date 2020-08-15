@@ -43,6 +43,7 @@ jobs:
         -   name: "Dependencies"
             run: |
                 sudo apt update
+                sudo apt upgrade -y
                 sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
                 sudo chown -R $(whoami) /github/home
 
@@ -56,6 +57,7 @@ jobs:
                 pip install .
         -   name: "Examples"
             run: |
+                sudo apt install time
                 . /home/firedrake/firedrake/bin/activate
                 . ./.github/workflows/run_firedrake_examples.sh
         -   name: "Test"
