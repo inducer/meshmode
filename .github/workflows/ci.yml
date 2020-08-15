@@ -54,11 +54,6 @@ jobs:
                 # doesn't have dataclasses.
                 pip install pytest dataclasses
                 pip install .
-        -   name: "Test"
-            run: |
-                . /home/firedrake/firedrake/bin/activate
-                cd test
-                python -m pytest --tb=native -rxsw test_firedrake_interop.py
         -   name: "Examples"
             run: |
                 . /home/firedrake/firedrake/bin/activate
@@ -72,6 +67,11 @@ jobs:
                     bn=$(basename "$i")
                     (cd $dn; time ${PY_EXE} "$bn")
                 done
+        -   name: "Test"
+            run: |
+                . /home/firedrake/firedrake/bin/activate
+                cd test
+                python -m pytest --tb=native -rxsw test_firedrake_interop.py
 
     examples3:
         name: Examples Conda Py3
