@@ -4,7 +4,8 @@ git+https://github.com/inducer/pytools.git#egg=pytools
 git+https://github.com/inducer/gmsh_interop.git#egg=gmsh_interop
 git+https://github.com/inducer/pyvisfile.git#egg=pyvisfile
 git+https://github.com/inducer/modepy.git#egg=modepy
-git+https://github.com/inducer/pyopencl.git#egg=pyopencl
+# git+https://github.com/inducer/pyopencl.git#egg=pyopencl
+git+https://github.com/alexfikl/pyopencl.git@refactor-pytest-fixture#egg=pyopencl
 git+https://github.com/inducer/islpy.git#egg=islpy
 
 # required by pytential, which is in turn needed for some tests
