@@ -72,6 +72,15 @@ class _BaseFakeNumpyNamespace:
 
         return obj_array_vectorized_n_args(f)
 
+    @obj_array_vectorized_n_args
+    def conjugate(self, x):
+        # NOTE: conjugate distribute over object arrays, but it looks for a
+        # `conjugate` ufunc, while some implementations only have the shorter
+        # `conj` (e.g. cl.array.Array), so this should work for everybody
+        return x.conj()
+
+    conj = conjugate
+
 
 class ArrayContext:
     """An interface that allows a :class:`Discretization` to create and interact with
@@ -217,12 +226,15 @@ class ArrayContext:
 # {{{ PyOpenCLArrayContext
 
 class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
-    def __getattr__(self, name):
-        if name in ["minimum", "maximum"]:
-            import pyopencl.array as cl_array
-            return obj_array_vectorized_n_args(getattr(cl_array, name))
+    @obj_array_vectorized_n_args
+    def maximum(self, x, y):
+        import pyopencl.array as cl_array
+        return cl_array.maximum(x, y)
 
-        return super().__getattr__(name)
+    @obj_array_vectorized_n_args
+    def minimum(self, x, y):
+        import pyopencl.array as cl_array
+        return cl_array.minimum(x, y)
 
     @obj_array_vectorized_n_args
     def where(self, criterion, then, else_):
