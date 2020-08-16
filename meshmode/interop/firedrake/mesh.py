@@ -779,6 +779,9 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
 
     :param mesh: A :class:`~meshmode.mesh.Mesh` to convert with
         at least one :class:`~meshmode.mesh.SimplexElementGroup`.
+        'mesh.is_conforming' must evaluate to *True*.
+        'mesh' must have vertices supplied, i.e.
+        'mesh.vertices' must not be *None*.
     :param group_nr: The group number to be converted into a firedrake
         mesh. The corresponding group must be of type
         :class:`~meshmode.mesh.SimplexElementGroup`. If *None* and
@@ -834,6 +837,10 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     if mesh.vertices is None:
         raise ValueError("'mesh' has no vertices "
                          "('mesh.vertices' is *None*)")
+    if not mesh.is_conforming:
+        raise ValueError(f"'mesh.is_conforming' is {mesh.is_conforming} "
+                         "instead of *True*. Converting non-conforming "
+                         " meshes to Firedrake is not supported")
 
     # Get the vertices and vertex indices of the requested group
     vertices_logger = ProcessLogger(logger,
@@ -921,12 +928,7 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     fspace_logger = ProcessLogger(logger, "Building firedrake function "
                                   "space for mesh coordinates")
     from firedrake import VectorFunctionSpace, Function
-    if mesh.is_conforming:
-        family = 'CG'
-    else:
-        warn("Non-conforming meshes are untested,... I think they should work")
-        family = 'DG'
-    coords_fspace = VectorFunctionSpace(top, family, group.order,
+    coords_fspace = VectorFunctionSpace(top, 'CG', group.order,
                                         dim=mesh.ambient_dim)
     coords = Function(coords_fspace)
     fspace_logger.done()
