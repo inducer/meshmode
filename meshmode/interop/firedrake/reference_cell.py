@@ -119,20 +119,39 @@ def get_finat_element_unit_nodes(finat_element):
     Returns the unit nodes used by the :mod:`finat` element in firedrake's
     (equivalently, :mod:`finat`/:mod:`FIAT`'s) reference coordinates
 
-    :arg finat_element: A :class:`~finat.finiteelementbase.FiniteElementBase`
-        instance (i.e. a firedrake function space's reference element).
+    :arg finat_element: A :class:`finat.finiteelementbase.FiniteElementBase`
+        instance whose :mod:`FIAT` element is of type
+        :class:`FIAT.finite_element.CiarletElement`
+        (i.e. a certain type of reference element used by
+        firedrake with dofs guaranteed to be nodal)
         The reference element of the finat element *MUST* be a simplex.
     :return: A numpy array of shape *(dim, nunit_dofs)* holding the unit
              nodes used by this element. *dim* is the dimension spanned
              by the finat element's reference element
              (see its ``cell`` attribute)
     """
+    from finat.finiteelementbase import FiniteElementBase
+    from FIAT.finite_element import CiarletElement
     from FIAT.reference_element import Simplex
+    if not isinstance(finat_element, FiniteElementBase):
+        raise TypeError("'finat_element' is of unexpected type "
+                        f"{type(finat_element)}. 'finat_element' must be an "
+                        "instance of finat.finiteelementbase.FiniteElementBase")
+    if not isinstance(finat_element._element, CiarletElement):
+        raise TypeError("'finat_element._element' is of unexpected type "
+                        f"{type(finat_element._element)}. "
+                        "'finat_element._element' must be an "
+                        "instance of FIAT.finite_element.CiarletElement")
     if not isinstance(finat_element.cell, Simplex):
         raise TypeError("Reference element of the finat element MUST be a"
                         " simplex, i.e. 'finat_element's *cell* attribute must"
                         " be of type FIAT.reference_element.Simplex, not "
                         f"'{type(finat_element.cell)}'")
+    # We insisted 'finat_element._element' was a
+    # FIAT.finite_element.CiarletElement,
+    # so the finat_element._element.dual.nodes ought to represent
+    # nodal dofs
+    #
     # point evaluators is a list of functions *p_0,...,p_{n-1}*.
     # *p_i(f)* evaluates function *f* at node *i* (stored as a tuple),
     # so to recover node *i* we need to evaluate *p_i* at the identity
