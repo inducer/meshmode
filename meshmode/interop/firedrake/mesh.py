@@ -297,7 +297,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         int_element_faces = int_element_faces[to_keep]
         int_neighbors = int_neighbors[to_keep]
         int_neighbor_faces = int_neighbor_faces[to_keep]
-        # For neighbor cells, change to new cell index or mark
+        # For neighbor cells, change to new cell index or record
         # as a new boundary (if the neighbor cell is not being used)
         no_bdy_neighbor_tag = -(_boundary_tag_bit(bdy_tags,
                                                   boundary_tag_to_index,
@@ -305,12 +305,31 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                 | _boundary_tag_bit(bdy_tags,
                                                     boundary_tag_to_index,
                                                     BTAG_NO_BOUNDARY))
+        newly_created_exterior_facs = []
         for ndx, icell in enumerate(int_neighbors):
             try:
                 int_neighbors[ndx] = cells_to_use_inv[icell]
             except KeyError:
-                int_neighbors[ndx] = no_bdy_neighbor_tag
-                int_neighbor_faces[ndx] = 0
+                newly_created_exterior_facs.append(ndx)
+        # Make boolean array: 1 if a newly created exterior facet, 0 if
+        #                     remains an interior facet
+        newly_created_exterior_facs = np.isin(np.arange(np.size(int_elements)),
+                                              newly_created_exterior_facs)
+        new_ext_elements = int_elements[newly_created_exterior_facs]
+        new_ext_element_faces = int_element_faces[newly_created_exterior_facs]
+        new_ext_neighbors = np.full(new_ext_elements.shape,
+                                    no_bdy_neighbor_tag,
+                                    dtype=IntType)
+        new_ext_neighbor_faces = np.full(new_ext_elements.shape,
+                                         0,
+                                         dtype=Mesh.face_id_dtype)
+        # Remove any (previously) interior facets that have become exterior
+        # facets
+        remaining_int_facs = np.logical_not(newly_created_exterior_facs)
+        int_elements = int_elements[remaining_int_facs]
+        int_element_faces = int_element_faces[remaining_int_facs]
+        int_neighbors = int_neighbors[remaining_int_facs]
+        int_neighbor_faces = int_neighbor_faces[remaining_int_facs]
 
     interconnectivity_grp = FacialAdjacencyGroup(igroup=0, ineighbor_group=0,
                                                  elements=int_elements,
@@ -335,7 +354,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     if cells_to_use is not None:
         to_keep = np.isin(ext_elements, cells_to_use)
         ext_elements = np.vectorize(cells_to_use_inv.__getitem__)(
-                ext_elements[to_keep])
+            ext_elements[to_keep])
         ext_element_faces = ext_element_faces[to_keep]
         ext_neighbor_faces = ext_neighbor_faces[to_keep]
 
@@ -349,6 +368,17 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         ext_neighbors = np.full(ext_elements.shape,
                                 marker_to_neighbor_value[None],
                                 dtype=IntType)
+
+    # If not using all the cells, some interior facets may have become
+    # interior facets:
+    if cells_to_use is not None:
+        # Record any newly created exterior facets
+        ext_elements = np.concatenate((ext_elements, new_ext_elements))
+        ext_element_faces = np.concatenate((ext_element_faces,
+                                            new_ext_element_faces))
+        ext_neighbor_faces = np.concatenate((ext_neighbor_faces,
+                                             new_ext_neighbor_faces))
+        ext_neighbors = np.concatenate((ext_neighbors, new_ext_neighbors))
 
     exterior_grp = FacialAdjacencyGroup(igroup=0, ineighbor=None,
                                         elements=ext_elements,
@@ -689,6 +719,9 @@ FromBoundaryFiredrakeConnection`.
         _get_firedrake_facial_adjacency_groups(fdrake_mesh,
                                                cells_to_use=cells_to_use)
     adj_grps_logger.done()
+
+    # TODO: Here the problem is that we moved interior facets to exterior facets,
+    #       so the shapes don't line up....
 
     # applied below to take elements and element_faces
     # (or neighbors and neighbor_faces) and flip in any faces that need to
