@@ -73,8 +73,7 @@ def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
         np.dot(flip_mat, flip_mat)
         - np.eye(len(flip_mat))) < 1e-13
 
-    # flip nodes that need to be flipped, note that this point we act
-    # like we are in a DG space
+    # flip nodes that need to be flipped
     flipped_nodes = np.copy(nodes)
     flipped_nodes[orient < 0] = np.einsum(
         "ij,ej->ei",
@@ -561,6 +560,35 @@ class FiredrakeConnection:
 # {{{ Create connection from firedrake into meshmode
 
 
+def _get_cells_to_use(fdrake_mesh, bdy_id):
+    """
+    Return the cell indices of 'fdrake_mesh' which have at least one vertex
+    coinciding with a facet which is marked with firedrake marker
+    'bdy_id'.
+
+    If 'bdy_id' is *None*, returns *None*
+
+    Separated into a function for testing purposes
+
+    :param fdrake_mesh: A mesh as in
+        :func:`~meshmode.interop.firedrake.mesh.import_firedrake_mesh`
+    :param bdy_id: As the argument 'restrict_to_boundary' in
+        :func:`build_connection_from_firedrake`
+    """
+    if bdy_id is None:
+        return None
+
+    cfspace = fdrake_mesh.coordinates.function_space()
+    cell_node_list = cfspace.cell_node_list
+
+    boundary_nodes = cfspace.boundary_nodes(bdy_id, 'topological')
+    # Reduce along each cell: Is a vertex of the cell in boundary nodes?
+    cell_is_near_bdy = np.any(np.isin(cell_node_list, boundary_nodes), axis=1)
+
+    from pyop2.datatypes import IntType
+    return np.nonzero(cell_is_near_bdy)[0].astype(IntType)
+
+
 def build_connection_from_firedrake(actx, fdrake_fspace, grp_factory=None,
                                     restrict_to_boundary=None):
 
@@ -651,18 +679,8 @@ PolynomialWarpAndBlendGroupFactory` is used.
     # If only converting a portion of the mesh near the boundary, get
     # *cells_to_use* as described in
     # :func:`meshmode.interop.firedrake.mesh.import_firedrake_mesh`
-    cells_to_use = None
-    if restrict_to_boundary is not None:
-        cfspace = fdrake_fspace.mesh().coordinates.function_space()
-        cell_node_list = cfspace.cell_node_list
-
-        boundary_nodes = cfspace.boundary_nodes(restrict_to_boundary,
-                                                'topological')
-        # Reduce along each cell: Is a vertex of the cell in boundary nodes?
-        cell_is_near_bdy = np.any(np.isin(cell_node_list, boundary_nodes), axis=1)
-
-        from pyop2.datatypes import IntType
-        cells_to_use = np.nonzero(cell_is_near_bdy)[0].astype(IntType)
+    cells_to_use = _get_cells_to_use(fdrake_fspace.mesh(),
+                                     restrict_to_boundary)
 
     # Create to_discr
     mm_mesh, orient = import_firedrake_mesh(fdrake_fspace.mesh(),

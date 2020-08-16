@@ -200,13 +200,14 @@ def test_to_fd_consistency(ctx_factory, mm_mesh, fspace_degree):
 # }}}
 
 
-# {{{ Now check the FromBoundaryFiredrakeConnection consistency
+# {{{ Now check the FiredrakeConnection consistency when restricted to bdy
 
 def test_from_boundary_consistency(ctx_factory,
                                    fdrake_mesh,
                                    fspace_degree):
     """
-    Make basic checks that FiredrakeFromBoundaryConnection is not doing
+    Make basic checks that FiredrakeConnection restricted to cells
+    near the boundary is not doing
     something obviously wrong,
     i.e. that the firedrake boundary tags partition the converted meshmode mesh,
     that the firedrake boundary tags correspond to the same physical
@@ -220,9 +221,10 @@ def test_from_boundary_consistency(ctx_factory,
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(queue)
 
-    frombdy_conn = FromBoundaryFiredrakeConnection(actx,
-                                                   fdrake_fspace,
-                                                   "on_boundary")
+    frombdy_conn = \
+        build_connection_from_firedrake(actx,
+                                        fdrake_fspace,
+                                        restrict_to_boundary="on_boundary")
 
     # Ensure the meshmode mesh has one group and make sure both
     # meshes agree on some basic properties
@@ -244,7 +246,8 @@ def test_from_boundary_consistency(ctx_factory,
     fdrake_unit_vert_indices = np.array(fdrake_unit_vert_indices)
 
     # only look at cells "near" bdy (with >= 1 vertex on)
-    cells_near_bdy = frombdy_conn._get_cells_to_use(fdrake_mesh)
+    from meshmode.interop.firedrake.connection import _get_cells_to_use
+    cells_near_bdy = _get_cells_to_use(fdrake_mesh, 'on_boundary')
     # get the firedrake vertices of cells near the boundary,
     # in no particular order
     fdrake_vert_indices = \
@@ -304,11 +307,8 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
     """
     cells_to_use = None
     if only_convert_bdy:
-        # make a dummy connection which just has a bdy_id
-        class DummyConnection(FromBoundaryFiredrakeConnection):
-            def __init__(self):
-                self.bdy_id = 'on_boundary'
-        cells_to_use = DummyConnection()._get_cells_to_use(square_or_cube_mesh)
+        from meshmode.interop.firedrake.connection import _get_cells_to_use
+        cells_to_use = _get_cells_to_use(square_or_cube_mesh, 'on_boundary')
     mm_mesh, orient = import_firedrake_mesh(square_or_cube_mesh,
                                             cells_to_use=cells_to_use)
     # Ensure meshmode required boundary tags are there
