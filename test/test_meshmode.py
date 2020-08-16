@@ -1596,6 +1596,7 @@ def test_array_context_np_workalike(ctx_factory):
             ("minimum", 2),
             ("maximum", 2),
             ("where", 3),
+            ("conj", 1),
             ]:
         args = [np.random.randn(discr.ndofs) for i in range(n_args)]
         ref_result = getattr(np, sym_name)(*args)
