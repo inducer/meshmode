@@ -82,8 +82,8 @@ def main():
 
     # {{{ Now send candidate_sol into firedrake and use it for boundary conditions
 
-    from meshmode.interop.firedrake import ToFiredrakeConnection
-    fd_connection = ToFiredrakeConnection(discr, group_nr=0)
+    from meshmode.interop.firedrake import build_connection_to_firedrake
+    fd_connection = build_connection_to_firedrake(discr, group_nr=0)
     # convert candidate_sol to firedrake
     fd_candidate_sol = fd_connection.from_meshmode(candidate_sol)
     # get the firedrake function space

@@ -36,8 +36,7 @@ def main():
     except ImportError:
         return 0
 
-    from meshmode.interop.firedrake import (
-        FromFiredrakeConnection, FromBoundaryFiredrakeConnection)
+    from meshmode.interop.firedrake import build_connection_from_firedrake
     from firedrake import (
         UnitSquareMesh, FunctionSpace, SpatialCoordinate, Function, cos
         )
@@ -54,22 +53,23 @@ def main():
     from meshmode.array_context import PyOpenCLArrayContext
     actx = PyOpenCLArrayContext(queue)
 
-    fd_connection = FromFiredrakeConnection(actx, fd_fspace)
-    fd_bdy_connection = FromBoundaryFiredrakeConnection(actx,
-                                                   fd_fspace,
-                                                   'on_boundary')
+    fd_connection = build_connection_from_firedrake(actx, fd_fspace)
+    fd_bdy_connection = \
+        build_connection_from_firedrake(actx,
+                                        fd_fspace,
+                                        restrict_to_boundary='on_boundary')
 
     # Plot the meshmode meshes that the connections connect to
     import matplotlib.pyplot as plt
     from meshmode.mesh.visualization import draw_2d_mesh
     fig, (ax1, ax2) = plt.subplots(1, 2)
-    ax1.set_title("FromFiredrakeConnection")
+    ax1.set_title("FiredrakeConnection")
     plt.sca(ax1)
     draw_2d_mesh(fd_connection.discr.mesh,
                  draw_vertex_numbers=False,
                  draw_element_numbers=False,
                  set_bounding_box=True)
-    ax2.set_title("FromBoundaryFiredrakeConnection")
+    ax2.set_title("FiredrakeConnection 'on_boundary'")
     plt.sca(ax2)
     draw_2d_mesh(fd_bdy_connection.discr.mesh,
                  draw_vertex_numbers=False,
@@ -77,7 +77,7 @@ def main():
                  set_bounding_box=True)
     plt.show()
 
-    # Plot fd_fntn using FromFiredrakeConnection
+    # Plot fd_fntn using unrestricted FiredrakeConnection
     from meshmode.discretization.visualization import make_visualizer
     discr = fd_connection.discr
     vis = make_visualizer(actx, discr, discr.groups[0].order+3)
@@ -85,17 +85,17 @@ def main():
 
     fig = plt.figure()
     ax1 = fig.add_subplot(1, 2, 1, projection='3d')
-    ax1.set_title("cos(x+y) in\nFromFiredrakeConnection")
+    ax1.set_title("cos(x+y) in\nFiredrakeConnection")
     vis.show_scalar_in_matplotlib_3d(field, do_show=False)
 
-    # Now repeat using FromBoundaryFiredrakeConnection
+    # Now repeat using FiredrakeConnection restricted to 'on_boundary'
     bdy_discr = fd_bdy_connection.discr
     bdy_vis = make_visualizer(actx, bdy_discr, bdy_discr.groups[0].order+3)
     bdy_field = fd_bdy_connection.from_firedrake(fd_fntn, actx=actx)
 
     ax2 = fig.add_subplot(1, 2, 2, projection='3d')
     plt.sca(ax2)
-    ax2.set_title("cos(x+y) in\nFromBoundaryFiredrakeConnection")
+    ax2.set_title("cos(x+y) in\nFiredrakeConnection 'on_boundary'")
     bdy_vis.show_scalar_in_matplotlib_3d(bdy_field, do_show=False)
 
     import matplotlib.cm as cm

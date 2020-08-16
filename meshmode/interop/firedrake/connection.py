@@ -22,9 +22,8 @@ THE SOFTWARE.
 
 __doc__ = """
 .. autoclass:: FiredrakeConnection
-.. autoclass:: FromFiredrakeConnection
-.. autoclass:: FromBoundaryFiredrakeConnection
-.. autoclass:: ToFiredrakeConnection
+.. autofunction:: build_connection_to_firedrake
+.. autofunction:: build_connection_from_firedrake
 """
 
 import numpy as np
@@ -89,11 +88,12 @@ def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
 class FiredrakeConnection:
     """
     A connection between one group of
-    a meshmode discretization and a firedrake "CG" or "DG"
+    a meshmode discretization and a firedrake "DG"
     function space.
 
-    Users should instantiate this using a
-    :class:`FromFiredrakeConnection` or :class:`ToFiredrakeConnection`.
+    Users should instantiate this using
+    :func:`build_connection_to_firedrake`
+    or :func:`build_connection_from_firedrake`
 
     .. attribute:: discr
 
@@ -561,169 +561,143 @@ class FiredrakeConnection:
 # {{{ Create connection from firedrake into meshmode
 
 
-class FromFiredrakeConnection(FiredrakeConnection):
+def build_connection_from_firedrake(actx, fdrake_fspace, grp_factory=None,
+                                    restrict_to_boundary=None):
+
     """
-    A connection created from a :mod:`firedrake`
-    ``"CG"`` or ``"DG"`` function space which creates a corresponding
-    meshmode discretization and allows
+    Create a :class:`FiredrakeConnection` from a :mod:`firedrake`
+    ``"DG"`` function space by creates a corresponding
+    meshmode discretization and facilitating
     transfer of functions to and from :mod:`firedrake`.
 
-    .. automethod:: __init__
-    """
-    def __init__(self, actx, fdrake_fspace, grp_factory=None):
-        """
-        :arg actx: A :class:`~meshmode.array_context.ArrayContext`
-            used to instantiate :attr:`FiredrakeConnection.discr`.
-        :arg fdrake_fspace: A :mod:`firedrake` ``"CG"`` or ``"DG"``
-            function space (of class
-            :class:`~firedrake.functionspaceimpl.WithGeometry`) built on
-            a mesh which is importable by
-            :func:`~meshmode.interop.firedrake.mesh.import_firedrake_mesh`.
-        :arg grp_factory: (optional) If not *None*, should be
-            a :class:`~meshmode.discretization.poly_element.ElementGroupFactory`
-            whose group class is a subclass of
-            :class:`~meshmode.discretization.InterpolatoryElementGroupBase`.
-            If *None*, and :mod:`recursivenodes` can be imported,
-            a :class:`~meshmode.discretization.poly_element.\
+    :arg actx: A :class:`~meshmode.array_context.ArrayContext`
+        used to instantiate :attr:`FiredrakeConnection.discr`.
+    :arg fdrake_fspace: A :mod:`firedrake` ``"DG"``
+        function space (of class
+        :class:`~firedrake.functionspaceimpl.WithGeometry`) built on
+        a mesh which is importable by
+        :func:`~meshmode.interop.firedrake.mesh.import_firedrake_mesh`.
+    :arg grp_factory: (optional) If not *None*, should be
+        a :class:`~meshmode.discretization.poly_element.ElementGroupFactory`
+        whose group class is a subclass of
+        :class:`~meshmode.discretization.InterpolatoryElementGroupBase`.
+        If *None*, and :mod:`recursivenodes` can be imported,
+        a :class:`~meshmode.discretization.poly_element.\
 PolynomialRecursiveNodesGroupFactory` with ``'lgl'`` nodes is used.
-            Note that :mod:`recursivenodes` may not be importable
-            as it uses :func:`math.comb`, which is new in Python 3.8.
-            In the case that :mod:`recursivenodes` cannot be successfully
-            imported, a :class:`~meshmode.discretization.poly_element.\
+        Note that :mod:`recursivenodes` may not be importable
+        as it uses :func:`math.comb`, which is new in Python 3.8.
+        In the case that :mod:`recursivenodes` cannot be successfully
+        imported, a :class:`~meshmode.discretization.poly_element.\
 PolynomialWarpAndBlendGroupFactory` is used.
-        """
-        # Ensure fdrake_fspace is a function space with appropriate reference
-        # element.
-        from firedrake.functionspaceimpl import WithGeometry
-        if not isinstance(fdrake_fspace, WithGeometry):
-            raise TypeError("'fdrake_fspace' must be of firedrake type "
-                            "WithGeometry, not '%s'."
-                            % type(fdrake_fspace))
-        ufl_elt = fdrake_fspace.ufl_element()
-
-        if ufl_elt.family() != 'Discontinuous Lagrange':
-            raise ValueError("the 'fdrake_fspace.ufl_element().family()' of "
-                             "must be be "
-                             "'Discontinuous Lagrange', not '%s'."
-                             % ufl_elt.family())
-        # Make sure grp_factory is the right type if provided, and
-        # uses an interpolatory class.
-        if grp_factory is not None:
-            if not isinstance(grp_factory, ElementGroupFactory):
-                raise TypeError("'grp_factory' must inherit from "
-                                "meshmode.discretization.ElementGroupFactory,"
-                                "but is instead of type "
-                                "'%s'." % type(grp_factory))
-            if not issubclass(grp_factory.group_class,
-                              InterpolatoryElementGroupBase):
-                raise TypeError("'grp_factory.group_class' must inherit from"
-                                "meshmode.discretization."
-                                "InterpolatoryElementGroupBase, but"
-                                " is instead of type '%s'"
-                                % type(grp_factory.group_class))
-        # If not provided, make one
-        else:
-            degree = ufl_elt.degree()
-            try:
-                # recursivenodes is only importable in Python 3.8 since
-                # it uses :func:`math.comb`, so need to check if it can
-                # be imported
-                import recursivenodes  # noqa : F401
-                family = 'lgl'  # L-G-Legendre
-                grp_factory = PolynomialRecursiveNodesGroupFactory(degree, family)
-            except ImportError:
-                # If cannot be imported, uses warp-and-blend nodes
-                grp_factory = PolynomialWarpAndBlendGroupFactory(degree)
-
-        # In case this class is really a FromBoundaryFiredrakeConnection,
-        # get *cells_to_use*
-        cells_to_use = self._get_cells_to_use(fdrake_fspace.mesh())
-        # Create to_discr
-        mm_mesh, orient = import_firedrake_mesh(fdrake_fspace.mesh(),
-                                                cells_to_use=cells_to_use)
-        to_discr = Discretization(actx, mm_mesh, grp_factory)
-
-        # get firedrake unit nodes and map onto meshmode reference element
-        group = to_discr.groups[0]
-        fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(group.dim,
-                                                                 True)
-        fd_unit_nodes = get_finat_element_unit_nodes(fdrake_fspace.finat_element)
-        fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
-        # Flipping negative elements corresponds to reordering the nodes.
-        # We handle reordering by storing the permutation explicitly as
-        # a numpy array
-
-        # Get the reordering fd->mm.
-        flip_mat = get_simplex_element_flip_matrix(ufl_elt.degree(),
-                                                   fd_unit_nodes)
-        fd_cell_node_list = fdrake_fspace.cell_node_list
-        if cells_to_use is not None:
-            fd_cell_node_list = fd_cell_node_list[cells_to_use]
-        # flip fd_cell_node_list
-        flipped_cell_node_list = _reorder_nodes(orient,
-                                                fd_cell_node_list,
-                                                flip_mat,
-                                                unflip=False)
-
-        assert np.size(np.unique(flipped_cell_node_list)) == \
-            np.size(flipped_cell_node_list), \
-            "A firedrake node in a 'DG' space got duplicated"
-        super(FromFiredrakeConnection, self).__init__(to_discr,
-                                                      fdrake_fspace,
-                                                      flipped_cell_node_list)
-
-    def _get_cells_to_use(self, mesh):
-        """
-        For compatibility with :class:`FromFiredrakeBdyConnection`
-        """
-        return None
-
-
-class FromBoundaryFiredrakeConnection(FromFiredrakeConnection):
+    :arg restrict_to_boundary: (optional)
+        If not *None*, then must be a valid boundary marker for
+        ``fdrake_fspace.mesh()``. In this case, creates a
+        :class:`~meshmode.discretization.Discretization` on a submesh
+        of ``fdrake_fspace.mesh()`` created from the cells with at least
+        one vertex on a facet marked with the marker
+        *restrict_to_boundary*.
     """
-    A connection created from a :mod:`firedrake`
-    ``"CG"`` or ``"DG"`` function space which creates a
-    meshmode discretization corresponding to all cells with at
-    least one vertex on the given boundary and allows
-    transfer of functions to and from :mod:`firedrake`.
+    # Ensure fdrake_fspace is a function space with appropriate reference
+    # element.
+    from firedrake.functionspaceimpl import WithGeometry
+    if not isinstance(fdrake_fspace, WithGeometry):
+        raise TypeError("'fdrake_fspace' must be of firedrake type "
+                        "WithGeometry, not '%s'."
+                        % type(fdrake_fspace))
+    ufl_elt = fdrake_fspace.ufl_element()
 
-    Use the same bdy_id as one would for a
-    :class:`firedrake.bcs.DirichletBC` instance.
-    ``"on_boundary"`` corresponds to the entire boundary.
+    if ufl_elt.family() != 'Discontinuous Lagrange':
+        raise ValueError("the 'fdrake_fspace.ufl_element().family()' of "
+                         "must be be "
+                         "'Discontinuous Lagrange', not '%s'."
+                         % ufl_elt.family())
+    # Make sure grp_factory is the right type if provided, and
+    # uses an interpolatory class.
+    if grp_factory is not None:
+        if not isinstance(grp_factory, ElementGroupFactory):
+            raise TypeError("'grp_factory' must inherit from "
+                            "meshmode.discretization.ElementGroupFactory,"
+                            "but is instead of type "
+                            "'%s'." % type(grp_factory))
+        if not issubclass(grp_factory.group_class,
+                          InterpolatoryElementGroupBase):
+            raise TypeError("'grp_factory.group_class' must inherit from"
+                            "meshmode.discretization."
+                            "InterpolatoryElementGroupBase, but"
+                            " is instead of type '%s'"
+                            % type(grp_factory.group_class))
+    # If not provided, make one
+    else:
+        degree = ufl_elt.degree()
+        try:
+            # recursivenodes is only importable in Python 3.8 since
+            # it uses :func:`math.comb`, so need to check if it can
+            # be imported
+            import recursivenodes  # noqa : F401
+            family = 'lgl'  # L-G-Legendre
+            grp_factory = PolynomialRecursiveNodesGroupFactory(degree, family)
+        except ImportError:
+            # If cannot be imported, uses warp-and-blend nodes
+            grp_factory = PolynomialWarpAndBlendGroupFactory(degree)
+    if restrict_to_boundary is not None:
+        uniq_markers = fdrake_fspace.mesh().exterior_facets.unique_markers
+        allowable_bdy_ids = list(uniq_markers) + ["on_boundary"]
+        if restrict_to_boundary not in allowable_bdy_ids:
+            raise ValueError("'restrict_to_boundary' must be one of"
+                            " the following allowable boundary ids: "
+                            f"{allowable_bdy_ids}, not "
+                            f"'{restrict_to_boundary}'")
 
-    .. attribute:: bdy_id
-
-        the boundary id of the boundary being connecting from
-
-    .. automethod:: __init__
-    """
-    def __init__(self, actx, fdrake_fspace, bdy_id, grp_factory=None):
-        """
-        :arg bdy_id: A boundary marker of *fdrake_fspace.mesh()* as accepted by
-            the *boundary_nodes* method of a
-            :class:`firedrake.functionspaceimpl.WithGeometry`.
-
-        Other arguments are as in
-        :class:`~meshmode.interop.firedrake.connection.FromFiredrakeConnection`.
-        """
-        self.bdy_id = bdy_id
-        super(FromBoundaryFiredrakeConnection, self).__init__(
-            actx, fdrake_fspace, grp_factory=grp_factory)
-
-    def _get_cells_to_use(self, mesh):
-        """
-        Returns an array of the cell ids with >= 1 vertex on the
-        given bdy_id
-        """
-        cfspace = mesh.coordinates.function_space()
+    # If only converting a portion of the mesh near the boundary, get
+    # *cells_to_use* as described in
+    # :func:`meshmode.interop.firedrake.mesh.import_firedrake_mesh`
+    cells_to_use = None
+    if restrict_to_boundary is not None:
+        cfspace = fdrake_fspace.mesh().coordinates.function_space()
         cell_node_list = cfspace.cell_node_list
 
-        boundary_nodes = cfspace.boundary_nodes(self.bdy_id, 'topological')
+        boundary_nodes = cfspace.boundary_nodes(restrict_to_boundary,
+                                                'topological')
         # Reduce along each cell: Is a vertex of the cell in boundary nodes?
         cell_is_near_bdy = np.any(np.isin(cell_node_list, boundary_nodes), axis=1)
 
         from pyop2.datatypes import IntType
-        return np.nonzero(cell_is_near_bdy)[0].astype(IntType)
+        cells_to_use = np.nonzero(cell_is_near_bdy)[0].astype(IntType)
+
+    # Create to_discr
+    mm_mesh, orient = import_firedrake_mesh(fdrake_fspace.mesh(),
+                                            cells_to_use=cells_to_use)
+    to_discr = Discretization(actx, mm_mesh, grp_factory)
+
+    # get firedrake unit nodes and map onto meshmode reference element
+    group = to_discr.groups[0]
+    fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(group.dim,
+                                                             True)
+    fd_unit_nodes = get_finat_element_unit_nodes(fdrake_fspace.finat_element)
+    fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
+    # Flipping negative elements corresponds to reordering the nodes.
+    # We handle reordering by storing the permutation explicitly as
+    # a numpy array
+
+    # Get the reordering fd->mm.
+    flip_mat = get_simplex_element_flip_matrix(ufl_elt.degree(),
+                                               fd_unit_nodes)
+    fd_cell_node_list = fdrake_fspace.cell_node_list
+    if cells_to_use is not None:
+        fd_cell_node_list = fd_cell_node_list[cells_to_use]
+    # flip fd_cell_node_list
+    flipped_cell_node_list = _reorder_nodes(orient,
+                                            fd_cell_node_list,
+                                            flip_mat,
+                                            unflip=False)
+
+    assert np.size(np.unique(flipped_cell_node_list)) == \
+        np.size(flipped_cell_node_list), \
+        "A firedrake node in a 'DG' space got duplicated"
+
+    return FiredrakeConnection(to_discr,
+                               fdrake_fspace,
+                               flipped_cell_node_list)
 
 # }}}
 
@@ -731,84 +705,80 @@ class FromBoundaryFiredrakeConnection(FromFiredrakeConnection):
 # {{{ Create connection to firedrake from meshmode
 
 
-class ToFiredrakeConnection(FiredrakeConnection):
+def build_connection_to_firedrake(discr, group_nr=None, comm=None):
     """
     Create a connection from a meshmode discretization
     into firedrake. Create a corresponding "DG" function
     space and allow for conversion back and forth
     by resampling at the nodes.
 
-    .. automethod:: __init__
-    """
-    def __init__(self, discr, group_nr=None, comm=None):
-        """
-        :param discr: A :class:`~meshmode.discretization.Discretization`
-            to intialize the connection with
-        :param group_nr: The group number of the discretization to convert.
-            If *None* there must be only one group. The selected group
-            must be of type
-            :class:`~meshmode.discretization.poly_element.\
+    :param discr: A :class:`~meshmode.discretization.Discretization`
+        to intialize the connection with
+    :param group_nr: The group number of the discretization to convert.
+        If *None* there must be only one group. The selected group
+        must be of type
+        :class:`~meshmode.discretization.poly_element.\
 InterpolatoryQuadratureSimplexElementGroup`.
 
-        :param comm: Communicator to build a dmplex object on for the created
-            firedrake mesh
-        """
-        if group_nr is None:
-            if len(discr.groups) != 1:
-                raise ValueError("'group_nr' is *None*, but 'discr' has '%s' "
-                                 "!= 1 groups." % len(discr.groups))
-            group_nr = 0
-        el_group = discr.groups[group_nr]
+    :param comm: Communicator to build a dmplex object on for the created
+        firedrake mesh
+    """
+    if group_nr is None:
+        if len(discr.groups) != 1:
+            raise ValueError("'group_nr' is *None*, but 'discr' has '%s' "
+                             "!= 1 groups." % len(discr.groups))
+        group_nr = 0
+    el_group = discr.groups[group_nr]
 
-        from firedrake.functionspace import FunctionSpace
-        fd_mesh, fd_cell_order, perm2cells = \
-            export_mesh_to_firedrake(discr.mesh, group_nr, comm)
-        fspace = FunctionSpace(fd_mesh, 'DG', el_group.order)
-        # get firedrake unit nodes and map onto meshmode reference element
-        dim = fspace.mesh().topological_dimension()
-        fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(dim, True)
-        fd_unit_nodes = get_finat_element_unit_nodes(fspace.finat_element)
-        fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
+    from firedrake.functionspace import FunctionSpace
+    fd_mesh, fd_cell_order, perm2cells = \
+        export_mesh_to_firedrake(discr.mesh, group_nr, comm)
+    fspace = FunctionSpace(fd_mesh, 'DG', el_group.order)
+    # get firedrake unit nodes and map onto meshmode reference element
+    dim = fspace.mesh().topological_dimension()
+    fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(dim, True)
+    fd_unit_nodes = get_finat_element_unit_nodes(fspace.finat_element)
+    fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
 
-        # **_cell_node holds the node nrs in shape *(ncells, nunit_nodes)*
-        fd_cell_node = fspace.cell_node_list
+    # **_cell_node holds the node nrs in shape *(ncells, nunit_nodes)*
+    fd_cell_node = fspace.cell_node_list
 
-        # To get the meshmode to firedrake node assocation, we need to handle
-        # local vertex reordering and cell reordering.
-        from pyop2.datatypes import IntType
-        mm2fd_node_mapping = np.ndarray((el_group.nelements, el_group.nunit_dofs),
-                                        dtype=IntType)
-        for perm, cells in perm2cells.items():
-            # reordering_arr[i] should be the fd node corresponding to meshmode
-            # node i
-            #
-            # The jth meshmode cell corresponds to the fd_cell_order[j]th
-            # firedrake cell. If *nodeperm* is the permutation of local nodes
-            # applied to the *j*th meshmode cell, the firedrake node
-            # fd_cell_node[fd_cell_order[j]][k] corresponds to the
-            # mm_cell_node[j, nodeperm[k]]th meshmode node.
-            #
-            # Note that the permutation on the unit nodes may not be the
-            # same as the permutation on the barycentric coordinates (*perm*).
-            # Importantly, the permutation is derived from getting a flip
-            # matrix from the Firedrake unit nodes, not necessarily the meshmode
-            # unit nodes
-            #
-            flip_mat = get_simplex_element_flip_matrix(el_group.order,
-                                                       fd_unit_nodes,
-                                                       np.argsort(perm))
-            flip_mat = np.rint(flip_mat).astype(IntType)
-            fd_permuted_cell_node = np.matmul(fd_cell_node[fd_cell_order[cells]],
-                                              flip_mat.T)
-            mm2fd_node_mapping[cells] = fd_permuted_cell_node
+    # To get the meshmode to firedrake node assocation, we need to handle
+    # local vertex reordering and cell reordering.
+    from pyop2.datatypes import IntType
+    mm2fd_node_mapping = np.ndarray((el_group.nelements, el_group.nunit_dofs),
+                                    dtype=IntType)
+    for perm, cells in perm2cells.items():
+        # reordering_arr[i] should be the fd node corresponding to meshmode
+        # node i
+        #
+        # The jth meshmode cell corresponds to the fd_cell_order[j]th
+        # firedrake cell. If *nodeperm* is the permutation of local nodes
+        # applied to the *j*th meshmode cell, the firedrake node
+        # fd_cell_node[fd_cell_order[j]][k] corresponds to the
+        # mm_cell_node[j, nodeperm[k]]th meshmode node.
+        #
+        # Note that the permutation on the unit nodes may not be the
+        # same as the permutation on the barycentric coordinates (*perm*).
+        # Importantly, the permutation is derived from getting a flip
+        # matrix from the Firedrake unit nodes, not necessarily the meshmode
+        # unit nodes
+        #
+        flip_mat = get_simplex_element_flip_matrix(el_group.order,
+                                                   fd_unit_nodes,
+                                                   np.argsort(perm))
+        flip_mat = np.rint(flip_mat).astype(IntType)
+        fd_permuted_cell_node = np.matmul(fd_cell_node[fd_cell_order[cells]],
+                                          flip_mat.T)
+        mm2fd_node_mapping[cells] = fd_permuted_cell_node
 
-        assert np.size(np.unique(mm2fd_node_mapping)) == \
-            np.size(mm2fd_node_mapping), \
-            "A firedrake node in a 'DG' space got duplicated"
-        super(ToFiredrakeConnection, self).__init__(discr,
-                                                    fspace,
-                                                    mm2fd_node_mapping,
-                                                    group_nr=group_nr)
+    assert np.size(np.unique(mm2fd_node_mapping)) == \
+        np.size(mm2fd_node_mapping), \
+        "A firedrake node in a 'DG' space got duplicated"
+    return FiredrakeConnection(discr,
+                               fspace,
+                               mm2fd_node_mapping,
+                               group_nr=group_nr)
 
 # }}}
 

@@ -12,15 +12,15 @@ Function Spaces/Discretizations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Users wishing to interact with :mod:`meshmode` from :mod:`firedrake`
-will primarily interact with the
-:class:`~meshmode.interop.firedrake.connection.FromFiredrakeConnection` and
-:class:`~meshmode.interop.firedrake.connection.FromBoundaryFiredrakeConnection`
-classes, while users wishing
+will create a 
+:class:`~meshmode.interop.firedrake.connection.FiredrakeConnection`
+using :func:`~meshmode.interop.firedrake.connection.build_connection_from_firedrake`,
+while users wishing
 to interact with :mod:`firedrake` from :mod:`meshmode` will use
+will create a 
+:class:`~meshmode.interop.firedrake.connection.FiredrakeConnection`
+using :func:`~meshmode.interop.firedrake.connection.build_connection_to_firedrake`.
 the :class:`~meshmode.interop.firedrake.connection.ToFiredrakeConnection` class.
-All of these classes inherit from
-the :class:`~meshmode.interop.firedrake.connection.FiredrakeConnection`
-class, which provides the interface.
 It is not recommended to create a
 :class:`~meshmode.interop.firedrake.connection.FiredrakeConnection` directly.
 

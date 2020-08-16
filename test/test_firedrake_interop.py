@@ -39,8 +39,8 @@ from meshmode.dof_array import DOFArray
 from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL, check_bc_coverage
 
 from meshmode.interop.firedrake import (
-    FromFiredrakeConnection, FromBoundaryFiredrakeConnection,
-    ToFiredrakeConnection, import_firedrake_mesh)
+    build_connection_from_firedrake, build_connection_to_firedrake,
+    import_firedrake_mesh)
 
 import pytest
 
@@ -168,7 +168,7 @@ def check_consistency(fdrake_fspace, discr, group_nr=0):
 
 def test_from_fd_consistency(ctx_factory, fdrake_mesh, fspace_degree):
     """
-    Check basic consistency with a FromFiredrakeConnection
+    Check basic consistency with a FiredrakeConnection built from firedrake
     """
     # make discretization from firedrake
     fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fspace_degree)
@@ -177,7 +177,7 @@ def test_from_fd_consistency(ctx_factory, fdrake_mesh, fspace_degree):
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(queue)
 
-    fdrake_connection = FromFiredrakeConnection(actx, fdrake_fspace)
+    fdrake_connection = build_connection_from_firedrake(actx, fdrake_fspace)
     discr = fdrake_connection.discr
     # Check consistency
     check_consistency(fdrake_fspace, discr)
@@ -192,7 +192,7 @@ def test_to_fd_consistency(ctx_factory, mm_mesh, fspace_degree):
 
     factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
     discr = Discretization(actx, mm_mesh, factory)
-    fdrake_connection = ToFiredrakeConnection(discr)
+    fdrake_connection = build_connection_to_firedrake(discr)
     fdrake_fspace = fdrake_connection.firedrake_fspace()
     # Check consistency
     check_consistency(fdrake_fspace, discr)
@@ -353,7 +353,9 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
 # }}}
 
 
-# TODO : Add test for ToFiredrakeConnection where group_nr != 0
+# TODO : Add test for FiredrakeConnection built from meshmode
+#        where group_nr != 0
+
 # {{{  Double check functions are being transported correctly
 
 
@@ -435,11 +437,12 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
         # make function space and build connection
         fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fspace_degree)
         if only_convert_bdy:
-            fdrake_connection = FromBoundaryFiredrakeConnection(actx,
-                                                                fdrake_fspace,
-                                                                'on_boundary')
+            fdrake_connection = \
+                build_connection_from_firedrake(actx,
+                                                fdrake_fspace,
+                                                restrict_to_boundary='on_boundary')
         else:
-            fdrake_connection = FromFiredrakeConnection(actx, fdrake_fspace)
+            fdrake_connection = build_connection_from_firedrake(actx, fdrake_fspace)
         # get this for making functions in firedrake
         spatial_coord = SpatialCoordinate(fdrake_mesh)
 
@@ -525,7 +528,7 @@ def test_to_fd_transfer(ctx_factory, fspace_degree, mesh_name, mesh_pars, dim):
         factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
         discr = Discretization(actx, mm_mesh, factory)
 
-        fdrake_connection = ToFiredrakeConnection(discr)
+        fdrake_connection = build_connection_to_firedrake(discr)
         fdrake_fspace = fdrake_connection.firedrake_fspace()
         spatial_coord = SpatialCoordinate(fdrake_fspace.mesh())
 
@@ -597,13 +600,14 @@ def test_from_fd_idempotency(ctx_factory,
     #
     # Otherwise, just continue as normal
     if only_convert_bdy:
-        fdrake_connection = FromBoundaryFiredrakeConnection(actx,
-                                                            fdrake_fspace,
-                                                            'on_boundary')
+        fdrake_connection = \
+            build_connection_from_firedrake(actx,
+                                            fdrake_fspace,
+                                            restrict_to_boundary='on_boundary')
         temp = fdrake_connection.from_firedrake(fdrake_unique, actx=actx)
         fdrake_unique = fdrake_connection.from_meshmode(temp)
     else:
-        fdrake_connection = FromFiredrakeConnection(actx, fdrake_fspace)
+        fdrake_connection = build_connection_from_firedrake(actx, fdrake_fspace)
 
     # Test for idempotency fd->mm->fd
     mm_field = fdrake_connection.from_firedrake(fdrake_unique, actx=actx)
@@ -643,7 +647,7 @@ def test_to_fd_idempotency(ctx_factory, mm_mesh, fspace_degree):
     # Make a function space and a function with unique values at each node
     factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
     discr = Discretization(actx, mm_mesh, factory)
-    fdrake_connection = ToFiredrakeConnection(discr)
+    fdrake_connection = build_connection_to_firedrake(discr)
     fdrake_mesh = fdrake_connection.firedrake_fspace().mesh()
     dtype = fdrake_mesh.coordinates.dat.data.dtype
 
