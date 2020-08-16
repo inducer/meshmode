@@ -342,6 +342,44 @@ class PyOpenCLArrayContext(ArrayContext):
             program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
         return lp.tag_inames(program, {outer_iname: "g.0"})
 
+
+def pytest_generate_tests_for_pyopencl_array_context(metafunc):
+    import pyopencl as cl
+    from pyopencl.tools import _ContextFactory
+
+    class ArrayContextFactory(_ContextFactory):
+        def __call__(self):
+            ctx = super(ArrayContextFactory, self).__call__()
+            return PyOpenCLArrayContext(cl.CommandQueue(ctx))
+
+        def __str__(self):
+            return ("<array context factory for <pyopencl.Device '%s' on '%s'>" %
+                    (self.device.name.strip(),
+                     self.device.platform.name.strip()))
+
+    import pyopencl.tools as cl_tools
+    arg_names = cl_tools.get_pyopencl_fixture_arg_names(
+            metafunc, extra_arg_names=["actx_factory"])
+
+    if not arg_names:
+        return
+
+    arg_values, ids = cl_tools.get_pyopencl_fixture_arg_values()
+    if "actx_factory" in arg_names:
+        if "ctx_factory" in arg_names or "ctx_getter" in arg_names:
+            raise RuntimeError("Cannot use both an 'actx_factory' and a "
+                    "'ctx_factory' / 'ctx_getter' as arguments.")
+
+        for arg_dict in arg_values:
+            arg_dict["actx_factory"] = ArrayContextFactory(arg_dict["device"])
+
+    arg_values = [
+            tuple(arg_dict[name] for name in arg_names)
+            for arg_dict in arg_values
+            ]
+
+    metafunc.parametrize(arg_names, arg_values, ids=ids)
+
 # }}}
 
 

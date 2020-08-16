@@ -26,12 +26,11 @@ from functools import partial
 from six.moves import range
 import numpy as np
 import numpy.linalg as la
-import pyopencl as cl
 
 from pytools.obj_array import make_obj_array
 
-from pyopencl.tools import (  # noqa
-        pytest_generate_tests_for_pyopencl
+from meshmode.array_context import (  # noqa
+        pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
@@ -42,7 +41,6 @@ from meshmode.discretization.poly_element import (
         PolynomialEquidistantSimplexGroupFactory,
         )
 from meshmode.mesh import Mesh, BTAG_ALL
-from meshmode.array_context import PyOpenCLArrayContext
 from meshmode.dof_array import thaw, flat_norm, flatten, unflatten
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
@@ -89,7 +87,7 @@ def test_circle_mesh(visualize=False):
 # {{{ test visualizer
 
 @pytest.mark.parametrize("dim", [1, 2, 3])
-def test_parallel_vtk_file(ctx_factory, dim):
+def test_parallel_vtk_file(actx_factory, dim):
     r"""
     Simple test just generates a sample parallel PVTU file
     and checks it against the expected result.  The expected
@@ -97,9 +95,7 @@ def test_parallel_vtk_file(ctx_factory, dim):
     """
     logging.basicConfig(level=logging.INFO)
 
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     nelements = 64
     target_order = 4
@@ -150,12 +146,10 @@ def test_parallel_vtk_file(ctx_factory, dim):
 
 
 @pytest.mark.parametrize("dim", [1, 2, 3])
-def test_visualizers(ctx_factory, dim):
+def test_visualizers(actx_factory, dim):
     logging.basicConfig(level=logging.INFO)
 
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     nelements = 64
     target_order = 4
@@ -353,11 +347,9 @@ def test_box_boundary_tags(dim, nelem, group_factory):
     ("warp", 3, [10, 20, 30]),
     ])
 @pytest.mark.parametrize("per_face_groups", [False, True])
-def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
+def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
         mesh_name, dim, mesh_pars, per_face_groups):
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
@@ -446,11 +438,9 @@ def test_boundary_interpolation(ctx_factory, group_factory, boundary_tag,
     ("warp", 3, [10, 20, 30]),
     ])
 @pytest.mark.parametrize("per_face_groups", [False, True])
-def test_all_faces_interpolation(ctx_factory, mesh_name, dim, mesh_pars,
+def test_all_faces_interpolation(actx_factory, mesh_name, dim, mesh_pars,
         per_face_groups):
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
@@ -561,13 +551,10 @@ def test_all_faces_interpolation(ctx_factory, mesh_name, dim, mesh_pars,
     ("warp", 2, [3, 5, 7]),
     ("warp", 3, [3, 5]),
     ])
-def test_opposite_face_interpolation(ctx_factory, group_factory,
+def test_opposite_face_interpolation(actx_factory, group_factory,
         mesh_name, dim, mesh_pars):
     logging.basicConfig(level=logging.INFO)
-
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
@@ -687,14 +674,11 @@ def test_element_orientation():
     ("ball", lambda: mgen.generate_icosahedron(1, 1)),
     ("torus", lambda: mgen.generate_torus(5, 1)),
     ])
-def test_orientation_3d(ctx_factory, what, mesh_gen_func, visualize=False):
+def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
     pytest.importorskip("pytential")
 
     logging.basicConfig(level=logging.INFO)
-
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     mesh = mesh_gen_func()
 
@@ -744,7 +728,7 @@ def test_orientation_3d(ctx_factory, what, mesh_gen_func, visualize=False):
 
 # {{{ merge and map
 
-def test_merge_and_map(ctx_factory, visualize=False):
+def test_merge_and_map(actx_factory, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
     from meshmode.mesh.generation import generate_box_mesh
     from meshmode.discretization.poly_element import (
@@ -785,9 +769,7 @@ def test_merge_and_map(ctx_factory, visualize=False):
 
     if visualize:
         from meshmode.discretization import Discretization
-        cl_ctx = ctx_factory()
-        queue = cl.CommandQueue(cl_ctx)
-        actx = PyOpenCLArrayContext(queue)
+        actx = actx_factory()
         discr = Discretization(actx, mesh3, discr_grp_factory)
 
         from meshmode.discretization.visualization import make_visualizer
@@ -801,12 +783,9 @@ def test_merge_and_map(ctx_factory, visualize=False):
 
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("order", [1, 3])
-def test_sanity_single_element(ctx_factory, dim, order, visualize=False):
+def test_sanity_single_element(actx_factory, dim, order, visualize=False):
     pytest.importorskip("pytential")
-
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     from modepy.tools import unit_vertices
     vertices = unit_vertices(dim).T.copy()
@@ -883,14 +862,11 @@ def test_sanity_single_element(ctx_factory, dim, order, visualize=False):
 
 @pytest.mark.parametrize("dim", [2, 3, 4])
 @pytest.mark.parametrize("order", [3])
-def test_sanity_qhull_nd(ctx_factory, dim, order):
+def test_sanity_qhull_nd(actx_factory, dim, order):
     pytest.importorskip("scipy")
 
     logging.basicConfig(level=logging.INFO)
-
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     from scipy.spatial import Delaunay
     verts = np.random.rand(1000, dim)
@@ -938,14 +914,11 @@ def test_sanity_qhull_nd(ctx_factory, dim, order):
     ("ball-radius-1.step", 3),
     ])
 @pytest.mark.parametrize("mesh_order", [1, 2])
-def test_sanity_balls(ctx_factory, src_file, dim, mesh_order, visualize=False):
+def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
     pytest.importorskip("pytential")
 
     logging.basicConfig(level=logging.INFO)
-
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     from pytools.convergence import EOCRecorder
     vol_eoc_rec = EOCRecorder()
@@ -1066,7 +1039,7 @@ def test_rect_mesh(visualize=False):
         pt.show()
 
 
-def test_box_mesh(ctx_factory, visualize=False):
+def test_box_mesh(actx_factory, visualize=False):
     from meshmode.mesh.generation import generate_box_mesh
     mesh = generate_box_mesh(3*(np.linspace(0, 1, 5),))
 
@@ -1074,10 +1047,8 @@ def test_box_mesh(ctx_factory, visualize=False):
         from meshmode.discretization import Discretization
         from meshmode.discretization.poly_element import \
                 PolynomialWarpAndBlendGroupFactory
-        cl_ctx = ctx_factory()
-        queue = cl.CommandQueue(cl_ctx)
-        actx = PyOpenCLArrayContext(queue)
 
+        actx = actx_factory()
         discr = Discretization(actx, mesh,
                 PolynomialWarpAndBlendGroupFactory(7))
 
@@ -1277,7 +1248,7 @@ def test_quad_multi_element():
 
 # {{{ test_vtk_overwrite
 
-def test_vtk_overwrite(ctx_factory):
+def test_vtk_overwrite(actx_factory):
     pytest.importorskip("pyvisfile")
 
     def _try_write_vtk(writer, obj):
@@ -1296,10 +1267,7 @@ def test_vtk_overwrite(ctx_factory):
         if os.path.exists(filename):
             os.remove(filename)
 
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
-
+    actx = actx_factory()
     target_order = 7
 
     from meshmode.mesh.generation import generate_torus
@@ -1368,10 +1336,8 @@ def test_affine_map():
             assert la.norm(x-m_inv(m(x))) < 1e-10
 
 
-def test_mesh_without_vertices(ctx_factory):
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
+def test_mesh_without_vertices(actx_factory):
+    actx = actx_factory()
 
     # create a mesh
     from meshmode.mesh.generation import generate_icosphere
@@ -1494,10 +1460,8 @@ def test_is_affine_group_check(mesh_name):
 
 
 @pytest.mark.parametrize("ambient_dim", [1, 2, 3])
-def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
+def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
+    actx = actx_factory()
 
     order = 4
 
@@ -1575,10 +1539,8 @@ def test_mesh_multiple_groups(ctx_factory, ambient_dim, visualize=False):
             assert error < 1.0e-11, error
 
 
-def test_array_context_np_workalike(ctx_factory):
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
+def test_array_context_np_workalike(actx_factory):
+    actx = actx_factory()
 
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(
@@ -1609,10 +1571,8 @@ def test_array_context_np_workalike(ctx_factory):
         assert np.allclose(actx_result, ref_result)
 
 
-def test_dof_array_comparison(ctx_factory):
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
+def test_dof_array_comparison(actx_factory):
+    actx = actx_factory()
 
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(

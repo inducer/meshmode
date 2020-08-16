@@ -25,14 +25,13 @@ THE SOFTWARE.
 import logging
 from functools import partial
 
-import pytest
-import pyopencl as cl
-
 import numpy as np
-from pyopencl.tools import (  # noqa
-        pytest_generate_tests_for_pyopencl
+import pytest
+
+from meshmode.array_context import (  # noqa
+        pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
-from meshmode.array_context import PyOpenCLArrayContext
+
 from meshmode.dof_array import thaw, flat_norm
 from meshmode.mesh.generation import (  # noqa
         generate_icosahedron, generate_box_mesh, make_curve_mesh, ellipse)
@@ -182,7 +181,7 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
 ])
 # test_refinement_connection(cl._csc, RefinerWithoutAdjacency, PolynomialWarpAndBlendGroupFactory, 'warp', 2, [4, 5, 6], 5, partial(even_refine_flags, 2))  # noqa: E501
 def test_refinement_connection(
-        ctx_getter, refiner_cls, group_factory,
+        actx_factory, refiner_cls, group_factory,
         mesh_name, dim, mesh_pars, mesh_order, refine_flags, visualize=False):
     from random import seed
     seed(13)
@@ -190,9 +189,7 @@ def test_refinement_connection(
     # Discretization order
     order = 5
 
-    cl_ctx = ctx_getter()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
@@ -261,9 +258,9 @@ def test_refinement_connection(
 
         if visualize == "dots":
             import matplotlib.pyplot as plt
-            x = x.get(queue)
+            x = x.get(actx.queue)
             err = np.array(np.log10(
-                1e-16 + np.abs((f_interp - f_true).get(queue))), dtype=float)
+                1e-16 + np.abs((f_interp - f_true).get(actx.queue))), dtype=float)
             import matplotlib.cm as cm
             cmap = cm.ScalarMappable(cmap=cm.jet)
             cmap.set_array(err)
@@ -273,7 +270,7 @@ def test_refinement_connection(
 
         elif visualize == "vtk":
             from meshmode.discretization.visualization import make_visualizer
-            fine_vis = make_visualizer(queue, fine_discr, mesh_order)
+            fine_vis = make_visualizer(actx, fine_discr, mesh_order)
 
             fine_vis.write_vtk_file(
                     "refine-fine-%s-%dd-%s.vtu" % (mesh_name, dim, mesh_par), [

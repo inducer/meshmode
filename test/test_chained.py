@@ -24,14 +24,11 @@ THE SOFTWARE.
 
 import numpy as np
 
-import pyopencl as cl
-
 import pytest
-from pyopencl.tools import (  # noqa
-        pytest_generate_tests_for_pyopencl
+from meshmode.array_context import (  # noqa
+        pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
-from meshmode.array_context import PyOpenCLArrayContext
 from meshmode.dof_array import thaw, flat_norm, flatten
 
 import logging
@@ -118,13 +115,11 @@ def create_face_connection(actx, discr):
 
 @pytest.mark.skip(reason='implementation detail')
 @pytest.mark.parametrize("ndim", [2, 3])
-def test_chained_batch_table(ctx_factory, ndim, visualize=False):
+def test_chained_batch_table(actx_factory, ndim, visualize=False):
     from meshmode.discretization.connection.chained import \
         _build_element_lookup_table
 
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     discr = create_discretization(actx, ndim)
     connections = []
@@ -140,8 +135,8 @@ def test_chained_batch_table(ctx_factory, ndim, visualize=False):
     el_table = _build_element_lookup_table(actx, conn)
     for igrp, grp in enumerate(conn.groups):
         for ibatch, batch in enumerate(grp.batches):
-            ifrom = batch.from_element_indices.get(queue)
-            jfrom = el_table[igrp][batch.to_element_indices.get(queue)]
+            ifrom = batch.from_element_indices.get(actx.queue)
+            jfrom = el_table[igrp][batch.to_element_indices.get(actx.queue)]
 
             assert np.all(ifrom == jfrom)
         assert np.min(el_table[igrp]) >= 0
@@ -149,13 +144,11 @@ def test_chained_batch_table(ctx_factory, ndim, visualize=False):
 
 @pytest.mark.skip(reason='implementation detail')
 @pytest.mark.parametrize("ndim", [2, 3])
-def test_chained_new_group_table(ctx_factory, ndim, visualize=False):
+def test_chained_new_group_table(actx_factory, ndim, visualize=False):
     from meshmode.discretization.connection.chained import \
         _build_new_group_table
 
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     discr = create_discretization(actx, ndim,
                                   nelements=8,
@@ -198,10 +191,8 @@ def test_chained_new_group_table(ctx_factory, ndim, visualize=False):
 
 
 @pytest.mark.parametrize("ndim", [2, 3])
-def test_chained_connection(ctx_factory, ndim, visualize=False):
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
+def test_chained_connection(actx_factory, ndim, visualize=False):
+    actx = actx_factory()
 
     discr = create_discretization(actx, ndim, nelements=10)
     connections = []
@@ -228,13 +219,11 @@ def test_chained_connection(ctx_factory, ndim, visualize=False):
 
 @pytest.mark.skip(reason='slow test')
 @pytest.mark.parametrize("ndim", [2, 3])
-def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
+def test_chained_full_resample_matrix(actx_factory, ndim, visualize=False):
     from meshmode.discretization.connection.chained import \
         make_full_resample_matrix
 
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     discr = create_discretization(actx, ndim)
     connections = []
@@ -265,15 +254,13 @@ def test_chained_full_resample_matrix(ctx_factory, ndim, visualize=False):
 
 @pytest.mark.parametrize(("ndim", "chain_type"), [
     (2, 1), (2, 2), (3, 1), (3, 3)])
-def test_chained_to_direct(ctx_factory, ndim, chain_type,
+def test_chained_to_direct(actx_factory, ndim, chain_type,
                            nelements=128, visualize=False):
     import time
     from meshmode.discretization.connection.chained import \
         flatten_chained_connection
 
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = actx_factory()
 
     discr = create_discretization(actx, ndim, nelements=nelements)
     connections = []
@@ -312,7 +299,7 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type,
                                      dtype=np.int)
         for grp in direct.groups:
             for batch in grp.batches:
-                for i in batch.to_element_indices.get(queue):
+                for i in batch.to_element_indices.get(actx.queue):
                     to_element_indices[i] += 1
         assert np.min(to_element_indices) > 0
 
@@ -352,10 +339,8 @@ def test_chained_to_direct(ctx_factory, ndim, chain_type,
 @pytest.mark.parametrize(("ndim", "mesh_name"), [
     (2, "starfish"),
     (3, "torus")])
-def test_reversed_chained_connection(ctx_factory, ndim, mesh_name):
-    ctx = ctx_factory()
-    queue = cl.CommandQueue(ctx)
-    actx = PyOpenCLArrayContext(queue)
+def test_reversed_chained_connection(actx_factory, ndim, mesh_name):
+    actx = actx_factory()
 
     def run(nelements, order):
         discr = create_discretization(actx, ndim,
