@@ -47,6 +47,7 @@ jobs:
             run: |
                 sudo apt update
                 sudo apt upgrade -y
+                sudo apt install time
                 sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
                 sudo chown -R $(whoami) /github/home
 
@@ -78,6 +79,7 @@ jobs:
             run: |
                 sudo apt update
                 sudo apt upgrade -y
+                sudo apt install time
                 sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
                 sudo chown -R $(whoami) /github/home
 
