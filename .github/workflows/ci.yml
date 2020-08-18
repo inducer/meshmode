@@ -40,7 +40,7 @@ jobs:
             image: 'firedrakeproject/firedrake'
         steps:
         -   uses: actions/checkout@v1
-        -   name: "Dependencies"
+        -   name: "Dependencies"  &setup_firedrake_dependencies
             run: |
                 sudo apt update
                 sudo apt upgrade -y
@@ -55,16 +55,25 @@ jobs:
                 # doesn't have dataclasses.
                 pip install pytest dataclasses
                 pip install .
-        -   name: "Examples"
-            run: |
-                sudo apt install time
-                . /home/firedrake/firedrake/bin/activate
-                . ./.github/workflows/run_firedrake_examples.sh
         -   name: "Test"
             run: |
                 . /home/firedrake/firedrake/bin/activate
                 cd test
                 python -m pytest --tb=native -rxsw test_firedrake_interop.py
+
+    firedrake_examples:
+        name: Firedrake Examples
+        runs-on: ubuntu-latest
+        container:
+            image: 'firedrakeproject/firedrake'
+        steps:
+        -   uses: actions/checkout@v1
+        -   *setup_firedrake_dependencies
+        -   name: "Examples"
+            run: |
+                sudo apt install time
+                . /home/firedrake/firedrake/bin/activate
+                . ./.github/workflows/run_firedrake_examples.sh
 
     examples3:
         name: Examples Conda Py3
