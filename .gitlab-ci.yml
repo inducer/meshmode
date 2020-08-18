@@ -60,7 +60,7 @@ Python 3 POCL Firedrake:
     sudo apt install time
     sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
     source ~/firedrake/bin/activate
-    "grep -v loopy requirements.txt > myreq.txt"
+    grep -v loopy requirements.txt > myreq.txt
     pip install -r myreq.txt
     pip install --force-reinstall git+https://github.com/benSepanski/loopy.git@firedrake-usable_for_potentials
     # The Firedrake container is based on Py3.6 as of 2020-10-10, which
