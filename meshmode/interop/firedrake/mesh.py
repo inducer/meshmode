@@ -299,12 +299,6 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         int_neighbor_faces = int_neighbor_faces[to_keep]
         # For neighbor cells, change to new cell index or record
         # as a new boundary (if the neighbor cell is not being used)
-        no_bdy_neighbor_tag = -(_boundary_tag_bit(bdy_tags,
-                                                  boundary_tag_to_index,
-                                                  BTAG_REALLY_ALL)
-                                | _boundary_tag_bit(bdy_tags,
-                                                    boundary_tag_to_index,
-                                                    BTAG_NO_BOUNDARY))
         newly_created_exterior_facs = []
         for ndx, icell in enumerate(int_neighbors):
             try:
@@ -317,8 +311,14 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                               newly_created_exterior_facs)
         new_ext_elements = int_elements[newly_created_exterior_facs]
         new_ext_element_faces = int_element_faces[newly_created_exterior_facs]
+        new_ext_neighbor_tag = -(_boundary_tag_bit(bdy_tags,
+                                                  boundary_tag_to_index,
+                                                  BTAG_REALLY_ALL)
+                                | _boundary_tag_bit(bdy_tags,
+                                                    boundary_tag_to_index,
+                                                    BTAG_NO_BOUNDARY))
         new_ext_neighbors = np.full(new_ext_elements.shape,
-                                    no_bdy_neighbor_tag,
+                                    new_ext_neighbor_tag,
                                     dtype=IntType)
         new_ext_neighbor_faces = np.full(new_ext_elements.shape,
                                          0,

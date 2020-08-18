@@ -82,7 +82,7 @@ def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
     return flipped_nodes
 
 
-# {{{ Most basic connection between a fd function space and mm discretization
+# {{{ Connection between a fd function space and mm discretization
 
 class FiredrakeConnection:
     r"""
