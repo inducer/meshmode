@@ -398,7 +398,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
 def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
                                 cells_to_use,
                                 normals=None, no_normals_warn=True):
-    """
+    r"""
     Return the orientations of the mesh elements:
 
     :arg fdrake_mesh: As described in :func:`import_firedrake_mesh`
@@ -411,11 +411,11 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
     :arg cells_to_use: If *None*, then ignored. Otherwise, a numpy array
         of unique firedrake cell indices indicating which cells to use.
 
-    :return: A numpy array, the *i*th element is > 0 if the *i*th element
+    :return: A numpy array, the *i*\ th element is > 0 if the *i*\ th element
         is positively oriented, < 0 if negatively oriented.
         Mesh must have co-dimension 0 or 1. If *cells_to_use* is not
-        *None*, then the *i*th entry corresponds to the
-        *cells_to_use[i]*th element.
+        *None*, then the *i*\ th entry corresponds to the
+        *cells_to_use[i]*\ th element.
     """
     # compute orientations
     tdim = fdrake_mesh.topological_dimension()
@@ -481,7 +481,7 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
 
 def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
                           normals=None, no_normals_warn=None):
-    """
+    r"""
     Create a :class:`meshmode.mesh.Mesh`
     from a :class:`firedrake.mesh.MeshGeometry`
     with the same cells/elements, vertices, nodes,
@@ -546,8 +546,8 @@ FromBoundaryFiredrakeConnection`.
 
             - If *None* then
               all elements are assumed to be positively oriented.
-            - Else, should be a list/array whose *i*th entry
-              is the normal for the *i*th element (*i*th
+            - Else, should be a list/array whose *i*\ th entry
+              is the normal for the *i*\ th element (*i*\ th
               in *mesh.coordinate.function_space()*'s
               :attr:`cell_node_list`)
 
@@ -891,8 +891,8 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     #              Permutations on *n* vertices are stored as a tuple
     #              containing all of the integers *0*, *1*, *2*, ..., *n-1*
     #              exactly once. A permutation *p*
-    #              represents relabeling the *i*th local vertex
-    #              of a meshmode element as the *p[i]*th local vertex
+    #              represents relabeling the *i*\ th local vertex
+    #              of a meshmode element as the *p[i]*\ th local vertex
     #              in the corresponding firedrake cell.
     #
     #              *perm2cells[p]* is a list of all the meshmode element indices

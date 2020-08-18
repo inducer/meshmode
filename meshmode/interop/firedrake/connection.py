@@ -85,7 +85,7 @@ def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
 # {{{ Most basic connection between a fd function space and mm discretization
 
 class FiredrakeConnection:
-    """
+    r"""
     A connection between one group of
     a meshmode discretization and a firedrake "DG"
     function space.
@@ -108,9 +108,9 @@ class FiredrakeConnection:
         Letting *element_grp = self.discr.groups[self.group_nr]*,
         *mm2fd_node_mapping* is a numpy array of shape
         *(element_grp.nelements, element_grp.nunit_dofs)*
-        whose *(i, j)*th entry is the :mod:`firedrake` node
-        index associated to the *j*th degree of freedom of the
-        *i*th element in *element_grp*.
+        whose *(i, j)*\ th entry is the :mod:`firedrake` node
+        index associated to the *j*\ th degree of freedom of the
+        *i*\ th element in *element_grp*.
 
         :attr:`mm2fd_node_mapping` must encode an embedding
         into the :mod:`firedrake` mesh, i.e. no two :mod:`meshmode` nodes
@@ -353,7 +353,7 @@ class FiredrakeConnection:
                     prefix = f"'{field_name}' is a numpy array of shape " \
                         f"{field.shape}, which is interpreted as a mapping" \
                         f" into a space of sahpe {field.shape}. For each " \
-                        " multi-index *mi*, the *mi*th coordinate values " \
+                        r" multi-index *mi*, the *mi*\ th coordinate values " \
                         f" of '{field_name}' should be represented as a " \
                         f"DOFArray stored in '{field_name}[mi]'. If you are " \
                         " not trying to represent a mapping into a space of " \
@@ -772,7 +772,7 @@ InterpolatoryQuadratureSimplexElementGroup`.
         #
         # The jth meshmode cell corresponds to the fd_cell_order[j]th
         # firedrake cell. If *nodeperm* is the permutation of local nodes
-        # applied to the *j*th meshmode cell, the firedrake node
+        # applied to the *j*\ th meshmode cell, the firedrake node
         # fd_cell_node[fd_cell_order[j]][k] corresponds to the
         # mm_cell_node[j, nodeperm[k]]th meshmode node.
         #
