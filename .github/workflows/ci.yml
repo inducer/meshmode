@@ -40,7 +40,8 @@ jobs:
             image: 'firedrakeproject/firedrake'
         steps:
         -   uses: actions/checkout@v1
-        -   name: "Dependencies"  &setup_firedrake_dependencies
+        -   &setup_firedrake_dependencies 
+            name: "Dependencies"
             run: |
                 sudo apt update
                 sudo apt upgrade -y
