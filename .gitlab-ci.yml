@@ -54,7 +54,7 @@ Python 3 POCL Firedrake:
   - "docker-runner"
   image: "firedrakeproject/firedrake"
   script:
-  - &firedrake_setup
+  - &firedrake_setup |
     sudo apt update
     sudo apt upgrade -y
     sudo apt install time
