@@ -65,7 +65,7 @@ jobs:
                 python -m pytest --tb=native -rxsw test_firedrake_interop.py
 
     firedrake_examples:
-        name: Firedrake Examples
+        name: Examples Firedrake
         runs-on: ubuntu-latest
         container:
             image: 'firedrakeproject/firedrake'
