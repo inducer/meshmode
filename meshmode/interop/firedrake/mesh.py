@@ -772,7 +772,7 @@ FromBoundaryFiredrakeConnection`.
 # {{{ Mesh exporting to firedrake
 
 def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
-    """
+    r"""
     Create a firedrake mesh corresponding to one
     :class:`~meshmode.mesh.Mesh`'s
     :class:`~meshmode.mesh.SimplexElementGroup`.
@@ -795,10 +795,10 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
         * *fdrake_mesh* is a :mod:`firedrake`
           :class:`~firedrake.mesh.MeshGeometry` corresponding to
           *mesh*
-        * *fdrake_cell_ordering* is a numpy array: the *i*th
-          element in *mesh* (i.e. the *i*th element in
+        * *fdrake_cell_ordering* is a numpy array whose *i*\ th
+          element in *mesh* (i.e. the *i*\ th element in
           *mesh.groups[group_nr].vertex_indices*) corresponds to the
-          *fdrake_cell_ordering[i]*th :mod:`firedrake` cell
+          *fdrake_cell_ordering[i]*\ th :mod:`firedrake` cell
         * *perm2cell* is a dictionary, mapping tuples to
           1-D numpy arrays of meshmode element indices.
           Each meshmode element index
@@ -806,9 +806,9 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
           tuple describes how firedrake reordered the local vertex
           indices on that cell. In particular, if *c*
           is in the list *perm2cell[p]* for a tuple *p*, then
-          the *p[i]*th local vertex of the *fdrake_cell_ordering[c]*th
-          firedrake cell corresponds to the *i*th local vertex
-          of the *c*th meshmode element.
+          the *p[i]*\ th local vertex of the *fdrake_cell_ordering[c]*\ th
+          firedrake cell corresponds to the *i*\ th local vertex
+          of the *c*\ th meshmode element.
 
     .. warning::
         Currently, no custom boundary tags are exported along with the mesh.
