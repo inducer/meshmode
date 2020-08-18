@@ -50,7 +50,7 @@ from pytools import memoize_method
 
 def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
     """
-    return a flipped copy of *nodes* according to *orient*
+    Return a flipped copy of *nodes* according to *orient*.
 
     :arg orient: An array of shape *(nelements)* of orientations,
                  >0 for positive, <0 for negative
