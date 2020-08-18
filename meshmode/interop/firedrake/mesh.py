@@ -481,7 +481,7 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
 
 def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
                           normals=None, no_normals_warn=None):
-    r"""
+    """
     Create a :class:`meshmode.mesh.Mesh`
     from a :class:`firedrake.mesh.MeshGeometry`
     with the same cells/elements, vertices, nodes,
@@ -538,16 +538,16 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
         instead of :class:`~meshmode.mesh.BTAG_ALL`.
 
         This argument is primarily intended for use by a
-        :class:`~meshmode.interop.firedrake.connection.\
-FromBoundaryFiredrakeConnection`.
+        :func:`~meshmode.interop.firedrake.connection.\
+build_connection_from_firedrake`.
 
     :arg normals: **Only** used if *fdrake_mesh* is a 1-surface
         embedded in 2-space. In this case,
 
             - If *None* then
               all elements are assumed to be positively oriented.
-            - Else, should be a list/array whose *i*\ th entry
-              is the normal for the *i*\ th element (*i*\ th
+            - Else, should be a list/array whose *i*\\ th entry
+              is the normal for the *i*\\ th element (*i*\\ th
               in *mesh.coordinate.function_space()*'s
               :attr:`cell_node_list`)
 
