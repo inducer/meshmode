@@ -82,7 +82,7 @@ def get_affine_reference_simplex_mapping(ambient_dim, firedrake_to_meshmode=True
     assert from_verts.shape == to_verts.shape
     dim, nvects = from_verts.shape
 
-    # If only have one vertex, have A = I and b = to_vert - from_vert
+    # If we only have one vertex, have A = I and b = to_vert - from_vert
     if nvects == 1:
         shift = to_verts[:, 0] - from_verts[:, 0]
 
