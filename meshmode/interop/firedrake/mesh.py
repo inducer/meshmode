@@ -598,106 +598,97 @@ build_connection_from_firedrake`.
         _get_firedrake_boundary_tags(fdrake_mesh,
                                      include_no_boundary=include_no_boundary)
 
-    nodal_info_logger = ProcessLogger(logger, "Retrieving vertex indices and "
-                                      "computing NodalAdjacency from "
-                                      "firedrake mesh")
-    vertex_indices, nodal_adjacency = \
-        _get_firedrake_nodal_info(fdrake_mesh, cells_to_use=cells_to_use)
+    with ProcessLogger(logger, "Retrieving vertex indices and computing "
+                       "NodalAdjacency from firedrake mesh"):
+        vertex_indices, nodal_adjacency = \
+            _get_firedrake_nodal_info(fdrake_mesh, cells_to_use=cells_to_use)
 
-    # If only using some cells, vertices may need new indices as many
-    # will be removed
-    if cells_to_use is not None:
-        vert_ndx_new2old = np.unique(vertex_indices.flatten())
-        vert_ndx_old2new = dict(zip(vert_ndx_new2old,
-                                    np.arange(np.size(vert_ndx_new2old),
-                                              dtype=vertex_indices.dtype)))
-        vertex_indices = \
-            np.vectorize(vert_ndx_old2new.__getitem__)(vertex_indices)
+        # If only using some cells, vertices may need new indices as many
+        # will be removed
+        if cells_to_use is not None:
+            vert_ndx_new2old = np.unique(vertex_indices.flatten())
+            vert_ndx_old2new = dict(zip(vert_ndx_new2old,
+                                        np.arange(np.size(vert_ndx_new2old),
+                                                  dtype=vertex_indices.dtype)))
+            vertex_indices = \
+                np.vectorize(vert_ndx_old2new.__getitem__)(vertex_indices)
 
-    nodal_info_logger.done()
+    with ProcessLogger(logger, "Building (possibly) unflipped "
+                       "SimplexElementGroup from firedrake unit nodes/nodes"):
 
-    unflipped_group_logger = ProcessLogger(logger, "Building (possibly) "
-                                           "unflipped SimplexElementGroup "
-                                           "from firedrake unit nodes/nodes")
+        # Grab the mesh reference element and cell dimension
+        coord_finat_elt = fdrake_mesh.coordinates.function_space().finat_element
+        cell_dim = fdrake_mesh.cell_dimension()
 
-    # Grab the mesh reference element and cell dimension
-    coord_finat_elt = fdrake_mesh.coordinates.function_space().finat_element
-    cell_dim = fdrake_mesh.cell_dimension()
+        # Get finat unit nodes and map them onto the meshmode reference simplex
+        finat_unit_nodes = get_finat_element_unit_nodes(coord_finat_elt)
+        fd_ref_to_mm = get_affine_reference_simplex_mapping(cell_dim, True)
+        finat_unit_nodes = fd_ref_to_mm(finat_unit_nodes)
 
-    # Get finat unit nodes and map them onto the meshmode reference simplex
-    finat_unit_nodes = get_finat_element_unit_nodes(coord_finat_elt)
-    fd_ref_to_mm = get_affine_reference_simplex_mapping(cell_dim, True)
-    finat_unit_nodes = fd_ref_to_mm(finat_unit_nodes)
+        # Now grab the nodes
+        coords = fdrake_mesh.coordinates
+        cell_node_list = coords.function_space().cell_node_list
+        if cells_to_use is not None:
+            cell_node_list = cell_node_list[cells_to_use]
+        nodes = np.real(coords.dat.data[cell_node_list])
+        # Add extra dim in 1D for shape (nelements, nunit_nodes, dim)
+        if tdim == 1:
+            nodes = np.reshape(nodes, nodes.shape + (1,))
+        # Transpose nodes to have shape (dim, nelements, nunit_nodes)
+        nodes = np.transpose(nodes, (2, 0, 1))
 
-    # Now grab the nodes
-    coords = fdrake_mesh.coordinates
-    cell_node_list = coords.function_space().cell_node_list
-    if cells_to_use is not None:
-        cell_node_list = cell_node_list[cells_to_use]
-    nodes = np.real(coords.dat.data[cell_node_list])
-    # Add extra dim in 1D for shape (nelements, nunit_nodes, dim)
-    if tdim == 1:
-        nodes = np.reshape(nodes, nodes.shape + (1,))
-    # Transpose nodes to have shape (dim, nelements, nunit_nodes)
-    nodes = np.transpose(nodes, (2, 0, 1))
-
-    # make a group (possibly with some elements that need to be flipped)
-    unflipped_group = SimplexElementGroup(coord_finat_elt.degree,
-                                          vertex_indices,
-                                          nodes,
-                                          dim=cell_dim,
-                                          unit_nodes=finat_unit_nodes)
-
-    unflipped_group_logger.done()
+        # make a group (possibly with some elements that need to be flipped)
+        unflipped_group = SimplexElementGroup(coord_finat_elt.degree,
+                                              vertex_indices,
+                                              nodes,
+                                              dim=cell_dim,
+                                              unit_nodes=finat_unit_nodes)
 
     # Next get the vertices (we'll need these for the orientations)
-    vertices_logger = ProcessLogger(logger, "Obtaining vertex coordinates")
+    with ProcessLogger(logger, "Obtaining vertex coordinates"):
+        coord_finat = fdrake_mesh.coordinates.function_space().finat_element
+        # unit_vertex_indices are the element-local indices of the nodes
+        # which coincide with the vertices, i.e. for element *i*,
+        # vertex 0's coordinates would be nodes[i][unit_vertex_indices[0]].
+        # This assumes each vertex has some node which coincides with it...
+        # which is normally fine to assume for firedrake meshes.
+        unit_vertex_indices = []
+        # iterate through the dofs associated to each vertex on the
+        # reference element
+        for _, dofs in sorted(coord_finat.entity_dofs()[0].items()):
+            assert len(dofs) == 1, \
+                "The function space of the mesh coordinates must have" \
+                " exactly one degree of freedom associated with " \
+                " each vertex in order to determine vertex coordinates"
+            dof, = dofs
+            unit_vertex_indices.append(dof)
 
-    coord_finat = fdrake_mesh.coordinates.function_space().finat_element
-    # unit_vertex_indices are the element-local indices of the nodes
-    # which coincide with the vertices, i.e. for element *i*,
-    # vertex 0's coordinates would be nodes[i][unit_vertex_indices[0]].
-    # This assumes each vertex has some node which coincides with it...
-    # which is normally fine to assume for firedrake meshes.
-    unit_vertex_indices = []
-    # iterate through the dofs associated to each vertex on the
-    # reference element
-    for _, dofs in sorted(coord_finat.entity_dofs()[0].items()):
-        assert len(dofs) == 1, \
-            "The function space of the mesh coordinates must have" \
-            " exactly one degree of freedom associated with " \
-            " each vertex in order to determine vertex coordinates"
-        dof, = dofs
-        unit_vertex_indices.append(dof)
-
-    # Now get the vertex coordinates as *(dim, nvertices)*-shaped array
-    if cells_to_use is not None:
-        nvertices = np.size(vert_ndx_new2old)
-    else:
-        nvertices = fdrake_mesh.num_vertices()
-    vertices = np.ndarray((gdim, nvertices), dtype=nodes.dtype)
-    recorded_verts = set()
-    for icell, cell_vertex_indices in enumerate(vertex_indices):
-        for local_vert_id, global_vert_id in enumerate(cell_vertex_indices):
-            if global_vert_id not in recorded_verts:
-                recorded_verts.add(global_vert_id)
-                local_node_nr = unit_vertex_indices[local_vert_id]
-                vertices[:, global_vert_id] = nodes[:, icell, local_node_nr]
-
-    vertices_logger.done()
+        # Now get the vertex coordinates as *(dim, nvertices)*-shaped array
+        if cells_to_use is not None:
+            nvertices = np.size(vert_ndx_new2old)
+        else:
+            nvertices = fdrake_mesh.num_vertices()
+        vertices = np.ndarray((gdim, nvertices), dtype=nodes.dtype)
+        recorded_verts = set()
+        for icell, cell_vertex_indices in enumerate(vertex_indices):
+            for local_vert_id, global_vert_id in enumerate(cell_vertex_indices):
+                if global_vert_id not in recorded_verts:
+                    recorded_verts.add(global_vert_id)
+                    local_node_nr = unit_vertex_indices[local_vert_id]
+                    vertices[:, global_vert_id] = nodes[:, icell, local_node_nr]
 
     # Use the vertices to compute the orientations and flip the group
-    orientation_logger = ProcessLogger(logger, "Computing cell orientations")
-    orient = _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
-                                         cells_to_use=cells_to_use,
-                                         normals=normals,
-                                         no_normals_warn=no_normals_warn)
-    orientation_logger.done()
+    with ProcessLogger(logger, "Computing cell orientations"):
+        orient = _get_firedrake_orientations(fdrake_mesh,
+                                             unflipped_group,
+                                             vertices,
+                                             cells_to_use=cells_to_use,
+                                             normals=normals,
+                                             no_normals_warn=no_normals_warn)
 
-    flipped_grp_logger = ProcessLogger(logger, "Flipping group")
-    from meshmode.mesh.processing import flip_simplex_element_group
-    group = flip_simplex_element_group(vertices, unflipped_group, orient < 0)
-    flipped_grp_logger.done()
+    with ProcessLogger(logger, "Flipping group"):
+        from meshmode.mesh.processing import flip_simplex_element_group
+        group = flip_simplex_element_group(vertices, unflipped_group, orient < 0)
 
     # Now, any flipped element had its 0 vertex and 1 vertex exchanged.
     # This changes the local facet nr, so we need to create and then
@@ -713,15 +704,11 @@ build_connection_from_firedrake`.
         elif 1 not in face:
             no_one_face_ndx = iface
 
-    adj_grps_logger = ProcessLogger(logger, "Building (possibly) unflipped "
-                                    "FacialAdjacencyGroups")
-    unflipped_facial_adjacency_groups = \
-        _get_firedrake_facial_adjacency_groups(fdrake_mesh,
-                                               cells_to_use=cells_to_use)
-    adj_grps_logger.done()
-
-    # TODO: Here the problem is that we moved interior facets to exterior facets,
-    #       so the shapes don't line up....
+    with ProcessLogger(logger, "Building (possibly) unflipped "
+                       "FacialAdjacencyGroups"):
+        unflipped_facial_adjacency_groups = \
+            _get_firedrake_facial_adjacency_groups(fdrake_mesh,
+                                                   cells_to_use=cells_to_use)
 
     # applied below to take elements and element_faces
     # (or neighbors and neighbor_faces) and flip in any faces that need to
@@ -739,26 +726,22 @@ build_connection_from_firedrake`.
         return faces
 
     # Create new facial adjacency groups that have been flipped
-    flip_adj_grps_logger = ProcessLogger(logger,
-                                         "Flipping FacialAdjacencyGroups")
-
-    facial_adjacency_groups = []
-    for igroup, fagrps in enumerate(unflipped_facial_adjacency_groups):
-        facial_adjacency_groups.append({})
-        for ineighbor_group, fagrp in fagrps.items():
-            new_element_faces = flip_local_face_indices(fagrp.element_faces,
-                                                        fagrp.elements)
-            new_neighbor_faces = flip_local_face_indices(fagrp.neighbor_faces,
-                                                         fagrp.neighbors)
-            new_fagrp = FacialAdjacencyGroup(igroup=igroup,
-                                             ineighbor_group=ineighbor_group,
-                                             elements=fagrp.elements,
-                                             element_faces=new_element_faces,
-                                             neighbors=fagrp.neighbors,
-                                             neighbor_faces=new_neighbor_faces)
-            facial_adjacency_groups[igroup][ineighbor_group] = new_fagrp
-
-    flip_adj_grps_logger.done()
+    with ProcessLogger(logger, "Flipping FacialAdjacencyGroups"):
+        facial_adjacency_groups = []
+        for igroup, fagrps in enumerate(unflipped_facial_adjacency_groups):
+            facial_adjacency_groups.append({})
+            for ineighbor_group, fagrp in fagrps.items():
+                new_element_faces = flip_local_face_indices(fagrp.element_faces,
+                                                            fagrp.elements)
+                new_neighbor_faces = flip_local_face_indices(fagrp.neighbor_faces,
+                                                             fagrp.neighbors)
+                new_fagrp = FacialAdjacencyGroup(igroup=igroup,
+                                                 ineighbor_group=ineighbor_group,
+                                                 elements=fagrp.elements,
+                                                 element_faces=new_element_faces,
+                                                 neighbors=fagrp.neighbors,
+                                                 neighbor_faces=new_neighbor_faces)
+                facial_adjacency_groups[igroup][ineighbor_group] = new_fagrp
 
     return (Mesh(vertices, [group],
                  boundary_tags=bdy_tags,
@@ -843,95 +826,87 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
                          " meshes to Firedrake is not supported")
 
     # Get the vertices and vertex indices of the requested group
-    vertices_logger = ProcessLogger(logger,
-                                    "Obtaining vertices from selected group")
-    group = mesh.groups[group_nr]
-    fd2mm_indices = np.unique(group.vertex_indices.flatten())
-    coords = mesh.vertices[:, fd2mm_indices].T
-    mm2fd_indices = dict(zip(fd2mm_indices, np.arange(np.size(fd2mm_indices))))
-    cells = np.vectorize(mm2fd_indices.__getitem__)(group.vertex_indices)
-
-    vertices_logger.done()
+    with ProcessLogger(logger, "Obtaining vertices from selected group"):
+        group = mesh.groups[group_nr]
+        fd2mm_indices = np.unique(group.vertex_indices.flatten())
+        coords = mesh.vertices[:, fd2mm_indices].T
+        mm2fd_indices = dict(zip(fd2mm_indices, np.arange(np.size(fd2mm_indices))))
+        cells = np.vectorize(mm2fd_indices.__getitem__)(group.vertex_indices)
 
     # Get a dmplex object and then a mesh topology
-    top_logger = ProcessLogger(logger, "Building dmplex object and MeshTopology")
-    if comm is None:
-        from pyop2.mpi import COMM_WORLD
-        comm = COMM_WORLD
-    # FIXME : not sure how to get around the private accesses
-    import firedrake.mesh as fd_mesh
-    plex = fd_mesh._from_cell_list(group.dim, cells, coords, comm)
-    # Nb : One might be tempted to pass reorder=False and thereby save some
-    #      hassle in exchange for forcing firedrake to have slightly
-    #      less efficient caching. Unfortunately, that only prevents
-    #      the cells from being reordered, and does not prevent the
-    #      vertices from being (locally) reordered on each cell...
-    #      the tl;dr is we don't actually save any hassle
-    top = fd_mesh.Mesh(plex, dim=mesh.ambient_dim)  # mesh topology
-    top.init()
-
-    top_logger.done()
+    with ProcessLogger(logger, "Building dmplex object and MeshTopology"):
+        if comm is None:
+            from pyop2.mpi import COMM_WORLD
+            comm = COMM_WORLD
+        # FIXME : not sure how to get around the private accesses
+        import firedrake.mesh as fd_mesh
+        plex = fd_mesh._from_cell_list(group.dim, cells, coords, comm)
+        # Nb : One might be tempted to pass reorder=False and thereby save some
+        #      hassle in exchange for forcing firedrake to have slightly
+        #      less efficient caching. Unfortunately, that only prevents
+        #      the cells from being reordered, and does not prevent the
+        #      vertices from being (locally) reordered on each cell...
+        #      the tl;dr is we don't actually save any hassle
+        top = fd_mesh.Mesh(plex, dim=mesh.ambient_dim)  # mesh topology
+        top.init()
 
     # Get new element ordering:
-    perm_logger = ProcessLogger(logger, "Determining permutations applied"
-                                " to local vertex numbers")
+    with ProcessLogger(logger, "Determining permutations applied"
+                       " to local vertex numbers"):
+        c_start, c_end = top._topology_dm.getHeightStratum(0)
+        cell_index_mm2fd = np.vectorize(top._cell_numbering.getOffset)(
+            np.arange(c_start, c_end))
+        v_start, v_end = top._topology_dm.getDepthStratum(0)
 
-    c_start, c_end = top._topology_dm.getHeightStratum(0)
-    cell_index_mm2fd = np.vectorize(top._cell_numbering.getOffset)(
-        np.arange(c_start, c_end))
-    v_start, v_end = top._topology_dm.getDepthStratum(0)
-
-    # Firedrake goes crazy reordering local vertex numbers,
-    # we've got to work to figure out what changes they made.
-    #
-    # *perm2cells* will map permutations of local vertex numbers to
-    #              the list of all the meshmode cells
-    #              which firedrake reordered according to that permutation
-    #
-    #              Permutations on *n* vertices are stored as a tuple
-    #              containing all of the integers *0*, *1*, *2*, ..., *n-1*
-    #              exactly once. A permutation *p*
-    #              represents relabeling the *i*\ th local vertex
-    #              of a meshmode element as the *p[i]*\ th local vertex
-    #              in the corresponding firedrake cell.
-    #
-    #              *perm2cells[p]* is a list of all the meshmode element indices
-    #              for which *p* represents the reordering applied by firedrake
-    perm2cells = {}
-    for mm_cell_id, dmp_ids in enumerate(top.cell_closure[cell_index_mm2fd]):
-        # look at order of vertices in firedrake cell
-        vert_dmp_ids = dmp_ids[np.logical_and(v_start <= dmp_ids, dmp_ids < v_end)]
-        fdrake_order = vert_dmp_ids - v_start
-        # get original order
-        mm_order = mesh.groups[group_nr].vertex_indices[mm_cell_id]
-        # want permutation p so that mm_order[p] = fdrake_order
-        # To do so, look at permutations acting by composition.
+        # Firedrake goes crazy reordering local vertex numbers,
+        # we've got to work to figure out what changes they made.
         #
-        # mm_order \circ argsort(mm_order) =
-        #     fdrake_order \circ argsort(fdrake_order)
-        # so
-        # mm_order \circ argsort(mm_order) \circ inv(argsort(fdrake_order))
-        #  = fdrake_order
+        # *perm2cells* will map permutations of local vertex numbers to
+        #              the list of all the meshmode cells
+        #              which firedrake reordered according to that permutation
         #
-        # argsort acts as an inverse, so the desired permutation is:
-        perm = tuple(np.argsort(mm_order)[np.argsort(np.argsort(fdrake_order))])
-        perm2cells.setdefault(perm, [])
-        perm2cells[perm].append(mm_cell_id)
+        #              Permutations on *n* vertices are stored as a tuple
+        #              containing all of the integers *0*, *1*, *2*, ..., *n-1*
+        #              exactly once. A permutation *p*
+        #              represents relabeling the *i*\ th local vertex
+        #              of a meshmode element as the *p[i]*\ th local vertex
+        #              in the corresponding firedrake cell.
+        #
+        #              *perm2cells[p]* is a list of all the meshmode element indices
+        #              for which *p* represents the reordering applied by firedrake
+        perm2cells = {}
+        for mm_cell_id, dmp_ids in enumerate(top.cell_closure[cell_index_mm2fd]):
+            # look at order of vertices in firedrake cell
+            vert_dmp_ids = \
+                dmp_ids[np.logical_and(v_start <= dmp_ids, dmp_ids < v_end)]
+            fdrake_order = vert_dmp_ids - v_start
+            # get original order
+            mm_order = mesh.groups[group_nr].vertex_indices[mm_cell_id]
+            # want permutation p so that mm_order[p] = fdrake_order
+            # To do so, look at permutations acting by composition.
+            #
+            # mm_order \circ argsort(mm_order) =
+            #     fdrake_order \circ argsort(fdrake_order)
+            # so
+            # mm_order \circ argsort(mm_order) \circ inv(argsort(fdrake_order))
+            #  = fdrake_order
+            #
+            # argsort acts as an inverse, so the desired permutation is:
+            perm = tuple(np.argsort(mm_order)[np.argsort(np.argsort(fdrake_order))])
+            perm2cells.setdefault(perm, [])
+            perm2cells[perm].append(mm_cell_id)
 
-    # Make perm2cells map to numpy arrays instead of lists
-    perm2cells = {perm: np.array(cells)
-                  for perm, cells in perm2cells.items()}
-
-    perm_logger.done()
+        # Make perm2cells map to numpy arrays instead of lists
+        perm2cells = {perm: np.array(cells)
+                      for perm, cells in perm2cells.items()}
 
     # Now make a coordinates function
-    fspace_logger = ProcessLogger(logger, "Building firedrake function "
-                                  "space for mesh coordinates")
-    from firedrake import VectorFunctionSpace, Function
-    coords_fspace = VectorFunctionSpace(top, 'CG', group.order,
-                                        dim=mesh.ambient_dim)
-    coords = Function(coords_fspace)
-    fspace_logger.done()
+    with ProcessLogger(logger, "Building firedrake function "
+                       "space for mesh coordinates"):
+        from firedrake import VectorFunctionSpace, Function
+        coords_fspace = VectorFunctionSpace(top, 'CG', group.order,
+                                            dim=mesh.ambient_dim)
+        coords = Function(coords_fspace)
 
     # get firedrake unit nodes and map onto meshmode reference element
     fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(group.dim, True)
@@ -948,28 +923,23 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
 
     # Now put the nodes in the right local order
     # nodes is shaped *(ambient dim, nelements, nunit nodes)*
-    undo_perm_logger = ProcessLogger(logger, "Storing meshmode mesh coordinates"
-                                     " in firedrake nodal order")
-
-    from meshmode.mesh.processing import get_simplex_element_flip_matrix
-    for perm, cells in perm2cells.items():
-        flip_mat = get_simplex_element_flip_matrix(group.order,
-                                                   fd_unit_nodes,
-                                                   perm)
-        flip_mat = np.rint(flip_mat).astype(np.int32)
-        resampled_group_nodes[:, cells, :] = \
-            np.matmul(resampled_group_nodes[:, cells, :], flip_mat.T)
-
-    undo_perm_logger.done()
+    with ProcessLogger(logger, "Storing meshmode mesh coordinates"
+                       " in firedrake nodal order"):
+        from meshmode.mesh.processing import get_simplex_element_flip_matrix
+        for perm, cells in perm2cells.items():
+            flip_mat = get_simplex_element_flip_matrix(group.order,
+                                                       fd_unit_nodes,
+                                                       perm)
+            flip_mat = np.rint(flip_mat).astype(np.int32)
+            resampled_group_nodes[:, cells, :] = \
+                np.matmul(resampled_group_nodes[:, cells, :], flip_mat.T)
 
     # store resampled data in right cell ordering
-    resample_logger = ProcessLogger(logger, "resampling mesh coordinates to "
-                                    "firedrake unit nodes")
-    reordered_cell_node_list = coords_fspace.cell_node_list[cell_index_mm2fd]
-    coords.dat.data[reordered_cell_node_list, :] = \
-        resampled_group_nodes.transpose((1, 2, 0))
-
-    resample_logger.done()
+    with ProcessLogger(logger, "resampling mesh coordinates to "
+                       "firedrake unit nodes"):
+        reordered_cell_node_list = coords_fspace.cell_node_list[cell_index_mm2fd]
+        coords.dat.data[reordered_cell_node_list, :] = \
+            resampled_group_nodes.transpose((1, 2, 0))
 
     return fd_mesh.Mesh(coords), cell_index_mm2fd, perm2cells
 
