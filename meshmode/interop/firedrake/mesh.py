@@ -370,7 +370,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                 dtype=IntType)
 
     # If not using all the cells, some interior facets may have become
-    # interior facets:
+    # exterior facets:
     if cells_to_use is not None:
         # Record any newly created exterior facets
         ext_elements = np.concatenate((ext_elements, new_ext_elements))
