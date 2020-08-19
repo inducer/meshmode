@@ -37,12 +37,12 @@ from meshmode.discretization.poly_element import (
 from meshmode.dof_array import DOFArray
 
 from meshmode.mesh import (
-    BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY, check_bc_coverage
+    BTAG_ALL, BTAG_REALLY_ALL, check_bc_coverage
     )
 
 from meshmode.interop.firedrake import (
     build_connection_from_firedrake, build_connection_to_firedrake,
-    import_firedrake_mesh)
+    import_firedrake_mesh, BTAG_INDUCED_BOUNDARY)
 
 import pytest
 
@@ -329,11 +329,11 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
             ext_grp.elements, ext_grp.element_faces, ext_grp.neighbors):
         # try: if mm_mesh has boundaries flagged as not boundaries we need to
         #      skip them
-        # catch: if mm_mesh does not use BTAG_NO_BOUNDARY flag we get a
+        # catch: if mm_mesh does not use BTAG_INDUCED_BOUNDARY flag we get a
         #        ValueError
         try:
             # If this facet is flagged as not really a boundary, skip it
-            if mm_mesh.boundary_tag_bit(BTAG_NO_BOUNDARY) & -bdy_flags:
+            if mm_mesh.boundary_tag_bit(BTAG_INDUCED_BOUNDARY) & -bdy_flags:
                 continue
         except ValueError:
             pass

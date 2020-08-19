@@ -67,7 +67,12 @@ class BTAG_ALL(object):  # noqa
     """A boundary tag representing the entire boundary or volume.
 
     In the case of the boundary, :class:`BTAG_ALL` does not include rank boundaries,
-    or, more generally, anything tagged with :class:`BTAG_NO_BOUNDARY`."""
+    or, more generally, anything tagged with :class:`BTAG_NO_BOUNDARY`.
+
+    In the case of a mesh imported from :mod:`firedrake`, :class:`BTAG_ALL` does
+    not include induced boundaries, or, more generally, anything tagged with
+    :class:`meshmode.interop.firedrake.mesh.BTAG_INDUCED_BOUNDARY`.
+    """
     pass
 
 
@@ -75,7 +80,13 @@ class BTAG_REALLY_ALL(object):  # noqa
     """A boundary tag representing the entire boundary.
 
     Unlike :class:`BTAG_ALL`, this includes rank boundaries,
-    or, more generally, everything tagged with :class:`BTAG_NO_BOUNDARY`."""
+    or, more generally, everything tagged with :class:`BTAG_NO_BOUNDARY`.
+
+    In the case of a mesh imported from :mod:`firedrake`,
+    this includes induced boundaries, or, more generally,
+    everything tagged with
+    :class:`meshmode.interop.firedrake.mesh.BTAG_INDUCED_BOUNDARY`
+    """
     pass
 
 
