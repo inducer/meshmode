@@ -119,29 +119,30 @@ def get_finat_element_unit_nodes(finat_element):
     Returns the unit nodes used by the :mod:`finat` element in firedrake's
     (equivalently, :mod:`finat`/:mod:`FIAT`'s) reference coordinates
 
-    :arg finat_element: A :class:`finat.finiteelementbase.FiniteElementBase`
-        instance whose :mod:`FIAT` element is of type
-        :class:`FIAT.finite_element.CiarletElement`
-        (i.e. a certain type of reference element used by
-        firedrake with dofs guaranteed to be nodal)
-        The reference element of the finat element *MUST* be a simplex.
+    :arg finat_element: An instance of one of the following :mod:`finat`
+        elements
+
+        * :class:`finat.fiat_elements.Lagrange`
+        * :class:`finat.fiat_elements.DiscontinuousLagrange`
+        * :class:`finat.fiat_elements.CrouzeixRaviart`
+        * :class:`finat.spectral.GaussLobattoLegendre`
+        * :class:`finat.spectral.GaussLegendre`
+
     :return: A numpy array of shape *(dim, nunit_dofs)* holding the unit
              nodes used by this element. *dim* is the dimension spanned
              by the finat element's reference element
              (see its ``cell`` attribute)
     """
-    from finat.finiteelementbase import FiniteElementBase
-    from FIAT.finite_element import CiarletElement
+    from finat.fiat_elements import (
+        Lagrange, DiscontinuousLagrange, CrouzeixRaviart)
+    from finat.spectral import GaussLobattoLegendre, GaussLegendre
     from FIAT.reference_element import Simplex
-    if not isinstance(finat_element, FiniteElementBase):
+    allowed_finat_elts = (Lagrange, DiscontinuousLagrange, CrouzeixRaviart,
+                          GaussLobattoLegendre, GaussLegendre)
+    if not isinstance(finat_element, allowed_finat_elts):
         raise TypeError("'finat_element' is of unexpected type "
-                        f"{type(finat_element)}. 'finat_element' must be an "
-                        "instance of finat.finiteelementbase.FiniteElementBase")
-    if not isinstance(finat_element._element, CiarletElement):
-        raise TypeError("'finat_element._element' is of unexpected type "
-                        f"{type(finat_element._element)}. "
-                        "'finat_element._element' must be an "
-                        "instance of FIAT.finite_element.CiarletElement")
+                        f"{type(finat_element)}. 'finat_element' must be of "
+                        "one of the following types: {allowed_finat_elts}")
     if not isinstance(finat_element.cell, Simplex):
         raise TypeError("Reference element of the finat element MUST be a"
                         " simplex, i.e. 'finat_element's *cell* attribute must"
