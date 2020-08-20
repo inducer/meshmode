@@ -472,60 +472,23 @@ def make_partition_connection(actx, local_bdry_conn, i_local_part,
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
 
     local_bdry = local_bdry_conn.to_discr
-    local_groups = local_bdry_conn.from_discr.mesh.groups
 
-    part_batches = [[] for _ in local_groups]
+    conn_groups = []
+    for i_local_grp, local_group in enumerate(local_bdry_conn.from_discr.groups):
+        grp_batches = []
+        conn_groups.append(grp_batches)
 
-    for i_remote_grp, adj in enumerate(remote_adj_groups):
-        indices = (i_local_part == adj.neighbor_partitions)
-        if not np.any(indices):
-            # Skip because i_remote_grp is not connected to i_local_part.
-            continue
-        i_remote_faces = adj.element_faces[indices]
-        i_local_meshwide_elems = adj.global_neighbors[indices]
-        i_local_faces = adj.neighbor_faces[indices]
-
-        i_local_grps = find_group_indices(local_groups, i_local_meshwide_elems)
-
-        for i_local_grp in np.unique(i_local_grps):
-
-            elem_base = local_groups[i_local_grp].element_nr_base
-            local_el_lookup = _make_bdry_el_lookup_table(actx,
-                                                         local_bdry_conn,
-                                                         i_local_grp)
-
-            for i_remote_face in i_remote_faces:
-
-                index_flags = np.logical_and(i_local_grps == i_local_grp,
-                                             i_remote_faces == i_remote_face)
-                if not np.any(index_flags):
-                    continue
-
-                remote_bdry_indices = None
-                for idxs, face in zip(remote_from_elem_indices[i_remote_grp],
-                                      remote_from_elem_faces[i_remote_grp]):
-                    if face == i_remote_face:
-                        remote_bdry_indices = idxs
-                        break
-                assert remote_bdry_indices is not None
-
-                elems = i_local_meshwide_elems[index_flags] - elem_base
-                faces = i_local_faces[index_flags]
-                local_bdry_indices = local_el_lookup[elems, faces]
-
-                batches = _make_cross_face_batches(actx,
+        grp_batches.extend(
+                _make_cross_face_batches(actx,
                         local_bdry, remote_bdry,
                         i_local_grp, i_remote_grp,
                         local_bdry_indices,
-                        remote_bdry_indices)
-
-                part_batches[i_local_grp].extend(batches)
+                        remote_bdry_indices))
 
     return DirectDiscretizationConnection(
             from_discr=remote_bdry,
             to_discr=local_bdry,
-            groups=[DiscretizationConnectionElementGroup(batches=grp_batches)
-                        for grp_batches in part_batches],
+            groups=conn_groups,
             is_surjective=True)
 
 # }}}
