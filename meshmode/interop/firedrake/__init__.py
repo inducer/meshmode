@@ -25,9 +25,9 @@ from meshmode.interop.firedrake.connection import (
     build_connection_from_firedrake, build_connection_to_firedrake,
     FiredrakeConnection)
 from meshmode.interop.firedrake.mesh import (
-    import_firedrake_mesh, export_mesh_to_firedrake, BTAG_INDUCED_BOUNDARY)
+    import_firedrake_mesh, export_mesh_to_firedrake)
 
 __all__ = ["build_connection_from_firedrake", "build_connection_to_firedrake",
            "FiredrakeConnection", "import_firedrake_mesh",
-           "export_mesh_to_firedrake", "BTAG_INDUCED_BOUNDARY",
+           "export_mesh_to_firedrake",
            ]

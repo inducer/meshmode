@@ -37,12 +37,12 @@ from meshmode.discretization.poly_element import (
 from meshmode.dof_array import DOFArray
 
 from meshmode.mesh import (
-    BTAG_ALL, BTAG_REALLY_ALL, check_bc_coverage
+    BTAG_ALL, BTAG_REALLY_ALL, BTAG_INDUCED_BOUNDARY, check_bc_coverage
     )
 
 from meshmode.interop.firedrake import (
     build_connection_from_firedrake, build_connection_to_firedrake,
-    import_firedrake_mesh, BTAG_INDUCED_BOUNDARY)
+    import_firedrake_mesh)
 
 import pytest
 
