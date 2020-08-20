@@ -26,7 +26,7 @@ import numpy as np
 
 from modepy import resampling_matrix, simplex_best_available_basis
 
-from meshmode.mesh import (BTAG_ALL, BTAG_REALLY_ALL,
+from meshmode.mesh import (BTAG_ALL, BTAG_REALLY_ALL, BTAG_INDUCED_BOUNDARY,
     FacialAdjacencyGroup, Mesh, NodalAdjacency, SimplexElementGroup)
 from meshmode.interop.firedrake.reference_cell import (
     get_affine_reference_simplex_mapping, get_finat_element_unit_nodes)
@@ -36,38 +36,10 @@ from pytools import ProcessLogger
 __doc__ = """
 .. autofunction:: import_firedrake_mesh
 .. autofunction:: export_mesh_to_firedrake
-
-Predefined Boundary tags
-------------------------
-
-.. autoclass:: BTAG_INDUCED_BOUNDARY
 """
 
 
 logger = logging.getLogger(__name__)
-
-
-# {{{ Predefined boundary tags
-
-class BTAG_INDUCED_BOUNDARY(object):  # noqa
-    """A boundary tag for a mesh imported from :mod:`firedrake` indicating that
-    this facet was not a boundary facet in the original :mod:`firedrake`
-    mesh.
-    This tag is used in place of :class:`BTAG_ALL`.
-
-    More precisely, if two cells in a :mod:`firedrake` mesh
-    share a facet, but exactly one of those cells is present
-    in the *cells_to_use* argument of :func:`import_firedrake_mesh`,
-    that facet becomes a boundary facet. We call this an "induced"
-    boundary facet.
-    In order to distinguish induced boundary facets
-    from other boundary facets, we mark induced facets with
-    :class:`BTAG_INDUCED_BOUNDARY` instead of
-    :class:`~meshmode.mesh.BTAG_ALL`.
-    """
-    pass
-
-# }}}
 
 
 # {{{ functions to extract information from Mesh Topology
@@ -195,7 +167,7 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
     return vertex_indices, nodal_adjacency
 
 
-def _get_firedrake_boundary_tags(fdrake_mesh, include_induced_boundary=False):
+def _get_firedrake_boundary_tags(fdrake_mesh, tag_induced_boundary=False):
     """
     Return a tuple of bdy tags as requested in
     the construction of a :mod:`meshmode` :class:`Mesh`
@@ -207,13 +179,13 @@ def _get_firedrake_boundary_tags(fdrake_mesh, include_induced_boundary=False):
 
     :arg fdrake_mesh: A :mod:`firedrake` :class:`MeshTopology` or
         :class:`MeshGeometry`
-    :arg include_induced_boundary: If *True*, include
-        :class:`BTAG_INDUCED_BOUNDARY`
+    :arg tag_induced_boundary: If *True*, tag induced boundary with
+        :class:`~meshmode.mesh.BTAG_INDUCED_BOUNDARY`
 
     :return: A tuple of boundary tags
     """
     bdy_tags = [BTAG_ALL, BTAG_REALLY_ALL]
-    if include_induced_boundary:
+    if tag_induced_boundary:
         bdy_tags.append(BTAG_INDUCED_BOUNDARY)
 
     unique_markers = fdrake_mesh.topology.exterior_facets.unique_markers
@@ -277,7 +249,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     # in the neighbors array for the external and internal facial adjacency
     # groups
     bdy_tags = _get_firedrake_boundary_tags(
-        top, include_induced_boundary=cells_to_use is not None)
+        top, tag_induced_boundary=cells_to_use is not None)
     boundary_tag_to_index = {bdy_tag: i for i, bdy_tag in enumerate(bdy_tags)}
     marker_to_neighbor_value = {}
     from meshmode.mesh import _boundary_tag_bit
@@ -623,7 +595,7 @@ build_connection_from_firedrake`.
 
     # Get all the nodal information we can from the topology
     bdy_tags = _get_firedrake_boundary_tags(
-        fdrake_mesh, include_induced_boundary=cells_to_use is not None)
+        fdrake_mesh, tag_induced_boundary=cells_to_use is not None)
 
     with ProcessLogger(logger, "Retrieving vertex indices and computing "
                        "NodalAdjacency from firedrake mesh"):
