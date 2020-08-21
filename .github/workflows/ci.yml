@@ -33,6 +33,69 @@ jobs:
                 curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project-within-miniconda.sh
                 . ./build-and-test-py-project-within-miniconda.sh
 
+    firedrake:
+        name: Pytest Firedrake
+        runs-on: ubuntu-latest
+        container:
+            image: 'firedrakeproject/firedrake'
+        steps:
+        -   uses: actions/checkout@v1
+        # This Dependencies setup is the same setup used for running firedrake
+        # examples, but had to be copied since github doesn't support yaml
+        # anchors. Changes made here should also be made there
+        -   name: "Dependencies"
+            run: |
+                sudo apt update
+                sudo apt upgrade -y
+                sudo apt install time
+                sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
+                sudo chown -R $(whoami) /github/home
+
+                . /home/firedrake/firedrake/bin/activate
+                grep -v loopy requirements.txt > /tmp/myreq.txt
+                pip install -r /tmp/myreq.txt
+                pip install --force-reinstall git+https://github.com/benSepanski/loopy.git@firedrake-usable_for_potentials
+                # The Firedrake container is based on Py3.6 as of 2020-10-10, which
+                # doesn't have dataclasses.
+                pip install pytest dataclasses
+                pip install .
+        -   name: "Test"
+            run: |
+                . /home/firedrake/firedrake/bin/activate
+                cd test
+                python -m pytest --tb=native -rxsw test_firedrake_interop.py
+
+    firedrake_examples:
+        name: Examples Firedrake
+        runs-on: ubuntu-latest
+        container:
+            image: 'firedrakeproject/firedrake'
+        steps:
+        -   uses: actions/checkout@v1
+        # This Dependencies setup is the same setup used for running firedrake
+        # tests, but had to be copied since github doesn't support yaml
+        # anchors. Changes made here should also be made there
+        -   name: "Dependencies"
+            run: |
+                sudo apt update
+                sudo apt upgrade -y
+                sudo apt install time
+                sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
+                sudo chown -R $(whoami) /github/home
+
+                . /home/firedrake/firedrake/bin/activate
+                grep -v loopy requirements.txt > /tmp/myreq.txt
+                pip install -r /tmp/myreq.txt
+                pip install --force-reinstall git+https://github.com/benSepanski/loopy.git@firedrake-usable_for_potentials
+                # The Firedrake container is based on Py3.6 as of 2020-10-10, which
+                # doesn't have dataclasses.
+                pip install pytest dataclasses
+                pip install .
+        -   name: "Examples"
+            run: |
+                . /home/firedrake/firedrake/bin/activate
+                . ./.github/workflows/run_firedrake_examples.sh
+
     examples3:
         name: Examples Conda Py3
         runs-on: ubuntu-latest

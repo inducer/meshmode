@@ -10,6 +10,7 @@ Contents:
    array
    discretization
    connection
+   interop
    misc
 
 Indices and tables

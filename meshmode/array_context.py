@@ -300,9 +300,13 @@ class PyOpenCLArrayContext(ArrayContext):
 
     def call_loopy(self, program, **kwargs):
         program = self.transform_loopy_program(program)
-        if not (
-                program.options.return_dict
-                and program.options.no_numpy):
+
+        # accommodate loopy with and without kernel callables
+        try:
+            options = program.options
+        except AttributeError:
+            options = program.root_kernel.options
+        if not (options.return_dict and options.no_numpy):
             raise ValueError("Loopy program passed to call_loopy must "
                     "have return_dict and no_numpy options set. "
                     "Did you use meshmode.array_context.make_loopy_program "
@@ -324,7 +328,11 @@ class PyOpenCLArrayContext(ArrayContext):
     def transform_loopy_program(self, program):
         # FIXME: This could be much smarter.
         import loopy as lp
-        all_inames = program.all_inames()
+        # accommodate loopy with and without kernel callables
+        try:
+            all_inames = program.all_inames()
+        except AttributeError:
+            all_inames = program.root_kernel.all_inames()
 
         inner_iname = None
         if "iel" not in all_inames and "i0" in all_inames:

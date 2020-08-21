@@ -53,33 +53,46 @@ Predefined Boundary tags
 .. autoclass:: BTAG_REALLY_ALL
 .. autoclass:: BTAG_NO_BOUNDARY
 .. autoclass:: BTAG_PARTITION
+.. autoclass:: BTAG_INDUCED_BOUNDARY
 """
 
 
 # {{{ element tags
 
-class BTAG_NONE(object):  # noqa
+class BTAG_NONE(object):  # noqa: N801
     """A boundary tag representing an empty boundary or volume."""
     pass
 
 
-class BTAG_ALL(object):  # noqa
+class BTAG_ALL(object):  # noqa: N801
     """A boundary tag representing the entire boundary or volume.
 
     In the case of the boundary, :class:`BTAG_ALL` does not include rank boundaries,
-    or, more generally, anything tagged with :class:`BTAG_NO_BOUNDARY`."""
+    or, more generally, anything tagged with :class:`BTAG_NO_BOUNDARY`.
+
+    In the case of a mesh representing an element-wise subset of another,
+    :class:`BTAG_ALL` does not include boundaries induced by taking the subset.
+    Instead, these boundaries will be tagged with
+    :class:`BTAG_INDUCED_BOUNDARY`.
+    """
     pass
 
 
-class BTAG_REALLY_ALL(object):  # noqa
+class BTAG_REALLY_ALL(object):  # noqa: N801
     """A boundary tag representing the entire boundary.
 
     Unlike :class:`BTAG_ALL`, this includes rank boundaries,
-    or, more generally, everything tagged with :class:`BTAG_NO_BOUNDARY`."""
+    or, more generally, everything tagged with :class:`BTAG_NO_BOUNDARY`.
+
+    In the case of a mesh representing an element-wise subset of another,
+    this tag includes boundaries induced by taking the subset, or, more generally,
+    everything tagged with
+    :class:`BTAG_INDUCED_BOUNDARY`
+    """
     pass
 
 
-class BTAG_NO_BOUNDARY(object):  # noqa
+class BTAG_NO_BOUNDARY(object):  # noqa: N801
     """A boundary tag indicating that this edge should not fall under
     :class:`BTAG_ALL`. Among other things, this is used to keep rank boundaries
     out of :class:`BTAG_ALL`.
@@ -87,7 +100,7 @@ class BTAG_NO_BOUNDARY(object):  # noqa
     pass
 
 
-class BTAG_PARTITION(object):  # noqa
+class BTAG_PARTITION(object):  # noqa: N801
     """
     A boundary tag indicating that this edge is adjacent to an element of
     another :class:`Mesh`. The partition number of the adjacent mesh
@@ -116,8 +129,19 @@ class BTAG_PARTITION(object):  # noqa
         return "<%s(%s)>" % (type(self).__name__, repr(self.part_nr))
 
 
+class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801
+    """When a :class:`Mesh` is created as an element-by-element subset of another
+    (as, for example, when calling
+    :func:`meshmode.interop.firedrake.build_connection_from_firedrake`
+    while passing *restrict_to_boundary*), boundaries may arise where there
+    were none in the original mesh. This boundary tag is used to indicate
+    such boundaries.
+    """
+    pass
+
+
 SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
-                   BTAG_PARTITION])
+                   BTAG_PARTITION, BTAG_INDUCED_BOUNDARY])
 
 # }}}
 
