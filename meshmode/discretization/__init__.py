@@ -148,7 +148,7 @@ class InterpolatoryElementGroupBase(ElementGroupBase):
 
     .. method:: diff_matrices()
 
-        Return a :attr:`dim`-long :class:`tuple` of matrices of
+        Return a :attr:`~ElementGroupBase.dim`-long :class:`tuple` of matrices of
         shape ``(nunit_nodes, nunit_nodes)``, each of which,
         when applied to an array of nodal values, take derivatives
         in the reference (r,s,t) directions.
@@ -245,7 +245,7 @@ class Discretization(object):
         """Return an empty :class:`~meshmode.dof_array.DOFArray`.
 
         :arg dtype: type special value 'c' will result in a
-            vector of dtype :attr:`self.complex_dtype`. If
+            vector of dtype :attr:`complex_dtype`. If
             *None* (the default), a real vector will be returned.
         """
         if not isinstance(actx, ArrayContext):
@@ -258,7 +258,7 @@ class Discretization(object):
         """Return a zero-initialized :class:`~meshmode.dof_array.DOFArray`.
 
         :arg dtype: type special value 'c' will result in a
-            vector of dtype :attr:`self.complex_dtype`. If
+            vector of dtype :attr:`complex_dtype`. If
             *None* (the default), a real vector will be returned.
         """
         if not isinstance(actx, ArrayContext):

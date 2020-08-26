@@ -449,14 +449,15 @@ def make_partition_connection(actx, local_bdry_conn, i_local_part,
     :arg local_bdry_conn: A :class:`DiscretizationConnection` of the local
         partition.
     :arg i_local_part: The partition number of the local partition.
-    :arg remote_adj_groups: A list of :class:`InterPartitionAdjacency`` of the
-        remote partition.
-    :arg remote_bdry: A :class:`Discretization` of the boundary of the
-        remote partition.
+    :arg remote_adj_groups: A list of
+        :class:`meshmode.mesh.InterPartitionAdjacencyGroup`
+        of the remote partition.
+    :arg remote_bdry: A :class:`~meshmode.discretization.Discretization` of the
+        boundary of the remote partition.
     :arg remote_from_elem_faces: `remote_from_elem_faces[igrp][idx]` gives the face
         that batch `idx` interpolates from in group `igrp`.
     :arg remote_from_elem_indices: `remote_from_elem_indices[igrp][idx]` gives a
-        :class:`np.array` of element indices that batch `idx` interpolates from
+        :class:`numpy.ndarray` of element indices that batch `idx` interpolates from
         in group `igrp`.
 
     :returns: A :class:`DirectDiscretizationConnection` that performs data

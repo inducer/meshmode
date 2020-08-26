@@ -276,14 +276,17 @@ texinfo_documents = [
 #texinfo_no_detailmenu = False
 
 intersphinx_mapping = {
-    'http://docs.python.org/': None,
-    'http://docs.scipy.org/doc/numpy/': None,
+    'https://docs.python.org/': None,
+    'https://docs.scipy.org/doc/numpy/': None,
     'https://documen.tician.de/pyopencl': None,
     'https://documen.tician.de/meshpy': None,
     'https://documen.tician.de/modepy': None,
     'https://documen.tician.de/loopy': None,
+    'https://documen.tician.de/gmsh_interop': None,
     'https://firedrakeproject.org/': None,
     'https://tisaac.gitlab.io/recursivenodes/': None,
     'https://fenics.readthedocs.io/projects/fiat/en/latest/': None,
     'https://finat.github.io/FInAT/': None,
 }
+
+autoclass_content = "class"

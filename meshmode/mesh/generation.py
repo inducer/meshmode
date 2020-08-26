@@ -583,10 +583,11 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
     :returns: a tuple ``(refiner, warp_mesh)``, where *refiner* is
         a :class:`~meshmode.mesh.refinement.Refiner` (from which the unwarped mesh
         may be obtained), and whose
-        :meth:`~meshmode.mesh.refinement.Refiner.get_current_mesh` returns a
-        locally-refined :class:`~meshmode.mesh.Mesh` of a sphere and *warp_mesh*
-        is a callable taking and returning a mesh that warps the unwarped mesh
-        into a smooth shape covered by a spherical harmonic of order *(m, n)*.
+        :meth:`~meshmode.mesh.refinement.RefinerWithoutAdjacency.get_current_mesh`
+        returns a locally-refined :class:`~meshmode.mesh.Mesh` of a sphere and
+        *warp_mesh* is a callable taking and returning a mesh that warps the
+        unwarped mesh into a smooth shape covered by a spherical harmonic of
+        order *(m, n)*.
     :arg order: the polynomial order of the returned mesh
     :arg est_rel_interp_tolerance: a tolerance for the relative
         interpolation error estimates on the warped version of the mesh.

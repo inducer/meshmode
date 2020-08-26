@@ -57,7 +57,7 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
     as :mod:`firedrdake`
 
     :arg fdrake_mesh_topology: A :mod:`firedrake` instance of class
-        :class:`MeshTopology` or :class:`MeshGeometry`.
+        `firedrake.mesh.MeshTopology` or `firedrake.mesh.MeshGeometry`.
 
     :arg cells_to_use: Ignored if *None*. Otherwise, assumed to be
         a numpy array holding the firedrake cell indices to use.
@@ -177,8 +177,8 @@ def _get_firedrake_boundary_tags(fdrake_mesh, tag_induced_boundary=False):
     any markers in the mesh topology's exterior facets
     (see :attr:`firedrake.mesh.MeshTopology.exterior_facets.unique_markers`)
 
-    :arg fdrake_mesh: A :mod:`firedrake` :class:`MeshTopology` or
-        :class:`MeshGeometry`
+    :arg fdrake_mesh: A `firedrake.mesh.MeshTopology` or
+        `firedrake.mesh.MeshGeometry`
     :arg tag_induced_boundary: If *True*, tag induced boundary with
         :class:`~meshmode.mesh.BTAG_INDUCED_BOUNDARY`
 
@@ -204,18 +204,17 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     flipped later.
 
     :arg fdrake_mesh_topology: A :mod:`firedrake` instance of class
-        :class:`MeshTopology` or :class:`MeshGeometry`.
+        `firedrake.mesh.MeshTopology` or `firedrake.mesh.MeshGeometry`.
     :arg cells_to_use: If *None*, then this argument is ignored.
         Otherwise, assumed to be a numpy array of unique firedrake
         cell ids indicating which cells of the mesh to include,
         as well as inducing a new cell index for those cells.
         Also, in this case boundary faces are tagged
-        with :class:`BTAG_INDUCED_BOUNDARY` if they are not a boundary
-        face in *fdrake_mesh_topology* but become a boundary
-        because the opposite cell is not in *cells_to_use*.
-        Boundary faces in *fdrake_mesh_topology* are marked
-        with :class:`BTAG_ALL`. Both are marked with
-        :class:`BTAG_REALLY_ALL`.
+        with :class:`meshmode.mesh.BTAG_INDUCED_BOUNDARY`
+        if they are not a boundary face in *fdrake_mesh_topology* but become a
+        boundary because the opposite cell is not in *cells_to_use*.  Boundary
+        faces in *fdrake_mesh_topology* are marked with :class:`BTAG_ALL`. Both
+        are marked with :class:`BTAG_REALLY_ALL`.
 
     :return: A list of maps to :class:`FacialAdjacencyGroup`s as required
         by a :mod:`meshmode` :class:`Mesh`.
@@ -482,7 +481,7 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
                           normals=None, no_normals_warn=None):
     """
     Create a :class:`meshmode.mesh.Mesh`
-    from a :class:`firedrake.mesh.MeshGeometry`
+    from a `firedrake.mesh.MeshGeometry`
     with the same cells/elements, vertices, nodes,
     mesh order, and facial adjacency.
 
@@ -490,12 +489,12 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
     as the cell/element ordering. However, :mod:`firedrake`
     does not require elements to be positively oriented,
     so any negative elements are flipped
-    as in :func:`meshmode.processing.flip_simplex_element_group`.
+    as in :func:`meshmode.mesh.processing.flip_simplex_element_group`.
 
     The flipped cells/elements are identified by the returned
     *firedrake_orient* array
 
-    :arg fdrake_mesh: :class:`firedrake.mesh.MeshGeometry`.
+    :arg fdrake_mesh: `firedrake.mesh.MeshGeometry`.
         This mesh **must** be in a space of ambient dimension
         1, 2, or 3 and have co-dimension of 0 or 1.
         It must use a simplex as a reference element.
@@ -539,7 +538,7 @@ build_connection_from_firedrake`.
         Note that in this latter case, some faces that are not
         boundaries in *fdrake_mesh* may become boundaries in the
         returned mesh. These "induced" boundaries are marked with
-        :class:`~meshmode.interop.firedrake.mesh.BTAG_INDUCED_BOUNDARY`
+        :class:`~meshmode.mesh.BTAG_INDUCED_BOUNDARY`
         instead of :class:`~meshmode.mesh.BTAG_ALL`.
 
     :arg normals: **Only** used if *fdrake_mesh* is a 1-surface
@@ -550,7 +549,7 @@ build_connection_from_firedrake`.
             - Else, should be a list/array whose *i*\\ th entry
               is the normal for the *i*\\ th element (*i*\\ th
               in *mesh.coordinate.function_space()*'s
-              :attr:`cell_node_list`)
+              *cell_node_list*)
 
     :arg no_normals_warn: If *True* (the default), raises a warning
         if *fdrake_mesh* is a 1-surface embedded in 2-space
@@ -775,7 +774,7 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
         where
 
         * *fdrake_mesh* is a :mod:`firedrake`
-          :class:`~firedrake.mesh.MeshGeometry` corresponding to
+          `firedrake.mesh.MeshGeometry` corresponding to
           *mesh*
         * *fdrake_cell_ordering* is a numpy array whose *i*\ th
           element in *mesh* (i.e. the *i*\ th element in
