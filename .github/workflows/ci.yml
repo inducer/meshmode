@@ -124,6 +124,12 @@ jobs:
                 . ci-support.sh
                 build_py_project_in_conda_env
                 conda install graphviz
+
+                # Work around
+                # intersphinx inventory 'https://firedrakeproject.org/objects.inv' not fetchable
+                rm -Rf meshmode/interop/firedrake
+                sed -i '/firedrakeproject/d' doc/conf.py
+
                 build_docs
 
 # vim: sw=4

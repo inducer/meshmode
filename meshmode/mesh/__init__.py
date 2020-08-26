@@ -133,12 +133,15 @@ class BTAG_PARTITION(object):  # noqa: N801
 
 class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801
     """When a :class:`Mesh` is created as an element-by-element subset of another
-    (as, for example, when calling
-    :func:`meshmode.interop.firedrake.connection.build_connection_from_firedrake`
+    (as, for example, when using the Firedrake interop features
     while passing *restrict_to_boundary*), boundaries may arise where there
     were none in the original mesh. This boundary tag is used to indicate
     such boundaries.
     """
+    # Don't be tempted to add a sphinx ref to the Firedrake stuff here.
+    # This is unavailable in the Github doc build because
+    # firedrakeproject.org seems to reject connections from Github.
+
     pass
 
 
