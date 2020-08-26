@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 import operator
 import numpy as np
-from typing import Optional, Iterable, TYPE_CHECKING, Any
+from typing import Optional, Iterable, Any
 from functools import partial
 
 from pytools import single_valued, memoize_in
