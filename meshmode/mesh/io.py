@@ -295,8 +295,8 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=[],
     """Run :command:`gmsh` on the input given by *source*, and return a
     :class:`meshmode.mesh.Mesh` based on the result.
 
-    :arg source: an instance of either :class:`FileSource` or
-        :class:`LiteralSource`
+    :arg source: an instance of either :class:`gmsh_interop.reader.FileSource` or
+        :class:`gmsh_interop.reader.ScriptSource`
     :arg force_ambient_dim: if not *None*, truncate point coordinates to
         this many dimensions.
     :arg mesh_construction_kwargs: *None* or a dictionary of keyword

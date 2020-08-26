@@ -70,6 +70,12 @@ class RefinerWithoutAdjacency(object):
         the resulting meshes may contain duplicated vertices.
         (I.e. two different numbers referring to the same geometric
         vertex.)
+
+    .. automethod:: __init__
+    .. automethod:: refine
+    .. automethod:: refine_uniformly
+    .. automethod:: get_current_mesh
+    .. automethod:: get_previous_mesh
     """
 
     def __init__(self, mesh):
