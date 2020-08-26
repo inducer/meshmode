@@ -127,8 +127,10 @@ jobs:
 
                 # Work around
                 # intersphinx inventory 'https://firedrakeproject.org/objects.inv' not fetchable
+                # by deleting all the Firedrake stuff
                 rm -Rf meshmode/interop/firedrake
                 sed -i '/firedrakeproject/d' doc/conf.py
+                rm doc/interop.rst
 
                 build_docs
 
