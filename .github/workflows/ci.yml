@@ -130,6 +130,7 @@ jobs:
                 # by deleting all the Firedrake stuff
                 rm -Rf meshmode/interop/firedrake
                 sed -i '/firedrakeproject/d' doc/conf.py
+                sed -i '/interop/d' doc/index.rst
                 rm doc/interop.rst
 
                 build_docs
