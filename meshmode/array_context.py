@@ -270,9 +270,11 @@ class PyOpenCLArrayContext(ArrayContext):
         self.context = queue.context
         self.queue = queue
         self.allocator = allocator if allocator else None
-        if allocator is None:
+
+        import pyopencl as cl
+        if allocator is None and queue.device.type & cl.device_type.GPU:
             from warnings import warn
-            warn("PyOpenCLArrayContext created without an allocator. "
+            warn("PyOpenCLArrayContext created without an allocator on a GPU. "
                  "This can lead to high numbers of memory allocations. "
                  "Please consider using a pyopencl.tools.MemoryPool. "
                  "Run with allocator=False to disable this warning.")
