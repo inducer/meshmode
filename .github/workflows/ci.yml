@@ -123,6 +123,7 @@ jobs:
                 curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/ci-support.sh
                 . ci-support.sh
                 build_py_project_in_conda_env
+                conda install graphviz
                 build_docs
 
 # vim: sw=4
