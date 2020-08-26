@@ -582,6 +582,7 @@ class Visualizer(object):
 
         # {{{ write either both the vis file and the manifest, or neither
 
+        responsible_for_writing_par_manifest = par_file_names[0] == file_name
         if os.path.exists(file_name):
             if overwrite:
                 # we simply overwrite below, no need to remove
@@ -590,7 +591,8 @@ class Visualizer(object):
                 raise FileExistsError("output file '%s' already exists"
                                       % file_name)
 
-        if par_manifest_filename is not None:
+        if (responsible_for_writing_par_manifest
+                and par_manifest_filename is not None):
             if os.path.exists(par_manifest_filename):
                 if overwrite:
                     # we simply overwrite below, no need to remove
@@ -615,7 +617,7 @@ class Visualizer(object):
                 raise ValueError("must specify par_manifest_filename if "
                         "par_file_names are given")
 
-            if par_file_names[0] == file_name:
+            if responsible_for_writing_par_manifest:
                 with open(par_manifest_filename, "w") as outf:
                     generator = ParallelXMLGenerator(par_file_names)
                     generator(grid).write(outf)
