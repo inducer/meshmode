@@ -490,36 +490,32 @@ def make_partition_connection(actx, local_bdry_conn, i_local_part,
         for i_local_grp in np.unique(i_local_grps):
 
             elem_base = local_groups[i_local_grp].element_nr_base
-            local_el_lookup = _make_bdry_el_lookup_table(actx,
-                                                         local_bdry_conn,
-                                                         i_local_grp)
+            local_el_lookup = _make_bdry_el_lookup_table(actx, local_bdry_conn,
+                        i_local_grp)
 
-            for i_remote_face in i_remote_faces:
-
-                index_flags = np.logical_and(i_local_grps == i_local_grp,
-                                             i_remote_faces == i_remote_face)
-                if not np.any(index_flags):
+            local_bdry_indices = []
+            remote_bdry_indices = []
+            for iface, face in enumerate(remote_from_elem_faces[i_remote_grp]):
+                local_indices = np.where((i_local_grps == i_local_grp)
+                            & (i_remote_faces == face))[0]
+                if len(local_indices) == 0:
                     continue
+                local_elems = i_local_meshwide_elems[local_indices] - elem_base
+                local_faces = i_local_faces[local_indices]
+                local_bdry_indices.append(local_el_lookup[local_elems, local_faces])
+                remote_bdry_indices.append(remote_from_elem_indices[i_remote_grp]
+                            [iface])
 
-                remote_bdry_indices = None
-                for idxs, face in zip(remote_from_elem_indices[i_remote_grp],
-                                      remote_from_elem_faces[i_remote_grp]):
-                    if face == i_remote_face:
-                        remote_bdry_indices = idxs
-                        break
-                assert remote_bdry_indices is not None
+            if len(local_bdry_indices) == 0:
+                continue
 
-                elems = i_local_meshwide_elems[index_flags] - elem_base
-                faces = i_local_faces[index_flags]
-                local_bdry_indices = local_el_lookup[elems, faces]
-
-                batches = _make_cross_face_batches(actx,
+            grp_batches = _make_cross_face_batches(actx,
                         local_bdry, remote_bdry,
                         i_local_grp, i_remote_grp,
-                        local_bdry_indices,
-                        remote_bdry_indices)
+                        np.concatenate(local_bdry_indices),
+                        np.concatenate(remote_bdry_indices))
 
-                part_batches[i_local_grp].extend(batches)
+            part_batches[i_local_grp].extend(grp_batches)
 
     return DirectDiscretizationConnection(
             from_discr=remote_bdry,
