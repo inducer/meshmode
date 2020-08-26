@@ -582,7 +582,9 @@ class Visualizer(object):
 
         # {{{ write either both the vis file and the manifest, or neither
 
-        responsible_for_writing_par_manifest = par_file_names[0] == file_name
+        responsible_for_writing_par_manifest = (
+                par_file_names
+                and par_file_names[0] == file_name)
         if os.path.exists(file_name):
             if overwrite:
                 # we simply overwrite below, no need to remove
