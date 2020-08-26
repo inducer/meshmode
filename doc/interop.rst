@@ -12,15 +12,14 @@ Function Spaces/Discretizations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Users wishing to interact with :mod:`meshmode` from :mod:`firedrake`
-will create a 
+will create a
 :class:`~meshmode.interop.firedrake.connection.FiredrakeConnection`
 using :func:`~meshmode.interop.firedrake.connection.build_connection_from_firedrake`,
 while users wishing
 to interact with :mod:`firedrake` from :mod:`meshmode` will use
-will create a 
+will create a
 :class:`~meshmode.interop.firedrake.connection.FiredrakeConnection`
 using :func:`~meshmode.interop.firedrake.connection.build_connection_to_firedrake`.
-the :class:`~meshmode.interop.firedrake.connection.ToFiredrakeConnection` class.
 It is not recommended to create a
 :class:`~meshmode.interop.firedrake.connection.FiredrakeConnection` directly.
 
@@ -162,39 +161,39 @@ roughly as so:
     is used to define what meshmode calls the unit nodes and unit
     vertices. It is worth noting that :mod:`firedrake` does
     not require a positive orientation of elements and that its
-    reference traingle is different than specified in :mod:`modepy`. 
+    reference traingle is different than specified in :mod:`modepy`.
 
-(2) A :class:`~firedrake.mesh.MeshTopology`
+(2) A `~firedrake.mesh.MeshTopology`
     which holds information about connectivity
     and other topological properties, but nothing about geometry/coordinates
     etc.
 
 (3) A class :class:`~firedrake.functionspaceimpl.FunctionSpace`
     created from a :mod:`finat` element and a
-    :class:`~firedrake.mesh.MeshTopology` which allows us to
+    `~firedrake.mesh.MeshTopology` which allows us to
     define functions mapping the nodes (defined by the
     :mod:`finat` element) of each element in the
-    :class:`~firedrake.mesh.MeshTopology` to some values.
+    `~firedrake.mesh.MeshTopology` to some values.
     Note that the function :func:`~firedrake.functionspace.FunctionSpace`
     in the firedrake API is used to create objects of class
     :class:`~firedrake.functionspaceimpl.FunctionSpace`
     and :class:`~firedrake.functionspaceimpl.WithGeometry` (see
     (6)).
 
-(4) A :class:`~firedrake.function.CoordinatelessFunction`
+(4) A `~firedrake.function.CoordinatelessFunction`
     (in the sense that its *domain* has no coordinates)
     which is a function in a
     :class:`~firedrake.functionspaceimpl.FunctionSpace`.
 
-(5) A :class:`~firedrake.mesh.MeshGeometry` created from a
+(5) A `~firedrake.mesh.MeshGeometry` created from a
     :class:`~firedrake.functionspaceimpl.FunctionSpace`
-    and a :class:`~firedrake.function.CoordinatelessFunction`
+    and a `~firedrake.function.CoordinatelessFunction`
     in that :class:`~firedrake.functionspaceimpl.FunctionSpace`
     which maps each dof to its geometric coordinates.
 
 (6) A :class:`~firedrake.functionspaceimpl.WithGeometry` which is a
     :class:`~firedrake.functionspaceimpl.FunctionSpace` together
-    with a :class:`~firedrake.mesh.MeshGeometry`.
+    with a `~firedrake.mesh.MeshGeometry`.
     This is the object returned
     usually returned to the user by a call
     to the :mod:`firedrake` function
@@ -205,13 +204,13 @@ roughly as so:
 
 Thus, by the coordinates of a mesh geometry we mean
 
-(a) On the hidden back-end: a :class:`~firedrake.function.CoordinatelessFunction`
+(a) On the hidden back-end: a `~firedrake.function.CoordinatelessFunction`
     *f* on some function space defined only on the mesh topology.
 (b) On the front-end: A :class:`~firedrake.function.Function`
     with the values of *f* but defined
     on a :class:`~firedrake.functionspaceimpl.WithGeometry`
     created from the :class:`~firedrake.functionspaceimpl.FunctionSpace`
-    *f* lives in and the :class:`~firedrake.mesh.MeshGeometry` *f* defines.
+    *f* lives in and the `~firedrake.mesh.MeshGeometry` *f* defines.
 
 Basically, it's this picture (where :math:`a\to b` if :math:`b` depends on :math:`a`)
 
@@ -225,7 +224,7 @@ Basically, it's this picture (where :math:`a\to b` if :math:`b` depends on :math
     :class:`~firedrake.functionspaceimpl.WithGeometry`.
     This picture
     only shows how the class definitions depend on each other.
-            
+
 
 .. graphviz::
 
@@ -238,7 +237,7 @@ Basically, it's this picture (where :math:`a\to b` if :math:`b` depends on :math
         fspace [label="Function Space"];
         coordless [label="Coordinateless\nFunction"];
         geo [label="Geometric\nMesh"];
-        withgeo [label="With\nGeometry"]; 
+        withgeo [label="With\nGeometry"];
 
         // EDGES
 

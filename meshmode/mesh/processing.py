@@ -35,6 +35,7 @@ __doc__ = """
 .. autofunction:: find_group_indices
 .. autofunction:: partition_mesh
 .. autofunction:: find_volume_mesh_element_orientations
+.. autofunction:: flip_simplex_element_group
 .. autofunction:: perform_flips
 .. autofunction:: find_bounding_box
 .. autofunction:: merge_disjoint_meshes

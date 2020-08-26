@@ -168,7 +168,9 @@ def flatten_chained_connection(actx, connection):
     nothing is done. However, if the connection is a
     :class:`~meshmode.discretization.connection.ChainedDiscretizationConnection`,
     a new direct connection is constructed that transports from
-    :attr:`connection.from_discr` to :attr:`connection.to_discr`.
+    :attr:`~meshmode.discretization.connection.DiscretizationConnection.from_discr`
+    to
+    :attr:`~meshmode.discretization.connection.DiscretizationConnection.to_discr`.
 
     The new direct connection will have a number of groups and batches that
     is, at worse, the product of all the connections in the chain. For
@@ -187,7 +189,7 @@ def flatten_chained_connection(actx, connection):
         If a large number of connections is chained, the number of groups and
         batches can become very large.
 
-    :arg actx: An instance of :class:`meshmode.array_contex.ArrayContext`.
+    :arg actx: An instance of :class:`meshmode.array_context.ArrayContext`.
     :arg connection: An instance of
         :class:`~meshmode.discretization.connection.DiscretizationConnection`.
     :return: An instance of

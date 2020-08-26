@@ -34,6 +34,8 @@ from pytools import Record, memoize_method
 __doc__ = """
 
 .. autoclass:: MeshElementGroup
+.. autoclass:: SimplexElementGroup
+.. autoclass:: TensorProductElementGroup
 
 .. autoclass:: Mesh
 
@@ -132,7 +134,7 @@ class BTAG_PARTITION(object):  # noqa: N801
 class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801
     """When a :class:`Mesh` is created as an element-by-element subset of another
     (as, for example, when calling
-    :func:`meshmode.interop.firedrake.build_connection_from_firedrake`
+    :func:`meshmode.interop.firedrake.connection.build_connection_from_firedrake`
     while passing *restrict_to_boundary*), boundaries may arise where there
     were none in the original mesh. This boundary tag is used to indicate
     such boundaries.
@@ -293,6 +295,10 @@ class MeshElementGroup(Record):
 # {{{ simplex
 
 class SimplexElementGroup(MeshElementGroup):
+    """
+    .. automethod:: __init__
+    """
+
     def __init__(self, order, vertex_indices, nodes,
             element_nr_base=None, node_nr_base=None,
             unit_nodes=None, dim=None):
@@ -305,7 +311,7 @@ class SimplexElementGroup(MeshElementGroup):
             version. If unspecified, the nodes from
             :func:`modepy.warp_and_blend_nodes` for *dim*
             are assumed. These must be in unit coordinates
-            as defined in :mod:`modepy.nodes`.
+            as defined in :mod:`modepy`.
         :arg dim: only used if *unit_nodes* is None, to get
             the default unit nodes.
 
@@ -374,6 +380,10 @@ class SimplexElementGroup(MeshElementGroup):
 # {{{ tensor-product
 
 class TensorProductElementGroup(MeshElementGroup):
+    """
+    .. automethod:: __init__
+    """
+
     def __init__(self, order, vertex_indices, nodes,
             element_nr_base=None, node_nr_base=None,
             unit_nodes=None):
@@ -607,15 +617,23 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
 
 class Mesh(Record):
     """
+    .. attribute:: ambient_dim
+
+    .. attribute:: dim
+
     .. attribute:: vertices
 
         *None* or an array of vertex coordinates with shape
         *(ambient_dim, nvertices)*. If *None*, vertices are not
         known for this mesh.
 
+    .. attribute:: nvertices
+
     .. attribute:: groups
 
         A list of :class:`MeshElementGroup` instances.
+
+    .. attribute:: nelements
 
     .. attribute:: nodal_adjacency
 

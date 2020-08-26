@@ -84,6 +84,21 @@ class _GroupRefinementRecord(RecordWithoutPickling):
 
 
 class Refiner(object):
+    """An older that mostly succeeds at preserving adjacency across
+    non-conformal refinement.
+
+    .. note::
+
+        This refiner is currently kind of slow, and not always correct.
+        See :class:`RefinerWithoutAdjacency` for a less capable
+        but much faster refiner.
+
+    .. automethod:: __init__
+    .. automethod:: refine
+    .. automethod:: refine_uniformly
+    .. automethod:: get_current_mesh
+    .. automethod:: get_previous_mesh
+    """
 
     # {{{ constructor
 
