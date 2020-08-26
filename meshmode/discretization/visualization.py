@@ -425,7 +425,8 @@ class Visualizer(object):
 
     def write_parallel_vtk_file(self, mpi_comm, file_name_pattern, names_and_fields,
                 compressor=None, real_only=False,
-                overwrite=False, use_high_order=None):
+                overwrite=False, use_high_order=None,
+                par_manifest_filename=None):
         r"""A convenience wrapper around :meth:`write_vtk_file` for
         distributed-memory visualization.
 
@@ -437,22 +438,23 @@ class Visualizer(object):
         :arg file_name_pattern: A file name pattern (required to end in ``.vtu``)
             that will be used with :meth:`str.format` with an (integer)
             argument of ``rank`` to obtain the per-rank file name.
-
-        *par_manifest_filename* is synthesized by substituting rank 0
-        into *file_name_pattern* and replacing the file extension with
-        ``.pvtu``.
+        :arg par_manifest_filename: as in :meth:`write_vtk_file`.
+            If not given, *par_manifest_filename* is synthesized by
+            substituting rank 0 into *file_name_pattern* and replacing the file
+            extension with ``.pvtu``.
 
         See :meth:`write_vtk_file` for the meaning of the remainder of the
         arguments.
 
         .. versionadded:: 2020.2
         """
-        par_manifest_filename = file_name_pattern.format(rank=0)
-        if not par_manifest_filename.endswith(".vtu"):
-            raise ValueError("file_name_pattern must produce file names "
-                    "ending in '.vtu'")
+        if par_manifest_filename is None:
+            par_manifest_filename = file_name_pattern.format(rank=0)
+            if not par_manifest_filename.endswith(".vtu"):
+                raise ValueError("file_name_pattern must produce file names "
+                        "ending in '.vtu'")
 
-        par_manifest_filename = par_manifest_filename[:-4] + '.pvtu'
+            par_manifest_filename = par_manifest_filename[:-4] + '.pvtu'
 
         self.write_vtk_file(
                 file_name=file_name_pattern.format(rank=mpi_comm.Get_rank()),
