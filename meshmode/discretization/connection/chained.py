@@ -262,7 +262,7 @@ def make_full_resample_matrix(actx, connection):
     """Build a dense matrix representing the discretization connection.
 
     This is based on
-    :func:`~meshmode.discretization.connection.DirectDiscretizationConnection.full_resample_matrix`.
+    :func:`~meshmode.discretization.connection.direct.make_direct_full_resample_matrix`.
     If a chained connection is given, the matrix is constructed recursively
     for each connection and multiplied left to right.
 
@@ -275,17 +275,19 @@ def make_full_resample_matrix(actx, connection):
     :arg connection: a
         :class:`~meshmode.discretization.connection.DiscretizationConnection`.
     :return: a :class:`pyopencl.array.Array` of shape
-        `(connection.from_discr.nnodes, connection.to_discr.nnodes)`.
+        `(connection.from_discr.ndofs, connection.to_discr.ndofs)`.
     """
+    from meshmode.discretization.connection.direct import \
+            DirectDiscretizationConnection, make_direct_full_resample_matrix
 
-    if hasattr(connection, "full_resample_matrix"):
-        return connection.full_resample_matrix(actx)
+    if isinstance(connection, DirectDiscretizationConnection):
+        return make_direct_full_resample_matrix(actx, connection)
 
-    if not hasattr(connection, 'connections'):
-        raise TypeError('connection is not chained')
+    if not isinstance(connection, ChainedDiscretizationConnection):
+        raise TypeError("only 'ChainedDiscretizationConnection's are supported")
 
     if not connection.connections:
-        result = np.eye(connection.to_discr.nnodes)
+        result = np.eye(connection.to_discr.ndofs)
         return actx.from_numpy(result)
 
     acc = actx.to_numpy(
