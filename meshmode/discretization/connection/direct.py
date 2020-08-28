@@ -171,8 +171,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
     .. automethod:: __call__
 
-    .. automethod:: full_resample_matrix
-
     """
 
     def __init__(self, from_discr, to_discr, groups, is_surjective):
@@ -248,73 +246,11 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         return actx.freeze(actx.from_numpy(result))
 
     def full_resample_matrix(self, actx):
-        """Build a dense matrix representing this discretization connection.
+        from warnings import warn
+        warn("This method is deprecated. Use 'make_direct_full_resample_matrix' "
+                "instead.", DeprecationWarning, stacklevel=2)
 
-        .. warning::
-
-            On average, this will be exceedingly expensive (:math:`O(N^2)` in
-            the number *N* of discretization points) in terms of memory usage
-            and thus not what you'd typically want, other than maybe for
-            testing.
-
-        .. note::
-
-            This function assumes a flattened DOF array, as produced by
-            :class:`~meshmode.dof_array.flatten`.
-        """
-
-        @memoize_in(actx, (DirectDiscretizationConnection, "oversample_mat_knl"))
-        def knl():
-            return make_loopy_program(
-                """{[iel, idof, j]:
-                    0<=iel<nelements and
-                    0<=idof<n_to_nodes and
-                    0<=j<n_from_nodes}""",
-                "result[itgt_base + to_element_indices[iel]*n_to_nodes + idof, \
-                        isrc_base + from_element_indices[iel]*n_from_nodes + j] \
-                    = resample_mat[idof, j]",
-                [
-                    lp.GlobalArg("result", None,
-                        shape="nnodes_tgt, nnodes_src",
-                        offset=lp.auto),
-                    lp.ValueArg("itgt_base,isrc_base", np.int32),
-                    lp.ValueArg("nnodes_tgt,nnodes_src", np.int32),
-                    "...",
-                    ],
-                name="oversample_mat")
-
-        to_discr_ndofs = sum(grp.nelements*grp.nunit_dofs
-                for grp in self.to_discr.groups)
-        from_discr_ndofs = sum(grp.nelements*grp.nunit_dofs
-                for grp in self.from_discr.groups)
-
-        result = actx.zeros(
-                (to_discr_ndofs, from_discr_ndofs),
-                dtype=self.to_discr.real_dtype)
-
-        from_group_sizes = [
-                grp.nelements*grp.nunit_dofs
-                for grp in self.from_discr.groups]
-        from_group_starts = np.cumsum([0] + from_group_sizes)
-
-        tgt_node_nr_base = 0
-        for i_tgrp, (tgrp, cgrp) in enumerate(
-                zip(self.to_discr.groups, self.groups)):
-            for i_batch, batch in enumerate(cgrp.batches):
-                if not len(batch.from_element_indices):
-                    continue
-
-                actx.call_loopy(knl(),
-                        resample_mat=self._resample_matrix(actx, i_tgrp, i_batch),
-                        result=result,
-                        itgt_base=tgt_node_nr_base,
-                        isrc_base=from_group_starts[batch.from_group_index],
-                        from_element_indices=batch.from_element_indices,
-                        to_element_indices=batch.to_element_indices)
-
-            tgt_node_nr_base += tgrp.nelements*tgrp.nunit_dofs
-
-        return result
+        return make_direct_full_resample_matrix(actx, self)
 
     def __call__(self, ary):
         from meshmode.dof_array import DOFArray
@@ -411,5 +347,85 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
 # }}}
 
+
+# {{{ dense resampling matrix
+
+def make_direct_full_resample_matrix(actx, conn):
+    """Build a dense matrix representing this discretization connection.
+
+    .. warning::
+
+        On average, this will be exceedingly expensive (:math:`O(N^2)` in
+        the number *N* of discretization points) in terms of memory usage
+        and thus not what you'd typically want, other than maybe for
+        testing.
+
+    .. note::
+
+        This function assumes a flattened DOF array, as produced by
+        :class:`~meshmode.dof_array.flatten`.
+
+    :arg actx: an :class:`~meshmode.array_context.ArrayContext`.
+    :arg conn: a :class:`DirectDiscretizationConnection`.
+    """
+
+    if not isinstance(conn, DirectDiscretizationConnection):
+        raise TypeError("can only construct a full resampling matrix "
+                "for a DirectDiscretizationConnection.")
+
+    @memoize_in(actx, (make_direct_full_resample_matrix, "oversample_mat_knl"))
+    def knl():
+        return make_loopy_program(
+            """{[iel, idof, j]:
+                0<=iel<nelements and
+                0<=idof<n_to_nodes and
+                0<=j<n_from_nodes}""",
+            "result[itgt_base + to_element_indices[iel]*n_to_nodes + idof, \
+                    isrc_base + from_element_indices[iel]*n_from_nodes + j] \
+                = resample_mat[idof, j]",
+            [
+                lp.GlobalArg("result", None,
+                    shape="nnodes_tgt, nnodes_src",
+                    offset=lp.auto),
+                lp.ValueArg("itgt_base,isrc_base", np.int32),
+                lp.ValueArg("nnodes_tgt,nnodes_src", np.int32),
+                "...",
+                ],
+            name="oversample_mat")
+
+    to_discr_ndofs = sum(grp.nelements*grp.nunit_dofs
+            for grp in conn.to_discr.groups)
+    from_discr_ndofs = sum(grp.nelements*grp.nunit_dofs
+            for grp in conn.from_discr.groups)
+
+    result = actx.zeros(
+            (to_discr_ndofs, from_discr_ndofs),
+            dtype=conn.to_discr.real_dtype)
+
+    from_group_sizes = [
+            grp.nelements*grp.nunit_dofs
+            for grp in conn.from_discr.groups]
+    from_group_starts = np.cumsum([0] + from_group_sizes)
+
+    tgt_node_nr_base = 0
+    for i_tgrp, (tgrp, cgrp) in enumerate(
+            zip(conn.to_discr.groups, conn.groups)):
+        for i_batch, batch in enumerate(cgrp.batches):
+            if not len(batch.from_element_indices):
+                continue
+
+            actx.call_loopy(knl(),
+                    resample_mat=conn._resample_matrix(actx, i_tgrp, i_batch),
+                    result=result,
+                    itgt_base=tgt_node_nr_base,
+                    isrc_base=from_group_starts[batch.from_group_index],
+                    from_element_indices=batch.from_element_indices,
+                    to_element_indices=batch.to_element_indices)
+
+        tgt_node_nr_base += tgrp.nelements*tgrp.nunit_dofs
+
+    return result
+
+# }}}
 
 # vim: foldmethod=marker
