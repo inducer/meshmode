@@ -484,6 +484,9 @@ class Visualizer(object):
             *name* is a string and *value* is a
             :class:`~meshmode.dof_array.DOFArray` or a constant,
             or an object array of those.
+            *value* may also be a data class (see :mod:`dataclasses`),
+            whose attributes will be inserted into the visualization
+            with their names prefixed by *name*.
         :arg overwrite: If *True*, silently overwrite existing
             files.
         :arg use_high_order: Writes arbitrary order Lagrange VTK elements.
@@ -521,6 +524,24 @@ class Visualizer(object):
                 VF_LIST_OF_COMPONENTS)
 
         nodes = self._vis_nodes_numpy()
+
+        # {{{ expand dataclasses in names_and_fields
+
+        new_names_and_fields = []
+        for name, fld in names_and_fields:
+            if hasattr(type(fld), "__dataclass_fields__"):
+                import dataclasses
+                new_names_and_fields.extend(
+                        (f"{name}_{dclass_field.name}", getattr(fld, dclass_field.name))
+                        for dclass_field in dataclasses.fields(fld))
+            else:
+                new_names_and_fields.append((name, fld))
+
+        names_and_fields = new_names_and_fields
+        del new_names_and_fields
+
+        # }}}
+
         names_and_fields = [
                 (name, resample_to_numpy(self.connection, fld))
                 for name, fld in names_and_fields]
