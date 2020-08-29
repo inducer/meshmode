@@ -541,7 +541,8 @@ class Visualizer(object):
             if hasattr(type(fld), "__dataclass_fields__"):
                 import dataclasses
                 new_names_and_fields.extend(
-                        (f"{name}_{dclass_field.name}", getattr(fld, dclass_field.name))
+                        (f"{name}_{dclass_field.name}",
+                            getattr(fld, dclass_field.name))
                         for dclass_field in dataclasses.fields(fld))
             else:
                 new_names_and_fields.append((name, fld))
