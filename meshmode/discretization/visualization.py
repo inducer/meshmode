@@ -435,6 +435,8 @@ class Visualizer(object):
             necessarily) an instance of ``mpi4py.Comm``. This is used
             to determine the current rank as well as the total number
             of files being written.
+            May also be *None* in which case a unit-size communicator
+            is assumed.
         :arg file_name_pattern: A file name pattern (required to end in ``.vtu``)
             that will be used with :meth:`str.format` with an (integer)
             argument of ``rank`` to obtain the per-rank file name.
@@ -448,6 +450,13 @@ class Visualizer(object):
 
         .. versionadded:: 2020.2
         """
+        if mpi_comm is not None:
+            rank = mpi_comm.Get_rank()
+            nranks = mpi_comm.Get_size()
+        else:
+            rank = 0
+            nranks = 1
+
         if par_manifest_filename is None:
             par_manifest_filename = file_name_pattern.format(rank=0)
             if not par_manifest_filename.endswith(".vtu"):
@@ -457,7 +466,7 @@ class Visualizer(object):
             par_manifest_filename = par_manifest_filename[:-4] + '.pvtu'
 
         self.write_vtk_file(
-                file_name=file_name_pattern.format(rank=mpi_comm.Get_rank()),
+                file_name=file_name_pattern.format(rank=rank),
                 names_and_fields=names_and_fields,
                 compressor=compressor,
                 real_only=real_only,
@@ -466,7 +475,7 @@ class Visualizer(object):
                 par_manifest_filename=par_manifest_filename,
                 par_file_names=[
                     file_name_pattern.format(rank=rank)
-                    for rank in range(mpi_comm.Get_size())
+                    for rank in range(nranks)
                     ]
                 )
 
