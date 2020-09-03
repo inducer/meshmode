@@ -490,11 +490,11 @@ def make_partition_connection(actx, local_bdry_conn, i_local_part,
         for i_local_grp in np.unique(i_local_grps):
 
             elem_base = local_groups[i_local_grp].element_nr_base
-            local_el_lookup = _make_bdry_el_lookup_table(actx, local_bdry_conn,
+            local_vol_to_bdry = _make_bdry_el_lookup_table(actx, local_bdry_conn,
                         i_local_grp)
 
-            local_bdry_indices = []
-            remote_bdry_indices = []
+            local_bdry_el_indices = []
+            remote_bdry_el_indices = []
             for iface, face in enumerate(remote_from_elem_faces[i_remote_grp]):
                 local_indices = np.where((i_local_grps == i_local_grp)
                             & (i_remote_faces == face))[0]
@@ -502,18 +502,19 @@ def make_partition_connection(actx, local_bdry_conn, i_local_part,
                     continue
                 local_elems = i_local_meshwide_elems[local_indices] - elem_base
                 local_faces = i_local_faces[local_indices]
-                local_bdry_indices.append(local_el_lookup[local_elems, local_faces])
-                remote_bdry_indices.append(remote_from_elem_indices[i_remote_grp]
+                local_bdry_el_indices.append(
+                        local_vol_to_bdry[local_elems, local_faces])
+                remote_bdry_el_indices.append(remote_from_elem_indices[i_remote_grp]
                             [iface])
 
-            if len(local_bdry_indices) == 0:
+            if not local_bdry_el_indices:
                 continue
 
             grp_batches = _make_cross_face_batches(actx,
                         local_bdry, remote_bdry,
                         i_local_grp, i_remote_grp,
-                        np.concatenate(local_bdry_indices),
-                        np.concatenate(remote_bdry_indices))
+                        np.concatenate(local_bdry_el_indices),
+                        np.concatenate(remote_bdry_el_indices))
 
             part_batches[i_local_grp].extend(grp_batches)
 
