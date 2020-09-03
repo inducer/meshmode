@@ -126,7 +126,7 @@ class MPIMeshDistributor(object):
 class MPIBoundaryCommSetupHelper(object):
     """
     .. automethod:: __call__
-    .. automethod:: is_ready
+    .. automethod:: is_setup_ready
     """
     def __init__(self, mpi_comm, actx, local_bdry_conn, i_remote_part,
             bdry_grp_factory):
