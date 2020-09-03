@@ -186,16 +186,16 @@ class MPIBoundaryCommSetupHelper(object):
                 source=self.i_remote_part,
                 tag=TAG_SEND_BOUNDARY)
 
-        logger.debug('rank %d: Received rank %d data',
+        logger.debug("rank %d: Received rank %d data",
                      self.i_local_part, self.i_remote_part)
 
         from meshmode.discretization import Discretization
-        remote_bdry_mesh = remote_data['bdry_mesh']
+        remote_bdry_mesh = remote_data["bdry_mesh"]
         remote_bdry = Discretization(self.array_context, remote_bdry_mesh,
                                      self.bdry_grp_factory)
-        remote_adj_groups = remote_data['adj']
-        remote_to_elem_faces = remote_data['to_elem_faces']
-        remote_to_elem_indices = remote_data['to_elem_indices']
+        remote_adj_groups = remote_data["adj"]
+        remote_to_elem_faces = remote_data["to_elem_faces"]
+        remote_to_elem_indices = remote_data["to_elem_indices"]
 
         # Connect local_mesh to remote_mesh
         from meshmode.discretization.connection import make_partition_connection
