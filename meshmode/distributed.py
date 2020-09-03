@@ -156,10 +156,10 @@ class MPIBoundaryCommSetupHelper(object):
                     for batch in grp_batches]
                 for grp_batches in local_batches]
 
-        local_data = {'bdry_mesh': local_bdry.mesh,
-                      'adj': local_adj_groups,
-                      'to_elem_faces': local_to_elem_faces,
-                      'to_elem_indices': local_to_elem_indices}
+        local_data = {"bdry_mesh": local_bdry.mesh,
+                      "adj": local_adj_groups,
+                      "to_elem_faces": local_to_elem_faces,
+                      "to_elem_indices": local_to_elem_indices}
         return self.mpi_comm.isend(local_data,
                                    dest=self.i_remote_part,
                                    tag=TAG_SEND_BOUNDARY)

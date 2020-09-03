@@ -526,7 +526,7 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
                     igroup=i_part_grp, ineighbor_group=None, elements=elements,
                     element_faces=element_faces, neighbors=neighbors,
                     neighbor_partitions=neighbor_parts,
-                    global_neighbors=neighbor_elements,
+                    partition_neighbors=neighbor_elements,
                     neighbor_faces=neighbor_faces))
 
     return inter_partition_adj_groups

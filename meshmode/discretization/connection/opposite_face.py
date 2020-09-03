@@ -482,7 +482,7 @@ def make_partition_connection(actx, local_bdry_conn, i_local_part,
             # Skip because i_remote_grp is not connected to i_local_part.
             continue
         i_remote_faces = adj.element_faces[indices]
-        i_local_meshwide_elems = adj.global_neighbors[indices]
+        i_local_meshwide_elems = adj.partition_neighbors[indices]
         i_local_faces = adj.neighbor_faces[indices]
 
         i_local_grps = find_group_indices(local_groups, i_local_meshwide_elems)
