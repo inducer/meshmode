@@ -54,7 +54,7 @@ Python 3 POCL Firedrake:
   - "docker-runner"
   image: "firedrakeproject/firedrake"
   script:
-  - .ci/install-for-firedrake.sh
+  - . .ci/install-for-firedrake.sh
   - cd test
   - python -m pytest --tb=native --junitxml=pytest.xml -rxsw test_firedrake_interop.py
   artifacts:
@@ -66,7 +66,7 @@ Python 3 POCL Firedrake Examples:
   - "docker-runner"
   image: "firedrakeproject/firedrake"
   script:
-  - .ci/install-for-firedrake.sh
+  - . .ci/install-for-firedrake.sh
   - . ./.ci/run_firedrake_examples.sh
   artifacts:
     reports:
