@@ -15,5 +15,8 @@ pip install pybind11
 # doesn't have dataclasses.
 pip install dataclasses
 
+pip install pytest
+
 pip install -r /tmp/myreq.txt
 pip install --force-reinstall git+https://github.com/benSepanski/loopy.git@firedrake-usable_for_potentials
+pip install .
