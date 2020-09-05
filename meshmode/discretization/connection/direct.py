@@ -288,7 +288,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 (DirectDiscretizationConnection, "resample_by_picking_knl"))
         def pick_knl():
             knl = make_loopy_program(
-                """{[iel, idof, j]:
+                """{[iel, idof]:
                     0<=iel<nelements and
                     0<=idof<n_to_nodes}""",
                 "result[to_element_indices[iel], idof] \
