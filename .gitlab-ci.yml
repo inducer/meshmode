@@ -67,7 +67,7 @@ Python 3 POCL Firedrake Examples:
   image: "firedrakeproject/firedrake"
   script:
   - .ci/install-for-firedrake.sh
-  - . ./.github/workflows/run_firedrake_examples.sh
+  - . ./.ci/run_firedrake_examples.sh
   artifacts:
     reports:
       junit: test/pytest.xml
