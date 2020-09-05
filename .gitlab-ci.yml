@@ -54,20 +54,7 @@ Python 3 POCL Firedrake:
   - "docker-runner"
   image: "firedrakeproject/firedrake"
   script:
-  - &firedrake_setup |
-    sudo apt update
-    sudo apt upgrade -y
-    sudo apt install time
-    sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
-    source ~/firedrake/bin/activate
-    grep -v loopy requirements.txt > myreq.txt
-    pip install -r myreq.txt
-    pip install --force-reinstall git+https://github.com/benSepanski/loopy.git@firedrake-usable_for_potentials
-    # The Firedrake container is based on Py3.6 as of 2020-10-10, which
-    # doesn't have dataclasses.
-    pip install pytest dataclasses
-    pip install .
-  # run tests
+  - .ci/install-for-firedrake.sh
   - cd test
   - python -m pytest --tb=native --junitxml=pytest.xml -rxsw test_firedrake_interop.py
   artifacts:
@@ -79,8 +66,7 @@ Python 3 POCL Firedrake Examples:
   - "docker-runner"
   image: "firedrakeproject/firedrake"
   script:
-  - *firedrake_setup
-  # run examples
+  - .ci/install-for-firedrake.sh
   - . ./.github/workflows/run_firedrake_examples.sh
   artifacts:
     reports:
