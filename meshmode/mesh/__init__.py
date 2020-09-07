@@ -544,7 +544,7 @@ class FacialAdjacencyGroup(Record):
 
 class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
     """
-    Describes boundary adjacency information of elements in
+    Describes boundary adjacency information of elements in one
     :class:`MeshElementGroup`.
 
     .. attribute:: igroup
@@ -560,7 +560,7 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
         Group-local element numbers.
         Element ``element_id_dtype elements[i]`` and face
         ``face_id_dtype element_faces[i]`` is connected to neighbor element
-        ``element_id_dtype global_neighbors[i]`` with face
+        ``element_id_dtype partition_neighbors[i]`` with face
         ``face_id_dtype global_neighbor_faces[i]``. The partition number it connects
         to is ``neighbor_partitions[i]``.
 
@@ -568,7 +568,7 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
 
         ``face_id_dtype element_faces[i]`` gives the face of
         ``element_id_dtype elements[i]`` that is connected to
-        ``global_neighbors[i]``.
+        ``partition_neighbors[i]``.
 
     .. attribute:: neighbors
 
@@ -576,16 +576,16 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
         as a boundary tag. ``-neighbors[i]`` should be interpreted according to
         :class:``Mesh.boundary_tags``.
 
-    .. attribute:: global_neighbors
+    .. attribute:: partition_neighbors
 
-        Mesh-wide element numbers.
-        ``element_id_dtype global_neighbors[i]`` gives the element number within the
-        neighboring partition of the element connected to
-        ``element_id_dtype elements[i]``. Use ``find_group_instances()`` to find the
-        group that the element belongs to, then subtract ``element_nr_base`` to find
-        the element of the group.
+        ``element_id_dtype partition_neighbors[i]`` gives the volume element number
+        within the neighboring partition of the element connected to
+        ``element_id_dtype elements[i]`` (which is a boundary element index). Use
+        `~meshmode.mesh.processing.find_group_indices` to find the group that
+        the element belongs to, then subtract ``element_nr_base`` to find the
+        element of the group.
 
-        If ``global_neighbors[i]`` is negative, ``elements[i]`` is on a true
+        If ``partition_neighbors[i]`` is negative, ``elements[i]`` is on a true
         boundary and is not connected to any other :class:``Mesh``.
 
     .. attribute:: neighbor_faces
@@ -610,7 +610,7 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
 
     def __eq__(self, other):
         return (super.__eq__(self, other)
-            and np.array_equal(self.global_neighbors, other.global_neighbors)
+            and np.array_equal(self.partition_neighbors, other.partition_neighbors)
             and np.array_equal(self.neighbor_partitions, other.neighbor_partitions))
 
 # }}}

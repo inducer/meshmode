@@ -133,46 +133,27 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
             assert bdry_nelements == remote_bdry_nelements, \
                     "partitions do not have the same number of connected elements"
 
-            # Gather just enough information for the connection
             local_bdry = local_bdry_conn.to_discr
-            local_mesh = part_meshes[i_local_part]
-            local_adj_groups = [local_mesh.facial_adjacency_groups[i][None]
-                                for i in range(len(local_mesh.groups))]
-            local_batches = [local_bdry_conn.groups[i].batches
-                                for i in range(len(local_mesh.groups))]
-            local_from_elem_faces = [[batch.to_element_face
-                                            for batch in grp_batches]
-                                        for grp_batches in local_batches]
-            local_from_elem_indices = [[
-                batch.to_element_indices.get(queue=actx.queue)
-                for batch in grp_batches
-                ] for grp_batches in local_batches]
 
             remote_bdry = remote_bdry_conn.to_discr
-            remote_mesh = part_meshes[i_remote_part]
-            remote_adj_groups = [remote_mesh.facial_adjacency_groups[i][None]
-                                for i in range(len(remote_mesh.groups))]
-            remote_batches = [remote_bdry_conn.groups[i].batches
-                                for i in range(len(remote_mesh.groups))]
-            remote_from_elem_faces = [[batch.to_element_face
-                                            for batch in grp_batches]
-                                        for grp_batches in remote_batches]
-            remote_from_elem_indices = [[
-                batch.to_element_indices.get(queue=actx.queue)
-                for batch in grp_batches
-                ] for grp_batches in remote_batches]
 
-            # Connect from remote_mesh to local_mesh
+            from meshmode.distributed import make_remote_group_infos
             remote_to_local_conn = make_partition_connection(
-                    actx, local_bdry_conn, i_local_part, remote_bdry,
-                    remote_adj_groups, remote_from_elem_faces,
-                    remote_from_elem_indices)
+                    actx,
+                    local_bdry_conn=local_bdry_conn,
+                    i_local_part=i_local_part,
+                    remote_bdry_discr=remote_bdry,
+                    remote_group_infos=make_remote_group_infos(
+                        actx, remote_bdry_conn))
 
             # Connect from local mesh to remote mesh
             local_to_remote_conn = make_partition_connection(
-                    actx, remote_bdry_conn, i_remote_part, local_bdry,
-                    local_adj_groups, local_from_elem_faces,
-                    local_from_elem_indices)
+                    actx,
+                    local_bdry_conn=remote_bdry_conn,
+                    i_local_part=i_remote_part,
+                    remote_bdry_discr=local_bdry,
+                    remote_group_infos=make_remote_group_infos(
+                        actx, local_bdry_conn))
 
             check_connection(actx, remote_to_local_conn)
             check_connection(actx, local_to_remote_conn)
@@ -269,12 +250,12 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                 continue
             elem_base = part.groups[grp_num].element_nr_base
             for idx in range(len(adj.elements)):
-                if adj.global_neighbors[idx] == -1:
+                if adj.partition_neighbors[idx] == -1:
                     continue
                 elem = adj.elements[idx]
                 face = adj.element_faces[idx]
                 n_part_num = adj.neighbor_partitions[idx]
-                n_meshwide_elem = adj.global_neighbors[idx]
+                n_meshwide_elem = adj.partition_neighbors[idx]
                 n_face = adj.neighbor_faces[idx]
                 num_tags[n_part_num] += 1
                 n_part, n_part_to_global = new_meshes[n_part_num]
@@ -287,7 +268,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                 n_elem = n_meshwide_elem - n_elem_base
                 n_idx = index_lookup_table[n_part_num, n_grp_num, n_elem, n_face]
                 assert (part_num == n_adj.neighbor_partitions[n_idx]
-                        and elem + elem_base == n_adj.global_neighbors[n_idx]
+                        and elem + elem_base == n_adj.partition_neighbors[n_idx]
                         and face == n_adj.neighbor_faces[n_idx]),\
                         "InterPartitionAdjacencyGroup is not consistent"
                 _, n_part_to_global = new_meshes[n_part_num]

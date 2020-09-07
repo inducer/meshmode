@@ -72,7 +72,7 @@ class InterpolationBatch(object):
 
     .. attribute:: to_element_face
 
-        *int* or *None*. (a :class:`pyopencl.array.Array` if existent) If this
+        *int* or *None*. If this
         interpolation batch targets interpolation *to* a face, then this number
         captures the face number (on all elements referenced by
         :attr:`from_element_indices` to which this batch interpolates. (Since

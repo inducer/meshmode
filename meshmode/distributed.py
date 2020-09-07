@@ -25,7 +25,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from dataclasses import dataclass
 import numpy as np  # noqa
+
+from meshmode.mesh import InterPartitionAdjacencyGroup
 
 # This file needs to be importable without mpi4py. So don't be tempted to add
 # that import here--push it into individual functions instead.
@@ -123,10 +126,39 @@ class MPIMeshDistributor(object):
 
 # {{{ boundary communication setup helper
 
+@dataclass
+class RemoteGroupInfo:
+    inter_partition_adj_group: InterPartitionAdjacencyGroup
+    vol_elem_indices: np.ndarray
+    bdry_elem_indices: np.ndarray
+    bdry_faces: np.ndarray
+
+
+def make_remote_group_infos(actx, bdry_conn):
+    local_vol_mesh = bdry_conn.from_discr.mesh
+
+    assert len(local_vol_mesh.groups) == len(bdry_conn.to_discr.groups)
+
+    return [
+            RemoteGroupInfo(
+                inter_partition_adj_group=(
+                    local_vol_mesh.facial_adjacency_groups[igrp][None]),
+                vol_elem_indices=np.concatenate([
+                    actx.to_numpy(batch.from_element_indices)
+                    for batch in bdry_conn.groups[igrp].batches]),
+                bdry_elem_indices=np.concatenate([
+                    actx.to_numpy(batch.to_element_indices)
+                    for batch in bdry_conn.groups[igrp].batches]),
+                bdry_faces=np.concatenate(
+                    [np.full(batch.nelements, batch.to_element_face)
+                        for batch in bdry_conn.groups[igrp].batches]))
+            for igrp in range(len(bdry_conn.from_discr.groups))]
+
+
 class MPIBoundaryCommSetupHelper(object):
     """
     .. automethod:: __call__
-    .. automethod:: is_ready
+    .. automethod:: is_setup_ready
     """
     def __init__(self, mpi_comm, actx, local_bdry_conn, i_remote_part,
             bdry_grp_factory):
@@ -142,27 +174,13 @@ class MPIBoundaryCommSetupHelper(object):
         self.bdry_grp_factory = bdry_grp_factory
 
     def _post_send_boundary_data(self):
-        local_bdry = self.local_bdry_conn.to_discr
-        local_mesh = self.local_bdry_conn.from_discr.mesh
-        local_adj_groups = [local_mesh.facial_adjacency_groups[i][None]
-                            for i in range(len(local_mesh.groups))]
-        local_batches = [self.local_bdry_conn.groups[i].batches
-                         for i in range(len(local_mesh.groups))]
-        local_to_elem_faces = [[batch.to_element_face for batch in grp_batches]
-                                for grp_batches in local_batches]
-        local_to_elem_indices = [
-                [
-                    self.array_context.to_numpy(batch.to_element_indices)
-                    for batch in grp_batches]
-                for grp_batches in local_batches]
 
-        local_data = {'bdry_mesh': local_bdry.mesh,
-                      'adj': local_adj_groups,
-                      'to_elem_faces': local_to_elem_faces,
-                      'to_elem_indices': local_to_elem_indices}
-        return self.mpi_comm.isend(local_data,
-                                   dest=self.i_remote_part,
-                                   tag=TAG_SEND_BOUNDARY)
+        return self.mpi_comm.isend(
+                (self.local_bdry_conn.to_discr.mesh,
+                    make_remote_group_infos(
+                        self.array_context, self.local_bdry_conn)),
+                dest=self.i_remote_part,
+                tag=TAG_SEND_BOUNDARY)
 
     def post_sends(self):
         logger.info("bdry comm rank %d send begin", self.i_local_part)
@@ -182,27 +200,25 @@ class MPIBoundaryCommSetupHelper(object):
         performs data exchange across faces from partition `i_remote_part` to the
         local mesh.
         """
-        remote_data = self.mpi_comm.recv(
+        remote_bdry_mesh, remote_group_infos = self.mpi_comm.recv(
                 source=self.i_remote_part,
                 tag=TAG_SEND_BOUNDARY)
 
-        logger.debug('rank %d: Received rank %d data',
+        logger.debug("rank %d: Received rank %d data",
                      self.i_local_part, self.i_remote_part)
 
         from meshmode.discretization import Discretization
-        remote_bdry_mesh = remote_data['bdry_mesh']
-        remote_bdry = Discretization(self.array_context, remote_bdry_mesh,
-                                     self.bdry_grp_factory)
-        remote_adj_groups = remote_data['adj']
-        remote_to_elem_faces = remote_data['to_elem_faces']
-        remote_to_elem_indices = remote_data['to_elem_indices']
 
         # Connect local_mesh to remote_mesh
         from meshmode.discretization.connection import make_partition_connection
         remote_to_local_bdry_conn = make_partition_connection(
-                self.array_context, self.local_bdry_conn, self.i_local_part,
-                remote_bdry, remote_adj_groups, remote_to_elem_faces,
-                remote_to_elem_indices)
+                self.array_context,
+                local_bdry_conn=self.local_bdry_conn,
+                i_local_part=self.i_local_part,
+                remote_bdry_discr=Discretization(
+                    self.array_context, remote_bdry_mesh,
+                    self.bdry_grp_factory),
+                remote_group_infos=remote_group_infos)
 
         self.send_req.wait()
         return remote_to_local_bdry_conn
