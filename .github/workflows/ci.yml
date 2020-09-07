@@ -40,25 +40,9 @@ jobs:
             image: 'firedrakeproject/firedrake'
         steps:
         -   uses: actions/checkout@v1
-        # This Dependencies setup is the same setup used for running firedrake
-        # examples, but had to be copied since github doesn't support yaml
-        # anchors. Changes made here should also be made there
         -   name: "Dependencies"
             run: |
-                sudo apt update
-                sudo apt upgrade -y
-                sudo apt install time
-                sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
-                sudo chown -R $(whoami) /github/home
-
-                . /home/firedrake/firedrake/bin/activate
-                grep -v loopy requirements.txt > /tmp/myreq.txt
-                pip install -r /tmp/myreq.txt
-                pip install --force-reinstall git+https://github.com/benSepanski/loopy.git@firedrake-usable_for_potentials
-                # The Firedrake container is based on Py3.6 as of 2020-10-10, which
-                # doesn't have dataclasses.
-                pip install pytest dataclasses
-                pip install .
+                . .ci/install-for-firedrake.sh
         -   name: "Test"
             run: |
                 . /home/firedrake/firedrake/bin/activate
@@ -72,29 +56,13 @@ jobs:
             image: 'firedrakeproject/firedrake'
         steps:
         -   uses: actions/checkout@v1
-        # This Dependencies setup is the same setup used for running firedrake
-        # tests, but had to be copied since github doesn't support yaml
-        # anchors. Changes made here should also be made there
         -   name: "Dependencies"
             run: |
-                sudo apt update
-                sudo apt upgrade -y
-                sudo apt install time
-                sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
-                sudo chown -R $(whoami) /github/home
-
-                . /home/firedrake/firedrake/bin/activate
-                grep -v loopy requirements.txt > /tmp/myreq.txt
-                pip install -r /tmp/myreq.txt
-                pip install --force-reinstall git+https://github.com/benSepanski/loopy.git@firedrake-usable_for_potentials
-                # The Firedrake container is based on Py3.6 as of 2020-10-10, which
-                # doesn't have dataclasses.
-                pip install pytest dataclasses
-                pip install .
+                . .ci/install-for-firedrake.sh
         -   name: "Examples"
             run: |
                 . /home/firedrake/firedrake/bin/activate
-                . ./.github/workflows/run_firedrake_examples.sh
+                . ./.ci/run_firedrake_examples.sh
 
     examples3:
         name: Examples Conda Py3
@@ -107,5 +75,32 @@ jobs:
                 USE_CONDA_BUILD=1
                 curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-py-project-and-run-examples.sh
                 . ./build-py-project-and-run-examples.sh
+
+    docs:
+        name: Documentation
+        runs-on: ubuntu-latest
+        steps:
+        -   uses: actions/checkout@v2
+        -
+            uses: actions/setup-python@v1
+            with:
+                python-version: '3.x'
+        -   name: "Main Script"
+            run: |
+                CONDA_ENVIRONMENT=.test-conda-env-py3.yml
+                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/ci-support.sh
+                . ci-support.sh
+                build_py_project_in_conda_env
+                conda install graphviz
+
+                # Work around
+                # intersphinx inventory 'https://firedrakeproject.org/objects.inv' not fetchable
+                # by deleting all the Firedrake stuff
+                rm -Rf meshmode/interop/firedrake
+                sed -i '/firedrakeproject/d' doc/conf.py
+                sed -i '/interop/d' doc/index.rst
+                rm doc/interop.rst
+
+                build_docs
 
 # vim: sw=4

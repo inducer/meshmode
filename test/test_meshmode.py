@@ -412,7 +412,10 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
         bdry_f_2 = bdry_connection(vol_f)
 
         if mesh_name == "blob" and dim == 2 and mesh.nelements < 500:
-            mat = actx.to_numpy(bdry_connection.full_resample_matrix(actx))
+            from meshmode.discretization.connection.direct import \
+                    make_direct_full_resample_matrix
+            mat = actx.to_numpy(
+                    make_direct_full_resample_matrix(actx, bdry_connection))
             bdry_f_2_by_mat = mat.dot(actx.to_numpy(flatten(vol_f)))
 
             mat_error = la.norm(actx.to_numpy(flatten(bdry_f_2)) - bdry_f_2_by_mat)

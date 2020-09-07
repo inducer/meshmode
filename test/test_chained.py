@@ -217,7 +217,6 @@ def test_chained_connection(actx_factory, ndim, visualize=False):
     assert flat_norm(f1-f2, np.inf) / flat_norm(f2) < 1e-11
 
 
-@pytest.mark.skip(reason='slow test')
 @pytest.mark.parametrize("ndim", [2, 3])
 def test_chained_full_resample_matrix(actx_factory, ndim, visualize=False):
     from meshmode.discretization.connection.chained import \
@@ -225,7 +224,7 @@ def test_chained_full_resample_matrix(actx_factory, ndim, visualize=False):
 
     actx = actx_factory()
 
-    discr = create_discretization(actx, ndim)
+    discr = create_discretization(actx, ndim, order=2, nelements=12)
     connections = []
     conn = create_refined_connection(actx, discr)
     connections.append(conn)

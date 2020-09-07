@@ -22,16 +22,13 @@ THE SOFTWARE.
 
 import operator
 import numpy as np
-from typing import Optional, Iterable, TYPE_CHECKING, Any
+from typing import Optional, Iterable, Any
 from functools import partial
 
 from pytools import single_valued, memoize_in
 from pytools.obj_array import obj_array_vectorize, obj_array_vectorize_n_args
 
 from meshmode.array_context import ArrayContext, make_loopy_program
-
-if TYPE_CHECKING:
-    from meshmode.discretization import Discretization as _Discretization
 
 
 __doc__ = """
@@ -243,7 +240,7 @@ def flatten(ary: np.ndarray) -> Any:
     return result
 
 
-def unflatten(actx: ArrayContext, discr: "_Discretization", ary,
+def unflatten(actx: ArrayContext, discr, ary,
         ndofs_per_element_per_group: Optional[Iterable[int]] = None) -> np.ndarray:
     r"""Convert a 'flat' array returned by :func:`flatten` back to a :class:`DOFArray`.
 

@@ -425,7 +425,8 @@ class Visualizer(object):
 
     def write_parallel_vtk_file(self, mpi_comm, file_name_pattern, names_and_fields,
                 compressor=None, real_only=False,
-                overwrite=False, use_high_order=None):
+                overwrite=False, use_high_order=None,
+                par_manifest_filename=None):
         r"""A convenience wrapper around :meth:`write_vtk_file` for
         distributed-memory visualization.
 
@@ -434,28 +435,38 @@ class Visualizer(object):
             necessarily) an instance of ``mpi4py.Comm``. This is used
             to determine the current rank as well as the total number
             of files being written.
+            May also be *None* in which case a unit-size communicator
+            is assumed.
         :arg file_name_pattern: A file name pattern (required to end in ``.vtu``)
             that will be used with :meth:`str.format` with an (integer)
             argument of ``rank`` to obtain the per-rank file name.
-
-        *par_manifest_filename* is synthesized by substituting rank 0
-        into *file_name_pattern* and replacing the file extension with
-        ``.pvtu``.
+        :arg par_manifest_filename: as in :meth:`write_vtk_file`.
+            If not given, *par_manifest_filename* is synthesized by
+            substituting rank 0 into *file_name_pattern* and replacing the file
+            extension with ``.pvtu``.
 
         See :meth:`write_vtk_file` for the meaning of the remainder of the
         arguments.
 
         .. versionadded:: 2020.2
         """
-        par_manifest_filename = file_name_pattern.format(rank=0)
-        if not par_manifest_filename.endswith(".vtu"):
-            raise ValueError("file_name_pattern must produce file names "
-                    "ending in '.vtu'")
+        if mpi_comm is not None:
+            rank = mpi_comm.Get_rank()
+            nranks = mpi_comm.Get_size()
+        else:
+            rank = 0
+            nranks = 1
 
-        par_manifest_filename = par_manifest_filename[:-4] + '.pvtu'
+        if par_manifest_filename is None:
+            par_manifest_filename = file_name_pattern.format(rank=0)
+            if not par_manifest_filename.endswith(".vtu"):
+                raise ValueError("file_name_pattern must produce file names "
+                        "ending in '.vtu'")
+
+            par_manifest_filename = par_manifest_filename[:-4] + '.pvtu'
 
         self.write_vtk_file(
-                file_name=file_name_pattern.format(rank=mpi_comm.Get_rank()),
+                file_name=file_name_pattern.format(rank=rank),
                 names_and_fields=names_and_fields,
                 compressor=compressor,
                 real_only=real_only,
@@ -464,7 +475,7 @@ class Visualizer(object):
                 par_manifest_filename=par_manifest_filename,
                 par_file_names=[
                     file_name_pattern.format(rank=rank)
-                    for rank in range(mpi_comm.Get_size())
+                    for rank in range(nranks)
                     ]
                 )
 
@@ -482,6 +493,9 @@ class Visualizer(object):
             *name* is a string and *value* is a
             :class:`~meshmode.dof_array.DOFArray` or a constant,
             or an object array of those.
+            *value* may also be a data class (see :mod:`dataclasses`),
+            whose attributes will be inserted into the visualization
+            with their names prefixed by *name*.
         :arg overwrite: If *True*, silently overwrite existing
             files.
         :arg use_high_order: Writes arbitrary order Lagrange VTK elements.
@@ -519,6 +533,25 @@ class Visualizer(object):
                 VF_LIST_OF_COMPONENTS)
 
         nodes = self._vis_nodes_numpy()
+
+        # {{{ expand dataclasses in names_and_fields
+
+        new_names_and_fields = []
+        for name, fld in names_and_fields:
+            if hasattr(type(fld), "__dataclass_fields__"):
+                import dataclasses
+                new_names_and_fields.extend(
+                        (f"{name}_{dclass_field.name}",
+                            getattr(fld, dclass_field.name))
+                        for dclass_field in dataclasses.fields(fld))
+            else:
+                new_names_and_fields.append((name, fld))
+
+        names_and_fields = new_names_and_fields
+        del new_names_and_fields
+
+        # }}}
+
         names_and_fields = [
                 (name, resample_to_numpy(self.connection, fld))
                 for name, fld in names_and_fields]
@@ -582,6 +615,9 @@ class Visualizer(object):
 
         # {{{ write either both the vis file and the manifest, or neither
 
+        responsible_for_writing_par_manifest = (
+                par_file_names
+                and par_file_names[0] == file_name)
         if os.path.exists(file_name):
             if overwrite:
                 # we simply overwrite below, no need to remove
@@ -590,7 +626,8 @@ class Visualizer(object):
                 raise FileExistsError("output file '%s' already exists"
                                       % file_name)
 
-        if par_manifest_filename is not None:
+        if (responsible_for_writing_par_manifest
+                and par_manifest_filename is not None):
             if os.path.exists(par_manifest_filename):
                 if overwrite:
                     # we simply overwrite below, no need to remove
@@ -615,7 +652,7 @@ class Visualizer(object):
                 raise ValueError("must specify par_manifest_filename if "
                         "par_file_names are given")
 
-            if par_file_names[0] == file_name:
+            if responsible_for_writing_par_manifest:
                 with open(par_manifest_filename, "w") as outf:
                     generator = ParallelXMLGenerator(par_file_names)
                     generator(grid).write(outf)

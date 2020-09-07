@@ -38,7 +38,7 @@ __doc__ = """
 
 def make_loopy_program(domains, statements, kernel_data=["..."],
         name="mm_actx_kernel"):
-    """Return a :class:`loopy.Program` suitable for use with
+    """Return a :class:`loopy.LoopKernel` suitable for use with
     :meth:`ArrayContext.call_loopy`.
     """
     return lp.make_kernel(
@@ -83,8 +83,9 @@ class _BaseFakeNumpyNamespace:
 
 
 class ArrayContext:
-    """An interface that allows a :class:`Discretization` to create and interact with
-    arrays of degrees of freedom without fully specifying their types.
+    """An interface that allows a
+    :class:`~meshmode.discretization.Discretization` to create and interact
+    with arrays of degrees of freedom without fully specifying their types.
 
     .. automethod:: empty
     .. automethod:: zeros
@@ -151,9 +152,9 @@ class ArrayContext:
         """Execute the :mod:`loopy` program *program* on the arguments
         *kwargs*.
 
-        *program* is a :class:`loopy.LoopKernel` or :class:`loopy.Program`.
+        *program* is a :class:`loopy.LoopKernel` or :class:`loopy.LoopKernel`.
         It is expected to not yet be transformed for execution speed.
-        It must have :class:`loopy.Options.return_dict` set.
+        It must have :attr:`loopy.Options.return_dict` set.
 
         :return: a :class:`dict` of outputs from the program, each an
             array understood by the context.
@@ -256,6 +257,7 @@ class PyOpenCLArrayContext(ArrayContext):
         A :class:`pyopencl.CommandQueue`.
 
     .. attribute:: allocator
+
         A PyOpenCL memory allocator. Can also be `None` (default) or `False` to
         use the default allocator. Please note that running with the default
         allocator allocates and deallocates OpenCL buffers directly. If lots
@@ -269,9 +271,11 @@ class PyOpenCLArrayContext(ArrayContext):
         self.context = queue.context
         self.queue = queue
         self.allocator = allocator if allocator else None
-        if allocator is None:
+
+        import pyopencl as cl
+        if allocator is None and queue.device.type & cl.device_type.GPU:
             from warnings import warn
-            warn("PyOpenCLArrayContext created without an allocator. "
+            warn("PyOpenCLArrayContext created without an allocator on a GPU. "
                  "This can lead to high numbers of memory allocations. "
                  "Please consider using a pyopencl.tools.MemoryPool. "
                  "Run with allocator=False to disable this warning.")
