@@ -164,15 +164,23 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
 
             # Connect from remote_mesh to local_mesh
             remote_to_local_conn = make_partition_connection(
-                    actx, local_bdry_conn, i_local_part, remote_bdry,
-                    remote_adj_groups, remote_from_elem_faces,
-                    remote_from_elem_indices)
+                    actx,
+                    local_bdry_conn=local_bdry_conn,
+                    i_local_part=i_local_part,
+                    remote_bdry_discr=remote_bdry,
+                    remote_ipart_adj_groups=remote_adj_groups,
+                    remote_bdry_faces=remote_from_elem_faces,
+                    remote_bdry_elem_indices=remote_from_elem_indices)
 
             # Connect from local mesh to remote mesh
             local_to_remote_conn = make_partition_connection(
-                    actx, remote_bdry_conn, i_remote_part, local_bdry,
-                    local_adj_groups, local_from_elem_faces,
-                    local_from_elem_indices)
+                    actx,
+                    local_bdry_conn=remote_bdry_conn,
+                    i_local_part=i_remote_part,
+                    remote_bdry_discr=local_bdry,
+                    remote_ipart_adj_groups=local_adj_groups,
+                    remote_bdry_faces=local_from_elem_faces,
+                    remote_bdry_elem_indices=local_from_elem_indices)
 
             check_connection(actx, remote_to_local_conn)
             check_connection(actx, local_to_remote_conn)

@@ -565,12 +565,12 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
 
     .. attribute:: partition_neighbors
 
-        Mesh-wide element numbers.
-        ``element_id_dtype partition_neighbors[i]`` gives the element number
+        ``element_id_dtype partition_neighbors[i]`` gives the volume element number
         within the neighboring partition of the element connected to
-        ``element_id_dtype elements[i]``. Use ``find_group_instances()`` to find the
-        group that the element belongs to, then subtract ``element_nr_base`` to find
-        the element of the group.
+        ``element_id_dtype elements[i]`` (which is a boundary element index). Use
+        `~meshmode.mesh.processing.find_group_indices` to find the group that
+        the element belongs to, then subtract ``element_nr_base`` to find the
+        element of the group.
 
         If ``partition_neighbors[i]`` is negative, ``elements[i]`` is on a true
         boundary and is not connected to any other :class:``Mesh``.

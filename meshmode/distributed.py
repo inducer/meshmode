@@ -156,10 +156,12 @@ class MPIBoundaryCommSetupHelper(object):
                     for batch in grp_batches]
                 for grp_batches in local_batches]
 
-        local_data = {"bdry_mesh": local_bdry.mesh,
-                      "adj": local_adj_groups,
-                      "to_elem_faces": local_to_elem_faces,
-                      "to_elem_indices": local_to_elem_indices}
+        local_data = {
+                "bdry_mesh": local_bdry.mesh,
+                "adj_groups": local_adj_groups,
+                "to_elem_faces": local_to_elem_faces,
+                "to_elem_indices": local_to_elem_indices,
+                }
         return self.mpi_comm.isend(local_data,
                                    dest=self.i_remote_part,
                                    tag=TAG_SEND_BOUNDARY)
@@ -190,19 +192,19 @@ class MPIBoundaryCommSetupHelper(object):
                      self.i_local_part, self.i_remote_part)
 
         from meshmode.discretization import Discretization
-        remote_bdry_mesh = remote_data["bdry_mesh"]
-        remote_bdry = Discretization(self.array_context, remote_bdry_mesh,
-                                     self.bdry_grp_factory)
-        remote_adj_groups = remote_data["adj"]
-        remote_to_elem_faces = remote_data["to_elem_faces"]
-        remote_to_elem_indices = remote_data["to_elem_indices"]
 
         # Connect local_mesh to remote_mesh
         from meshmode.discretization.connection import make_partition_connection
         remote_to_local_bdry_conn = make_partition_connection(
-                self.array_context, self.local_bdry_conn, self.i_local_part,
-                remote_bdry, remote_adj_groups, remote_to_elem_faces,
-                remote_to_elem_indices)
+                self.array_context,
+                local_bdry_conn=self.local_bdry_conn,
+                i_local_part=self.i_local_part,
+                remote_bdry_discr=Discretization(
+                    self.array_context, remote_data["bdry_mesh"],
+                    self.bdry_grp_factory),
+                remote_ipart_adj_groups=remote_data["adj_groups"],
+                remote_bdry_faces=remote_data["to_elem_faces"],
+                remote_bdry_elem_indices=remote_data["to_elem_indices"])
 
         self.send_req.wait()
         return remote_to_local_bdry_conn
