@@ -447,8 +447,8 @@ def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
     :arg local_bdry_conn: A :class:`DiscretizationConnection` of the local
         partition.
     :arg i_local_part: The partition number of the local partition.
-    :arg remote_bdry_discr: A :class:`Discretization` of the boundary of the
-        remote partition.
+    :arg remote_bdry_discr: A :class:`~meshmode.discretization.Discretization`
+        of the boundary of the remote partition.
     :arg remote_group_infos: An array of
         :class:`meshmode.distributed.RemoteGroupInfo` instances, one per remote
         volume element group.

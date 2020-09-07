@@ -95,10 +95,6 @@ Restriction to faces
 
 .. autofunction:: make_opposite_face_connection
 
-Mesh partitioning
------------------
-.. autofunction:: make_partition_connection
-
 Refinement
 ----------
 .. autofunction:: make_refinement_connection
