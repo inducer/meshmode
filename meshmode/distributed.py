@@ -177,7 +177,8 @@ class MPIBoundaryCommSetupHelper(object):
 
         return self.mpi_comm.isend(
                 (self.local_bdry_conn.to_discr.mesh,
-                    make_remote_group_infos(self.array_context, self.local_bdry_conn)),
+                    make_remote_group_infos(
+                        self.array_context, self.local_bdry_conn)),
                 dest=self.i_remote_part,
                 tag=TAG_SEND_BOUNDARY)
 
