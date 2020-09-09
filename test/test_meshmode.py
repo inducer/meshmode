@@ -1541,7 +1541,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
             error = flat_norm(bdry_f - em_bdry_f)
             assert error < 1.0e-11, error
 
-    # check some derivatives
+    # check some derivatives (nb: flatten is a generator)
     import pytools
     ref_axes = pytools.flatten([[i] for i in range(ambient_dim)])
 
