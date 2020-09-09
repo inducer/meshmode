@@ -275,6 +275,7 @@ class Discretization(object):
 
     def num_reference_derivative(self, ref_axes, vec):
         actx = vec.array_context
+        ref_axes = list(ref_axes)
 
         @memoize_in(actx, (Discretization, "reference_derivative_prg"))
         def prg():

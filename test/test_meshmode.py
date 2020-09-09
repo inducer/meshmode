@@ -1541,6 +1541,13 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
             error = flat_norm(bdry_f - em_bdry_f)
             assert error < 1.0e-11, error
 
+    # check some derivatives (nb: flatten is a generator)
+    import pytools
+    ref_axes = pytools.flatten([[i] for i in range(ambient_dim)])
+
+    x = thaw(actx, discr.nodes())
+    discr.num_reference_derivative(ref_axes, x[0])
+
 
 def test_array_context_np_workalike(actx_factory):
     actx = actx_factory()
