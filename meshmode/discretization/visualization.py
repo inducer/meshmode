@@ -496,6 +496,11 @@ class Visualizer(object):
             *value* may also be a data class (see :mod:`dataclasses`),
             whose attributes will be inserted into the visualization
             with their names prefixed by *name*.
+            If *value* is *None*, then there is no data to write and the
+            corresponding *name* will not appear in the data file.
+            If *value* is *None*, it should be *None* collectively across all
+            ranks for parallel writes; otherwise the behavior of this routine
+            is undefined.
         :arg overwrite: If *True*, silently overwrite existing
             files.
         :arg use_high_order: Writes arbitrary order Lagrange VTK elements.
