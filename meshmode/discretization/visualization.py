@@ -540,12 +540,11 @@ class Visualizer(object):
         for name, fld in names_and_fields:
             if hasattr(type(fld), "__dataclass_fields__"):
                 import dataclasses
-                for dclass_field in dataclasses.fields(fld):
-                    field = getattr(fld, dclass_field.name)
-                    if field is not None:
-                        new_names_and_fields.append(
-                            (f"{name}_{dclass_field.name}", field)
-                        )
+                new_names_and_fields.extend(
+                        (f"{name}_{dclass_field.name}",
+                            getattr(fld, dclass_field.name))
+                        for dclass_field in dataclasses.fields(fld)
+                        if getattr(fld, dclass_field.name) is not None)
             else:
                 new_names_and_fields.append((name, fld))
 
