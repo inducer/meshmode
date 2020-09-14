@@ -550,7 +550,7 @@ class Visualizer(object):
                             getattr(fld, dclass_field.name))
                         for dclass_field in dataclasses.fields(fld)
                         if getattr(fld, dclass_field.name) is not None)
-            else if fld is not None:
+            elif fld is not None:
                 new_names_and_fields.append((name, fld))
 
         names_and_fields = new_names_and_fields
