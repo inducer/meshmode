@@ -496,6 +496,11 @@ class Visualizer(object):
             *value* may also be a data class (see :mod:`dataclasses`),
             whose attributes will be inserted into the visualization
             with their names prefixed by *name*.
+            If *value* is *None*, then there is no data to write and the
+            corresponding *name* will not appear in the data file.
+            If *value* is *None*, it should be *None* collectively across all
+            ranks for parallel writes; otherwise the behavior of this routine
+            is undefined.
         :arg overwrite: If *True*, silently overwrite existing
             files.
         :arg use_high_order: Writes arbitrary order Lagrange VTK elements.
@@ -543,8 +548,9 @@ class Visualizer(object):
                 new_names_and_fields.extend(
                         (f"{name}_{dclass_field.name}",
                             getattr(fld, dclass_field.name))
-                        for dclass_field in dataclasses.fields(fld))
-            else:
+                        for dclass_field in dataclasses.fields(fld)
+                        if getattr(fld, dclass_field.name) is not None)
+            elif fld is not None:
                 new_names_and_fields.append((name, fld))
 
         names_and_fields = new_names_and_fields
