@@ -6,6 +6,7 @@ sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
 
 . /home/firedrake/firedrake/bin/activate
 grep -v loopy requirements.txt > /tmp/myreq.txt
+sed -i s/pyopencl.git/pyopencl.git@v2020.2.2/ /tmp/myreq.txt
 
 # This shouldn't be necessary, but...
 # https://github.com/inducer/meshmode/pull/48#issuecomment-687519451
