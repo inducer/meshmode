@@ -1,5 +1,3 @@
-from __future__ import division, print_function
-
 __copyright__ = "Copyright (C) 2014-6 Shivam Gupta"
 
 __license__ = """
@@ -25,7 +23,6 @@ THE SOFTWARE.
 
 import numpy as np
 import itertools
-from six.moves import range
 from pytools import RecordWithoutPickling
 from meshmode.mesh.refinement.no_adjacency import (  # noqa: F401
         RefinerWithoutAdjacency)
@@ -41,7 +38,7 @@ __doc__ = """
 """
 
 
-class TreeRayNode(object):
+class TreeRayNode:
     """Describes a ray as a tree, this class represents each node in this tree
     .. attribute:: left
         Left child.
@@ -83,7 +80,7 @@ class _GroupRefinementRecord(RecordWithoutPickling):
             tesselation=tesselation, element_mapping=element_mapping)
 
 
-class Refiner(object):
+class Refiner:
     """An older that mostly succeeds at preserving adjacency across
     non-conformal refinement.
 

@@ -1,5 +1,3 @@
-from __future__ import division
-
 __copyright__ = "Copyright (C) 2020 Andreas Kloeckner"
 
 __license__ = """
@@ -361,7 +359,7 @@ def pytest_generate_tests_for_pyopencl_array_context(metafunc):
 
     class ArrayContextFactory(_ContextFactory):
         def __call__(self):
-            ctx = super(ArrayContextFactory, self).__call__()
+            ctx = super().__call__()
             return PyOpenCLArrayContext(cl.CommandQueue(ctx))
 
         def __str__(self):

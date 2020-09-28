@@ -1,5 +1,3 @@
-from __future__ import division, print_function
-
 __copyright__ = "Copyright (C) 2020 Andreas Kloeckner"
 
 __license__ = """

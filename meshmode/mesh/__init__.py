@@ -1,5 +1,3 @@
-from __future__ import division, absolute_import
-
 __copyright__ = "Copyright (C) 2010,2012,2013 Andreas Kloeckner, Michael Tom"
 
 __license__ = """
@@ -21,9 +19,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-
-from six.moves import range
-import six
 
 import numpy as np
 import numpy.linalg as la
@@ -61,12 +56,12 @@ Predefined Boundary tags
 
 # {{{ element tags
 
-class BTAG_NONE(object):  # noqa: N801
+class BTAG_NONE:  # noqa: N801
     """A boundary tag representing an empty boundary or volume."""
     pass
 
 
-class BTAG_ALL(object):  # noqa: N801
+class BTAG_ALL:  # noqa: N801
     """A boundary tag representing the entire boundary or volume.
 
     In the case of the boundary, :class:`BTAG_ALL` does not include rank boundaries,
@@ -80,7 +75,7 @@ class BTAG_ALL(object):  # noqa: N801
     pass
 
 
-class BTAG_REALLY_ALL(object):  # noqa: N801
+class BTAG_REALLY_ALL:  # noqa: N801
     """A boundary tag representing the entire boundary.
 
     Unlike :class:`BTAG_ALL`, this includes rank boundaries,
@@ -94,7 +89,7 @@ class BTAG_REALLY_ALL(object):  # noqa: N801
     pass
 
 
-class BTAG_NO_BOUNDARY(object):  # noqa: N801
+class BTAG_NO_BOUNDARY:  # noqa: N801
     """A boundary tag indicating that this edge should not fall under
     :class:`BTAG_ALL`. Among other things, this is used to keep rank boundaries
     out of :class:`BTAG_ALL`.
@@ -102,7 +97,7 @@ class BTAG_NO_BOUNDARY(object):  # noqa: N801
     pass
 
 
-class BTAG_PARTITION(object):  # noqa: N801
+class BTAG_PARTITION:  # noqa: N801
     """
     A boundary tag indicating that this edge is adjacent to an element of
     another :class:`Mesh`. The partition number of the adjacent mesh
@@ -128,7 +123,7 @@ class BTAG_PARTITION(object):  # noqa: N801
         return not self.__eq__(other)
 
     def __repr__(self):
-        return "<%s(%s)>" % (type(self).__name__, repr(self.part_nr))
+        return "<{}({})>".format(type(self).__name__, repr(self.part_nr))
 
 
 class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801
@@ -145,8 +140,8 @@ class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801
     pass
 
 
-SYSTEM_TAGS = set([BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
-                   BTAG_PARTITION, BTAG_INDUCED_BOUNDARY])
+SYSTEM_TAGS = {BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
+                   BTAG_PARTITION, BTAG_INDUCED_BOUNDARY}
 
 # }}}
 
@@ -343,7 +338,7 @@ class SimplexElementGroup(MeshElementGroup):
                         "element. expected: %d, got: %d" % (dims+1,
                             vertex_indices.shape[-1]))
 
-        super(SimplexElementGroup, self).__init__(order, vertex_indices, nodes,
+        super().__init__(order, vertex_indices, nodes,
                 element_nr_base, node_nr_base, unit_nodes, dim)
 
     @property
@@ -413,7 +408,7 @@ class TensorProductElementGroup(MeshElementGroup):
                         "element. expected: %d, got: %d" % (2**dims,
                             vertex_indices.shape[-1]))
 
-        super(TensorProductElementGroup, self).__init__(order, vertex_indices, nodes,
+        super().__init__(order, vertex_indices, nodes,
                 element_nr_base, node_nr_base, unit_nodes)
 
     def face_vertex_indices(self):
@@ -783,8 +778,8 @@ class Mesh(Record):
             raise ValueError("too few bits in element_id_dtype to represent all "
                     "boundary tags")
 
-        btag_to_index = dict(
-                (btag, i) for i, btag in enumerate(boundary_tags))
+        btag_to_index = {
+                btag: i for i, btag in enumerate(boundary_tags)}
 
         # }}}
 
@@ -838,7 +833,7 @@ class Mesh(Record):
             if facial_adjacency_groups:
                 assert len(facial_adjacency_groups) == len(self.groups)
                 for fagrp_map in facial_adjacency_groups:
-                    for fagrp in six.itervalues(fagrp_map):
+                    for fagrp in fagrp_map.values():
                         nfagrp_elements, = fagrp.elements.shape
 
                         assert fagrp.element_faces.dtype == self.face_id_dtype
@@ -1121,7 +1116,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
 
     # maps tuples (igrp, ineighbor_group) to number of elements
     group_count = {}
-    for face_tuples in six.itervalues(face_map):
+    for face_tuples in face_map.values():
         if len(face_tuples) == 2:
             (igrp, _, _), (inb_grp, _, _) = face_tuples
             group_count[igrp, inb_grp] = group_count.get((igrp, inb_grp), 0) + 1
@@ -1197,7 +1192,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
 
     # maps tuples (igrp, ineighbor_group) to number of elements filled in group
     fill_count = {}
-    for face_tuples in six.itervalues(face_map):
+    for face_tuples in face_map.values():
         if len(face_tuples) == 2:
             for (igroup, iel, iface), (ineighbor_group, inb_el, inb_face) in [
                     (face_tuples[0], face_tuples[1]),
@@ -1244,7 +1239,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
 # {{{ as_python
 
 def _numpy_array_as_python(array):
-    return "np.array(%s, dtype=np.%s)" % (
+    return "np.array({}, dtype=np.{})".format(
             repr(array.tolist()),
             array.dtype.name)
 
@@ -1274,7 +1269,7 @@ def as_python(mesh, function_name="make_mesh"):
         cg("")
         for group in mesh.groups:
             cg("import %s" % type(group).__module__)
-            cg("groups.append(%s.%s(" % (
+            cg("groups.append({}.{}(".format(
                 type(group).__module__,
                 type(group).__name__))
             cg("    order=%s," % group.order)
@@ -1296,16 +1291,16 @@ def as_python(mesh, function_name="make_mesh"):
                     "neighbors": _numpy_array_as_python(fagrp.neighbors),
                     "neighbor_faces": _numpy_array_as_python(fagrp.neighbor_faces),
                     }
-            return ",\n    ".join("%s=%s" % (k, v) for k, v in six.iteritems(params))
+            return ",\n    ".join(f"{k}={v}" for k, v in params.items())
 
         if mesh._facial_adjacency_groups:
             cg("facial_adjacency_groups = []")
 
             for igrp, fagrp_map in enumerate(mesh.facial_adjacency_groups):
                 cg("facial_adjacency_groups.append({%s})" % ",\n    ".join(
-                    "%r: FacialAdjacencyGroup(%s)" % (
+                    "{!r}: FacialAdjacencyGroup({})".format(
                         inb_grp, fagrp_params_str(fagrp))
-                    for inb_grp, fagrp in six.iteritems(fagrp_map)))
+                    for inb_grp, fagrp in fagrp_map.items()))
 
         else:
             cg("facial_adjacency_groups = %r" % mesh._facial_adjacency_groups)
@@ -1330,7 +1325,7 @@ def as_python(mesh, function_name="make_mesh"):
         cg("    element_id_dtype=np.%s," % mesh.element_id_dtype.name)
 
         if isinstance(mesh._nodal_adjacency, NodalAdjacency):
-            el_con_str = "(%s, %s)" % (
+            el_con_str = "({}, {})".format(
                     _numpy_array_as_python(
                         mesh._nodal_adjacency.neighbors_starts),
                     _numpy_array_as_python(

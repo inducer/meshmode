@@ -1,5 +1,3 @@
-from __future__ import division, print_function, absolute_import
-
 __copyright__ = """Copyright (C) 2018 Alexandru Fikl"""
 
 __license__ = """
@@ -58,7 +56,7 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
             # It's an identity
             is_surjective = True
 
-        super(ChainedDiscretizationConnection, self).__init__(
+        super().__init__(
                 from_discr, to_discr, is_surjective=is_surjective)
 
         self.connections = connections

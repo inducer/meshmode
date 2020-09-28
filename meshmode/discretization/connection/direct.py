@@ -1,5 +1,3 @@
-from __future__ import division, print_function, absolute_import
-
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
 __license__ = """
@@ -22,7 +20,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from six.moves import range, zip
 
 import numpy as np
 
@@ -33,7 +30,7 @@ from meshmode.array_context import ArrayContext, make_loopy_program
 
 # {{{ interpolation batch
 
-class InterpolationBatch(object):
+class InterpolationBatch:
     """One interpolation batch captures how a batch of elements *within* an
     element group should be an interpolated. Note that while it's possible that
     an interpolation batch takes care of interpolating an entire element group
@@ -97,7 +94,7 @@ class InterpolationBatch(object):
 
 # {{{ connection element group
 
-class DiscretizationConnectionElementGroup(object):
+class DiscretizationConnectionElementGroup:
     """
     .. attribute:: batches
 
@@ -111,7 +108,7 @@ class DiscretizationConnectionElementGroup(object):
 
 # {{{ connection classes
 
-class DiscretizationConnection(object):
+class DiscretizationConnection:
     """Abstract interface for transporting a DOF vector from one
     :class:`meshmode.discretization.Discretization` to another.
     Possible applications include:
@@ -174,7 +171,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
     """
 
     def __init__(self, from_discr, to_discr, groups, is_surjective):
-        super(DirectDiscretizationConnection, self).__init__(
+        super().__init__(
                 from_discr, to_discr, is_surjective)
 
         self.groups = groups

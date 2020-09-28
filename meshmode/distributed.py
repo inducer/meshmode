@@ -1,5 +1,3 @@
-from __future__ import division, absolute_import, print_function
-
 __copyright__ = """
 Copyright (C) 2017 Ellis Hoag
 Copyright (C) 2017 Andreas Kloeckner
@@ -51,7 +49,7 @@ __doc__ = """
 
 # {{{ mesh distributor
 
-class MPIMeshDistributor(object):
+class MPIMeshDistributor:
     """
     .. automethod:: is_mananger_rank
     .. automethod:: send_mesh_parts
@@ -155,7 +153,7 @@ def make_remote_group_infos(actx, bdry_conn):
             for igrp in range(len(bdry_conn.from_discr.groups))]
 
 
-class MPIBoundaryCommSetupHelper(object):
+class MPIBoundaryCommSetupHelper:
     """
     .. automethod:: __call__
     .. automethod:: is_setup_ready

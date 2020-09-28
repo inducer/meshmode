@@ -345,7 +345,7 @@ class FiredrakeConnection:
                 raise ValueError(f"'{field_name}.shape' must be {shape}, not "
                                  f"'{field.shape}'")
             for multi_index, arr in np.ndenumerate(field):
-                arr_name = "%s[%s]" % (field_name, multi_index)
+                arr_name = f"{field_name}[{multi_index}]"
                 try:
                     check_dof_array(arr, arr_name)
                 except TypeError as type_err:

@@ -1,5 +1,3 @@
-from __future__ import division, absolute_import, print_function
-
 __copyright__ = "Copyright (C) 2018 Alexandru Fikl"
 
 __license__ = """
@@ -53,7 +51,7 @@ def create_discretization(actx, ndim,
         elif mesh_name == "starfish":
             mesh = make_curve_mesh(starfish, t, order=order)
         else:
-            raise ValueError("unknown mesh name: {}".format(mesh_name))
+            raise ValueError(f"unknown mesh name: {mesh_name}")
     elif ndim == 3:
         from meshmode.mesh.generation import generate_torus
         from meshmode.mesh.generation import generate_warped_rect_mesh
@@ -67,9 +65,9 @@ def create_discretization(actx, ndim,
         elif mesh_name == "warp":
             mesh = generate_warped_rect_mesh(ndim, order=order, n=nelements)
         else:
-            raise ValueError("unknown mesh name: {}".format(mesh_name))
+            raise ValueError(f"unknown mesh name: {mesh_name}")
     else:
-        raise ValueError("unsupported dimension: {}".format(ndim))
+        raise ValueError(f"unsupported dimension: {ndim}")
 
     # create discretization
     from meshmode.discretization import Discretization
@@ -236,7 +234,7 @@ def test_chained_full_resample_matrix(actx_factory, ndim, visualize=False):
     chained = ChainedDiscretizationConnection(connections)
 
     def f(x):
-        from six.moves import reduce
+        from functools import reduce
         return 0.1 * reduce(lambda x, y: x * actx.np.sin(5 * y), x)
 
     resample_mat = actx.to_numpy(make_full_resample_matrix(actx, chained))
@@ -303,7 +301,7 @@ def test_chained_to_direct(actx_factory, ndim, chain_type,
         assert np.min(to_element_indices) > 0
 
     def f(x):
-        from six.moves import reduce
+        from functools import reduce
         return 0.1 * reduce(lambda x, y: x * actx.np.sin(5 * y), x)
 
     x = thaw(actx, connections[0].from_discr.nodes())

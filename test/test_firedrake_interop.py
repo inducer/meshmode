@@ -22,7 +22,6 @@ THE SOFTWARE.
 
 import numpy as np
 import pyopencl as cl
-import six
 
 from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
@@ -128,7 +127,7 @@ def check_consistency(fdrake_fspace, discr, group_nr=0):
     cfspace = fdrake_mesh.coordinates.function_space()
     entity_dofs = cfspace.finat_element.entity_dofs()[0]
     fdrake_unit_vert_indices = []
-    for _, local_node_nrs in sorted(six.iteritems(entity_dofs)):
+    for _, local_node_nrs in sorted(entity_dofs.items()):
         assert len(local_node_nrs) == 1
         fdrake_unit_vert_indices.append(local_node_nrs[0])
 
@@ -242,7 +241,7 @@ def test_from_boundary_consistency(ctx_factory,
     cfspace = fdrake_mesh.coordinates.function_space()
     entity_dofs = cfspace.finat_element.entity_dofs()[0]
     fdrake_unit_vert_indices = []
-    for _, local_node_nrs in sorted(six.iteritems(entity_dofs)):
+    for _, local_node_nrs in sorted(entity_dofs.items()):
         assert len(local_node_nrs) == 1
         fdrake_unit_vert_indices.append(local_node_nrs[0])
     fdrake_unit_vert_indices = np.array(fdrake_unit_vert_indices)
@@ -314,7 +313,7 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
     mm_mesh, orient = import_firedrake_mesh(square_or_cube_mesh,
                                             cells_to_use=cells_to_use)
     # Ensure meshmode required boundary tags are there
-    assert set([BTAG_ALL, BTAG_REALLY_ALL]) <= set(mm_mesh.boundary_tags)
+    assert {BTAG_ALL, BTAG_REALLY_ALL} <= set(mm_mesh.boundary_tags)
     # Check disjoint coverage of bdy ids and BTAG_ALL
     check_bc_coverage(mm_mesh, [BTAG_ALL])
     check_bc_coverage(mm_mesh, bdy_ids)
@@ -424,12 +423,12 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
             assert dim == 2
             if fdrake_mesh_name == "blob2d-order1":
                 from firedrake import Mesh
-                fdrake_mesh = Mesh("%s-h%s.msh" % (fdrake_mesh_name, mesh_par),
+                fdrake_mesh = Mesh(f"{fdrake_mesh_name}-h{mesh_par}.msh",
                                    dim=dim)
             else:
                 from meshmode.mesh.io import read_gmsh
                 from meshmode.interop.firedrake import export_mesh_to_firedrake
-                mm_mesh = read_gmsh("%s-h%s.msh" % (fdrake_mesh_name, mesh_par),
+                mm_mesh = read_gmsh(f"{fdrake_mesh_name}-h{mesh_par}.msh",
                                     force_ambient_dim=dim)
                 fdrake_mesh, _, _ = export_mesh_to_firedrake(mm_mesh)
             h = float(mesh_par)
@@ -490,7 +489,7 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
                 eoc_recorders[(False, d)].add_data_point(h, err)
 
     # assert that order is correct or error is "low enough"
-    for ((fd2mm, d), eoc_rec) in six.iteritems(eoc_recorders):
+    for ((fd2mm, d), eoc_rec) in eoc_recorders.items():
         print("\nfiredrake -> meshmode: %s\nvector *x* -> *sin(x[%s])*\n"
               % (fd2mm, d), eoc_rec)
         assert (
@@ -527,7 +526,7 @@ def test_to_fd_transfer(ctx_factory, fspace_degree, mesh_name, mesh_pars, dim):
         if mesh_name in ("blob2d-order1", "blob2d-order4"):
             assert dim == 2
             from meshmode.mesh.io import read_gmsh
-            mm_mesh = read_gmsh("%s-h%s.msh" % (mesh_name, mesh_par),
+            mm_mesh = read_gmsh(f"{mesh_name}-h{mesh_par}.msh",
                                 force_ambient_dim=dim)
             h = float(mesh_par)
         elif mesh_name == "warp":
@@ -563,7 +562,7 @@ def test_to_fd_transfer(ctx_factory, fspace_degree, mesh_name, mesh_pars, dim):
             eoc_recorders[d].add_data_point(h, err)
 
     # assert that order is correct or error is "low enough"
-    for d, eoc_rec in six.iteritems(eoc_recorders):
+    for d, eoc_rec in eoc_recorders.items():
         print("\nvector *x* -> *x[%s]*\n" % d, eoc_rec)
         assert (
             eoc_rec.order_estimate() >= fspace_degree

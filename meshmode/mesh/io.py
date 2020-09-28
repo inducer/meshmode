@@ -1,5 +1,3 @@
-from __future__ import division, absolute_import
-
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
 __license__ = """
@@ -22,8 +20,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import six
-from six.moves import range, zip
 import numpy as np
 
 from gmsh_interop.reader import (  # noqa
@@ -131,7 +127,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         ambient_dim = self.points.shape[-1]
 
         mesh_bulk_dim = max(
-                el_type.dimensions for el_type in six.iterkeys(el_type_hist))
+                el_type.dimensions for el_type in el_type_hist.keys())
 
         # {{{ build vertex numbering
 
@@ -161,7 +157,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         # {{{ build vertex array
 
         gmsh_vertex_indices, my_vertex_indices = \
-                list(zip(*six.iteritems(vertex_gmsh_index_to_mine)))
+                list(zip(*vertex_gmsh_index_to_mine.items()))
         vertices = np.empty(
                 (ambient_dim, len(vertex_gmsh_index_to_mine)), dtype=np.float64)
         vertices[:, np.array(my_vertex_indices, np.intp)] = \
@@ -174,7 +170,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         bulk_el_types = set()
 
-        for group_el_type, ngroup_elements in six.iteritems(el_type_hist):
+        for group_el_type, ngroup_elements in el_type_hist.items():
             if group_el_type.dimensions != mesh_bulk_dim:
                 continue
 
@@ -217,9 +213,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
             elif isinstance(group_el_type, GmshTensorProductElementBase):
                 gmsh_vertex_tuples = type(group_el_type)(order=1).gmsh_node_tuples()
-                gmsh_vertex_tuples_loc_dict = dict(
-                        (gvt, i)
-                        for i, gvt in enumerate(gmsh_vertex_tuples))
+                gmsh_vertex_tuples_loc_dict = {
+                        gvt: i
+                        for i, gvt in enumerate(gmsh_vertex_tuples)}
 
                 from pytools import (
                         generate_nonnegative_integer_tuples_below as gnitb)
@@ -453,10 +449,10 @@ def to_json(mesh):
         # not yet implemented
         "facial_adjacency_groups": None,
         "boundary_tags": [btag_to_json(btag) for btag in mesh.boundary_tags],
-        "btag_to_index": dict(
-            (btag_to_json(btag), value)
+        "btag_to_index": {
+            btag_to_json(btag): value
 
-            for btag, value in six.iteritems(mesh.btag_to_index)),
+            for btag, value in mesh.btag_to_index.items()},
         "is_conforming": mesh.is_conforming,
         }
 

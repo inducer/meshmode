@@ -174,8 +174,8 @@ class VTKConnectivity:
 
         elif isinstance(grp.mesh_el_group, TensorProductElementGroup):
             node_tuples = list(gnitb(grp.order+1, grp.dim))
-            node_tuple_to_index = dict(
-                    (nt, i) for i, nt in enumerate(node_tuples))
+            node_tuple_to_index = {
+                    nt: i for i, nt in enumerate(node_tuples)}
 
             def add_tuple(a, b):
                 return tuple(ai+bi for ai, bi in zip(a, b))
@@ -334,7 +334,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
 
 # {{{ visualizer
 
-class Visualizer(object):
+class Visualizer:
     """
     .. automethod:: show_scalar_in_mayavi
     .. automethod:: show_scalar_in_matplotlib_3d

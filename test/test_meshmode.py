@@ -1,5 +1,3 @@
-from __future__ import division, absolute_import, print_function
-
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
 __license__ = """
@@ -23,7 +21,6 @@ THE SOFTWARE.
 """
 
 from functools import partial
-from six.moves import range
 import numpy as np
 import numpy.linalg as la
 
@@ -991,7 +988,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
             bdry_vis = make_visualizer(actx, bdry_discr, 7)
 
             name = src_file.split("-")[0]
-            vol_vis.write_vtk_file("sanity_balls_volume_%s_%g.vtu" % (name, h), [
+            vol_vis.write_vtk_file(f"sanity_balls_volume_{name}_{h:g}.vtu", [
                 ("f", vol_one),
                 ("area_el", bind(
                     vol_discr,
@@ -999,7 +996,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
                     (actx)),
                 ])
 
-            bdry_vis.write_vtk_file("sanity_balls_boundary_%s_%g.vtu" % (name, h), [
+            bdry_vis.write_vtk_file(f"sanity_balls_boundary_{name}_{h:g}.vtu", [
                 ("f", bdry_one)
                 ])
 
@@ -1457,7 +1454,7 @@ def test_is_affine_group_check(mesh_name):
         is_affine = False
         mesh = generate_torus(10.0, 2.0, order=order)
     else:
-        raise ValueError("unknown mesh name: {}".format(mesh_name))
+        raise ValueError(f"unknown mesh name: {mesh_name}")
 
     assert all(grp.is_affine for grp in mesh.groups) == is_affine
 
