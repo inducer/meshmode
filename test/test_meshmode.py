@@ -208,10 +208,10 @@ def test_visualizers(actx_factory, dim):
 def test_boundary_tags():
     from meshmode.mesh.io import read_gmsh
     # ensure tags are read in
-    mesh = read_gmsh('annulus.msh')
-    if not {'outer_bdy', 'inner_bdy'} <= set(mesh.boundary_tags):
+    mesh = read_gmsh("annulus.msh")
+    if not {"outer_bdy", "inner_bdy"} <= set(mesh.boundary_tags):
         print("Mesh boundary tags:", mesh.boundary_tags)
-        raise ValueError('Tags not saved by mesh')
+        raise ValueError("Tags not saved by mesh")
 
     # correct answers
     num_on_outer_bdy = 26
@@ -220,8 +220,8 @@ def test_boundary_tags():
     # check how many elements are marked on each boundary
     num_marked_outer_bdy = 0
     num_marked_inner_bdy = 0
-    outer_btag_bit = mesh.boundary_tag_bit('outer_bdy')
-    inner_btag_bit = mesh.boundary_tag_bit('inner_bdy')
+    outer_btag_bit = mesh.boundary_tag_bit("outer_bdy")
+    inner_btag_bit = mesh.boundary_tag_bit("inner_bdy")
     for igrp in range(len(mesh.groups)):
         bdry_fagrp = mesh.facial_adjacency_groups[igrp].get(None, None)
 
@@ -245,7 +245,7 @@ def test_boundary_tags():
 
     # ensure boundary is covered
     from meshmode.mesh import check_bc_coverage
-    check_bc_coverage(mesh, ['inner_bdy', 'outer_bdy'])
+    check_bc_coverage(mesh, ["inner_bdy", "outer_bdy"])
 
 # }}}
 
@@ -297,7 +297,7 @@ def test_box_boundary_tags(dim, nelem, group_factory):
 
     assert not is_boundary_tag_empty(mesh, "btag_test_1")
     assert not is_boundary_tag_empty(mesh, "btag_test_2")
-    check_bc_coverage(mesh, ['btag_test_1', 'btag_test_2'])
+    check_bc_coverage(mesh, ["btag_test_1", "btag_test_2"])
 
     # check how many elements are marked on each boundary
     num_marked_bdy_1 = 0
@@ -672,7 +672,7 @@ def test_element_orientation():
 
 # {{{ element orientation: canned 3D meshes
 
-# python test_meshmode.py 'test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)'  # noqa
+# python test_meshmode.py "test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)"  # noqa
 @pytest.mark.parametrize(("what", "mesh_gen_func"), [
     ("ball", lambda: mgen.generate_icosahedron(1, 1)),
     ("torus", lambda: mgen.generate_torus(5, 1)),
@@ -911,7 +911,7 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
 
 # {{{ sanity checks: ball meshes
 
-# python test_meshmode.py 'test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)'  # noqa
+# python test_meshmode.py "test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)"  # noqa
 @pytest.mark.parametrize(("src_file", "dim"), [
     ("disk-radius-1.step", 2),
     ("ball-radius-1.step", 3),

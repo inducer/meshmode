@@ -902,7 +902,7 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     with ProcessLogger(logger, "Building firedrake function "
                        "space for mesh coordinates"):
         from firedrake import VectorFunctionSpace, Function
-        coords_fspace = VectorFunctionSpace(top, 'CG', group.order,
+        coords_fspace = VectorFunctionSpace(top, "CG", group.order,
                                             dim=mesh.ambient_dim)
         coords = Function(coords_fspace)
 

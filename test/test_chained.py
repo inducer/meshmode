@@ -53,7 +53,7 @@ def create_discretization(actx, ndim,
         elif mesh_name == "starfish":
             mesh = make_curve_mesh(starfish, t, order=order)
         else:
-            raise ValueError('unknown mesh name: {}'.format(mesh_name))
+            raise ValueError("unknown mesh name: {}".format(mesh_name))
     elif ndim == 3:
         from meshmode.mesh.generation import generate_torus
         from meshmode.mesh.generation import generate_warped_rect_mesh
@@ -113,7 +113,7 @@ def create_face_connection(actx, discr):
     return connection
 
 
-@pytest.mark.skip(reason='implementation detail')
+@pytest.mark.skip(reason="implementation detail")
 @pytest.mark.parametrize("ndim", [2, 3])
 def test_chained_batch_table(actx_factory, ndim, visualize=False):
     from meshmode.discretization.connection.chained import \
@@ -142,7 +142,7 @@ def test_chained_batch_table(actx_factory, ndim, visualize=False):
         assert np.min(el_table[igrp]) >= 0
 
 
-@pytest.mark.skip(reason='implementation detail')
+@pytest.mark.skip(reason="implementation detail")
 @pytest.mark.parametrize("ndim", [2, 3])
 def test_chained_new_group_table(actx_factory, ndim, visualize=False):
     from meshmode.discretization.connection.chained import \
@@ -179,13 +179,13 @@ def test_chained_new_group_table(actx_factory, ndim, visualize=False):
             to_unit_nodes = grp_info[mgroup][mbatch].result_unit_nodes
 
             if ndim == 2:
-                pt.plot(from_unit_nodes, 'o')
-                pt.plot(to_unit_nodes, '^')
+                pt.plot(from_unit_nodes, "o")
+                pt.plot(to_unit_nodes, "^")
             else:
-                pt.plot(from_unit_nodes[0], from_unit_nodes[1], 'o')
-                pt.plot(to_unit_nodes[0], to_unit_nodes[1], '^')
+                pt.plot(from_unit_nodes[0], from_unit_nodes[1], "o")
+                pt.plot(to_unit_nodes[0], to_unit_nodes[1], "^")
 
-            pt.savefig('test_grp_to_grp_{}d_{:05d}_{:05d}.png'
+            pt.savefig("test_grp_to_grp_{}d_{:05d}_{:05d}.png"
                         .format(ndim, mgroup, mbatch), dpi=300)
             pt.clf()
 
@@ -281,7 +281,7 @@ def test_chained_to_direct(actx_factory, ndim, chain_type,
         conn = create_face_connection(actx, conn.to_discr)
         connections.append(conn)
     else:
-        raise ValueError('unknown test case')
+        raise ValueError("unknown test case")
 
     from meshmode.discretization.connection import \
             ChainedDiscretizationConnection
@@ -291,7 +291,7 @@ def test_chained_to_direct(actx_factory, ndim, chain_type,
     direct = flatten_chained_connection(actx, chained)
     t_end = time.time()
     if visualize:
-        print('[TIME] Flatten: {:.5e}'.format(t_end - t_start))
+        print("[TIME] Flatten: {:.5e}".format(t_end - t_start))
 
     if chain_type < 3:
         to_element_indices = np.full(direct.to_discr.mesh.nelements, 0,
@@ -313,23 +313,23 @@ def test_chained_to_direct(actx_factory, ndim, chain_type,
     f1 = actx.to_numpy(flatten(direct(fx)))
     t_end = time.time()
     if visualize:
-        print('[TIME] Direct: {:.5e}'.format(t_end - t_start))
+        print("[TIME] Direct: {:.5e}".format(t_end - t_start))
 
     t_start = time.time()
     f2 = actx.to_numpy(flatten(chained(fx)))
     t_end = time.time()
     if visualize:
-        print('[TIME] Chained: {:.5e}'.format(t_end - t_start))
+        print("[TIME] Chained: {:.5e}".format(t_end - t_start))
 
     if visualize and ndim == 2:
         import matplotlib.pyplot as pt
 
         pt.figure(figsize=(10, 8), dpi=300)
-        pt.plot(f1, label='Direct')
-        pt.plot(f2, label='Chained')
+        pt.plot(f1, label="Direct")
+        pt.plot(f2, label="Chained")
         pt.ylim([np.min(f2) - 0.1, np.max(f2) + 0.1])
         pt.legend()
-        pt.savefig('test_chained_to_direct.png')
+        pt.savefig("test_chained_to_direct.png")
         pt.clf()
 
     assert np.allclose(f1, f2)

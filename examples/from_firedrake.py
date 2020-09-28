@@ -43,7 +43,7 @@ def main():
 
     # Create a firedrake mesh and interpolate cos(x+y) onto it
     fd_mesh = UnitSquareMesh(10, 10)
-    fd_fspace = FunctionSpace(fd_mesh, 'DG', 2)
+    fd_fspace = FunctionSpace(fd_mesh, "DG", 2)
     spatial_coord = SpatialCoordinate(fd_mesh)
     fd_fntn = Function(fd_fspace).interpolate(cos(sum(spatial_coord)))
 
@@ -57,7 +57,7 @@ def main():
     fd_bdy_connection = \
         build_connection_from_firedrake(actx,
                                         fd_fspace,
-                                        restrict_to_boundary='on_boundary')
+                                        restrict_to_boundary="on_boundary")
 
     # Plot the meshmode meshes that the connections connect to
     import matplotlib.pyplot as plt
@@ -84,16 +84,16 @@ def main():
     field = fd_connection.from_firedrake(fd_fntn, actx=actx)
 
     fig = plt.figure()
-    ax1 = fig.add_subplot(1, 2, 1, projection='3d')
+    ax1 = fig.add_subplot(1, 2, 1, projection="3d")
     ax1.set_title("cos(x+y) in\nFiredrakeConnection")
     vis.show_scalar_in_matplotlib_3d(field, do_show=False)
 
-    # Now repeat using FiredrakeConnection restricted to 'on_boundary'
+    # Now repeat using FiredrakeConnection restricted to "on_boundary"
     bdy_discr = fd_bdy_connection.discr
     bdy_vis = make_visualizer(actx, bdy_discr, bdy_discr.groups[0].order+3)
     bdy_field = fd_bdy_connection.from_firedrake(fd_fntn, actx=actx)
 
-    ax2 = fig.add_subplot(1, 2, 2, projection='3d')
+    ax2 = fig.add_subplot(1, 2, 2, projection="3d")
     plt.sca(ax2)
     ax2.set_title("cos(x+y) in\nFiredrakeConnection 'on_boundary'")
     bdy_vis.show_scalar_in_matplotlib_3d(bdy_field, do_show=False)

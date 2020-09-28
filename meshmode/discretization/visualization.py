@@ -463,7 +463,7 @@ class Visualizer(object):
                 raise ValueError("file_name_pattern must produce file names "
                         "ending in '.vtu'")
 
-            par_manifest_filename = par_manifest_filename[:-4] + '.pvtu'
+            par_manifest_filename = par_manifest_filename[:-4] + ".pvtu"
 
         self.write_vtk_file(
                 file_name=file_name_pattern.format(rank=rank),

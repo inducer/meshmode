@@ -135,7 +135,7 @@ class FiredrakeConnection:
         :param discr: A :class:`meshmode.discretization.Discretization`
         :param fdrake_fspace: A
             :class:`firedrake.functionspaceimpl.WithGeometry`.
-            Must use ufl family ``'Discontinuous Lagrange'``.
+            Must use ufl family ``"Discontinuous Lagrange"``.
         :param mm2fd_node_mapping: Used as attribute :attr:`mm2fd_node_mapping`.
             A 2-D numpy integer array with the same dtype as
             ``fdrake_fspace.cell_node_list.dtype``
@@ -187,7 +187,7 @@ class FiredrakeConnection:
             raise TypeError("'discr.groups[group_nr]' must be of type "
                             "InterpolatoryElementGroupBase"
                             ", not '%s'." % type(element_grp))
-        if fdrake_fspace.ufl_element().family() != 'Discontinuous Lagrange':
+        if fdrake_fspace.ufl_element().family() != "Discontinuous Lagrange":
             raise TypeError("'fdrake_fspace.ufl_element().family()' must be"
                             "'Discontinuous Lagrange', not "
                             f"'{fdrake_fspace.ufl_element().family()}'")
@@ -581,7 +581,7 @@ def _get_cells_to_use(fdrake_mesh, bdy_id):
     cfspace = fdrake_mesh.coordinates.function_space()
     cell_node_list = cfspace.cell_node_list
 
-    boundary_nodes = cfspace.boundary_nodes(bdy_id, 'topological')
+    boundary_nodes = cfspace.boundary_nodes(bdy_id, "topological")
     # Reduce along each cell: Is a vertex of the cell in boundary nodes?
     cell_is_near_bdy = np.any(np.isin(cell_node_list, boundary_nodes), axis=1)
 
@@ -611,7 +611,7 @@ def build_connection_from_firedrake(actx, fdrake_fspace, grp_factory=None,
         :class:`~meshmode.discretization.InterpolatoryElementGroupBase`.
         If *None*, and :mod:`recursivenodes` can be imported,
         a :class:`~meshmode.discretization.poly_element.\
-PolynomialRecursiveNodesGroupFactory` with ``'lgl'`` nodes is used.
+PolynomialRecursiveNodesGroupFactory` with ``"lgl"`` nodes is used.
         Note that :mod:`recursivenodes` may not be importable
         as it uses :func:`math.comb`, which is new in Python 3.8.
         In the case that :mod:`recursivenodes` cannot be successfully
@@ -634,7 +634,7 @@ PolynomialWarpAndBlendGroupFactory` is used.
                         % type(fdrake_fspace))
     ufl_elt = fdrake_fspace.ufl_element()
 
-    if ufl_elt.family() != 'Discontinuous Lagrange':
+    if ufl_elt.family() != "Discontinuous Lagrange":
         raise ValueError("the 'fdrake_fspace.ufl_element().family()' of "
                          "must be be "
                          "'Discontinuous Lagrange', not '%s'."
@@ -662,7 +662,7 @@ PolynomialWarpAndBlendGroupFactory` is used.
             # it uses :func:`math.comb`, so need to check if it can
             # be imported
             import recursivenodes  # noqa : F401
-            family = 'lgl'  # L-G-Legendre
+            family = "lgl"  # L-G-Legendre
             grp_factory = PolynomialRecursiveNodesGroupFactory(degree, family)
         except ImportError:
             # If cannot be imported, uses warp-and-blend nodes
@@ -751,7 +751,7 @@ InterpolatoryQuadratureSimplexElementGroup`.
     from firedrake.functionspace import FunctionSpace
     fd_mesh, fd_cell_order, perm2cells = \
         export_mesh_to_firedrake(discr.mesh, group_nr, comm)
-    fspace = FunctionSpace(fd_mesh, 'DG', el_group.order)
+    fspace = FunctionSpace(fd_mesh, "DG", el_group.order)
     # get firedrake unit nodes and map onto meshmode reference element
     dim = fspace.mesh().topological_dimension()
     fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(dim, True)

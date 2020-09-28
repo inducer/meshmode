@@ -153,7 +153,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("n_to_elements", np.int32),
                     lp.ValueArg("n_to_nodes", np.int32),
                     lp.ValueArg("ibasis", np.int32),
-                    '...'
+                    "..."
                     ],
                 name="conn_projection_knl")
 
@@ -172,7 +172,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     lp.GlobalArg("coefficients", None,
                         shape=("nelements", "n_to_nodes")),
                     lp.ValueArg("ibasis", np.int32),
-                    '...'
+                    "..."
                     ],
                 name="conn_evaluate_knl")
 

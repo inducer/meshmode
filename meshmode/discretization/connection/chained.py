@@ -200,7 +200,7 @@ def flatten_chained_connection(actx, connection):
             DiscretizationConnectionElementGroup,
             make_same_mesh_connection)
 
-    if not hasattr(connection, 'connections'):
+    if not hasattr(connection, "connections"):
         return connection
 
     if not connection.connections:

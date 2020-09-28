@@ -97,7 +97,7 @@ class MPIMeshDistributor(object):
             else:
                 reqs.append(mpi_comm.isend(part, dest=r, tag=TAG_DISTRIBUTE_MESHES))
 
-        logger.info('rank %d: sent all mesh partitions', rank)
+        logger.info("rank %d: sent all mesh partitions", rank)
         for req in reqs:
             req.wait()
 
@@ -117,7 +117,7 @@ class MPIMeshDistributor(object):
         result = self.mpi_comm.recv(
                 source=self.manager_rank, tag=TAG_DISTRIBUTE_MESHES,
                 status=status)
-        logger.info('rank %d: received local mesh (size = %d)', rank, status.count)
+        logger.info("rank %d: received local mesh (size = %d)", rank, status.count)
 
         return result
 
