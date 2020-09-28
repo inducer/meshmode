@@ -1,5 +1,3 @@
-from __future__ import division, print_function
-
 __copyright__ = """
 Copyright (C) 2018 Andreas Kloeckner
 Copyright (C) 2014-6 Shivam Gupta
@@ -54,9 +52,9 @@ def tesselatetri():
     result = []
 
     node_tuples = list(gnitstam(2, 2))
-    node_dict = dict(
-          (ituple, idx)
-          for idx, ituple in enumerate(node_tuples))
+    node_dict = {
+          ituple: idx
+          for idx, ituple in enumerate(node_tuples)}
 
     def try_add_tri(current, d1, d2, d3):
         try:
@@ -83,9 +81,9 @@ def tesselatetri():
 def tesselatetet():
     node_tuples = list(gnitstam(2, 3))
 
-    node_dict = dict(
-          (ituple, idx)
-          for idx, ituple in enumerate(node_tuples))
+    node_dict = {
+          ituple: idx
+          for idx, ituple in enumerate(node_tuples)}
 
     def try_add_tet(current, d1, d2, d3, d4):
         try:

@@ -22,7 +22,6 @@ THE SOFTWARE.
 
 import numpy as np
 import pyopencl as cl
-import six
 
 from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
@@ -91,7 +90,7 @@ def fdrake_mesh(request):
         return UnitSquareMesh(10, 10)
     elif mesh_name == "FiredrakeUnitSquareMesh-order2":
         m = UnitSquareMesh(10, 10)
-        fspace = VectorFunctionSpace(m, 'CG', 2)
+        fspace = VectorFunctionSpace(m, "CG", 2)
         coords = Function(fspace).interpolate(SpatialCoordinate(m))
         from firedrake.mesh import Mesh
         return Mesh(coords)
@@ -128,7 +127,7 @@ def check_consistency(fdrake_fspace, discr, group_nr=0):
     cfspace = fdrake_mesh.coordinates.function_space()
     entity_dofs = cfspace.finat_element.entity_dofs()[0]
     fdrake_unit_vert_indices = []
-    for _, local_node_nrs in sorted(six.iteritems(entity_dofs)):
+    for _, local_node_nrs in sorted(entity_dofs.items()):
         assert len(local_node_nrs) == 1
         fdrake_unit_vert_indices.append(local_node_nrs[0])
 
@@ -173,7 +172,7 @@ def test_from_fd_consistency(ctx_factory, fdrake_mesh, fspace_degree):
     Check basic consistency with a FiredrakeConnection built from firedrake
     """
     # make discretization from firedrake
-    fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fspace_degree)
+    fdrake_fspace = FunctionSpace(fdrake_mesh, "DG", fspace_degree)
 
     cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
@@ -217,7 +216,7 @@ def test_from_boundary_consistency(ctx_factory,
     and that each boundary tag is associated to the same number of facets
     in the converted meshmode mesh as in the original firedrake mesh.
     """
-    fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fspace_degree)
+    fdrake_fspace = FunctionSpace(fdrake_mesh, "DG", fspace_degree)
 
     cl_ctx = ctx_factory()
     queue = cl.CommandQueue(cl_ctx)
@@ -242,14 +241,14 @@ def test_from_boundary_consistency(ctx_factory,
     cfspace = fdrake_mesh.coordinates.function_space()
     entity_dofs = cfspace.finat_element.entity_dofs()[0]
     fdrake_unit_vert_indices = []
-    for _, local_node_nrs in sorted(six.iteritems(entity_dofs)):
+    for _, local_node_nrs in sorted(entity_dofs.items()):
         assert len(local_node_nrs) == 1
         fdrake_unit_vert_indices.append(local_node_nrs[0])
     fdrake_unit_vert_indices = np.array(fdrake_unit_vert_indices)
 
     # only look at cells "near" bdy (with >= 1 vertex on)
     from meshmode.interop.firedrake.connection import _get_cells_to_use
-    cells_near_bdy = _get_cells_to_use(fdrake_mesh, 'on_boundary')
+    cells_near_bdy = _get_cells_to_use(fdrake_mesh, "on_boundary")
     # get the firedrake vertices of cells near the boundary,
     # in no particular order
     fdrake_vert_indices = \
@@ -310,11 +309,11 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
     cells_to_use = None
     if only_convert_bdy:
         from meshmode.interop.firedrake.connection import _get_cells_to_use
-        cells_to_use = _get_cells_to_use(square_or_cube_mesh, 'on_boundary')
+        cells_to_use = _get_cells_to_use(square_or_cube_mesh, "on_boundary")
     mm_mesh, orient = import_firedrake_mesh(square_or_cube_mesh,
                                             cells_to_use=cells_to_use)
     # Ensure meshmode required boundary tags are there
-    assert set([BTAG_ALL, BTAG_REALLY_ALL]) <= set(mm_mesh.boundary_tags)
+    assert {BTAG_ALL, BTAG_REALLY_ALL} <= set(mm_mesh.boundary_tags)
     # Check disjoint coverage of bdy ids and BTAG_ALL
     check_bc_coverage(mm_mesh, [BTAG_ALL])
     check_bc_coverage(mm_mesh, bdy_ids)
@@ -424,12 +423,12 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
             assert dim == 2
             if fdrake_mesh_name == "blob2d-order1":
                 from firedrake import Mesh
-                fdrake_mesh = Mesh("%s-h%s.msh" % (fdrake_mesh_name, mesh_par),
+                fdrake_mesh = Mesh(f"{fdrake_mesh_name}-h{mesh_par}.msh",
                                    dim=dim)
             else:
                 from meshmode.mesh.io import read_gmsh
                 from meshmode.interop.firedrake import export_mesh_to_firedrake
-                mm_mesh = read_gmsh("%s-h%s.msh" % (fdrake_mesh_name, mesh_par),
+                mm_mesh = read_gmsh(f"{fdrake_mesh_name}-h{mesh_par}.msh",
                                     force_ambient_dim=dim)
                 fdrake_mesh, _, _ = export_mesh_to_firedrake(mm_mesh)
             h = float(mesh_par)
@@ -448,12 +447,12 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
     for mesh_par in fdrake_mesh_pars:
         fdrake_mesh, h = get_fdrake_mesh_and_h_from_par(mesh_par)
         # make function space and build connection
-        fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fspace_degree)
+        fdrake_fspace = FunctionSpace(fdrake_mesh, "DG", fspace_degree)
         if only_convert_bdy:
             fdrake_connection = \
                 build_connection_from_firedrake(actx,
                                                 fdrake_fspace,
-                                                restrict_to_boundary='on_boundary')
+                                                restrict_to_boundary="on_boundary")
         else:
             fdrake_connection = build_connection_from_firedrake(actx, fdrake_fspace)
         # get this for making functions in firedrake
@@ -490,7 +489,7 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
                 eoc_recorders[(False, d)].add_data_point(h, err)
 
     # assert that order is correct or error is "low enough"
-    for ((fd2mm, d), eoc_rec) in six.iteritems(eoc_recorders):
+    for ((fd2mm, d), eoc_rec) in eoc_recorders.items():
         print("\nfiredrake -> meshmode: %s\nvector *x* -> *sin(x[%s])*\n"
               % (fd2mm, d), eoc_rec)
         assert (
@@ -527,7 +526,7 @@ def test_to_fd_transfer(ctx_factory, fspace_degree, mesh_name, mesh_pars, dim):
         if mesh_name in ("blob2d-order1", "blob2d-order4"):
             assert dim == 2
             from meshmode.mesh.io import read_gmsh
-            mm_mesh = read_gmsh("%s-h%s.msh" % (mesh_name, mesh_par),
+            mm_mesh = read_gmsh(f"{mesh_name}-h{mesh_par}.msh",
                                 force_ambient_dim=dim)
             h = float(mesh_par)
         elif mesh_name == "warp":
@@ -563,7 +562,7 @@ def test_to_fd_transfer(ctx_factory, fspace_degree, mesh_name, mesh_pars, dim):
             eoc_recorders[d].add_data_point(h, err)
 
     # assert that order is correct or error is "low enough"
-    for d, eoc_rec in six.iteritems(eoc_recorders):
+    for d, eoc_rec in eoc_recorders.items():
         print("\nvector *x* -> *x[%s]*\n" % d, eoc_rec)
         assert (
             eoc_rec.order_estimate() >= fspace_degree
@@ -584,17 +583,17 @@ def test_from_fd_idempotency(ctx_factory,
     """
     # Make a function space and a function with unique values at each node
     if fspace_type == "scalar":
-        fdrake_fspace = FunctionSpace(fdrake_mesh, 'DG', fspace_degree)
+        fdrake_fspace = FunctionSpace(fdrake_mesh, "DG", fspace_degree)
         # Just use the node nr
         fdrake_unique = Function(fdrake_fspace)
         fdrake_unique.dat.data[:] = np.arange(fdrake_unique.dat.data.shape[0])
     elif fspace_type == "vector":
-        fdrake_fspace = VectorFunctionSpace(fdrake_mesh, 'DG', fspace_degree)
+        fdrake_fspace = VectorFunctionSpace(fdrake_mesh, "DG", fspace_degree)
         # use the coordinates
         xx = SpatialCoordinate(fdrake_fspace.mesh())
         fdrake_unique = Function(fdrake_fspace).interpolate(xx)
     elif fspace_type == "tensor":
-        fdrake_fspace = TensorFunctionSpace(fdrake_mesh, 'DG', fspace_degree)
+        fdrake_fspace = TensorFunctionSpace(fdrake_mesh, "DG", fspace_degree)
         # use the coordinates, duplicated into the right tensor shape
         xx = SpatialCoordinate(fdrake_fspace.mesh())
         dim = fdrake_fspace.mesh().geometric_dimension()
@@ -616,7 +615,7 @@ def test_from_fd_idempotency(ctx_factory,
         fdrake_connection = \
             build_connection_from_firedrake(actx,
                                             fdrake_fspace,
-                                            restrict_to_boundary='on_boundary')
+                                            restrict_to_boundary="on_boundary")
         temp = fdrake_connection.from_firedrake(fdrake_unique, actx=actx)
         fdrake_unique = fdrake_connection.from_meshmode(temp)
     else:

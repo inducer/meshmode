@@ -1,5 +1,3 @@
-from __future__ import division, print_function, absolute_import
-
 __copyright__ = """
 Copyright (C) 2014 Andreas Kloeckner
 Copyright (C) 2018 Alexandru Fikl

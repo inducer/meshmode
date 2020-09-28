@@ -1,5 +1,3 @@
-from __future__ import division, print_function
-
 __copyright__ = """
 Copyright (C) 2018 Andreas Kloeckner
 Copyright (C) 2014-6 Shivam Gupta
@@ -28,7 +26,6 @@ THE SOFTWARE.
 
 
 import numpy as np
-from six.moves import range  # noqa: F401
 from pytools import RecordWithoutPickling
 
 from pytools import memoize_method
@@ -58,7 +55,7 @@ class _GroupRefinementRecord(RecordWithoutPickling):
             tesselation=tesselation, element_mapping=element_mapping)
 
 
-class RefinerWithoutAdjacency(object):
+class RefinerWithoutAdjacency:
     """A refiner that may be applied to non-conforming
     :class:`meshmode.mesh.Mesh` instances. It does not generate adjacency
     information, and it is typically faster than
@@ -97,9 +94,9 @@ class RefinerWithoutAdjacency(object):
             orig_vertex_tuples = [(0,) * dim] + [
                     (0,) * i + (2,) + (0,) * (dim-i-1)
                     for i in range(dim)]
-            node_dict = dict(
-                  (ituple, idx)
-                  for idx, ituple in enumerate(ref_vertices))
+            node_dict = {
+                  ituple: idx
+                  for idx, ituple in enumerate(ref_vertices)}
             orig_vertex_indices = [node_dict[vt] for vt in orig_vertex_tuples]
 
             from meshmode.mesh.refinement.resampler import SimplexResampler

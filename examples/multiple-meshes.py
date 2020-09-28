@@ -1,5 +1,3 @@
-from __future__ import division
-
 import numpy as np  # noqa
 import sys
 
@@ -25,6 +23,7 @@ def main():
         pt.show()
     else:
         pt.savefig("plot.pdf")
+
 
 if __name__ == "__main__":
     main()

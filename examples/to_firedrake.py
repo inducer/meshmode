@@ -97,7 +97,7 @@ def main():
     # because it's easier to write down the variational problem,
     # we're going to project from our "DG" space
     # into a continuous one.
-    cfd_fspace = FunctionSpace(fd_fspace.mesh(), 'CG', order)
+    cfd_fspace = FunctionSpace(fd_fspace.mesh(), "CG", order)
     u = TrialFunction(cfd_fspace)
     v = TestFunction(cfd_fspace)
     sol = Function(cfd_fspace)
@@ -105,8 +105,8 @@ def main():
     a = inner(grad(u), grad(v)) * dx
     rhs = Constant(0.0) * v * dx
     bc_value = project(fd_candidate_sol, cfd_fspace)
-    bc = DirichletBC(cfd_fspace, bc_value, 'on_boundary')
-    params = {'ksp_monitor': None}
+    bc = DirichletBC(cfd_fspace, bc_value, "on_boundary")
+    params = {"ksp_monitor": None}
     solve(a == rhs, sol, bcs=[bc], solver_parameters=params)
 
     # project back into our "DG" space

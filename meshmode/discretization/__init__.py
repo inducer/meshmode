@@ -42,7 +42,7 @@ class NoninterpolatoryElementGroupError(TypeError):
     pass
 
 
-class ElementGroupBase(object):
+class ElementGroupBase:
     """Container for the :class:`Discretization` data corresponding to
     one :class:`meshmode.mesh.MeshElementGroup`.
 
@@ -157,7 +157,7 @@ class InterpolatoryElementGroupBase(ElementGroupBase):
 # }}}
 
 
-class Discretization(object):
+class Discretization:
     """An unstructured composite discretization.
 
     .. attribute:: real_dtype

@@ -1,5 +1,3 @@
-from __future__ import division, absolute_import, print_function
-
 __copyright__ = """
 Copyright (C) 2017 Ellis Hoag
 Copyright (C) 2017 Andreas Kloeckner
@@ -25,7 +23,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from six.moves import range
 import numpy as np
 import pyopencl as cl
 
@@ -89,7 +86,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
         if part_method == "random":
             part_per_element = np.random.randint(num_parts, size=mesh.nelements)
         else:
-            pytest.importorskip('pymetis')
+            pytest.importorskip("pymetis")
 
             from meshmode.distributed import get_partition_by_pymetis
             part_per_element = get_partition_by_pymetis(mesh, num_parts,
@@ -165,7 +162,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
             err = flat_norm(true_local_points - local_points, np.inf)
 
             # Can't currently expect exact results due to limitations of
-            # interpolation 'snapping' in DirectDiscretizationConnection's
+            # interpolation "snapping" in DirectDiscretizationConnection's
             # _resample_point_pick_indices
             assert err < 1e-11
 
@@ -199,7 +196,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
     if scramble_partitions:
         part_per_element = np.random.randint(num_parts, size=mesh.nelements)
     else:
-        pytest.importorskip('pymetis')
+        pytest.importorskip("pymetis")
 
         from meshmode.distributed import get_partition_by_pymetis
         part_per_element = get_partition_by_pymetis(mesh, num_parts)
@@ -403,7 +400,7 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
     def f(x):
         return 10*actx.np.sin(20.*x)
 
-    '''
+    """
     Here is a simplified example of what happens from
     the point of view of the local rank.
 
@@ -419,7 +416,7 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
     Local rank:
         6. Receive local points from remote rank.
         7. Check if local points are the same as the original local points.
-    '''
+    """
 
     # 1.
     send_reqs = []

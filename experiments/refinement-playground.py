@@ -1,6 +1,5 @@
 from __future__ import division, print_function
 
-from six.moves import range
 import numpy as np  # noqa
 import pyopencl as cl
 import random
@@ -103,7 +102,7 @@ def get_corner_flags(mesh):
 def get_random_flags(mesh):
     flags = np.zeros(len(mesh.groups[0].vertex_indices))
     for i in range(0, len(flags)):
-            flags[i] = random.randint(0, 1)
+        flags[i] = random.randint(0, 1)
     return flags
 
 

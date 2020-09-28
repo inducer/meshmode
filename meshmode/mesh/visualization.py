@@ -1,5 +1,3 @@
-from __future__ import division, absolute_import
-
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
 __license__ = """
@@ -23,7 +21,6 @@ THE SOFTWARE.
 """
 
 import numpy as np
-from six.moves import range
 
 __doc__ = """
 .. autofunction:: draw_2d_mesh
@@ -78,13 +75,13 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
 
                 pt.text(centroid[0], centroid[1], el_label, fontsize=17,
                         ha="center", va="center",
-                        bbox=dict(facecolor='white', alpha=0.5, lw=0))
+                        bbox=dict(facecolor="white", alpha=0.5, lw=0))
 
     if draw_vertex_numbers:
         for ivert, vert in enumerate(mesh.vertices.T):
             pt.text(vert[0], vert[1], str(ivert), fontsize=15,
                     ha="center", va="center", color="blue",
-                    bbox=dict(facecolor='white', alpha=0.5, lw=0))
+                    bbox=dict(facecolor="white", alpha=0.5, lw=0))
 
     if draw_nodal_adjacency:
         def global_iel_to_group_and_iel(global_iel):
@@ -135,7 +132,7 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
 
                     pt.text(face_center[0], face_center[1], str(iface), fontsize=12,
                             ha="center", va="center", color="purple",
-                            bbox=dict(facecolor='white', alpha=0.5, lw=0))
+                            bbox=dict(facecolor="white", alpha=0.5, lw=0))
 
     if set_bounding_box:
         from meshmode.mesh.processing import find_bounding_box

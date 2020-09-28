@@ -1,5 +1,3 @@
-from __future__ import division, print_function, absolute_import
-
 __copyright__ = """Copyright (C) 2018 Alexandru Fikl"""
 
 __license__ = """
@@ -74,7 +72,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
             raise RuntimeError("`to_discr` must have an orthogonal basis")
 
         self.conn = conn
-        super(L2ProjectionInverseDiscretizationConnection, self).__init__(
+        super().__init__(
                 from_discr=self.conn.to_discr,
                 to_discr=self.conn.from_discr,
                 is_surjective=is_surjective)
@@ -153,7 +151,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("n_to_elements", np.int32),
                     lp.ValueArg("n_to_nodes", np.int32),
                     lp.ValueArg("ibasis", np.int32),
-                    '...'
+                    "..."
                     ],
                 name="conn_projection_knl")
 
@@ -172,7 +170,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     lp.GlobalArg("coefficients", None,
                         shape=("nelements", "n_to_nodes")),
                     lp.ValueArg("ibasis", np.int32),
-                    '...'
+                    "..."
                     ],
                 name="conn_evaluate_knl")
 

@@ -1,5 +1,3 @@
-from __future__ import division
-
 __copyright__ = "Copyright (C) 2013 Andreas Kloeckner"
 
 __license__ = """
@@ -365,7 +363,7 @@ class EquidistantTensorProductElementGroup(
 
 # {{{ group factories
 
-class ElementGroupFactory(object):
+class ElementGroupFactory:
     """
     .. function:: __call__(mesh_ele_group, node_nr_base)
     """

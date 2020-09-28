@@ -1,5 +1,3 @@
-from __future__ import division, absolute_import, print_function
-
 __copyright__ = "Copyright (C) 2016 Matt Wala"
 
 __license__ = """
@@ -33,7 +31,7 @@ logger = logging.getLogger(__name__)
 # {{{ resampling simplex points for refinement
 
 # NOTE: Class internal to refiner: do not make documentation public.
-class SimplexResampler(object):
+class SimplexResampler:
     """
     Resampling of points on simplex elements for refinement.
 
@@ -128,10 +126,10 @@ class SimplexResampler(object):
         ambient_dim = len(group.nodes)
         nunit_nodes = len(group.unit_nodes[0])
 
-        return dict((elem,
+        return {elem:
             resamp_unit_nodes[ielem].reshape(
-                 (ambient_dim, -1, nunit_nodes)))
-            for ielem, elem in enumerate(elements))
+                 (ambient_dim, -1, nunit_nodes))
+            for ielem, elem in enumerate(elements)}
 
 # }}}
 

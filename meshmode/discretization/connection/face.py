@@ -1,5 +1,3 @@
-from __future__ import division, print_function, absolute_import
-
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
 __license__ = """
@@ -21,9 +19,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-
-import six
-from six.moves import range, zip
 
 from pytools import Record
 
@@ -234,7 +229,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
         group_boundary_faces = []
 
         if boundary_tag is FACE_RESTR_INTERIOR:
-            for fagrp in six.itervalues(fagrp_map):
+            for fagrp in fagrp_map.values():
                 if fagrp.ineighbor_group is None:
                     # boundary faces -> not looking for those
                     continue

@@ -1,5 +1,3 @@
-from __future__ import division, absolute_import
-
 __copyright__ = "Copyright (C) 2010,2012,2013 Andreas Kloeckner, Michael Tom"
 
 __license__ = """
@@ -25,7 +23,6 @@ THE SOFTWARE.
 import numpy as np
 import numpy.linalg as la
 from pytools.spatial_btree import SpatialBinaryTreeBucket
-from six.moves import range
 
 
 # {{{ make_element_lookup_tree
@@ -71,9 +68,9 @@ def nd_quad_submesh(node_tuples):
     from pytools import single_valued, add_tuples
     dims = single_valued(len(nt) for nt in node_tuples)
 
-    node_dict = dict(
-            (ituple, idx)
-            for idx, ituple in enumerate(node_tuples))
+    node_dict = {
+            ituple: idx
+            for idx, ituple in enumerate(node_tuples)}
 
     from pytools import generate_nonnegative_integer_tuples_below as gnitb
 
@@ -145,7 +142,7 @@ def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None):
 
 # {{{ AffineMap
 
-class AffineMap(object):
+class AffineMap:
     """An affine map ``A@x+b``represented by a matrix *A* and an offset vector *b*.
 
     .. attribute:: matrix
