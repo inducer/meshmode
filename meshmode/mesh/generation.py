@@ -714,7 +714,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
             ^^^^^^^
 
         Specifying a value other than *None* for all other mesh
-        types is an error.
+        dimensionalities and element types is an error.
 
     .. versionchanged:: 2017.1
 
