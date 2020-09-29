@@ -24,7 +24,6 @@ THE SOFTWARE.
 __doc__ = """
 .. exception:: Error
 .. exception:: DataUnavailable
-.. exception:: FileExistsError
 """
 
 
@@ -34,6 +33,3 @@ class Error(RuntimeError):
 
 class DataUnavailable(Error):
     pass
-
-
-from builtins import FileExistsError  # noqa: F401

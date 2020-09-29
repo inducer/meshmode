@@ -1253,7 +1253,6 @@ def test_vtk_overwrite(actx_factory):
 
     def _try_write_vtk(writer, obj):
         import os
-        from meshmode import FileExistsError
 
         filename = "vtk_overwrite_temp.vtu"
         if os.path.exists(filename):

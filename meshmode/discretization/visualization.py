@@ -616,11 +616,9 @@ class Visualizer:
 
         # {{{ write
 
-        import os
-        from meshmode import FileExistsError
-
         # {{{ write either both the vis file and the manifest, or neither
 
+        import os
         responsible_for_writing_par_manifest = (
                 par_file_names
                 and par_file_names[0] == file_name)
@@ -843,7 +841,6 @@ def write_nodal_adjacency_vtk_file(file_name, mesh,
                 dtype=np.uint8))
 
     import os
-    from meshmode import FileExistsError
     if os.path.exists(file_name):
         if overwrite:
             os.remove(file_name)
