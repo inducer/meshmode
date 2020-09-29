@@ -674,8 +674,9 @@ def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
 # {{{ generate_box_mesh
 
 def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
-        group_factory=None, boundary_tag_to_face=None):
-    """Create a semi-structured mesh.
+        group_factory=None, boundary_tag_to_face=None,
+        mesh_type=None):
+    r"""Create a semi-structured mesh.
 
     :param axis_coords: a tuple with a number of entries corresponding
         to the number of dimensions, with each entry a numpy array
@@ -690,6 +691,30 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
         For example::
 
             boundary_tag_to_face={"bdry_1": ["+x", "+y"], "bdry_2": ["-x"]}
+    :param mesh_type: In two dimensions with non-tensor-product elements,
+        *mesh_type* may be set to ``"X"`` to generate this type
+        of mesh::
+
+            _______
+            |\   /|
+            | \ / |
+            |  X  |
+            | / \ |
+            |/   \|
+            ^^^^^^^
+
+        instead of the default::
+
+            _______
+            |\    |
+            | \   |
+            |  \  |
+            |   \ |
+            |    \|
+            ^^^^^^^
+
+        Specifying a value other than *None* for all other mesh
+        dimensionalities and element types is an error.
 
     .. versionchanged:: 2017.1
 
@@ -739,6 +764,9 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     el_vertices = []
 
     if dim == 1:
+        if mesh_type is not None:
+            raise ValueError("unsupported mesh_type")
+
         for i in range(shape[0]-1):
             # a--b
 
@@ -748,6 +776,31 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
             el_vertices.append((a, b,))
 
     elif dim == 2:
+        if mesh_type == "X" and not is_tp:
+            shape_m1 = tuple(si-1 for si in shape)
+
+            nmidpoints = product(shape_m1)
+            midpoint_indices = (
+                    nvertices
+                    + np.arange(nmidpoints).reshape(*shape_m1, order="F"))
+
+            midpoints = np.empty((dim,)+shape_m1, dtype=coord_dtype)
+            for idim in range(dim):
+                vshape = (shape_m1[idim],) + (1,)*idim
+                left_axis_coords = axis_coords[idim][:-1]
+                right_axis_coords = axis_coords[idim][1:]
+                midpoints[idim] = (
+                        0.5*(left_axis_coords+right_axis_coords)).reshape(*vshape)
+
+            midpoints = midpoints.reshape(dim, -1)
+            vertices = np.concatenate((vertices, midpoints), axis=1)
+
+        elif mesh_type is None:
+            pass
+
+        else:
+            raise ValueError("unsupported mesh_type")
+
         for i in range(shape[0]-1):
             for j in range(shape[1]-1):
 
@@ -762,11 +815,22 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
                 if is_tp:
                     el_vertices.append((a, b, c, d))
+
+                elif mesh_type == "X":
+                    m = midpoint_indices[i, j]
+                    el_vertices.append((a, b, m))
+                    el_vertices.append((b, d, m))
+                    el_vertices.append((d, c, m))
+                    el_vertices.append((c, a, m))
+
                 else:
                     el_vertices.append((a, b, c))
                     el_vertices.append((d, c, b))
 
     elif dim == 3:
+        if mesh_type is not None:
+            raise ValueError("unsupported mesh_type")
+
         for i in range(shape[0]-1):
             for j in range(shape[1]-1):
                 for k in range(shape[2]-1):
@@ -843,7 +907,13 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
             for ielem in range(0, grp.nelements):
                 for ref_fvi in grp.face_vertex_indices():
                     fvi = grp.vertex_indices[ielem, ref_fvi]
-                    fvi_tuples = [vert_index_to_tuple[i] for i in fvi]
+                    try:
+                        fvi_tuples = [vert_index_to_tuple[i] for i in fvi]
+                    except KeyError:
+                        # Happens for interior faces of "X" meshes because
+                        # midpoints aren't in vert_index_to_tuple. We don't
+                        # care about them.
+                        continue
 
                     if all(fvi_tuple[axis] == vert_crit for fvi_tuple in fvi_tuples):
                         key = frozenset(fvi)
@@ -873,8 +943,10 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
 def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
                                boundary_tag_to_face=None,
-                               group_factory=None):
-    """Create a semi-structured rectangular mesh.
+                               group_factory=None,
+                               mesh_type=None,
+                               ):
+    """Create a semi-structured rectangular mesh with equispaced elements.
 
     :param a: the lower left hand point of the rectangle
     :param b: the upper right hand point of the rectangle
@@ -882,6 +954,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
       on [a,b].
     :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
         See :func:`generate_box_mesh`.
+    :param mesh_type: See :func:`generate_box_mesh`.
     """
     if min(n) < 2:
         raise ValueError("need at least two points in each direction")
@@ -891,7 +964,8 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
 
     return generate_box_mesh(axis_coords, order=order,
                              boundary_tag_to_face=boundary_tag_to_face,
-                             group_factory=group_factory)
+                             group_factory=group_factory,
+                             mesh_type=mesh_type)
 
 # }}}
 

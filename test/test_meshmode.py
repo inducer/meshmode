@@ -249,10 +249,11 @@ def test_boundary_tags():
 
 # {{{ test custom boundary tags on box mesh
 
-@pytest.mark.parametrize(("dim", "nelem"), [
-    (1, 20),
-    (2, 20),
-    (3, 10),
+@pytest.mark.parametrize(("dim", "nelem", "mesh_type"), [
+    (1, 20, None),
+    (2, 20, None),
+    (2, 20, "X"),
+    (3, 10, None),
     ])
 @pytest.mark.parametrize("group_factory", [
     SimplexElementGroup,
@@ -260,7 +261,7 @@ def test_boundary_tags():
     # FIXME: Not implemented: TPE.face_vertex_indices
     # TensorProductElementGroup
     ])
-def test_box_boundary_tags(dim, nelem, group_factory):
+def test_box_boundary_tags(dim, nelem, mesh_type, group_factory, visualize=False):
     from meshmode.mesh.generation import generate_regular_rect_mesh
     from meshmode.mesh import is_boundary_tag_empty
     from meshmode.mesh import check_bc_coverage
@@ -285,7 +286,15 @@ def test_box_boundary_tags(dim, nelem, group_factory):
     mesh = generate_regular_rect_mesh(a=a, b=b,
                                       n=n, order=3,
                                       boundary_tag_to_face=btag_to_face,
-                                      group_factory=group_factory)
+                                      group_factory=group_factory,
+                                      mesh_type=mesh_type)
+
+    if visualize:
+        from meshmode.mesh.visualization import draw_2d_mesh
+        draw_2d_mesh(mesh, draw_element_numbers=False, draw_vertex_numbers=False)
+        import matplotlib.pyplot as plt
+        plt.show()
+
     # correct answer
     if dim == 1:
         num_on_bdy = 1
