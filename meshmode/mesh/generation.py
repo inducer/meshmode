@@ -795,6 +795,9 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
             midpoints = midpoints.reshape(dim, -1)
             vertices = np.concatenate((vertices, midpoints), axis=1)
 
+        elif mesh_type is None:
+            pass
+
         else:
             raise ValueError("unsupported mesh_type")
 
