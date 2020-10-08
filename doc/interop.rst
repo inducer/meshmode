@@ -4,6 +4,10 @@ Interoperability with Other Discretization Packages
 Functionality in this subpackage helps import and export data to/from other
 pieces of software, typically PDE solvers.
 
+Nodal DG
+--------
+
+.. automodule:: meshmode.interop.nodal_dg
 
 Firedrake
 ---------
