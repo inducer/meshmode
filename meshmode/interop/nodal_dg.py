@@ -106,7 +106,7 @@ class NodalDGContext(object):
         dim = int(etov_size[0, 1]-1)
 
         if dim == 1:
-            unit_nodes = self.octave.eval(f"JacobiGL(0, 0, N)", verbose=False).T
+            unit_nodes = self.octave.eval("JacobiGL(0, 0, N)", verbose=False).T
         else:
             unit_nodes_arrays = self.octave.eval(
                     f"Nodes{dim}D(N)", nout=dim, verbose=False)
