@@ -13,6 +13,9 @@ dependencies:
 - islpy
 - gmsh
 
+# Needed for nodal-DG interop
+- oct2py
+
 # for Pytential
 - cython
 
