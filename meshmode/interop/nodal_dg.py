@@ -29,6 +29,7 @@ THE SOFTWARE.
 """
 
 
+import numpy as np
 import meshmode.mesh
 import meshmode.discretization
 import meshmode.dof_array
@@ -55,34 +56,102 @@ class NodalDGContext(object):
     def __enter__(self):
         import oct2py
         self.octave = oct2py.Oct2Py()
-        import os.path
-        self.octave.feval(os.path.join(self.path, "mypath.m"))
+        self.octave.eval(f'cd "{self.path}"')
+        self.octave.eval("mypath")
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.octave.kill_octave()
+        self.octave.exit()
 
-    def set_mesh(self, mesh: meshmode.mesh.Mesh):
+    REF_AXES = ["r", "s", "t"]
+    AXES = ["x", "y", "z"]
+
+    def set_mesh(self, mesh: meshmode.mesh.Mesh, order):
         """Set the mesh information in the nodal DG Octave instance to
         the one given by *mesh*.
 
-        High-order information is silently ignored.
-        """
-        pass
+        The mesh must only have a single element group of simplices.
 
-    def get_discr(self) -> meshmode.discretization.Discretization:
+        .. warning::
+
+            High-order geometryinformation is currently silently ignored.
+        """
+        if len(mesh.groups) != 1:
+            raise ValueError("mesh must have exactly one element group")
+
+        elgrp, = mesh.groups
+
+        self.octave.eval(f"Globals{mesh.dim}D;")
+        self.octave.push("Nv", mesh.nvertices)
+        self.octave.push("K", mesh.nelements)
+        for ax in range(mesh.ambient_dim):
+            self.octave.push(f"V{self.AXES[ax].upper()}", mesh.vertices[ax])
+
+        self.octave.push(f"V{self.AXES[ax].upper()}", mesh.vertices[ax])
+        self.octave.push("EToV", elgrp.vertex_indices+1)
+
+        self.octave.push("N", order)
+
+        self.octave.eval(f"StartUp{mesh.dim}D;")
+
+    def get_discr(self, actx) -> meshmode.discretization.Discretization:
         """Get a discretization with nodes exactly matching the ones used
-        by the book code.
+        by the nodal-DG code.
 
         The returned discretization contains a new :class:`~meshmode.mesh.Mesh`
         object constructed from the global Octave state.
         """
+        # find dim as number of vertices in the simplex - 1
+        etov_size = self.octave.eval("size(EToV)", verbose=False)
+        dim = int(etov_size[0, 1]-1)
+
+        if dim == 1:
+            unit_nodes = self.octave.eval(f"JacobiGL(0, 0, N)", verbose=False).T
+        else:
+            unit_nodes_arrays = self.octave.eval(
+                    f"Nodes{dim}D(N)", nout=dim, verbose=False)
+
+            equilat_to_biunit_func_name = (
+                    "".join(self.AXES[:dim] + ["to"] + self.REF_AXES[:dim]))
+
+            unit_nodes_arrays = self.octave.feval(
+                    equilat_to_biunit_func_name, *unit_nodes_arrays,
+                    nout=dim, verbose=False)
+
+            unit_nodes = np.array([a.reshape(-1) for a in unit_nodes_arrays])
+
+        vertices = np.array([
+                self.octave.pull(f"V{self.AXES[ax].upper()}").reshape(-1)
+                for ax in range(dim)])
+        nodes = np.array([self.octave.pull(self.AXES[ax]).T for ax in range(dim)])
+        vertex_indices = (self.octave.pull("EToV")).astype(np.int32)-1
+
+        from meshmode.mesh import Mesh, SimplexElementGroup
+        order = int(self.octave.pull("N"))
+        egroup = SimplexElementGroup(
+                order,
+                vertex_indices=vertex_indices,
+                nodes=nodes,
+                unit_nodes=unit_nodes)
+
+        mesh = Mesh(vertices=vertices, groups=[egroup], is_conforming=True)
+
+        from meshmode.discretization import Discretization
+        from meshmode.discretization.poly_element import (
+                PolynomialGivenNodesGroupFactory)
+        return Discretization(actx, mesh,
+                PolynomialGivenNodesGroupFactory(order, unit_nodes))
 
     def push_dof_array(self, name, ary: meshmode.dof_array.DOFArray):
         """
         """
-        pass
+        grp_array, = ary
+        ary = ary.array_context.to_numpy(grp_array)
+        self.octave.push(name, ary.T)
 
     def pull_dof_array(
             self, actx: meshmode.array_context.ArrayContext, name
             ) -> meshmode.dof_array.DOFArray:
-        pass
+        ary = self.octave.pull(name).T
+
+        return meshmode.dof_array.DOFArray.from_list(actx, [actx.from_numpy(ary)])
