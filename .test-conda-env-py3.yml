@@ -15,6 +15,7 @@ dependencies:
 
 # Needed for nodal-DG interop
 - oct2py
+- octave
 
 # for Pytential
 - cython
