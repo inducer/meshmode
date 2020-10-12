@@ -212,14 +212,39 @@ def write_vertex_vtk_file(mesh, file_name,
 
     # }}}
 
+    # {{{ create cell connectivity
+
+    cells = np.empty(
+            sum(egrp.vertex_indices.size for egrp in mesh.groups),
+            dtype=mesh.vertex_id_dtype)
+
+    # NOTE: vtk uses z-order for the linear quads
+    tensor_order = {
+            1: (0, 1),
+            2: (0, 1, 3, 2),
+            3: (0, 1, 3, 2, 4, 5, 7, 6)
+            }
+
+    vertex_nr_base = 0
+    for egrp in mesh.groups:
+        i = np.s_[vertex_nr_base:vertex_nr_base + egrp.vertex_indices.size]
+        if isinstance(egrp, SimplexElementGroup):
+            cells[i] = egrp.vertex_indices.reshape(-1)
+        elif isinstance(egrp, TensorProductElementGroup):
+            cells[i] = egrp.vertex_indices[:, tensor_order[egrp.dim]].reshape(-1)
+        else:
+            raise TypeError("unsupported group type")
+
+        vertex_nr_base += egrp.vertex_indices.size
+
+    # }}}
+
     grid = UnstructuredGrid(
             (mesh.nvertices,
                 DataArray("points",
                     mesh.vertices,
                     vector_format=VF_LIST_OF_COMPONENTS)),
-            cells=np.hstack([
-                vgrp.vertex_indices.reshape(-1)
-                for vgrp in mesh.groups]),
+            cells=cells,
             cell_types=cell_types)
 
     import os
