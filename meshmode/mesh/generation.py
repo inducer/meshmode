@@ -308,12 +308,12 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 # {{{ make_group_from_vertices
 
 def make_group_from_vertices(vertices, vertex_indices, order,
-        group_factory=None):
-    # shape: (dim, nelements, nvertices)
+        group_factory=None, unit_nodes=None):
+    # shape: (ambient_dim, nelements, nvertices)
+    ambient_dim = vertices.shape[0]
     el_vertices = vertices[:, vertex_indices]
 
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-
     if group_factory is None:
         group_factory = SimplexElementGroup
 
@@ -330,10 +330,11 @@ def make_group_from_vertices(vertices, vertex_indices, order,
         dim = nspan_vectors
 
         # dim, nunit_nodes
-        if dim <= 3:
-            unit_nodes = mp.warp_and_blend_nodes(dim, order)
-        else:
-            unit_nodes = mp.equidistant_nodes(dim, order)
+        if unit_nodes is None:
+            if dim <= 3:
+                unit_nodes = mp.warp_and_blend_nodes(dim, order)
+            else:
+                unit_nodes = mp.equidistant_nodes(dim, order)
 
         unit_nodes_01 = 0.5 + 0.5*unit_nodes
 
@@ -344,21 +345,18 @@ def make_group_from_vertices(vertices, vertex_indices, order,
     elif issubclass(group_factory, TensorProductElementGroup):
         nelements, nvertices = vertex_indices.shape
 
-        dim = 0
-        while True:
-            if nvertices == 2**dim:
-                break
-            if nvertices < 2**dim:
-                raise ValueError("invalid number of vertices for tensor-product "
-                        "elements, must be power of two")
-            dim += 1
+        dim = int(np.log2(nvertices))
+        if nvertices != 2**dim:
+            raise ValueError("invalid number of vertices for tensor-product "
+                    "elements, must be power of two")
 
-        from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
-        from modepy.nodes import tensor_product_nodes
-        unit_nodes = tensor_product_nodes(dim, legendre_gauss_lobatto_nodes(order))
+        if unit_nodes is None:
+            from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
+            unit_nodes = mp.tensor_product_nodes(dim,
+                    legendre_gauss_lobatto_nodes(order))
+
         # shape: (dim, nnodes)
         unit_nodes_01 = 0.5 + 0.5*unit_nodes
-
         _, nnodes = unit_nodes.shape
 
         from pytools import generate_nonnegative_integer_tuples_below as gnitb
@@ -372,8 +370,8 @@ def make_group_from_vertices(vertices, vertex_indices, order,
                 vdm[i, j] = np.prod(vertex_ref**func_tuple)
 
         # shape: (dim, nelements, nvertices)
-        coeffs = np.empty((dim, nelements, nvertices))
-        for d in range(dim):
+        coeffs = np.empty((ambient_dim, nelements, nvertices))
+        for d in range(ambient_dim):
             coeffs[d] = la.solve(vdm, el_vertices[d].T).T
 
         vdm_nodes = np.zeros((nnodes, nvertices))
@@ -383,7 +381,6 @@ def make_group_from_vertices(vertices, vertex_indices, order,
                     axis=0)
 
         nodes = np.einsum("ij,dej->dei", vdm_nodes, coeffs)
-
     else:
         raise ValueError("unsupported value for 'group_factory': %s"
                 % group_factory)

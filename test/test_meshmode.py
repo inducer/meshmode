@@ -49,6 +49,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def acf():
+    import pyopencl as cl
+    from meshmode.array_context import PyOpenCLArrayContext
+    context = cl._csc()
+    queue = cl.CommandQueue(context)
+    return PyOpenCLArrayContext(queue)
+
+
 # {{{ circle mesh
 
 def test_circle_mesh(visualize=False):
@@ -737,16 +745,22 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
 
 # {{{ merge and map
 
-def test_merge_and_map(actx_factory, visualize=False):
+@pytest.mark.parametrize("group_factory", [
+    SimplexElementGroup,
+
+    # NOTE: needs TensorProductElementGroup.face_vertex_indices
+    # TensorProductElementGroup
+    ])
+def test_merge_and_map(actx_factory, group_factory, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
-    from meshmode.mesh.generation import generate_box_mesh
     from meshmode.discretization.poly_element import (
             PolynomialWarpAndBlendGroupFactory,
             LegendreGaussLobattoTensorProductGroupFactory)
 
+    order = 3
     mesh_order = 3
 
-    if 1:
+    if group_factory is SimplexElementGroup:
         mesh = generate_gmsh(
                 FileSource("blob-2d.step"), 2, order=mesh_order,
                 force_ambient_dim=2,
@@ -754,17 +768,14 @@ def test_merge_and_map(actx_factory, visualize=False):
                 target_unit="MM",
                 )
 
-        discr_grp_factory = PolynomialWarpAndBlendGroupFactory(3)
+        discr_grp_factory = PolynomialWarpAndBlendGroupFactory(order)
     else:
-        mesh = generate_box_mesh(
-                (
-                    np.linspace(0, 1, 4),
-                    np.linspace(0, 1, 4),
-                    np.linspace(0, 1, 4),
-                    ),
-                10, group_factory=TensorProductElementGroup)
+        ambient_dim = 3
+        mesh = mgen.generate_regular_rect_mesh(
+                a=(0,)*ambient_dim, b=(1,)*ambient_dim, n=(4,)*ambient_dim,
+                order=mesh_order, group_factory=group_factory)
 
-        discr_grp_factory = LegendreGaussLobattoTensorProductGroupFactory(3)
+        discr_grp_factory = LegendreGaussLobattoTensorProductGroupFactory(order)
 
     from meshmode.mesh.processing import merge_disjoint_meshes, affine_map
     mesh2 = affine_map(mesh,
@@ -1151,24 +1162,47 @@ def test_nd_quad_submesh(dims):
 
 # {{{ test_quad_mesh_2d
 
-def test_quad_mesh_2d():
+@pytest.mark.parametrize(("ambient_dim", "filename"),
+        [(2, "blob-2d.step"), (3, "ball-radius-1.step")])
+def test_quad_mesh_2d(ambient_dim, filename, visualize=False):
     from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
-    print("BEGIN GEN")
+    logger.info("BEGIN GEN")
+
     mesh = generate_gmsh(
             ScriptWithFilesSource(
-                """
-                Merge "blob-2d.step";
-                Mesh.CharacteristicLengthMax = 0.05;
+                f"""
+                Merge "{filename}";
                 Recombine Surface "*" = 0.0001;
                 Mesh 2;
                 Save "output.msh";
                 """,
-                ["blob-2d.step"]),
-            force_ambient_dim=2,
+                [filename]),
+            order=1,
+            force_ambient_dim=ambient_dim,
             target_unit="MM",
             )
-    print("END GEN")
-    print(mesh.nelements)
+
+    logger.info("END GEN")
+    logger.info("nelements: %d", mesh.nelements)
+
+    from meshmode.mesh.generation import make_group_from_vertices
+    groups = []
+    for grp in mesh.groups:
+        assert isinstance(grp, TensorProductElementGroup)
+
+        g = make_group_from_vertices(mesh.vertices,
+                grp.vertex_indices, grp.order,
+                group_factory=TensorProductElementGroup)
+        assert g.nodes.shape == (mesh.ambient_dim, grp.nelements, grp.nunit_nodes)
+
+        groups.append(g)
+
+    mesh_from_vertices = Mesh(mesh.vertices, groups=groups, is_conforming=True)
+
+    if visualize:
+        from meshmode.mesh.visualization import write_vertex_vtk_file
+        write_vertex_vtk_file(mesh, "quad_mesh_2d_orig.vtu")
+        write_vertex_vtk_file(mesh_from_vertices, "quad_mesh_2d_groups.vtu")
 
 # }}}
 
