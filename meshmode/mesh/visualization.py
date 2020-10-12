@@ -225,9 +225,9 @@ def write_vertex_vtk_file(mesh, file_name,
             3: (0, 1, 3, 2, 4, 5, 7, 6)
             }
 
-    node_nr_base = 0
+    vertex_nr_base = 0
     for egrp in mesh.groups:
-        i = np.s_[node_nr_base:node_nr_base + egrp.vertex_indices.size]
+        i = np.s_[vertex_nr_base:vertex_nr_base + egrp.vertex_indices.size]
         if isinstance(egrp, SimplexElementGroup):
             cells[i] = egrp.vertex_indices.reshape(-1)
         elif isinstance(egrp, TensorProductElementGroup):
@@ -235,7 +235,7 @@ def write_vertex_vtk_file(mesh, file_name,
         else:
             raise TypeError("unsupported group type")
 
-        node_nr_base += egrp.vertex_indices.size
+        vertex_nr_base += egrp.vertex_indices.size
 
     # }}}
 

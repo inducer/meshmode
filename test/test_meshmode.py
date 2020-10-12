@@ -26,6 +26,7 @@ import numpy.linalg as la
 
 from pytools.obj_array import make_obj_array
 
+import meshmode
 from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
@@ -47,14 +48,6 @@ import pytest
 
 import logging
 logger = logging.getLogger(__name__)
-
-
-def acf():
-    import pyopencl as cl
-    from meshmode.array_context import PyOpenCLArrayContext
-    context = cl._csc()
-    queue = cl.CommandQueue(context)
-    return PyOpenCLArrayContext(queue)
 
 
 # {{{ circle mesh
@@ -1192,7 +1185,7 @@ def test_quad_mesh_2d(ambient_dim, filename, visualize=False):
 
         g = make_group_from_vertices(mesh.vertices,
                 grp.vertex_indices, grp.order,
-                group_factory=TensorProductElementGroup)
+                group_cls=TensorProductElementGroup)
         assert g.nodes.shape == (mesh.ambient_dim, grp.nelements, grp.nunit_nodes)
 
         groups.append(g)
@@ -1253,7 +1246,7 @@ def test_quad_single_element():
     mg = make_group_from_vertices(
             vertices,
             np.array([[0, 1, 2, 3]], dtype=np.int32),
-            30, group_factory=TensorProductElementGroup)
+            30, group_cls=TensorProductElementGroup)
 
     Mesh(vertices, [mg], nodal_adjacency=None, facial_adjacency_groups=None)
     if 0:

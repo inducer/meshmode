@@ -308,16 +308,26 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 # {{{ make_group_from_vertices
 
 def make_group_from_vertices(vertices, vertex_indices, order,
-        group_factory=None, unit_nodes=None):
+        group_cls=None, unit_nodes=None, group_factory=None):
+    if group_factory is not None:
+        from warnings import warn
+        warn("'group_factory' is deprecated, use 'group_cls' instead",
+                DeprecationWarning, stacklevel=2)
+
+        if group_cls is not None:
+            raise ValueError("cannot set both 'group_cls' and 'group_factory'")
+
+        group_cls = group_factory
+
     # shape: (ambient_dim, nelements, nvertices)
     ambient_dim = vertices.shape[0]
     el_vertices = vertices[:, vertex_indices]
 
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-    if group_factory is None:
-        group_factory = SimplexElementGroup
+    if group_cls is None:
+        group_cls = SimplexElementGroup
 
-    if issubclass(group_factory, SimplexElementGroup):
+    if issubclass(group_cls, SimplexElementGroup):
         if order < 1:
             raise ValueError("can't represent simplices with mesh order < 1")
 
@@ -342,10 +352,10 @@ def make_group_from_vertices(vertices, vertex_indices, order,
                 "si,des->dei",
                 unit_nodes_01, spanning_vectors) + el_origins
 
-    elif issubclass(group_factory, TensorProductElementGroup):
+    elif issubclass(group_cls, TensorProductElementGroup):
         nelements, nvertices = vertex_indices.shape
 
-        dim = int(np.log2(nvertices))
+        dim = nvertices.bit_length() - 1
         if nvertices != 2**dim:
             raise ValueError("invalid number of vertices for tensor-product "
                     "elements, must be power of two")
@@ -369,7 +379,7 @@ def make_group_from_vertices(vertices, vertex_indices, order,
                 vertex_ref = np.array(vertex_tuple, dtype=np.float64)
                 vdm[i, j] = np.prod(vertex_ref**func_tuple)
 
-        # shape: (dim, nelements, nvertices)
+        # shape: (ambient_dim, nelements, nvertices)
         coeffs = np.empty((ambient_dim, nelements, nvertices))
         for d in range(ambient_dim):
             coeffs[d] = la.solve(vdm, el_vertices[d].T).T
@@ -382,13 +392,12 @@ def make_group_from_vertices(vertices, vertex_indices, order,
 
         nodes = np.einsum("ij,dej->dei", vdm_nodes, coeffs)
     else:
-        raise ValueError("unsupported value for 'group_factory': %s"
-                % group_factory)
+        raise ValueError(f"unsupported value for 'group_cls': {group_cls}")
 
     # make contiguous
     nodes = nodes.copy()
 
-    return group_factory(
+    return group_cls(
             order, vertex_indices, nodes,
             unit_nodes=unit_nodes)
 
@@ -863,7 +872,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
     grp = make_group_from_vertices(
             vertices.reshape(dim, -1), el_vertices, order,
-            group_factory=group_factory)
+            group_cls=group_factory)
 
     # {{{ compute facial adjacency for mesh if there is tag information
 
