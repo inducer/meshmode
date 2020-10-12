@@ -18,13 +18,14 @@ Python 3 POCL:
       junit: test/pytest.xml
 
 Python 3 Nvidia Titan V:
-  script:
-  - export PY_EXE=python3
-  - export PYOPENCL_TEST=nvi:titan
-  - export EXTRA_INSTALL="pybind11 cython numpy mako"
-  # cython is here because pytential (for now, for TS) depends on it
-  - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
-  - ". ./build-and-test-py-project.sh"
+  script: |
+    export PY_EXE=python3
+    export PYOPENCL_TEST=nvi:titan
+    export EXTRA_INSTALL="pybind11 cython numpy mako oct2py"
+    (cd test; git clone https://github.com/tcew/nodal-dg)
+    # cython is here because pytential (for now, for TS) depends on it
+    curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
+    . ./build-and-test-py-project.sh
   tags:
   - python3
   - nvidia-titan-v
