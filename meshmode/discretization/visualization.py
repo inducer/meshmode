@@ -280,7 +280,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                 }
 
     def connectivity_for_element_group(self, grp):
-        from meshmode.mesh import SimplexElementGroup
+        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
         if isinstance(grp.mesh_el_group, SimplexElementGroup):
             from pyvisfile.vtk.vtk_ordering import (
@@ -294,6 +294,19 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                     dtype=np.intp).reshape(1, 1, -1)
 
             vtk_cell_type = self.simplex_cell_types[grp.dim]
+
+        elif isinstance(grp.mesh_el_group, TensorProductElementGroup):
+            from pyvisfile.vtk.vtk_ordering import (
+                    vtk_lagrange_quad_node_tuples,
+                    vtk_lagrange_quad_node_tuples_to_permutation)
+
+            node_tuples = vtk_lagrange_quad_node_tuples(
+                    grp.dim, grp.order, is_consistent=False)
+            el_connectivity = np.array(
+                    vtk_lagrange_quad_node_tuples_to_permutation(node_tuples),
+                    dtype=np.intp).reshape(1, 1, -1)
+
+            vtk_cell_type = self.tensor_cell_types[grp.dim]
 
         else:
             raise NotImplementedError("visualization for element groups "

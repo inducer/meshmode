@@ -385,7 +385,7 @@ class EquidistantTensorProductElementGroup(
     def unit_nodes(self):
         from modepy.nodes import tensor_product_nodes, equidistant_nodes
         return tensor_product_nodes(
-                self.dim, equidistant_nodes(1, self.order))
+                self.dim, equidistant_nodes(1, self.order).reshape(-1))
 
 # }}}
 
