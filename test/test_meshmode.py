@@ -26,7 +26,7 @@ import numpy.linalg as la
 
 from pytools.obj_array import make_obj_array
 
-import meshmode
+import meshmode         # noqa: F401
 from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
