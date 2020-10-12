@@ -259,7 +259,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
         # NOTE: version 2.2 has an updated ordering for the hexahedron
         # elements that is not supported currently
         # https://gitlab.kitware.com/vtk/vtk/-/merge_requests/6678
-        return "2.0"
+        return "2.1"
 
     @property
     def simplex_cell_types(self):
@@ -288,7 +288,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                     vtk_lagrange_simplex_node_tuples_to_permutation)
 
             node_tuples = vtk_lagrange_simplex_node_tuples(
-                    grp.dim, grp.order, is_consistent=True)
+                    grp.dim, grp.order, vtk_version=(2, 2))
             el_connectivity = np.array(
                     vtk_lagrange_simplex_node_tuples_to_permutation(node_tuples),
                     dtype=np.intp).reshape(1, 1, -1)
@@ -301,7 +301,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                     vtk_lagrange_quad_node_tuples_to_permutation)
 
             node_tuples = vtk_lagrange_quad_node_tuples(
-                    grp.dim, grp.order, is_consistent=False)
+                    grp.dim, grp.order, vtk_version=(2, 2))
             el_connectivity = np.array(
                     vtk_lagrange_quad_node_tuples_to_permutation(node_tuples),
                     dtype=np.intp).reshape(1, 1, -1)

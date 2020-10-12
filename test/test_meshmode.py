@@ -204,11 +204,16 @@ def test_visualizers(actx_factory, dim, group_factory):
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order)
 
-    vis.write_vtk_file(f"visualizer_vtk_linear_{dim}.vtu",
+    if is_simplex:
+        basename = f"visualizer_vtk_simplex_{dim}d"
+    else:
+        basename = f"visualizer_vtk_box_{dim}d"
+
+    vis.write_vtk_file(f"{basename}_linear.vtu",
             [("f", f)], overwrite=True)
 
     with pytest.raises(RuntimeError):
-        vis.write_vtk_file(f"visualizer_vtk_lagrange_{dim}.vtu",
+        vis.write_vtk_file(f"{basename}_lagrange.vtu",
                 [("f", f)], overwrite=True, use_high_order=True)
 
     if mesh.dim == 2 and is_simplex:
@@ -225,7 +230,7 @@ def test_visualizers(actx_factory, dim, group_factory):
 
     vis = make_visualizer(actx, discr, target_order,
             force_equidistant=True)
-    vis.write_vtk_file(f"visualizer_vtk_lagrange_{dim}.vtu",
+    vis.write_vtk_file(f"{basename}_lagrange.vtu",
             [("f", f)], overwrite=True, use_high_order=True)
 
 # }}}
