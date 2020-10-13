@@ -299,8 +299,7 @@ class Discretization:
 
         return _DOFArray.from_list(actx, [
                 actx.call_loopy(
-                    prg(), diff_mat=actx.from_numpy(get_mat(grp)),
-                    vec=actx.freeze(vec[grp.index])
+                    prg(), diff_mat=actx.from_numpy(get_mat(grp)), vec=vec[grp.index]
                     )["result"]
                 for grp in self.groups])
 
