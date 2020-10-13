@@ -546,6 +546,7 @@ class PytatoArrayContext(ArrayContext):
     def call_loopy(self, program, **kwargs):
         # FIXME:always happens eagerly
         import pytato as pt
+        from numbers import Number
         prg_kwargs = {}
 
         assert not any(isinstance(arg, pt.Placeholder) for arg in
@@ -554,6 +555,8 @@ class PytatoArrayContext(ArrayContext):
         for arg_name, arg in kwargs.items():
             if isinstance(arg, pt.array.DataWrapper):
                 prg_kwargs[arg_name] = arg.data
+            elif isinstance(arg, Number):
+                prg_kwargs[arg_name] = arg
             else:
                 raise NotImplementedError
 
