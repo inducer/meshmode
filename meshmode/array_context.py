@@ -454,4 +454,143 @@ def pytest_generate_tests_for_pyopencl_array_context(metafunc):
 # }}}
 
 
+# {{{ PytatoArrayContext
+
+class _PytatoFakeNumpyNamespace(_BaseFakeNumpyNamespace):
+
+    @property
+    def ns(self):
+        return self._array_context.ns
+
+    def _math_func(self, op_name, x, res_dtype):
+        from pymbolic import var
+        from pymbolic.primitives import Subscript
+        import pytato as pt
+
+        indices = tuple(var(f'_{i}') for i in range(len(x.shape)))
+        expr = Subscript(var('_in0'), indices)
+
+        return pt.IndexLambda(self.ns, expr, shape=x.shape,
+                dtype=res_dtype, bindings={'_in0': x})
+
+    @obj_array_vectorized_n_args
+    def exp(self, x):
+        if x.dtype.kind == 'i':
+            res_dtype = np.float64
+        elif x.dtype.kind == 'f':
+            res_dtype = x.dtype
+        else:
+            raise NotImplementedError
+
+        y = self._math_func('pytato.c99.exp', x, res_dtype)
+        return y
+
+
+class PytatoArrayContext(ArrayContext):
+    """
+    A :class:`ArrayContext` that uses :mod:`pytato` data types to represent
+    the DOF arrays targeting OpenCL for offloading operations.
+
+    .. attribute:: context
+
+        A :class:`pyopencl.Context`.
+
+    .. attribute:: queue
+
+        A :class:`pyopencl.CommandQueue`.
+    """
+
+    def __init__(self, ctx, queue=None):
+        import pytato as pt
+        import pyopencl as cl
+        super().__init__()
+        self.ns = pt.Namespace()
+        self.opencl_ctx = ctx
+        if queue is None:
+            queue = cl.CommandQueue(ctx)
+
+        self.queue = queue
+        self.np = self._get_fake_numpy_namespace()
+
+    def _get_fake_numpy_namespace(self):
+        return _PytatoFakeNumpyNamespace(self)
+
+    # {{{ ArrayContext interface
+
+    def empty(self, shape, dtype):
+        import pytato as pt
+        return pt.make_placeholder(self.ns, name=self.ns.name_gen('u'),
+                shape=shape, dtype=dtype)
+
+    def zeros(self, shape, dtype):
+        import pytato as pt
+        return pt.IndexLambda(self.ns, 0, shape=shape, dtype=dtype)
+
+    def from_numpy(self, np_array: np.ndarray):
+        import pytato as pt
+        import pyopencl.array as cla
+        cl_array = cla.to_device(self.queue, np_array)
+        return pt.make_data_wrapper(self.ns, cl_array)
+
+    def to_numpy(self, array):
+        import pytato as pt
+        prg = pt.generate_loopy(array).program
+
+        prog_kwargs = {arg_name: self.ns[arg_name].data
+                       for arg_name in prg.arg_dict
+                       if arg_name in self.ns}
+        evt, (cl_array,) = prg(self.queue, **prog_kwargs)
+
+        return cl_array.get(queue=self.queue)
+
+    def call_loopy(self, program, **kwargs):
+        # FIXME:always happens eagerly
+        import pytato as pt
+        prg_kwargs = {}
+
+        assert not any(isinstance(arg, pt.Placeholder) for arg in
+                kwargs.values())
+
+        for arg_name, arg in kwargs.items():
+            if isinstance(arg, pt.array.DataWrapper):
+                prg_kwargs[arg_name] = arg.data
+            else:
+                raise NotImplementedError
+
+        options = program.options
+        if not (options.return_dict and options.no_numpy):
+            raise ValueError("Loopy program passed to call_loopy must "
+                    "have return_dict and no_numpy options set. "
+                    "Did you use meshmode.array_context.make_loopy_program "
+                    "to create this program?")
+
+        evt, result = program(self.queue, **prg_kwargs)
+        pt_results = {res_name: pt.make_data_wrapper(self.ns, res)
+                      for res_name, res in result.items()}
+        return pt_results
+
+    def freeze(self, array):
+        import pytato as pt
+        import pyopencl.array as cla
+        if isinstance(array, pt.Placeholder):
+            cl_array = cla.empty(self.queue, shape=array.shape,
+                            dtype=array.dtype)
+            return pt.make_data_wrapper(self.ns, cl_array)
+
+        prg = pt.generate_loopy(array).program
+        prog_kwargs = {arg_name: self.ns[arg_name].data
+                for arg_name in prg.arg_dict
+                if arg_name in self.ns and isinstance(self.ns[arg_name],
+                    pt.array.DataWrapper)}
+        evt, (cl_array,) = prg(self.queue, **prog_kwargs)
+
+        return pt.make_data_wrapper(self.ns, cl_array)
+
+    def thaw(self, array):
+        return array
+
+    # }}}
+
+# }}}
+
 # vim: foldmethod=marker
