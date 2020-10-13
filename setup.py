@@ -48,6 +48,7 @@ def main():
               "pytest>=2.3",
               "loo.py>=2014.1",
               "recursivenodes",
+              "dataclasses; python_version<='3.6'",
               ],
           )
 
