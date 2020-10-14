@@ -264,18 +264,18 @@ class PyOpenCLArrayContext(ArrayContext):
         as the allocator can help avoid this cost.
     """
 
-    def __init__(self, queue, allocator=None, wait_event_queue_legnth=None):
+    def __init__(self, queue, allocator=None, wait_event_queue_length=None):
         r"""
-        :arg wait_event_queue_legnth: The length of a queue of
+        :arg wait_event_queue_length: The length of a queue of
             :class:`~pyopencl.Event` objects that are maintained by the
             array context, on a per-kernel-name basis. The events returned
             from kernel execution are appended to the queue, and Once the
-            length of the queue exceeds *wait_event_queue_legnth*, the
+            length of the queue exceeds *wait_event_queue_length*, the
             first event in the queue :meth:`pyopencl.Event.wait`\ ed on.
 
-            *wait_event_queue* may be set to *None* to disable this feature.
+            *wait_event_queue_length* may be set to *False* to disable this feature.
 
-            The use of *wait_event_queue_legnth* helps avoid enqueuing
+            The use of *wait_event_queue_length* helps avoid enqueuing
             large amounts of work (and, potentially, allocating large amounts
             of memory) far ahead of the actual OpenCL execution front,
             by limiting the number of each type (name, really) of kernel
@@ -283,7 +283,7 @@ class PyOpenCLArrayContext(ArrayContext):
 
         .. note::
 
-            For now, *wait_event_queue_legnth* should be regarded as an
+            For now, *wait_event_queue_length* should be regarded as an
             experimental feature that may change or disappear at any minute.
         """
         super().__init__()
@@ -291,10 +291,10 @@ class PyOpenCLArrayContext(ArrayContext):
         self.queue = queue
         self.allocator = allocator if allocator else None
 
-        if wait_event_queue_legnth is not None:
-            wait_event_queue_legnth = 10
+        if wait_event_queue_length is None:
+            wait_event_queue_length = 10
 
-        self._wait_event_queue_legnth = wait_event_queue_legnth
+        self._wait_event_queue_length = wait_event_queue_length
         self._kernel_name_to_wait_event_queue = {}
 
         import pyopencl as cl
@@ -343,12 +343,12 @@ class PyOpenCLArrayContext(ArrayContext):
 
         evt, result = program(self.queue, **kwargs, allocator=self.allocator)
 
-        if self._wait_event_queue_legnth is not None:
+        if self._wait_event_queue_length is not False:
             wait_event_queue = self._kernel_name_to_wait_event_queue.setdefault(
                     program.name, [])
 
             wait_event_queue.append(evt)
-            if len(wait_event_queue) > self._wait_event_queue_legnth:
+            if len(wait_event_queue) > self._wait_event_queue_length:
                 wait_event_queue.pop(0).wait()
 
         return result
@@ -388,6 +388,10 @@ class PyOpenCLArrayContext(ArrayContext):
             program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
         return lp.tag_inames(program, {outer_iname: "g.0"})
 
+# }}}
+
+
+# {{{ pytest integration
 
 def pytest_generate_tests_for_pyopencl_array_context(metafunc):
     import pyopencl as cl
@@ -396,7 +400,13 @@ def pytest_generate_tests_for_pyopencl_array_context(metafunc):
     class ArrayContextFactory(_ContextFactory):
         def __call__(self):
             ctx = super().__call__()
-            return PyOpenCLArrayContext(cl.CommandQueue(ctx))
+            return PyOpenCLArrayContext(
+                    cl.CommandQueue(ctx),
+                    # CI machines are often quite limited in their memory.
+                    # Avoid enqueueing ahead by too much. See
+                    # https://github.com/inducer/grudge/pull/23
+                    # for the saga that led to this. Bring popcorn.
+                    wait_event_queue_length=2)
 
         def __str__(self):
             return ("<array context factory for <pyopencl.Device '%s' on '%s'>" %
