@@ -1165,6 +1165,7 @@ def test_quad_mesh_2d(ambient_dim, filename, visualize=False):
             ScriptWithFilesSource(
                 f"""
                 Merge "{filename}";
+                Mesh.CharacteristicLengthMax = 0.05;
                 Recombine Surface "*" = 0.0001;
                 Mesh 2;
                 Save "output.msh";
@@ -1181,7 +1182,11 @@ def test_quad_mesh_2d(ambient_dim, filename, visualize=False):
     from meshmode.mesh.generation import make_group_from_vertices
     groups = []
     for grp in mesh.groups:
-        assert isinstance(grp, TensorProductElementGroup)
+        if not isinstance(grp, TensorProductElementGroup):
+            # NOTE: gmsh isn't guaranteed to recombine all elements, so we
+            # could still have some simplices sitting around, so skip them
+            groups.append(grp.copy())
+            continue
 
         g = make_group_from_vertices(mesh.vertices,
                 grp.vertex_indices, grp.order,
