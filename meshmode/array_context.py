@@ -240,6 +240,17 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         import pyopencl.array as cl_array
         return cl_array.if_positive(criterion != 0, then, else_)
 
+    @obj_array_vectorized_n_args
+    def reshape(self, a, newshape):
+        import pyopencl.array as cl_array
+        return cl_array.reshape(a, newshape)
+
+    @obj_array_vectorized_n_args
+    def concatenate(self, arrays, axis=0):
+        import pyopencl.array as cl_array
+        return cl_array.concatenate(arrays, axis,
+                self._array_context.queue, self._array_context.allocator)
+
 
 class PyOpenCLArrayContext(ArrayContext):
     """
