@@ -219,25 +219,10 @@ def flatten(ary: np.ndarray) -> Any:
             and not isinstance(ary, DOFArray)):
         return obj_array_vectorize(flatten, ary)
 
-    group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in ary]
-    group_starts = np.cumsum([0] + group_sizes)
-
     actx = ary.array_context
 
-    @memoize_in(actx, (flatten, "flatten_prg"))
-    def prg():
-        return make_loopy_program(
-            "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
-            """result[grp_start + iel*ndofs_per_element + idof] \
-                = grp_ary[iel, idof]""",
-            name="flatten")
-
-    result = actx.empty(group_starts[-1], dtype=ary.entry_dtype)
-
-    for grp_start, grp_ary in zip(group_starts, ary):
-        actx.call_loopy(prg(), grp_ary=grp_ary, result=result, grp_start=grp_start)
-
-    return result
+    return actx.np.concatenate(actx.np.reshape(grp_ary, (-1,))
+                               for grp_ary in ary)
 
 
 def unflatten(actx: ArrayContext, discr, ary,
