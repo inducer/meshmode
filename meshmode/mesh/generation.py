@@ -25,7 +25,7 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
-from functools import wraps
+from pytools import deprecate_keyword
 import logging
 logger = logging.getLogger(__name__)
 
@@ -71,28 +71,6 @@ Tools for Iterative Refinement
 
 .. autofunction:: warp_and_refine_until_resolved
 """
-
-
-def _deprecate_kwargs(oldkey, newkey):
-    def super_wrapper(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            if oldkey in kwargs:
-                from warnings import warn
-                warn(f"The '{oldkey}' keyword is deprecated and will be removed. "
-                        f"Use '{newkey}' instead.",
-                        DeprecationWarning, stacklevel=2)
-
-                if newkey in kwargs:
-                    raise ValueError(f"Cannot use both '{oldkey}' and '{newkey}'.")
-
-                kwargs[newkey] = kwargs[oldkey]
-                del kwargs[oldkey]
-
-            return func(*args, **kwargs)
-        return wrapper
-
-    return super_wrapper
 
 
 # {{{ test curve parametrizations
@@ -330,7 +308,7 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 
 # {{{ make_group_from_vertices
 
-@_deprecate_kwargs("group_factory", "group_cls")
+@deprecate_keyword("group_factory", "group_cls")
 def make_group_from_vertices(vertices, vertex_indices, order,
         group_cls=None, unit_nodes=None):
     # shape: (ambient_dim, nelements, nvertices)
@@ -693,7 +671,7 @@ def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
 
 # {{{ generate_box_mesh
 
-@_deprecate_kwargs("group_factory", "group_cls")
+@deprecate_keyword("group_factory", "group_cls")
 def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
         group_cls=None, boundary_tag_to_face=None,
         mesh_type=None):
@@ -965,7 +943,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
 # {{{ generate_regular_rect_mesh
 
-@_deprecate_kwargs("group_factory", "group_cls")
+@deprecate_keyword("group_factory", "group_cls")
 def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
                                boundary_tag_to_face=None,
                                group_cls=None,
