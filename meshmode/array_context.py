@@ -388,6 +388,10 @@ class PyOpenCLArrayContext(ArrayContext):
             program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
         return lp.tag_inames(program, {outer_iname: "g.0"})
 
+# }}}
+
+
+# {{{ pytest integration
 
 def pytest_generate_tests_for_pyopencl_array_context(metafunc):
     import pyopencl as cl
@@ -396,7 +400,13 @@ def pytest_generate_tests_for_pyopencl_array_context(metafunc):
     class ArrayContextFactory(_ContextFactory):
         def __call__(self):
             ctx = super().__call__()
-            return PyOpenCLArrayContext(cl.CommandQueue(ctx))
+            return PyOpenCLArrayContext(
+                    cl.CommandQueue(ctx),
+                    # CI machines are often quite limited in their memory.
+                    # Avoid enqueueing ahead by too much. See
+                    # https://github.com/inducer/grudge/pull/23
+                    # for the saga that led to this. Bring popcorn.
+                    wait_event_queue_legnth=2)
 
         def __str__(self):
             return ("<array context factory for <pyopencl.Device '%s' on '%s'>" %
