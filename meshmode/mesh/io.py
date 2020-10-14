@@ -176,7 +176,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
             bulk_el_types.add(group_el_type)
 
-            nodes = np.empty((ambient_dim, ngroup_elements, el_type.node_count()),
+            nodes = np.empty(
+                    (ambient_dim, ngroup_elements, group_el_type.node_count()),
                     np.float64)
             el_vertex_count = group_el_type.vertex_count()
             vertex_indices = np.empty(
