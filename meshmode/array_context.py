@@ -389,11 +389,15 @@ class PyOpenCLArrayContext(ArrayContext):
 
             if "i1" in all_inames:
                 inner_iname = "i1"
-        else:
+        elif "iel" in all_inames:
             outer_iname = "iel"
 
             if "idof" in all_inames:
                 inner_iname = "idof"
+        else:
+            # cannot "fit" the optimization strategy for the provided kernel
+            # => bail
+            return program
 
         if inner_iname is not None:
             program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
