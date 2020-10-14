@@ -273,7 +273,7 @@ class PyOpenCLArrayContext(ArrayContext):
             length of the queue exceeds *wait_event_queue_length*, the
             first event in the queue :meth:`pyopencl.Event.wait`\ ed on.
 
-            *wait_event_queue* may be set to *None* to disable this feature.
+            *wait_event_queue_length* may be set to *False* to disable this feature.
 
             The use of *wait_event_queue_length* helps avoid enqueuing
             large amounts of work (and, potentially, allocating large amounts
@@ -343,7 +343,7 @@ class PyOpenCLArrayContext(ArrayContext):
 
         evt, result = program(self.queue, **kwargs, allocator=self.allocator)
 
-        if self._wait_event_queue_length is not None:
+        if self._wait_event_queue_length is not False:
             wait_event_queue = self._kernel_name_to_wait_event_queue.setdefault(
                     program.name, [])
 
