@@ -44,10 +44,11 @@ def main():
               "numpy",
               "modepy",
               "gmsh_interop",
-              "pytools>=2020.3",
+              "pytools>=2020.4.1",
               "pytest>=2.3",
               "loo.py>=2014.1",
               "recursivenodes",
+              "dataclasses; python_version<='3.6'",
               ],
           )
 

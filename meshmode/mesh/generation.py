@@ -25,6 +25,7 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
+from pytools import deprecate_keyword
 import logging
 logger = logging.getLogger(__name__)
 
@@ -307,18 +308,9 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 
 # {{{ make_group_from_vertices
 
+@deprecate_keyword("group_factory", "group_cls")
 def make_group_from_vertices(vertices, vertex_indices, order,
-        group_cls=None, unit_nodes=None, group_factory=None):
-    if group_factory is not None:
-        from warnings import warn
-        warn("'group_factory' is deprecated, use 'group_cls' instead",
-                DeprecationWarning, stacklevel=2)
-
-        if group_cls is not None:
-            raise ValueError("cannot set both 'group_cls' and 'group_factory'")
-
-        group_cls = group_factory
-
+        group_cls=None, unit_nodes=None):
     # shape: (ambient_dim, nelements, nvertices)
     ambient_dim = vertices.shape[0]
     el_vertices = vertices[:, vertex_indices]
@@ -679,15 +671,16 @@ def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
 
 # {{{ generate_box_mesh
 
+@deprecate_keyword("group_factory", "group_cls")
 def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
-        group_factory=None, boundary_tag_to_face=None,
+        group_cls=None, boundary_tag_to_face=None,
         mesh_type=None):
     r"""Create a semi-structured mesh.
 
     :param axis_coords: a tuple with a number of entries corresponding
         to the number of dimensions, with each entry a numpy array
         specifying the coordinates to be used along that axis.
-    :param group_factory: One of :class:`meshmode.mesh.SimplexElementGroup`
+    :param group_cls: One of :class:`meshmode.mesh.SimplexElementGroup`
         or :class:`meshmode.mesh.TensorProductElementGroup`.
     :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
         The keys correspond to custom boundary tags, with the values giving
@@ -729,6 +722,10 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     .. versionchanged:: 2020.1
 
         *boundary_tag_to_face* parameter added.
+
+    .. versionchanged:: 2020.3
+
+        *group_factory* deprecated and renamed to *group_cls*.
     """
 
     if boundary_tag_to_face is None:
@@ -756,16 +753,15 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     vertices = vertices.reshape(dim, -1)
 
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-    if group_factory is None:
-        group_factory = SimplexElementGroup
+    if group_cls is None:
+        group_cls = SimplexElementGroup
 
-    if issubclass(group_factory, SimplexElementGroup):
+    if issubclass(group_cls, SimplexElementGroup):
         is_tp = False
-    elif issubclass(group_factory, TensorProductElementGroup):
+    elif issubclass(group_cls, TensorProductElementGroup):
         is_tp = True
     else:
-        raise ValueError("unsupported value for 'group_factory': %s"
-                % group_factory)
+        raise ValueError(f"unsupported value for 'group_cls': {group_cls}")
 
     el_vertices = []
 
@@ -872,7 +868,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
     grp = make_group_from_vertices(
             vertices.reshape(dim, -1), el_vertices, order,
-            group_cls=group_factory)
+            group_cls=group_cls)
 
     # {{{ compute facial adjacency for mesh if there is tag information
 
@@ -947,9 +943,10 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
 # {{{ generate_regular_rect_mesh
 
+@deprecate_keyword("group_factory", "group_cls")
 def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
                                boundary_tag_to_face=None,
-                               group_factory=None,
+                               group_cls=None,
                                mesh_type=None,
                                ):
     """Create a semi-structured rectangular mesh with equispaced elements.
@@ -970,7 +967,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
 
     return generate_box_mesh(axis_coords, order=order,
                              boundary_tag_to_face=boundary_tag_to_face,
-                             group_factory=group_factory,
+                             group_cls=group_cls,
                              mesh_type=mesh_type)
 
 # }}}

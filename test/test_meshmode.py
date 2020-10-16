@@ -256,13 +256,13 @@ def test_boundary_tags():
     (2, 20, "X"),
     (3, 10, None),
     ])
-@pytest.mark.parametrize("group_factory", [
+@pytest.mark.parametrize("group_cls", [
     SimplexElementGroup,
 
     # FIXME: Not implemented: TPE.face_vertex_indices
     # TensorProductElementGroup
     ])
-def test_box_boundary_tags(dim, nelem, mesh_type, group_factory, visualize=False):
+def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
     from meshmode.mesh.generation import generate_regular_rect_mesh
     from meshmode.mesh import is_boundary_tag_empty
     from meshmode.mesh import check_bc_coverage
@@ -287,7 +287,7 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_factory, visualize=False
     mesh = generate_regular_rect_mesh(a=a, b=b,
                                       n=n, order=3,
                                       boundary_tag_to_face=btag_to_face,
-                                      group_factory=group_factory,
+                                      group_cls=group_cls,
                                       mesh_type=mesh_type)
 
     if visualize:
@@ -738,13 +738,13 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
 
 # {{{ merge and map
 
-@pytest.mark.parametrize("group_factory", [
+@pytest.mark.parametrize("group_cls", [
     SimplexElementGroup,
 
     # NOTE: needs TensorProductElementGroup.face_vertex_indices
     # TensorProductElementGroup
     ])
-def test_merge_and_map(actx_factory, group_factory, visualize=False):
+def test_merge_and_map(actx_factory, group_cls, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
     from meshmode.discretization.poly_element import (
             PolynomialWarpAndBlendGroupFactory,
@@ -753,7 +753,7 @@ def test_merge_and_map(actx_factory, group_factory, visualize=False):
     order = 3
     mesh_order = 3
 
-    if group_factory is SimplexElementGroup:
+    if group_cls is SimplexElementGroup:
         mesh = generate_gmsh(
                 FileSource("blob-2d.step"), 2, order=mesh_order,
                 force_ambient_dim=2,
@@ -766,7 +766,7 @@ def test_merge_and_map(actx_factory, group_factory, visualize=False):
         ambient_dim = 3
         mesh = mgen.generate_regular_rect_mesh(
                 a=(0,)*ambient_dim, b=(1,)*ambient_dim, n=(4,)*ambient_dim,
-                order=mesh_order, group_factory=group_factory)
+                order=mesh_order, group_cls=group_cls)
 
         discr_grp_factory = LegendreGaussLobattoTensorProductGroupFactory(order)
 
@@ -1266,7 +1266,7 @@ def test_quad_single_element():
 
 # {{{ test_quad_multi_element
 
-def test_quad_multi_element():
+def test_quad_multi_element(visualize=False):
     from meshmode.mesh.generation import generate_box_mesh
     mesh = generate_box_mesh(
             (
@@ -1274,9 +1274,9 @@ def test_quad_multi_element():
                 np.linspace(3, 8, 4),
                 np.linspace(3, 8, 4),
                 ),
-            10, group_factory=TensorProductElementGroup)
+            10, group_cls=TensorProductElementGroup)
 
-    if 0:
+    if visualize:
         import matplotlib.pyplot as plt
         mg = mesh.groups[0]
         plt.plot(
