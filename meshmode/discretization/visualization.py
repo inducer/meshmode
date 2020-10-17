@@ -256,7 +256,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
 
     @property
     def version(self):
-        return "2.2"
+        return "2.0"
 
     @property
     def simplex_cell_types(self):
@@ -279,13 +279,14 @@ class VTKLagrangeConnectivity(VTKConnectivity):
     def connectivity_for_element_group(self, grp):
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
+        vtk_version = tuple(int(v) for v in self.version.split("."))
         if isinstance(grp.mesh_el_group, SimplexElementGroup):
             from pyvisfile.vtk.vtk_ordering import (
                     vtk_lagrange_simplex_node_tuples,
                     vtk_lagrange_simplex_node_tuples_to_permutation)
 
             node_tuples = vtk_lagrange_simplex_node_tuples(
-                    grp.dim, grp.order, vtk_version=(2, 2))
+                    grp.dim, grp.order, vtk_version=vtk_version)
             el_connectivity = np.array(
                     vtk_lagrange_simplex_node_tuples_to_permutation(node_tuples),
                     dtype=np.intp).reshape(1, 1, -1)
@@ -298,7 +299,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                     vtk_lagrange_quad_node_tuples_to_permutation)
 
             node_tuples = vtk_lagrange_quad_node_tuples(
-                    grp.dim, grp.order, vtk_version=(2, 2))
+                    grp.dim, grp.order, vtk_version=vtk_version)
             el_connectivity = np.array(
                     vtk_lagrange_quad_node_tuples_to_permutation(node_tuples),
                     dtype=np.intp).reshape(1, 1, -1)
