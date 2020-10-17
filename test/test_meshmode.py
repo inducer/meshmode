@@ -51,14 +51,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def acf():
-    import pyopencl as cl
-    from meshmode.array_context import PyOpenCLArrayContext
-    context = cl._csc()
-    queue = cl.CommandQueue(context)
-    return PyOpenCLArrayContext(queue)
-
-
 # {{{ circle mesh
 
 def test_circle_mesh(visualize=False):

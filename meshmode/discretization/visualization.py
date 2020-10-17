@@ -256,10 +256,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
 
     @property
     def version(self):
-        # NOTE: version 2.2 has an updated ordering for the hexahedron
-        # elements that is not supported currently
-        # https://gitlab.kitware.com/vtk/vtk/-/merge_requests/6678
-        return "2.1"
+        return "2.2"
 
     @property
     def simplex_cell_types(self):
