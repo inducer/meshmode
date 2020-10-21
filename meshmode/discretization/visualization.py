@@ -256,9 +256,6 @@ class VTKLagrangeConnectivity(VTKConnectivity):
 
     @property
     def version(self):
-        # NOTE: version 2.2 has an updated ordering for the hexahedron
-        # elements that is not supported currently
-        # https://gitlab.kitware.com/vtk/vtk/-/merge_requests/6678
         return "2.0"
 
     @property
@@ -280,20 +277,34 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                 }
 
     def connectivity_for_element_group(self, grp):
-        from meshmode.mesh import SimplexElementGroup
+        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
+        vtk_version = tuple(int(v) for v in self.version.split("."))
         if isinstance(grp.mesh_el_group, SimplexElementGroup):
             from pyvisfile.vtk.vtk_ordering import (
                     vtk_lagrange_simplex_node_tuples,
                     vtk_lagrange_simplex_node_tuples_to_permutation)
 
             node_tuples = vtk_lagrange_simplex_node_tuples(
-                    grp.dim, grp.order, is_consistent=True)
+                    grp.dim, grp.order, vtk_version=vtk_version)
             el_connectivity = np.array(
                     vtk_lagrange_simplex_node_tuples_to_permutation(node_tuples),
                     dtype=np.intp).reshape(1, 1, -1)
 
             vtk_cell_type = self.simplex_cell_types[grp.dim]
+
+        elif isinstance(grp.mesh_el_group, TensorProductElementGroup):
+            from pyvisfile.vtk.vtk_ordering import (
+                    vtk_lagrange_quad_node_tuples,
+                    vtk_lagrange_quad_node_tuples_to_permutation)
+
+            node_tuples = vtk_lagrange_quad_node_tuples(
+                    grp.dim, grp.order, vtk_version=vtk_version)
+            el_connectivity = np.array(
+                    vtk_lagrange_quad_node_tuples_to_permutation(node_tuples),
+                    dtype=np.intp).reshape(1, 1, -1)
+
+            vtk_cell_type = self.tensor_cell_types[grp.dim]
 
         else:
             raise NotImplementedError("visualization for element groups "

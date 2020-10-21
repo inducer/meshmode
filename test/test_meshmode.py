@@ -37,6 +37,7 @@ from meshmode.discretization.poly_element import (
         PolynomialWarpAndBlendGroupFactory,
         PolynomialRecursiveNodesGroupFactory,
         PolynomialEquidistantSimplexGroupFactory,
+        LegendreGaussLobattoTensorProductGroupFactory
         )
 from meshmode.mesh import Mesh, BTAG_ALL
 from meshmode.dof_array import thaw, flat_norm, flatten, unflatten
@@ -143,60 +144,86 @@ def test_parallel_vtk_file(actx_factory, dim):
     assert(filecmp.cmp("ref-"+pvtu_filename, pvtu_filename))
 
 
-@pytest.mark.parametrize("dim", [1, 2, 3])
-def test_visualizers(actx_factory, dim):
-    logging.basicConfig(level=logging.INFO)
-
+@pytest.mark.parametrize(("dim", "group_factory"), [
+    (1, SimplexElementGroup),
+    (2, SimplexElementGroup),
+    (3, SimplexElementGroup),
+    (2, TensorProductElementGroup),
+    (3, TensorProductElementGroup),
+    ])
+def test_visualizers(actx_factory, dim, group_factory):
     actx = actx_factory()
 
     nelements = 64
     target_order = 4
 
+    is_simplex = issubclass(group_factory, SimplexElementGroup)
     if dim == 1:
         mesh = mgen.make_curve_mesh(
                 mgen.NArmedStarfish(5, 0.25),
                 np.linspace(0.0, 1.0, nelements + 1),
                 target_order)
     elif dim == 2:
-        mesh = mgen.generate_torus(5.0, 1.0, order=target_order)
+        if is_simplex:
+            mesh = mgen.generate_torus(5.0, 1.0, order=target_order)
+        else:
+            mesh = mgen.generate_regular_rect_mesh(
+                    a=(0,)*dim, b=(1,)*dim, n=(5,)*dim,
+                    group_factory=group_factory,
+                    order=target_order)
     elif dim == 3:
-        mesh = mgen.generate_warped_rect_mesh(dim, target_order, 5)
+        if is_simplex:
+            mesh = mgen.generate_warped_rect_mesh(dim, target_order, 5)
+        else:
+            mesh = mgen.generate_regular_rect_mesh(
+                    a=(0,)*dim, b=(1,)*dim, n=(5,)*dim,
+                    group_factory=group_factory,
+                    order=target_order)
     else:
         raise ValueError("unknown dimensionality")
 
+    if is_simplex:
+        discr_group_factory = InterpolatoryQuadratureSimplexGroupFactory
+    else:
+        discr_group_factory = LegendreGaussLobattoTensorProductGroupFactory
+
     from meshmode.discretization import Discretization
-    discr = Discretization(actx, mesh,
-            InterpolatoryQuadratureSimplexGroupFactory(target_order))
+    discr = Discretization(actx, mesh, discr_group_factory(target_order))
+
+    nodes = thaw(actx, discr.nodes())
+    f = actx.np.sqrt(sum(nodes**2))
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order)
 
-    vis.write_vtk_file(f"visualizer_vtk_linear_{dim}.vtu",
-            [], overwrite=True)
+    if is_simplex:
+        basename = f"visualizer_vtk_simplex_{dim}d"
+    else:
+        basename = f"visualizer_vtk_box_{dim}d"
+
+    vis.write_vtk_file(f"{basename}_linear.vtu",
+            [("f", f)], overwrite=True)
 
     with pytest.raises(RuntimeError):
-        vis.write_vtk_file(f"visualizer_vtk_lagrange_{dim}.vtu",
-                [], overwrite=True, use_high_order=True)
+        vis.write_vtk_file(f"{basename}_lagrange.vtu",
+                [("f", f)], overwrite=True, use_high_order=True)
 
-    if mesh.dim <= 2:
-        field = thaw(actx, discr.nodes()[0])
-
-    if mesh.dim == 2:
+    if mesh.dim == 2 and is_simplex:
         try:
-            vis.show_scalar_in_matplotlib_3d(field, do_show=False)
+            vis.show_scalar_in_matplotlib_3d(f, do_show=False)
         except ImportError:
             logger.info("matplotlib not available")
 
-    if mesh.dim <= 2:
+    if mesh.dim <= 2 and is_simplex:
         try:
-            vis.show_scalar_in_mayavi(field, do_show=False)
+            vis.show_scalar_in_mayavi(f, do_show=False)
         except ImportError:
             logger.info("mayavi not avaiable")
 
     vis = make_visualizer(actx, discr, target_order,
             force_equidistant=True)
-    vis.write_vtk_file(f"visualizer_vtk_lagrange_{dim}.vtu",
-            [], overwrite=True, use_high_order=True)
+    vis.write_vtk_file(f"{basename}_lagrange.vtu",
+            [("f", f)], overwrite=True, use_high_order=True)
 
 # }}}
 
