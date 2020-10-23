@@ -400,13 +400,7 @@ def pytest_generate_tests_for_pyopencl_array_context(metafunc):
     class ArrayContextFactory(_ContextFactory):
         def __call__(self):
             ctx = super().__call__()
-            return PyOpenCLArrayContext(
-                    cl.CommandQueue(ctx),
-                    # CI machines are often quite limited in their memory.
-                    # Avoid enqueueing ahead by too much. See
-                    # https://github.com/inducer/grudge/pull/23
-                    # for the saga that led to this. Bring popcorn.
-                    wait_event_queue_length=2)
+            return PyOpenCLArrayContext(cl.CommandQueue(ctx))
 
         def __str__(self):
             return ("<array context factory for <pyopencl.Device '%s' on '%s'>" %
