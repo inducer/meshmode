@@ -23,8 +23,8 @@ THE SOFTWARE.
 
 import numpy as np
 import pytest
-import pyopencl as cl
 
+import meshmode         # noqa: F401
 from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests,
@@ -35,16 +35,29 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def acf():
-    context = cl._csc()
-    queue = cl.CommandQueue(context)
-    return PyOpenCLArrayContext(queue)
+def download_nodal_dg_if_not_present(path="nodal-dg"):
+    import os
+    if os.path.exists(path):
+        return
+
+    from pytools import download_from_web_if_not_present
+    download_from_web_if_not_present(
+            url="https://github.com/tcew/nodal-dg/archive/master.zip")
+
+    import zipfile
+    with zipfile.ZipFile("master.zip", "r") as zp:
+        zp.extractall()
+
+    import shutil
+    shutil.move("nodal-dg-master", path)
 
 
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_nodal_dg_interop(actx_factory, dim):
+    pytest.importorskip("oct2py")
     actx = actx_factory()
 
+    download_nodal_dg_if_not_present()
     order = 4
 
     from meshmode.mesh.generation import generate_regular_rect_mesh
