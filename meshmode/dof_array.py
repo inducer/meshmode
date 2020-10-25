@@ -24,6 +24,7 @@ import operator
 import numpy as np
 from typing import Optional, Iterable, Any
 from functools import partial
+import loopy as lp
 
 from pytools import single_valued, memoize_in
 from pytools.obj_array import obj_array_vectorize, obj_array_vectorize_n_args
@@ -230,6 +231,10 @@ def flatten(ary: np.ndarray) -> Any:
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
             """result[grp_start + iel*ndofs_per_element + idof] \
                 = grp_ary[iel, idof]""",
+            kernel_data=[
+                lp.GlobalArg("grp_ary", None, shape=lp.auto, tags="dof_array"),
+                ...
+            ],
             name="flatten")
 
     result = actx.empty(group_starts[-1], dtype=ary.entry_dtype)
