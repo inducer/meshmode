@@ -22,7 +22,10 @@ THE SOFTWARE.
 
 import numpy as np
 import numpy.linalg as la
+
+from modepy.tools import hypercube_submesh
 from pytools.spatial_btree import SpatialBinaryTreeBucket
+from pytools import MovedFunctionDeprecationWrapper
 
 
 # {{{ make_element_lookup_tree
@@ -51,40 +54,7 @@ def make_element_lookup_tree(mesh, eps=1e-12):
 
 # {{{ nd_quad_submesh
 
-def nd_quad_submesh(node_tuples):
-    """Return a list of tuples of indices into the node list that
-    generate a tesselation of the reference element.
-
-    :arg node_tuples: A list of tuples *(i, j, ...)* of integers
-        indicating node positions inside the unit element. The
-        returned list references indices in this list.
-
-        :func:`pytools.generate_nonnegative_integer_tuples_below`
-        may be used to generate *node_tuples*.
-
-    See also :func:`modepy.tools.simplex_submesh`.
-    """
-
-    from pytools import single_valued, add_tuples
-    dims = single_valued(len(nt) for nt in node_tuples)
-
-    node_dict = {
-            ituple: idx
-            for idx, ituple in enumerate(node_tuples)}
-
-    from pytools import generate_nonnegative_integer_tuples_below as gnitb
-
-    result = []
-    for current in node_tuples:
-        try:
-            result.append(tuple(
-                    node_dict[add_tuples(current, offset)]
-                    for offset in gnitb(2, dims)))
-
-        except KeyError:
-            pass
-
-    return result
+nd_quad_submesh = MovedFunctionDeprecationWrapper(hypercube_submesh)
 
 # }}}
 

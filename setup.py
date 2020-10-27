@@ -42,7 +42,7 @@ def main():
           python_requires="~=3.6",
           install_requires=[
               "numpy",
-              "modepy",
+              "modepy>=2020.2",
               "gmsh_interop",
               "pytools>=2020.4.1",
               "pytest>=2.3",
