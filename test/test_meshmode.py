@@ -1156,30 +1156,6 @@ def test_lookup_tree(visualize=False):
 # }}}
 
 
-# {{{ test_nd_quad_submesh
-
-@pytest.mark.parametrize("dims", [2, 3, 4])
-def test_nd_quad_submesh(dims):
-    from meshmode.mesh.tools import nd_quad_submesh
-    from pytools import generate_nonnegative_integer_tuples_below as gnitb
-
-    node_tuples = list(gnitb(3, dims))
-
-    for i, nt in enumerate(node_tuples):
-        print(i, nt)
-
-    assert len(node_tuples) == 3**dims
-
-    elements = nd_quad_submesh(node_tuples)
-
-    for e in elements:
-        print(e)
-
-    assert len(elements) == 2**dims
-
-# }}}
-
-
 # {{{ test_quad_mesh_2d
 
 @pytest.mark.parametrize(("ambient_dim", "filename"),
