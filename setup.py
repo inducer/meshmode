@@ -46,7 +46,7 @@ def main():
               "gmsh_interop",
               "pytools>=2020.4.1",
               "pytest>=2.3",
-              "loo.py>=2014.1",
+              "loopy>=2020.2",
               "recursivenodes",
               "dataclasses; python_version<='3.6'",
               ],
