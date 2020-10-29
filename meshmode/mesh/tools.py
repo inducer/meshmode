@@ -69,8 +69,8 @@ def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None):
     :arg randnums: 3 random numbers in the range [0, 1]. If `None`, they will be
         auto-generated.
     """
-    # from http://www.realtimerendering.com/resources/GraphicsGems/gemsiii/rand_rotation.c  # noqa: E501
-    # from http://blog.lostinmyterminal.com/python/2015/05/12/random-rotation-matrix.html  # noqa: E501
+    # from https://www.realtimerendering.com/resources/GraphicsGems/gemsiii/rand_rotation.c  # noqa: E501
+    # from https://blog.lostinmyterminal.com/python/2015/05/12/random-rotation-matrix.html  # noqa: E501
 
     if ambient_dim != 3:
         raise NotImplementedError("ambient_dim=%d" % ambient_dim)

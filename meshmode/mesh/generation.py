@@ -399,7 +399,7 @@ def make_group_from_vertices(vertices, vertex_indices, order,
 # {{{ generate_icosahedron
 
 def generate_icosahedron(r, order):
-    # http://en.wikipedia.org/w/index.php?title=Icosahedron&oldid=387737307
+    # https://en.wikipedia.org/w/index.php?title=Icosahedron&oldid=387737307
 
     phi = (1+5**(1/2))/2
 

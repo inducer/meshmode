@@ -17,7 +17,7 @@ def main():
           author="Andreas Kloeckner",
           author_email="inform@tiker.net",
           license="MIT",
-          url="http://documen.tician.de/meshmode",
+          url="https://documen.tician.de/meshmode",
           classifiers=[
               "Development Status :: 3 - Alpha",
               "Intended Audience :: Developers",
