@@ -109,7 +109,7 @@ html_theme = "alabaster"
 html_theme_options = {
         "extra_nav_links": {
             "🚀 Github": "https://github.com/inducer/meshmode",
-            "💾 Download Releases": "https://pypi.python.org/pypi/meshmode",
+            "💾 Download Releases": "https://pypi.org/project/meshmode",
             }
         }
 

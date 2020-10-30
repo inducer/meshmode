@@ -149,7 +149,7 @@ For Developers: Firedrake Function Space Design Crash Course
 
 In Firedrake, meshes and function spaces have a close relationship.
 In particular, this is  due to some structure described in this
-`Firedrake pull request <http://github.com/firedrakeproject/firedrake/pull/627>`_.
+`Firedrake pull request <https://github.com/firedrakeproject/firedrake/pull/627>`_.
 If you wish to develop on / add to the implementation of conversion
 between :mod:`meshmode` and :mod:`firedrake`, you will need
 to understand their design style. Below is a crash course.

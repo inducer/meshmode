@@ -394,7 +394,7 @@ class Visualizer:
 
             args = tuple(nodes) + (field,)
 
-            # http://docs.enthought.com/mayavi/mayavi/auto/example_plotting_many_lines.html  # noqa
+            # https://docs.enthought.com/mayavi/mayavi/auto/example_plotting_many_lines.html  # noqa
             src = mlab.pipeline.scalar_scatter(*args)
 
             src.mlab_source.dataset.lines = vis_connectivity.reshape(-1, 2)

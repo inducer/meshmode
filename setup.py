@@ -17,7 +17,7 @@ def main():
           author="Andreas Kloeckner",
           author_email="inform@tiker.net",
           license="MIT",
-          url="http://documen.tician.de/meshmode",
+          url="https://documen.tician.de/meshmode",
           classifiers=[
               "Development Status :: 3 - Alpha",
               "Intended Audience :: Developers",
@@ -46,7 +46,11 @@ def main():
               "gmsh_interop",
               "pytools>=2020.4.1",
               "pytest>=2.3",
-              "loo.py>=2014.1",
+
+              # 2019.1 is required for the Firedrake CIs, which use an very specific
+              # version of Loopy.
+              "loopy>=2019.1",
+
               "recursivenodes",
               "dataclasses; python_version<='3.6'",
               ],
