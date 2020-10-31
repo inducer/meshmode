@@ -259,7 +259,8 @@ class DGDiscretization:
                     vec=vec[grp.index])["result"])
 
         result = DOFArray.from_list(self._setup_actx, results)
-        return result/self.vol_jacobian()
+        vj = thaw(self._setup_actx, self.vol_jacobian())
+        return result/vj
 
     @memoize_method
     def get_local_face_mass_matrix(self, afgrp, volgrp, dtype):
