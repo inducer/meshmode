@@ -467,22 +467,22 @@ class _PytatoFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         from pymbolic.primitives import Subscript
         import pytato as pt
 
-        indices = tuple(var(f'_{i}') for i in range(len(x.shape)))
-        expr = Subscript(var('_in0'), indices)
+        indices = tuple(var(f"_{i}") for i in range(len(x.shape)))
+        expr = Subscript(var("_in0"), indices)
 
         return pt.IndexLambda(self.ns, expr, shape=x.shape,
-                dtype=res_dtype, bindings={'_in0': x})
+                dtype=res_dtype, bindings={"_in0": x})
 
     @obj_array_vectorized_n_args
     def exp(self, x):
-        if x.dtype.kind == 'i':
+        if x.dtype.kind == "i":
             res_dtype = np.float64
-        elif x.dtype.kind == 'f':
+        elif x.dtype.kind == "f":
             res_dtype = x.dtype
         else:
             raise NotImplementedError
 
-        y = self._math_func('pytato.c99.exp', x, res_dtype)
+        y = self._math_func("pytato.c99.exp", x, res_dtype)
         return y
 
 
@@ -519,7 +519,7 @@ class PytatoArrayContext(ArrayContext):
 
     def empty(self, shape, dtype):
         import pytato as pt
-        return pt.make_placeholder(self.ns, name=self.ns.name_gen('u'),
+        return pt.make_placeholder(self.ns, name=self.ns.name_gen("u"),
                 shape=shape, dtype=dtype)
 
     def zeros(self, shape, dtype):
