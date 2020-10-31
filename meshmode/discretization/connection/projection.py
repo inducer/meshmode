@@ -123,10 +123,9 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")
 
-        if ary.shape != (len(self.from_discr.groups),):
-            raise ValueError("invalid shape of incoming resampling data")
+        raise NotImplementedError("Stateful access, must rewrite.")
 
-        actx = ary.array_context
+        actx = vec.array_context
 
         @memoize_in(actx, (L2ProjectionInverseDiscretizationConnection,
             "conn_projection_knl"))
