@@ -457,6 +457,7 @@ def make_direct_full_resample_matrix(actx, conn):
     :arg actx: an :class:`~meshmode.array_context.ArrayContext`.
     :arg conn: a :class:`DirectDiscretizationConnection`.
     """
+    raise NotImplementedError("Stateful access, must rewrite this section.")
 
     if not isinstance(conn, DirectDiscretizationConnection):
         raise TypeError("can only construct a full resampling matrix "

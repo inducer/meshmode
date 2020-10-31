@@ -119,6 +119,8 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         if not isinstance(vec, DOFArray):
             raise TypeError("non-array passed to discretization connection")
 
+        raise NotImplementedError("Stateful access, must rewrite.")
+
         actx = vec.array_context
 
         @memoize_in(actx, (L2ProjectionInverseDiscretizationConnection,
