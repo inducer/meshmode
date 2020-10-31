@@ -31,7 +31,7 @@ from pytools.obj_array import (
         obj_array_vectorize)
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
 from meshmode.dof_array import DOFArray, freeze, thaw
-from meshmode.array_context import PyOpenCLArrayContext, make_loopy_program
+from meshmode.array_context import PytatoArrayContext, make_loopy_program
 
 
 # Features lost vs. https://github.com/inducer/grudge:
@@ -468,7 +468,7 @@ def main():
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
 
-    actx = PyOpenCLArrayContext(queue)
+    actx = PytatoArrayContext(cl_ctx, queue)
 
     nel_1d = 16
     from meshmode.mesh.generation import generate_regular_rect_mesh
