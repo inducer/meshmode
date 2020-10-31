@@ -366,7 +366,7 @@ class SimplexElementGroup(MeshElementGroup):
                 (1, 2, 3)
                 )
         else:
-            raise NotImplementedError("dim=%d" % self.dim)
+            raise NotImplementedError(f"dimension {self.dim}")
 
     def vertex_unit_coordinates(self):
         from modepy.tools import unit_vertices
@@ -412,10 +412,33 @@ class TensorProductElementGroup(MeshElementGroup):
                 element_nr_base, node_nr_base, unit_nodes)
 
     def face_vertex_indices(self):
-        raise NotImplementedError()
+        if self.dim == 1:
+            return (
+                (0,),
+                (1,),
+                )
+        elif self.dim == 2:
+            return (
+                    (0, 1),
+                    (3, 2),
+                    (2, 0),
+                    (1, 3),
+                    )
+        elif self.dim == 3:
+            return (
+                    (0, 2, 1, 3),
+                    (4, 6, 5, 7),
+                    (0, 4, 5, 1),
+                    (2, 6, 7, 3),
+                    (0, 4, 6, 2),
+                    (1, 5, 7, 3),
+                    )
+        else:
+            raise NotImplementedError(f"dimension {self.dim}")
 
     def vertex_unit_coordinates(self):
-        raise NotImplementedError()
+        from pytools import generate_nonnegative_integer_tuples_below as gnitb
+        return np.array(list(gnitb(2, self.dim)), dtype=np.float64)*2.0 - 1.0
 
 # }}}
 
@@ -971,15 +994,22 @@ class Mesh(Record):
 
 # {{{ node-vertex consistency test
 
-def _test_node_vertex_consistency_simplex(mesh, mgrp, tol):
+def _test_node_vertex_consistency_resampling(mesh, mgrp, tol):
     if mesh.vertices is None:
         return True
 
     if mgrp.nelements == 0:
         return True
 
+    if isinstance(mgrp, SimplexElementGroup):
+        basis = mp.simplex_best_available_basis(mgrp.dim, mgrp.order)
+    elif isinstance(mgrp, TensorProductElementGroup):
+        basis = mp.legendre_tensor_product_basis(mgrp.dim, mgrp.order)
+    else:
+        raise TypeError(f"unsupported group type: {type(mgrp).__name__}")
+
     resampling_mat = mp.resampling_matrix(
-            mp.simplex_best_available_basis(mgrp.dim, mgrp.order),
+            basis,
             mgrp.vertex_unit_coordinates().T,
             mgrp.unit_nodes)
 
@@ -1013,8 +1043,8 @@ def _test_node_vertex_consistency(mesh, tol):
     """
 
     for mgrp in mesh.groups:
-        if isinstance(mgrp, SimplexElementGroup):
-            assert _test_node_vertex_consistency_simplex(mesh, mgrp, tol)
+        if isinstance(mgrp, (SimplexElementGroup, TensorProductElementGroup)):
+            assert _test_node_vertex_consistency_resampling(mesh, mgrp, tol)
         else:
             from warnings import warn
             warn("not implemented: node-vertex consistency check for '%s'"

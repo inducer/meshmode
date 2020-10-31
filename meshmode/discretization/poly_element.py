@@ -33,7 +33,7 @@ import modepy as mp
 __doc__ = """
 
 Group types
-^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 .. autoclass:: InterpolatoryQuadratureSimplexElementGroup
 .. autoclass:: QuadratureSimplexElementGroup
@@ -41,6 +41,8 @@ Group types
 .. autoclass:: PolynomialRecursiveNodesElementGroup
 .. autoclass:: PolynomialEquidistantSimplexElementGroup
 .. autoclass:: PolynomialGivenNodesElementGroup
+
+.. autoclass:: InterpolatoryQuadratureTensorProductElementGroup
 .. autoclass:: LegendreGaussLobattoTensorProductElementGroup
 .. autoclass:: EquidistantTensorProductElementGroup
 
@@ -48,12 +50,16 @@ Group factories
 ^^^^^^^^^^^^^^^
 
 .. autoclass:: ElementGroupFactory
+.. autoclass:: OrderAndTypeBasedGroupFactory
+
 .. autoclass:: InterpolatoryQuadratureSimplexGroupFactory
 .. autoclass:: QuadratureSimplexGroupFactory
 .. autoclass:: PolynomialWarpAndBlendGroupFactory
 .. autoclass:: PolynomialRecursiveNodesGroupFactory
 .. autoclass:: PolynomialEquidistantSimplexGroupFactory
 .. autoclass:: PolynomialGivenNodesGroupFactory
+
+.. autoclass:: InterpolatoryQuadratureTensorProductGroupFactory
 .. autoclass:: LegendreGaussLobattoTensorProductGroupFactory
 """
 
@@ -346,9 +352,8 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
 
 # {{{ concrete element groups for tensor product elements
 
-class TensorProductElementGroupBase(PolynomialElementGroupBase):
-    def is_orthogonal_basis(self):
-        return True
+class _TensorProductElementGroupBase(PolynomialElementGroupBase):
+    # {{{
 
     def basis_1d(self):
         from modepy.modes import jacobi
@@ -363,6 +368,11 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase):
     def unit_nodes_1d(self):
         raise NotImplementedError
 
+    # }}}
+
+    def is_orthogonal_basis(self):
+        return True
+
     def basis(self):
         from modepy.modes import tensor_product_basis
         return tensor_product_basis(self.dim, self.basis_1d())
@@ -376,25 +386,32 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase):
     @memoize_method
     def unit_nodes(self):
         from modepy.nodes import tensor_product_nodes
-        return tensor_product_nodes(self.dim, self.unit_nodes_1d)
+        return tensor_product_nodes(self.dim, self.unit_nodes_1d())
 
     @memoize_method
     def from_mesh_interp_matrix(self):
+        from modepy.modes import legendre_tensor_product_basis
         meg = self.mesh_el_group
         return mp.resampling_matrix(
-                self.basis(),
+                legendre_tensor_product_basis(self.dim, self.order),
                 self.unit_nodes,
-                meg.unit_nodes,
-                least_squares_ok=False)
+                meg.unit_nodes)
 
 
-class InterpolatoryQuadratureTensorProductElementGroup(TensorProductElementGroup):
+class InterpolatoryQuadratureTensorProductElementGroup(
+        _TensorProductElementGroupBase):
+    """Elemental discretization supplying a high-order quadrature rule
+    with a number of nodes matching the number of polynomials in the tensor
+    product basis, hence usable for differentiation and interpolation.
+
+    No interpolation nodes are present on the boundary of the hypercube.
+    """
+
     @memoize_method
     def _quadrature_rule_1d(self):
         from modepy.quadrature import LegendreGaussQuadrature
         return LegendreGaussQuadrature(self.order)
 
-    @property
     def unit_nodes_1d(self):
         return self._quadrature_rule().nodes
 
@@ -405,15 +422,30 @@ class InterpolatoryQuadratureTensorProductElementGroup(TensorProductElementGroup
         return tensor_product_nodes(self.dim, self._quadrature_rule().weights)
 
 
-class LegendreGaussLobattoTensorProductElementGroup(TensorProductElementGroupBase):
-    @property
+class LegendreGaussLobattoTensorProductElementGroup(
+        _TensorProductElementGroupBase):
+    """Elemental discretization supplying a high-order quadrature rule
+    with a number of nodes matching the number of polynomials in the tensor
+    product basis, hence usable for differentiation and interpolation.
+    Nodes are present on the boundary of the hypercube.
+
+    Uses :func:`~modepy.quadrature.legendre_gauss_lobatto_nodes`.
+    """
+
     def unit_nodes_1d(self):
         from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
         return legendre_gauss_lobatto_nodes(self.order)
 
 
-class EquidistantTensorProductElementGroup(TensorProductElementGroupBase):
-    @property
+class EquidistantTensorProductElementGroup(_TensorProductElementGroupBase):
+    """Elemental discretization supplying a high-order quadrature rule
+    with a number of nodes matching the number of polynomials in the tensor
+    product basis, hence usable for differentiation and interpolation.
+    Nodes are present on the boundary of the hypercube.
+
+    Uses :func:`~modepy.equidistant_nodes`.
+    """
+
     def unit_nodes_1d(self):
         from modepy.nodes import equidistant_nodes
         return equidistant_nodes(1, self.order)[0]
@@ -514,13 +546,24 @@ class PolynomialGivenNodesGroupFactory(HomogeneousOrderBasedGroupFactory):
 
         return PolynomialGivenNodesElementGroup(
                 mesh_el_group, self.order, self.unit_nodes, index)
+
 # }}}
+
+
+# {{{ group factories for tensor products
+
+class InterpolatoryQuadratureTensorProductGroupFactory(
+        HomogeneousOrderBasedGroupFactory):
+    mesh_group_class = _MeshTensorProductElementGroup
+    group_class = InterpolatoryQuadratureTensorProductElementGroup
 
 
 class LegendreGaussLobattoTensorProductGroupFactory(
         HomogeneousOrderBasedGroupFactory):
     mesh_group_class = _MeshTensorProductElementGroup
     group_class = LegendreGaussLobattoTensorProductElementGroup
+
+# }}}
 
 # }}}
 

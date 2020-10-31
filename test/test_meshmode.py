@@ -285,14 +285,16 @@ def test_boundary_tags():
     ])
 @pytest.mark.parametrize("group_cls", [
     SimplexElementGroup,
-
-    # FIXME: Not implemented: TPE.face_vertex_indices
-    # TensorProductElementGroup
+    TensorProductElementGroup
     ])
 def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
+    if group_cls is TensorProductElementGroup and mesh_type is not None:
+        pytest.skip("mesh type not supported on tensor product elements")
+
     from meshmode.mesh.generation import generate_regular_rect_mesh
     from meshmode.mesh import is_boundary_tag_empty
     from meshmode.mesh import check_bc_coverage
+
     if dim == 1:
         a = (0,)
         b = (1,)
@@ -317,7 +319,7 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
                                       group_cls=group_cls,
                                       mesh_type=mesh_type)
 
-    if visualize:
+    if visualize and dim == 2:
         from meshmode.mesh.visualization import draw_2d_mesh
         draw_2d_mesh(mesh, draw_element_numbers=False, draw_vertex_numbers=False)
         import matplotlib.pyplot as plt
@@ -326,8 +328,10 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
     # correct answer
     if dim == 1:
         num_on_bdy = 1
-    else:
-        num_on_bdy = dim*(dim-1)*(nelem-1)**(dim-1)
+    elif group_cls is TensorProductElementGroup:
+        num_on_bdy = dim * (nelem-1)**(dim-1)
+    elif group_cls is SimplexElementGroup:
+        num_on_bdy = dim * (dim-1) * (nelem-1)**(dim-1)
 
     assert not is_boundary_tag_empty(mesh, "btag_test_1")
     assert not is_boundary_tag_empty(mesh, "btag_test_2")
@@ -358,7 +362,6 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
         raise ValueError("%i marked on custom boundary 2, should be %i" %
                          (num_marked_bdy_2, num_on_bdy))
 
-
 # }}}
 
 
@@ -368,7 +371,10 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
     InterpolatoryQuadratureSimplexGroupFactory,
     PolynomialWarpAndBlendGroupFactory,
     partial(PolynomialRecursiveNodesGroupFactory, family="lgl"),
-    #partial(PolynomialRecursiveNodesGroupFactory, family="gc"),
+    # partial(PolynomialRecursiveNodesGroupFactory, family="gc"),
+
+    # FIXME: need support in make_face_restriction
+    # LegendreGaussLobattoTensorProductGroupFactory,
     ])
 @pytest.mark.parametrize("boundary_tag", [
     BTAG_ALL,
@@ -383,7 +389,16 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
 @pytest.mark.parametrize("per_face_groups", [False, True])
 def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
         mesh_name, dim, mesh_pars, per_face_groups):
+    if (issubclass(group_factory, LegendreGaussLobattoTensorProductGroupFactory)
+            and mesh_name == "blob"):
+        pytest.skip("tensor products not implemented on blobs")
+
     actx = actx_factory()
+
+    if issubclass(group_factory, LegendreGaussLobattoTensorProductGroupFactory):
+        group_cls = TensorProductElementGroup
+    else:
+        group_cls = SimplexElementGroup
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
@@ -420,7 +435,8 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
                     force_ambient_dim=2)
         elif mesh_name == "warp":
             from meshmode.mesh.generation import generate_warped_rect_mesh
-            mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par)
+            mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par,
+                    group_cls=group_cls)
 
             h = 1/mesh_par
         else:
@@ -586,7 +602,7 @@ def test_all_faces_interpolation(actx_factory, mesh_name, dim, mesh_pars,
     ("segment", 1, [8, 16, 32]),
     ("blob", 2, [1e-1, 8e-2, 5e-2]),
     ("warp", 2, [3, 5, 7]),
-    ("warp", 3, [3, 5]),
+    ("warp", 3, [3, 5])
     ])
 def test_opposite_face_interpolation(actx_factory, group_factory,
         mesh_name, dim, mesh_pars):
@@ -642,8 +658,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
 
         # }}}
 
-        vol_discr = Discretization(actx, mesh,
-                group_factory(order))
+        vol_discr = Discretization(actx, mesh, group_factory(order))
         print("h=%s -> %d elements" % (
                 h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
@@ -767,9 +782,7 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
 
 @pytest.mark.parametrize("group_cls", [
     SimplexElementGroup,
-
-    # NOTE: needs TensorProductElementGroup.face_vertex_indices
-    # TensorProductElementGroup
+    TensorProductElementGroup
     ])
 def test_merge_and_map(actx_factory, group_cls, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
@@ -1242,7 +1255,7 @@ def no_test_quad_mesh_3d():
 
 # {{{ test_quad_single_element
 
-def test_quad_single_element():
+def test_quad_single_element(visualize=False):
     from meshmode.mesh.generation import make_group_from_vertices
 
     vertices = np.array([
@@ -1257,7 +1270,7 @@ def test_quad_single_element():
             30, group_cls=TensorProductElementGroup)
 
     Mesh(vertices, [mg], nodal_adjacency=None, facial_adjacency_groups=None)
-    if 0:
+    if visualize:
         import matplotlib.pyplot as plt
         plt.plot(
                 mg.nodes[0].reshape(-1),

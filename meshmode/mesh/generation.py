@@ -767,7 +767,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
     if dim == 1:
         if mesh_type is not None:
-            raise ValueError("unsupported mesh_type")
+            raise ValueError(f"unsupported mesh type: '{mesh_type}'")
 
         for i in range(shape[0]-1):
             # a--b
@@ -801,7 +801,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
             pass
 
         else:
-            raise ValueError("unsupported mesh_type")
+            raise ValueError(f"unsupported mesh type: '{mesh_type}'")
 
         for i in range(shape[0]-1):
             for j in range(shape[1]-1):
@@ -957,7 +957,8 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
       on [a,b].
     :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
         See :func:`generate_box_mesh`.
-    :param mesh_type: See :func:`generate_box_mesh`.
+    :param group_cls: see :func:`generate_box_mesh`.
+    :param mesh_type: see :func:`generate_box_mesh`.
     """
     if min(n) < 2:
         raise ValueError("need at least two points in each direction")
@@ -975,7 +976,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
 
 # {{{ generate_warped_rect_mesh
 
-def generate_warped_rect_mesh(dim, order, n):
+def generate_warped_rect_mesh(dim, order, n, *, group_cls=None):
     """Generate a mesh of a warped line/square/cube. Mainly useful for testing
     functionality with curvilinear meshes.
     """
@@ -983,7 +984,7 @@ def generate_warped_rect_mesh(dim, order, n):
     assert dim in [1, 2, 3]
     mesh = generate_regular_rect_mesh(
             a=(-0.5,)*dim, b=(0.5,)*dim,
-            n=(n,)*dim, order=order)
+            n=(n,)*dim, order=order, group_cls=group_cls)
 
     def m(x):
         result = np.empty_like(x)
