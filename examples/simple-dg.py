@@ -190,7 +190,7 @@ class DGDiscretization:
         return self.volume_discr.zeros(actx)
 
     def grad(self, vec):
-        ipder = self.inverse_parametrization_derivative()
+        ipder = thaw(self._setup_actx, self.inverse_parametrization_derivative())
 
         from meshmode.discretization import num_reference_derivative
         dref = [
@@ -307,7 +307,7 @@ class DGDiscretization:
         all_faces_discr = all_faces_conn.to_discr
         vol_discr = all_faces_conn.from_discr
 
-        fj = self.face_jacobian("all_faces")
+        fj = thaw(self._setup_actx, self.face_jacobian("all_faces"))
         vec = vec*fj
 
         assert len(all_faces_discr.groups) == len(vol_discr.groups)
