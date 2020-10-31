@@ -248,15 +248,17 @@ class DGDiscretization:
 
         discr = self.volume_discr
 
-        result = discr.empty_like(vec)
+        results = []
 
         for grp in discr.groups:
             matrix = self.get_inverse_mass_matrix(grp, vec.entry_dtype)
 
-            vec.array_context.call_loopy(
+            results.append(vec.array_context.call_loopy(
                     knl(),
-                    mat=matrix, result=result[grp.index], vec=vec[grp.index])
+                    mat=matrix, nelements=grp.nelements,
+                    vec=vec[grp.index])["result"])
 
+        result = DOFArray.from_list(self._setup_actx, results)
         return result/self.vol_jacobian()
 
     @memoize_method
@@ -305,24 +307,25 @@ class DGDiscretization:
         all_faces_discr = all_faces_conn.to_discr
         vol_discr = all_faces_conn.from_discr
 
-        result = vol_discr.empty_like(vec)
-
         fj = self.face_jacobian("all_faces")
         vec = vec*fj
 
         assert len(all_faces_discr.groups) == len(vol_discr.groups)
+
+        results = []
 
         for afgrp, volgrp in zip(all_faces_discr.groups, vol_discr.groups):
             nfaces = volgrp.mesh_el_group.nfaces
 
             matrix = self.get_local_face_mass_matrix(afgrp, volgrp, vec.entry_dtype)
 
-            vec.array_context.call_loopy(knl(),
-                    mat=matrix, result=result[volgrp.index],
+            results.append(vec.array_context.call_loopy(knl(),
+                    mat=matrix,
+                    nelements=volgrp.nelements,
                     vec=vec[afgrp.index].reshape(
-                        nfaces, volgrp.nelements, afgrp.nunit_dofs))
+                        (nfaces, volgrp.nelements, afgrp.nunit_dofs)))["result"])
 
-        return result
+        return DOFArray.from_list(self._setup_actx, results)
 
 # }}}
 
