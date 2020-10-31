@@ -389,13 +389,13 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
 @pytest.mark.parametrize("per_face_groups", [False, True])
 def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
         mesh_name, dim, mesh_pars, per_face_groups):
-    if (issubclass(group_factory, LegendreGaussLobattoTensorProductGroupFactory)
+    if (group_factory is LegendreGaussLobattoTensorProductGroupFactory
             and mesh_name == "blob"):
         pytest.skip("tensor products not implemented on blobs")
 
     actx = actx_factory()
 
-    if issubclass(group_factory, LegendreGaussLobattoTensorProductGroupFactory):
+    if group_factory is LegendreGaussLobattoTensorProductGroupFactory:
         group_cls = TensorProductElementGroup
     else:
         group_cls = SimplexElementGroup
