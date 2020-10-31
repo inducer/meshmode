@@ -533,6 +533,7 @@ class PytatoArrayContext(ArrayContext):
         return pt.make_data_wrapper(self.ns, cl_array)
 
     def to_numpy(self, array):
+        # FIXME: Should invoke call_loopy
         import pytato as pt
         prg = pt.generate_loopy(array).program
 
@@ -546,6 +547,7 @@ class PytatoArrayContext(ArrayContext):
     def call_loopy(self, program, **kwargs):
         # FIXME:always happens eagerly
         import pytato as pt
+        import pyopencl.array as cla
         from numbers import Number
         prg_kwargs = {}
 
@@ -557,8 +559,14 @@ class PytatoArrayContext(ArrayContext):
                 prg_kwargs[arg_name] = arg.data
             elif isinstance(arg, Number):
                 prg_kwargs[arg_name] = arg
+            elif isinstance(arg, pt.array.IndexLambda):
+                # FIXME: Eager alert
+                prg_kwargs[arg_name] = self.freeze(arg)
+            elif isinstance(arg, cla.Array):
+                prg_kwargs[arg_name] = arg
             else:
-                raise NotImplementedError
+                raise NotImplementedError(f"Not implemented for {arg_name} of"
+                        f" type {type(arg)}")
 
         options = program.options
         if not (options.return_dict and options.no_numpy):
@@ -573,12 +581,17 @@ class PytatoArrayContext(ArrayContext):
         return pt_results
 
     def freeze(self, array):
+        # FIXME: Should invoke call_loopy
         import pytato as pt
-        import pyopencl.array as cla
         if isinstance(array, pt.Placeholder):
-            cl_array = cla.empty(self.queue, shape=array.shape,
-                            dtype=array.dtype)
-            return pt.make_data_wrapper(self.ns, cl_array)
+            1/0
+            # import pyopencl.array as cla
+            # cl_array = cla.empty(self.queue, shape=array.shape,
+            #                 dtype=array.dtype)
+
+            # return pt.make_data_wrapper(self.ns, cl_array)
+
+        # FIXME: should also invoke call_loopy
 
         prg = pt.generate_loopy(array).program
         prog_kwargs = {arg_name: self.ns[arg_name].data
@@ -587,10 +600,14 @@ class PytatoArrayContext(ArrayContext):
                     pt.array.DataWrapper)}
         evt, (cl_array,) = prg(self.queue, **prog_kwargs)
 
-        return pt.make_data_wrapper(self.ns, cl_array)
+        return cl_array
 
     def thaw(self, array):
-        return array
+        import pytato as pt
+        print(f"Thaw got an object of type '{type(array)}'")
+        if array.dtype.kind == "O":
+            raise NotImplementedError()
+        return pt.make_data_wrapper(self.ns, array)
 
     # }}}
 
