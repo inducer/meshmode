@@ -33,7 +33,7 @@ import modepy as mp
 __doc__ = """
 
 Group types
-^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^
 
 .. autoclass:: InterpolatoryQuadratureSimplexElementGroup
 .. autoclass:: QuadratureSimplexElementGroup
@@ -429,7 +429,7 @@ class LegendreGaussLobattoTensorProductElementGroup(
     product basis, hence usable for differentiation and interpolation.
     Nodes are present on the boundary of the hypercube.
 
-    Uses :func:`~modepy.quadrature.legendre_gauss_lobatto_nodes`.
+    Uses :func:`~modepy.quadrature.jacobi_gauss.legendre_gauss_lobatto_nodes`.
     """
 
     def unit_nodes_1d(self):
