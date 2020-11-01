@@ -331,7 +331,7 @@ class DGDiscretization:
             results.append(vec.array_context.call_loopy(knl(),
                     mat=matrix,
                     nelements=volgrp.nelements,
-                    vec=vec[afgrp.index].reshape(
+                    vec=self._setup_actx.np.reshape(vec[afgrp.index],
                         (nfaces, volgrp.nelements, afgrp.nunit_dofs)))["result"])
 
         return DOFArray.from_list(self._setup_actx, results)
