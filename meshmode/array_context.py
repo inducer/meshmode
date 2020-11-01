@@ -485,6 +485,16 @@ class _PytatoFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         y = self._math_func("pytato.c99.exp", x, res_dtype)
         return y
 
+    @obj_array_vectorized_n_args
+    def reshape(self, a, newshape):
+        import pytato as pt
+        return pt.reshape(a, newshape)
+
+    @obj_array_vectorized_n_args
+    def concatenate(self, arrays, axis=0):
+        import pytato as pt
+        return pt.concatenate(arrays, axis)
+
 
 class PytatoArrayContext(ArrayContext):
     """
@@ -560,6 +570,9 @@ class PytatoArrayContext(ArrayContext):
             elif isinstance(arg, Number):
                 prg_kwargs[arg_name] = arg
             elif isinstance(arg, pt.array.IndexLambda):
+                # FIXME: Eager alert
+                prg_kwargs[arg_name] = self.freeze(arg)
+            elif isinstance(arg, pt.array.IndexRemappingBase):
                 # FIXME: Eager alert
                 prg_kwargs[arg_name] = self.freeze(arg)
             elif isinstance(arg, cla.Array):
