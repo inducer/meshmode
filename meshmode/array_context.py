@@ -594,33 +594,131 @@ class PytatoArrayContext(ArrayContext):
         return pt_results
 
     def freeze(self, array):
-        # FIXME: Should invoke call_loopy
         import pytato as pt
+
         if isinstance(array, pt.Placeholder):
-            1/0
-            # import pyopencl.array as cla
-            # cl_array = cla.empty(self.queue, shape=array.shape,
-            #                 dtype=array.dtype)
+            raise NotImplementedError()
 
-            # return pt.make_data_wrapper(self.ns, cl_array)
+        prg = pt.generate_loopy(array, target=pt.PyOpenCLTarget(self.queue))
+        evt, (cl_array,) = prg()
 
-        # FIXME: should also invoke call_loopy
-
-        prg = pt.generate_loopy(array).program
-        prog_kwargs = {arg_name: self.ns[arg_name].data
-                for arg_name in prg.arg_dict
-                if arg_name in self.ns and isinstance(self.ns[arg_name],
-                    pt.array.DataWrapper)}
-        evt, (cl_array,) = prg(self.queue, **prog_kwargs)
-
-        return cl_array
+        return pt.make_data_wrapper(cl_array)
 
     def thaw(self, array):
         import pytato as pt
-        print(f"Thaw got an object of type '{type(array)}'")
-        if array.dtype.kind == "O":
-            raise NotImplementedError()
-        return pt.make_data_wrapper(self.ns, array)
+        assert isinstance(array, pt.array.Array)
+        return array
+
+    # }}}
+
+# }}}
+
+
+# {{{ DebuggingArrayContext
+
+class _DebugFakeNumpyNamespace(_BaseFakeNumpyNamespace):
+    @property
+    def actx_np(self):
+        return self._array_context.actx.np
+
+    @property
+    def ref_actx_np(self):
+        return self._array_context.ref_actx.np
+
+
+class DebugArray(tuple):
+    def __init__(self, actx, array, ref_actx, ref_array):
+        self.array = array
+        self.ref_array = ref_array
+        self.actx = actx
+        self.ref_actx = ref_actx
+
+        assert isinstance(actx, ArrayContext)
+        assert isinstance(ref_actx, ArrayContext)
+
+    def debug(self, debug_array):
+        np_array = self.actx.to_numpy(self.array)
+        np_ref_array = self.ref_actx.to_numpy(self.ref_array)
+        assert np.testing.array_equal(np_array, np_ref_array)
+
+
+class DebuggingArrayContext(ArrayContext):
+    """
+    An array context to debug between 2 array contexts.
+
+    .. attribute:: actx
+
+        A :class:`meshmode.ArrayContext`.
+
+    .. attribute:: ref_actx
+
+        Reference :class:`meshmode.ArrayContext`.
+    """
+
+    def __init__(self, actx, ref_actx):
+        super().__init__()
+        self.actx = actx
+        self.ref_actx = ref_actx
+
+    def _get_fake_numpy_namespace(self):
+        return _DebugFakeNumpyNamespace(self)
+
+    # {{{ ArrayContext interface
+
+    def empty(self, shape, dtype):
+        return DebugArray(self.actx, self.actx.empty(shape, dtype),
+                          self.ref_actx, self.ref_actx.empty(shape, dtype))
+
+    def zeros(self, shape, dtype):
+        return DebugArray(self.actx, self.actx.zeros(shape, dtype),
+                          self.ref_actx, self.ref_actx.zeros(shape, dtype))
+
+    def from_numpy(self, np_array: np.ndarray):
+        return DebugArray(self.actx, self.actx.from_numpy(np_array),
+                          self.ref_actx, self.ref_actx.from_numpy(np_array))
+
+    def to_numpy(self, array):
+        assert isinstance(array, DebugArray)
+
+        # DEBUG #
+        array.debug()
+
+        return self.actx.to_numpy(array.array)
+
+    def call_loopy(self, program, **kwargs):
+        unmangled_kwargs = {key: val.array if isinstance(val, DebugArray) else val
+                            for key, val in kwargs.items()}
+        unmangled_ref_kwargs = {key: val.ref_array if isinstance(val, DebugArray)
+                                     else val
+                                for key, val in kwargs.items()}
+        result = self.actx.call_loopy(program, **unmangled_kwargs)
+        ref_result = self.ref_actx.call_loopy(program, **unmangled_ref_kwargs)
+
+        result_as_debug_array = DebugArray(self.actx, result,
+                                           self.ref_actx, ref_result)
+
+        # DEBUG #
+        result_as_debug_array.debug()
+
+        return result_as_debug_array
+
+    def freeze(self, array):
+        result = DebugArray(self.actx, self.actx.freeze(array.array),
+                            self.ref_actx, self.ref_actx.freeze(array.ref_array))
+
+        # DEBUG #
+        result.debug()
+
+        return result
+
+    def thaw(self, array):
+        result = DebugArray(self.actx, self.actx.thaw(array.array),
+                            self.ref_actx, self.ref_actx.thaw(array.ref_array))
+
+        # DEBUG #
+        result.debug()
+
+        return result
 
     # }}}
 
