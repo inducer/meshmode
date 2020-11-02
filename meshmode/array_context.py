@@ -29,6 +29,7 @@ from pytools.obj_array import obj_array_vectorized_n_args
 import operator
 from functools import partialmethod
 from numbers import Number
+import time
 
 __doc__ = """
 .. autofunction:: make_loopy_program
@@ -467,11 +468,11 @@ class _PytatoFakeNumpyNamespace(_BaseFakeNumpyNamespace):
 
     def _math_func(self, op_name, x, res_dtype):
         from pymbolic import var
-        from pymbolic.primitives import Subscript
+        from pymbolic.primitives import Subscript, Call
         import pytato as pt
 
         indices = tuple(var(f"_{i}") for i in range(len(x.shape)))
-        expr = Subscript(var("_in0"), indices)
+        expr = Call(var(op_name), (Subscript(var("_in0"), indices), ))
 
         return pt.IndexLambda(self.ns, expr, shape=x.shape,
                 dtype=res_dtype, bindings={"_in0": x})
@@ -634,6 +635,33 @@ class _DebugFakeNumpyNamespace(_BaseFakeNumpyNamespace):
 
         return result_dbg_ary
 
+    @obj_array_vectorized_n_args
+    def reshape(self, a, newshape):
+        ary = self.actx_np.reshape(a.array, newshape)
+        ref_ary = self.ref_actx_np.reshape(a.ref_array, newshape)
+
+        result_dbg_ary = DebugArray(a.actx, ary,
+                                    a.ref_actx, ref_ary)
+
+        # DEBUG #
+        result_dbg_ary.debug()
+
+        return result_dbg_ary
+
+    @obj_array_vectorized_n_args
+    def concatenate(self, arrays, axis=0):
+        ary = self.actx_np.concatenate([array.array for array in arrays], axis)
+        ref_ary = self.ref_actx_np.concatenate([array.ref_array
+                                                for array in arrays], axis)
+
+        result_dbg_ary = DebugArray(arrays[0].actx, ary,
+                                    arrays[0].ref_actx, ref_ary)
+
+        # DEBUG #
+        result_dbg_ary.debug()
+
+        return result_dbg_ary
+
 
 class DebugArray:
     def __init__(self, actx, array, ref_actx, ref_array):
@@ -661,7 +689,7 @@ class DebugArray:
         np_array = self.actx.to_numpy(self.array)
         np_ref_array = self.ref_actx.to_numpy(self.ref_array)
         np.testing.assert_almost_equal(np_array, np_ref_array)
-        print("Verified")
+        print(f"[{time.asctime()}]: Verified")
 
     def _binary_op(self, op, other, reverse=False):
         if isinstance(other, DebugArray):
@@ -701,6 +729,11 @@ class DebugArray:
     def dtype(self):
         assert self.array.dtype == self.ref_array.dtype
         return self.array.dtype
+
+    @property
+    def size(self):
+        assert self.array.size == self.ref_array.size
+        return self.array.size
 
     __mul__ = partialmethod(_binary_op, operator.mul)
     __rmul__ = partialmethod(_binary_op, operator.mul, reverse=True)
