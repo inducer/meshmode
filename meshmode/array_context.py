@@ -543,15 +543,7 @@ class PytatoArrayContext(ArrayContext):
         return pt.make_data_wrapper(self.ns, cl_array)
 
     def to_numpy(self, array):
-        # FIXME: Should invoke call_loopy
-        import pytato as pt
-        prg = pt.generate_loopy(array).program
-
-        prog_kwargs = {arg_name: self.ns[arg_name].data
-                       for arg_name in prg.arg_dict
-                       if arg_name in self.ns}
-        evt, (cl_array,) = prg(self.queue, **prog_kwargs)
-
+        cl_array = self.freeze(array).data
         return cl_array.get(queue=self.queue)
 
     def call_loopy(self, program, **kwargs):
@@ -571,10 +563,10 @@ class PytatoArrayContext(ArrayContext):
                 prg_kwargs[arg_name] = arg
             elif isinstance(arg, pt.array.IndexLambda):
                 # FIXME: Eager alert
-                prg_kwargs[arg_name] = self.freeze(arg)
+                prg_kwargs[arg_name] = self.freeze(arg).data
             elif isinstance(arg, pt.array.IndexRemappingBase):
                 # FIXME: Eager alert
-                prg_kwargs[arg_name] = self.freeze(arg)
+                prg_kwargs[arg_name] = self.freeze(arg).data
             elif isinstance(arg, cla.Array):
                 prg_kwargs[arg_name] = arg
             else:
@@ -602,7 +594,7 @@ class PytatoArrayContext(ArrayContext):
         prg = pt.generate_loopy(array, target=pt.PyOpenCLTarget(self.queue))
         evt, (cl_array,) = prg()
 
-        return pt.make_data_wrapper(cl_array)
+        return pt.make_data_wrapper(self.ns, cl_array)
 
     def thaw(self, array):
         import pytato as pt
@@ -614,7 +606,7 @@ class PytatoArrayContext(ArrayContext):
 # }}}
 
 
-# {{{ DebuggingArrayContext
+# {{{ DebugArrayContext
 
 class _DebugFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     @property
@@ -626,7 +618,7 @@ class _DebugFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         return self._array_context.ref_actx.np
 
 
-class DebugArray(tuple):
+class DebugArray:
     def __init__(self, actx, array, ref_actx, ref_array):
         self.array = array
         self.ref_array = ref_array
@@ -636,13 +628,14 @@ class DebugArray(tuple):
         assert isinstance(actx, ArrayContext)
         assert isinstance(ref_actx, ArrayContext)
 
-    def debug(self, debug_array):
+    def debug(self):
         np_array = self.actx.to_numpy(self.array)
         np_ref_array = self.ref_actx.to_numpy(self.ref_array)
-        assert np.testing.array_equal(np_array, np_ref_array)
+        np.testing.assert_array_equal(np_array, np_ref_array)
+        print("Verified")
 
 
-class DebuggingArrayContext(ArrayContext):
+class DebugArrayContext(ArrayContext):
     """
     An array context to debug between 2 array contexts.
 
@@ -694,11 +687,21 @@ class DebuggingArrayContext(ArrayContext):
         result = self.actx.call_loopy(program, **unmangled_kwargs)
         ref_result = self.ref_actx.call_loopy(program, **unmangled_ref_kwargs)
 
-        result_as_debug_array = DebugArray(self.actx, result,
-                                           self.ref_actx, ref_result)
+        assert result.keys() == ref_result.keys()
 
-        # DEBUG #
-        result_as_debug_array.debug()
+        result_dict = {}
+
+        for key in result.keys():
+            val = result[key]
+            ref_val = ref_result[key]
+
+            result_as_debug_array = DebugArray(self.actx, val,
+                                               self.ref_actx, ref_val)
+
+            # DEBUG #
+            result_as_debug_array.debug()
+
+            result_dict[key] = result_as_debug_array
 
         return result_as_debug_array
 
