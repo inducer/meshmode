@@ -26,6 +26,9 @@ import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method
 from pytools.obj_array import obj_array_vectorized_n_args
+import operator
+from functools import partialmethod
+from numbers import Number
 
 __doc__ = """
 .. autofunction:: make_loopy_program
@@ -528,6 +531,7 @@ class PytatoArrayContext(ArrayContext):
     # {{{ ArrayContext interface
 
     def empty(self, shape, dtype):
+        raise NotImplementedError("Debugging phase: should not call empty")
         import pytato as pt
         return pt.make_placeholder(self.ns, name=self.ns.name_gen("u"),
                 shape=shape, dtype=dtype)
@@ -617,6 +621,19 @@ class _DebugFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def ref_actx_np(self):
         return self._array_context.ref_actx.np
 
+    @obj_array_vectorized_n_args
+    def exp(self, x):
+        ary = self.actx_np.exp(x.array)
+        ref_ary = self.ref_actx_np.exp(x.ref_array)
+
+        result_dbg_ary = DebugArray(x.actx, ary,
+                                    x.ref_actx, ref_ary)
+
+        # DEBUG #
+        result_dbg_ary.debug()
+
+        return result_dbg_ary
+
 
 class DebugArray:
     def __init__(self, actx, array, ref_actx, ref_array):
@@ -628,11 +645,79 @@ class DebugArray:
         assert isinstance(actx, ArrayContext)
         assert isinstance(ref_actx, ArrayContext)
 
+    def __getitem__(self, key):
+        ary = self.array[key]
+        ref_ary = self.ref_array[key]
+
+        result_dbg_ary = DebugArray(self.actx, ary,
+                                    self.ref_actx, ref_ary)
+
+        # DEBUG #
+        result_dbg_ary.debug()
+
+        return result_dbg_ary
+
     def debug(self):
         np_array = self.actx.to_numpy(self.array)
         np_ref_array = self.ref_actx.to_numpy(self.ref_array)
-        np.testing.assert_array_equal(np_array, np_ref_array)
+        np.testing.assert_almost_equal(np_array, np_ref_array)
         print("Verified")
+
+    def _binary_op(self, op, other, reverse=False):
+        if isinstance(other, DebugArray):
+            ary = op(self.array, other.array)
+            ref_ary = op(self.ref_array, other.ref_array)
+        else:
+            assert isinstance(other, Number)
+            ary = op(self.array, other)
+            ref_ary = op(self.ref_array, other)
+
+        result_dbg_ary = DebugArray(self.actx, ary,
+                                    self.ref_actx, ref_ary)
+
+        # DEBUG #
+        result_dbg_ary.debug()
+
+        return result_dbg_ary
+
+    def _unary_op(self, op):
+        ary = op(self.array)
+        ref_ary = op(self.ref_array)
+
+        result_dbg_ary = DebugArray(self.actx, ary,
+                                    self.ref_actx, ref_ary)
+
+        # DEBUG #
+        result_dbg_ary.debug()
+
+        return result_dbg_ary
+
+    @property
+    def shape(self):
+        assert self.array.shape == self.ref_array.shape
+        return self.array.shape
+
+    @property
+    def dtype(self):
+        assert self.array.dtype == self.ref_array.dtype
+        return self.array.dtype
+
+    __mul__ = partialmethod(_binary_op, operator.mul)
+    __rmul__ = partialmethod(_binary_op, operator.mul, reverse=True)
+
+    __add__ = partialmethod(_binary_op, operator.add)
+    __radd__ = partialmethod(_binary_op, operator.add, reverse=True)
+
+    __sub__ = partialmethod(_binary_op, operator.sub)
+    __rsub__ = partialmethod(_binary_op, operator.sub, reverse=True)
+
+    __truediv__ = partialmethod(_binary_op, operator.truediv)
+    __rtruediv__ = partialmethod(_binary_op, operator.truediv, reverse=True)
+
+    __pow__ = partialmethod(_binary_op, operator.pow)
+    __rpow__ = partialmethod(_binary_op, operator.pow, reverse=True)
+
+    __neg__ = partialmethod(_unary_op, operator.neg)
 
 
 class DebugArrayContext(ArrayContext):
@@ -689,7 +774,7 @@ class DebugArrayContext(ArrayContext):
 
         assert result.keys() == ref_result.keys()
 
-        result_dict = {}
+        dbg_array_result_dict = {}
 
         for key in result.keys():
             val = result[key]
@@ -701,9 +786,9 @@ class DebugArrayContext(ArrayContext):
             # DEBUG #
             result_as_debug_array.debug()
 
-            result_dict[key] = result_as_debug_array
+            dbg_array_result_dict[key] = result_as_debug_array
 
-        return result_as_debug_array
+        return dbg_array_result_dict
 
     def freeze(self, array):
         result = DebugArray(self.actx, self.actx.freeze(array.array),
