@@ -221,8 +221,8 @@ def flatten(ary: np.ndarray) -> Any:
 
     actx = ary.array_context
 
-    return actx.np.concatenate(actx.np.reshape(grp_ary, (-1,))
-                               for grp_ary in ary)
+    return actx.np.concatenate([actx.np.reshape(grp_ary, (-1,))
+                                for grp_ary in ary])
 
 
 def unflatten(actx: ArrayContext, discr, ary,
