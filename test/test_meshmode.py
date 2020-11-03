@@ -497,15 +497,29 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
 
 # {{{ boundary-to-all-faces connecttion
 
+@pytest.mark.parametrize("group_factory", [
+    InterpolatoryQuadratureSimplexGroupFactory,
+    PolynomialWarpAndBlendGroupFactory,
+    LegendreGaussLobattoTensorProductGroupFactory,
+    ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
     ("blob", 2, [1e-1, 8e-2, 5e-2]),
     ("warp", 2, [10, 20, 30]),
     ("warp", 3, [10, 20, 30]),
     ])
 @pytest.mark.parametrize("per_face_groups", [False, True])
-def test_all_faces_interpolation(actx_factory, mesh_name, dim, mesh_pars,
-        per_face_groups):
+def test_all_faces_interpolation(actx_factory, group_factory,
+        mesh_name, dim, mesh_pars, per_face_groups):
+    if (group_factory is LegendreGaussLobattoTensorProductGroupFactory
+            and mesh_name == "blob"):
+        pytest.skip("tensor products not implemented on blobs")
+
     actx = actx_factory()
+
+    if group_factory is LegendreGaussLobattoTensorProductGroupFactory:
+        group_cls = TensorProductElementGroup
+    else:
+        group_cls = SimplexElementGroup
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
@@ -540,7 +554,8 @@ def test_all_faces_interpolation(actx_factory, mesh_name, dim, mesh_pars,
             print("END GEN")
         elif mesh_name == "warp":
             from meshmode.mesh.generation import generate_warped_rect_mesh
-            mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par)
+            mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par,
+                    group_cls=group_cls)
 
             h = 1/mesh_par
         else:
@@ -548,13 +563,12 @@ def test_all_faces_interpolation(actx_factory, mesh_name, dim, mesh_pars,
 
         # }}}
 
-        vol_discr = Discretization(actx, mesh,
-                PolynomialWarpAndBlendGroupFactory(order))
+        vol_discr = Discretization(actx, mesh, group_factory(order))
         print("h=%s -> %d elements" % (
                 h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
         all_face_bdry_connection = make_face_restriction(
-                actx, vol_discr, PolynomialWarpAndBlendGroupFactory(order),
+                actx, vol_discr, group_factory(order),
                 FACE_RESTR_ALL, per_face_groups=per_face_groups)
         all_face_bdry_discr = all_face_bdry_connection.to_discr
 
@@ -579,7 +593,7 @@ def test_all_faces_interpolation(actx_factory, mesh_name, dim, mesh_pars,
                 FACE_RESTR_INTERIOR,
                 ]:
             bdry_connection = make_face_restriction(
-                    actx, vol_discr, PolynomialWarpAndBlendGroupFactory(order),
+                    actx, vol_discr, group_factory(order),
                     boundary_tag, per_face_groups=per_face_groups)
             bdry_discr = bdry_connection.to_discr
 
@@ -608,18 +622,28 @@ def test_all_faces_interpolation(actx_factory, mesh_name, dim, mesh_pars,
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory
+    PolynomialWarpAndBlendGroupFactory,
+    LegendreGaussLobattoTensorProductGroupFactory,
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
     ("segment", 1, [8, 16, 32]),
     ("blob", 2, [1e-1, 8e-2, 5e-2]),
     ("warp", 2, [3, 5, 7]),
-    ("warp", 3, [3, 5])
+    ("warp", 3, [5, 7])
     ])
 def test_opposite_face_interpolation(actx_factory, group_factory,
         mesh_name, dim, mesh_pars):
+    if (group_factory is LegendreGaussLobattoTensorProductGroupFactory
+            and mesh_name in ["segment", "blob"]):
+        pytest.skip("tensor products not implemented on blobs")
+
     logging.basicConfig(level=logging.INFO)
     actx = actx_factory()
+
+    if group_factory is LegendreGaussLobattoTensorProductGroupFactory:
+        group_cls = TensorProductElementGroup
+    else:
+        group_cls = SimplexElementGroup
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
@@ -643,7 +667,8 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
             from meshmode.mesh.generation import generate_box_mesh
             mesh = generate_box_mesh(
                     [np.linspace(-0.5, 0.5, mesh_par)],
-                    order=order)
+                    order=order,
+                    group_cls=group_cls)
             h = 1.0 / mesh_par
         elif mesh_name == "blob":
             assert dim == 2
@@ -662,7 +687,8 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
             print("END GEN")
         elif mesh_name == "warp":
             from meshmode.mesh.generation import generate_warped_rect_mesh
-            mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par)
+            mesh = generate_warped_rect_mesh(dim, order=order, n=mesh_par,
+                    group_cls=group_cls)
 
             h = 1/mesh_par
         else:
@@ -692,7 +718,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
     print(eoc_rec)
     assert (
             eoc_rec.order_estimate() >= order-0.5
-            or eoc_rec.max_error() < 1e-13)
+            or eoc_rec.max_error() < 1.5e-13)
 
 # }}}
 
