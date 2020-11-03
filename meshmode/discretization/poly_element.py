@@ -355,17 +355,17 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
 class _TensorProductElementGroupBase(PolynomialElementGroupBase):
     # {{{ 1D basis
 
-    def basis_1d(self):
+    def _basis_1d(self):
         from modepy.modes import jacobi
         from functools import partial
         return tuple(partial(jacobi, 0, 0, i) for i in range(self.order + 1))
 
-    def grad_basis_1d(self):
+    def _grad_basis_1d(self):
         from modepy.modes import grad_jacobi
         from functools import partial
         return tuple(partial(grad_jacobi, 0, 0, i) for i in range(self.order + 1))
 
-    def unit_nodes_1d(self):
+    def _unit_nodes_1d(self):
         raise NotImplementedError
 
     # }}}
@@ -375,18 +375,18 @@ class _TensorProductElementGroupBase(PolynomialElementGroupBase):
 
     def basis(self):
         from modepy.modes import tensor_product_basis
-        return tensor_product_basis(self.dim, self.basis_1d())
+        return tensor_product_basis(self.dim, self._basis_1d())
 
     def grad_basis(self):
         from modepy.modes import grad_tensor_product_basis
         return grad_tensor_product_basis(self.dim,
-                self.basis_1d(), self.grad_basis_1d())
+                self._basis_1d(), self._grad_basis_1d())
 
     @property
     @memoize_method
     def unit_nodes(self):
         from modepy.nodes import tensor_product_nodes
-        return tensor_product_nodes(self.dim, self.unit_nodes_1d())
+        return tensor_product_nodes(self.dim, self._unit_nodes_1d())
 
     @memoize_method
     def from_mesh_interp_matrix(self):
@@ -409,17 +409,20 @@ class InterpolatoryQuadratureTensorProductElementGroup(
 
     @memoize_method
     def _quadrature_rule_1d(self):
-        from modepy.quadrature import LegendreGaussQuadrature
-        return LegendreGaussQuadrature(self.order)
+        import modepy as mp
+        return mp.LegendreGaussQuadrature(self.order)
 
-    def unit_nodes_1d(self):
-        return self._quadrature_rule().nodes
+    def _unit_nodes_1d(self):
+        return self._quadrature_rule_1d().nodes
 
     @property
-    @memoize_method
     def weights(self):
-        from modepy.nodes import tensor_product_nodes
-        return tensor_product_nodes(self.dim, self._quadrature_rule().weights)
+        from itertools import product
+        weights = self._quadrature_rule_1d().weights
+        return np.fromiter(
+                (np.prod(w) for w in product(weights, repeat=self.dim)),
+                dtype=np.float,
+                count=self.order**self.dim)
 
 
 class LegendreGaussLobattoTensorProductElementGroup(
@@ -432,7 +435,7 @@ class LegendreGaussLobattoTensorProductElementGroup(
     Uses :func:`~modepy.quadrature.jacobi_gauss.legendre_gauss_lobatto_nodes`.
     """
 
-    def unit_nodes_1d(self):
+    def _unit_nodes_1d(self):
         from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
         return legendre_gauss_lobatto_nodes(self.order)
 
@@ -446,7 +449,7 @@ class EquidistantTensorProductElementGroup(_TensorProductElementGroupBase):
     Uses :func:`~modepy.equidistant_nodes`.
     """
 
-    def unit_nodes_1d(self):
+    def _unit_nodes_1d(self):
         from modepy.nodes import equidistant_nodes
         return equidistant_nodes(1, self.order)[0]
 
