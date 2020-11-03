@@ -554,7 +554,6 @@ class PytatoArrayContext(ArrayContext):
     def call_loopy(self, program, **kwargs):
         # FIXME:always happens eagerly
         import pytato as pt
-        import pyopencl.array as cla
         from numbers import Number
         prg_kwargs = {}
 
@@ -572,13 +571,13 @@ class PytatoArrayContext(ArrayContext):
             elif isinstance(arg, pt.array.IndexRemappingBase):
                 # FIXME: Eager alert
                 prg_kwargs[arg_name] = self.freeze(arg).data
-            elif isinstance(arg, cla.Array):
-                prg_kwargs[arg_name] = arg
             else:
                 raise NotImplementedError(f"Not implemented for {arg_name} of"
                         f" type {type(arg)}")
 
-        options = program.options
+        entrypoint, = program.entrypoints.copy()
+
+        options = program[entrypoint].options
         if not (options.return_dict and options.no_numpy):
             raise ValueError("Loopy program passed to call_loopy must "
                     "have return_dict and no_numpy options set. "
