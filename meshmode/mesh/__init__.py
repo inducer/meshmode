@@ -397,15 +397,17 @@ class TensorProductElementGroup(MeshElementGroup):
 
 
               ^ s
-              |  6-----7
-              | /|    /|
-              |/ |   / |
-              2-----3  |
-              |  |  |  |
-              |  4--|--5
-              | /   | /
-              |/    |/
-              0-----1---->r
+              |   6-----------7
+              |  /|          /|
+              | / |   ^     / |
+              |/  |  / t   /  |
+              2-----------3   |
+              |   |/      |   |
+              |   4-------|---5
+              |  /        |  /
+              | /         | /
+              |/          |/
+              0-----------1---->r
 
         For general dimensions, follow binary upward counting:
         000, 001, 010, 011, ...
