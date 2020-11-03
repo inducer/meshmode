@@ -353,7 +353,7 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
 # {{{ concrete element groups for tensor product elements
 
 class _TensorProductElementGroupBase(PolynomialElementGroupBase):
-    # {{{
+    # {{{ 1D basis
 
     def basis_1d(self):
         from modepy.modes import jacobi
@@ -427,7 +427,7 @@ class LegendreGaussLobattoTensorProductElementGroup(
     """Elemental discretization supplying a high-order quadrature rule
     with a number of nodes matching the number of polynomials in the tensor
     product basis, hence usable for differentiation and interpolation.
-    Nodes are present on the boundary of the hypercube.
+    Nodes sufficient for unisolvency are present on the boundary of the hypercube.
 
     Uses :func:`~modepy.quadrature.jacobi_gauss.legendre_gauss_lobatto_nodes`.
     """
@@ -441,7 +441,7 @@ class EquidistantTensorProductElementGroup(_TensorProductElementGroupBase):
     """Elemental discretization supplying a high-order quadrature rule
     with a number of nodes matching the number of polynomials in the tensor
     product basis, hence usable for differentiation and interpolation.
-    Nodes are present on the boundary of the hypercube.
+    Nodes sufficient for unisolvency are present on the boundary of the hypercube.
 
     Uses :func:`~modepy.equidistant_nodes`.
     """
