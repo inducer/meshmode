@@ -371,10 +371,11 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
     InterpolatoryQuadratureSimplexGroupFactory,
     PolynomialWarpAndBlendGroupFactory,
     partial(PolynomialRecursiveNodesGroupFactory, family="lgl"),
+
+    # Redundant, no information gain.
     # partial(PolynomialRecursiveNodesGroupFactory, family="gc"),
 
-    # FIXME: need support in make_face_restriction
-    # LegendreGaussLobattoTensorProductGroupFactory,
+    LegendreGaussLobattoTensorProductGroupFactory,
     ])
 @pytest.mark.parametrize("boundary_tag", [
     BTAG_ALL,
@@ -383,10 +384,14 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
     ("blob", 2, ["8e-2", "6e-2", "4e-2"]),
+
+    # If "warp" works, "rect" likely does, too.
+    # ("rect", 3, [10, 20, 30]),
+
     ("warp", 2, [10, 20, 30]),
     ("warp", 3, [10, 20, 30]),
     ])
-@pytest.mark.parametrize("per_face_groups", [False, True])
+@pytest.mark.parametrize("per_face_groups", [True, False])
 def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
         mesh_name, dim, mesh_pars, per_face_groups):
     if (group_factory is LegendreGaussLobattoTensorProductGroupFactory
@@ -439,6 +444,13 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
                     group_cls=group_cls)
 
             h = 1/mesh_par
+
+        elif mesh_name == "rect":
+            from meshmode.mesh.generation import generate_regular_rect_mesh
+            mesh = generate_regular_rect_mesh(a=(0,)*dim, b=(1,)*dim,
+                    order=4, n=(mesh_par,)*dim, group_cls=group_cls)
+
+            h = 1/mesh_par
         else:
             raise ValueError("mesh_name not recognized")
 
@@ -478,7 +490,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
     print(eoc_rec)
     assert (
             eoc_rec.order_estimate() >= order-order_slack
-            or eoc_rec.max_error() < 3e-14)
+            or eoc_rec.max_error() < 1e-13)
 
 # }}}
 

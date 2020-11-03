@@ -385,13 +385,30 @@ class TensorProductElementGroup(MeshElementGroup):
     def __init__(self, order, vertex_indices, nodes,
             element_nr_base=None, node_nr_base=None,
             unit_nodes=None):
-        """
+        r"""
         :arg order: the maximum total degree used for interpolation.
         :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
             The nodes are assumed to be mapped versions of *unit_nodes*.
         :arg unit_nodes: ``[dim, nunit_nodes]``
             The unit nodes of which *nodes* is a mapped
             version.
+
+        The vertex order in 3D is as follows ::
+
+
+              ^ s
+              |  6-----7
+              | /|    /|
+              |/ |   / |
+              2-----3  |
+              |  |  |  |
+              |  4--|--5
+              | /   | /
+              |/    |/
+              0-----1---->r
+
+        For general dimensions, follow binary upward counting:
+        000, 001, 010, 011, ...
 
         Do not supply *element_nr_base* and *node_nr_base*, they will be
         automatically assigned.
@@ -426,12 +443,19 @@ class TensorProductElementGroup(MeshElementGroup):
                     )
         elif self.dim == 3:
             return (
-                    (0, 2, 1, 3),
-                    (4, 6, 5, 7),
-                    (0, 4, 5, 1),
-                    (2, 6, 7, 3),
-                    (0, 4, 6, 2),
-                    (1, 5, 7, 3),
+                    # binary is tsr
+
+                    # rs-aligned
+                    (0b000, 0b001, 0b010, 0b011,),
+                    (0b100, 0b101, 0b110, 0b111,),
+
+                    # st-aligned
+                    (0b000, 0b010, 0b100, 0b110,),
+                    (0b001, 0b011, 0b101, 0b111,),
+
+                    # rt-aligned
+                    (0b000, 0b001, 0b100, 0b101,),
+                    (0b010, 0b011, 0b110, 0b111,),
                     )
         else:
             raise NotImplementedError(f"dimension {self.dim}")

@@ -75,7 +75,9 @@ def _build_boundary_connection(actx, vol_discr, bdry_discr, connection_data,
             data = connection_data[igrp, face_id]
 
             bdry_unit_nodes_01 = (bdry_grp.unit_nodes + 1)*0.5
-            result_unit_nodes = (np.dot(data.A, bdry_unit_nodes_01).T + data.b).T
+            result_unit_nodes = (
+                    np.dot(data.face_basis.T, bdry_unit_nodes_01).T
+                    + data.face_offset).T
 
             batches.append(
                 InterpolationBatch(
@@ -208,7 +210,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
 
     # }}}
 
-    from meshmode.mesh import Mesh, SimplexElementGroup
+    from meshmode.mesh import Mesh, SimplexElementGroup, TensorProductElementGroup
     bdry_mesh_groups = []
     connection_data = {}
 
@@ -220,9 +222,10 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
 
         mgrp = grp.mesh_el_group
 
-        if not isinstance(mgrp, SimplexElementGroup):
+        if not isinstance(mgrp, (SimplexElementGroup, TensorProductElementGroup)):
             raise NotImplementedError("can only take boundary of "
-                    "SimplexElementGroup-based meshes")
+                    "meshes based on SimplexElementGroup and "
+                    "TensorProductElementGroup")
 
         # {{{ pull together per-group face lists
 
@@ -282,14 +285,31 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
                 else:
                     ngroup_bdry_elements = len(group_boundary_faces)
 
+                # make up some not-terrible nodes for the boundary Mesh
+                if isinstance(mgrp, SimplexElementGroup):
+                    bdry_unit_nodes = mp.warp_and_blend_nodes(mgrp.dim-1, mgrp.order)
+                    vol_basis = mp.simplex_onb(mgrp.dim, mgrp.order)
+
+                    nbdry_el_vertices = (mgrp.dim-1) + 1
+
+                elif isinstance(mgrp, TensorProductElementGroup):
+                    bdry_unit_nodes = \
+                            mp.legendre_gauss_lobatto_tensor_product_nodes(
+                                    mgrp.dim-1, mgrp.order)
+                    vol_basis = mp.legendre_tensor_product_basis(
+                            mgrp.dim, mgrp.order)
+
+                    nbdry_el_vertices = 2**(mgrp.dim-1)
+
+                else:
+                    assert False
+
                 vertex_indices = np.empty(
-                        (ngroup_bdry_elements, mgrp.dim+1-1),
+                        (ngroup_bdry_elements, nbdry_el_vertices),
                         mgrp.vertex_indices.dtype)
 
-                bdry_unit_nodes = mp.warp_and_blend_nodes(mgrp.dim-1, mgrp.order)
                 bdry_unit_nodes_01 = (bdry_unit_nodes + 1)*0.5
 
-                vol_basis = mp.simplex_onb(mgrp.dim, mgrp.order)
                 nbdry_unit_nodes = bdry_unit_nodes_01.shape[-1]
                 nodes = np.empty(
                         (discr.ambient_dim, ngroup_bdry_elements, nbdry_unit_nodes),
@@ -310,16 +330,52 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
             face_vertex_unit_coordinates = \
                     grp_vertex_unit_coordinates[loc_face_vertices]
 
-            # Find A, b such that A [e_1 e_2] + b = [r_1 r_2]
+            # Find face_basis, face_offset such that
+            # face_basis.T @ [e_1 e_2] + face_offset == [r_1 r_2].
+            #
             # (Notation assumes that the volume is 3D and the face is 2D.
             # Code does not.)
 
-            b = face_vertex_unit_coordinates[0]
-            A = (  # noqa
+            face_offset = face_vertex_unit_coordinates[0]
+            face_basis = (
                     face_vertex_unit_coordinates[1:]
-                    - face_vertex_unit_coordinates[0]).T
+                    - face_offset)
 
-            face_unit_nodes = (np.dot(A, bdry_unit_nodes_01).T + b).T
+            if isinstance(mgrp, SimplexElementGroup):
+                # no further action required
+                pass
+
+            elif isinstance(mgrp, TensorProductElementGroup):
+                if mgrp.dim <= 2:
+                    # faces are simplices, no action required
+                    pass
+
+                elif mgrp.dim == 3:
+                    # Drop the trailing basis vector, so that the convex
+                    # combination of the remaining two is a subset of the face.
+                    reduced_face_basis = face_basis[:-1]
+
+                    # FIXME: This makes the tests pass, but I do not understand
+                    # why this reversal is necessary.
+                    reduced_face_basis = reduced_face_basis[::-1]
+
+                    # assert that all basis vectors are axis-aligned
+                    for bvec in reduced_face_basis:
+                        assert sum(abs(entry) > 1e-13 for entry in bvec) == 1
+
+                    face_basis = reduced_face_basis
+                    del reduced_face_basis
+
+                else:
+                    raise NotImplementedError(
+                            f"face restriction of a {mgrp.dim}D hypercube")
+
+            else:
+                assert False
+
+            face_unit_nodes = (
+                    np.dot(face_basis.T, bdry_unit_nodes_01).T
+                    + face_offset).T
 
             resampling_mat = mp.resampling_matrix(
                     vol_basis,
@@ -346,14 +402,14 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
             connection_data[igrp, face_id] = _ConnectionBatchData(
                     group_source_element_indices=batch_boundary_el_numbers_in_grp,
                     group_target_element_indices=new_el_numbers,
-                    A=A,
-                    b=b,
+                    face_basis=face_basis,
+                    face_offset=face_offset,
                     )
 
             is_last_face = face_id + 1 == mgrp.nfaces
 
             if per_face_groups or is_last_face:
-                bdry_mesh_group = SimplexElementGroup(
+                bdry_mesh_group = type(mgrp)(
                         mgrp.order, vertex_indices, nodes,
                         unit_nodes=bdry_unit_nodes)
                 bdry_mesh_groups.append(bdry_mesh_group)
