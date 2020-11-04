@@ -743,11 +743,11 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     from pytools import product
     nvertices = product(shape)
 
-    vertex_indices = np.arange(nvertices).reshape(*shape, order="F")
+    vertex_indices = np.arange(nvertices).reshape(*shape)
 
     vertices = np.empty((dim,)+shape, dtype=coord_dtype)
     for idim in range(dim):
-        vshape = (shape[idim],) + (1,)*idim
+        vshape = (shape[idim],) + (1,)*(dim-1-idim)
         vertices[idim] = axis_coords[idim].reshape(*vshape)
 
     vertices = vertices.reshape(dim, -1)
