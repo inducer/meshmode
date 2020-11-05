@@ -142,9 +142,9 @@ def _get_face_vertices(mesh, boundary_tag):
 
         # }}}
     else:
-        # For FRESTR_INTERIOR_FACES, this is likely every vertex in the book.
+        # For FACE_RESTR_INTERIOR, this is likely every vertex in the book.
         # Don't ever bother trying to cut the list down.
-        # For FRESTR_ALL_FACES, it literally is every single vertex.
+        # For FACE_RESTR_ALL, it literally is every single vertex.
 
         return np.arange(mesh.nvertices, dtype=np.intp)
 
@@ -338,7 +338,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
 
             face_offset = face_vertex_unit_coordinates[0]
             face_basis = (
-                    face_vertex_unit_coordinates[1:]
+                    face_vertex_unit_coordinates[1:mgrp.dim]
                     - face_offset)
 
             if isinstance(mgrp, SimplexElementGroup):
@@ -351,20 +351,13 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
                     pass
 
                 elif mgrp.dim == 3:
-                    # Drop the trailing basis vector, so that the convex
-                    # combination of the remaining two is a subset of the face.
-                    reduced_face_basis = face_basis[:-1]
-
                     # FIXME: This makes the tests pass, but I do not understand
                     # why this reversal is necessary.
-                    reduced_face_basis = reduced_face_basis[::-1]
+                    face_basis = face_basis[::-1]
 
                     # assert that all basis vectors are axis-aligned
-                    for bvec in reduced_face_basis:
+                    for bvec in face_basis:
                         assert sum(abs(entry) > 1e-13 for entry in bvec) == 1
-
-                    face_basis = reduced_face_basis
-                    del reduced_face_basis
 
                 else:
                     raise NotImplementedError(

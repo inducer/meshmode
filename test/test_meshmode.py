@@ -490,7 +490,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
     print(eoc_rec)
     assert (
             eoc_rec.order_estimate() >= order-order_slack
-            or eoc_rec.max_error() < 1e-13)
+            or eoc_rec.max_error() < 1.5e-13)
 
 # }}}
 
