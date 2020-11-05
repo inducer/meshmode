@@ -50,7 +50,8 @@ def make_loopy_program(domains, statements, kernel_data=["..."],
             options=lp.Options(
                 no_numpy=True,
                 return_dict=True),
-            default_offset=lp.auto,
+            # FIXME: Not sure why is this here.
+            # default_offset=lp.auto,
             name=name,
             lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
@@ -555,22 +556,17 @@ class PytatoArrayContext(ArrayContext):
         # FIXME:always happens eagerly
         import pytato as pt
         from numbers import Number
-        prg_kwargs = {}
+        bindings = {}
 
         assert not any(isinstance(arg, pt.Placeholder) for arg in
                 kwargs.values())
 
         for arg_name, arg in kwargs.items():
-            if isinstance(arg, pt.array.DataWrapper):
-                prg_kwargs[arg_name] = arg.data
+            if isinstance(arg, pt.array.Array):
+                bindings[arg_name] = arg
             elif isinstance(arg, Number):
-                prg_kwargs[arg_name] = arg
-            elif isinstance(arg, pt.array.IndexLambda):
-                # FIXME: Eager alert
-                prg_kwargs[arg_name] = self.freeze(arg).data
-            elif isinstance(arg, pt.array.IndexRemappingBase):
-                # FIXME: Eager alert
-                prg_kwargs[arg_name] = self.freeze(arg).data
+                program = lp.fix_parameters(program, **{arg_name: arg})
+                # bindings[arg_name] = arg
             else:
                 raise NotImplementedError(f"Not implemented for {arg_name} of"
                         f" type {type(arg)}")
@@ -584,10 +580,7 @@ class PytatoArrayContext(ArrayContext):
                     "Did you use meshmode.array_context.make_loopy_program "
                     "to create this program?")
 
-        evt, result = program(self.queue, **prg_kwargs)
-        pt_results = {res_name: pt.make_data_wrapper(self.ns, res)
-                      for res_name, res in result.items()}
-        return pt_results
+        return pt.call_loopy(self.ns, program, bindings)
 
     def freeze(self, array):
         import pytato as pt

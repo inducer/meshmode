@@ -417,6 +417,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     batch.from_element_indices)
                 kwargs[f"to_element_indices_{i_batch}"] = (
                     batch.to_element_indices)
+                kwargs[f"nelements_{i_batch}"] = batch.to_element_indices.size
 
                 kernels.append(knl)
 

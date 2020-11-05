@@ -299,7 +299,10 @@ class Discretization:
 
         return _DOFArray.from_list(actx, [
                 actx.call_loopy(
-                    prg(), diff_mat=actx.from_numpy(get_mat(grp)), vec=vec[grp.index]
+                    prg(), diff_mat=actx.from_numpy(get_mat(grp)),
+                    vec=vec[grp.index],
+                    nunit_dofs=grp.nunit_dofs,
+                    nelements=grp.nelements,
                     )["result"]
                 for grp in self.groups])
 
@@ -345,7 +348,7 @@ class Discretization:
                     result[iel, idof] = \
                         sum(j, resampling_mat[idof, j] * nodes[iel, j])
                     """,
-                name="nodes")
+                name="lp_nodes")
 
         return make_obj_array([
             _DOFArray.from_list(None, [
@@ -354,7 +357,10 @@ class Discretization:
                         prg(),
                         resampling_mat=actx.from_numpy(
                             grp.from_mesh_interp_matrix()),
-                        nodes=actx.from_numpy(grp.mesh_el_group.nodes[iaxis])
+                        nodes=actx.from_numpy(grp.mesh_el_group.nodes[iaxis]),
+                        ndiscr_nodes=grp.nunit_dofs,
+                        nelements=grp.nelements,
+                        nmesh_nodes=grp.mesh_el_group.nunit_nodes,
                         )["result"])
                 for grp in self.groups])
             for iaxis in range(self.ambient_dim)])
