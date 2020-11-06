@@ -422,7 +422,7 @@ class InterpolatoryQuadratureTensorProductElementGroup(
         return np.fromiter(
                 (np.prod(w) for w in product(weights, repeat=self.dim)),
                 dtype=np.float,
-                count=self.order**self.dim)
+                count=(self.order + 1)**self.dim)
 
 
 class LegendreGaussLobattoTensorProductElementGroup(
