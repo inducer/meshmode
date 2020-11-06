@@ -393,7 +393,7 @@ class _TensorProductElementGroupBase(PolynomialElementGroupBase):
         from modepy.modes import legendre_tensor_product_basis
         meg = self.mesh_el_group
         return mp.resampling_matrix(
-                legendre_tensor_product_basis(self.dim, self.order),
+                legendre_tensor_product_basis(self.dim, meg.order),
                 self.unit_nodes,
                 meg.unit_nodes)
 
