@@ -1261,32 +1261,63 @@ def test_quad_mesh_2d(ambient_dim, filename, visualize=False):
 
 # {{{ test_quad_mesh_3d
 
-# This currently (gmsh 2.13.2) crashes gmsh. A massaged version of this using
-# 'cube.step' succeeded in generating 'hybrid-cube.msh' and 'cubed-cube.msh'.
-def no_test_quad_mesh_3d():
-    from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
-    print("BEGIN GEN")
-    mesh = generate_gmsh(
-            ScriptWithFilesSource(
-                """
-                Merge "ball-radius-1.step";
-                // Mesh.CharacteristicLengthMax = 0.1;
+@pytest.mark.parametrize("mesh_name", [
+    # this currently (2020-11-05 with gmsh 4.6.0) does not recombine anything
+    # or flat out crashes gmsh
+    # "ball",
 
-                Mesh.RecombineAll=1;
-                Mesh.Recombine3DAll=1;
-                Mesh.Algorithm = 8;
-                Mesh.Algorithm3D = 9;
-                // Mesh.Smoothing = 0;
+    "cube",
+    ])
+def test_quad_mesh_3d(mesh_name, visualize=False):
+    if mesh_name == "ball":
+        from meshmode.mesh.io import ScriptWithFilesSource
+        script = ScriptWithFilesSource(
+            """
+            Merge "ball-radius-1.step";
+            // Mesh.CharacteristicLengthMax = 0.1;
 
-                // Mesh.ElementOrder = 3;
+            Mesh.RecombineAll = 1;
+            Mesh.Recombine3DAll = 1;
+            Mesh.Recombine3DLevel = 2;
 
-                Mesh 3;
-                Save "output.msh";
-                """,
-                ["ball-radius-1.step"]),
-            )
-    print("END GEN")
-    print(mesh.nelements)
+            Mesh.Algorithm = 8;
+            Mesh.Algorithm3D = 8;
+
+            Mesh 3;
+            Save "output.msh";
+            """,
+            ["ball-radius-1.step"])
+
+        with open("ball-quad.geo", "w") as f:
+            f.write(script.source)
+
+    elif mesh_name == "cube":
+        from meshmode.mesh.io import ScriptSource
+        script = ScriptSource(
+            """
+            SetFactory("OpenCASCADE");
+            Box(1) = {0, 0, 0, 1, 1, 1};
+
+            Transfinite Line "*" = 8;
+            Transfinite Surface "*";
+            Transfinite Volume "*";
+
+            Mesh.RecombineAll = 1;
+            Mesh.Recombine3DAll = 1;
+            Mesh.Recombine3DLevel = 2;
+            """, "geo")
+    else:
+        raise ValueError(f"unknown mesh name: '{mesh_name}'")
+
+    from meshmode.mesh.io import generate_gmsh
+    logger.info("BEGIN GEN")
+    # FIXME: this fails when order = 2
+    mesh = generate_gmsh(script, 3, order=1, target_unit="MM")
+    logger.info("END GEN")
+
+    if visualize:
+        from meshmode.mesh.visualization import write_vertex_vtk_file
+        write_vertex_vtk_file(mesh, f"quad_mesh_3d_{mesh_name}.vtu", overwrite=True)
 
 # }}}
 
