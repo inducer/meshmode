@@ -46,6 +46,16 @@ __doc__ = """
 
 # {{{ gmsh receiver
 
+def _gmsh_node_shuffle(cls, order):
+    group = cls(order=order)
+    gmsh_node_dict = {gvt: i for i, gvt in enumerate(group.gmsh_node_tuples())}
+
+    from pytools import generate_nonnegative_integer_tuples_below as gnitb
+    return np.array([
+        gmsh_node_dict[nt] for nt in gnitb(order + 1, group.dimensions)
+        ])
+
+
 class GmshMeshReceiver(GmshMeshReceiverBase):
     def __init__(self, mesh_construction_kwargs=None):
         # Use data fields similar to meshpy.triangle.MeshInfo and
@@ -191,8 +201,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     continue
 
                 nodes[:, i] = self.points[el_nodes].T
-                vertex_indices[i] = [vertex_gmsh_index_to_mine[v_nr]
-                        for v_nr in el_vertices]
+                vertex_indices[i] = [
+                        vertex_gmsh_index_to_mine[v_nr] for v_nr in el_vertices
+                        ]
 
                 i += 1
 
@@ -213,16 +224,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                             np.ones(ngroup_elements, np.bool))
 
             elif isinstance(group_el_type, GmshTensorProductElementBase):
-                gmsh_vertex_tuples = type(group_el_type)(order=1).gmsh_node_tuples()
-                gmsh_vertex_tuples_loc_dict = {
-                        gvt: i
-                        for i, gvt in enumerate(gmsh_vertex_tuples)}
-
-                from pytools import (
-                        generate_nonnegative_integer_tuples_below as gnitb)
-                vertex_shuffle = np.array([
-                    gmsh_vertex_tuples_loc_dict[vt]
-                    for vt in gnitb(2, group_el_type.dimensions)])
+                vertex_shuffle = _gmsh_node_shuffle(type(group_el_type), 1)
 
                 group = TensorProductElementGroup(
                     group_el_type.order,
