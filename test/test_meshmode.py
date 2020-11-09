@@ -1298,7 +1298,7 @@ def test_quad_mesh_3d(mesh_name, order=3, visualize=False):
             SetFactory("OpenCASCADE");
             Box(1) = {0, 0, 0, 1, 1, 1};
 
-            Transfinite Line "*" = 1;
+            Transfinite Line "*" = 8;
             Transfinite Surface "*";
             Transfinite Volume "*";
 
