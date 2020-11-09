@@ -424,11 +424,11 @@ class GaussLegendreTensorProductElementGroup(_LegendreTensorProductElementGroup)
     """
     def __init__(self, mesh_el_group, order, index):
         import modepy as mp
-        quad = mp.LegendreGaussQuadrature(self.order)
+        quad = mp.LegendreGaussQuadrature(order)
 
         super().__init__(mesh_el_group, order, index,
                 unit_nodes_1d=quad.nodes,
-                quad_nodes_1d=quad.weights)
+                quad_weights_1d=quad.weights)
 
 
 class LegendreGaussLobattoTensorProductElementGroup(
