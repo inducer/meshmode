@@ -46,16 +46,6 @@ __doc__ = """
 
 # {{{ gmsh receiver
 
-def _gmsh_node_shuffle(cls, order):
-    group = cls(order=order)
-    gmsh_node_dict = {gvt: i for i, gvt in enumerate(group.gmsh_node_tuples())}
-
-    from pytools import generate_nonnegative_integer_tuples_below as gnitb
-    return np.array([
-        gmsh_node_dict[nt] for nt in gnitb(order + 1, group.dimensions)
-        ])
-
-
 class GmshMeshReceiver(GmshMeshReceiverBase):
     def __init__(self, mesh_construction_kwargs=None):
         # Use data fields similar to meshpy.triangle.MeshInfo and
@@ -224,7 +214,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                             np.ones(ngroup_elements, np.bool))
 
             elif isinstance(group_el_type, GmshTensorProductElementBase):
-                vertex_shuffle = _gmsh_node_shuffle(type(group_el_type), 1)
+                vertex_shuffle = type(group_el_type)(
+                        order=1).get_lexicographic_gmsh_node_indices()
 
                 group = TensorProductElementGroup(
                     group_el_type.order,

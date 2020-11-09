@@ -1268,7 +1268,7 @@ def test_quad_mesh_2d(ambient_dim, filename, visualize=False):
 
     "cube",
     ])
-def test_quad_mesh_3d(mesh_name, order=1, visualize=False):
+def test_quad_mesh_3d(mesh_name, order=3, visualize=False):
     if mesh_name == "ball":
         from meshmode.mesh.io import ScriptWithFilesSource
         script = ScriptWithFilesSource(
@@ -1312,7 +1312,6 @@ def test_quad_mesh_3d(mesh_name, order=1, visualize=False):
     np.set_printoptions(linewidth=200)
     from meshmode.mesh.io import generate_gmsh
     logger.info("BEGIN GEN")
-    # FIXME: this fails when order = 2
     mesh = generate_gmsh(script, 3, order=order, target_unit="MM")
     logger.info("END GEN")
 
