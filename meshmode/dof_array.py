@@ -42,7 +42,7 @@ __doc__ = """
 """
 
 
-class DOFTag(Tag):i
+class DOFTag(Tag):
     pass
 
 
