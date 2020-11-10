@@ -41,8 +41,10 @@ __doc__ = """
 .. autofunction:: flat_norm
 """
 
-class DOFTag(Tag):
+
+class DOFTag(Tag):i
     pass
+
 
 # {{{ DOFArray
 
