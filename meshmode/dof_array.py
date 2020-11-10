@@ -28,9 +28,9 @@ import loopy as lp
 
 from pytools import single_valued, memoize_in
 from pytools.obj_array import obj_array_vectorize, obj_array_vectorize_n_args
+from pytools.tag import Tag
 
 from meshmode.array_context import ArrayContext, make_loopy_program
-
 
 __doc__ = """
 .. autoclass:: DOFArray
@@ -41,6 +41,8 @@ __doc__ = """
 .. autofunction:: flat_norm
 """
 
+class DOFTag(Tag):
+    pass
 
 # {{{ DOFArray
 
@@ -232,7 +234,7 @@ def flatten(ary: np.ndarray) -> Any:
             """result[grp_start + iel*ndofs_per_element + idof] \
                 = grp_ary[iel, idof]""",
             kernel_data=[
-                lp.GlobalArg("grp_ary", None, shape=lp.auto, tags="dof_array"),
+                lp.GlobalArg("grp_ary", None, shape=lp.auto, tags=DOFTag()),
                 ...
             ],
             name="flatten")
