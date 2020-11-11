@@ -156,7 +156,7 @@ class NodalDGContext(object):
             ) -> meshmode.dof_array.DOFArray:
         ary = self.octave.pull(name).T
 
-        return meshmode.dof_array.DOFArray.from_list(actx, [actx.from_numpy(ary)])
+        return meshmode.dof_array.DOFArray(actx, tuple(actx.from_numpy(ary)))
 
 
 def download_nodal_dg_if_not_present(path="nodal-dg"):
