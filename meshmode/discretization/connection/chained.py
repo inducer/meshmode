@@ -23,6 +23,7 @@ THE SOFTWARE.
 import numpy as np
 
 from pytools import Record
+from pytools.obj_array import obj_array_vectorized_n_args
 
 import modepy as mp
 from meshmode.discretization.connection.direct import \
@@ -61,11 +62,12 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
 
         self.connections = connections
 
-    def __call__(self, vec):
+    @obj_array_vectorized_n_args
+    def __call__(self, ary):
         for cnx in self.connections:
-            vec = cnx(vec)
+            ary = cnx(ary)
 
-        return vec
+        return ary
 
 # }}}
 
