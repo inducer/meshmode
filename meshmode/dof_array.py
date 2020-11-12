@@ -214,7 +214,6 @@ def obj_or_dof_array_vectorize(f, ary):
     if isinstance(ary, DOFArray):
         return ary._like_me([f(ary_i) for ary_i in ary._data])
     else:
-        from pytools import obj_array_vectorize
         return obj_array_vectorize(f, ary)
 
 
