@@ -191,7 +191,7 @@ def test_visualizers(actx_factory, dim, group_factory):
     discr = Discretization(actx, mesh, discr_group_factory(target_order))
 
     nodes = thaw(actx, discr.nodes())
-    f = actx.np.sqrt(sum(nodes**2))
+    f = actx.np.sqrt(sum(nodes**2)) + 1j*nodes[0]
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order)
