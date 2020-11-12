@@ -199,6 +199,9 @@ class DOFArray:
     def __and__(self, arg): return self._bop(operator.and_, self, arg)  # noqa: E704
     def __xor__(self, arg): return self._bop(operator.xor, self, arg)  # noqa: E704
     def __or__(self, arg): return self._bop(operator.or_, self, arg)  # noqa: E704
+    def __rand__(self, arg): return self._bop(operator.and_, arg, self)  # noqa: E704
+    def __rxor__(self, arg): return self._bop(operator.xor, arg, self)  # noqa: E704
+    def __ror__(self, arg): return self._bop(operator.or_, arg, self)  # noqa: E704
 
     # bit shifts unimplemented for now
 
