@@ -279,8 +279,9 @@ texinfo_documents = [
 #texinfo_no_detailmenu = False
 
 intersphinx_mapping = {
-    "https://docs.python.org/3/objects.inv": None,
-    "https://numpy.org/doc/stable/objects.inv": None,
+    "https://docs.python.org/3/": None,
+    "https://numpy.org/doc/stable/": None,
+    "https://documen.tician.de/pytools": None,
     "https://documen.tician.de/pyopencl": None,
     "https://documen.tician.de/meshpy": None,
     "https://documen.tician.de/modepy": None,
