@@ -25,7 +25,6 @@ import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method
-from pytools.obj_array import obj_array_vectorized_n_args
 
 __doc__ = """
 .. autofunction:: make_loopy_program
@@ -58,7 +57,7 @@ class _BaseFakeNumpyNamespace:
         self._array_context = array_context
 
     def __getattr__(self, name):
-        def f(*args):
+        def loopy_implemented_elwise_func(*args):
             actx = self._array_context
             # FIXME: Maybe involve loopy type inference?
             result = actx.empty(args[0].shape, args[0].dtype)
@@ -68,14 +67,15 @@ class _BaseFakeNumpyNamespace:
                     **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result
 
-        return obj_array_vectorized_n_args(f)
+        from meshmode.dof_array import obj_or_dof_array_vectorized_n_args
+        return obj_or_dof_array_vectorized_n_args(loopy_implemented_elwise_func)
 
-    @obj_array_vectorized_n_args
     def conjugate(self, x):
         # NOTE: conjugate distribute over object arrays, but it looks for a
         # `conjugate` ufunc, while some implementations only have the shorter
         # `conj` (e.g. cl.array.Array), so this should work for everybody
-        return x.conj()
+        from meshmode.dof_array import obj_or_dof_array_vectorize
+        return obj_or_dof_array_vectorize(lambda obj: obj.conj(), x)
 
     conj = conjugate
 
@@ -225,20 +225,21 @@ class ArrayContext:
 # {{{ PyOpenCLArrayContext
 
 class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
-    @obj_array_vectorized_n_args
     def maximum(self, x, y):
         import pyopencl.array as cl_array
-        return cl_array.maximum(x, y)
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(cl_array.maximum, x, y)
 
-    @obj_array_vectorized_n_args
     def minimum(self, x, y):
         import pyopencl.array as cl_array
-        return cl_array.minimum(x, y)
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(cl_array.minimum, x, y)
 
-    @obj_array_vectorized_n_args
     def where(self, criterion, then, else_):
         import pyopencl.array as cl_array
-        return cl_array.if_positive(criterion != 0, then, else_)
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(
+                cl_array.if_positive, criterion != 0, then, else_)
 
 
 class PyOpenCLArrayContext(ArrayContext):

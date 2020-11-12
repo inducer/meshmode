@@ -40,7 +40,7 @@ from meshmode.discretization.poly_element import (
         LegendreGaussLobattoTensorProductGroupFactory
         )
 from meshmode.mesh import Mesh, BTAG_ALL
-from meshmode.dof_array import thaw, flat_norm, flatten, unflatten
+from meshmode.dof_array import thaw, flat_norm, flatten
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -191,7 +191,7 @@ def test_visualizers(actx_factory, dim, group_factory):
     discr = Discretization(actx, mesh, discr_group_factory(target_order))
 
     nodes = thaw(actx, discr.nodes())
-    f = actx.np.sqrt(sum(nodes**2))
+    f = actx.np.sqrt(sum(nodes**2)) + 1j*nodes[0]
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order)
@@ -1587,74 +1587,6 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
 
     x = thaw(actx, discr.nodes())
     discr.num_reference_derivative(ref_axes, x[0])
-
-
-def test_array_context_np_workalike(actx_factory):
-    actx = actx_factory()
-
-    from meshmode.mesh.generation import generate_regular_rect_mesh
-    mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*2, b=(0.5,)*2, n=(8,)*2, order=3)
-
-    from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlendGroupFactory as GroupFactory
-    discr = Discretization(actx, mesh, GroupFactory(3))
-
-    for sym_name, n_args in [
-            ("sin", 1),
-            ("exp", 1),
-            ("arctan2", 2),
-            ("minimum", 2),
-            ("maximum", 2),
-            ("where", 3),
-            ("conj", 1),
-            ]:
-        args = [np.random.randn(discr.ndofs) for i in range(n_args)]
-        ref_result = getattr(np, sym_name)(*args)
-
-        actx_args = [unflatten(actx, discr, actx.from_numpy(arg)) for arg in args]
-
-        actx_result = actx.to_numpy(
-                flatten(getattr(actx.np, sym_name)(*actx_args)))
-
-        assert np.allclose(actx_result, ref_result)
-
-
-def test_dof_array_comparison(actx_factory):
-    actx = actx_factory()
-
-    from meshmode.mesh.generation import generate_regular_rect_mesh
-    mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*2, b=(0.5,)*2, n=(8,)*2, order=3)
-
-    from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlendGroupFactory as GroupFactory
-    discr = Discretization(actx, mesh, GroupFactory(3))
-
-    import operator
-    for op in [
-            operator.lt,
-            operator.le,
-            operator.gt,
-            operator.ge,
-            ]:
-        np_arg = np.random.randn(discr.ndofs)
-        arg = unflatten(actx, discr, actx.from_numpy(np_arg))
-        zeros = discr.zeros(actx)
-
-        comp = op(arg, zeros)
-        np_comp = actx.to_numpy(flatten(comp))
-        assert np.array_equal(np_comp, op(np_arg, 0))
-
-        comp = op(arg, 0)
-        np_comp = actx.to_numpy(flatten(comp))
-        assert np.array_equal(np_comp, op(np_arg, 0))
-
-        comp = op(0, arg)
-        np_comp = actx.to_numpy(flatten(comp))
-        assert np.array_equal(np_comp, op(0, np_arg))
 
 
 if __name__ == "__main__":
