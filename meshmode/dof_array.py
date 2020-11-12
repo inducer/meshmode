@@ -294,7 +294,7 @@ def freeze(ary: Union[DOFArray, np.ndarray]) -> np.ndarray:
         ary.array_context.freeze(subary) for subary in ary))
 
 
-def flatten(ary: Union[np.ndarray]) -> Any:
+def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
     r"""Convert a :class:`DOFArray` into a "flat" array of degrees of freedom,
     where the resulting type of the array is given by the
     :attr:`DOFArray.array_context`.
