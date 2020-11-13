@@ -440,7 +440,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
                     force_ambient_dim=2)
         elif mesh_name == "warp":
             from meshmode.mesh.generation import generate_warped_rect_mesh
-            mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par,
+            mesh = generate_warped_rect_mesh(dim, order=order, n=mesh_par,
                     group_cls=group_cls)
 
             h = 1/mesh_par
@@ -448,7 +448,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
         elif mesh_name == "rect":
             from meshmode.mesh.generation import generate_regular_rect_mesh
             mesh = generate_regular_rect_mesh(a=(0,)*dim, b=(1,)*dim,
-                    order=4, n=(mesh_par,)*dim, group_cls=group_cls)
+                    order=order, n=(mesh_par,)*dim, group_cls=group_cls)
 
             h = 1/mesh_par
         else:

@@ -337,9 +337,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
             # Code does not.)
 
             face_offset = face_vertex_unit_coordinates[0]
-            face_basis = (
-                    face_vertex_unit_coordinates[1:mgrp.dim]
-                    - face_offset)
+            face_basis = face_vertex_unit_coordinates[1:] - face_offset
 
             if isinstance(mgrp, SimplexElementGroup):
                 # no further action required
@@ -353,7 +351,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
                 elif mgrp.dim == 3:
                     # FIXME: This makes the tests pass, but I do not understand
                     # why this reversal is necessary.
-                    face_basis = face_basis[::-1]
+                    face_basis = face_basis[-2::-1]
 
                     # assert that all basis vectors are axis-aligned
                     for bvec in face_basis:
