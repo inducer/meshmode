@@ -346,7 +346,6 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
 
         return self._unit_nodes
 
-
 # }}}
 
 
@@ -392,8 +391,14 @@ class _TensorProductElementGroupBase(PolynomialElementGroupBase):
 
     @property
     def weights(self):
+        if self._quad_weights_1d is None:
+            import modepy as mp
+            mm = mp.mass_matrix(self._basis_1d(), self._unit_nodes_1d)
+            weights = mm @ np.ones(len(self._unit_nodes_1d))
+        else:
+            weights = self._quad_weights_1d
+
         from itertools import product
-        weights = self._quad_weights_1d
         return np.fromiter(
                 (np.prod(w) for w in product(weights, repeat=self.dim)),
                 dtype=np.float,
