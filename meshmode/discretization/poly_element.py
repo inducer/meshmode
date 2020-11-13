@@ -390,6 +390,7 @@ class _TensorProductElementGroupBase(PolynomialElementGroupBase):
                 meg.unit_nodes)
 
     @property
+    @memoize_method
     def weights(self):
         if self._quad_weights_1d is None:
             import modepy as mp
