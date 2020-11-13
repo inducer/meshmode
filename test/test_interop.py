@@ -35,34 +35,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def download_nodal_dg_if_not_present(path="nodal-dg"):
-    import os
-    if os.path.exists(path):
-        return
-
-    import tempfile
-    with tempfile.TemporaryDirectory() as tmp:
-        filename = os.path.join(tmp, "master.zip")
-
-        from pytools import download_from_web_if_not_present
-        download_from_web_if_not_present(
-                url="https://github.com/tcew/nodal-dg/archive/master.zip",
-                local_name=filename)
-
-        import zipfile
-        with zipfile.ZipFile(filename, "r") as zp:
-            zp.extractall(tmp)
-
-        if not os.path.exists(path):
-            import shutil
-            shutil.move(os.path.join(tmp, "nodal-dg-master"), path)
-
-
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_nodal_dg_interop(actx_factory, dim):
     pytest.importorskip("oct2py")
     actx = actx_factory()
 
+    from meshmode.interop.nodal_dg import download_nodal_dg_if_not_present
     download_nodal_dg_if_not_present()
     order = 4
 

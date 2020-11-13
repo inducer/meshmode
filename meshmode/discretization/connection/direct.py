@@ -25,6 +25,7 @@ import numpy as np
 
 import loopy as lp
 from pytools import memoize_in, keyed_memoize_method
+from pytools.obj_array import obj_array_vectorized_n_args
 from meshmode.array_context import ArrayContext, make_loopy_program
 
 
@@ -249,10 +250,14 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         return make_direct_full_resample_matrix(actx, self)
 
+    @obj_array_vectorized_n_args
     def __call__(self, ary):
         from meshmode.dof_array import DOFArray
         if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")
+
+        if ary.shape != (len(self.from_discr.groups),):
+            raise ValueError("invalid shape of incoming resampling data")
 
         actx = ary.array_context
 
@@ -310,9 +315,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             result = self.to_discr.empty(actx, dtype=ary.entry_dtype)
         else:
             result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
-
-        if ary.shape != (len(self.from_discr.groups),):
-            raise ValueError("invalid shape of incoming resampling data")
 
         for i_tgrp, (tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.groups)):

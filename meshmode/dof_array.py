@@ -22,17 +22,26 @@ THE SOFTWARE.
 
 import operator
 import numpy as np
-from typing import Optional, Iterable, Any
+from typing import Optional, Iterable, Any, Tuple, Union
 from functools import partial
+from numbers import Number
+import operator as op
+import decorator
 
 from pytools import single_valued, memoize_in
-from pytools.obj_array import obj_array_vectorize, obj_array_vectorize_n_args
+from pytools.obj_array import obj_array_vectorize
 
 from meshmode.array_context import ArrayContext, make_loopy_program
 
 
 __doc__ = """
 .. autoclass:: DOFArray
+
+.. autofunction:: obj_or_dof_array_vectorize
+.. autofunction:: obj_or_dof_array_vectorized
+.. autofunction:: obj_or_dof_array_vectorize_n_args
+.. autofunction:: obj_or_dof_array_vectorized_n_args
+
 .. autofunction:: thaw
 .. autofunction:: freeze
 .. autofunction:: flatten
@@ -43,9 +52,8 @@ __doc__ = """
 
 # {{{ DOFArray
 
-class DOFArray(np.ndarray):
-    """This array type is a subclass of :class:`numpy.ndarray` intended to hold
-    degree-of-freedom arrays for use with
+class DOFArray:
+    """This array type holds degree-of-freedom arrays for use with
     :class:`~meshmode.discretization.Discretization`,
     with one entry in the :class:`DOFArray` for each
     :class:`~meshmode.discretization.ElementGroupBase`.
@@ -56,9 +64,7 @@ class DOFArray(np.ndarray):
     of the associated group.
     ``ndofs_per_element`` is typically, but not necessarily, the same as
     :attr:`~meshmode.discretization.ElementGroupBase.nunit_dofs`
-    of the associated group.
-    This array is derived from :class:`numpy.ndarray` with dtype object ("an
-    object array").  The entries in this array are further arrays managed by
+    of the associated group. The entries in this array are further arrays managed by
     :attr:`array_context`.
 
     One main purpose of this class is to describe the data structure,
@@ -75,7 +81,10 @@ class DOFArray(np.ndarray):
         The (assumed uniform) :class:`numpy.dtype` of the group arrays
         contained in this instance.
 
-    .. automethod:: from_list
+    .. automethod:: __len__
+    .. automethod:: __getitem__
+
+    This object supports arithmetic, comparisons, and logic operators.
 
     .. note::
 
@@ -83,28 +92,23 @@ class DOFArray(np.ndarray):
         ``<=``, ``>=``. (:mod:`numpy` object arrays containing arrays do not.)
     """
 
-    # Follows https://numpy.org/devdocs/user/basics.subclassing.html
-
-    def __new__(cls, actx: Optional[ArrayContext], input_array):
+    def __init__(self, actx: Optional[ArrayContext], data: Tuple[Any]):
         if not (actx is None or isinstance(actx, ArrayContext)):
             raise TypeError("actx must be of type ArrayContext")
 
-        result = np.asarray(input_array).view(cls)
-        if len(result.shape) != 1:
-            raise ValueError("DOFArray instances must have one-dimensional "
-                    "shape, with one entry per element group")
+        if not isinstance(data, tuple):
+            raise TypeError("'data' argument must be a tuple")
 
-        result.array_context = actx
-        return result
+        self.array_context = actx
+        self._data = data
 
-    def __array_finalize__(self, obj):
-        if obj is None:
-            return
-        self.array_context = getattr(obj, "array_context", None)
+    # Tell numpy that we would like to do our own array math, thank you very much.
+    # (numpy arrays have priority 0.)
+    __array_priority__ = 10
 
     @property
     def entry_dtype(self):
-        return single_valued(subary.dtype for subary in self.flat)
+        return single_valued(subary.dtype for subary in self._data)
 
     @classmethod
     def from_list(cls, actx: Optional[ArrayContext], res_list) -> "DOFArray":
@@ -114,96 +118,183 @@ class DOFArray(np.ndarray):
         :arg actx: If *None*, the arrays in *res_list* must be
             :meth:`~meshmode.array_context.ArrayContext.thaw`\ ed.
         """
+        from warnings import warn
+        warn("DOFArray.from_list is deprecated and will disappear in 2021.",
+                DeprecationWarning, stacklevel=2)
         if not (actx is None or isinstance(actx, ArrayContext)):
             raise TypeError("actx must be of type ArrayContext")
 
-        ngroups = len(res_list)
-
-        result = np.empty(ngroups, dtype=object).view(cls)
-        result.array_context = actx
-
-        # 'result[:] = res_list' may look tempting, however:
-        # https://github.com/numpy/numpy/issues/16564
-        for igrp in range(ngroups):
-            result[igrp] = res_list[igrp]
-
-        return result
-
-    # {{{ work around numpy failing to compare obj arrays of arrays
-
-    def _comparison(self, operator_func, other):
-        from numbers import Number
-        if isinstance(other, DOFArray):
-            return obj_array_vectorize_n_args(operator_func, self, other)
-
-        elif isinstance(other, Number):
-            return obj_array_vectorize(
-                    lambda self_entry: operator_func(self_entry, other),
-                    self)
-
-        else:
-            # fall back to "best effort" (i.e. likley failure)
-            return operator_func(self, other)
-
-    def __lt__(self, other):
-        return self._comparison(operator.lt, other)
-
-    def __gt__(self, other):
-        return self._comparison(operator.gt, other)
-
-    def __le__(self, other):
-        return self._comparison(operator.le, other)
-
-    def __ge__(self, other):
-        return self._comparison(operator.ge, other)
+        return cls(actx, tuple(res_list))
 
     # }}}
+
+    # {{{ sequence protocol
+
+    def __len__(self):
+        return len(self._data)
+
+    def __getitem__(self, i):
+        return self._data[i]
+
+    def __iter__(self):
+        return iter(self._data)
+
+    # }}}
+
+    @property
+    def shape(self):
+        return (len(self),)
+
+    def _like_me(self, data):
+        return DOFArray(self.array_context, tuple(data))
+
+    def _bop(self, f, op1, op2):
+        """Broadcasting logic for a generic binary operator."""
+        if isinstance(op1, DOFArray) and isinstance(op2, DOFArray):
+            if len(op1._data) != len(op2._data):
+                raise ValueError("DOFArray objects in binary operator must have "
+                        f"same length, got {len(op1._data)} and {len(op2._data)}")
+            return self._like_me([
+                f(op1_i, op2_i)
+                for op1_i, op2_i in zip(op1._data, op2._data)])
+        elif isinstance(op1, DOFArray) and isinstance(op2, Number):
+            return self._like_me([f(op1_i, op2) for op1_i in op1._data])
+        elif isinstance(op1, Number) and isinstance(op2, DOFArray):
+            return self._like_me([f(op1, op2_i) for op2_i in op2._data])
+        else:
+            return NotImplemented
+
+    def __add__(self, arg): return self._bop(op.add, self, arg)  # noqa: E704
+    def __radd__(self, arg): return self._bop(op.add, arg, self)  # noqa: E704
+    def __sub__(self, arg): return self._bop(op.sub, self, arg)  # noqa: E704
+    def __rsub__(self, arg): return self._bop(op.sub, arg, self)  # noqa: E704
+    def __mul__(self, arg): return self._bop(op.mul, self, arg)  # noqa: E704
+    def __rmul__(self, arg): return self._bop(op.mul, arg, self)  # noqa: E704
+    def __truediv__(self, arg): return self._bop(op.truediv, self, arg)  # noqa: E704
+    def __rtruediv__(self, arg): return self._bop(op.truediv, arg, self)  # noqa: E704, E501
+    def __pow__(self, arg): return self._bop(op.pow, self, arg)  # noqa: E704
+    def __rpow__(self, arg): return self._bop(op.pow, arg, self)  # noqa: E704
+    def __mod__(self, arg): return self._bop(op.mod, self, arg)  # noqa: E704
+    def __rmod__(self, arg): return self._bop(op.mod, arg, self)  # noqa: E704
+    def __divmod__(self, arg): return self._bop(divmod, self, arg)  # noqa: E704
+    def __rdivmod__(self, arg): return self._bop(divmod, arg, self)  # noqa: E704
+
+    def __pos__(self): return self  # noqa: E704
+    def __neg__(self): return self._like_me([-self_i for self_i in self._data])  # noqa: E704, E501
+    def __abs__(self): return self._like_me([abs(self_i) for self_i in self._data])  # noqa: E704, E501
+
+    def conj(self): return self._like_me([self_i.conj() for self_i in self._data])  # noqa: E704, E501
+    @property
+    def real(self): return self._like_me([self_i.real for self_i in self._data])  # noqa: E704, E501
+    @property
+    def imag(self): return self._like_me([self_i.imag for self_i in self._data])  # noqa: E704, E501
+
+    def __eq__(self, arg): return self._bop(op.eq, self, arg)  # noqa: E704
+    def __ne__(self, arg): return self._bop(op.ne, self, arg)  # noqa: E704
+    def __lt__(self, arg): return self._bop(op.lt, self, arg)  # noqa: E704
+    def __gt__(self, arg): return self._bop(op.gt, self, arg)  # noqa: E704
+    def __le__(self, arg): return self._bop(op.le, self, arg)  # noqa: E704
+    def __ge__(self, arg): return self._bop(op.ge, self, arg)  # noqa: E704
+
+    def __and__(self, arg): return self._bop(operator.and_, self, arg)  # noqa: E704
+    def __xor__(self, arg): return self._bop(operator.xor, self, arg)  # noqa: E704
+    def __or__(self, arg): return self._bop(operator.or_, self, arg)  # noqa: E704
+    def __rand__(self, arg): return self._bop(operator.and_, arg, self)  # noqa: E704
+    def __rxor__(self, arg): return self._bop(operator.xor, arg, self)  # noqa: E704
+    def __ror__(self, arg): return self._bop(operator.or_, arg, self)  # noqa: E704
+
+    # bit shifts unimplemented for now
 
 # }}}
 
 
-def thaw(actx: ArrayContext, ary: np.ndarray) -> np.ndarray:
+def obj_or_dof_array_vectorize(f, ary):
+    r"""
+    Works like :func:`~pytools.obj_array.obj_array_vectorize`, but also
+    for :class:`DOFArray`\ s.
+    """
+
+    if isinstance(ary, DOFArray):
+        return ary._like_me([f(ary_i) for ary_i in ary._data])
+    else:
+        return obj_array_vectorize(f, ary)
+
+
+obj_or_dof_array_vectorized = decorator.decorator(obj_or_dof_array_vectorize)
+
+
+def obj_or_dof_array_vectorize_n_args(f, *args):
+    r"""Apply the function *f* elementwise to all entries of any
+    object arrays or :class:`DOFArray`\ s in *args*. All such arrays are expected
+    to have the same shape (but this is not checked).
+    Equivalent to an appropriately-looped execution of::
+
+        result[idx] = f(obj_array_arg1[idx], arg2, obj_array_arg3[idx])
+
+    Return an array of the same shape as the arguments consisting of the
+    return values of *f*.
+
+    Works like :func:`~pytools.obj_array.obj_array_vectorize_n_args`, but also
+    for :class:`DOFArray`\ s.
+    """
+    dofarray_arg_indices = [
+            i for i, arg in enumerate(args)
+            if isinstance(arg, DOFArray)]
+
+    if not dofarray_arg_indices:
+        from pytools.obj_array import obj_array_vectorize_n_args
+        return obj_array_vectorize_n_args(f, *args)
+
+    leading_da_index = dofarray_arg_indices[0]
+
+    template_ary = args[leading_da_index]
+    result = []
+    new_args = list(args)
+    for igrp in range(len(template_ary)):
+        for arg_i in dofarray_arg_indices:
+            new_args[arg_i] = args[arg_i][igrp]
+        result.append(f(*new_args))
+
+    return DOFArray(template_ary.array_context, tuple(result))
+
+
+obj_or_dof_array_vectorized_n_args = decorator.decorator(
+        obj_or_dof_array_vectorize_n_args)
+
+
+def thaw(actx: ArrayContext, ary: Union[DOFArray, np.ndarray]) -> np.ndarray:
     r"""Call :meth:`~meshmode.array_context.ArrayContext.thaw` on the element
     group arrays making up the :class:`DOFArray`, using *actx*.
 
     Vectorizes over object arrays of :class:`DOFArray`\ s.
     """
-    if (isinstance(ary, np.ndarray)
-            and ary.dtype.char == "O"
-            and not isinstance(ary, DOFArray)):
+    if isinstance(ary, np.ndarray):
         return obj_array_vectorize(partial(thaw, actx), ary)
 
     if ary.array_context is not None:
         raise ValueError("DOFArray passed to thaw is not frozen")
 
-    return DOFArray.from_list(actx, [
-        actx.thaw(subary)
-        for subary in ary
-        ])
+    return DOFArray(actx, tuple(actx.thaw(subary) for subary in ary))
 
 
-def freeze(ary: np.ndarray) -> np.ndarray:
+def freeze(ary: Union[DOFArray, np.ndarray]) -> np.ndarray:
     r"""Call :meth:`~meshmode.array_context.ArrayContext.freeze` on the element
     group arrays making up the :class:`DOFArray`, using the
     :class:`~meshmode.array_context.ArrayContext` in *ary*.
 
     Vectorizes over object arrays of :class:`DOFArray`\ s.
     """
-    if (isinstance(ary, np.ndarray)
-            and ary.dtype.char == "O"
-            and not isinstance(ary, DOFArray)):
+    if isinstance(ary, np.ndarray):
         return obj_array_vectorize(freeze, ary)
 
     if ary.array_context is None:
         raise ValueError("DOFArray passed to freeze is already frozen")
 
-    return DOFArray.from_list(None, [
-        ary.array_context.freeze(subary)
-        for subary in ary
-        ])
+    return DOFArray(None, tuple(
+        ary.array_context.freeze(subary) for subary in ary))
 
 
-def flatten(ary: np.ndarray) -> Any:
+def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
     r"""Convert a :class:`DOFArray` into a "flat" array of degrees of freedom,
     where the resulting type of the array is given by the
     :attr:`DOFArray.array_context`.
@@ -214,9 +305,7 @@ def flatten(ary: np.ndarray) -> Any:
 
     Vectorizes over object arrays of :class:`DOFArray`\ s.
     """
-    if (isinstance(ary, np.ndarray)
-            and ary.dtype.char == "O"
-            and not isinstance(ary, DOFArray)):
+    if isinstance(ary, np.ndarray):
         return obj_array_vectorize(flatten, ary)
 
     group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in ary]
@@ -240,15 +329,13 @@ def flatten(ary: np.ndarray) -> Any:
     return result
 
 
-def unflatten(actx: ArrayContext, discr, ary,
+def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
         ndofs_per_element_per_group: Optional[Iterable[int]] = None) -> np.ndarray:
     r"""Convert a 'flat' array returned by :func:`flatten` back to a :class:`DOFArray`.
 
     Vectorizes over object arrays of :class:`DOFArray`\ s.
     """
-    if (isinstance(ary, np.ndarray)
-            and ary.dtype.char == "O"
-            and not isinstance(ary, DOFArray)):
+    if isinstance(ary, np.ndarray):
         return obj_array_vectorize(
                 lambda subary: unflatten(
                     actx, discr, subary, ndofs_per_element_per_group),
@@ -276,7 +363,7 @@ def unflatten(actx: ArrayContext, discr, ary,
 
     group_starts = np.cumsum([0] + group_sizes)
 
-    return DOFArray.from_list(actx, [
+    return DOFArray(actx, tuple(
         actx.call_loopy(
             prg(),
             grp_start=grp_start, ary=ary,
@@ -286,7 +373,7 @@ def unflatten(actx: ArrayContext, discr, ary,
         for grp_start, grp, ndofs_per_element in zip(
             group_starts,
             discr.groups,
-            ndofs_per_element_per_group)])
+            ndofs_per_element_per_group)))
 
 
 def flat_norm(ary: DOFArray, ord=2):
