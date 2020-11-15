@@ -264,6 +264,8 @@ class DGDiscretization:
             results.append(vec.array_context.call_loopy(
                     knl(),
                     mat=matrix, nelements=grp.nelements,
+                    ndiscr_nodes_out=matrix.shape[0],
+                    ndiscr_nodes_in=matrix.shape[1],
                     vec=vec[grp.index])["result"])
 
         result = DOFArray.from_list(self._setup_actx, results)
@@ -332,6 +334,9 @@ class DGDiscretization:
             results.append(vec.array_context.call_loopy(knl(),
                     mat=matrix,
                     nelements=volgrp.nelements,
+                    nvol_nodes=matrix.shape[0],
+                    nfaces=matrix.shape[1],
+                    nface_nodes=matrix.shape[2],
                     vec=self._setup_actx.np.reshape(vec[afgrp.index],
                         (nfaces, volgrp.nelements, afgrp.nunit_dofs)))["result"])
 
@@ -469,9 +474,9 @@ def main():
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
 
-    pytato_actx = PytatoArrayContext(cl_ctx, queue)
-    pyopencl_actx = PyOpenCLArrayContext(queue)
-    actx = DebugArrayContext(pytato_actx, pyopencl_actx)
+    actx = PytatoArrayContext(cl_ctx, queue)
+    # pyopencl_actx = PyOpenCLArrayContext(queue)
+    # actx = DebugArrayContext(pyopencl_actx, pyopencl_actx)
 
     nel_1d = 16
     from meshmode.mesh.generation import generate_regular_rect_mesh
@@ -511,6 +516,7 @@ def main():
             # DOFArray would be nice?
             assert len(fields[0]) == 1
             print(istep, t, la.norm(actx.to_numpy(fields[0][0])))
+            1/0
             vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep,
                     [
                         ("u", fields[0]),

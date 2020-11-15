@@ -409,6 +409,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     f"to_element_indices_{i_batch}")
                 knl = lp.rename_argument(knl, "nelements",
                     f"nelements_{i_batch}")
+                knl = lp.rename_argument(knl, "n_from_nodes",
+                    f"n_from_nodes_{i_batch}")
+                knl = lp.rename_argument(knl, "nelements_vec",
+                    f"nelements_vec_{i_batch}")
 
                 # }}}
 
@@ -418,6 +422,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 kwargs[f"to_element_indices_{i_batch}"] = (
                     batch.to_element_indices)
                 kwargs[f"nelements_{i_batch}"] = batch.to_element_indices.size
+                kwargs[f"nelements_vec_{i_batch}"] = ary[
+                        batch.from_group_index].shape[0]
+                kwargs[f"n_from_nodes_{i_batch}"] = ary[
+                        batch.from_group_index].shape[-1]
 
                 kernels.append(knl)
 
