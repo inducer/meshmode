@@ -26,7 +26,7 @@ from pytools import memoize_in, memoize_method
 from pytools.obj_array import make_obj_array
 from meshmode.array_context import ArrayContext, make_loopy_program
 from meshmode.dof_array import DOFTag
-import loopy as lp
+from loopy import GlobalArg, auto
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
@@ -348,7 +348,7 @@ class Discretization:
                         sum(j, resampling_mat[idof, j] * nodes[iel, j])
                     """,
                 kernel_data=[
-                    lp.GlobalArg("result", None, shape=lp.auto, tags=DOFTag()),
+                    GlobalArg("result", None, shape=auto, tags=DOFTag()),
                     ...
                 ],
                 name="nodes")

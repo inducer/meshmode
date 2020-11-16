@@ -24,7 +24,7 @@ import operator
 import numpy as np
 from typing import Optional, Iterable, Any, Tuple, Union
 from functools import partial
-import loopy as lp
+from loopy import GlobalArg, auto
 
 from pytools import single_valued, memoize_in
 from pytools.obj_array import obj_array_vectorize, obj_array_vectorize_n_args
@@ -334,7 +334,7 @@ def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
             """result[grp_start + iel*ndofs_per_element + idof] \
                 = grp_ary[iel, idof]""",
             kernel_data=[
-                lp.GlobalArg("grp_ary", None, shape=lp.auto, tags=DOFTag()),
+                GlobalArg("grp_ary", None, shape=auto, tags=DOFTag()),
                 ...
             ],
             name="flatten")
