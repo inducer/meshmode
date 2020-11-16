@@ -256,7 +256,6 @@ def obj_or_dof_array_vectorize_n_args(f, *args):
             if isinstance(arg, DOFArray)]
 
     if not dofarray_arg_indices:
-        from pytools.obj_array import obj_array_vectorize_n_args
         return obj_array_vectorize_n_args(f, *args)
 
     leading_da_index = dofarray_arg_indices[0]
