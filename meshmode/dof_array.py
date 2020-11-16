@@ -52,6 +52,7 @@ __doc__ = """
 .. autofunction:: flat_norm
 """
 
+
 # {{{ DOFTag
 
 class DOFTag(Tag):
@@ -140,7 +141,7 @@ class DOFArray:
 
         return cls(actx, tuple(res_list))
 
-    # }}}
+     # }}}
 
     # {{{ sequence protocol
 
