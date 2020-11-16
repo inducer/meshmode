@@ -37,6 +37,7 @@ import decorator
 from meshmode.array_context import ArrayContext, make_loopy_program
 
 __doc__ = """
+.. autoclass:: DOFTag
 .. autoclass:: DOFArray
 
 .. autofunction:: obj_or_dof_array_vectorize
@@ -51,12 +52,19 @@ __doc__ = """
 .. autofunction:: flat_norm
 """
 
+# { {{ DOFTag
 
 class DOFTag(Tag):
+    """A tag to mark arrays of DOFs in Loopy kernels. Applications
+    could use this to decide how to change the memory layout of
+    these arrays.
+    """
     pass
 
+    # }}}
 
-# {{{ DOFArray
+
+# { {{ DOFArray
 
 class DOFArray:
     """This array type holds degree-of-freedom arrays for use with
