@@ -23,6 +23,7 @@ THE SOFTWARE.
 import numpy as np
 
 from pytools import keyed_memoize_method, memoize_in
+from pytools.obj_array import obj_array_vectorized_n_args
 
 import loopy as lp
 
@@ -115,11 +116,15 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
 
         return weights
 
-    def __call__(self, vec):
-        if not isinstance(vec, DOFArray):
+    @obj_array_vectorized_n_args
+    def __call__(self, ary):
+        if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")
 
-        actx = vec.array_context
+        if ary.shape != (len(self.from_discr.groups),):
+            raise ValueError("invalid shape of incoming resampling data")
+
+        actx = ary.array_context
 
         @memoize_in(actx, (L2ProjectionInverseDiscretizationConnection,
             "conn_projection_knl"))
@@ -131,7 +136,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 """
                 for iel
                     <> element_dot = sum(idof_quad,
-                                vec[from_element_indices[iel], idof_quad]
+                                ary[from_element_indices[iel], idof_quad]
                                 * basis[idof_quad] * weights[idof_quad])
 
                     result[to_element_indices[iel], ibasis] = \
@@ -139,7 +144,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 end
                 """,
                 [
-                    lp.GlobalArg("vec", None,
+                    lp.GlobalArg("ary", None,
                         shape=("n_from_elements", "n_from_nodes")),
                     lp.GlobalArg("result", None,
                         shape=("n_to_elements", "n_to_nodes")),
@@ -178,7 +183,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         weights = self._batch_weights(actx)
 
         # perform dot product (on reference element) to get basis coefficients
-        c = self.to_discr.zeros(actx, dtype=vec.entry_dtype)
+        c = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
 
         for igrp, (tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.conn.groups)):
@@ -195,7 +200,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     # saves on recreating the connection groups and batches.
                     actx.call_loopy(kproj(),
                             ibasis=ibasis,
-                            vec=vec[sgrp.index],
+                            ary=ary[sgrp.index],
                             basis=basis,
                             weights=weights[igrp, ibatch],
                             result=c[igrp],
@@ -203,7 +208,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                             to_element_indices=batch.from_element_indices)
 
         # evaluate at unit_nodes to get the vector on to_discr
-        result = self.to_discr.zeros(actx, dtype=vec.entry_dtype)
+        result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
         for igrp, grp in enumerate(self.to_discr.groups):
             for ibasis, basis_fn in enumerate(grp.basis()):
                 basis = actx.from_numpy(

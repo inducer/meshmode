@@ -399,7 +399,7 @@ def make_group_from_vertices(vertices, vertex_indices, order,
 # {{{ generate_icosahedron
 
 def generate_icosahedron(r, order):
-    # http://en.wikipedia.org/w/index.php?title=Icosahedron&oldid=387737307
+    # https://en.wikipedia.org/w/index.php?title=Icosahedron&oldid=387737307
 
     phi = (1+5**(1/2))/2
 
@@ -743,11 +743,11 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     from pytools import product
     nvertices = product(shape)
 
-    vertex_indices = np.arange(nvertices).reshape(*shape, order="F")
+    vertex_indices = np.arange(nvertices).reshape(*shape)
 
     vertices = np.empty((dim,)+shape, dtype=coord_dtype)
     for idim in range(dim):
-        vshape = (shape[idim],) + (1,)*idim
+        vshape = (shape[idim],) + (1,)*(dim-1-idim)
         vertices[idim] = axis_coords[idim].reshape(*vshape)
 
     vertices = vertices.reshape(dim, -1)

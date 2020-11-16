@@ -239,9 +239,9 @@ class Discretization:
         else:
             dtype = np.dtype(dtype)
 
-        return _DOFArray.from_list(actx, [
+        return _DOFArray(actx, tuple(
             creation_func(shape=(grp.nelements, grp.nunit_dofs), dtype=dtype)
-            for grp in self.groups])
+            for grp in self.groups))
 
     def empty(self, actx: ArrayContext, dtype=None):
         """Return an empty :class:`~meshmode.dof_array.DOFArray`.
@@ -299,11 +299,11 @@ class Discretization:
 
             return mat
 
-        return _DOFArray.from_list(actx, [
+        return _DOFArray(actx, tuple(
                 actx.call_loopy(
                     prg(), diff_mat=actx.from_numpy(get_mat(grp)), vec=vec[grp.index]
                     )["result"]
-                for grp in self.groups])
+                for grp in self.groups))
 
     @memoize_method
     def quad_weights(self):
@@ -318,14 +318,14 @@ class Discretization:
                 "result[iel,idof] = weights[idof]",
                 name="quad_weights")
 
-        return _DOFArray.from_list(None, [
+        return _DOFArray(None, tuple(
                 actx.freeze(
                     actx.call_loopy(
                         prg(),
                         weights=actx.from_numpy(grp.weights),
                         nelements=grp.nelements,
                         )["result"])
-                for grp in self.groups])
+                for grp in self.groups))
 
     @memoize_method
     def nodes(self):
@@ -355,7 +355,7 @@ class Discretization:
                 name="nodes")
 
         return make_obj_array([
-            _DOFArray.from_list(None, [
+            _DOFArray(None, tuple(
                 actx.freeze(
                     actx.call_loopy(
                         prg(),
@@ -363,7 +363,7 @@ class Discretization:
                             grp.from_mesh_interp_matrix()),
                         nodes=actx.from_numpy(grp.mesh_el_group.nodes[iaxis])
                         )["result"])
-                for grp in self.groups])
+                for grp in self.groups))
             for iaxis in range(self.ambient_dim)])
 
 # vim: fdm=marker

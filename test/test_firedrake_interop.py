@@ -666,7 +666,7 @@ def test_to_fd_idempotency(ctx_factory, mm_mesh, fspace_degree):
     mm_unique = discr.zeros(actx, dtype=dtype)
     unique_vals = np.arange(np.size(mm_unique[0]), dtype=dtype)
     mm_unique[0].set(unique_vals.reshape(mm_unique[0].shape))
-    mm_unique_copy = DOFArray.from_list(actx, [mm_unique[0].copy()])
+    mm_unique_copy = DOFArray(actx, (mm_unique[0].copy(),))
 
     # Test for idempotency mm->fd->mm
     fdrake_unique = fdrake_connection.from_meshmode(mm_unique)

@@ -30,7 +30,7 @@ from pytools.obj_array import (
         flat_obj_array, make_obj_array,
         obj_array_vectorize)
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
-from meshmode.dof_array import DOFArray, freeze, thaw
+from meshmode.dof_array import freeze, thaw
 from meshmode.array_context import PyOpenCLArrayContext, make_loopy_program
 
 
@@ -146,9 +146,7 @@ class DGDiscretization:
             raise ValueError(f"locations '{src}'->'{tgt}' not understood")
 
     def interp(self, src, tgt, vec):
-        if (isinstance(vec, np.ndarray)
-                and vec.dtype.char == "O"
-                and not isinstance(vec, DOFArray)):
+        if isinstance(vec, np.ndarray):
             return obj_array_vectorize(
                     lambda el: self.interp(src, tgt, el), vec)
 
@@ -237,9 +235,7 @@ class DGDiscretization:
         return actx.freeze(actx.from_numpy(matrix))
 
     def inverse_mass(self, vec):
-        if (isinstance(vec, np.ndarray)
-                and vec.dtype.char == "O"
-                and not isinstance(vec, DOFArray)):
+        if isinstance(vec, np.ndarray):
             return obj_array_vectorize(
                     lambda el: self.inverse_mass(el), vec)
 
@@ -291,11 +287,8 @@ class DGDiscretization:
         return actx.freeze(actx.from_numpy(matrix))
 
     def face_mass(self, vec):
-        if (isinstance(vec, np.ndarray)
-                and vec.dtype.char == "O"
-                and not isinstance(vec, DOFArray)):
-            return obj_array_vectorize(
-                    lambda el: self.face_mass(el), vec)
+        if isinstance(vec, np.ndarray):
+            return obj_array_vectorize(lambda el: self.face_mass(el), vec)
 
         @memoize_in(self, "face_mass_knl")
         def knl():
