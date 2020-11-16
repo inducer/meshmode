@@ -141,7 +141,7 @@ class DOFArray:
 
         return cls(actx, tuple(res_list))
 
-     # }}}
+    # }}}
 
     # {{{ sequence protocol
 
