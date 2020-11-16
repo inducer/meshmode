@@ -349,7 +349,6 @@ class Discretization:
                     """,
                 kernel_data=[
                     lp.GlobalArg("result", None, shape=lp.auto, tags=DOFTag()),
-                    lp.GlobalArg("nodes", None, shape=lp.auto, tags=""),
                     ...
                 ],
                 name="nodes")

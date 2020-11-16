@@ -44,7 +44,7 @@ def main():
               "numpy",
               "modepy",
               "gmsh_interop",
-              "pytools>=2020.4.1",
+              "pytools>=2020.4.2",
               "pytest>=2.3",
               "loo.py>=2014.1",
               "recursivenodes",
