@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 import numpy as np
 from pytools import memoize_method, Record
-from meshmode.dof_array import DOFArray, flatten, thaw
+from meshmode.dof_array import flatten, thaw
 
 
 __doc__ = """
@@ -73,9 +73,7 @@ def separate_by_real_and_imag(names_and_fields, real_only):
 
 
 def resample_to_numpy(conn, vec):
-    if (isinstance(vec, np.ndarray)
-            and vec.dtype.char == "O"
-            and not isinstance(vec, DOFArray)):
+    if isinstance(vec, np.ndarray):
         from pytools.obj_array import obj_array_vectorize
         return obj_array_vectorize(lambda x: resample_to_numpy(conn, x), vec)
 
@@ -394,7 +392,7 @@ class Visualizer:
 
             args = tuple(nodes) + (field,)
 
-            # http://docs.enthought.com/mayavi/mayavi/auto/example_plotting_many_lines.html  # noqa
+            # https://docs.enthought.com/mayavi/mayavi/auto/example_plotting_many_lines.html  # noqa
             src = mlab.pipeline.scalar_scatter(*args)
 
             src.mlab_source.dataset.lines = vis_connectivity.reshape(-1, 2)

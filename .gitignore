@@ -17,3 +17,5 @@ a.out
 
 .cache
 .pytest_cache
+
+test/nodal-dg

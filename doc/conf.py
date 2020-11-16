@@ -12,8 +12,8 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
-import sys
-import os
+import sys  # noqa: F401
+import os  # noqa: F401
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -23,34 +23,34 @@ import os
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
-#needs_sphinx = '1.0'
+#needs_sphinx = "1.0"
 
 # Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
+# extensions coming with Sphinx (named "sphinx.ext.*") or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.doctest',
-    'sphinx.ext.intersphinx',
-    'sphinx.ext.mathjax',
-    'sphinx.ext.graphviz',
+    "sphinx.ext.autodoc",
+    "sphinx.ext.doctest",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.graphviz",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # The suffix of source filenames.
-source_suffix = '.rst'
+source_suffix = ".rst"
 
 # The encoding of source files.
-#source_encoding = 'utf-8-sig'
+#source_encoding = "utf-8-sig"
 
 # The master toctree document.
-master_doc = 'index'
+master_doc = "index"
 
 # General information about the project.
-project = u'meshmode'
-copyright = u'2014, Andreas Klöckner'
+project = u"meshmode"
+copyright = u"2014, Andreas Klöckner"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -58,7 +58,10 @@ copyright = u'2014, Andreas Klöckner'
 #
 # The short X.Y version.
 ver_dic = {}
-exec(compile(open("../meshmode/version.py").read(), "../meshmode/version.py", 'exec'), ver_dic)
+exec(
+        compile(
+            open("../meshmode/version.py").read(), "../meshmode/version.py", "exec"),
+        ver_dic)
 version = ".".join(str(x) for x in ver_dic["VERSION"])
 # The full version, including alpha/beta/rc tags.
 release = ver_dic["VERSION_TEXT"]
@@ -75,7 +78,7 @@ release = ver_dic["VERSION_TEXT"]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ['_build']
+exclude_patterns = ["_build"]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -93,7 +96,7 @@ exclude_patterns = ['_build']
 #show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = "sphinx"
 
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []
@@ -109,16 +112,16 @@ html_theme = "alabaster"
 html_theme_options = {
         "extra_nav_links": {
             "🚀 Github": "https://github.com/inducer/meshmode",
-            "💾 Download Releases": "https://pypi.python.org/pypi/meshmode",
+            "💾 Download Releases": "https://pypi.org/project/meshmode",
             }
         }
 
 html_sidebars = {
-    '**': [
-        'about.html',
-        'navigation.html',
-        'relations.html',
-        'searchbox.html',
+    "**": [
+        "about.html",
+        "navigation.html",
+        "relations.html",
+        "searchbox.html",
     ]
 }
 
@@ -194,28 +197,28 @@ html_static_path = []
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'meshmodedoc'
+htmlhelp_basename = "meshmodedoc"
 
 
 # -- Options for LaTeX output ---------------------------------------------
 
 latex_elements = {
-# The paper size ('letterpaper' or 'a4paper').
-#'papersize': 'letterpaper',
+    # The paper size ("letterpaper" or "a4paper").
+    #"papersize": "letterpaper",
 
-# The font size ('10pt', '11pt' or '12pt').
-#'pointsize': '10pt',
+    # The font size ("10pt", "11pt" or "12pt").
+    #"pointsize": "10pt",
 
-# Additional stuff for the LaTeX preamble.
-#'preamble': '',
+    # Additional stuff for the LaTeX preamble.
+    #"preamble": '',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  ('index', 'meshmode.tex', u'meshmode Documentation',
-   u'Andreas Klöckner', 'manual'),
+        ("index", "meshmode.tex", u"meshmode Documentation",
+            u"Andreas Klöckner", "manual"),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -244,8 +247,8 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'meshmode', u'meshmode Documentation',
-     [u'Andreas Klöckner'], 1)
+    ("index", "meshmode", u"meshmode Documentation",
+     [u"Andreas Klöckner"], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -258,9 +261,9 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'meshmode', u'meshmode Documentation',
-   u'Andreas Klöckner', 'meshmode', 'One line description of project.',
-   'Miscellaneous'),
+        ("index", "meshmode", u"meshmode Documentation",
+            u"Andreas Klöckner", "meshmode", "One line description of project.",
+            "Miscellaneous"),
 ]
 
 # Documents to append as an appendix to all manuals.
@@ -269,24 +272,25 @@ texinfo_documents = [
 # If false, no module index is generated.
 #texinfo_domain_indices = True
 
-# How to display URL addresses: 'footnote', 'no', or 'inline'.
-#texinfo_show_urls = 'footnote'
+# How to display URL addresses: "footnote", "no", or "inline".
+#texinfo_show_urls = "footnote"
 
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 #texinfo_no_detailmenu = False
 
 intersphinx_mapping = {
-    'https://docs.python.org/': None,
-    'https://docs.scipy.org/doc/numpy/': None,
-    'https://documen.tician.de/pyopencl': None,
-    'https://documen.tician.de/meshpy': None,
-    'https://documen.tician.de/modepy': None,
-    'https://documen.tician.de/loopy': None,
-    'https://documen.tician.de/gmsh_interop': None,
-    'https://firedrakeproject.org/': None,
-    'https://tisaac.gitlab.io/recursivenodes/': None,
-    'https://fenics.readthedocs.io/projects/fiat/en/latest/': None,
-    'https://finat.github.io/FInAT/': None,
+    "https://docs.python.org/3/": None,
+    "https://numpy.org/doc/stable/": None,
+    "https://documen.tician.de/pytools": None,
+    "https://documen.tician.de/pyopencl": None,
+    "https://documen.tician.de/meshpy": None,
+    "https://documen.tician.de/modepy": None,
+    "https://documen.tician.de/loopy": None,
+    "https://documen.tician.de/gmsh_interop": None,
+    "https://firedrakeproject.org/": None,
+    "https://tisaac.gitlab.io/recursivenodes/": None,
+    "https://fenics.readthedocs.io/projects/fiat/en/latest/": None,
+    "https://finat.github.io/FInAT/": None,
 }
 
 autoclass_content = "class"
