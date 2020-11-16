@@ -52,7 +52,7 @@ __doc__ = """
 .. autofunction:: flat_norm
 """
 
-# { {{ DOFTag
+# {{{ DOFTag
 
 class DOFTag(Tag):
     """A tag to mark arrays of DOFs in Loopy kernels. Applications
@@ -64,7 +64,7 @@ class DOFTag(Tag):
     # }}}
 
 
-# { {{ DOFArray
+# {{{ DOFArray
 
 class DOFArray:
     """This array type holds degree-of-freedom arrays for use with
