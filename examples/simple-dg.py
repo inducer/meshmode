@@ -33,6 +33,10 @@ from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
 from meshmode.dof_array import DOFArray, freeze, thaw
 from meshmode.array_context import (DebugArrayContext, PyOpenCLArrayContext,
         PytatoArrayContext, make_loopy_program)
+from time import time
+import warnings
+
+warnings.filterwarnings("ignore")
 
 
 # Features lost vs. https://github.com/inducer/grudge:
@@ -474,6 +478,8 @@ def main():
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
 
+    start = time()
+
     actx = PytatoArrayContext(cl_ctx, queue)
     # pyopencl_actx = PyOpenCLArrayContext(queue)
     # actx = DebugArrayContext(pyopencl_actx, pyopencl_actx)
@@ -499,6 +505,9 @@ def main():
             [discr.zeros(actx) for i in range(discr.dim)]
             )
 
+    end = time()
+    print(f"Intialization time: {end-start} s")
+
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr.volume_discr, discr.order+3)
 
@@ -509,14 +518,18 @@ def main():
     t_final = 3
     istep = 0
     while t < t_final:
-        fields = rk4_step(fields, t, dt, rhs)
+        start = time()
+        fields = thaw(actx, freeze(rk4_step(fields, t, dt, rhs)))
 
-        if istep % 10 == 0:
+        print(istep, t, la.norm(actx.to_numpy(fields[0][0])))
+        end = time()
+        print(f"Time to RK4-dt{istep}: {end-start} s")
+
+        if False and istep % 10 == 0:
             # FIXME: Maybe an integral function to go with the
             # DOFArray would be nice?
             assert len(fields[0]) == 1
             print(istep, t, la.norm(actx.to_numpy(fields[0][0])))
-            1/0
             vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep,
                     [
                         ("u", fields[0]),
@@ -525,6 +538,9 @@ def main():
 
         t += dt
         istep += 1
+
+        if istep == 3:
+            1/0
 
 
 if __name__ == "__main__":
