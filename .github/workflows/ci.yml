@@ -30,12 +30,15 @@ jobs:
         -   name: "Main Script"
             run: |
                 sudo apt update
-                sudo apt install octave
+                sudo apt install octave openmpi-bin libopenmpi-dev
 
                 CONDA_ENVIRONMENT=.test-conda-env-py3.yml
                 export MPLBACKEND=Agg
-                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project-within-miniconda.sh
-                . ./build-and-test-py-project-within-miniconda.sh
+                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/ci-support.sh
+                . ./ci-support.sh
+                build_py_project_in_conda_env
+                with_echo python -m pip install mpi4py
+                test_py_project
 
     firedrake:
         name: Pytest Firedrake
