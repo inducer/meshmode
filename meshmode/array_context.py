@@ -43,7 +43,7 @@ def make_loopy_program(domains, statements, kernel_data=["..."],
     """Return a :class:`loopy.LoopKernel` suitable for use with
     :meth:`ArrayContext.call_loopy`.
     """
-    return lp.make_kernel(
+    return lp.make_function(
             domains,
             statements,
             kernel_data=kernel_data,
@@ -571,7 +571,8 @@ class PytatoArrayContext(ArrayContext):
                 raise NotImplementedError(f"Not implemented for {arg_name} of"
                         f" type {type(arg)}")
 
-        entrypoint, = program.entrypoints.copy()
+        # FIXME: Take an entrypoint from the user
+        entrypoint, = set(program.callables_table)
 
         options = program[entrypoint].options
         if not (options.return_dict and options.no_numpy):
@@ -580,7 +581,8 @@ class PytatoArrayContext(ArrayContext):
                     "Did you use meshmode.array_context.make_loopy_program "
                     "to create this program?")
 
-        return pt.call_loopy(self.ns, program, bindings)
+        return pt.call_loopy(self.ns, program.copy(entrypoints=frozenset()),
+                             bindings, entrypoint)
 
     def freeze(self, array):
         import pytato as pt
