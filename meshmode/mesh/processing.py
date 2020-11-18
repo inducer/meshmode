@@ -1038,7 +1038,9 @@ def map_mesh(mesh, f):  # noqa
 
     # }}}
 
-    return mesh.copy(vertices=vertices, groups=new_groups)
+    return mesh.copy(
+            vertices=vertices, groups=new_groups,
+            is_conforming=mesh.is_conforming)
 
 # }}}
 
