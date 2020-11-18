@@ -383,10 +383,11 @@ def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
 
 
 def flat_norm(ary: DOFArray, ord=2):
-    # FIXME This could be done without flattening and copying
     actx = ary.array_context
     import numpy.linalg as la
-    return la.norm(actx.to_numpy(flatten(ary)), ord)
+    return la.norm(np.array([
+        actx.np.linalg.norm(grp_ary.reshape(-1), ord)
+        for grp_ary in ary]), ord)
 
 
 # vim: foldmethod=marker
