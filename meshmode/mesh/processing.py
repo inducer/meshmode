@@ -1038,7 +1038,6 @@ def map_mesh(mesh, f):  # noqa
 
     # }}}
 
-    from meshmode.mesh import Mesh
     return mesh.copy(vertices=vertices, groups=new_groups)
 
 # }}}
