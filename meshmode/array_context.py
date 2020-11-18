@@ -56,6 +56,61 @@ class _BaseFakeNumpyNamespace:
     def __init__(self, array_context):
         self._array_context = array_context
 
+    _numpy_math_functions = frozenset({
+        # https://numpy.org/doc/stable/reference/routines.math.html
+
+        # FIXME: Heads up: not all of these are supported yet.
+        # But I felt it was important to only dispatch actually existing
+        # numpy functions to loopy.
+
+        # Trigonometric functions
+        "sin", "cos", "tan", "arcsin", "arccos", "arctan", "hypot", "arctan2",
+        "degrees", "radians", "unwrap", "deg2rad", "rad2deg",
+
+        # Hyperbolic functions
+        "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh",
+
+        # Rounding
+        "around", "round_", "rint", "fix", "floor", "ceil", "trunc",
+
+        # Sums, products, differences
+
+        # FIXME: Many of These are reductions or scans.
+        # "prod", "sum", "nanprod", "nansum", "cumprod", "cumsum", "nancumprod",
+        # "nancumsum", "diff", "ediff1d", "gradient", "cross", "trapz",
+
+        # Exponents and logarithms
+        "exp", "expm1", "exp2", "log", "log10", "log2", "log1p", "logaddexp",
+        "logaddexp2",
+
+        # Other special functions
+        "i0", "sinc",
+
+        # Floating point routines
+        "signbit", "copysign", "frexp", "ldexp", "nextafter", "spacing",
+        # Rational routines
+        "lcm", "gcd",
+
+        # Arithmetic operations
+        "add", "reciprocal", "positive", "negative", "multiply", "divide", "power",
+        "subtract", "true_divide", "floor_divide", "float_power", "fmod", "mod",
+        "modf", "remainder", "divmod",
+
+        # Handling complex numbers
+        "angle", "real", "imag",
+        # Implemented below:
+        # "conj", "conjugate",
+
+        # Miscellaneous
+        "convolve", "clip", "sqrt", "cbrt", "square", "absolute", "fabs", "sign",
+        "heaviside", "maximum", "fmax", "nan_to_num",
+
+        # FIXME:
+        # "interp",
+
+        })
+
+
     def __getattr__(self, name):
         def loopy_implemented_elwise_func(*args):
             actx = self._array_context
@@ -67,8 +122,11 @@ class _BaseFakeNumpyNamespace:
                     **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result
 
-        from meshmode.dof_array import obj_or_dof_array_vectorized_n_args
-        return obj_or_dof_array_vectorized_n_args(loopy_implemented_elwise_func)
+        if name in self._numpy_math_functions:
+            from meshmode.dof_array import obj_or_dof_array_vectorized_n_args
+            return obj_or_dof_array_vectorized_n_args(loopy_implemented_elwise_func)
+        else:
+            raise AttributeError(name)
 
     def conjugate(self, x):
         # NOTE: conjugate distribute over object arrays, but it looks for a
