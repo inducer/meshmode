@@ -26,7 +26,7 @@ THE SOFTWARE.
 import numpy as np
 import pyopencl as cl
 
-from meshmode.dof_array import thaw, flatten, unflatten, flat_norm
+from meshmode.dof_array import thaw, flatten, unflatten
 
 from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
@@ -159,7 +159,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
             remote_points = local_to_remote_conn(true_local_points)
             local_points = remote_to_local_conn(remote_points)
 
-            err = flat_norm(true_local_points - local_points, np.inf)
+            err = actx.np.linalg.norm(true_local_points - local_points, np.inf)
 
             # Can't currently expect exact results due to limitations of
             # interpolation "snapping" in DirectDiscretizationConnection's
