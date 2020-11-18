@@ -165,16 +165,16 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         def keval():
             return make_loopy_program([
                 "{[iel]: 0 <= iel < nelements}",
-                "{[idof]: 0 <= idof < n_to_nodes}"
+                "{[idof]: 0 <= idof < n_to_nodes}",
+                "{[ibasis]: 0 <= ibasis < n_to_nodes}"
                 ],
                 """
                     result[iel, idof] = result[iel, idof] + \
-                            coefficients[iel, ibasis] * basis[idof]
+                        sum(ibasis, vdm[idof, ibasis] * coefficients[iel, ibasis])
                 """,
                 [
                     lp.GlobalArg("coefficients", None,
                         shape=("nelements", "n_to_nodes")),
-                    lp.ValueArg("ibasis", np.int32),
                     "..."
                     ],
                 name="conn_evaluate_knl")
@@ -210,16 +210,13 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         # evaluate at unit_nodes to get the vector on to_discr
         result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
         for igrp, grp in enumerate(self.to_discr.groups):
-            for ibasis, basis_fn in enumerate(grp.basis()):
-                basis = actx.from_numpy(
-                        basis_fn(grp.unit_nodes).flatten())
-
-                actx.call_loopy(
-                        keval(),
-                        ibasis=ibasis,
-                        result=result[grp.index],
-                        basis=basis,
-                        coefficients=c[grp.index])
+            from modepy import vandermonde
+            vdm = actx.from_numpy(vandermonde(grp.basis(), grp.unit_nodes))
+            actx.call_loopy(
+                    keval(),
+                    result=result[grp.index],
+                    vdm=vdm,
+                    coefficients=c[grp.index])
 
         return result
 
