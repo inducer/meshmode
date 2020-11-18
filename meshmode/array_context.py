@@ -21,6 +21,7 @@ THE SOFTWARE.
 """
 
 
+from functools import partial
 import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
@@ -55,6 +56,10 @@ def make_loopy_program(domains, statements, kernel_data=["..."],
 class _BaseFakeNumpyNamespace:
     def __init__(self, array_context):
         self._array_context = array_context
+        self.linalg = self._get_fake_numpy_linalg_namespace()
+
+    def _get_fake_numpy_linalg_namespace(self):
+        return _BaseFakeNumpyLinalgNamespace(self.array_context)
 
     _numpy_math_functions = frozenset({
         # https://numpy.org/doc/stable/reference/routines.math.html
@@ -136,6 +141,11 @@ class _BaseFakeNumpyNamespace:
         return obj_or_dof_array_vectorize(lambda obj: obj.conj(), x)
 
     conj = conjugate
+
+
+class _BaseFakeNumpyLinalgNamespace:
+    def __init__(self, array_context):
+        self._array_context = array_context
 
 
 class ArrayContext:
@@ -283,21 +293,58 @@ class ArrayContext:
 # {{{ PyOpenCLArrayContext
 
 class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
+    def _get_fake_numpy_linalg_namespace(self):
+        return _PyOpenCLFakeNumpyLinalgNamespace(self._array_context)
+
     def maximum(self, x, y):
         import pyopencl.array as cl_array
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
-        return obj_or_dof_array_vectorize_n_args(cl_array.maximum, x, y)
+        return obj_or_dof_array_vectorize_n_args(
+                partial(cl_array.maximum, queue=self._array_context.queue),
+                x, y)
 
     def minimum(self, x, y):
         import pyopencl.array as cl_array
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
-        return obj_or_dof_array_vectorize_n_args(cl_array.minimum, x, y)
+        return obj_or_dof_array_vectorize_n_args(
+                partial(cl_array.minimum, queue=self._array_context.queue),
+                x, y)
 
     def where(self, criterion, then, else_):
         import pyopencl.array as cl_array
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
         return obj_or_dof_array_vectorize_n_args(
-                cl_array.if_positive, criterion != 0, then, else_)
+                partial(cl_array.if_positive, queue=self._array_context.queue),
+                criterion != 0, then, else_)
+
+    def sum(self, a, dtype=None):
+        import pyopencl.array as cl_array
+        return cl_array.sum(a, dtype=dtype, queue=self._array_context.queue).get()
+
+    def min(self, a):
+        import pyopencl.array as cl_array
+        return cl_array.min(a, queue=self._array_context.queue).get()
+
+    def max(self, a):
+        import pyopencl.array as cl_array
+        return cl_array.max(a, queue=self._array_context.queue).get()
+
+
+class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
+    def norm(self, array, ord=None):
+        if len(array.shape) != 1:
+            raise NotImplementedError("only vector norms are implemented")
+
+        if ord is None:
+            ord = 2
+
+        from numbers import Number
+        if ord == np.inf:
+            return self._array_context.np.max(abs(array))
+        elif isinstance(ord, Number) and ord > 0:
+            return self._array_context.np.sum(abs(array)**ord)**(1/ord)
+        else:
+            raise NotImplementedError(f"unsupported value of 'ord': {ord}")
 
 
 class PyOpenCLArrayContext(ArrayContext):
