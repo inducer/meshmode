@@ -1040,6 +1040,7 @@ def map_mesh(mesh, f):  # noqa
 
     from meshmode.mesh import Mesh
     return Mesh(vertices, new_groups, skip_tests=True,
+            boundary_tags=mesh.boundary_tags,
             nodal_adjacency=mesh.nodal_adjacency_init_arg(),
             facial_adjacency_groups=mesh._facial_adjacency_groups,
             is_conforming=mesh.is_conforming)
