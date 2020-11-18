@@ -341,6 +341,15 @@ class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
         if ord is None:
             ord = 2
 
+        # Handling DOFArrays here is not beautiful, but it sure does avoid
+        # downstream headaches.
+        from meshmode.dof_array import DOFArray
+        if isinstance(array, DOFArray):
+            import numpy.linalg as la
+            return la.norm(np.array([
+                self.norm(grp_ary.reshape(-1), ord)
+                for grp_ary in array]), ord)
+
         from numbers import Number
         if ord == np.inf:
             return self._array_context.np.max(abs(array))
