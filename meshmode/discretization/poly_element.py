@@ -394,7 +394,7 @@ class _TensorProductElementGroupBase(PolynomialElementGroupBase):
     def weights(self):
         if self._quad_weights_1d is None:
             import modepy as mp
-            mm = mp.mass_matrix(self._basis_1d(), self._unit_nodes_1d)
+            mm = mp.mass_matrix(self._basis_1d, self._unit_nodes_1d)
             weights = mm @ np.ones(len(self._unit_nodes_1d))
         else:
             weights = self._quad_weights_1d
