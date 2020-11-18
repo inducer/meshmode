@@ -873,7 +873,6 @@ class Mesh(Record):
         set_if_not_present("nodal_adjacency", "_nodal_adjacency")
         set_if_not_present("facial_adjacency_groups", "_facial_adjacency_groups")
         set_if_not_present("boundary_tags")
-        set_if_not_present("btags_to_index")
         set_if_not_present("vertex_id_dtype")
         set_if_not_present("element_id_dtype")
         set_if_not_present("is_conforming")
