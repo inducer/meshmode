@@ -129,6 +129,7 @@ class _BaseFakeNumpyNamespace:
                     **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result
 
+        # limit which functions we try to hand off to loopy
         if name in self._numpy_math_functions:
             from meshmode.dof_array import obj_or_dof_array_vectorized_n_args
             return obj_or_dof_array_vectorized_n_args(loopy_implemented_elwise_func)
