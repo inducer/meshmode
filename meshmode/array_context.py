@@ -118,7 +118,6 @@ class _BaseFakeNumpyNamespace:
 
         })
 
-
     def __getattr__(self, name):
         def loopy_implemented_elwise_func(*args):
             actx = self._array_context
