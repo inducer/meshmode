@@ -72,6 +72,9 @@ class _BaseFakeNumpyNamespace:
         "sin", "cos", "tan", "arcsin", "arccos", "arctan", "hypot", "arctan2",
         "degrees", "radians", "unwrap", "deg2rad", "rad2deg",
 
+        # Deprecated, for compatibility (see below)
+        "atan2",
+
         # Hyperbolic functions
         "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh",
 
