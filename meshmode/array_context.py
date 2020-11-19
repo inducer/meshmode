@@ -316,9 +316,12 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def where(self, criterion, then, else_):
         import pyopencl.array as cl_array
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
-        return obj_or_dof_array_vectorize_n_args(
-                partial(cl_array.if_positive, queue=self._array_context.queue),
-                criterion != 0, then, else_)
+
+        def where_inner(inner_crit, inner_then, inner_else):
+            return cl_array.if_positive(inner_crit != 0, inner_then, inner_else,
+                    queue=self._array_context.queue)
+
+        return obj_or_dof_array_vectorize_n_args(where_inner, criterion, then, else_)
 
     def sum(self, a, dtype=None):
         import pyopencl.array as cl_array
