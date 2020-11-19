@@ -212,6 +212,8 @@ class DOFArray:
 # }}}
 
 
+# {{{ obj_or_dof vectorization
+
 def obj_or_dof_array_vectorize(f, ary):
     r"""
     Works like :func:`~pytools.obj_array.obj_array_vectorize`, but also
@@ -265,6 +267,10 @@ def obj_or_dof_array_vectorize_n_args(f, *args):
 obj_or_dof_array_vectorized_n_args = decorator.decorator(
         obj_or_dof_array_vectorize_n_args)
 
+# }}}
+
+
+# {{{ thaw / freeze
 
 def thaw(actx: ArrayContext, ary: Union[DOFArray, np.ndarray]) -> np.ndarray:
     r"""Call :meth:`~meshmode.array_context.ArrayContext.thaw` on the element
@@ -297,6 +303,10 @@ def freeze(ary: Union[DOFArray, np.ndarray]) -> np.ndarray:
     return DOFArray(None, tuple(
         ary.array_context.freeze(subary) for subary in ary))
 
+# }}}
+
+
+# {{{ flatten / unflatten
 
 def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
     r"""Convert a :class:`DOFArray` into a "flat" array of degrees of freedom,
@@ -378,6 +388,8 @@ def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
             group_starts,
             discr.groups,
             ndofs_per_element_per_group)))
+
+# }}}
 
 
 def flat_norm(ary: DOFArray, ord=None):
