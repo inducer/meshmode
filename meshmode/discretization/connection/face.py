@@ -349,9 +349,24 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
                     pass
 
                 elif mgrp.dim == 3:
-                    # FIXME: This makes the tests pass, but I do not understand
-                    # why this reversal is necessary.
-                    face_basis = face_basis[-2::-1]
+                    # The 3D vertices that generate the face basis for the
+                    # volume cube are [a, b, c].
+
+                    # ^ [1, 0]
+                    # |
+                    # b----c
+                    # |    |
+                    # |    |
+                    # 0----a--> [0,1]
+
+                    # First, drop 'c': He's linearly dependent on a, b.
+                    face_basis = face_basis[:-1]
+
+                    # Somehow, we've ended up with a 'last dimension varies
+                    # fastest' convention for vertex numbering, which means
+                    # that the multiplication by the face basis will swap the
+                    # axes. Not good, undo:
+                    face_basis = face_basis[::-1]
 
                     # assert that all basis vectors are axis-aligned
                     for bvec in face_basis:
