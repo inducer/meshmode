@@ -216,14 +216,14 @@ class DOFArray:
 
 def obj_or_dof_array_vectorize(f, ary):
     r"""
-    Works like :func:`~pytools.obj_array.obj_array_vectorize`, but also
-    for :class:`DOFArray`\ s.
+    Works like :func:`~pytools.obj_array.rec_obj_array_vectorize`, while
+    also tolerating one final 'layer' of :class:`DOFArray`\ s.
     """
 
     if isinstance(ary, DOFArray):
         return ary._like_me([f(ary_i) for ary_i in ary._data])
     else:
-        return obj_array_vectorize(f, ary)
+        return obj_array_vectorize(partial(obj_or_dof_array_vectorize, f), ary)
 
 
 obj_or_dof_array_vectorized = decorator.decorator(obj_or_dof_array_vectorize)
@@ -238,10 +238,12 @@ def obj_or_dof_array_vectorize_n_args(f, *args):
         result[idx] = f(obj_array_arg1[idx], arg2, obj_array_arg3[idx])
 
     Return an array of the same shape as the arguments consisting of the
-    return values of *f*.
+    return values of *f*.  If the elements of arrays found in *args* are
+    further object arrays, recurse.  If a :class:`DOFArray` is found,  apply
+    *f* to its entries. If non-object-arrays are found, apply *f* to those.
 
-    Works like :func:`~pytools.obj_array.obj_array_vectorize_n_args`, but also
-    for :class:`DOFArray`\ s.
+    Works like :func:`~pytools.obj_array.rec_obj_array_vectorize_n_args`, while
+    also tolerating one final 'layer' of :class:`DOFArray`\ s.
     """
     dofarray_arg_indices = [
             i for i, arg in enumerate(args)
@@ -249,7 +251,8 @@ def obj_or_dof_array_vectorize_n_args(f, *args):
 
     if not dofarray_arg_indices:
         from pytools.obj_array import obj_array_vectorize_n_args
-        return obj_array_vectorize_n_args(f, *args)
+        return obj_array_vectorize_n_args(
+                partial(obj_or_dof_array_vectorize_n_args, f), *args)
 
     leading_da_index = dofarray_arg_indices[0]
 
