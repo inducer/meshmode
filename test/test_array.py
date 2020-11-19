@@ -27,9 +27,11 @@ from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
+from pytools.obj_array import make_obj_array
+
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import PolynomialWarpAndBlendGroupFactory
-from meshmode.dof_array import flatten, unflatten
+from meshmode.dof_array import flatten, unflatten, DOFArray
 
 import logging
 logger = logging.getLogger(__name__)
@@ -56,12 +58,27 @@ def test_array_context_np_workalike(actx_factory):
         args = [np.random.randn(discr.ndofs) for i in range(n_args)]
         ref_result = getattr(np, sym_name)(*args)
 
+        # {{{ test DOFArrays
+
         actx_args = [unflatten(actx, discr, actx.from_numpy(arg)) for arg in args]
 
         actx_result = actx.to_numpy(
                 flatten(getattr(actx.np, sym_name)(*actx_args)))
 
         assert np.allclose(actx_result, ref_result)
+
+        # }}}
+
+        # {{{ test object arrays of DOFArrays
+
+        obj_array_args = [make_obj_array([arg]) for arg in actx_args]
+
+        obj_array_result = actx.to_numpy(
+                flatten(getattr(actx.np, sym_name)(*obj_array_args)[0]))
+
+        assert np.allclose(obj_array_result, ref_result)
+
+        # }}}
 
 
 def test_dof_array_arithmetic_same_as_numpy(actx_factory):
@@ -72,6 +89,12 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
             a=(-0.5,)*2, b=(0.5,)*2, n=(3,)*2, order=1)
 
     discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
+
+    def get_real(ary):
+        return ary.real
+
+    def get_imag(ary):
+        return ary.real
 
     import operator
     from pytools import generate_nonnegative_integer_tuples_below as gnitb
@@ -103,8 +126,8 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
             (operator.neg, 1, False),
             (operator.abs, 1, False),
 
-            (lambda ary: ary.real, 1, False),
-            (lambda ary: ary.imag, 1, False),
+            (get_real, 1, False),
+            (get_imag, 1, False),
             ]:
         for is_array_flags in gnitb(2, n_args):
             if sum(is_array_flags) == 0:
@@ -122,6 +145,8 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
                     for is_array_flag in is_array_flags]
             ref_result = op_func(*args)
 
+            # {{{ test DOFArrays
+
             actx_args = [
                     unflatten(actx, discr, actx.from_numpy(arg))
                     if isinstance(arg, np.ndarray) else arg
@@ -131,38 +156,35 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
 
             assert np.allclose(actx_result, ref_result)
 
+            # }}}
 
-def test_dof_array_comparison(actx_factory):
-    actx = actx_factory()
+            # {{{ test object arrays of DOFArrays
 
-    from meshmode.mesh.generation import generate_regular_rect_mesh
-    mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*2, b=(0.5,)*2, n=(8,)*2, order=3)
+            # It would be very nice if comparisons on object arrays behaved
+            # consistently with everything else. Alas, they do not. Instead:
+            #
+            # 0.5 < obj_array(DOFArray) -> obj_array([True])
+            #
+            # because hey, 0.5 < DOFArray returned something truthy.
 
-    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
+            if op_func not in [
+                    operator.eq, operator.ne,
+                    operator.le, operator.lt,
+                    operator.ge, operator.gt,
 
-    import operator
-    for op in [
-            operator.lt,
-            operator.le,
-            operator.gt,
-            operator.ge,
-            ]:
-        np_arg = np.random.randn(discr.ndofs)
-        arg = unflatten(actx, discr, actx.from_numpy(np_arg))
-        zeros = discr.zeros(actx)
+                    # All Python objects are real-valued, right?
+                    get_imag,
+                    ]:
+                obj_array_args = [
+                        make_obj_array([arg]) if isinstance(arg, DOFArray) else arg
+                        for arg in actx_args]
 
-        comp = op(arg, zeros)
-        np_comp = actx.to_numpy(flatten(comp))
-        assert np.array_equal(np_comp, op(np_arg, 0))
+                obj_array_result = actx.to_numpy(
+                        flatten(op_func(*obj_array_args)[0]))
 
-        comp = op(arg, 0)
-        np_comp = actx.to_numpy(flatten(comp))
-        assert np.array_equal(np_comp, op(np_arg, 0))
+                assert np.allclose(obj_array_result, ref_result)
 
-        comp = op(0, arg)
-        np_comp = actx.to_numpy(flatten(comp))
-        assert np.array_equal(np_comp, op(0, np_arg))
+            # }}}
 
 
 if __name__ == "__main__":
