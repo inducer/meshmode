@@ -137,9 +137,9 @@ class _BaseFakeNumpyNamespace:
             raise AttributeError(name)
 
     def conjugate(self, x):
-        # NOTE: conjugate distribute over object arrays, but it looks for a
+        # NOTE: conjugate distributes over object arrays, but it looks for a
         # `conjugate` ufunc, while some implementations only have the shorter
-        # `conj` (e.g. cl.array.Array), so this should work for everybody
+        # `conj` (e.g. cl.array.Array), so this should work for everybody.
         from meshmode.dof_array import obj_or_dof_array_vectorize
         return obj_or_dof_array_vectorize(lambda obj: obj.conj(), x)
 
@@ -316,9 +316,12 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def where(self, criterion, then, else_):
         import pyopencl.array as cl_array
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
-        return obj_or_dof_array_vectorize_n_args(
-                partial(cl_array.if_positive, queue=self._array_context.queue),
-                criterion != 0, then, else_)
+
+        def where_inner(inner_crit, inner_then, inner_else):
+            return cl_array.if_positive(inner_crit != 0, inner_then, inner_else,
+                    queue=self._array_context.queue)
+
+        return obj_or_dof_array_vectorize_n_args(where_inner, criterion, then, else_)
 
     def sum(self, a, dtype=None):
         import pyopencl.array as cl_array
