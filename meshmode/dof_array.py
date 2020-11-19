@@ -216,8 +216,8 @@ class DOFArray:
 
 def obj_or_dof_array_vectorize(f, ary):
     r"""
-    Works like :func:`~pytools.obj_array.rec_obj_array_vectorize`, while
-    also tolerating one final 'layer' of :class:`DOFArray`\ s.
+    Works like :func:`~pytools.obj_array.obj_array_vectorize`, but recurses
+    on object arrays and also tolerates one final 'layer' of :class:`DOFArray`\ s.
     """
 
     if isinstance(ary, DOFArray):
@@ -241,9 +241,6 @@ def obj_or_dof_array_vectorize_n_args(f, *args):
     return values of *f*.  If the elements of arrays found in *args* are
     further object arrays, recurse.  If a :class:`DOFArray` is found,  apply
     *f* to its entries. If non-object-arrays are found, apply *f* to those.
-
-    Works like :func:`~pytools.obj_array.rec_obj_array_vectorize_n_args`, while
-    also tolerating one final 'layer' of :class:`DOFArray`\ s.
     """
     dofarray_arg_indices = [
             i for i, arg in enumerate(args)
