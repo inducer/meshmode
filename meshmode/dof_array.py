@@ -44,6 +44,7 @@ __doc__ = """
 
 .. autofunction:: thaw
 .. autofunction:: freeze
+
 .. autofunction:: flatten
 .. autofunction:: unflatten
 """
@@ -124,8 +125,6 @@ class DOFArray:
             raise TypeError("actx must be of type ArrayContext")
 
         return cls(actx, tuple(res_list))
-
-    # }}}
 
     def __str__(self):
         return str(self._data)
