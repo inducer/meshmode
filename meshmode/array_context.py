@@ -137,9 +137,9 @@ class _BaseFakeNumpyNamespace:
             raise AttributeError(name)
 
     def conjugate(self, x):
-        # NOTE: conjugate distribute over object arrays, but it looks for a
+        # NOTE: conjugate distributes over object arrays, but it looks for a
         # `conjugate` ufunc, while some implementations only have the shorter
-        # `conj` (e.g. cl.array.Array), so this should work for everybody
+        # `conj` (e.g. cl.array.Array), so this should work for everybody.
         from meshmode.dof_array import obj_or_dof_array_vectorize
         return obj_or_dof_array_vectorize(lambda obj: obj.conj(), x)
 
