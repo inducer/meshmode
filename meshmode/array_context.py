@@ -21,6 +21,7 @@ THE SOFTWARE.
 """
 
 
+from functools import partial
 import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
@@ -55,6 +56,67 @@ def make_loopy_program(domains, statements, kernel_data=["..."],
 class _BaseFakeNumpyNamespace:
     def __init__(self, array_context):
         self._array_context = array_context
+        self.linalg = self._get_fake_numpy_linalg_namespace()
+
+    def _get_fake_numpy_linalg_namespace(self):
+        return _BaseFakeNumpyLinalgNamespace(self.array_context)
+
+    _numpy_math_functions = frozenset({
+        # https://numpy.org/doc/stable/reference/routines.math.html
+
+        # FIXME: Heads up: not all of these are supported yet.
+        # But I felt it was important to only dispatch actually existing
+        # numpy functions to loopy.
+
+        # Trigonometric functions
+        "sin", "cos", "tan", "arcsin", "arccos", "arctan", "hypot", "arctan2",
+        "degrees", "radians", "unwrap", "deg2rad", "rad2deg",
+
+        # Deprecated, for compatibility (see below)
+        "atan2",
+
+        # Hyperbolic functions
+        "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh",
+
+        # Rounding
+        "around", "round_", "rint", "fix", "floor", "ceil", "trunc",
+
+        # Sums, products, differences
+
+        # FIXME: Many of These are reductions or scans.
+        # "prod", "sum", "nanprod", "nansum", "cumprod", "cumsum", "nancumprod",
+        # "nancumsum", "diff", "ediff1d", "gradient", "cross", "trapz",
+
+        # Exponents and logarithms
+        "exp", "expm1", "exp2", "log", "log10", "log2", "log1p", "logaddexp",
+        "logaddexp2",
+
+        # Other special functions
+        "i0", "sinc",
+
+        # Floating point routines
+        "signbit", "copysign", "frexp", "ldexp", "nextafter", "spacing",
+        # Rational routines
+        "lcm", "gcd",
+
+        # Arithmetic operations
+        "add", "reciprocal", "positive", "negative", "multiply", "divide", "power",
+        "subtract", "true_divide", "floor_divide", "float_power", "fmod", "mod",
+        "modf", "remainder", "divmod",
+
+        # Handling complex numbers
+        "angle", "real", "imag",
+        # Implemented below:
+        # "conj", "conjugate",
+
+        # Miscellaneous
+        "convolve", "clip", "sqrt", "cbrt", "square", "absolute", "fabs", "sign",
+        "heaviside", "maximum", "fmax", "nan_to_num",
+
+        # FIXME:
+        # "interp",
+
+        })
 
     def __getattr__(self, name):
         def loopy_implemented_elwise_func(*args):
@@ -67,8 +129,12 @@ class _BaseFakeNumpyNamespace:
                     **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result
 
-        from meshmode.dof_array import obj_or_dof_array_vectorized_n_args
-        return obj_or_dof_array_vectorized_n_args(loopy_implemented_elwise_func)
+        # limit which functions we try to hand off to loopy
+        if name in self._numpy_math_functions:
+            from meshmode.dof_array import obj_or_dof_array_vectorized_n_args
+            return obj_or_dof_array_vectorized_n_args(loopy_implemented_elwise_func)
+        else:
+            raise AttributeError(name)
 
     def conjugate(self, x):
         # NOTE: conjugate distribute over object arrays, but it looks for a
@@ -78,6 +144,11 @@ class _BaseFakeNumpyNamespace:
         return obj_or_dof_array_vectorize(lambda obj: obj.conj(), x)
 
     conj = conjugate
+
+
+class _BaseFakeNumpyLinalgNamespace:
+    def __init__(self, array_context):
+        self._array_context = array_context
 
 
 class ArrayContext:
@@ -225,21 +296,84 @@ class ArrayContext:
 # {{{ PyOpenCLArrayContext
 
 class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
+    def _get_fake_numpy_linalg_namespace(self):
+        return _PyOpenCLFakeNumpyLinalgNamespace(self._array_context)
+
     def maximum(self, x, y):
         import pyopencl.array as cl_array
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
-        return obj_or_dof_array_vectorize_n_args(cl_array.maximum, x, y)
+        return obj_or_dof_array_vectorize_n_args(
+                partial(cl_array.maximum, queue=self._array_context.queue),
+                x, y)
 
     def minimum(self, x, y):
         import pyopencl.array as cl_array
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
-        return obj_or_dof_array_vectorize_n_args(cl_array.minimum, x, y)
+        return obj_or_dof_array_vectorize_n_args(
+                partial(cl_array.minimum, queue=self._array_context.queue),
+                x, y)
 
     def where(self, criterion, then, else_):
         import pyopencl.array as cl_array
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
         return obj_or_dof_array_vectorize_n_args(
-                cl_array.if_positive, criterion != 0, then, else_)
+                partial(cl_array.if_positive, queue=self._array_context.queue),
+                criterion != 0, then, else_)
+
+    def sum(self, a, dtype=None):
+        import pyopencl.array as cl_array
+        return cl_array.sum(a, dtype=dtype, queue=self._array_context.queue).get()
+
+    def min(self, a):
+        import pyopencl.array as cl_array
+        return cl_array.min(a, queue=self._array_context.queue).get()
+
+    def max(self, a):
+        import pyopencl.array as cl_array
+        return cl_array.max(a, queue=self._array_context.queue).get()
+
+
+def _flatten_grp_array(grp_ary):
+    if grp_ary.size == 0:
+        # Work around https://github.com/inducer/pyopencl/pull/402
+        return grp_ary._new_with_changes(
+                data=None, offset=0, shape=(0,), strides=(grp_ary.dtype.itemsize,))
+    if grp_ary.flags.f_contiguous:
+        return grp_ary.reshape(-1, order="F")
+    elif grp_ary.flags.c_contiguous:
+        return grp_ary.reshape(-1, order="C")
+    else:
+        raise ValueError("cannot flatten group array of DOFArray for norm, "
+                f"with strides {grp_ary.strides} of {grp_ary.dtype}")
+
+
+class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
+    def norm(self, array, ord=None):
+        if len(array.shape) != 1:
+            raise NotImplementedError("only vector norms are implemented")
+
+        if ord is None:
+            ord = 2
+
+        # Handling DOFArrays here is not beautiful, but it sure does avoid
+        # downstream headaches.
+        from meshmode.dof_array import DOFArray
+        if isinstance(array, DOFArray):
+            import numpy.linalg as la
+            return la.norm(np.array([
+                self.norm(_flatten_grp_array(grp_ary), ord)
+                for grp_ary in array]), ord)
+
+        if array.size == 0:
+            return 0
+
+        from numbers import Number
+        if ord == np.inf:
+            return self._array_context.np.max(abs(array))
+        elif isinstance(ord, Number) and ord > 0:
+            return self._array_context.np.sum(abs(array)**ord)**(1/ord)
+        else:
+            raise NotImplementedError(f"unsupported value of 'ord': {ord}")
 
 
 class PyOpenCLArrayContext(ArrayContext):

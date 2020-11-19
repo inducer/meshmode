@@ -40,7 +40,7 @@ from meshmode.discretization.poly_element import (
         LegendreGaussLobattoTensorProductGroupFactory
         )
 from meshmode.mesh import Mesh, BTAG_ALL
-from meshmode.dof_array import thaw, flat_norm, flatten
+from meshmode.dof_array import thaw, flatten
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -455,7 +455,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
             mat_error = la.norm(actx.to_numpy(flatten(bdry_f_2)) - bdry_f_2_by_mat)
             assert mat_error < 1e-14, mat_error
 
-        err = flat_norm(bdry_f-bdry_f_2, np.inf)
+        err = actx.np.linalg.norm(bdry_f-bdry_f_2, np.inf)
         eoc_rec.add_data_point(h, err)
 
     order_slack = 0.75 if mesh_name == "blob" else 0.5
@@ -565,7 +565,7 @@ def test_all_faces_interpolation(actx_factory, mesh_name, dim, mesh_pars,
 
             all_face_f_2 = all_face_f_2 + all_face_embedding(bdry_f)
 
-        err = flat_norm(all_face_f-all_face_f_2, np.inf)
+        err = actx.np.linalg.norm(all_face_f-all_face_f_2, np.inf)
         eoc_rec.add_data_point(h, err)
 
     print(eoc_rec)
@@ -659,7 +659,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
         bdry_f = f(bdry_x)
         bdry_f_2 = opp_face(bdry_f)
 
-        err = flat_norm(bdry_f-bdry_f_2, np.inf)
+        err = actx.np.linalg.norm(bdry_f-bdry_f_2, np.inf)
         eoc_rec.add_data_point(h, err)
 
     print(eoc_rec)
@@ -937,8 +937,8 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
     f_high_num = cnx(f_low)
 
     err = (
-            flat_norm(f_high_ref-f_high_num, np.inf)
-            / flat_norm(f_high_ref, np.inf))
+            actx.np.linalg.norm(f_high_ref-f_high_num, np.inf)
+            / actx.np.linalg.norm(f_high_ref, np.inf))
 
     print(err)
     assert err < 1e-2
@@ -1570,7 +1570,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
             check_connection(actx, opposite)
 
             op_bdry_f = opposite(bdry_f)
-            error = flat_norm(bdry_f - op_bdry_f, np.inf)
+            error = actx.np.linalg.norm(bdry_f - op_bdry_f, np.inf)
             assert error < 1.0e-11, error
 
         if boundary_tag == FACE_RESTR_ALL:
@@ -1578,7 +1578,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
             check_connection(actx, embedding)
 
             em_bdry_f = embedding(bdry_f)
-            error = flat_norm(bdry_f - em_bdry_f)
+            error = actx.np.linalg.norm(bdry_f - em_bdry_f)
             assert error < 1.0e-11, error
 
     # check some derivatives (nb: flatten is a generator)

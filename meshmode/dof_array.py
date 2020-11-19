@@ -46,7 +46,6 @@ __doc__ = """
 .. autofunction:: freeze
 .. autofunction:: flatten
 .. autofunction:: unflatten
-.. autofunction:: flat_norm
 """
 
 
@@ -382,11 +381,12 @@ def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
             ndofs_per_element_per_group)))
 
 
-def flat_norm(ary: DOFArray, ord=2):
-    # FIXME This could be done without flattening and copying
-    actx = ary.array_context
-    import numpy.linalg as la
-    return la.norm(actx.to_numpy(flatten(ary)), ord)
+def flat_norm(ary: DOFArray, ord=None):
+    from warnings import warn
+    warn("flat_norm is deprecated. Use array_context.np.linalg.norm instead. "
+            "flat_norm will disappear in 2022.",
+            DeprecationWarning, stacklevel=2)
+    return ary.array_context.np.linalg.norm(ary, ord=ord)
 
 
 # vim: foldmethod=marker
