@@ -325,15 +325,16 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
 
     def sum(self, a, dtype=None):
         import pyopencl.array as cl_array
-        return cl_array.sum(a, dtype=dtype, queue=self._array_context.queue).get()
+        return cl_array.sum(
+                a, dtype=dtype, queue=self._array_context.queue).get()[()]
 
     def min(self, a):
         import pyopencl.array as cl_array
-        return cl_array.min(a, queue=self._array_context.queue).get()
+        return cl_array.min(a, queue=self._array_context.queue).get()[()]
 
     def max(self, a):
         import pyopencl.array as cl_array
-        return cl_array.max(a, queue=self._array_context.queue).get()
+        return cl_array.max(a, queue=self._array_context.queue).get()[()]
 
 
 def _flatten_grp_array(grp_ary):
