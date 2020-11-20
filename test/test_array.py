@@ -187,6 +187,19 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
             # }}}
 
 
+def test_dof_array_reductions_same_as_numpy(actx_factory):
+    actx = actx_factory()
+
+    from numbers import Number
+    for name in ["sum", "min", "max"]:
+        ary = np.random.randn(3000)
+        np_red = getattr(np, name)(ary)
+        actx_red = getattr(actx.np, name)(actx.from_numpy(ary))
+
+        assert isinstance(actx_red, Number)
+        assert np.allclose(np_red, actx_red)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
