@@ -72,9 +72,6 @@ class _BaseFakeNumpyNamespace:
         "sin", "cos", "tan", "arcsin", "arccos", "arctan", "hypot", "arctan2",
         "degrees", "radians", "unwrap", "deg2rad", "rad2deg",
 
-        # Deprecated, for compatibility (see below)
-        "atan2",
-
         # Hyperbolic functions
         "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh",
 
@@ -118,16 +115,40 @@ class _BaseFakeNumpyNamespace:
 
         })
 
+    _numpy_to_c_arc_functions = {
+            "arcsin": "asin",
+            "arccos": "acos",
+            "arctan": "atan",
+            "arctan2": "atan2",
+
+            "arcsinh": "asinh",
+            "arccosh": "acosh",
+            "arctanh": "atanh",
+            }
+
+    _c_to_numpy_arc_functions = {c_name: numpy_name
+            for numpy_name, c_name in _numpy_to_c_arc_functions.items()}
+
     def __getattr__(self, name):
         def loopy_implemented_elwise_func(*args):
             actx = self._array_context
             # FIXME: Maybe involve loopy type inference?
             result = actx.empty(args[0].shape, args[0].dtype)
             prg = actx._get_scalar_func_loopy_program(
-                    name, nargs=len(args), naxes=len(args[0].shape))
+                    c_name, nargs=len(args), naxes=len(args[0].shape))
             actx.call_loopy(prg, out=result,
                     **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result
+
+        if name in self._c_to_numpy_arc_functions:
+            from warnings import warn
+            warn(f"'{name}' in ArrayContext.np is deprecated. "
+                    "Use '{c_to_numpy_arc_functions[name]}' as in numpy. "
+                    "The old name will stop working in 2021.",
+                    DeprecationWarning, stacklevel=3)
+
+        # normalize to C names anyway
+        c_name = self._numpy_to_c_arc_functions.get(name, name)
 
         # limit which functions we try to hand off to loopy
         if name in self._numpy_math_functions:
@@ -231,15 +252,7 @@ class ArrayContext:
         raise NotImplementedError
 
     @memoize_method
-    def _get_scalar_func_loopy_program(self, name, nargs, naxes):
-        if name == "arctan2":
-            name = "atan2"
-        elif name == "atan2":
-            from warnings import warn
-            warn("'atan2' in ArrayContext.np is deprecated. Use 'arctan2', "
-                    "as in numpy2. This will be disallowed in 2021.",
-                    DeprecationWarning, stacklevel=3)
-
+    def _get_scalar_func_loopy_program(self, c_name, nargs, naxes):
         from pymbolic import var
 
         var_names = ["i%d" % i for i in range(naxes)]
@@ -258,10 +271,10 @@ class ArrayContext:
                 [
                     lp.Assignment(
                         var("out")[subscript],
-                        var(name)(*[
+                        var(c_name)(*[
                             var("inp%d" % i)[subscript] for i in range(nargs)]))
                     ],
-                name="actx_special_%s" % name)
+                name="actx_special_%s" % c_name)
 
     def freeze(self, array):
         """Return a version of the context-defined array *array* that is
