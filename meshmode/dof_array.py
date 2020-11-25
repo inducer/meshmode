@@ -154,6 +154,12 @@ class DOFArray:
 
     def _bop(self, f, op1, op2):
         """Broadcasting logic for a generic binary operator."""
+        if isinstance(op1, np.ndarray):
+            return obj_array_vectorize(lambda op: self._bop(f, op, op2),
+                op1.astype(np.object, copy=False))
+        if isinstance(op2, np.ndarray):
+            return obj_array_vectorize(lambda op: self._bop(f, op1, op),
+                op2.astype(np.object, copy=False))
         if isinstance(op1, DOFArray) and isinstance(op2, DOFArray):
             if len(op1._data) != len(op2._data):
                 raise ValueError("DOFArray objects in binary operator must have "
