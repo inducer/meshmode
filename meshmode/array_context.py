@@ -29,6 +29,7 @@ from pytools import memoize_method
 
 __doc__ = """
 .. autofunction:: make_loopy_program
+.. autofunction:: pytest_generate_tests_for_pyopencl_array_context
 .. autoclass:: ArrayContext
 .. autoclass:: PyOpenCLArrayContext
 """
