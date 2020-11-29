@@ -29,9 +29,9 @@ from pytools import memoize_method
 
 __doc__ = """
 .. autofunction:: make_loopy_program
-.. autofunction:: pytest_generate_tests_for_pyopencl_array_context
 .. autoclass:: ArrayContext
 .. autoclass:: PyOpenCLArrayContext
+.. autofunction:: pytest_generate_tests_for_pyopencl_array_context
 """
 
 
@@ -547,6 +547,8 @@ class PyOpenCLArrayContext(ArrayContext):
 # {{{ pytest integration
 
 def pytest_generate_tests_for_pyopencl_array_context(metafunc):
+    """Parametrize tests for :mod:`pytest` to use a :mod:`pyopencl` array context."""
+
     import pyopencl as cl
     from pyopencl.tools import _ContextFactory
 
