@@ -547,7 +547,7 @@ class PyOpenCLArrayContext(ArrayContext):
 # {{{ pytest integration
 
 def pytest_generate_tests_for_pyopencl_array_context(metafunc):
-    """Parametrize tests for :mod:`pytest` to use a :mod:`pyopencl` array context."""
+    """Parametrize tests for pytest to use a :mod:`pyopencl` array context."""
 
     import pyopencl as cl
     from pyopencl.tools import _ContextFactory
