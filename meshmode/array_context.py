@@ -551,7 +551,7 @@ def pytest_generate_tests_for_pyopencl_array_context(metafunc):
 
     Performs device enumeration analogously to
     :func:`pyopencl.tools.pytest_generate_tests_for_pyopencl`,
-    allowing you to specify the `PYOPENCL_TEST` environment variable
+    allowing you to specify the ``PYOPENCL_TEST`` environment variable
     for device selection.
     """
 
