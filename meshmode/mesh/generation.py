@@ -362,7 +362,9 @@ def make_group_from_vertices(vertices, vertex_indices, order,
         _, nnodes = unit_nodes.shape
 
         from pytools import generate_nonnegative_integer_tuples_below as gnitb
-        id_tuples = list(gnitb(2, dim))
+        # Modepy's convention is 'first coordinate varies fastest'. Adapt to it
+        # for the vertices. It doesn't matter for the basis.
+        id_tuples = [id_tuple[::-1] for id_tuple in gnitb(2, dim)]
         assert len(id_tuples) == nvertices
 
         vdm = np.empty((nvertices, nvertices))
@@ -849,8 +851,8 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
                     if is_tp:
                         el_vertices.append(
-                                (a000, a001, a010, a011,
-                                    a100, a101, a110, a111))
+                                (a000, a100, a010, a110,
+                                    a001, a101, a011, a111))
 
                     else:
                         el_vertices.append((a000, a100, a010, a001))

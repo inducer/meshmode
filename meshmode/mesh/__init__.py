@@ -290,13 +290,9 @@ class MeshElementGroup(Record):
 # }}}
 
 
-# {{{ simplex
+# {{{ modepy-based element group
 
-class SimplexElementGroup(MeshElementGroup):
-    """
-    .. automethod:: __init__
-    """
-
+class _ModepyElementGroup(MeshElementGroup):
     def __init__(self, order, vertex_indices, nodes,
             element_nr_base=None, node_nr_base=None,
             unit_nodes=None, dim=None):
@@ -317,156 +313,57 @@ class SimplexElementGroup(MeshElementGroup):
         automatically assigned.
         """
 
-        if unit_nodes is None:
+        if unit_nodes is not None:
+            _dim = unit_nodes.shape[0]
+            if dim is not None and _dim != dim:
+                raise ValueError("dim does not match unit_nodes")
+            else:
+                dim = _dim
+        else:
             if dim is None:
                 raise TypeError("'dim' must be passed "
                         "if 'unit_nodes' is not passed")
 
-            if dim <= 3:
-                unit_nodes = mp.warp_and_blend_nodes(dim, order)
-            else:
-                unit_nodes = mp.equidistant_nodes(dim, order)
+        # dim is now usable
+        shape = self._modepy_shape = self._modepy_shape_cls(dim)
+        space = self._modepy_space = mp.space_for_shape(self._modepy_shape, order)
 
-        dims = unit_nodes.shape[0]
+        if unit_nodes is None:
+            unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
 
         if vertex_indices is not None:
             if not issubclass(vertex_indices.dtype.type, np.integer):
                 raise TypeError("vertex_indices must be integral")
 
-            if vertex_indices.shape[-1] != dims+1:
+            if vertex_indices.shape[-1] != shape.nvertices:
                 raise ValueError("vertex_indices has wrong number of vertices per "
-                        "element. expected: %d, got: %d" % (dims+1,
+                        "element. expected: %d, got: %d" % (shape.nvertices,
                             vertex_indices.shape[-1]))
 
         super().__init__(order, vertex_indices, nodes,
                 element_nr_base, node_nr_base, unit_nodes, dim)
+
+    def face_vertex_indices(self):
+        return tuple(face.volume_vertex_indices
+                for face in mp.faces_for_shape(self._modepy_shape))
+
+    def vertex_unit_coordinates(self):
+        return mp.biunit_vertices_for_shape(self._modepy_shape).T
+
+# }}}
+
+
+class SimplexElementGroup(_ModepyElementGroup):
+    _modepy_shape_cls = mp.Simplex
 
     @property
     @memoize_method
     def is_affine(self):
         return is_affine_simplex_group(self)
 
-    def face_vertex_indices(self):
-        if self.dim == 1:
-            return (
-                (0,),
-                (1,),
-                )
-        elif self.dim == 2:
-            return (
-                (0, 1),
-                (2, 0),
-                (1, 2),
-                )
-        elif self.dim == 3:
-            return (
-                (0, 2, 1),
-                (0, 1, 3),
-                (0, 3, 2),
-                (1, 2, 3)
-                )
-        else:
-            raise NotImplementedError(f"dimension {self.dim}")
 
-    def vertex_unit_coordinates(self):
-        from modepy.tools import unit_vertices
-        return unit_vertices(self.dim)
-
-# }}}
-
-
-# {{{ tensor-product
-
-class TensorProductElementGroup(MeshElementGroup):
-    """
-    .. automethod:: __init__
-    """
-
-    def __init__(self, order, vertex_indices, nodes,
-            element_nr_base=None, node_nr_base=None,
-            unit_nodes=None):
-        r"""
-        :arg order: the maximum total degree used for interpolation.
-        :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
-            The nodes are assumed to be mapped versions of *unit_nodes*.
-        :arg unit_nodes: ``[dim, nunit_nodes]``
-            The unit nodes of which *nodes* is a mapped
-            version.
-
-        The vertex order in 3D is as follows ::
-
-
-              ^ s
-              |   6-----------7
-              |  /|          /|
-              | / |   ^     / |
-              |/  |  / t   /  |
-              2-----------3   |
-              |   |/      |   |
-              |   4-------|---5
-              |  /        |  /
-              | /         | /
-              |/          |/
-              0-----------1---->r
-
-        For general dimensions, follow binary upward counting:
-        000, 001, 010, 011, ...
-
-        Do not supply *element_nr_base* and *node_nr_base*, they will be
-        automatically assigned.
-        """
-
-        dims = unit_nodes.shape[0]
-
-        if vertex_indices is not None:
-            if not issubclass(vertex_indices.dtype.type, np.integer):
-                raise TypeError("vertex_indices must be integral")
-
-            if vertex_indices.shape[-1] != 2**dims:
-                raise ValueError("vertex_indices has wrong number of vertices per "
-                        "element. expected: %d, got: %d" % (2**dims,
-                            vertex_indices.shape[-1]))
-
-        super().__init__(order, vertex_indices, nodes,
-                element_nr_base, node_nr_base, unit_nodes)
-
-    def face_vertex_indices(self):
-        if self.dim == 1:
-            return (
-                (0,),
-                (1,),
-                )
-        elif self.dim == 2:
-            return (
-                    (0, 1),
-                    (3, 2),
-                    (2, 0),
-                    (1, 3),
-                    )
-        elif self.dim == 3:
-            return (
-                    # binary is tsr
-
-                    # rs-aligned
-                    (0b000, 0b001, 0b010, 0b011,),
-                    (0b100, 0b101, 0b110, 0b111,),
-
-                    # st-aligned
-                    (0b000, 0b010, 0b100, 0b110,),
-                    (0b001, 0b011, 0b101, 0b111,),
-
-                    # rt-aligned
-                    (0b000, 0b001, 0b100, 0b101,),
-                    (0b010, 0b011, 0b110, 0b111,),
-                    )
-        else:
-            raise NotImplementedError(f"dimension {self.dim}")
-
-    def vertex_unit_coordinates(self):
-        from pytools import generate_nonnegative_integer_tuples_below as gnitb
-        return np.array(list(gnitb(2, self.dim)), dtype=np.float64)*2.0 - 1.0
-
-# }}}
+class TensorProductElementGroup(_ModepyElementGroup):
+    _modepy_shape_cls = mp.Hypercube
 
 # }}}
 
@@ -1029,10 +926,8 @@ def _test_node_vertex_consistency_resampling(mesh, mgrp, tol):
     if mgrp.nelements == 0:
         return True
 
-    if isinstance(mgrp, SimplexElementGroup):
-        basis = mp.simplex_best_available_basis(mgrp.dim, mgrp.order)
-    elif isinstance(mgrp, TensorProductElementGroup):
-        basis = mp.legendre_tensor_product_basis(mgrp.dim, mgrp.order)
+    if isinstance(mgrp, _ModepyElementGroup):
+        basis = mp.basis_for_space(mgrp._modepy_space).functions
     else:
         raise TypeError(f"unsupported group type: {type(mgrp).__name__}")
 
@@ -1071,7 +966,7 @@ def _test_node_vertex_consistency(mesh, tol):
     """
 
     for mgrp in mesh.groups:
-        if isinstance(mgrp, (SimplexElementGroup, TensorProductElementGroup)):
+        if isinstance(mgrp, _ModepyElementGroup):
             assert _test_node_vertex_consistency_resampling(mesh, mgrp, tol)
         else:
             from warnings import warn
