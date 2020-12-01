@@ -16,7 +16,7 @@ git+https://github.com/inducer/loopy.git@revert-172-revert-156-master#egg=loopy 
 # more pytential dependencies
 git+https://github.com/inducer/boxtree.git#egg=boxtree
 git+https://github.com/inducer/sumpy.git#egg=sumpy
-git+https://github.com/nchristensen/pytential.git#pytential==2020.2.1
+git+https://github.com/inducer/pytential.git#pytential
 
 # requires pymetis for tests for partition_mesh
 git+https://github.com/inducer/pymetis.git#egg=pymetis
