@@ -266,7 +266,6 @@ def obj_or_dof_array_vectorize_n_args(f, *args):
     if not dofarray_arg_indices:
         if any(isinstance(arg, np.ndarray) and arg.dtype.char == "O"
                 for i, arg in enumerate(args)):
-            from pytools.obj_array import obj_array_vectorize_n_args
             return obj_array_vectorize_n_args(
                     partial(obj_or_dof_array_vectorize_n_args, f), *args)
         else:
