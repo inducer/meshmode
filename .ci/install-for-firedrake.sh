@@ -19,5 +19,5 @@ pip install dataclasses
 pip install pytest
 
 pip install -r /tmp/myreq.txt
-pip install --force-reinstall git+https://github.com/inducer/loopy.git@firedrake-usable_for_potentials
+pip install --force-reinstall git+https://github.com/nchristensen/loopy.git@test-firedrake-usable
 pip install .
