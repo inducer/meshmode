@@ -29,7 +29,7 @@ from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests,
         PyOpenCLArrayContext)
-from meshmode.dof_array import flat_norm, thaw
+from meshmode.dof_array import thaw
 
 import logging
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ def test_nodal_dg_interop(actx_factory, dim):
 
         for ax in range(dim):
             x_ax = ndgctx.pull_dof_array(actx, ndgctx.AXES[ax])
-            err = flat_norm(x_ax-discr.nodes()[ax], np.inf)
+            err = actx.np.linalg.norm(x_ax-discr.nodes()[ax], np.inf)
             assert err < 1e-15
 
         n0 = thaw(actx, discr.nodes()[0])
@@ -64,7 +64,7 @@ def test_nodal_dg_interop(actx_factory, dim):
         ndgctx.push_dof_array("n0", n0)
         n0_2 = ndgctx.pull_dof_array(actx, "n0")
 
-        assert flat_norm(n0 - n0_2, np.inf) < 1e-15
+        assert actx.np.linalg.norm(n0 - n0_2, np.inf) < 1e-15
 
 
 if __name__ == "__main__":

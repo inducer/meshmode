@@ -47,9 +47,9 @@ __doc__ = """
 
 .. autofunction:: thaw
 .. autofunction:: freeze
+
 .. autofunction:: flatten
 .. autofunction:: unflatten
-.. autofunction:: flat_norm
 """
 
 
@@ -141,7 +141,11 @@ class DOFArray:
 
         return cls(actx, tuple(res_list))
 
-    # }}}
+    def __str__(self):
+        return str(self._data)
+
+    def __repr__(self):
+        return f"DOFArray({repr(self._data)})"
 
     # {{{ sequence protocol
 
@@ -223,16 +227,20 @@ class DOFArray:
 # }}}
 
 
+# {{{ obj_or_dof vectorization
+
 def obj_or_dof_array_vectorize(f, ary):
     r"""
-    Works like :func:`~pytools.obj_array.obj_array_vectorize`, but also
-    for :class:`DOFArray`\ s.
+    Works like :func:`~pytools.obj_array.obj_array_vectorize`, but recurses
+    on object arrays and also tolerates one final 'layer' of :class:`DOFArray`\ s.
     """
 
     if isinstance(ary, DOFArray):
         return ary._like_me([f(ary_i) for ary_i in ary._data])
+    elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
+        return obj_array_vectorize(partial(obj_or_dof_array_vectorize, f), ary)
     else:
-        return obj_array_vectorize(f, ary)
+        return f(ary)
 
 
 obj_or_dof_array_vectorized = decorator.decorator(obj_or_dof_array_vectorize)
@@ -247,17 +255,22 @@ def obj_or_dof_array_vectorize_n_args(f, *args):
         result[idx] = f(obj_array_arg1[idx], arg2, obj_array_arg3[idx])
 
     Return an array of the same shape as the arguments consisting of the
-    return values of *f*.
-
-    Works like :func:`~pytools.obj_array.obj_array_vectorize_n_args`, but also
-    for :class:`DOFArray`\ s.
+    return values of *f*.  If the elements of arrays found in *args* are
+    further object arrays, recurse.  If a :class:`DOFArray` is found,  apply
+    *f* to its entries. If non-object-arrays are found, apply *f* to those.
     """
     dofarray_arg_indices = [
             i for i, arg in enumerate(args)
             if isinstance(arg, DOFArray)]
 
     if not dofarray_arg_indices:
-        return obj_array_vectorize_n_args(f, *args)
+        if any(isinstance(arg, np.ndarray) and arg.dtype.char == "O"
+                for i, arg in enumerate(args)):
+            from pytools.obj_array import obj_array_vectorize_n_args
+            return obj_array_vectorize_n_args(
+                    partial(obj_or_dof_array_vectorize_n_args, f), *args)
+        else:
+            return f(*args)
 
     leading_da_index = dofarray_arg_indices[0]
 
@@ -275,6 +288,10 @@ def obj_or_dof_array_vectorize_n_args(f, *args):
 obj_or_dof_array_vectorized_n_args = decorator.decorator(
         obj_or_dof_array_vectorize_n_args)
 
+# }}}
+
+
+# {{{ thaw / freeze
 
 def thaw(actx: ArrayContext, ary: Union[DOFArray, np.ndarray]) -> np.ndarray:
     r"""Call :meth:`~meshmode.array_context.ArrayContext.thaw` on the element
@@ -307,6 +324,10 @@ def freeze(ary: Union[DOFArray, np.ndarray]) -> np.ndarray:
     return DOFArray(None, tuple(
         ary.array_context.freeze(subary) for subary in ary))
 
+# }}}
+
+
+# {{{ flatten / unflatten
 
 def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
     r"""Convert a :class:`DOFArray` into a "flat" array of degrees of freedom,
@@ -393,12 +414,15 @@ def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
             discr.groups,
             ndofs_per_element_per_group)))
 
+# }}}
 
-def flat_norm(ary: DOFArray, ord=2):
-    # FIXME This could be done without flattening and copying
-    actx = ary.array_context
-    import numpy.linalg as la
-    return la.norm(actx.to_numpy(flatten(ary)), ord)
+
+def flat_norm(ary: DOFArray, ord=None):
+    from warnings import warn
+    warn("flat_norm is deprecated. Use array_context.np.linalg.norm instead. "
+            "flat_norm will disappear in 2022.",
+            DeprecationWarning, stacklevel=2)
+    return ary.array_context.np.linalg.norm(ary, ord=ord)
 
 
 # vim: foldmethod=marker
