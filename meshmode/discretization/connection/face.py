@@ -362,12 +362,6 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
                     # First, drop 'c': He's linearly dependent on a, b.
                     face_basis = face_basis[:-1]
 
-                    # Somehow, we've ended up with a 'last dimension varies
-                    # fastest' convention for vertex numbering, which means
-                    # that the multiplication by the face basis will swap the
-                    # axes. Not good, undo:
-                    face_basis = face_basis[::-1]
-
                     # assert that all basis vectors are axis-aligned
                     for bvec in face_basis:
                         assert sum(abs(entry) > 1e-13 for entry in bvec) == 1
