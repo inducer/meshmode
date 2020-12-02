@@ -273,12 +273,13 @@ class DGDiscretization:
                     afgrp.nunit_dofs),
                 dtype=dtype)
 
-        from modepy.tools import UNIT_VERTICES
         import modepy as mp
-        for iface, fvi in enumerate(
-                volgrp.mesh_el_group.face_vertex_indices()):
-            face_vertices = UNIT_VERTICES[volgrp.dim][np.array(fvi)].T
-            matrix[:, iface, :] = mp.nodal_face_mass_matrix(
+        shape = mp.Simplex(volgrp.dim)
+        unit_vertices = mp.biunit_vertices_for_shape(shape).T
+
+        for face in mp.faces_for_shape(shape):
+            face_vertices = unit_vertices[np.array(face.volume_vertex_indices)].T
+            matrix[:, face.face_index, :] = mp.nodal_face_mass_matrix(
                     volgrp.basis(), volgrp.unit_nodes, afgrp.unit_nodes,
                     volgrp.order,
                     face_vertices)
