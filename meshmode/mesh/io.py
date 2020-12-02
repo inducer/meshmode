@@ -197,8 +197,17 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
                 i += 1
 
-            unit_nodes = (np.array(group_el_type.lexicographic_node_tuples(),
-                    dtype=np.float64).T/group_el_type.order)*2 - 1
+            import modepy as mp
+            if isinstance(group_el_type, GmshSimplexElementBase):
+                shape = mp.Simplex(group_el_type.dimensions)
+            elif isinstance(group_el_type, GmshTensorProductElementBase):
+                shape = mp.Hypercube(group_el_type.dimensions)
+            else:
+                raise NotImplementedError(
+                        f"gmsh element type: {type(group_el_type).__name__}")
+
+            space = mp.space_for_shape(shape, group_el_type.order)
+            unit_nodes = mp.equispaced_nodes_for_space(space, shape)
 
             if isinstance(group_el_type, GmshSimplexElementBase):
                 group = SimplexElementGroup(
@@ -224,8 +233,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     unit_nodes=unit_nodes
                     )
             else:
-                raise NotImplementedError("gmsh element type: %s"
-                        % type(group_el_type).__name__)
+                pass
 
             groups.append(group)
 
