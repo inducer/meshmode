@@ -873,43 +873,57 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
 # {{{ sanity checks: single element
 
 @pytest.mark.parametrize("dim", [2, 3])
-@pytest.mark.parametrize("order", [1, 3])
-def test_sanity_single_element(actx_factory, dim, order, visualize=False):
+@pytest.mark.parametrize("mesh_order", [1, 3])
+@pytest.mark.parametrize("group_cls", [
+    SimplexElementGroup,
+    TensorProductElementGroup,
+    ])
+def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
+        visualize=False):
     pytest.importorskip("pytential")
     actx = actx_factory()
 
-    from modepy.tools import unit_vertices
-    vertices = unit_vertices(dim).T.copy()
+    if group_cls is SimplexElementGroup:
+        from meshmode.discretization.poly_element import \
+                PolynomialWarpAndBlendGroupFactory as GroupFactory
+    elif group_cls is TensorProductElementGroup:
+        from meshmode.discretization.poly_element import \
+                LegendreGaussLobattoTensorProductGroupFactory as GroupFactory
+    else:
+        raise TypeError
+
+    import modepy as mp
+    shape = group_cls._modepy_shape_cls(dim)
+    space = mp.space_for_shape(shape, mesh_order)
+
+    vertices = mp.biunit_vertices_for_shape(shape)
+    nodes = mp.edge_clustered_nodes_for_space(space, shape).reshape(dim, 1, -1)
+    vertex_indices = np.arange(shape.nvertices, dtype=np.int32).reshape(1, -1)
 
     center = np.empty(dim, np.float64)
     center.fill(-0.5)
 
-    import modepy as mp
-    from meshmode.mesh import SimplexElementGroup, Mesh, BTAG_ALL
-    mg = SimplexElementGroup(
-            order=order,
-            vertex_indices=np.arange(dim+1, dtype=np.int32).reshape(1, -1),
-            nodes=mp.warp_and_blend_nodes(dim, order).reshape(dim, 1, -1),
-            dim=dim)
-
+    from meshmode.mesh import Mesh, BTAG_ALL
+    mg = group_cls(mesh_order, vertex_indices, nodes, dim=dim)
     mesh = Mesh(vertices, [mg], is_conforming=True)
 
     from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlendGroupFactory
-    vol_discr = Discretization(actx, mesh,
-            PolynomialWarpAndBlendGroupFactory(order+3))
+    vol_discr = Discretization(actx, mesh, GroupFactory(mesh_order + 3))
 
     # {{{ volume calculation check
 
-    vol_x = thaw(actx, vol_discr.nodes())
+    if isinstance(mg, SimplexElementGroup):
+        from pytools import factorial
+        true_vol = 1/factorial(dim) * 2**dim
+    elif isinstance(mg, TensorProductElementGroup):
+        true_vol = 2**dim
+    else:
+        raise TypeError
 
-    vol_one = vol_x[0] * 0 + 1
+    nodes = thaw(actx, vol_discr.nodes())
+    vol_one = 1 + 0 * nodes[0]
+
     from pytential import norm, integral  # noqa
-
-    from pytools import factorial
-    true_vol = 1/factorial(dim) * 2**dim
-
     comp_vol = integral(vol_discr, vol_one)
     rel_vol_err = abs(true_vol - comp_vol) / true_vol
 
@@ -921,14 +935,14 @@ def test_sanity_single_element(actx_factory, dim, order, visualize=False):
 
     from meshmode.discretization.connection import make_face_restriction
     bdry_connection = make_face_restriction(
-            actx, vol_discr, PolynomialWarpAndBlendGroupFactory(order + 3),
+            actx, vol_discr, GroupFactory(mesh_order + 3),
             BTAG_ALL)
     bdry_discr = bdry_connection.to_discr
 
     # }}}
 
     from pytential import bind, sym
-    bdry_normals = bind(bdry_discr, sym.normal(dim))(actx).as_vector(dtype=object)
+    bdry_normals = bind(bdry_discr, sym.normal(dim).as_vector())(actx)
 
     if visualize:
         from meshmode.discretization.visualization import make_visualizer
