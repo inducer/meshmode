@@ -316,13 +316,12 @@ class _ModepyElementGroup(MeshElementGroup):
         if unit_nodes is not None:
             _dim = unit_nodes.shape[0]
             if dim is not None and _dim != dim:
-                raise ValueError("dim does not match unit_nodes")
+                raise ValueError("'dim' does not match 'unit_nodes' dimension")
             else:
                 dim = _dim
         else:
             if dim is None:
-                raise TypeError("'dim' must be passed "
-                        "if 'unit_nodes' is not passed")
+                raise TypeError("'dim' must be passed if 'unit_nodes' is not passed")
 
         # dim is now usable
         shape = self._modepy_shape = self._modepy_shape_cls(dim)
@@ -331,14 +330,21 @@ class _ModepyElementGroup(MeshElementGroup):
         if unit_nodes is None:
             unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
 
+        if unit_nodes.shape[-1] != nodes.shape[-1]:
+            raise ValueError(
+                    "'nodes' has wrong number of unit nodes per element."
+                    f" expected {unit_nodes.shape[-1]}, "
+                    f" but got {nodes.shape[-1]}.")
+
         if vertex_indices is not None:
             if not issubclass(vertex_indices.dtype.type, np.integer):
-                raise TypeError("vertex_indices must be integral")
+                raise TypeError("'vertex_indices' must be integral")
 
             if vertex_indices.shape[-1] != shape.nvertices:
-                raise ValueError("vertex_indices has wrong number of vertices per "
-                        "element. expected: %d, got: %d" % (shape.nvertices,
-                            vertex_indices.shape[-1]))
+                raise ValueError(
+                        "'vertex_indices' has wrong number of vertices per element."
+                        f" expected {shape.nvertices},"
+                        f" got {vertex_indices.shape[-1]}")
 
         super().__init__(order, vertex_indices, nodes,
                 element_nr_base, node_nr_base, unit_nodes, dim)
