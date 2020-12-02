@@ -104,11 +104,22 @@ class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
 # {{{ concrete element groups for simplices
 
 class SimplexElementGroupBase(ElementGroupBase):
+    @property
+    @memoize_method
+    def _shape(self):
+        return mp.Simplex(self.dim)
+
+    @property
+    @memoize_method
+    def _space(self):
+        return mp.PN(self.dim, self.order)
+
     @memoize_method
     def from_mesh_interp_matrix(self):
         meg = self.mesh_el_group
+        meg_space = mp.PN(meg.dim, meg.order)
         return mp.resampling_matrix(
-                mp.simplex_best_available_basis(meg.dim, meg.order),
+                mp.basis_for_space(meg_space, self._shape).functions,
                 self.unit_nodes,
                 meg.unit_nodes)
 
@@ -118,28 +129,19 @@ class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase,
     def is_orthogonal_basis(self):
         return self.dim <= 3
 
+    @property
     @memoize_method
-    def _mode_ids_and_basis(self):
-        # for now, see https://gitlab.tiker.net/inducer/modepy/-/merge_requests/14
-        import modepy.modes as modes
-        if self.dim <= 3:
-            return modes.simplex_onb_with_mode_ids(self.dim, self.order)
-        else:
-            return modes.simplex_monomial_basis_with_mode_ids(self.dim, self.order)
+    def _basis(self):
+        return mp.basis_for_space(self._space, self._shape)
 
     def basis(self):
-        mode_ids, basis = self._mode_ids_and_basis()
-        return basis
+        return self._basis.functions
 
     def mode_ids(self):
-        mode_ids, basis = self._mode_ids_and_basis()
-        return mode_ids
+        return self._basis.mode_ids
 
     def grad_basis(self):
-        if self.dim <= 3:
-            return mp.grad_simplex_onb(self.dim, self.order)
-        else:
-            return mp.grad_simplex_monomial_basis(self.dim, self.order)
+        return self._basis.gradients
 
 
 class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
@@ -351,77 +353,88 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
 
 # {{{ concrete element groups for tensor product elements
 
-class _TensorProductElementGroupBase(PolynomialElementGroupBase):
+class HypercubeElementGroupBase(ElementGroupBase):
+    @property
+    @memoize_method
+    def _shape(self):
+        return mp.Hypercube(self.dim)
+
+    @property
+    @memoize_method
+    def _space(self):
+        return mp.QN(self.dim, self.order)
+
+    @memoize_method
+    def from_mesh_interp_matrix(self):
+        meg = self.mesh_el_group
+        meg_space = mp.QN(meg.dim, meg.order)
+        return mp.resampling_matrix(
+                mp.basis_for_space(meg_space, self._shape).functions,
+                self.unit_nodes,
+                meg.unit_nodes)
+
+
+class TensorProductElementGroupBase(PolynomialElementGroupBase,
+        HypercubeElementGroupBase):
     def __init__(self, mesh_el_group, order, index, *,
-            basis_1d=None, grad_basis_1d=None,
-            unit_nodes_1d=None, quad_weights_1d=None):
+            basis, unit_nodes_1d, quad_weights_1d=None):
         super().__init__(mesh_el_group, order, index)
 
-        self._basis_1d = basis_1d
-        self._grad_basis_1d = grad_basis_1d
+        self._basis = basis
         self._unit_nodes_1d = unit_nodes_1d
         self._quad_weights_1d = quad_weights_1d
 
     def is_orthogonal_basis(self):
-        return True
+        try:
+            self._basis.orthonormality_weight()
+            return True
+        except mp.BasisNotOrthonormal:
+            return False
+
+    def mode_ids(self):
+        return self._basis.mode_ids
 
     def basis(self):
-        from modepy.modes import tensor_product_basis
-        return tensor_product_basis(self.dim, self._basis_1d)
+        return self._basis.functions
 
     def grad_basis(self):
-        from modepy.modes import grad_tensor_product_basis
-        return grad_tensor_product_basis(self.dim,
-                self._basis_1d, self._grad_basis_1d)
+        return self._basis.gradients
 
     @property
     @memoize_method
     def unit_nodes(self):
-        from modepy.nodes import tensor_product_nodes
-        return tensor_product_nodes(self.dim, self._unit_nodes_1d)
-
-    @memoize_method
-    def from_mesh_interp_matrix(self):
-        from modepy.modes import legendre_tensor_product_basis
-        meg = self.mesh_el_group
-        return mp.resampling_matrix(
-                legendre_tensor_product_basis(self.dim, meg.order),
-                self.unit_nodes,
-                meg.unit_nodes)
+        # FIXME: allow non-homogeneous tensor products
+        return mp.tensor_product_nodes(self.dim, self._unit_nodes_1d)
 
     @property
     @memoize_method
     def weights(self):
         if self._quad_weights_1d is None:
-            import modepy as mp
-            mm = mp.mass_matrix(self._basis_1d, self._unit_nodes_1d)
-            weights = mm @ np.ones(len(self._unit_nodes_1d))
+            return np.dot(
+                    self.mass_matrix(),
+                    np.ones(len(self.basis())))
         else:
-            weights = self._quad_weights_1d
-
-        from itertools import product
-        return np.fromiter(
-                (np.prod(w) for w in product(weights, repeat=self.dim)),
-                dtype=np.float,
-                count=(self.order + 1)**self.dim)
+            # FIXME: allow non-homogeneous tensor products
+            return np.prod(
+                mp.tensor_product_nodes(self.dim, self._quad_weights_1d),
+                axis=0)
 
 
-class _LegendreTensorProductElementGroup(_TensorProductElementGroupBase):
+class LegendreTensorProductElementGroup(TensorProductElementGroupBase):
     def __init__(self, mesh_el_group, order, index, *,
             unit_nodes_1d=None, quad_weights_1d=None):
-        from modepy.modes import jacobi, grad_jacobi
-        from functools import partial
+
+        basis = mp.orthonormal_basis_for_space(
+                mp.QN(mesh_el_group.dim, order),
+                mp.Hypercube(mesh_el_group.dim))
 
         super().__init__(mesh_el_group, order, index,
-                basis_1d=tuple(
-                    partial(jacobi, 0, 0, i) for i in range(order + 1)),
-                grad_basis_1d=tuple(
-                    partial(grad_jacobi, 0, 0, i) for i in range(order + 1)),
+                basis=basis,
                 unit_nodes_1d=unit_nodes_1d,
                 quad_weights_1d=quad_weights_1d)
 
 
-class GaussLegendreTensorProductElementGroup(_LegendreTensorProductElementGroup):
+class GaussLegendreTensorProductElementGroup(LegendreTensorProductElementGroup):
     """Elemental discretization supplying a high-order quadrature rule
     with a number of nodes matching the number of polynomials in the tensor
     product basis, hence usable for differentiation and interpolation.
@@ -429,7 +442,6 @@ class GaussLegendreTensorProductElementGroup(_LegendreTensorProductElementGroup)
     No interpolation nodes are present on the boundary of the hypercube.
     """
     def __init__(self, mesh_el_group, order, index):
-        import modepy as mp
         quad = mp.LegendreGaussQuadrature(order)
 
         super().__init__(mesh_el_group, order, index,
@@ -438,7 +450,7 @@ class GaussLegendreTensorProductElementGroup(_LegendreTensorProductElementGroup)
 
 
 class LegendreGaussLobattoTensorProductElementGroup(
-        _LegendreTensorProductElementGroup):
+        LegendreTensorProductElementGroup):
     """Elemental discretization supplying a high-order quadrature rule
     with a number of nodes matching the number of polynomials in the tensor
     product basis, hence usable for differentiation and interpolation.
@@ -453,7 +465,7 @@ class LegendreGaussLobattoTensorProductElementGroup(
                 unit_nodes_1d=legendre_gauss_lobatto_nodes(order))
 
 
-class EquidistantTensorProductElementGroup(_LegendreTensorProductElementGroup):
+class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
     """Elemental discretization supplying a high-order quadrature rule
     with a number of nodes matching the number of polynomials in the tensor
     product basis, hence usable for differentiation and interpolation.
