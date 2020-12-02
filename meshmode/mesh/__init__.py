@@ -330,11 +330,12 @@ class _ModepyElementGroup(MeshElementGroup):
         if unit_nodes is None:
             unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
 
-        if unit_nodes.shape[-1] != nodes.shape[-1]:
-            raise ValueError(
-                    "'nodes' has wrong number of unit nodes per element."
-                    f" expected {unit_nodes.shape[-1]}, "
-                    f" but got {nodes.shape[-1]}.")
+        if nodes is not None:
+            if unit_nodes.shape[-1] != nodes.shape[-1]:
+                raise ValueError(
+                        "'nodes' has wrong number of unit nodes per element."
+                        f" expected {unit_nodes.shape[-1]}, "
+                        f" but got {nodes.shape[-1]}.")
 
         if vertex_indices is not None:
             if not issubclass(vertex_indices.dtype.type, np.integer):
