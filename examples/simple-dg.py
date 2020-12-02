@@ -275,7 +275,7 @@ class DGDiscretization:
 
         import modepy as mp
         shape = mp.Simplex(volgrp.dim)
-        unit_vertices = mp.biunit_vertices_for_shape(shape).T
+        unit_vertices = mp.unit_vertices_for_shape(shape).T
 
         for face in mp.faces_for_shape(shape):
             face_vertices = unit_vertices[np.array(face.volume_vertex_indices)].T

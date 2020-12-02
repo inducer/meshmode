@@ -896,7 +896,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     shape = group_cls._modepy_shape_cls(dim)
     space = mp.space_for_shape(shape, mesh_order)
 
-    vertices = mp.biunit_vertices_for_shape(shape)
+    vertices = mp.unit_vertices_for_shape(shape)
     nodes = mp.edge_clustered_nodes_for_space(space, shape).reshape(dim, 1, -1)
     vertex_indices = np.arange(shape.nvertices, dtype=np.int32).reshape(1, -1)
 

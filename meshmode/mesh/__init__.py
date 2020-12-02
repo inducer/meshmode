@@ -363,7 +363,7 @@ class _ModepyElementGroup(MeshElementGroup):
                 for face in mp.faces_for_shape(self._modepy_shape))
 
     def vertex_unit_coordinates(self):
-        return mp.biunit_vertices_for_shape(self._modepy_shape).T
+        return mp.unit_vertices_for_shape(self._modepy_shape).T
 
 # }}}
 
