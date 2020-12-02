@@ -358,9 +358,13 @@ class _ModepyElementGroup(MeshElementGroup):
         self._modepy_shape = self._modepy_shape_cls(self.dim)
         self._modepy_space = mp.space_for_shape(self._modepy_shape, self.order)
 
+    @property
+    @memoize_method
+    def faces(self):
+        return mp.faces_for_shape(self._modepy_shape)
+
     def face_vertex_indices(self):
-        return tuple(face.volume_vertex_indices
-                for face in mp.faces_for_shape(self._modepy_shape))
+        return tuple(face.volume_vertex_indices for face in self.faces)
 
     def vertex_unit_coordinates(self):
         return mp.unit_vertices_for_shape(self._modepy_shape).T

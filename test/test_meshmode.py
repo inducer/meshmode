@@ -718,7 +718,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
     print(eoc_rec)
     assert (
             eoc_rec.order_estimate() >= order-0.5
-            or eoc_rec.max_error() < 1.5e-13)
+            or eoc_rec.max_error() < 1.7e-13)
 
 # }}}
 
