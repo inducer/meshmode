@@ -942,7 +942,7 @@ def _test_node_vertex_consistency_resampling(mesh, mgrp, tol):
         return True
 
     if isinstance(mgrp, _ModepyElementGroup):
-        basis = mp.basis_for_space(mgrp._modepy_space).functions
+        basis = mp.basis_for_space(mgrp._modepy_space, mgrp._modepy_shape).functions
     else:
         raise TypeError(f"unsupported group type: {type(mgrp).__name__}")
 
@@ -1403,11 +1403,10 @@ def is_affine_simplex_group(group, abs_tol=None):
                 type(group).__name__)
 
     # get matrices
-    basis = mp.simplex_best_available_basis(group.dim, group.order)
-    grad_basis = mp.grad_simplex_best_available_basis(group.dim, group.order)
-
-    vinv = la.inv(mp.vandermonde(basis, group.unit_nodes))
-    diff = mp.differentiation_matrices(basis, grad_basis, group.unit_nodes)
+    basis = mp.basis_for_space(group._modepy_space, group._modepy_shape)
+    vinv = la.inv(mp.vandermonde(basis.functions, group.unit_nodes))
+    diff = mp.differentiation_matrices(
+            basis.functions, basis.gradients, group.unit_nodes)
     if not isinstance(diff, tuple):
         diff = (diff,)
 
