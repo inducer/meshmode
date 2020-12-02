@@ -219,12 +219,13 @@ class MeshElementGroup(Record):
             unit_nodes=unit_nodes,
             element_nr_base=element_nr_base, node_nr_base=node_nr_base)
 
-    def copy(self, **kwargs):
+    def get_copy_kwargs(self, **kwargs):
         if "element_nr_base" not in kwargs:
             kwargs["element_nr_base"] = None
         if "node_nr_base" not in kwargs:
             kwargs["node_nr_base"] = None
-        return Record.copy(self, **kwargs)
+
+        return super().get_copy_kwargs(**kwargs)
 
     @property
     def dim(self):
