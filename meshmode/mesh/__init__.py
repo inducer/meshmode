@@ -351,6 +351,13 @@ class _ModepyElementGroup(MeshElementGroup):
         super().__init__(order, vertex_indices, nodes,
                 element_nr_base, node_nr_base, unit_nodes, dim)
 
+    def __setstate__(self, valuedict):
+        super().__setstate__(valuedict)
+
+        import modepy as mp
+        self._modepy_shape = self._modepy_shape_cls(self.dim)
+        self._modepy_space = mp.space_for_shape(self._modepy_shape, self.order)
+
     def face_vertex_indices(self):
         return tuple(face.volume_vertex_indices
                 for face in mp.faces_for_shape(self._modepy_shape))
