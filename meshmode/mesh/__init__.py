@@ -202,11 +202,10 @@ class MeshElementGroup(Record):
             unit_nodes=None, dim=None, **kwargs):
         """
         :arg order: the maximum total degree used for interpolation.
-        :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
+        :arg nodes: ``(ambient_dim, nelements, nunit_nodes)``
             The nodes are assumed to be mapped versions of *unit_nodes*.
-        :arg unit_nodes: ``[dim, nunit_nodes]``
-            The unit nodes of which *nodes* is a mapped
-            version.
+        :arg unit_nodes: ``(dim, nunit_nodes)`` The unit nodes of which *nodes*
+            is a mapped version.
 
         Do not supply *element_nr_base* and *node_nr_base*, they will be
         automatically assigned.
@@ -257,20 +256,20 @@ class MeshElementGroup(Record):
 
     @property
     def is_affine(self):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def face_vertex_indices(self):
         """Return a tuple of tuples indicating which vertices
         (in mathematically positive ordering) make up each face
         of an element in this group.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def vertex_unit_coordinates(self):
         """Return an array of shape ``(nfaces, dim)`` with the unit
         coordinates of each vertex.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @property
     def nfaces(self):
@@ -300,15 +299,13 @@ class _ModepyElementGroup(MeshElementGroup):
             unit_nodes=None, dim=None, **kwargs):
         """
         :arg order: the maximum total degree used for interpolation.
-        :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
+        :arg nodes: ``(ambient_dim, nelements, nunit_nodes)``
             The nodes are assumed to be mapped versions of *unit_nodes*.
-        :arg unit_nodes: ``[dim, nunit_nodes]``
-            The unit nodes of which *nodes* is a mapped
-            version. If unspecified, the nodes from
-            :func:`modepy.warp_and_blend_nodes` for *dim*
-            are assumed. These must be in unit coordinates
-            as defined in :mod:`modepy`.
-        :arg dim: only used if *unit_nodes* is None, to get
+        :arg unit_nodes: ``(dim, nunit_nodes)`` The unit nodes of which
+            *nodes* is a mapped version. If unspecified, the nodes from
+            :func:`modepy.edge_clustered_nodes_for_space` are assumed.
+            These must be in unit coordinates as defined in :mod:`modepy`.
+        :arg dim: only used if *unit_nodes* is *None*, to get
             the default unit nodes.
 
         Do not supply *element_nr_base* and *node_nr_base*, they will be

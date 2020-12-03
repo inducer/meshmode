@@ -131,7 +131,7 @@ def vtk_submesh_for_shape(shape: Shape, node_tuples):
 @vtk_submesh_for_shape.register(Simplex)
 def _(shape: Simplex, node_tuples):
     import modepy as mp
-    return submesh_for_shape(shape, node_tuples)
+    return mp.submesh_for_shape(shape, node_tuples)
 
 
 @vtk_submesh_for_shape.register(Hypercube)
