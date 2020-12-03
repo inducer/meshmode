@@ -333,13 +333,11 @@ def make_group_from_vertices(vertices, vertex_indices, order,
 
         # dim, nunit_nodes
         if unit_nodes is None:
-            if dim <= 3:
-                unit_nodes = mp.warp_and_blend_nodes(dim, order)
-            else:
-                unit_nodes = mp.equidistant_nodes(dim, order)
+            shape = mp.Simplex(dim)
+            space = mp.space_for_shape(shape, order)
+            unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
 
         unit_nodes_01 = 0.5 + 0.5*unit_nodes
-
         nodes = np.einsum(
                 "si,des->dei",
                 unit_nodes_01, spanning_vectors) + el_origins
@@ -352,24 +350,22 @@ def make_group_from_vertices(vertices, vertex_indices, order,
             raise ValueError("invalid number of vertices for tensor-product "
                     "elements, must be power of two")
 
+        shape = mp.Hypercube(dim)
+        space = mp.space_for_shape(shape, order)
+
         if unit_nodes is None:
-            from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
-            unit_nodes = mp.tensor_product_nodes(dim,
-                    legendre_gauss_lobatto_nodes(order))
+            unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
 
         # shape: (dim, nnodes)
         unit_nodes_01 = 0.5 + 0.5*unit_nodes
         _, nnodes = unit_nodes.shape
 
-        from pytools import generate_nonnegative_integer_tuples_below as gnitb
-        # Modepy's convention is 'first coordinate varies fastest'. Adapt to it
-        # for the vertices. It doesn't matter for the basis.
-        id_tuples = [id_tuple[::-1] for id_tuple in gnitb(2, dim)]
-        assert len(id_tuples) == nvertices
+        node_tuples = mp.node_tuples_for_space(type(space)(dim, 1))
+        assert len(node_tuples) == nvertices
 
         vdm = np.empty((nvertices, nvertices))
-        for i, vertex_tuple in enumerate(id_tuples):
-            for j, func_tuple in enumerate(id_tuples):
+        for i, vertex_tuple in enumerate(node_tuples):
+            for j, func_tuple in enumerate(node_tuples):
                 vertex_ref = np.array(vertex_tuple, dtype=np.float64)
                 vdm[i, j] = np.prod(vertex_ref**func_tuple)
 
@@ -379,7 +375,7 @@ def make_group_from_vertices(vertices, vertex_indices, order,
             coeffs[d] = la.solve(vdm, el_vertices[d].T).T
 
         vdm_nodes = np.zeros((nnodes, nvertices))
-        for j, func_tuple in enumerate(id_tuples):
+        for j, func_tuple in enumerate(node_tuples):
             vdm_nodes[:, j] = np.prod(
                     unit_nodes_01 ** np.array(func_tuple).reshape(-1, 1),
                     axis=0)
