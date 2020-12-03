@@ -199,7 +199,7 @@ class MeshElementGroup(Record):
 
     def __init__(self, order, vertex_indices, nodes,
             element_nr_base=None, node_nr_base=None,
-            unit_nodes=None, dim=None):
+            unit_nodes=None, dim=None, **kwargs):
         """
         :arg order: the maximum total degree used for interpolation.
         :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
@@ -212,12 +212,13 @@ class MeshElementGroup(Record):
         automatically assigned.
         """
 
-        Record.__init__(self,
+        super().__init__(
             order=order,
             vertex_indices=vertex_indices,
             nodes=nodes,
             unit_nodes=unit_nodes,
-            element_nr_base=element_nr_base, node_nr_base=node_nr_base)
+            element_nr_base=element_nr_base, node_nr_base=node_nr_base,
+            **kwargs)
 
     def get_copy_kwargs(self, **kwargs):
         if "element_nr_base" not in kwargs:
@@ -296,7 +297,7 @@ class MeshElementGroup(Record):
 class _ModepyElementGroup(MeshElementGroup):
     def __init__(self, order, vertex_indices, nodes,
             element_nr_base=None, node_nr_base=None,
-            unit_nodes=None, dim=None):
+            unit_nodes=None, dim=None, **kwargs):
         """
         :arg order: the maximum total degree used for interpolation.
         :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
@@ -325,8 +326,8 @@ class _ModepyElementGroup(MeshElementGroup):
                 raise TypeError("'dim' must be passed if 'unit_nodes' is not passed")
 
         # dim is now usable
-        shape = self._modepy_shape = self._modepy_shape_cls(dim)
-        space = self._modepy_space = mp.space_for_shape(self._modepy_shape, order)
+        shape = self._modepy_shape_cls(dim)
+        space = mp.space_for_shape(shape, order)
 
         if unit_nodes is None:
             unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
@@ -349,14 +350,12 @@ class _ModepyElementGroup(MeshElementGroup):
                         f" got {vertex_indices.shape[-1]}")
 
         super().__init__(order, vertex_indices, nodes,
-                element_nr_base, node_nr_base, unit_nodes, dim)
-
-    def __setstate__(self, valuedict):
-        super().__setstate__(valuedict)
-
-        import modepy as mp
-        self._modepy_shape = self._modepy_shape_cls(self.dim)
-        self._modepy_space = mp.space_for_shape(self._modepy_shape, self.order)
+                element_nr_base=element_nr_base,
+                node_nr_base=node_nr_base,
+                unit_nodes=unit_nodes,
+                dim=dim,
+                _modepy_shape=shape,
+                _modepy_space=space)
 
     @property
     @memoize_method
