@@ -20,10 +20,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from functools import singledispatch
+
 import numpy as np
+
 from pytools import memoize_method, Record
 from meshmode.dof_array import flatten, thaw
 
+from modepy.shapes import Shape, Simplex, Hypercube
 
 __doc__ = """
 
@@ -117,6 +121,60 @@ class _VisConnectivityGroup(Record):
 # }}}
 
 
+# {{{ vtk submeshes
+
+@singledispatch
+def vtk_submesh_for_shape(shape: Shape, node_tuples):
+    raise NotImplementedError(type(shape).__name__)
+
+
+@vtk_submesh_for_shape.register(Simplex)
+def _(shape: Simplex, node_tuples):
+    import modepy as mp
+    return submesh_for_shape(shape, node_tuples)
+
+
+@vtk_submesh_for_shape.register(Hypercube)
+def vtk_submesh_for_shape(shape: Hypercube, node_tuples):
+    node_tuple_to_index = {nt: i for i, nt in enumerate(node_tuples)}
+
+    # NOTE: this can't use mp.submesh_for_shape because VTK vertex order is
+    # counterclockwise instead of z order
+    el_offsets = {
+            1: [(0,), (1,)],
+            2: [(0, 0), (1, 0), (1, 1), (0, 1)],
+            3: [
+                (0, 0, 0),
+                (1, 0, 0),
+                (1, 1, 0),
+                (0, 1, 0),
+                (0, 0, 1),
+                (1, 0, 1),
+                (1, 1, 1),
+                (0, 1, 1),
+                ]
+            }[shape.dim]
+
+    def element_from_origin(origin):
+        return tuple([
+            ])
+
+    from pytools import add_tuples
+    elements = []
+    for origin in node_tuples:
+        try:
+            elements.append(tuple(
+                node_tuple_to_index[add_tuples(origin, offset)]
+                for offset in el_offsets
+                ))
+        except KeyError:
+            pass
+
+    return elements
+
+# }}}
+
+
 # {{{ vtk connectivity
 
 class VTKConnectivity:
@@ -155,51 +213,24 @@ class VTKConnectivity:
                 }
 
     def connectivity_for_element_group(self, grp):
-        from pytools import (
-                generate_nonnegative_integer_tuples_summing_to_at_most as gnitstam,
-                generate_nonnegative_integer_tuples_below as gnitb)
-        from meshmode.mesh import TensorProductElementGroup, SimplexElementGroup
+        import modepy as mp
+        from meshmode.mesh import _ModepyElementGroup
 
-        if isinstance(grp.mesh_el_group, SimplexElementGroup):
-            node_tuples = list(gnitstam(grp.order, grp.dim))
+        if isinstance(grp.mesh_el_group, _ModepyElementGroup):
+            shape = grp.mesh_el_group._modepy_shape
+            space = type(grp.mesh_el_group._modepy_space)(grp.dim, grp.order)
+            node_tuples = mp.node_tuples_for_space(space)
 
-            from modepy.tools import simplex_submesh
             el_connectivity = np.array(
-                    simplex_submesh(node_tuples),
+                    vtk_submesh_for_shape(shape, node_tuples),
                     dtype=np.intp)
 
-            vtk_cell_type = self.simplex_cell_types[grp.dim]
-
-        elif isinstance(grp.mesh_el_group, TensorProductElementGroup):
-            node_tuples = list(gnitb(grp.order+1, grp.dim))
-            node_tuple_to_index = {
-                    nt: i for i, nt in enumerate(node_tuples)}
-
-            def add_tuple(a, b):
-                return tuple(ai+bi for ai, bi in zip(a, b))
-
-            el_offsets = {
-                    1: [(0,), (1,)],
-                    2: [(0, 0), (1, 0), (1, 1), (0, 1)],
-                    3: [
-                        (0, 0, 0),
-                        (1, 0, 0),
-                        (1, 1, 0),
-                        (0, 1, 0),
-                        (0, 0, 1),
-                        (1, 0, 1),
-                        (1, 1, 1),
-                        (0, 1, 1),
-                        ]
-                    }[grp.dim]
-
-            el_connectivity = np.array([
-                    [
-                        node_tuple_to_index[add_tuple(origin, offset)]
-                        for offset in el_offsets]
-                    for origin in gnitb(grp.order, grp.dim)])
-
-            vtk_cell_type = self.tensor_cell_types[grp.dim]
+            if isinstance(shape, Simplex):
+                vtk_cell_type = self.simplex_cell_types[shape.dim]
+            elif isinstance(shape, Hypercube):
+                vtk_cell_type = self.tensor_cell_types[shape.dim]
+            else:
+                raise TypeError(f"unsupported shape: {type(shape)}")
 
         else:
             raise NotImplementedError("visualization for element groups "
