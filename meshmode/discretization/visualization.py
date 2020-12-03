@@ -135,7 +135,7 @@ def _(shape: Simplex, node_tuples):
 
 
 @vtk_submesh_for_shape.register(Hypercube)
-def vtk_submesh_for_shape(shape: Hypercube, node_tuples):
+def _(shape: Hypercube, node_tuples):
     node_tuple_to_index = {nt: i for i, nt in enumerate(node_tuples)}
 
     # NOTE: this can't use mp.submesh_for_shape because VTK vertex order is
@@ -154,10 +154,6 @@ def vtk_submesh_for_shape(shape: Hypercube, node_tuples):
                 (0, 1, 1),
                 ]
             }[shape.dim]
-
-    def element_from_origin(origin):
-        return tuple([
-            ])
 
     from pytools import add_tuples
     elements = []

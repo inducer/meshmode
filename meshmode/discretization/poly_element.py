@@ -386,7 +386,7 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
 
         if len(unit_nodes_1d) != mesh_el_group.dim:
             raise ValueError("insufficient nodes for element group dimension. "
-                    f"expected {mesh_le_group.dim}, got {len(unit_nodes_1d)}.")
+                    f"expected {mesh_el_group.dim}, got {len(unit_nodes_1d)}.")
 
         self._basis = basis
         self._unit_nodes_1d = unit_nodes_1d

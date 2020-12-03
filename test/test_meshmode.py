@@ -144,20 +144,20 @@ def test_parallel_vtk_file(actx_factory, dim):
     assert(filecmp.cmp("ref-"+pvtu_filename, pvtu_filename))
 
 
-@pytest.mark.parametrize(("dim", "group_factory"), [
+@pytest.mark.parametrize(("dim", "group_cls"), [
     (1, SimplexElementGroup),
     (2, SimplexElementGroup),
     (3, SimplexElementGroup),
     (2, TensorProductElementGroup),
     (3, TensorProductElementGroup),
     ])
-def test_visualizers(actx_factory, dim, group_factory):
+def test_visualizers(actx_factory, dim, group_cls):
     actx = actx_factory()
 
     nelements = 64
     target_order = 4
 
-    is_simplex = issubclass(group_factory, SimplexElementGroup)
+    is_simplex = issubclass(group_cls, SimplexElementGroup)
     if dim == 1:
         mesh = mgen.make_curve_mesh(
                 mgen.NArmedStarfish(5, 0.25),
@@ -169,7 +169,7 @@ def test_visualizers(actx_factory, dim, group_factory):
         else:
             mesh = mgen.generate_regular_rect_mesh(
                     a=(0,)*dim, b=(1,)*dim, n=(5,)*dim,
-                    group_factory=group_factory,
+                    group_cls=group_cls,
                     order=target_order)
     elif dim == 3:
         if is_simplex:
@@ -177,18 +177,18 @@ def test_visualizers(actx_factory, dim, group_factory):
         else:
             mesh = mgen.generate_regular_rect_mesh(
                     a=(0,)*dim, b=(1,)*dim, n=(5,)*dim,
-                    group_factory=group_factory,
+                    group_cls=group_cls,
                     order=target_order)
     else:
         raise ValueError("unknown dimensionality")
 
     if is_simplex:
-        discr_group_factory = InterpolatoryQuadratureSimplexGroupFactory
+        group_factory = InterpolatoryQuadratureSimplexGroupFactory
     else:
-        discr_group_factory = LegendreGaussLobattoTensorProductGroupFactory
+        group_factory = LegendreGaussLobattoTensorProductGroupFactory
 
     from meshmode.discretization import Discretization
-    discr = Discretization(actx, mesh, discr_group_factory(target_order))
+    discr = Discretization(actx, mesh, group_factory(target_order))
 
     nodes = thaw(actx, discr.nodes())
     f = actx.np.sqrt(sum(nodes**2)) + 1j*nodes[0]
