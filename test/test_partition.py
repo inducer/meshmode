@@ -236,6 +236,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
             for i, (elem, face) in enumerate(zip(adj.elements, adj.element_faces)):
                 index_lookup_table[ipart, igrp, elem, face] = i
 
+    # pylint: disable=too-many-nested-blocks
     for part_num in range(num_parts):
         part, part_to_global = new_meshes[part_num]
         for grp_num in range(len(part.groups)):
@@ -400,23 +401,21 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
     def f(x):
         return 10*actx.np.sin(20.*x)
 
-    """
-    Here is a simplified example of what happens from
-    the point of view of the local rank.
-
-    Local rank:
-        1. Transfer local points from local boundary to remote boundary
-            to get remote points.
-        2. Send remote points to remote rank.
-    Remote rank:
-        3. Receive remote points from local rank.
-        4. Transfer remote points from remote boundary to local boundary
-            to get local points.
-        5. Send local points to local rank.
-    Local rank:
-        6. Receive local points from remote rank.
-        7. Check if local points are the same as the original local points.
-    """
+    # Here is a simplified example of what happens from
+    # the point of view of the local rank.
+    #
+    # Local rank:
+    #     1. Transfer local points from local boundary to remote boundary
+    #         to get remote points.
+    #     2. Send remote points to remote rank.
+    # Remote rank:
+    #     3. Receive remote points from local rank.
+    #     4. Transfer remote points from remote boundary to local boundary
+    #         to get local points.
+    #     5. Send local points to local rank.
+    # Local rank:
+    #     6. Receive local points from remote rank.
+    #     7. Check if local points are the same as the original local points.
 
     # 1.
     send_reqs = []

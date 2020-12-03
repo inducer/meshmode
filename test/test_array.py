@@ -27,11 +27,11 @@ from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
-from pytools.obj_array import make_obj_array
-
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import PolynomialWarpAndBlendGroupFactory
 from meshmode.dof_array import flatten, unflatten, DOFArray
+
+from pytools.obj_array import make_obj_array
 
 import logging
 logger = logging.getLogger(__name__)

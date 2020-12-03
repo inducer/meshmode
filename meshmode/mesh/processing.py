@@ -53,9 +53,10 @@ def find_group_indices(groups, meshwide_elems):
     """
     grps = np.zeros_like(meshwide_elems)
     next_grp_boundary = 0
-    for igrp, grp in enumerate(groups):
+    for grp in groups:
         next_grp_boundary += grp.nelements
         grps += meshwide_elems >= next_grp_boundary
+
     return grps
 
 
@@ -122,8 +123,6 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
     group_to_new_group = [None] * len(groups)
     for i_new_grp, i_old_grp in enumerate(new_group_to_old_group):
         group_to_new_group[i_old_grp] = i_new_grp
-
-    del grp
 
     # }}}
 
@@ -455,7 +454,7 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             element_faces = nl.element_faces
             neighbor_parts = nl.neighbor_parts
             neighbors = np.empty_like(elements)
-            for inonlocal in range(len(neighbors)):
+            for inonlocal in range(len(neighbors)):     # pylint: disable=C0200
                 i_neighbor_part = neighbor_parts[inonlocal]
                 from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
                 neighbors[inonlocal] = -(
@@ -664,7 +663,7 @@ def find_volume_mesh_element_group_orientation(vertices, grp):
     mvs = [MultiVector(vec) for vec in spanning_object_array]
 
     from operator import xor
-    outer_prod = -reduce(xor, mvs)
+    outer_prod = -reduce(xor, mvs)      # pylint: disable=E1130
 
     if grp.dim == 1:
         # FIXME: This is a little weird.
@@ -907,7 +906,7 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
                     order = group.order
                     unit_nodes = group.unit_nodes
                 else:
-                    assert type(group) == grp_cls
+                    assert isinstance(group, grp_cls)
                     assert group.order == order
                     assert np.array_equal(unit_nodes, group.unit_nodes)
 

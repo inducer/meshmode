@@ -20,12 +20,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import operator
+import operator as op
 import numpy as np
 from typing import Optional, Iterable, Any, Tuple, Union
 from functools import partial
 from numbers import Number
-import operator as op
 import decorator
 
 from pytools import single_valued, memoize_in
@@ -174,44 +173,77 @@ class DOFArray:
         else:
             return NotImplemented
 
-    def __add__(self, arg): return self._bop(op.add, self, arg)  # noqa: E704
-    def __radd__(self, arg): return self._bop(op.add, arg, self)  # noqa: E704
-    def __sub__(self, arg): return self._bop(op.sub, self, arg)  # noqa: E704
-    def __rsub__(self, arg): return self._bop(op.sub, arg, self)  # noqa: E704
-    def __mul__(self, arg): return self._bop(op.mul, self, arg)  # noqa: E704
-    def __rmul__(self, arg): return self._bop(op.mul, arg, self)  # noqa: E704
-    def __truediv__(self, arg): return self._bop(op.truediv, self, arg)  # noqa: E704
-    def __rtruediv__(self, arg): return self._bop(op.truediv, arg, self)  # noqa: E704, E501
-    def __pow__(self, arg): return self._bop(op.pow, self, arg)  # noqa: E704
-    def __rpow__(self, arg): return self._bop(op.pow, arg, self)  # noqa: E704
-    def __mod__(self, arg): return self._bop(op.mod, self, arg)  # noqa: E704
-    def __rmod__(self, arg): return self._bop(op.mod, arg, self)  # noqa: E704
-    def __divmod__(self, arg): return self._bop(divmod, self, arg)  # noqa: E704
-    def __rdivmod__(self, arg): return self._bop(divmod, arg, self)  # noqa: E704
+    def __add__(self, arg):
+        return self._bop(op.add, self, arg)
+    def __radd__(self, arg):
+        return self._bop(op.add, arg, self)
+    def __sub__(self, arg):
+        return self._bop(op.sub, self, arg)
+    def __rsub__(self, arg):
+        return self._bop(op.sub, arg, self)
+    def __mul__(self, arg):
+        return self._bop(op.mul, self, arg)
+    def __rmul__(self, arg):
+        return self._bop(op.mul, arg, self)
+    def __truediv__(self, arg):
+        return self._bop(op.truediv, self, arg)
+    def __rtruediv__(self, arg):
+        return self._bop(op.truediv, arg, self)
+    def __pow__(self, arg):
+        return self._bop(op.pow, self, arg)
+    def __rpow__(self, arg):
+        return self._bop(op.pow, arg, self)
+    def __mod__(self, arg):
+        return self._bop(op.mod, self, arg)
+    def __rmod__(self, arg):
+        return self._bop(op.mod, arg, self)
+    def __divmod__(self, arg):
+        return self._bop(divmod, self, arg)
+    def __rdivmod__(self, arg):
+        return self._bop(divmod, arg, self)
 
-    def __pos__(self): return self  # noqa: E704
-    def __neg__(self): return self._like_me([-self_i for self_i in self._data])  # noqa: E704, E501
-    def __abs__(self): return self._like_me([abs(self_i) for self_i in self._data])  # noqa: E704, E501
+    def __pos__(self):
+        return self  # noqa: E704
+    def __neg__(self):
+        return self._like_me([-self_i for self_i in self._data])
+    def __abs__(self):
+        return self._like_me([abs(self_i) for self_i in self._data])
 
-    def conj(self): return self._like_me([self_i.conj() for self_i in self._data])  # noqa: E704, E501
+    def conj(self):
+        return self._like_me([self_i.conj() for self_i in self._data])
+
     @property
-    def real(self): return self._like_me([self_i.real for self_i in self._data])  # noqa: E704, E501
+    def real(self):
+        return self._like_me([self_i.real for self_i in self._data])
     @property
-    def imag(self): return self._like_me([self_i.imag for self_i in self._data])  # noqa: E704, E501
+    def imag(self):
+        return self._like_me([self_i.imag for self_i in self._data])
 
-    def __eq__(self, arg): return self._bop(op.eq, self, arg)  # noqa: E704
-    def __ne__(self, arg): return self._bop(op.ne, self, arg)  # noqa: E704
-    def __lt__(self, arg): return self._bop(op.lt, self, arg)  # noqa: E704
-    def __gt__(self, arg): return self._bop(op.gt, self, arg)  # noqa: E704
-    def __le__(self, arg): return self._bop(op.le, self, arg)  # noqa: E704
-    def __ge__(self, arg): return self._bop(op.ge, self, arg)  # noqa: E704
+    def __eq__(self, arg):
+        return self._bop(op.eq, self, arg)
+    def __ne__(self, arg):
+        return self._bop(op.ne, self, arg)
+    def __lt__(self, arg):
+        return self._bop(op.lt, self, arg)
+    def __gt__(self, arg):
+        return self._bop(op.gt, self, arg)
+    def __le__(self, arg):
+        return self._bop(op.le, self, arg)
+    def __ge__(self, arg):
+        return self._bop(op.ge, self, arg)
 
-    def __and__(self, arg): return self._bop(operator.and_, self, arg)  # noqa: E704
-    def __xor__(self, arg): return self._bop(operator.xor, self, arg)  # noqa: E704
-    def __or__(self, arg): return self._bop(operator.or_, self, arg)  # noqa: E704
-    def __rand__(self, arg): return self._bop(operator.and_, arg, self)  # noqa: E704
-    def __rxor__(self, arg): return self._bop(operator.xor, arg, self)  # noqa: E704
-    def __ror__(self, arg): return self._bop(operator.or_, arg, self)  # noqa: E704
+    def __and__(self, arg):
+        return self._bop(op.and_, self, arg)
+    def __xor__(self, arg):
+        return self._bop(op.xor, self, arg)
+    def __or__(self, arg):
+        return self._bop(op.or_, self, arg)
+    def __rand__(self, arg):
+        return self._bop(op.and_, arg, self)
+    def __rxor__(self, arg):
+        return self._bop(op.xor, arg, self)
+    def __ror__(self, arg):
+        return self._bop(op.or_, arg, self)
 
     # bit shifts unimplemented for now
 
@@ -404,7 +436,7 @@ def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
 # }}}
 
 
-def flat_norm(ary: DOFArray, ord=None):
+def flat_norm(ary: DOFArray, ord=None):     # pylint: disable=W0622
     from warnings import warn
     warn("flat_norm is deprecated. Use array_context.np.linalg.norm instead. "
             "flat_norm will disappear in 2022.",

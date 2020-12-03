@@ -34,11 +34,14 @@ __doc__ = """
 """
 
 
-def make_loopy_program(domains, statements, kernel_data=["..."],
+def make_loopy_program(domains, statements, kernel_data=None,
         name="mm_actx_kernel"):
     """Return a :class:`loopy.LoopKernel` suitable for use with
     :meth:`ArrayContext.call_loopy`.
     """
+    if kernel_data is None:
+        kernel_data = ["..."]
+
     return lp.make_kernel(
             domains,
             statements,
@@ -365,7 +368,7 @@ def _flatten_grp_array(grp_ary):
 
 
 class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
-    def norm(self, array, ord=None):
+    def norm(self, array, ord=None):    # pylint: disable=W0622
         if len(array.shape) != 1:
             raise NotImplementedError("only vector norms are implemented")
 
@@ -472,9 +475,9 @@ class PyOpenCLArrayContext(ArrayContext):
         return cla.zeros(self.queue, shape=shape, dtype=dtype,
                 allocator=self.allocator)
 
-    def from_numpy(self, np_array: np.ndarray):
+    def from_numpy(self, array: np.ndarray):
         import pyopencl.array as cla
-        return cla.to_device(self.queue, np_array, allocator=self.allocator)
+        return cla.to_device(self.queue, array, allocator=self.allocator)
 
     def to_numpy(self, array):
         return array.get(queue=self.queue)
@@ -517,7 +520,6 @@ class PyOpenCLArrayContext(ArrayContext):
     @memoize_method
     def transform_loopy_program(self, program):
         # FIXME: This could be much smarter.
-        import loopy as lp
         # accommodate loopy with and without kernel callables
         try:
             all_inames = program.all_inames()

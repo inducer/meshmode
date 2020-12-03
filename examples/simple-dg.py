@@ -55,7 +55,7 @@ def parametrization_derivative(actx, discr):
     return result
 
 
-class DGDiscretization:
+class DGDiscretization:         # pylint: disable=too-many-public-methods
     def __init__(self, actx, mesh, order):
         self.order = order
 
@@ -70,10 +70,6 @@ class DGDiscretization:
     @property
     def _setup_actx(self):
         return self.volume_discr._setup_actx
-
-    @property
-    def array_context(self):
-        return self.volume_discr.array_context
 
     @property
     def dim(self):
@@ -236,8 +232,7 @@ class DGDiscretization:
 
     def inverse_mass(self, vec):
         if isinstance(vec, np.ndarray):
-            return obj_array_vectorize(
-                    lambda el: self.inverse_mass(el), vec)
+            return obj_array_vectorize(self.inverse_mass, vec)
 
         @memoize_in(self, "elwise_linear_knl")
         def knl():
@@ -289,7 +284,7 @@ class DGDiscretization:
 
     def face_mass(self, vec):
         if isinstance(vec, np.ndarray):
-            return obj_array_vectorize(lambda el: self.face_mass(el), vec)
+            return obj_array_vectorize(self.face_mass, vec)
 
         @memoize_in(self, "face_mass_knl")
         def knl():
@@ -362,9 +357,7 @@ class TracePair:
 
 def interior_trace_pair(discr, vec):
     i = discr.interp("vol", "int_faces", vec)
-    e = obj_array_vectorize(
-            lambda el: discr.opposite_face_connection()(el),
-            i)
+    e = obj_array_vectorize(discr.opposite_face_connection(), i)
     return TracePair("int_faces", i, e)
 
 # }}}

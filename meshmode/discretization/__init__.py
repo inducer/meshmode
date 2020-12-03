@@ -55,7 +55,7 @@ class ElementGroupBase:
     .. autoattribute:: ndofs
     .. autoattribute:: dim
 
-    .. method:: unit_nodes()
+    .. method:: unit_nodes
 
         Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
         of reference coordinates of interpolation nodes.
@@ -106,6 +106,10 @@ class ElementGroupBase:
     @property
     def dim(self):
         return self.mesh_el_group.dim
+
+    @property
+    def unit_nodes(self):
+        raise NotImplementedError
 
     def basis(self):
         raise NoninterpolatoryElementGroupError("'{}' "

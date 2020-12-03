@@ -37,8 +37,8 @@ def map_unit_nodes_to_children(unit_nodes, tesselation):
     element.
 
     The tesselation should follow the format of
-    :func:`meshmode.mesh.tesselate.tesselatetri()` or
-    :func:`meshmode.mesh.tesselate.tesselatetet()`.
+    :func:`meshmode.mesh.refinement.tesselate.tesselatetri()` or
+    :func:`meshmode.mesh.refinement.tesselate.tesselatetet()`.
 
     `unit_nodes` should be relative to the unit simplex coordinates in
     :module:`modepy`.
@@ -46,6 +46,7 @@ def map_unit_nodes_to_children(unit_nodes, tesselation):
     :arg unit_nodes: shaped `(dim, nunit_nodes)`
     :arg tesselation: With attributes `ref_vertices`, `children`
     """
+    # pylint: disable=unsubscriptable-object
     ref_vertices = np.array(tesselation.ref_vertices, dtype=np.float)
 
     assert len(unit_nodes.shape) == 2
@@ -83,9 +84,6 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
     from meshmode.mesh.tools import make_element_lookup_tree
     tree = make_element_lookup_tree(mesh, eps=tol)
     logger.debug("nodal adj test: tree build done")
-
-    from meshmode.mesh.processing import find_bounding_box
-    bbox_min, bbox_max = find_bounding_box(mesh)
 
     nadj = mesh.nodal_adjacency
     nvertices_per_element = len(mesh.groups[0].vertex_indices[0])

@@ -27,6 +27,7 @@ from pytools import memoize_method
 from meshmode.mesh import (
         SimplexElementGroup as _MeshSimplexElementGroup,
         TensorProductElementGroup as _MeshTensorProductElementGroup)
+from meshmode.discretization import ElementGroupBase, InterpolatoryElementGroupBase
 
 import modepy as mp
 
@@ -63,17 +64,17 @@ Group factories
 .. autoclass:: LegendreGaussLobattoTensorProductGroupFactory
 """
 
-from meshmode.discretization import ElementGroupBase, InterpolatoryElementGroupBase
-
 
 # {{{ base class for poynomial elements
 
 class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
+    def is_orthogonal_basis(self):
+        raise NotImplementedError
+
     @memoize_method
     def mass_matrix(self):
         assert self.is_orthogonal_basis()
 
-        import modepy as mp
         return mp.mass_matrix(
                 self.basis(),
                 self.unit_nodes)
@@ -173,7 +174,7 @@ class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBa
         if len(result.shape) == 1:
             result = np.array([result])
 
-        dim2, nunit_nodes = result.shape
+        dim2, _ = result.shape
         assert dim2 == self.mesh_el_group.dim
         return result
 
@@ -213,7 +214,7 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
         if len(result.shape) == 1:
             result = np.array([result])
 
-        dim2, nunit_nodes = result.shape
+        dim2, _ = result.shape
         assert dim2 == self.mesh_el_group.dim
 
         return result
@@ -255,7 +256,7 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
         else:
             result = mp.warp_and_blend_nodes(dim, self.order)
 
-        dim2, nunit_nodes = result.shape
+        dim2, _ = result.shape
         assert dim2 == dim
         return result
 
@@ -295,7 +296,7 @@ class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
         result = recursive_nodes(dim, self.order, self.family,
                 domain="biunit").T.copy()
 
-        dim2, nunit_nodes = result.shape
+        dim2, _ = result.shape
         assert dim2 == dim
         return result
 
@@ -318,7 +319,7 @@ class PolynomialEquidistantSimplexElementGroup(_MassMatrixQuadratureElementGroup
         dim = self.mesh_el_group.dim
         result = mp.equidistant_nodes(dim, self.order)
 
-        dim2, nunit_nodes = result.shape
+        dim2, _ = result.shape
         assert dim2 == dim
         return result
 
@@ -488,10 +489,12 @@ class ElementGroupFactory:
     """
     .. function:: __call__(mesh_ele_group, node_nr_base)
     """
-    pass
 
 
 class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
+    mesh_group_class = type
+    group_class = type
+
     def __init__(self, order):
         self.order = order
 
@@ -542,7 +545,7 @@ class PolynomialWarpAndBlendGroupFactory(HomogeneousOrderBasedGroupFactory):
 
 class PolynomialRecursiveNodesGroupFactory(HomogeneousOrderBasedGroupFactory):
     def __init__(self, order, family):
-        self.order = order
+        super().__init__(order)
         self.family = family
 
     def __call__(self, mesh_el_group, index):
@@ -565,7 +568,7 @@ class PolynomialEquidistantSimplexGroupFactory(HomogeneousOrderBasedGroupFactory
 
 class PolynomialGivenNodesGroupFactory(HomogeneousOrderBasedGroupFactory):
     def __init__(self, order, unit_nodes):
-        self.order = order
+        super().__init__(order)
         self.unit_nodes = unit_nodes
 
     def __call__(self, mesh_el_group, index):

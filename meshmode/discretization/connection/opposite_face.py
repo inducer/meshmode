@@ -69,7 +69,7 @@ def _make_cross_face_batches(actx,
     src_grp = src_bdry_discr.groups[i_src_grp]
 
     dim = src_grp.dim
-    ambient_dim, nelements, ntgt_unit_nodes = tgt_bdry_nodes.shape
+    _, nelements, ntgt_unit_nodes = tgt_bdry_nodes.shape
     assert tgt_bdry_nodes.shape == src_bdry_nodes.shape
 
     # {{{ invert face map (using Gauss-Newton)
@@ -222,7 +222,7 @@ def _make_cross_face_batches(actx,
 
         if max_resid < tol:
             logger.debug("_make_cross_face_batches: gauss-newton: done, "
-                    "final residual: %g" % max_resid)
+                    "final residual: %g", max_resid)
             break
 
         niter += 1
@@ -237,7 +237,7 @@ def _make_cross_face_batches(actx,
     done_elements = np.zeros(nelements, dtype=np.bool)
     while True:
         todo_elements, = np.where(~done_elements)
-        if not len(todo_elements):
+        if len(todo_elements) == 0:
             return
 
         template_unit_nodes = src_unit_nodes[:, todo_elements[0], :]
@@ -250,7 +250,6 @@ def _make_cross_face_batches(actx,
         close_els = todo_elements[unit_node_dist < tol]
         done_elements[close_els] = True
 
-        from meshmode.discretization.connection.direct import InterpolationBatch
         yield InterpolationBatch(
                 from_group_index=i_src_grp,
                 from_element_indices=freeze_from_numpy(
@@ -287,7 +286,7 @@ def _make_bdry_el_lookup_table(actx, connection, igrp):
     iel_lookup = np.full((from_nelements, from_nfaces), -1,
             dtype=connection.from_discr.mesh.element_id_dtype)
 
-    for ibatch, batch in enumerate(connection.groups[igrp].batches):
+    for batch in connection.groups[igrp].batches:
         from_element_indices = thaw_to_numpy(actx, batch.from_element_indices)
         iel_lookup[from_element_indices, batch.to_element_face] = \
                 thaw_to_numpy(actx, batch.to_element_indices)

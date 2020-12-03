@@ -231,7 +231,7 @@ def test_refinement_connection(
             else:
                 factor = 9
 
-            for iaxis in range(len(x)):
+            for iaxis in range(len(x)):     # pylint: disable=C0200
                 result = result * actx.np.sin(factor * (x[iaxis]/mesh_ext[iaxis]))
 
             return result

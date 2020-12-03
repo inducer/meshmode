@@ -85,9 +85,10 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
 
     if draw_nodal_adjacency:
         def global_iel_to_group_and_iel(global_iel):
-            for igrp, grp in enumerate(mesh.groups):
+            for grp in mesh.groups:
                 if global_iel < grp.nelements:
                     return grp, global_iel
+
                 global_iel -= grp.nelements
 
             raise ValueError("invalid element nr")

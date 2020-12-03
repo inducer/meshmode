@@ -163,7 +163,7 @@ class RefinerWithoutAdjacency:
         if perform_vertex_updates:
             inew_vertex = mesh.nvertices
 
-        for igrp, group in enumerate(mesh.groups):
+        for group in mesh.groups:
             bisection_info = self._get_bisection_tesselation_info(
                     type(group), group.dim)
 

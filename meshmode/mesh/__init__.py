@@ -58,7 +58,6 @@ Predefined Boundary tags
 
 class BTAG_NONE:  # noqa: N801
     """A boundary tag representing an empty boundary or volume."""
-    pass
 
 
 class BTAG_ALL:  # noqa: N801
@@ -72,7 +71,6 @@ class BTAG_ALL:  # noqa: N801
     Instead, these boundaries will be tagged with
     :class:`BTAG_INDUCED_BOUNDARY`.
     """
-    pass
 
 
 class BTAG_REALLY_ALL:  # noqa: N801
@@ -86,7 +84,6 @@ class BTAG_REALLY_ALL:  # noqa: N801
     everything tagged with
     :class:`BTAG_INDUCED_BOUNDARY`
     """
-    pass
 
 
 class BTAG_NO_BOUNDARY:  # noqa: N801
@@ -94,7 +91,6 @@ class BTAG_NO_BOUNDARY:  # noqa: N801
     :class:`BTAG_ALL`. Among other things, this is used to keep rank boundaries
     out of :class:`BTAG_ALL`.
     """
-    pass
 
 
 class BTAG_PARTITION:  # noqa: N801
@@ -136,8 +132,6 @@ class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801
     # Don't be tempted to add a sphinx ref to the Firedrake stuff here.
     # This is unavailable in the Github doc build because
     # firedrakeproject.org seems to reject connections from Github.
-
-    pass
 
 
 SYSTEM_TAGS = {BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
@@ -277,7 +271,7 @@ class MeshElementGroup(Record):
 
     def __eq__(self, other):
         return (
-                type(self) == type(other)
+                isinstance(self, type(other))
                 and self.order == other.order
                 and np.array_equal(self.vertex_indices, other.vertex_indices)
                 and np.array_equal(self.nodes, other.nodes)
@@ -315,11 +309,11 @@ class _ModepyElementGroup(MeshElementGroup):
         """
 
         if unit_nodes is not None:
-            _dim = unit_nodes.shape[0]
-            if dim is not None and _dim != dim:
+            if dim is None:
+                dim = unit_nodes.shape[0]
+
+            if unit_nodes.shape[0] != dim:
                 raise ValueError("'dim' does not match 'unit_nodes' dimension")
-            else:
-                dim = _dim
         else:
             if dim is None:
                 raise TypeError("'dim' must be passed if 'unit_nodes' is not passed")
@@ -354,7 +348,6 @@ class _ModepyElementGroup(MeshElementGroup):
     def __setstate__(self, valuedict):
         super().__setstate__(valuedict)
 
-        import modepy as mp
         self._modepy_shape = self._modepy_shape_cls(self.dim)
         self._modepy_space = mp.space_for_shape(self._modepy_shape, self.order)
 
@@ -413,7 +406,7 @@ class NodalAdjacency(Record):
 
     def __eq__(self, other):
         return (
-                type(self) == type(other)
+                isinstance(self, type(other))
                 and np.array_equal(self.neighbors_starts,
                     other.neighbors_starts)
                 and np.array_equal(self.neighbors, other.neighbors))
@@ -485,7 +478,7 @@ class FacialAdjacencyGroup(Record):
 
     def __eq__(self, other):
         return (
-                type(self) == type(other)
+                isinstance(self, type(other))
                 and self.igroup == other.igroup
                 and self.ineighbor_group == other.ineighbor_group
                 and np.array_equal(self.elements, other.elements)
@@ -868,11 +861,12 @@ class Mesh(Record):
 
     @property
     def nodal_adjacency(self):
+        # pylint: disable=E0203,W0201
         from meshmode import DataUnavailable
         if self._nodal_adjacency is False:
             raise DataUnavailable("nodal_adjacency")
 
-        elif self._nodal_adjacency is None:
+        if self._nodal_adjacency is None:
             if not self.is_conforming:
                 raise DataUnavailable("nodal_adjacency can only "
                         "be computed for known-conforming meshes")
@@ -890,11 +884,12 @@ class Mesh(Record):
 
     @property
     def facial_adjacency_groups(self):
+        # pylint: disable=E0203,W0201
         from meshmode import DataUnavailable
         if self._facial_adjacency_groups is False:
             raise DataUnavailable("facial_adjacency_groups")
 
-        elif self._facial_adjacency_groups is None:
+        if self._facial_adjacency_groups is None:
             if not self.is_conforming:
                 raise DataUnavailable("facial_adjacency_groups can only "
                         "be computed for known-conforming meshes")
@@ -913,7 +908,7 @@ class Mesh(Record):
 
     def __eq__(self, other):
         return (
-                type(self) == type(other)
+                isinstance(self, type(other))
                 and np.array_equal(self.vertices, other.vertices)
                 and self.groups == other.groups
                 and self.vertex_id_dtype == other.vertex_id_dtype
@@ -1083,9 +1078,6 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
                 face_map.setdefault(
                         frozenset(fvi), []).append((igrp, iel_grp, fid))
 
-    del igrp
-    del grp
-
     # maps tuples (igrp, ineighbor_group) to number of elements
     group_count = {}
     for face_tuples in face_map.values():
@@ -1099,11 +1091,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
         else:
             raise RuntimeError("unexpected number of adjacent faces")
 
-    del face_tuples
-    del igrp
-
     # {{{ build facial_adjacency_groups data structure, still empty
-    from meshmode.mesh import FacialAdjacencyGroup, BTAG_ALL, BTAG_REALLY_ALL
 
     facial_adjacency_groups = []
     for igroup in range(len(groups)):
@@ -1155,10 +1143,6 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
                         element_faces=element_faces,
                         neighbors=neighbors,
                         neighbor_faces=neighbor_faces)
-
-    del igroup
-    del ineighbor_group
-    del grp_map
 
     # }}}
 
@@ -1268,7 +1252,7 @@ def as_python(mesh, function_name="make_mesh"):
         if mesh._facial_adjacency_groups:
             cg("facial_adjacency_groups = []")
 
-            for igrp, fagrp_map in enumerate(mesh.facial_adjacency_groups):
+            for fagrp_map in mesh.facial_adjacency_groups:
                 cg("facial_adjacency_groups.append({%s})" % ",\n    ".join(
                     "{!r}: FacialAdjacencyGroup({})".format(
                         inb_grp, fagrp_params_str(fagrp))
@@ -1335,7 +1319,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
     :arg true_boundary_only: only verify for faces tagged with :class:`BTAG_ALL`.
     """
 
-    for igrp, fagrp_map in enumerate(mesh.facial_adjacency_groups):
+    for fagrp_map in mesh.facial_adjacency_groups:
         bdry_grp = fagrp_map.get(None)
         if bdry_grp is None:
             continue

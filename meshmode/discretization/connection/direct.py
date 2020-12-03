@@ -316,10 +316,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         else:
             result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
 
-        for i_tgrp, (tgrp, cgrp) in enumerate(
-                zip(self.to_discr.groups, self.groups)):
+        for i_tgrp, cgrp in enumerate(self.groups):
             for i_batch, batch in enumerate(cgrp.batches):
-                if not len(batch.from_element_indices):
+                if len(batch.from_element_indices) == 0:
                     continue
 
                 point_pick_indices = self._resample_point_pick_indices(
@@ -410,7 +409,7 @@ def make_direct_full_resample_matrix(actx, conn):
     for i_tgrp, (tgrp, cgrp) in enumerate(
             zip(conn.to_discr.groups, conn.groups)):
         for i_batch, batch in enumerate(cgrp.batches):
-            if not len(batch.from_element_indices):
+            if len(batch.from_element_indices) == 0:
                 continue
 
             actx.call_loopy(knl(),
