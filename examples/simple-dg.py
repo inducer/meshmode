@@ -474,6 +474,46 @@ def bump(actx, discr, t=0):
             / source_width**2))
 
 
+def make_placeholder_like(actx, fields_obj_ary):
+    return flat_obj_array([DOFArray.from_list(actx,
+                                              [actx.symbolic_array_var(grp_ary.shape,
+                                                  grp_ary.dtype, f"_msh_inp_{i}_{j}")
+                                               for j, grp_ary in enumerate(dof_ary)])
+                          for i, dof_ary in enumerate(fields_obj_ary)])
+
+
+def to_dict_of_named_arrays(fields):
+    import pytato as pt
+    dictofnamedarrays = {}
+    for i, field in enumerate(fields):
+        for j, grp in enumerate(field):
+            dictofnamedarrays[f"_msh_out_{i}_{j}"] = grp
+
+    return pt.DictOfNamedArrays(dictofnamedarrays)
+
+
+def to_obj_array(actx, out_dict, ngrps):
+    return thaw(actx, flat_obj_array([DOFArray.from_list(actx,
+                                                         [out_dict[f"_msh_out_{i}_{j}"]
+                                                          for j in range(ngrp)])
+                                      for i, ngrp in enumerate(ngrps)]))
+
+
+def to_input_kwargs(fields):
+    _lpy_kwargs = {}
+    import pytato as pt
+    for i, field in enumerate(fields):
+        for j, grp in enumerate(field):
+            if isinstance(grp, pt.array.DataWrapper):
+                _lpy_kwargs[f"_msh_inp_{i}_{j}"] = grp.data
+            elif isinstance(grp, cla.Array):
+                _lpy_kwargs[f"_msh_inp_{i}_{j}"] = grp
+            else:
+                raise NotImplementedError(type(grp))
+
+    return _lpy_kwargs
+
+
 def main():
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
@@ -500,10 +540,10 @@ def main():
 
     discr = DGDiscretization(actx, mesh, order=order)
 
-    fields = flat_obj_array(
+    fields = freeze(flat_obj_array(
             bump(actx, discr),
             [discr.zeros(actx) for i in range(discr.dim)]
-            )
+            ))
 
     end = time()
     print(f"Intialization time: {end-start} s")
@@ -511,36 +551,54 @@ def main():
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr.volume_discr, discr.order+3)
 
+    symbolic_fields = make_placeholder_like(actx, fields)
+    import pytato as pt
+
     def rhs(t, w):
         return wave_operator(actx, discr, c=1, w=w)
+
+    rk4_step_knl = pt.generate_loopy(to_dict_of_named_arrays(rk4_step(symbolic_fields, 0, dt, rhs)),
+                                 options={"return_dict": True},
+                                 target=pt.PyOpenCLTarget(queue))
+    # print(wave_knl.program)
+
+    # we definitely need to tell pytato to call this loop
 
     t = 0
     t_final = 3
     istep = 0
+    input_kwargs = to_input_kwargs(fields)
+
+    start = time()
     while t < t_final:
-        start = time()
-        fields = thaw(actx, freeze(rk4_step(fields, t, dt, rhs)))
+        evt, out_dict = rk4_step_knl(**input_kwargs)
+        input_kwargs = {key.replace("out", "inp"): val
+                        for key, val in out_dict.items()}
+        # fields = to_obj_array(fields_as_dict, [1, 1, 1])
+        # end = time()
+        # print(f"Time to RK4-dt{istep}: {end-start} s")
 
-        print(istep, t, la.norm(actx.to_numpy(fields[0][0])))
-        end = time()
-        print(f"Time to RK4-dt{istep}: {end-start} s")
-
-        if False and istep % 10 == 0:
-            # FIXME: Maybe an integral function to go with the
-            # DOFArray would be nice?
-            assert len(fields[0]) == 1
-            print(istep, t, la.norm(actx.to_numpy(fields[0][0])))
-            vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep,
-                    [
-                        ("u", fields[0]),
-                        ("v", fields[1:]),
-                        ])
+        # if False and istep % 10 == 0:
+        #     # FIXME: Maybe an integral function to go with the
+        #     # DOFArray would be nice?
+        #     assert len(fields[0]) == 1
+        #     print(istep, t, la.norm(actx.to_numpy(fields[0][0])))
+        #     vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep,
+        #             [
+        #                 ("u", fields[0]),
+        #                 ("v", fields[1:]),
+        #                 ])
 
         t += dt
         istep += 1
 
-        if istep == 3:
-            1/0
+        # if istep == 3:
+        #     1/0
+
+    end = time()
+
+    print(istep, t, la.norm(out_dict["_msh_out_0_0"].get()))
+    print(f"Exec time of a timestep = {(end-start)/istep}")
 
 
 if __name__ == "__main__":

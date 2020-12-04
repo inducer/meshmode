@@ -538,6 +538,10 @@ class PytatoArrayContext(ArrayContext):
         return pt.make_placeholder(self.ns, name=self.ns.name_gen("u"),
                 shape=shape, dtype=dtype)
 
+    def symbolic_array_var(self, shape, dtype, name=None):
+        import pytato as pt
+        return pt.make_placeholder(self.ns, shape=shape, dtype=dtype, name=name)
+
     def zeros(self, shape, dtype):
         import pytato as pt
         return pt.IndexLambda(self.ns, 0, shape=shape, dtype=dtype)
@@ -557,9 +561,6 @@ class PytatoArrayContext(ArrayContext):
         import pytato as pt
         from numbers import Number
         bindings = {}
-
-        assert not any(isinstance(arg, pt.Placeholder) for arg in
-                kwargs.values())
 
         for arg_name, arg in kwargs.items():
             if isinstance(arg, pt.array.Array):
