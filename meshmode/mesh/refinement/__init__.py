@@ -27,6 +27,7 @@ from pytools import RecordWithoutPickling
 from meshmode.mesh.refinement.no_adjacency import (  # noqa: F401
         RefinerWithoutAdjacency)
 
+from meshmode.mesh.refinement.resampler import TesselationInfo as _Tesselation
 
 import logging
 logger = logging.getLogger(__name__)
@@ -63,14 +64,6 @@ class TreeRayNode:
         self.midpoint = None
         self.adjacent_elements = copy.deepcopy(adjacent_elements)
         self.adjacent_add_diff = []
-
-
-class _Tesselation(RecordWithoutPickling):
-
-    def __init__(self, children, ref_vertices):
-        RecordWithoutPickling.__init__(self,
-                children=children,
-                ref_vertices=ref_vertices,)
 
 
 class _GroupRefinementRecord(RecordWithoutPickling):
@@ -617,8 +610,8 @@ class Refiner:
                                 SimplexResampler)
                             resampler = SimplexResampler()
                             tesselation = _Tesselation(
-                                self.simplex_result[grp.dim],
-                                self.simplex_node_tuples[grp.dim])
+                                children=self.simplex_result[grp.dim],
+                                ref_vertices=self.simplex_node_tuples[grp.dim])
                     else:
                         raise NotImplementedError("unimplemented: midpoint finding"
                                                   "for non simplex elements")

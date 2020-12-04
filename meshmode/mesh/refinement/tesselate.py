@@ -28,6 +28,10 @@ from pytools import generate_nonnegative_integer_tuples_summing_to_at_most \
     as gnitstam
 
 
+def mul_tuples(t, m):
+    return tuple(m * a for a in t)
+
+
 def add_tuples(a, b):
     return tuple(ac+bc for ac, bc in zip(a, b))
 

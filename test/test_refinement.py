@@ -36,6 +36,7 @@ from meshmode.mesh.generation import (  # noqa
 from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
 from meshmode.mesh.refinement import Refiner, RefinerWithoutAdjacency
 
+from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
     InterpolatoryQuadratureSimplexGroupFactory,
     PolynomialWarpAndBlendGroupFactory,
@@ -289,12 +290,17 @@ def test_refinement_connection(
             or eoc_rec.max_error() < 1e-14)
 
 
-@pytest.mark.parametrize("with_adjacency", [True, False])
-def test_uniform_refinement(with_adjacency):
+@pytest.mark.parametrize(("group_cls", "with_adjacency"), [
+    (SimplexElementGroup, True),
+    (SimplexElementGroup, False),
+    (TensorProductElementGroup, False)
+    ])
+def test_uniform_refinement(group_cls, with_adjacency):
     make_mesh = partial(generate_box_mesh, (
             np.linspace(0.0, 1.0, 2),
             np.linspace(0.0, 1.0, 3),
-            np.linspace(0.0, 1.0, 2)), order=4)
+            np.linspace(0.0, 1.0, 2)),
+            order=4, group_cls=group_cls)
     mesh = make_mesh()
 
     from meshmode.mesh.refinement import refine_uniformly

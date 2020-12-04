@@ -20,9 +20,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from functools import singledispatch
 
 import numpy as np
 import modepy as mp
+from pytools import RecordWithoutPickling
 
 import logging
 logger = logging.getLogger(__name__)
@@ -30,108 +32,160 @@ logger = logging.getLogger(__name__)
 
 # {{{ resampling simplex points for refinement
 
-# NOTE: Class internal to refiner: do not make documentation public.
 class SimplexResampler:
-    """
-    Resampling of points on simplex elements for refinement.
-
-    Most methods take a ``tesselation`` parameter.
-    The tesselation should follow the format of
-    :func:`meshmode.mesh.tesselate.tesselatetri()` or
-    :func:`meshmode.mesh.tesselate.tesselatetet()`.
-    """
-
     @staticmethod
     def get_vertex_pair_to_midpoint_order(dim):
-        """
-        :arg dim: Dimension of the element
-
-        :return: A :class:`dict` mapping the vertex pair :math:`(v1, v2)` (with
-            :math:`v1 < v2`) to the number of the midpoint in the tesselation
-            ordering (the numbering is restricted to the midpoints, so there
-            are no gaps in the numbering)
-        """
-        nmidpoints = dim * (dim + 1) // 2
-        return dict(zip(
-            ((i, j) for j in range(dim + 1) for i in range(j)),
-            range(nmidpoints)
-            ))
+        return get_vertex_pair_to_midpoint_order(mp.Simplex(dim))
 
     @staticmethod
     def get_midpoints(group, tesselation, elements):
-        """
-        Compute the midpoints of the vertices of the specified elements.
-
-        :arg group: An instance of :class:`meshmode.mesh.SimplexElementGroup`
-        :arg tesselation: With attributes `ref_vertices`, `children`
-        :arg elements: A list of (group-relative) element numbers
-
-        :return: A :class:`dict` mapping element numbers to midpoint
-            coordinates, with each value in the map having shape
-            ``(ambient_dim, nmidpoints)``. The ordering of the midpoints
-            follows their ordering in the tesselation (see also
-            :meth:`SimplexResampler.get_vertex_pair_to_midpoint_order`)
-        """
-        if group.vertex_indices is not None:
-            assert len(group.vertex_indices[0]) == group.dim + 1
-
-        # Get midpoints, converted to unit coordinates.
-        midpoints = -1 + np.array([vertex for vertex in
-                tesselation.ref_vertices if 1 in vertex], dtype=float)
-
-        resamp_mat = mp.resampling_matrix(
-            mp.simplex_best_available_basis(group.dim, group.order),
-            midpoints.T,
-            group.unit_nodes)
-
-        resamp_midpoints = np.einsum("mu,deu->edm",
-                                     resamp_mat,
-                                     group.nodes[:, elements])
-
-        return dict(zip(elements, resamp_midpoints))
+        return get_midpoints(mp.Simplex(group.dim),
+                group, tesselation, elements)
 
     @staticmethod
     def get_tesselated_nodes(group, tesselation, elements):
-        """
-        Compute the nodes of the child elements according to the tesselation.
-
-        :arg group: An instance of :class:`meshmode.mesh.SimplexElementGroup`
-        :arg tesselation: With attributes `ref_vertices`, `children`
-        :arg elements: A list of (group-relative) element numbers
-
-        :return: A :class:`dict` mapping element numbers to node
-            coordinates, with each value in the map having shape
-            ``(ambient_dim, nchildren, nunit_nodes)``.
-            The ordering of the child nodes follows the ordering
-            of ``tesselation.children.``
-        """
-        if group.vertex_indices is not None:
-            assert len(group.vertex_indices[0]) == group.dim + 1
-
-        from meshmode.mesh.refinement.utils import map_unit_nodes_to_children
-
-        # Get child unit node coordinates.
-        child_unit_nodes = np.hstack(list(
-            map_unit_nodes_to_children(group.unit_nodes, tesselation)))
-
-        resamp_mat = mp.resampling_matrix(
-            mp.simplex_best_available_basis(group.dim, group.order),
-            child_unit_nodes,
-            group.unit_nodes)
-
-        resamp_unit_nodes = np.einsum("cu,deu->edc",
-                                      resamp_mat,
-                                      group.nodes[:, elements])
-
-        ambient_dim = len(group.nodes)
-        nunit_nodes = len(group.unit_nodes[0])
-
-        return {elem:
-            resamp_unit_nodes[ielem].reshape(
-                 (ambient_dim, -1, nunit_nodes))
-            for ielem, elem in enumerate(elements)}
+        return get_tesselated_nodes(mp.Simplex(group.dim),
+                group, tesselation, elements)
 
 # }}}
 
+
+# {{{ interface
+
+# NOTE: internal to refiners: do not make documentation public.
+
+class TesselationInfo(RecordWithoutPickling):
+    """
+    .. attribute:: ref_vertices
+    .. attribute:: children
+    """
+
+@singledispatch
+def map_unit_nodes_to_children(shape: mp.Shape, tesselation, unit_nodes):
+    raise NotImplementedError
+
+
+@singledispatch
+def get_ref_midpoints(shape: mp.Shape, ref_vertices):
+    from pytools import add_tuples
+    space = mp.space_for_shape(shape, 1)
+    orig_vertices = [
+            add_tuples(vt, vt) for vt in mp.node_tuples_for_space(space)
+            ]
+    return [rv for rv in ref_vertices if rv not in orig_vertices]
+
+
+@singledispatch
+def get_midpoints(shape: mp.Shape, group, tesselation, elements):
+    """Compute the midpoints of the vertices of the specified elements.
+
+    :arg group: an instance of :class:`meshmode.mesh.MeshElementGroup`.
+    :arg tesselation: a :class:`TesselationInfo`.
+    :arg elements: a list of (group-relative) element numbers.
+
+    :return: A :class:`dict` mapping element numbers to midpoint
+        coordinates, with each value in the map having shape
+        ``(ambient_dim, nmidpoints)``. The ordering of the midpoints
+        follows their ordering in the tesselation (see also
+        :meth:`SimplexResampler.get_vertex_pair_to_midpoint_order`)
+    """
+    if shape.dim != group.dim:
+        raise ValueError("shape and group dimension do not match")
+
+    if group.vertex_indices is not None:
+        assert len(group.vertex_indices[0]) == shape.nvertices
+
+    # get midpoints, converted to unit coordinates.
+    midpoints = -1 + np.array(get_ref_midpoints(shape, tesselation.ref_vertices))
+
+    space = mp.space_for_shape(shape, group.order)
+    resampling_mat = mp.resampling_matrix(
+            mp.basis_for_space(space, shape).functions,
+            midpoints.T,
+            group.unit_nodes)
+
+    resampled_midpoints = np.einsum("mu,deu->edm",
+            resampling_mat, group.nodes[:, elements])
+
+    return dict(zip(elements, resampled_midpoints))
+
+
+@singledispatch
+def get_tesselated_nodes(shape: mp.Shape, group, tesselation, elements):
+    """Compute the nodes of the child elements according to the tesselation.
+
+    :arg group: An instance of :class:`meshmode.mesh.MeshElementGroup`.
+    :arg tesselation: a :class:`TesselationInfo`.
+    :arg elements: A list of (group-relative) element numbers.
+
+    :return: A :class:`dict` mapping element numbers to node
+        coordinates, with each value in the map having shape
+        ``(ambient_dim, nchildren, nunit_nodes)``.
+        The ordering of the child nodes follows the ordering
+        of ``tesselation.children.``
+    """
+    if shape.dim != group.dim:
+        raise ValueError("shape and group dimension do not match")
+
+    if group.vertex_indices is not None:
+        assert len(group.vertex_indices[0]) == shape.nvertices
+
+    # get child unit node coordinates.
+    child_unit_nodes = np.hstack(list(
+        map_unit_nodes_to_children(shape, tesselation, group.unit_nodes)
+        ))
+
+    space = mp.space_for_shape(shape, group.order)
+    resampling_mat = mp.resampling_matrix(
+            mp.basis_for_space(space, shape).functions,
+            child_unit_nodes,
+            group.unit_nodes)
+
+    resampled_unit_nodes = np.einsum("cu,deu->edc",
+            resampling_mat, group.nodes[:, elements])
+
+    ambient_dim = len(group.nodes)
+    nunit_nodes = len(group.unit_nodes[0])
+
+    return {
+            el: resampled_unit_nodes[iel].reshape((ambient_dim, -1, nunit_nodes))
+            for iel, el in enumerate(elements)
+            }
+    raise NotImplementedError(type(shape).__name__)
+
+# }}}
+
+
+# {{{ simplex
+
+@map_unit_nodes_to_children.register(mp.Simplex)
+def _(shape: mp.Simplex, tesselation, unit_nodes):
+    ref_vertices = np.array(tesselation.ref_vertices, dtype=np.float)
+    assert len(unit_nodes.shape) == 2
+
+    for child_element in tesselation.children:
+        origin = np.vstack(ref_vertices[child_element[0]])
+        basis = ref_vertices.T[:, child_element[1:]] - origin
+
+        yield basis.dot((unit_nodes + 1) / 2) + origin - 1
+
+# }}}
+
+
+# {{{ hypercube
+
+@map_unit_nodes_to_children.register(mp.Hypercube)
+def _(shape: mp.Hypercube, tesselation, unit_nodes):
+    ref_vertices = np.array(tesselation.ref_vertices, dtype=np.float)
+    assert len(unit_nodes.shape) == 2
+
+    basis_indices = [1, 2, 4][:shape.dim]
+    for child_element in tesselation.children:
+        origin = np.vstack(ref_vertices[child_element[0]])
+        basis = ref_vertices.T[:, np.array(child_element)[indices]] - origin
+
+        yield basis.dot((unit_nodes + 1) / 2) + origin - 1
+
+# }}}
 
 # vim: foldmethod=marker

@@ -47,7 +47,6 @@ def map_unit_nodes_to_children(unit_nodes, tesselation):
     :arg tesselation: With attributes `ref_vertices`, `children`
     """
     ref_vertices = np.array(tesselation.ref_vertices, dtype=np.float)
-
     assert len(unit_nodes.shape) == 2
 
     for child_element in tesselation.children:

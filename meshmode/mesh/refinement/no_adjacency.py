@@ -26,33 +26,156 @@ THE SOFTWARE.
 
 
 import numpy as np
+
+import modepy as mp
 from pytools import RecordWithoutPickling
-
-from pytools import memoize_method
-
+from pytools import memoize, memoize_method
 
 import logging
 logger = logging.getLogger(__name__)
 
 
-class _TesselationInfo(RecordWithoutPickling):
+# {{{ tesselation
 
-    def __init__(self, children, ref_vertices, orig_vertex_indices,
-            midpoint_indices, midpoint_vertex_pairs, resampler):
-        RecordWithoutPickling.__init__(self,
-                children=children,
-                ref_vertices=ref_vertices,
-                orig_vertex_indices=orig_vertex_indices,
-                midpoint_indices=midpoint_indices,
-                midpoint_vertex_pairs=midpoint_vertex_pairs,
-                resampler=resampler)
+class _TesselationInfo(RecordWithoutPickling):
+    """
+    .. attribute:: shape
+
+    .. attribute:: children
+    .. attribute:: ref_vertices
+
+    .. attribute:: orig_vertex_indices
+    .. attribute:: midpoint_indices
+    .. attribute:: midpoint_vertex_pairs
+    """
 
 
 class _GroupRefinementRecord(RecordWithoutPickling):
+    """
+    .. attribute:: tesselation
+    .. attribute:: element_mapping
+    """
 
-    def __init__(self, tesselation, element_mapping):
-        RecordWithoutPickling.__init__(self,
-            tesselation=tesselation, element_mapping=element_mapping)
+
+def _old_simplex_tesselation_info(dim):
+    from meshmode.mesh.refinement.tesselate import \
+            tesselate_simplex_bisection, add_tuples, halve_tuple
+    ref_vertices, children = tesselate_simplex_bisection(dim)
+
+    orig_vertex_tuples = [(0,) * dim] + [
+            (0,) * i + (2,) + (0,) * (dim-i-1)
+            for i in range(dim)]
+    node_dict = {
+          ituple: idx
+          for idx, ituple in enumerate(ref_vertices)}
+    orig_vertex_indices = [node_dict[vt] for vt in orig_vertex_tuples]
+
+    from meshmode.mesh.refinement.resampler import SimplexResampler
+    resampler = SimplexResampler()
+    vertex_pair_to_midpoint_order = \
+            resampler.get_vertex_pair_to_midpoint_order(dim)
+
+    midpoint_idx_to_vertex_pair = {}
+    for vpair, mpoint_idx in vertex_pair_to_midpoint_order.items():
+        midpoint_idx_to_vertex_pair[mpoint_idx] = vpair
+
+    midpoint_vertex_pairs = [
+            midpoint_idx_to_vertex_pair[i]
+            for i in range(len(midpoint_idx_to_vertex_pair))]
+
+    midpoint_indices = [
+            node_dict[
+                halve_tuple(
+                    add_tuples(
+                        orig_vertex_tuples[v1],
+                        orig_vertex_tuples[v2]))]
+            for v1, v2 in midpoint_vertex_pairs]
+
+    return _TesselationInfo(
+            ref_vertices=ref_vertices,
+            children=np.array(children),
+            orig_vertex_indices=np.array(orig_vertex_indices),
+            midpoint_indices=np.array(midpoint_indices),
+            midpoint_vertex_pairs=midpoint_vertex_pairs,
+            resampler=resampler,
+            )
+
+
+def _midpoint_tuples(a, b):
+    def halve(ai, bi):
+        d, r = divmod(ai + bi, 2)
+        if r:
+            raise ValueError(f"({ai} + {bi}) is not evenly divisible by two")
+
+        return d
+
+    return tuple(halve(ai, bi) for ai, bi in zip(a, b))
+
+
+def get_simplex_tesselation_info(shape):
+    # ref_vertices refer to the nodes in the 2nd order simplex
+    #
+    #   F
+    #   | \
+    #   |   \
+    #   D----E
+    #   |   /| \
+    #   | /  |   \
+    #   A----B----C
+    #
+    # orig_vertices is just (A, C, F)
+    #
+    # we then find the midpoints (B, D, E) and the vertex pairs around them.
+
+    space = mp.space_for_shape(shape, 2)
+    ref_vertices = mp.node_tuples_for_space(space)
+    ref_vertices_to_index = {rv: i for i, rv in enumerate(ref_vertices)}
+
+    from pytools import add_tuples
+    space = mp.space_for_shape(shape, 1)
+    orig_vertices = tuple([
+        add_tuples(vt, vt) for vt in mp.node_tuples_for_space(space)
+        ])
+    orig_vertex_indices = [ref_vertices_to_index[vt] for vt in orig_vertices]
+
+    from meshmode.mesh.refinement.resampler import get_ref_midpoints
+    midpoints = get_ref_midpoints(shape, ref_vertices)
+    midpoint_indices = [ref_vertices_to_index[mp] for mp in midpoints]
+
+    midpoint_to_vertex_pairs = {
+            midpoint: (i, j)
+            for i, ivt in enumerate(orig_vertices)
+            for j, jvt in enumerate(orig_vertices)
+            for midpoint in [_midpoint_tuples(ivt, jvt)]
+            if i < j and midpoint in midpoints
+            }
+    midpoint_vertex_pairs = [midpoint_to_vertex_pairs[m] for m in midpoints]
+
+    return _TesselationInfo(
+            shape=shape,
+            ref_vertices=ref_vertices,
+            children=np.array(mp.submesh_for_shape(shape, ref_vertices)),
+            orig_vertex_indices=np.array(orig_vertex_indices),
+            midpoint_indices=np.array(midpoint_indices),
+            midpoint_vertex_pairs=midpoint_vertex_pairs,
+            )
+
+
+def get_hypercube_tesselation_info(shape):
+    return get_simplex_tesselation_info(shape)
+
+@memoize
+def get_bisection_tesselation_info(group_type, dim):
+    from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+    if issubclass(group_type, SimplexElementGroup):
+        return get_simplex_tesselation_info(mp.Simplex(dim))
+    elif issubclass(group_type, TensorProductElementGroup):
+        return get_hypercube_tesselation_info(mp.Hypercube(dim))
+    else:
+        raise NotImplementedError(
+                "bisection for element groups of type {group_type.__name__}")
+
+# }}}
 
 
 class RefinerWithoutAdjacency:
@@ -81,61 +204,6 @@ class RefinerWithoutAdjacency:
         self.group_refinement_records = None
         self.global_vertex_pair_to_midpoint = {}
 
-    # {{{ build tesselation info
-
-    @memoize_method
-    def _get_bisection_tesselation_info(self, group_type, dim):
-        from meshmode.mesh import SimplexElementGroup
-        if issubclass(group_type, SimplexElementGroup):
-            from meshmode.mesh.refinement.tesselate import \
-                    tesselate_simplex_bisection, add_tuples, halve_tuple
-            ref_vertices, children = tesselate_simplex_bisection(dim)
-
-            orig_vertex_tuples = [(0,) * dim] + [
-                    (0,) * i + (2,) + (0,) * (dim-i-1)
-                    for i in range(dim)]
-            node_dict = {
-                  ituple: idx
-                  for idx, ituple in enumerate(ref_vertices)}
-            orig_vertex_indices = [node_dict[vt] for vt in orig_vertex_tuples]
-
-            from meshmode.mesh.refinement.resampler import SimplexResampler
-            resampler = SimplexResampler()
-            vertex_pair_to_midpoint_order = \
-                    resampler.get_vertex_pair_to_midpoint_order(dim)
-
-            midpoint_idx_to_vertex_pair = {}
-            for vpair, mpoint_idx in vertex_pair_to_midpoint_order.items():
-                midpoint_idx_to_vertex_pair[mpoint_idx] = vpair
-
-            midpoint_vertex_pairs = [
-                    midpoint_idx_to_vertex_pair[i]
-                    for i in range(len(midpoint_idx_to_vertex_pair))]
-
-            midpoint_indices = [
-                    node_dict[
-                        halve_tuple(
-                            add_tuples(
-                                orig_vertex_tuples[v1],
-                                orig_vertex_tuples[v2]))]
-                    for v1, v2 in midpoint_vertex_pairs]
-
-            return _TesselationInfo(
-                    ref_vertices=ref_vertices,
-                    children=np.array(children),
-                    orig_vertex_indices=np.array(orig_vertex_indices),
-                    midpoint_indices=np.array(midpoint_indices),
-                    midpoint_vertex_pairs=midpoint_vertex_pairs,
-                    resampler=resampler,
-                    )
-
-        else:
-            raise NotImplementedError(
-                    "bisection for elements groups of type %s"
-                    % group_type.__name__)
-
-    # }}}
-
     def refine_uniformly(self):
         flags = np.ones(self._current_mesh.nelements, dtype=bool)
         return self.refine(flags)
@@ -163,9 +231,11 @@ class RefinerWithoutAdjacency:
         if perform_vertex_updates:
             inew_vertex = mesh.nvertices
 
+        from meshmode.mesh.refinement.resampler import \
+                get_midpoints, get_tesselated_nodes
+
         for igrp, group in enumerate(mesh.groups):
-            bisection_info = self._get_bisection_tesselation_info(
-                    type(group), group.dim)
+            bisection_info = get_bisection_tesselation_info(type(group), group.dim)
 
             # {{{ compute counts and index arrays
 
@@ -201,7 +271,7 @@ class RefinerWithoutAdjacency:
             # {{{ get new vertices together
 
             if perform_vertex_updates:
-                midpoints = bisection_info.resampler.get_midpoints(
+                midpoints = get_midpoints(bisection_info.shape,
                         group, bisection_info, refining_el_old_indices)
 
                 new_vertex_indices = np.empty(
@@ -269,7 +339,7 @@ class RefinerWithoutAdjacency:
             # copy over unchanged nodes
             new_nodes[:, unrefined_el_new_indices] = group.nodes[:, ~grp_flags]
 
-            tesselated_nodes = bisection_info.resampler.get_tesselated_nodes(
+            tesselated_nodes = get_tesselated_nodes(bisection_info.shape,
                     group, bisection_info, refining_el_old_indices)
 
             for old_iel in refining_el_old_indices:
