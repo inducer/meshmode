@@ -395,7 +395,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
                 # {{{ enforce different namespaces for the kernels
 
-                for iname in knl[knlname].all_inames():
+                for iname in sorted(knl[knlname].all_inames()):
                     knl = lp.rename_iname(knl, iname, f"{iname}_{i_batch}")
 
                 knl = lp.rename_argument(knl, "ary", f"ary_{i_batch}")
