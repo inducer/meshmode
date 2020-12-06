@@ -75,9 +75,13 @@ def get_child_basis_vertex_indices(shape: mp.Shape, child):
 def _(shape: mp.Hypercube, child):
     assert len(child) == shape.nvertices
 
-    # for a cube, we reorder nodes such that the vectors
-    #   (0, 1), (0, 2) and (0, 4)
-    # form an orthogonal basis, since (0, 3) is linearly dependent on 1 and 2.
+    # * for a cube, we reorder nodes such that the vectors
+    #
+    #       (0, 1), (0, 2) and (0, 4)
+    #
+    #   form an orthogonal basis, since (0, 3) is linearly dependent on 1 and 2.
+    #
+    # * lines and squares don't require any reordering
 
     return [child[i] for i in [0, 1, 2, 4][:shape.dim + 1]]
 

@@ -625,6 +625,7 @@ class Refiner:
         nelements_in_grp = grp.nelements
         del self.group_refinement_records[:]
 
+        from meshmode.mesh import SimplexElementGroup
         for grp_idx, grp in enumerate(self.last_mesh.groups):
             if not isinstance(grp, SimplexElementGroup):
                 raise TypeError("refinement not supported for groups of type "
