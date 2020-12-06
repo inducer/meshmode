@@ -545,9 +545,6 @@ def main():
             [discr.zeros(actx) for i in range(discr.dim)]
             ))
 
-    end = time()
-    print(f"Intialization time: {end-start} s")
-
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr.volume_discr, discr.order+3)
 
@@ -560,9 +557,8 @@ def main():
     rk4_step_knl = pt.generate_loopy(to_dict_of_named_arrays(rk4_step(symbolic_fields, 0, dt, rhs)),
                                  options={"return_dict": True},
                                  target=pt.PyOpenCLTarget(queue))
-    # print(wave_knl.program)
-
-    # we definitely need to tell pytato to call this loop
+    end = time()
+    print(f"Intialization time: {end-start} s")
 
     t = 0
     t_final = 3
@@ -574,8 +570,6 @@ def main():
         evt, out_dict = rk4_step_knl(**input_kwargs)
         input_kwargs = {key.replace("out", "inp"): val
                         for key, val in out_dict.items()}
-        # fields = to_obj_array(fields_as_dict, [1, 1, 1])
-        # end = time()
         # print(f"Time to RK4-dt{istep}: {end-start} s")
 
         # if False and istep % 10 == 0:
@@ -591,9 +585,6 @@ def main():
 
         t += dt
         istep += 1
-
-        # if istep == 3:
-        #     1/0
 
     end = time()
 
