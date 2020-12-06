@@ -87,9 +87,16 @@ def _build_interpolation_batches_for_group(
                 to_bin.append(child_idx)
 
     fine_unit_nodes = fine_discr_group.unit_nodes
-    from meshmode.mesh.refinement.utils import map_unit_nodes_to_children
-    mapped_unit_nodes = map_unit_nodes_to_children(
-        fine_unit_nodes, record.tesselation)
+    meg = fine_discr_group.mesh_el_group
+
+    from meshmode.mesh import _ModepyElementGroup
+    if isinstance(meg, _ModepyElementGroup):
+        from meshmode.mesh.refinement.tesselate import map_unit_nodes_to_children
+        mapped_unit_nodes = map_unit_nodes_to_children(
+                meg._modepy_shape, fine_unit_nodes, record.tesselation)
+    else:
+        raise TypeError("cannot construct refinement connection for groups "
+                f"of type '{type(meg).__name__}'")
 
     from itertools import chain
     for from_bin, to_bin, unit_nodes in zip(

@@ -914,10 +914,8 @@ class Mesh(Record):
                 and self.groups == other.groups
                 and self.vertex_id_dtype == other.vertex_id_dtype
                 and self.element_id_dtype == other.element_id_dtype
-                and (self._nodal_adjacency
-                        == other._nodal_adjacency)
-                and (self._facial_adjacency_groups
-                        == other._facial_adjacency_groups)
+                and self._nodal_adjacency == other._nodal_adjacency
+                and self._facial_adjacency_groups == other._facial_adjacency_groups
                 and self.boundary_tags == other.boundary_tags
                 and self.is_conforming == other.is_conforming)
 
