@@ -37,7 +37,7 @@ import decorator
 from meshmode.array_context import ArrayContext, make_loopy_program
 
 __doc__ = """
-.. autoclass:: DOFTag
+.. autoclass:: IsDOFArray
 .. autoclass:: DOFArray
 
 .. autofunction:: obj_or_dof_array_vectorize
@@ -53,9 +53,9 @@ __doc__ = """
 """
 
 
-# {{{ DOFTag
+# {{{ IsDOFArray
 
-class DOFTag(Tag):
+class IsDOFArray(Tag):
     """A tag to mark arrays of DOFs in Loopy kernels. Applications
     could use this to decide how to change the memory layout of
     these arrays.
@@ -360,7 +360,7 @@ def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
             """result[grp_start + iel*ndofs_per_element + idof] \
                 = grp_ary[iel, idof]""",
             kernel_data=[
-                GlobalArg("grp_ary", None, shape=auto, tags=DOFTag()),
+                GlobalArg("grp_ary", None, shape=auto, tags=IsDOFArray()),
                 ...
             ],
             name="flatten")

@@ -27,7 +27,7 @@ import loopy as lp
 from pytools import memoize_in, keyed_memoize_method
 from pytools.obj_array import obj_array_vectorized_n_args
 from meshmode.array_context import ArrayContext, make_loopy_program
-from meshmode.dof_array import DOFTag
+from meshmode.dof_array import IsDOFArray
 
 
 # {{{ interpolation batch
@@ -275,10 +275,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 [
                     lp.GlobalArg("result", None,
                         shape="nelements_result, n_to_nodes",
-                        offset=lp.auto, tags=DOFTag()),
+                        offset=lp.auto, tags=IsDOFArray()),
                     lp.GlobalArg("ary", None,
                         shape="nelements_vec, n_from_nodes",
-                        offset=lp.auto, tags=DOFTag()),
+                        offset=lp.auto, tags=IsDOFArray()),
                     lp.ValueArg("nelements_result", np.int32),
                     lp.ValueArg("nelements_vec", np.int32),
                     "...",
@@ -299,10 +299,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 [
                     lp.GlobalArg("result", None,
                         shape="nelements_result, n_to_nodes",
-                        offset=lp.auto, tags=DOFTag()),
+                        offset=lp.auto, tags=IsDOFArray()),
                     lp.GlobalArg("ary", None,
                         shape="nelements_vec, n_from_nodes",
-                        offset=lp.auto, tags=DOFTag()),
+                        offset=lp.auto, tags=IsDOFArray()),
                     lp.ValueArg("nelements_result", np.int32),
                     lp.ValueArg("nelements_vec", np.int32),
                     lp.ValueArg("n_from_nodes", np.int32),
