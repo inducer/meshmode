@@ -541,14 +541,14 @@ class PyOpenCLArrayContext(ArrayContext):
 
         inner_iname = None
 
-        hasDOFResult = False
+        has_dof_result = False
         for arg in program.args:
-            if arg.name == "result" and isinstance(getattr(arg, 'tags', None),
+            if arg.name == "result" and isinstance(getattr(arg, "tags", None),
                     IsDOFArray):
-                hasDOFResult = True
+                has_dof_result = True
                 break
 
-        if hasDOFResult:
+        if has_dof_result:
             outer_iname = "iel"
             inner_iname = "idof"
         elif "iel" not in all_inames and "i0" in all_inames:
