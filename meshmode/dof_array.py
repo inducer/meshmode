@@ -56,7 +56,7 @@ __doc__ = """
 # {{{ DOFTag
 
 class DOFTag(Tag):
-    """A tag to mark arrays of DOFs in Loopy kernels. Applications
+    """A tag to mark arrays of DOFs in :mod:`loopy` kernels. Applications
     could use this to decide how to change the memory layout of
     these arrays.
     """
