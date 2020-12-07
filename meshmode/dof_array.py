@@ -50,8 +50,8 @@ __doc__ = """
 .. autofunction:: unflatten
 """
 
+# {{{ DOFArray
 
- # {{{ DOFArray
 
 class DOFArray:
     """This array type holds degree-of-freedom arrays for use with
