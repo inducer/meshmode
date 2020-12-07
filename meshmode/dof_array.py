@@ -28,16 +28,14 @@ from loopy import GlobalArg, auto
 
 from pytools import single_valued, memoize_in
 from pytools.obj_array import obj_array_vectorize, obj_array_vectorize_n_args
-from pytools.tag import Tag
 
 from numbers import Number
 import operator as op
 import decorator
 
-from meshmode.array_context import ArrayContext, make_loopy_program
+from meshmode.array_context import ArrayContext, make_loopy_program, IsDOFArray
 
 __doc__ = """
-.. autoclass:: IsDOFArray
 .. autoclass:: DOFArray
 
 .. autofunction:: obj_or_dof_array_vectorize
@@ -53,19 +51,7 @@ __doc__ = """
 """
 
 
-# {{{ IsDOFArray
-
-class IsDOFArray(Tag):
-    """A tag to mark arrays of DOFs in :mod:`loopy` kernels. Applications
-    could use this to decide how to change the memory layout of
-    these arrays.
-    """
-    pass
-
-    # }}}
-
-
-# {{{ DOFArray
+ # {{{ DOFArray
 
 class DOFArray:
     """This array type holds degree-of-freedom arrays for use with

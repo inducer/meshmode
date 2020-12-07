@@ -286,6 +286,11 @@ class Discretization:
                     0<=iel<nelements and
                     0<=idof,j<nunit_dofs}""",
                 "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
+                kernel_data=[
+                    GlobalArg("result", None, shape=auto, tags=IsDOFArray()),
+                    GlobalArg("vec", None, shape=auto, tags=IsDOFArray()),
+                    ...
+                ],
                 name="diff")
 
         def get_mat(grp):
@@ -349,6 +354,7 @@ class Discretization:
                     """,
                 kernel_data=[
                     GlobalArg("result", None, shape=auto, tags=IsDOFArray()),
+                    GlobalArg("nodes", None, shape=auto, tags=IsDOFArray()),
                     ...
                 ],
                 name="nodes")

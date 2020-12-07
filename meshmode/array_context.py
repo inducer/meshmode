@@ -26,9 +26,11 @@ import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method
+from pytools.tag import Tag
 
 __doc__ = """
 .. autofunction:: make_loopy_program
+.. autoclass:: IsDOFArray
 .. autoclass:: ArrayContext
 .. autoclass:: PyOpenCLArrayContext
 .. autofunction:: pytest_generate_tests_for_pyopencl_array_context
@@ -50,6 +52,18 @@ def make_loopy_program(domains, statements, kernel_data=["..."],
             default_offset=lp.auto,
             name=name,
             lang_version=MOST_RECENT_LANGUAGE_VERSION)
+
+
+# {{{ IsDOFArray
+
+class IsDOFArray(Tag):
+    """A tag to mark arrays of DOFs in :mod:`loopy` kernels. Applications
+    could use this to decide how to change the memory layout of
+    these arrays.
+    """
+    pass
+
+    # }}}
 
 
 # {{{ ArrayContext
@@ -526,7 +540,18 @@ class PyOpenCLArrayContext(ArrayContext):
             all_inames = program.root_kernel.all_inames()
 
         inner_iname = None
-        if "iel" not in all_inames and "i0" in all_inames:
+
+        hasDOFResult = False
+        for arg in program.args:
+            if arg.name == "result" and isinstance(getattr(arg, 'tags', None),
+                    IsDOFArray):
+                hasDOFResult = True
+                break
+
+        if hasDOFResult:
+            outer_iname = "iel"
+            inner_iname = "idof"
+        elif "iel" not in all_inames and "i0" in all_inames:
             outer_iname = "i0"
 
             if "i1" in all_inames:

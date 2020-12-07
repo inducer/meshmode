@@ -31,7 +31,9 @@ from pytools.obj_array import (
         obj_array_vectorize)
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
 from meshmode.dof_array import freeze, thaw
-from meshmode.array_context import PyOpenCLArrayContext, make_loopy_program
+from meshmode.array_context import (PyOpenCLArrayContext, make_loopy_program,
+        IsDOFArray)
+from loopy import GlobalArg, auto
 
 
 # Features lost vs. https://github.com/inducer/grudge:
@@ -247,6 +249,11 @@ class DGDiscretization:
                     0<=idof<ndiscr_nodes_out and
                     0<=j<ndiscr_nodes_in}""",
                 "result[iel,idof] = sum(j, mat[idof, j] * vec[iel, j])",
+                kernel_data=[
+                    GlobalArg("result", None, shape=auto, tags=IsDOFArray()),
+                    GlobalArg("vec", None, shape=auto, tags=IsDOFArray()),
+                    ...
+                ],
                 name="diff")
 
         discr = self.volume_discr
@@ -300,6 +307,10 @@ class DGDiscretization:
                     0<=j<nface_nodes}""",
                 "result[iel,idof] = "
                 "sum(f, sum(j, mat[idof, f, j] * vec[f, iel, j]))",
+                kernel_data=[
+                    GlobalArg("result", None, shape=auto, tags=IsDOFArray()),
+                    ...
+                ],
                 name="face_mass")
 
         all_faces_conn = self.get_connection("vol", "all_faces")
