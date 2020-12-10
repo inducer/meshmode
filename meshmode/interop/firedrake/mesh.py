@@ -81,8 +81,7 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
     # If you don't understand dmplex, look at the PETSc reference
     # here: https://cse.buffalo.edu/~knepley/classes/caam519/CSBook.pdf
     # used to get topology info
-    # FIXME : not sure how to get around the private access
-    top_dm = top._topology_dm
+    top_dm = top.topology_dm
 
     # Get range of dmplex ids for cells, facets, and vertices
     f_start, f_end = top_dm.getHeightStratum(1)
@@ -851,10 +850,10 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     # Get new element ordering:
     with ProcessLogger(logger, "Determining permutations applied"
                        " to local vertex numbers"):
-        c_start, c_end = top._topology_dm.getHeightStratum(0)
+        c_start, c_end = top.topology_dm.getHeightStratum(0)
         cell_index_mm2fd = np.vectorize(top._cell_numbering.getOffset)(
             np.arange(c_start, c_end))
-        v_start, v_end = top._topology_dm.getDepthStratum(0)
+        v_start, v_end = top.topology_dm.getDepthStratum(0)
 
         # Firedrake goes crazy reordering local vertex numbers,
         # we've got to work to figure out what changes they made.
