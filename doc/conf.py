@@ -34,6 +34,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
     "sphinx.ext.graphviz",
+    "sphinx_copybutton",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -107,23 +108,13 @@ pygments_style = "sphinx"
 
 # -- Options for HTML output ----------------------------------------------
 
-html_theme = "alabaster"
+html_theme = "furo"
 
 html_theme_options = {
-        "extra_nav_links": {
-            "🚀 Github": "https://github.com/inducer/meshmode",
-            "💾 Download Releases": "https://pypi.org/project/meshmode",
-            }
         }
 
 html_sidebars = {
-    "**": [
-        "about.html",
-        "navigation.html",
-        "relations.html",
-        "searchbox.html",
-    ]
-}
+        }
 
 
 # Add any paths that contain custom themes here, relative to this directory.
