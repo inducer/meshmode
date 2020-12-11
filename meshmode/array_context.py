@@ -541,26 +541,24 @@ class PyOpenCLArrayContext(ArrayContext):
 
         inner_iname = None
 
-        has_dof_result = False
+        has_dof_array = False
         for arg in program.args:
-            if arg.name == "result" and isinstance(getattr(arg, "tags", None),
-                    IsDOFArray):
-                has_dof_result = True
+            if isinstance(getattr(arg, "tags", None), IsDOFArray):
+                has_dof_array = True
                 break
 
-        if has_dof_result:
+        if has_dof_array:
             outer_iname = "iel"
             inner_iname = "idof"
-        elif "iel" not in all_inames and "i0" in all_inames:
+        # Needed for act_special_exp
+        elif "i0" in all_inames:
             outer_iname = "i0"
-
             if "i1" in all_inames:
                 inner_iname = "i1"
+        elif len(all_inames) == 1:
+            outer_iname = all_inames[0]
         else:
-            outer_iname = "iel"
-
-            if "idof" in all_inames:
-                inner_iname = "idof"
+            raise ValueError("outer_iname not defined in {}.".format(program.name))
 
         if inner_iname is not None:
             program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
