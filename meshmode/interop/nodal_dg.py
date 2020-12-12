@@ -76,7 +76,7 @@ class NodalDGContext(object):
 
         .. warning::
 
-            High-order geometryinformation is currently silently ignored.
+            High-order geometry information is currently silently ignored.
         """
         if len(mesh.groups) != 1:
             raise ValueError("mesh must have exactly one element group")
