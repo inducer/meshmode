@@ -20,12 +20,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import itertools
+from functools import partial
 
 import numpy as np
-import itertools
-from meshmode.mesh.refinement.no_adjacency import (  # noqa: F401
-        RefinerWithoutAdjacency)
 
+from meshmode.mesh.refinement.no_adjacency import RefinerWithoutAdjacency
 from meshmode.mesh.refinement.tesselate import \
         TesselationInfo, GroupRefinementRecord
 
@@ -37,6 +37,11 @@ __doc__ = """
 .. autoclass :: RefinerWithoutAdjacency
 .. autofunction :: refine_uniformly
 """
+
+__all__ = [
+    "Refiner", "RefinerWithoutAdjacency", "refine_uniformly"
+]
+
 
 # {{{ deprecated
 
@@ -68,19 +73,8 @@ def tesselate_simplex(dim):
     node_tuples = mp.node_tuples_for_space(space)
     return node_tuples, mp.submesh_for_shape(shape, node_tuples)
 
-
-def tesselateseg():
-    return tesselate_simplex(1)
-
-
-def tesselatetri():
-    return tesselate_simplex(2)
-
-
-def tesselatetet():
-    return tesselate_simplex(3)
-
 # }}}
+
 
 class TreeRayNode:
     """Describes a ray as a tree, this class represents each node in this tree
@@ -138,9 +132,9 @@ class Refiner:
         self.lazy = False
         self.seen_tuple = {}
         self.group_refinement_records = []
-        seg_node_tuples, seg_result = tesselateseg()
-        tri_node_tuples, tri_result = tesselatetri()
-        tet_node_tuples, tet_result = tesselatetet()
+        seg_node_tuples, seg_result = tesselate_simplex(1)
+        tri_node_tuples, tri_result = tesselate_simplex(2)
+        tet_node_tuples, tet_result = tesselate_simplex(3)
         #quadrilateral_node_tuples = [
         #print tri_result, tet_result
         self.simplex_node_tuples = [
