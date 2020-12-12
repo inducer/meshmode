@@ -23,7 +23,6 @@ THE SOFTWARE.
 
 import numpy as np
 import itertools
-from pytools import RecordWithoutPickling
 from meshmode.mesh.refinement.no_adjacency import (  # noqa: F401
         RefinerWithoutAdjacency)
 

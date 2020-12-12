@@ -24,32 +24,73 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from dataclasses import dataclass
 from functools import singledispatch
-import numpy as np
 
+import numpy as np
 import modepy as mp
-from pytools import RecordWithoutPickling, memoize
+
+from pytools import memoize
 
 import logging
 logger = logging.getLogger(__name__)
 
+from typing import List, Tuple, Optional
 
-class TesselationInfo(RecordWithoutPickling):
+
+@dataclass(frozen=True)
+class TesselationInfo:
     """
     .. attribute:: children
+
+        A tesselation of the reference element, given here by
+        :attr:`ref_vertices`.
+
     .. attribute:: ref_vertices
 
+        A list of tuples (similar to :func:`modepy.node_tuples_for_space`)
+        for the reference element containing midpoints. This is equivalent
+        to a second-order equidistant element.
+
     .. attribute:: orig_vertex_indices
+
+        Indices into :attr:`ref_vertices` that select only the vertices, i.e.
+        without the midpoints.
+
     .. attribute:: midpoint_indices
+
+        Indices into :attr:`ref_vertices` that select only the midpoints, i.e.
+        without :attr:`orig_vertex_indices`.
+
     .. attribute:: midpoint_vertex_pairs
+
+        A list of tuples ``(v1, v2)`` of indices into :attr:`orig_vertex_indices`
+        that give for each midpoint the two vertices on the same line.
     """
 
+    children: np.ndarray
+    ref_vertices: List[Tuple[int, ...]]
 
-class GroupRefinementRecord(RecordWithoutPickling):
+    orig_vertex_indices: Optional[np.ndarray] = None
+    midpoint_indices: Optional[np.ndarray] = None
+    midpoint_vertex_pairs: Optional[List[Tuple[int, int]]] = None
+
+
+@dataclass(frozen=True)
+class GroupRefinementRecord:
     """
     .. attribute:: tesselation
+
+        A :class:`TesselationInfo` that describes the tesselation of the
+        element group.
+
     .. attribute:: element_mapping
+
+        A mapping from the original elements to the refined child elements.
     """
+
+    tesselation: TesselationInfo
+    element_mapping: List[List[int]]
 
 
 def midpoint_tuples(a, b):

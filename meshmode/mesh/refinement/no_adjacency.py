@@ -26,8 +26,6 @@ THE SOFTWARE.
 
 import numpy as np
 
-from meshmode.mesh.refinement.tesselate import GroupRefinementRecord
-
 import logging
 logger = logging.getLogger(__name__)
 
@@ -115,6 +113,7 @@ class RefinerWithoutAdjacency:
 
             # }}}
 
+            from meshmode.mesh.refinement.tesselate import GroupRefinementRecord
             group_refinement_records.append(
                     GroupRefinementRecord(
                         tesselation=tesselation,
