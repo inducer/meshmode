@@ -57,12 +57,12 @@ class SimplexResampler:
     @staticmethod
     def get_midpoints(group, tesselation, elements):
         import meshmode.mesh.refinement.tesselate as tess
-        return tess.get_midpoints(group, tesselation, elements)
+        return tess.get_group_midpoints(group, tesselation, elements)
 
     @staticmethod
     def get_tesselated_nodes(group, tesselation, elements):
         import meshmode.mesh.refinement.tesselate as tess
-        return tess.get_tesselated_nodes(group, tesselation, elements)
+        return tess.get_group_tesselated_nodes(group, tesselation, elements)
 
 
 def tesselate_simplex(dim):

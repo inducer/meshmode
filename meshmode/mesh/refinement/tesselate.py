@@ -176,7 +176,7 @@ def map_unit_nodes_to_children(shape, unit_nodes, tesselation):
         yield basis.dot((unit_nodes + 1.0) / 2.0) + origin - 1.0
 
 
-def get_midpoints(group, tesselation, elements):
+def get_group_midpoints(group, tesselation, elements):
     """Compute the midpoints of the vertices of the specified elements.
 
     :arg group: an instance of :class:`meshmode.mesh.MeshElementGroup`.
@@ -211,7 +211,7 @@ def get_midpoints(group, tesselation, elements):
     return dict(zip(elements, resampled_midpoints))
 
 
-def get_tesselated_nodes(group, tesselation, elements):
+def get_group_tesselated_nodes(group, tesselation, elements):
     """Compute the nodes of the child elements according to the tesselation.
 
     :arg group: An instance of :class:`meshmode.mesh.MeshElementGroup`.
@@ -259,7 +259,7 @@ def get_tesselated_nodes(group, tesselation, elements):
 
 # {{{ tesselation
 
-def get_tesselation_info(shape):
+def get_shape_tesselation_info(shape):
     space = mp.space_for_shape(shape, 2)
     ref_vertices = mp.node_tuples_for_space(space)
     ref_vertices_to_index = {rv: i for i, rv in enumerate(ref_vertices)}
@@ -294,12 +294,11 @@ def get_tesselation_info(shape):
 
 
 @memoize
-def get_bisection_tesselation_info(group_type, dim):
+def get_group_tesselation_info(group_type, dim):
     from meshmode.mesh import _ModepyElementGroup
     if issubclass(group_type, _ModepyElementGroup):
-        from meshmode.mesh.refinement.tesselate import get_tesselation_info
         shape = group_type._modepy_shape_cls(dim)
-        return get_tesselation_info(shape)
+        return get_shape_tesselation_info(shape)
     else:
         raise NotImplementedError(
                 "bisection for element groups of type {group_type.__name__}")

@@ -84,12 +84,12 @@ class RefinerWithoutAdjacency:
             inew_vertex = mesh.nvertices
 
         from meshmode.mesh.refinement.tesselate import (
-                get_bisection_tesselation_info,
-                get_midpoints,
-                get_tesselated_nodes)
+                get_group_tesselation_info,
+                get_group_midpoints,
+                get_group_tesselated_nodes)
 
         for igrp, group in enumerate(mesh.groups):
-            tesselation = get_bisection_tesselation_info(type(group), group.dim)
+            tesselation = get_group_tesselation_info(type(group), group.dim)
 
             # {{{ compute counts and index arrays
 
@@ -126,7 +126,7 @@ class RefinerWithoutAdjacency:
             # {{{ get new vertices together
 
             if perform_vertex_updates:
-                midpoints = get_midpoints(
+                midpoints = get_group_midpoints(
                         group, tesselation, refining_el_old_indices)
 
                 new_vertex_indices = np.empty(
@@ -194,7 +194,7 @@ class RefinerWithoutAdjacency:
             # copy over unchanged nodes
             new_nodes[:, unrefined_el_new_indices] = group.nodes[:, ~grp_flags]
 
-            tesselated_nodes = get_tesselated_nodes(
+            tesselated_nodes = get_group_tesselated_nodes(
                     group, tesselation, refining_el_old_indices)
 
             for old_iel in refining_el_old_indices:
