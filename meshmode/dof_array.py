@@ -376,6 +376,10 @@ def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
         return make_loopy_program(
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
             "result[iel, idof] = ary[grp_start + iel*ndofs_per_element + idof]",
+            kernel_data=[
+                GlobalArg("result", None, shape=auto, tags=IsDOFArray()),
+                ...
+            ],
             name="unflatten")
 
     if ndofs_per_element_per_group is None:
