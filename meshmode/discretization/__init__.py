@@ -288,7 +288,6 @@ class Discretization:
                 "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
                 kernel_data=[
                     GlobalArg("result", None, shape=auto, tags=IsDOFArray()),
-                    GlobalArg("vec", None, shape=auto, tags=IsDOFArray()),
                     ...
                 ],
                 name="diff")
@@ -321,6 +320,10 @@ class Discretization:
             return make_loopy_program(
                 "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
                 "result[iel,idof] = weights[idof]",
+                kernel_data=[
+                    GlobalArg("result", None, shape=auto, tags=IsDOFArray()),
+                    ...
+                ],
                 name="quad_weights")
 
         return _DOFArray(None, tuple(
@@ -354,7 +357,6 @@ class Discretization:
                     """,
                 kernel_data=[
                     GlobalArg("result", None, shape=auto, tags=IsDOFArray()),
-                    GlobalArg("nodes", None, shape=auto, tags=IsDOFArray()),
                     ...
                 ],
                 name="nodes")

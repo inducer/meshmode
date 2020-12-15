@@ -24,6 +24,7 @@ import numpy as np
 
 from pytools import keyed_memoize_method, memoize_in
 from pytools.obj_array import obj_array_vectorized_n_args
+from pytools.array_context import IsDOFArray
 
 import loopy as lp
 
@@ -173,6 +174,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                         sum(ibasis, vdm[idof, ibasis] * coefficients[iel, ibasis])
                 """,
                 [
+                    lp.GlobalArg("result", None, tags=IsDOFArray()),
                     lp.GlobalArg("coefficients", None,
                         shape=("nelements", "n_to_nodes")),
                     "..."

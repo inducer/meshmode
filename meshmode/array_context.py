@@ -550,6 +550,8 @@ class PyOpenCLArrayContext(ArrayContext):
         if has_dof_array:
             outer_iname = "iel"
             inner_iname = "idof"
+        elif program.name == "conn_projection_knl":
+            outer_iname = "iel"
         # Needed for act_special_exp
         elif "i0" in all_inames:
             outer_iname = "i0"
