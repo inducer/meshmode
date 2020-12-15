@@ -386,7 +386,7 @@ def make_direct_full_resample_matrix(actx, conn):
             [
                 lp.GlobalArg("result", None,
                     shape="nnodes_tgt, nnodes_src",
-                    offset=lp.auto),
+                    offset=lp.auto, tags=IsDOFArray()),
                 lp.ValueArg("itgt_base,isrc_base", np.int32),
                 lp.ValueArg("nnodes_tgt,nnodes_src", np.int32),
                 "...",
