@@ -173,7 +173,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                         sum(ibasis, vdm[idof, ibasis] * coefficients[iel, ibasis])
                 """,
                 [
-                    lp.GlobalArg("result", None, tags=IsDOFArray()),
+                    lp.GlobalArg("result", None, shape=lp.auto, tags=IsDOFArray()),
                     lp.GlobalArg("coefficients", None,
                         shape=("nelements", "n_to_nodes")),
                     "..."
