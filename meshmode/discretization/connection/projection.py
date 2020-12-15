@@ -24,11 +24,10 @@ import numpy as np
 
 from pytools import keyed_memoize_method, memoize_in
 from pytools.obj_array import obj_array_vectorized_n_args
-from pytools.array_context import IsDOFArray
 
 import loopy as lp
 
-from meshmode.array_context import make_loopy_program
+from meshmode.array_context import make_loopy_program, IsDOFArray
 from meshmode.dof_array import DOFArray
 from meshmode.discretization.connection.direct import (
         DiscretizationConnection,
