@@ -104,31 +104,6 @@ def midpoint_tuples(a, b):
     return tuple(midpoint(ai, bi) for ai, bi in zip(a, b))
 
 
-# {{{ shape-dependent tesselation helpers
-
-@singledispatch
-def get_child_basis_vertex_indices(shape: mp.Shape, child):
-    assert len(child) == shape.nvertices
-    return child[:shape.dim + 1]
-
-
-@get_child_basis_vertex_indices.register(mp.Hypercube)
-def _(shape: mp.Hypercube, child):
-    assert len(child) == shape.nvertices
-
-    # * for a cube, we reorder nodes such that the vectors
-    #
-    #       (0, 1), (0, 2) and (0, 4)
-    #
-    #   form an orthogonal basis, since (0, 3) is linearly dependent on 1 and 2.
-    #
-    # * lines and squares don't require any reordering
-
-    return [child[i] for i in [0, 1, 2, 4][:shape.dim + 1]]
-
-# }}}
-
-
 # {{{ resampling
 
 def get_ref_midpoints(shape, ref_vertices):
@@ -155,25 +130,6 @@ def get_ref_midpoints(shape, ref_vertices):
             add_tuples(vt, vt) for vt in mp.node_tuples_for_space(space)
             ]
     return [rv for rv in ref_vertices if rv not in orig_vertices]
-
-
-def map_unit_nodes_to_children(shape, unit_nodes, tesselation):
-    """
-    :arg unit_nodes: an :class:`~numpy.ndarray` of shape ``(dim, nnodes)``.
-    :arg tesselation: a :class:`TesselationInfo`.
-    """
-
-    ref_vertices = np.array(tesselation.ref_vertices, dtype=np.float).T
-    assert len(unit_nodes.shape) == 2
-
-    for child_element in tesselation.children:
-        indices = get_child_basis_vertex_indices(shape, child_element)
-
-        origin = ref_vertices[:, indices[0]].reshape(-1, 1)
-        basis = ref_vertices[:, indices[1:]] - origin
-
-        # mapped nodes are on [0, 2], so we subtract 1 to get it to [-1, 1]
-        yield basis.dot((unit_nodes + 1.0) / 2.0) + origin - 1.0
 
 
 def get_group_midpoints(group, tesselation, elements):
@@ -233,8 +189,9 @@ def get_group_tesselated_nodes(group, tesselation, elements):
     space = mp.space_for_shape(shape, group.order)
 
     # get child unit node coordinates.
+    from meshmode.mesh.refinement.utils import map_unit_nodes_to_children
     child_unit_nodes = np.hstack(list(
-        map_unit_nodes_to_children(shape, group.unit_nodes, tesselation)
+        map_unit_nodes_to_children(group, group.unit_nodes, tesselation)
         ))
 
     # resample child nodes to ambient coordinates
