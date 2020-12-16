@@ -89,7 +89,7 @@ class RefinerWithoutAdjacency:
                 get_group_tesselated_nodes)
 
         for igrp, group in enumerate(mesh.groups):
-            tesselation = get_group_tesselation_info(group)
+            tess_info = get_group_tesselation_info(group)
 
             # {{{ compute counts and index arrays
 
@@ -97,7 +97,7 @@ class RefinerWithoutAdjacency:
                     group.element_nr_base:
                     group.element_nr_base+group.nelements]
 
-            nchildren = len(tesselation.children)
+            nchildren = len(tess_info.children)
             nchild_elements = np.ones(group.nelements, dtype=mesh.element_id_dtype)
             nchild_elements[grp_flags] = nchildren
 
@@ -116,7 +116,7 @@ class RefinerWithoutAdjacency:
             from meshmode.mesh.refinement.tesselate import GroupRefinementRecord
             group_refinement_records.append(
                     GroupRefinementRecord(
-                        tesselation=tesselation,
+                        tess_info=tess_info,
                         element_mapping=[
                             list(range(
                                 child_el_indices[iel],
@@ -127,7 +127,7 @@ class RefinerWithoutAdjacency:
 
             if perform_vertex_updates:
                 midpoints = get_group_midpoints(
-                        group, tesselation, refining_el_old_indices)
+                        group, tess_info, refining_el_old_indices)
 
                 new_vertex_indices = np.empty(
                     (new_nelements, group.vertex_indices.shape[1]),
@@ -141,17 +141,17 @@ class RefinerWithoutAdjacency:
                 for old_iel in refining_el_old_indices:
                     new_iel_base = child_el_indices[old_iel]
 
-                    refining_vertices = np.empty(len(tesselation.ref_vertices),
+                    refining_vertices = np.empty(len(tess_info.ref_vertices),
                         dtype=mesh.vertex_id_dtype)
                     refining_vertices.fill(-17)
 
                     # carry over old vertices
-                    refining_vertices[tesselation.orig_vertex_indices] = \
+                    refining_vertices[tess_info.orig_vertex_indices] = \
                             group.vertex_indices[old_iel]
 
                     for imidpoint, (iref_midpoint, (v1, v2)) in enumerate(zip(
-                            tesselation.midpoint_indices,
-                            tesselation.midpoint_vertex_pairs)):
+                            tess_info.midpoint_indices,
+                            tess_info.midpoint_vertex_pairs)):
 
                         global_v1 = group.vertex_indices[old_iel, v1]
                         global_v2 = group.vertex_indices[old_iel, v2]
@@ -175,7 +175,7 @@ class RefinerWithoutAdjacency:
                     assert (refining_vertices >= 0).all()
 
                     new_vertex_indices[new_iel_base:new_iel_base+nchildren] = \
-                            refining_vertices[tesselation.children]
+                            refining_vertices[tess_info.children]
 
                 assert (new_vertex_indices >= 0).all()
             else:
@@ -195,7 +195,7 @@ class RefinerWithoutAdjacency:
             new_nodes[:, unrefined_el_new_indices] = group.nodes[:, ~grp_flags]
 
             tesselated_nodes = get_group_tesselated_nodes(
-                    group, tesselation, refining_el_old_indices)
+                    group, tess_info, refining_el_old_indices)
 
             for old_iel in refining_el_old_indices:
                 new_iel_base = child_el_indices[old_iel]

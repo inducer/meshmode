@@ -55,14 +55,14 @@ class SimplexResampler:
             ))
 
     @staticmethod
-    def get_midpoints(group, tesselation, elements):
+    def get_midpoints(group, tess_info, elements):
         import meshmode.mesh.refinement.tesselate as tess
-        return tess.get_group_midpoints(group, tesselation, elements)
+        return tess.get_group_midpoints(group, tess_info, elements)
 
     @staticmethod
-    def get_tesselated_nodes(group, tesselation, elements):
+    def get_tesselated_nodes(group, tess_info, elements):
         import meshmode.mesh.refinement.tesselate as tess
-        return tess.get_group_tesselated_nodes(group, tesselation, elements)
+        return tess.get_group_tesselated_nodes(group, tess_info, elements)
 
 
 def tesselate_simplex(dim):
@@ -631,7 +631,7 @@ class Refiner:
             iel_base = grp.element_nr_base
             # List of lists mapping element number to new element number(s).
             element_mapping = []
-            tesselation = None
+            tess_info = None
 
             # {{{ get midpoint coordinates for vertices
 
@@ -644,7 +644,7 @@ class Refiner:
                         midpoints_to_find.append(iel_grp)
                         if not resampler:
                             resampler = SimplexResampler()
-                            tesselation = TesselationInfo(
+                            tess_info = TesselationInfo(
                                 children=self.simplex_result[grp.dim],
                                 ref_vertices=self.simplex_node_tuples[grp.dim])
                     else:
@@ -653,7 +653,7 @@ class Refiner:
 
             if midpoints_to_find:
                 midpoints = resampler.get_midpoints(
-                        grp, tesselation, midpoints_to_find)
+                        grp, tess_info, midpoints_to_find)
                 midpoint_order = resampler.get_vertex_pair_to_midpoint_order(grp.dim)
 
             del midpoints_to_find
@@ -732,7 +732,7 @@ class Refiner:
 
             self.group_refinement_records.append(
                 GroupRefinementRecord(
-                    tesselation=tesselation,
+                    tess_info=tess_info,
                     element_mapping=element_mapping)
                 )
 
@@ -793,7 +793,7 @@ class Refiner:
                 if is_simplex:
                     resampler = SimplexResampler()
                     new_nodes = resampler.get_tesselated_nodes(
-                        prev_group, refinement_record.tesselation, to_resample)
+                        prev_group, refinement_record.tess_info, to_resample)
                 else:
                     raise NotImplementedError(
                         "unimplemented: node resampling for non simplex elements")

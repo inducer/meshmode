@@ -45,7 +45,7 @@ class TesselationInfo:
     """
     .. attribute:: children
 
-        A tesselation of the reference element, given here by
+        A tess_info of the reference element, given here by
         :attr:`ref_vertices`.
 
     .. attribute:: ref_vertices
@@ -81,9 +81,9 @@ class TesselationInfo:
 @dataclass(frozen=True)
 class GroupRefinementRecord:
     """
-    .. attribute:: tesselation
+    .. attribute:: tess_info
 
-        A :class:`TesselationInfo` that describes the tesselation of the
+        A :class:`TesselationInfo` that describes the tess_info of the
         element group.
 
     .. attribute:: element_mapping
@@ -91,39 +91,39 @@ class GroupRefinementRecord:
         A mapping from the original elements to the refined child elements.
     """
 
-    tesselation: TesselationInfo
+    tess_info: TesselationInfo
     element_mapping: List[List[int]]
 
 
 @singledispatch
-def get_group_midpoints(meg: MeshElementGroup, tesselation, elements):
+def get_group_midpoints(meg: MeshElementGroup, tess_info, elements):
     """Compute the midpoints of the vertices of the specified elements.
 
     :arg group: an instance of :class:`meshmode.mesh.MeshElementGroup`.
-    :arg tesselation: a :class:`TesselationInfo`.
+    :arg tess_info: a :class:`TesselationInfo`.
     :arg elements: a list of (group-relative) element numbers.
 
     :return: A :class:`dict` mapping element numbers to midpoint
         coordinates, with each value in the map having shape
         ``(ambient_dim, nmidpoints)``. The ordering of the midpoints
-        follows their ordering in the tesselation.
+        follows their ordering in the tess_info.
     """
     raise NotImplementedError(type(meg).__name__)
 
 
 @singledispatch
-def get_group_tesselated_nodes(meg: MeshElementGroup, tesselation, elements):
-    """Compute the nodes of the child elements according to the tesselation.
+def get_group_tesselated_nodes(meg: MeshElementGroup, tess_info, elements):
+    """Compute the nodes of the child elements according to the tess_info.
 
     :arg group: An instance of :class:`meshmode.mesh.MeshElementGroup`.
-    :arg tesselation: a :class:`TesselationInfo`.
+    :arg tess_info: a :class:`TesselationInfo`.
     :arg elements: A list of (group-relative) element numbers.
 
     :return: A :class:`dict` mapping element numbers to node
         coordinates, with each value in the map having shape
         ``(ambient_dim, nchildren, nunit_nodes)``.
         The ordering of the child nodes follows the ordering
-        of ``tesselation.children.``
+        of ``tess_info.children.``
     """
     raise NotImplementedError(type(meg).__name__)
 
@@ -179,15 +179,15 @@ def _get_ref_midpoints(shape, ref_vertices):
 # }}}
 
 
-# {{{ modepy.shape tesselation and resampling
+# {{{ modepy.shape tess_info and resampling
 
 @get_group_midpoints.register(_ModepyElementGroup)
-def _(meg: _ModepyElementGroup, tesselation, elements):
+def _(meg: _ModepyElementGroup, tess_info, elements):
     shape = meg._modepy_shape
     space = meg._modepy_space
 
     # get midpoints in reference coordinates
-    midpoints = -1 + np.array(_get_ref_midpoints(shape, tesselation.ref_vertices))
+    midpoints = -1 + np.array(_get_ref_midpoints(shape, tess_info.ref_vertices))
 
     # resample midpoints to ambient coordinates
     resampling_mat = mp.resampling_matrix(
@@ -202,14 +202,14 @@ def _(meg: _ModepyElementGroup, tesselation, elements):
 
 
 @get_group_tesselated_nodes.register(_ModepyElementGroup)
-def _(meg: _ModepyElementGroup, tesselation, elements):
+def _(meg: _ModepyElementGroup, tess_info, elements):
     shape = meg._modepy_shape
     space = meg._modepy_space
 
     # get child unit node coordinates.
     from meshmode.mesh.refinement.utils import map_unit_nodes_to_children
     child_unit_nodes = np.hstack(list(
-        map_unit_nodes_to_children(meg, meg.unit_nodes, tesselation)
+        map_unit_nodes_to_children(meg, meg.unit_nodes, tess_info)
         ))
 
     # resample child nodes to ambient coordinates
