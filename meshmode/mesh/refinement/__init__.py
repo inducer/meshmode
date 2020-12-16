@@ -123,6 +123,10 @@ class Refiner:
     # {{{ constructor
 
     def __init__(self, mesh):
+        from warnings import warn
+        warn("Refiner is deprecated and will be removed in 2022.",
+                DeprecationWarning, stacklevel=2)
+
         if mesh.is_conforming is not True:
             raise ValueError("Refiner can only be used with meshes that are known "
                     "to be conforming. If you would like to refine non-conforming "
@@ -974,9 +978,13 @@ class Refiner:
 
 def refine_uniformly(mesh, iterations, with_adjacency=False):
     if with_adjacency:
-        refiner = Refiner(mesh)
-    else:
-        refiner = RefinerWithoutAdjacency(mesh)
+        # For conforming meshes, even RefinerWithoutAdjacency will reconstruct
+        # adjacency from vertex identity.
+
+        if not mesh.is_conforming:
+            raise ValueError("mesh must be conforming if adjacency is desired")
+
+    refiner = RefinerWithoutAdjacency(mesh)
 
     for _ in range(iterations):
         refiner.refine_uniformly()
