@@ -83,7 +83,7 @@ class GroupRefinementRecord:
     """
     .. attribute:: tess_info
 
-        A :class:`TesselationInfo` that describes the tess_info of the
+        A :class:`TesselationInfo` that describes the tesselation of the
         element group.
 
     .. attribute:: element_mapping
@@ -106,14 +106,14 @@ def get_group_midpoints(meg: MeshElementGroup, tess_info, elements):
     :return: A :class:`dict` mapping element numbers to midpoint
         coordinates, with each value in the map having shape
         ``(ambient_dim, nmidpoints)``. The ordering of the midpoints
-        follows their ordering in the tess_info.
+        follows their ordering in the tesselation.
     """
     raise NotImplementedError(type(meg).__name__)
 
 
 @singledispatch
 def get_group_tesselated_nodes(meg: MeshElementGroup, tess_info, elements):
-    """Compute the nodes of the child elements according to the tess_info.
+    """Compute the nodes of the child elements according to the tesselation.
 
     :arg group: An instance of :class:`meshmode.mesh.MeshElementGroup`.
     :arg tess_info: a :class:`TesselationInfo`.
@@ -179,7 +179,7 @@ def _get_ref_midpoints(shape, ref_vertices):
 # }}}
 
 
-# {{{ modepy.shape tess_info and resampling
+# {{{ modepy.shape tesselation and resampling
 
 @get_group_midpoints.register(_ModepyElementGroup)
 def _(meg: _ModepyElementGroup, tess_info, elements):
