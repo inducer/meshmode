@@ -28,15 +28,17 @@ from dataclasses import dataclass
 from functools import singledispatch
 
 import numpy as np
-import modepy as mp
 
-from pytools import memoize
+import modepy as mp
+from meshmode.mesh import MeshElementGroup, _ModepyElementGroup
 
 import logging
 logger = logging.getLogger(__name__)
 
 from typing import List, Tuple, Optional
 
+
+# {{{ interface
 
 @dataclass(frozen=True)
 class TesselationInfo:
@@ -93,7 +95,52 @@ class GroupRefinementRecord:
     element_mapping: List[List[int]]
 
 
-def midpoint_tuples(a, b):
+@singledispatch
+def get_group_midpoints(meg: MeshElementGroup, tesselation, elements):
+    """Compute the midpoints of the vertices of the specified elements.
+
+    :arg group: an instance of :class:`meshmode.mesh.MeshElementGroup`.
+    :arg tesselation: a :class:`TesselationInfo`.
+    :arg elements: a list of (group-relative) element numbers.
+
+    :return: A :class:`dict` mapping element numbers to midpoint
+        coordinates, with each value in the map having shape
+        ``(ambient_dim, nmidpoints)``. The ordering of the midpoints
+        follows their ordering in the tesselation.
+    """
+    raise NotImplementedError(type(meg).__name__)
+
+
+@singledispatch
+def get_group_tesselated_nodes(meg: MeshElementGroup, tesselation, elements):
+    """Compute the nodes of the child elements according to the tesselation.
+
+    :arg group: An instance of :class:`meshmode.mesh.MeshElementGroup`.
+    :arg tesselation: a :class:`TesselationInfo`.
+    :arg elements: A list of (group-relative) element numbers.
+
+    :return: A :class:`dict` mapping element numbers to node
+        coordinates, with each value in the map having shape
+        ``(ambient_dim, nchildren, nunit_nodes)``.
+        The ordering of the child nodes follows the ordering
+        of ``tesselation.children.``
+    """
+    raise NotImplementedError(type(meg).__name__)
+
+
+@singledispatch
+def get_group_tesselation_info(meg: MeshElementGroup):
+    """
+    :returns: a :class:`TesselationInfo` for the element group *meg*.
+    """
+    raise NotImplementedError(type(meg).__name__)
+
+# }}}
+
+
+# {{{ helpers
+
+def _midpoint_tuples(a, b):
     def midpoint(x, y):
         d, r = divmod(x + y, 2)
         if r:
@@ -104,9 +151,7 @@ def midpoint_tuples(a, b):
     return tuple(midpoint(ai, bi) for ai, bi in zip(a, b))
 
 
-# {{{ resampling
-
-def get_ref_midpoints(shape, ref_vertices):
+def _get_ref_midpoints(shape, ref_vertices):
     r"""The reference element is considered to be, e.g. for a 2 simplex::
 
         F
@@ -131,111 +176,83 @@ def get_ref_midpoints(shape, ref_vertices):
             ]
     return [rv for rv in ref_vertices if rv not in orig_vertices]
 
+# }}}
 
-def get_group_midpoints(group, tesselation, elements):
-    """Compute the midpoints of the vertices of the specified elements.
 
-    :arg group: an instance of :class:`meshmode.mesh.MeshElementGroup`.
-    :arg tesselation: a :class:`TesselationInfo`.
-    :arg elements: a list of (group-relative) element numbers.
+# {{{ modepy.shape tesselation and resampling
 
-    :return: A :class:`dict` mapping element numbers to midpoint
-        coordinates, with each value in the map having shape
-        ``(ambient_dim, nmidpoints)``. The ordering of the midpoints
-        follows their ordering in the tesselation.
-    """
-    from meshmode.mesh import _ModepyElementGroup
-    if not isinstance(group, _ModepyElementGroup):
-        raise TypeError(f"groups of type '{type(group.mesh_el_group).__name__}'"
-                " are not supported.")
-
-    shape = group._modepy_shape
-    space = mp.space_for_shape(shape, group.order)
+@get_group_midpoints.register(_ModepyElementGroup)
+def _(meg: _ModepyElementGroup, tesselation, elements):
+    shape = meg._modepy_shape
+    space = meg._modepy_space
 
     # get midpoints in reference coordinates
-    midpoints = -1 + np.array(get_ref_midpoints(shape, tesselation.ref_vertices))
+    midpoints = -1 + np.array(_get_ref_midpoints(shape, tesselation.ref_vertices))
 
     # resample midpoints to ambient coordinates
     resampling_mat = mp.resampling_matrix(
             mp.basis_for_space(space, shape).functions,
             midpoints.T,
-            group.unit_nodes)
+            meg.unit_nodes)
 
     resampled_midpoints = np.einsum("mu,deu->edm",
-            resampling_mat, group.nodes[:, elements])
+            resampling_mat, meg.nodes[:, elements])
 
     return dict(zip(elements, resampled_midpoints))
 
 
-def get_group_tesselated_nodes(group, tesselation, elements):
-    """Compute the nodes of the child elements according to the tesselation.
-
-    :arg group: An instance of :class:`meshmode.mesh.MeshElementGroup`.
-    :arg tesselation: a :class:`TesselationInfo`.
-    :arg elements: A list of (group-relative) element numbers.
-
-    :return: A :class:`dict` mapping element numbers to node
-        coordinates, with each value in the map having shape
-        ``(ambient_dim, nchildren, nunit_nodes)``.
-        The ordering of the child nodes follows the ordering
-        of ``tesselation.children.``
-    """
-    from meshmode.mesh import _ModepyElementGroup
-    if not isinstance(group, _ModepyElementGroup):
-        raise TypeError(f"groups of type '{type(group.mesh_el_group).__name__}'"
-                " are not supported.")
-
-    shape = group._modepy_shape
-    space = mp.space_for_shape(shape, group.order)
+@get_group_tesselated_nodes.register(_ModepyElementGroup)
+def _(meg: _ModepyElementGroup, tesselation, elements):
+    shape = meg._modepy_shape
+    space = meg._modepy_space
 
     # get child unit node coordinates.
     from meshmode.mesh.refinement.utils import map_unit_nodes_to_children
     child_unit_nodes = np.hstack(list(
-        map_unit_nodes_to_children(group, group.unit_nodes, tesselation)
+        map_unit_nodes_to_children(meg, meg.unit_nodes, tesselation)
         ))
 
     # resample child nodes to ambient coordinates
     resampling_mat = mp.resampling_matrix(
             mp.basis_for_space(space, shape).functions,
             child_unit_nodes,
-            group.unit_nodes)
+            meg.unit_nodes)
 
     resampled_unit_nodes = np.einsum("cu,deu->edc",
-            resampling_mat, group.nodes[:, elements])
+            resampling_mat, meg.nodes[:, elements])
 
-    ambient_dim = len(group.nodes)
-    nunit_nodes = len(group.unit_nodes[0])
+    ambient_dim = len(meg.nodes)
+    nunit_nodes = len(meg.unit_nodes[0])
 
     return {
             el: resampled_unit_nodes[iel].reshape((ambient_dim, -1, nunit_nodes))
             for iel, el in enumerate(elements)
             }
 
-# }}}
 
+@get_group_tesselation_info.register(_ModepyElementGroup)
+def _(meg: _ModepyElementGroup):
+    shape = meg._modepy_shape
+    space = type(meg._modepy_space)(meg.dim, 2)
 
-# {{{ tesselation
-
-def get_shape_tesselation_info(shape):
-    space = mp.space_for_shape(shape, 2)
     ref_vertices = mp.node_tuples_for_space(space)
     ref_vertices_to_index = {rv: i for i, rv in enumerate(ref_vertices)}
 
     from pytools import add_tuples
-    space = mp.space_for_shape(shape, 1)
+    space = type(meg._modepy_space)(meg.dim, 1)
     orig_vertices = tuple([
         add_tuples(vt, vt) for vt in mp.node_tuples_for_space(space)
         ])
     orig_vertex_indices = [ref_vertices_to_index[vt] for vt in orig_vertices]
 
-    midpoints = get_ref_midpoints(shape, ref_vertices)
+    midpoints = _get_ref_midpoints(shape, ref_vertices)
     midpoint_indices = [ref_vertices_to_index[mp] for mp in midpoints]
 
     midpoint_to_vertex_pairs = {
             midpoint: (i, j)
             for i, ivt in enumerate(orig_vertices)
             for j, jvt in enumerate(orig_vertices)
-            for midpoint in [midpoint_tuples(ivt, jvt)]
+            for midpoint in [_midpoint_tuples(ivt, jvt)]
             if i < j and midpoint in midpoints
             }
     # ensure order matches the one in midpoint_indices
@@ -248,17 +265,6 @@ def get_shape_tesselation_info(shape):
             midpoint_indices=np.array(midpoint_indices),
             midpoint_vertex_pairs=midpoint_vertex_pairs,
             )
-
-
-@memoize
-def get_group_tesselation_info(group_type, dim):
-    from meshmode.mesh import _ModepyElementGroup
-    if issubclass(group_type, _ModepyElementGroup):
-        shape = group_type._modepy_shape_cls(dim)
-        return get_shape_tesselation_info(shape)
-    else:
-        raise NotImplementedError(
-                "bisection for element groups of type {group_type.__name__}")
 
 # }}}
 

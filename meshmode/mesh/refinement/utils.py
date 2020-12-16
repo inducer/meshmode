@@ -48,7 +48,7 @@ def map_unit_nodes_to_children(meg: MeshElementGroup,
     raise NotImplementedError(type(meg).__name__)
 
 
-@singledispatch.register(SimplexElementGroup)
+@map_unit_nodes_to_children.register(SimplexElementGroup)
 def _(meg: SimplexElementGroup, unit_nodes, tess_info):
     ref_vertices = np.array(tess_info.ref_vertices, dtype=np.float).T
     assert len(unit_nodes.shape) == 2
@@ -61,23 +61,18 @@ def _(meg: SimplexElementGroup, unit_nodes, tess_info):
         yield basis.dot((unit_nodes + 1.0) / 2.0) + origin - 1.0
 
 
-@singledispatch.register(TensorProductElementGroup)
+@map_unit_nodes_to_children.register(TensorProductElementGroup)
 def _(meg: TensorProductElementGroup, unit_nodes, tess_info):
     ref_vertices = np.array(tess_info.ref_vertices, dtype=np.float).T
     assert len(unit_nodes.shape) == 2
 
-    import modepy as mp
-    from dataclass import replace
-    space = replace(meg._modepy_space, order=1)
-    basis_indices = [
-            i for i, node in mp.node_tuples_for_space(space)
-            if sum(node) == 1
-            ]
+    # NOTE: nodes indices in the unit hypercube that form the `e_i` basis
+    basis_indices = 2**np.arange(meg.dim)
 
     for child in tess_info.children:
         child_arr = np.array(child)
-        origin = ref_vertices[:, child[0]].reshape(-1, 1)
-        basis = ref_vertices[:, child[basis_indices]] - origin
+        origin = ref_vertices[:, child_arr[0]].reshape(-1, 1)
+        basis = ref_vertices[:, child_arr[basis_indices]] - origin
 
         # mapped nodes are on [0, 2], so we subtract 1 to get it to [-1, 1]
         yield basis.dot((unit_nodes + 1.0) / 2.0) + origin - 1.0

@@ -89,7 +89,7 @@ class RefinerWithoutAdjacency:
                 get_group_tesselated_nodes)
 
         for igrp, group in enumerate(mesh.groups):
-            tesselation = get_group_tesselation_info(type(group), group.dim)
+            tesselation = get_group_tesselation_info(group)
 
             # {{{ compute counts and index arrays
 
