@@ -304,3 +304,5 @@ def get_group_tesselation_info(group_type, dim):
                 "bisection for element groups of type {group_type.__name__}")
 
 # }}}
+
+# vim: foldmethod=marker
