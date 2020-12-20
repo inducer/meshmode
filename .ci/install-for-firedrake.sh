@@ -20,4 +20,8 @@ pip install pytest
 
 pip install -r /tmp/myreq.txt
 pip install --force-reinstall git+https://github.com/inducer/loopy.git@firedrake-usable_for_potentials
+
+# Context: https://github.com/OP2/PyOP2/pull/605
+python -m pip install --force-reinstall git+https://github.com/inducer/pytools.git
+
 pip install .
