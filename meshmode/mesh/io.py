@@ -233,7 +233,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     unit_nodes=unit_nodes
                     )
             else:
-                pass
+                # NOTE: already checked above
+                assert False
 
             groups.append(group)
 

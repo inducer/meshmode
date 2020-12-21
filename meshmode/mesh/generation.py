@@ -360,12 +360,12 @@ def make_group_from_vertices(vertices, vertex_indices, order,
         unit_nodes_01 = 0.5 + 0.5*unit_nodes
         _, nnodes = unit_nodes.shape
 
-        node_tuples = mp.node_tuples_for_space(type(space)(dim, 1))
-        assert len(node_tuples) == nvertices
+        vertex_tuples = mp.node_tuples_for_space(type(space)(dim, 1))
+        assert len(vertex_tuples) == nvertices
 
         vdm = np.empty((nvertices, nvertices))
-        for i, vertex_tuple in enumerate(node_tuples):
-            for j, func_tuple in enumerate(node_tuples):
+        for i, vertex_tuple in enumerate(vertex_tuples):
+            for j, func_tuple in enumerate(vertex_tuples):
                 vertex_ref = np.array(vertex_tuple, dtype=np.float64)
                 vdm[i, j] = np.prod(vertex_ref**func_tuple)
 
@@ -375,7 +375,7 @@ def make_group_from_vertices(vertices, vertex_indices, order,
             coeffs[d] = la.solve(vdm, el_vertices[d].T).T
 
         vdm_nodes = np.zeros((nnodes, nvertices))
-        for j, func_tuple in enumerate(node_tuples):
+        for j, func_tuple in enumerate(vertex_tuples):
             vdm_nodes[:, j] = np.prod(
                     unit_nodes_01 ** np.array(func_tuple).reshape(-1, 1),
                     axis=0)

@@ -356,11 +356,11 @@ class _ModepyElementGroup(MeshElementGroup):
 
     @property
     @memoize_method
-    def faces(self):
+    def _modepy_faces(self):
         return mp.faces_for_shape(self._modepy_shape)
 
     def face_vertex_indices(self):
-        return tuple(face.volume_vertex_indices for face in self.faces)
+        return tuple(face.volume_vertex_indices for face in self._modepy_faces)
 
     def vertex_unit_coordinates(self):
         return mp.unit_vertices_for_shape(self._modepy_shape).T

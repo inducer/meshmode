@@ -261,7 +261,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
 
         # group by face_index
 
-        for face in mgrp.faces:
+        for face in mgrp._modepy_faces:
             batch_boundary_el_numbers_in_grp = np.array([
                 ibface_el
                 for ibface_el, ibface_face in group_boundary_faces
