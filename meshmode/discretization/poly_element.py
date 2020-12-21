@@ -393,8 +393,7 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
 
     def is_orthogonal_basis(self):
         try:
-            self._basis.orthonormality_weight()
-            return True
+            return self._basis.orthonormality_weight() == 1
         except mp.BasisNotOrthonormal:
             return False
 
