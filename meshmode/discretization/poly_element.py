@@ -397,8 +397,8 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
 
     def is_orthogonal_basis(self):
         try:
-            # NOTE: meshmode kind of assumes that the basis is also orthonormal,
-            # which is why this check is stricter than expected
+            # NOTE: meshmode kind of assumes that the basis is orthonormal
+            # with weight 1, which is why this check is stricter than expected.
             return self._basis.orthonormality_weight() == 1
         except mp.BasisNotOrthonormal:
             return False
