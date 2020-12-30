@@ -812,9 +812,12 @@ class Visualizer:
 
         # {{{ write hdf5 + create xml tree
 
+        # NOTE: XDMF and/or XDMF in Paraview/VTK seems to be quite frail with
+        # a lot of setups found online just crashing it nonchalantly :(
+        #
         # The current setup writes a grid for each element group. The grids
         # are completely separate, i.e. each one gets its own subset of the
-        # nodes / connectivity / fields
+        # nodes / connectivity / fields. This seems to work reasonably well.
         #
         # This mostly works with the Xdmf3ReaderS (S for spatial) Paraview
         # plugin. It seems to also work with the XMDFReader (for Xdmf2) plugin,
@@ -850,17 +853,21 @@ class Visualizer:
             h5grid = h5.create_group("Grid")
 
             grids = []
+            node_nr_base = 0
             for igrp, (vgrp, gnodes) in enumerate(zip(connectivity.groups, nodes)):
                 grp_name = f"Group_{igrp:05d}"
                 h5grp = h5grid.create_group(grp_name)
 
+                # offset connectivity back to local numbering
+                visconn = vgrp.vis_connectivity.reshape(vgrp.nsubelements, -1) \
+                        - node_nr_base
+                node_nr_base += self.vis_discr.groups[igrp].ndofs
+
                 # hdf5 side
-                dset = h5grp.create_dataset("Nodes",
-                        data=gnodes.T)
+                dset = h5grp.create_dataset("Nodes", data=gnodes.T)
                 gnodes = DataArray.from_dataset(dset)
 
-                dset = h5grp.create_dataset("Connectivity",
-                        data=vgrp.vis_connectivity.reshape(vgrp.nsubelements, -1))
+                dset = h5grp.create_dataset("Connectivity", data=visconn)
                 gconnectivity = DataArray.from_dataset(dset)
 
                 # xdmf side
