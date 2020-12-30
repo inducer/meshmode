@@ -1,4 +1,7 @@
-__copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
+__copyright__ = """
+Copyright (C) 2014 Andreas Kloeckner
+Copyright (C) 2020 Alexandru Fikl
+"""
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -25,7 +28,7 @@ from functools import singledispatch
 import numpy as np
 
 from pytools import memoize_method, Record
-from meshmode.dof_array import flatten, thaw
+from meshmode.dof_array import DOFArray, flatten, thaw
 
 from modepy.shapes import Shape, Simplex, Hypercube
 
@@ -89,6 +92,49 @@ def resample_to_numpy(conn, vec):
         resampled = conn(vec)
         actx = resampled.array_context
         return actx.to_numpy(flatten(resampled))
+
+
+def resample_to_numpy_by_group(conn, vec, *, stack=False):
+    from pytools.obj_array import obj_array_vectorize, make_obj_array
+
+    def dof_array_flatten_by_group(x):
+        assert isinstance(x, DOFArray)
+        actx = x.array_context
+        return make_obj_array([
+            actx.to_numpy(xi).reshape(-1) for xi in x
+            ])
+
+    resampled = conn(vec)
+    if isinstance(vec, np.ndarray):
+        resampled = obj_array_vectorize(dof_array_flatten_by_group, resampled)
+        if stack:
+            resampled = make_obj_array([
+                np.stack([ri[igrp] for ri in resampled])
+                for igrp in range(resampled[0].size)
+                ])
+        return resampled
+    else:
+        return dof_array_flatten_by_group(resampled)
+
+
+def expand_and_filter_fields(names_and_fields):
+    """Gets arrays out of dataclasses and removes empty arrays."""
+    from dataclasses import asdict, is_dataclass
+
+    result = []
+    for name, field in names_and_fields:
+        if is_dataclass(field):
+            result.extend([
+                (f"{name}_{key}", value)
+                for key, value in asdict(field).items() if value is not None
+                ])
+            continue
+
+        if field is not None:
+            result.append((name, field))
+            continue
+
+    return result
 
 
 class _VisConnectivityGroup(Record):
@@ -696,6 +742,152 @@ class Visualizer:
                 with open(par_manifest_filename, "w") as outf:
                     generator = ParallelXMLGenerator(par_file_names)
                     generator(grid).write(outf)
+
+        # }}}
+
+    # }}}
+
+    # {{{ xdmf
+
+    @memoize_method
+    def _xdmf_nodes_numpy(self):
+        actx = self.vis_discr._setup_actx
+        return resample_to_numpy_by_group(
+                lambda x: x,
+                thaw(actx, self.vis_discr.nodes()),
+                stack=True)
+
+    def _vtk_to_xdmf_cell_type(self, cell_type):
+        import pyvisfile.vtk as vtk
+        from pyvisfile.xdmf import TopologyType
+        return {
+                vtk.VTK_LINE: TopologyType.Polyline,
+                vtk.VTK_TRIANGLE: TopologyType.Triangle,
+                vtk.VTK_TETRA: TopologyType.Tetrahedron,
+                vtk.VTK_QUAD: TopologyType.Quadrilateral,
+                vtk.VTK_HEXAHEDRON: TopologyType.Hexahedron,
+                }[cell_type]
+
+    def write_xdmf_file(self, file_name, names_and_fields,
+            attrs=None, h5_file_options=None, real_only=False, overwrite=False):
+        """Write an XDMF file (with an ``.xmf`` extension) containing the
+        arrays in *names_and_fields*. The heavy data is written to binary
+        HDF5 files with ``h5py``.
+
+        :arg names_and_fields: a list of ``(name, array)``, where *array* is
+            an array-like object (see :meth:`Visualizer.write_vtk_file`).
+        :arg attrs: a :class:`dict` of scalar attributes that will be saved
+            in the root HDF5 group.
+        :arg h5_file_options: a :class:`dict` passed directly to
+            ``h5py.File`` that allows controlling chunking, compatibility, etc.
+        """
+        if attrs is None:
+            attrs = {}
+
+        if h5_file_options is None:
+            h5_file_options = {}
+
+        # {{{ hdf5
+
+        try:
+            import h5py
+        except ImportError as exc:
+            raise ImportError("'write_xdmf_file' requires 'h5py'") from exc
+
+        import os
+        h5_file_name = "{}.h5".format(os.path.splitext(file_name)[0])
+
+        # }}}
+
+        # {{{ expand -> filter -> resample -> to_numpy fields
+
+        names_and_fields = expand_and_filter_fields(names_and_fields)
+        names_and_fields = [
+                (name, resample_to_numpy_by_group(
+                    self.connection, field, stack=True))
+                for name, field in names_and_fields
+                ]
+
+        # }}}
+
+        # {{{ write hdf5 + create xml tree
+
+        # The current setup writes a grid for each element group. The grids
+        # are completely separate, i.e. each one gets its own subset of the
+        # nodes / connectivity / fields
+        #
+        # This mostly works with the Xdmf3ReaderS (S for spatial) Paraview
+        # plugin. It seems to also work with the XMDFReader (for Xdmf2) plugin,
+        # but that's not very tested.
+        #
+        # Tried
+        # * writing the nodes globally and then using a 'Reference' DataItem,
+        #   but that crashed Paraview on load
+
+        from pyvisfile.xdmf import (
+                XdmfUnstructuredGrid, DataArray, DataItem,
+                AttributeType, GeometryType, Information)
+
+        if self.vis_discr.ambient_dim == 2:
+            geometry_type = GeometryType.XY
+        elif self.vis_discr.ambient_dim == 3:
+            geometry_type = GeometryType.XYZ
+        else:
+            raise ValueError(f"unsupported dimension: {self.vis_discr.dim}")
+
+        with h5py.File(h5_file_name, "w", **h5_file_options) as h5:
+            tags = []
+            for key, value in attrs.items():
+                h5.attrs[key] = value
+                tags.append(Information(name=key, value=str(value)))
+
+            # {{{ create grids
+
+            nodes = self._xdmf_nodes_numpy()
+            connectivity = self._vtk_connectivity
+
+            # global nodes
+            h5grid = h5.create_group("Grid")
+
+            grids = []
+            for igrp, (vgrp, gnodes) in enumerate(zip(connectivity.groups, nodes)):
+                grp_name = f"Group_{igrp:05d}"
+                h5grp = h5grid.create_group(grp_name)
+
+                # hdf5 side
+                dset = h5grp.create_dataset("Nodes",
+                        data=gnodes.T)
+                gnodes = DataArray.from_dataset(dset)
+
+                dset = h5grp.create_dataset("Connectivity",
+                        data=vgrp.vis_connectivity.reshape(vgrp.nsubelements, -1))
+                gconnectivity = DataArray.from_dataset(dset)
+
+                # xdmf side
+                topology_type = self._vtk_to_xdmf_cell_type(vgrp.vtk_cell_type)
+                grid = XdmfUnstructuredGrid(
+                        gnodes, gconnectivity,
+                        topology_type=topology_type,
+                        geometry_type=geometry_type,
+                        name=grp_name)
+
+                grids.append(grid)
+
+                # fields
+                for name, field in separate_by_real_and_imag(
+                        names_and_fields, real_only):
+                    dset = h5grp.create_dataset(name, data=field[igrp])
+                    grid.add_attribute(DataArray.from_dataset(dset))
+
+            # }}}
+
+        # }}}
+
+        # {{{ write xdmf
+
+        from pyvisfile.xdmf import XdmfWriter
+        writer = XdmfWriter(tuple(grids), tags=tuple(tags))
+        writer.write_pretty(file_name)
 
         # }}}
 
