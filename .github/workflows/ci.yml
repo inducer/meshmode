@@ -30,7 +30,7 @@ jobs:
         -   name: "Main Script"
             run: |
                 sudo apt update
-                sudo apt install octave openmpi-bin libopenmpi-dev
+                sudo apt install octave openmpi-bin libopenmpi-dev libhdf5-dev
 
                 CONDA_ENVIRONMENT=.test-conda-env-py3.yml
                 export MPLBACKEND=Agg
