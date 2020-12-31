@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from dataclasses import dataclass
 from functools import partial
 import numpy as np
 import numpy.linalg as la
@@ -144,6 +145,11 @@ def test_parallel_vtk_file(actx_factory, dim):
     assert(filecmp.cmp("ref-"+pvtu_filename, pvtu_filename))
 
 
+@dataclass
+class VisualizerData:
+    g: np.ndarray
+
+
 @pytest.mark.parametrize(("dim", "group_cls"), [
     (1, SimplexElementGroup),
     (2, SimplexElementGroup),
@@ -192,20 +198,23 @@ def test_visualizers(actx_factory, dim, group_cls):
 
     nodes = thaw(actx, discr.nodes())
     f = actx.np.sqrt(sum(nodes**2)) + 1j*nodes[0]
+    g = VisualizerData(g=f)
+    names_and_fields = [("f", f), ("g", g)]
+    names_and_fields = [("f", f)]
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order)
 
     eltype = "simplex" if is_simplex else "box"
     basename = f"visualizer_vtk_{eltype}_{dim}d"
-    vis.write_vtk_file(f"{basename}_linear.vtu", [("f", f)], overwrite=True)
+    vis.write_vtk_file(f"{basename}_linear.vtu", names_and_fields, overwrite=True)
 
     with pytest.raises(RuntimeError):
         vis.write_vtk_file(f"{basename}_lagrange.vtu",
-                [("f", f)], overwrite=True, use_high_order=True)
+                names_and_fields, overwrite=True, use_high_order=True)
 
     basename = f"visualizer_xdmf_{eltype}_{dim}d"
-    vis.write_xdmf_file(f"{basename}.xmf", [("f", f)], overwrite=True)
+    vis.write_xdmf_file(f"{basename}.xmf", names_and_fields, overwrite=True)
 
     if mesh.dim == 2 and is_simplex:
         try:
@@ -224,7 +233,7 @@ def test_visualizers(actx_factory, dim, group_cls):
 
     basename = f"visualizer_vtk_{eltype}_{dim}d"
     vis.write_vtk_file(f"{basename}_lagrange.vtu",
-            [("f", f)], overwrite=True, use_high_order=True)
+            names_and_fields, overwrite=True, use_high_order=True)
 
 # }}}
 

@@ -28,6 +28,7 @@ from functools import singledispatch
 import numpy as np
 
 from pytools import memoize_method, Record
+from pytools.obj_array import make_obj_array
 from meshmode.dof_array import DOFArray, flatten, thaw
 
 from modepy.shapes import Shape, Simplex, Hypercube
@@ -79,60 +80,73 @@ def separate_by_real_and_imag(names_and_fields, real_only):
                 yield (name, field)
 
 
-def resample_to_numpy(conn, vec):
-    if isinstance(vec, np.ndarray):
+def _stack_object_array(vec, *, by_group=False):
+    if not by_group:
+        return np.stack(vec)
+
+    return make_obj_array([
+        np.stack([ri[igrp] for ri in vec])
+        for igrp in range(vec[0].size)
+        ])
+
+
+def resample_to_numpy(conn, vec, *, stack=False, by_group=False):
+    """
+    :arg stack: if *True* object arrays are stacked into a single
+        :class:`~numpy.ndarray`.
+    :arg by_group: if *True*, the per-group arrays in a :class:`DOFArray`
+        are flattened separately. This can be used to write each group as a
+        separate mesh (in supporting formats).
+    """
+    if isinstance(vec, np.ndarray) and vec.dtype.char == "O":
         from pytools.obj_array import obj_array_vectorize
-        return obj_array_vectorize(lambda x: resample_to_numpy(conn, x), vec)
+        r = obj_array_vectorize(
+                lambda x: resample_to_numpy(conn, x, by_group=by_group),
+                vec)
+
+        return _stack_object_array(r, by_group=by_group) if stack else r
+
+    if isinstance(vec, DOFArray):
+        actx = vec.array_context
+        vec = conn(vec)
 
     from numbers import Number
-    if isinstance(vec, Number):
-        nnodes = sum(grp.ndofs for grp in conn.to_discr.groups)
-        return np.ones(nnodes) * vec
-    else:
-        resampled = conn(vec)
-        actx = resampled.array_context
-        return actx.to_numpy(flatten(resampled))
-
-
-def resample_to_numpy_by_group(conn, vec, *, stack=False):
-    from pytools.obj_array import obj_array_vectorize, make_obj_array
-
-    def dof_array_flatten_by_group(x):
-        assert isinstance(x, DOFArray)
-        actx = x.array_context
-        return make_obj_array([
-            actx.to_numpy(xi).reshape(-1) for xi in x
-            ])
-
-    resampled = conn(vec)
-    if isinstance(vec, np.ndarray):
-        resampled = obj_array_vectorize(dof_array_flatten_by_group, resampled)
-        if stack:
-            resampled = make_obj_array([
-                np.stack([ri[igrp] for ri in resampled])
-                for igrp in range(resampled[0].size)
+    if by_group:
+        if isinstance(vec, Number):
+            return make_obj_array([
+                np.full(grp.ndofs, vec) for grp in conn.to_discr.groups
                 ])
-        return resampled
+        elif isinstance(vec, DOFArray):
+            return make_obj_array([
+                actx.to_numpy(ivec).reshape(-1) for ivec in vec
+                ])
+        else:
+            raise TypeError(f"unsupported array type: {type(vec).__name__}")
     else:
-        return dof_array_flatten_by_group(resampled)
+        if isinstance(vec, Number):
+            nnodes = sum(grp.ndofs for grp in conn.to_discr.groups)
+            return np.full(nnodes, vec)
+        elif isinstance(vec, DOFArray):
+            return actx.to_numpy(flatten(vec))
+        else:
+            raise TypeError(f"unsupported array type: {type(vec).__name__}")
 
 
-def expand_and_filter_fields(names_and_fields):
+def preprocess_fields(names_and_fields):
     """Gets arrays out of dataclasses and removes empty arrays."""
-    from dataclasses import asdict, is_dataclass
+    from dataclasses import fields, is_dataclass
 
     result = []
     for name, field in names_and_fields:
         if is_dataclass(field):
             result.extend([
-                (f"{name}_{key}", value)
-                for key, value in asdict(field).items() if value is not None
+                (f"{name}_{dcf.name}", value)
+                for dcf in fields(field)
+                for value in [getattr(field, dcf.name)]
+                if value is not None
                 ])
-            continue
-
-        if field is not None:
+        elif field is not None:
             result.append((name, field))
-            continue
 
     return result
 
@@ -621,28 +635,11 @@ class Visualizer:
 
         nodes = self._vis_nodes_numpy()
 
-        # {{{ expand dataclasses in names_and_fields
-
-        new_names_and_fields = []
-        for name, fld in names_and_fields:
-            if hasattr(type(fld), "__dataclass_fields__"):
-                import dataclasses
-                new_names_and_fields.extend(
-                        (f"{name}_{dclass_field.name}",
-                            getattr(fld, dclass_field.name))
-                        for dclass_field in dataclasses.fields(fld)
-                        if getattr(fld, dclass_field.name) is not None)
-            elif fld is not None:
-                new_names_and_fields.append((name, fld))
-
-        names_and_fields = new_names_and_fields
-        del new_names_and_fields
-
-        # }}}
-
+        names_and_fields = preprocess_fields(names_and_fields)
         names_and_fields = [
                 (name, resample_to_numpy(self.connection, fld))
-                for name, fld in names_and_fields]
+                for name, fld in names_and_fields
+                ]
 
         # {{{ create cell_types
 
@@ -752,10 +749,10 @@ class Visualizer:
     @memoize_method
     def _xdmf_nodes_numpy(self):
         actx = self.vis_discr._setup_actx
-        return resample_to_numpy_by_group(
+        return resample_to_numpy(
                 lambda x: x,
                 thaw(actx, self.vis_discr.nodes()),
-                stack=True)
+                stack=True, by_group=True)
 
     def _vtk_to_xdmf_cell_type(self, cell_type):
         import pyvisfile.vtk as vtk
@@ -769,7 +766,8 @@ class Visualizer:
                 }[cell_type]
 
     def write_xdmf_file(self, file_name, names_and_fields,
-            attrs=None, h5_file_options=None, real_only=False, overwrite=False):
+            attrs=None, h5_file_options=None, dataset_options=None,
+            real_only=False, overwrite=False):
         """Write an XDMF file (with an ``.xmf`` extension) containing the
         arrays in *names_and_fields*. The heavy data is written to binary
         HDF5 files with ``h5py``.
@@ -780,12 +778,19 @@ class Visualizer:
             in the root HDF5 group.
         :arg h5_file_options: a :class:`dict` passed directly to
             ``h5py.File`` that allows controlling chunking, compatibility, etc.
+        :arg dataset_options: a :class:`dict` passed directly to
+            ``h5py.Group.create_dataset``.
         """
         if attrs is None:
             attrs = {}
 
         if h5_file_options is None:
             h5_file_options = {}
+
+        dataset_defaults = {"compression": "gzip", "compression_opts": 6}
+        if dataset_options is not None:
+            dataset_defaults.update(dataset_options)
+        dataset_options = dataset_defaults
 
         # {{{ hdf5
 
@@ -801,10 +806,11 @@ class Visualizer:
 
         # {{{ expand -> filter -> resample -> to_numpy fields
 
-        names_and_fields = expand_and_filter_fields(names_and_fields)
+        names_and_fields = preprocess_fields(names_and_fields)
         names_and_fields = [
-                (name, resample_to_numpy_by_group(
-                    self.connection, field, stack=True))
+                (name, resample_to_numpy(
+                    self.connection, field,
+                    stack=True, by_group=True))
                 for name, field in names_and_fields
                 ]
 
@@ -828,8 +834,8 @@ class Visualizer:
         #   but that crashed Paraview on load
 
         from pyvisfile.xdmf import (
-                XdmfUnstructuredGrid, DataArray, DataItem,
-                AttributeType, GeometryType, Information)
+                XdmfUnstructuredGrid, DataArray,
+                GeometryType, Information)
 
         if self.vis_discr.ambient_dim == 2:
             geometry_type = GeometryType.XY
@@ -864,10 +870,12 @@ class Visualizer:
                 node_nr_base += self.vis_discr.groups[igrp].ndofs
 
                 # hdf5 side
-                dset = h5grp.create_dataset("Nodes", data=gnodes.T)
+                dset = h5grp.create_dataset("Nodes", data=gnodes.T,
+                        **dataset_options)
                 gnodes = DataArray.from_dataset(dset)
 
-                dset = h5grp.create_dataset("Connectivity", data=visconn)
+                dset = h5grp.create_dataset("Connectivity", data=visconn,
+                        **dataset_options)
                 gconnectivity = DataArray.from_dataset(dset)
 
                 # xdmf side
@@ -878,13 +886,14 @@ class Visualizer:
                         geometry_type=geometry_type,
                         name=grp_name)
 
-                grids.append(grid)
-
                 # fields
                 for name, field in separate_by_real_and_imag(
                         names_and_fields, real_only):
-                    dset = h5grp.create_dataset(name, data=field[igrp])
+                    dset = h5grp.create_dataset(name, data=field[igrp],
+                            **dataset_options)
                     grid.add_attribute(DataArray.from_dataset(dset))
+
+                grids.append(grid)
 
             # }}}
 
