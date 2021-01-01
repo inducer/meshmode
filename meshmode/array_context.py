@@ -547,18 +547,21 @@ class PyOpenCLArrayContext(ArrayContext):
                 has_dof_array = True
                 break
 
-        if has_dof_array:
+        if program.name == "conn_projection_knl":
             outer_iname = "iel"
-            inner_iname = "idof"
-        elif program.name == "conn_projection_knl":
-            outer_iname = "iel"
-        # Needed for act_special_exp
+        # Needed for act_special_exp etc.
         elif "i0" in all_inames:
             outer_iname = "i0"
             if "i1" in all_inames:
                 inner_iname = "i1"
         elif len(all_inames) == 1:
             outer_iname = all_inames[0]
+        elif has_dof_array:
+            # Ce n'est pas tout à fait correct. Whether or not an array is a dof
+            # array has no bearing on the names of the loop variables. The "special"
+            # math operations, for instance, name the variables i0, i1.
+            outer_iname = "iel"
+            inner_iname = "idof"
         else:
             raise ValueError("outer_iname not defined in {}.".format(program.name))
 
