@@ -821,8 +821,7 @@ class Visualizer:
 
         # {{{ write hdf5 + create xml tree
 
-        # NOTE: XDMF and/or XDMF in Paraview/VTK seems to be quite frail with
-        # a lot of setups found online just crashing it nonchalantly :(
+        # NOTE: 01-03-2021 based on Paraview 5.8.1 with (internal) VTK 8.90.0
         #
         # The current setup writes a grid for each element group. The grids
         # are completely separate, i.e. each one gets its own subset of the
@@ -832,9 +831,15 @@ class Visualizer:
         # plugin. It seems to also work with the XMDFReader (for Xdmf2) plugin,
         # but that's not very tested.
         #
-        # Tried
-        # * writing the nodes globally and then using a 'Reference' DataItem,
-        #   but that crashed Paraview on load
+        # A few nice-to-haves / improvements
+        #
+        # * writing a single grid per meshmode.Mesh. `meshio` actually does this
+        #   using the XDMF `TopologyType.Mixed`
+        # * writing object ndarrays as separate `DataItem`s. Tried this using
+        #   an Xdmf `DataItemType.Function`, but Paraview did not recognize it.
+        # * Using `Reference` DataItems to e.g. store the nodes globally on the
+        #   domain and just reference it in the individual grids. This crashed
+        #   Paraview.
 
         from pyvisfile.xdmf import (
                 XdmfUnstructuredGrid, DataArray,
