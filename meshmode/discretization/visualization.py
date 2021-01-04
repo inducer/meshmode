@@ -439,6 +439,7 @@ class Visualizer:
     .. automethod:: show_scalar_in_matplotlib_3d
     .. automethod:: write_vtk_file
     .. automethod:: write_parallel_vtk_file
+    .. automethod:: write_xdmf_file
     """
 
     def __init__(self, connection,
@@ -773,16 +774,16 @@ class Visualizer:
             real_only=False, overwrite=False):
         """Write an XDMF file (with an ``.xmf`` extension) containing the
         arrays in *names_and_fields*. The heavy data is written to binary
-        HDF5 files with ``h5py``.
+        HDF5 files, which requires installing :ref:`h5py <h5py:install>`.
 
         :arg names_and_fields: a list of ``(name, array)``, where *array* is
             an array-like object (see :meth:`Visualizer.write_vtk_file`).
         :arg attrs: a :class:`dict` of scalar attributes that will be saved
             in the root HDF5 group.
         :arg h5_file_options: a :class:`dict` passed directly to
-            ``h5py.File`` that allows controlling chunking, compatibility, etc.
+            :class:`h5py.File` that allows controlling chunking, compatibility, etc.
         :arg dataset_options: a :class:`dict` passed directly to
-            ``h5py.Group.create_dataset``.
+            :meth:`h5py.Group.create_dataset`.
         """
         if attrs is None:
             attrs = {}
