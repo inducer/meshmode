@@ -84,8 +84,8 @@ class GroupRefinementRecord:
     """
     .. attribute:: tess_info
 
-        A :class:`TesselationInfo` that describes the tesselation of the
-        element group.
+        An instance of :class:`ElementTesselationInfo` that describes the
+        tesselation of a single element into multiple child elements.
 
     .. attribute:: element_mapping
 
