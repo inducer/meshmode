@@ -152,7 +152,7 @@ def _midpoint_tuples(a, b):
 
 
 def _get_ref_midpoints(shape, ref_vertices):
-    r"""The reference element is considered to be, e.g. for a 2 simplex::
+    r"""The reference element is considered to be, e.g. for a 2-simplex::
 
         F
         | \
