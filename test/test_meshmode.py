@@ -213,8 +213,11 @@ def test_visualizers(actx_factory, dim, group_cls):
         vis.write_vtk_file(f"{basename}_lagrange.vtu",
                 names_and_fields, overwrite=True, use_high_order=True)
 
-    basename = f"visualizer_xdmf_{eltype}_{dim}d"
-    vis.write_xdmf_file(f"{basename}.xmf", names_and_fields, overwrite=True)
+    try:
+        basename = f"visualizer_xdmf_{eltype}_{dim}d"
+        vis.write_xdmf_file(f"{basename}.xmf", names_and_fields, overwrite=True)
+    except ImportError:
+        logger.info("h5py not available")
 
     if mesh.dim == 2 and is_simplex:
         try:
@@ -226,7 +229,7 @@ def test_visualizers(actx_factory, dim, group_cls):
         try:
             vis.show_scalar_in_mayavi(f, do_show=False)
         except ImportError:
-            logger.info("mayavi not avaiable")
+            logger.info("mayavi not available")
 
     vis = make_visualizer(actx, discr, target_order,
             force_equidistant=True)
