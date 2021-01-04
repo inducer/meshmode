@@ -37,11 +37,12 @@ logger = logging.getLogger(__name__)
 
 @singledispatch
 def map_unit_nodes_to_children(meg: MeshElementGroup,
-        unit_nodes, tess_info) -> np.ndarray:
+        unit_nodes, el_tess_info) -> np.ndarray:
     """
     :arg unit_nodes: an :class:`~numpy.ndarray` of unit nodes on the
         element type described by *meg*.
-    :arg tess_info: a :class:`~meshmode.mesh.refinement.tesselate.TesselationInfo`.
+    :arg el_tess_info: a
+        :class:`~meshmode.mesh.refinement.tesselate.ElementTesselationInfo`.
     :returns: an :class:`~numpy.ndarray` of mapped unit nodes for each
         child in the tesselation.
     """
@@ -49,11 +50,11 @@ def map_unit_nodes_to_children(meg: MeshElementGroup,
 
 
 @map_unit_nodes_to_children.register(SimplexElementGroup)
-def _(meg: SimplexElementGroup, unit_nodes, tess_info):
-    ref_vertices = np.array(tess_info.ref_vertices, dtype=np.float).T
+def _(meg: SimplexElementGroup, unit_nodes, el_tess_info):
+    ref_vertices = np.array(el_tess_info.ref_vertices, dtype=np.float).T
     assert len(unit_nodes.shape) == 2
 
-    for child in tess_info.children:
+    for child in el_tess_info.children:
         origin = ref_vertices[:, child[0]].reshape(-1, 1)
         basis = ref_vertices[:, child[1:]] - origin
 
@@ -62,14 +63,14 @@ def _(meg: SimplexElementGroup, unit_nodes, tess_info):
 
 
 @map_unit_nodes_to_children.register(TensorProductElementGroup)
-def _(meg: TensorProductElementGroup, unit_nodes, tess_info):
-    ref_vertices = np.array(tess_info.ref_vertices, dtype=np.float).T
+def _(meg: TensorProductElementGroup, unit_nodes, el_tess_info):
+    ref_vertices = np.array(el_tess_info.ref_vertices, dtype=np.float).T
     assert len(unit_nodes.shape) == 2
 
     # NOTE: nodes indices in the unit hypercube that form the `e_i` basis
     basis_indices = 2**np.arange(meg.dim)
 
-    for child in tess_info.children:
+    for child in el_tess_info.children:
         child_arr = np.array(child)
         origin = ref_vertices[:, child_arr[0]].reshape(-1, 1)
         basis = ref_vertices[:, child_arr[basis_indices]] - origin
