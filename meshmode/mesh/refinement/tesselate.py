@@ -41,8 +41,9 @@ from typing import List, Tuple, Optional
 # {{{ interface
 
 @dataclass(frozen=True)
-class TesselationInfo:
-    """
+class ElementTesselationInfo:
+    """Describes how one element is split into multiple child elements.
+    
     .. attribute:: children
 
         A tess_info of the reference element, given here by
