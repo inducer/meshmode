@@ -92,6 +92,7 @@ class GroupRefinementRecord:
     """
 
     tess_info: TesselationInfo
+    # FIXME: This should really be a CSR data structure.
     element_mapping: List[List[int]]
 
 
