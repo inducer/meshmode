@@ -98,6 +98,9 @@ def resample_to_numpy(conn, vec, *, stack=False, by_group=False):
         are flattened separately. This can be used to write each group as a
         separate mesh (in supporting formats).
     """
+    # "stack" exists as mainly as a workaround for Xdmf. See here:
+    # https://github.com/inducer/pyvisfile/pull/12#discussion_r550959081
+    # for (minimal) discussion.
     if isinstance(vec, np.ndarray) and vec.dtype.char == "O":
         from pytools.obj_array import obj_array_vectorize
         r = obj_array_vectorize(
