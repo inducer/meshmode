@@ -43,11 +43,11 @@ from typing import List, Tuple, Optional
 @dataclass(frozen=True)
 class ElementTesselationInfo:
     """Describes how one element is split into multiple child elements.
-    
+
     .. attribute:: children
 
-        A tess_info of the reference element, given here by
-        :attr:`ref_vertices`.
+        An array of shape ``(nchildren, nvertices)`` containing the vertices
+        of each child element the reference element was split into.
 
     .. attribute:: ref_vertices
 
