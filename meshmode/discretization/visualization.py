@@ -775,6 +775,7 @@ class Visualizer:
         """Write an XDMF file (with an ``.xmf`` extension) containing the
         arrays in *names_and_fields*. The heavy data is written to binary
         HDF5 files, which requires installing :ref:`h5py <h5py:install>`.
+        Distributed memory visualization is not supported.
 
         :arg names_and_fields: a list of ``(name, array)``, where *array* is
             an array-like object (see :meth:`Visualizer.write_vtk_file`).
@@ -795,6 +796,10 @@ class Visualizer:
         if dataset_options is not None:
             dataset_defaults.update(dataset_options)
         dataset_options = dataset_defaults
+
+        if "comm" in h5_file_options \
+                or h5_file_options.get("driver", None) == "mpio":
+            raise ValueError("distributed memory visualization not supported")
 
         # {{{ hdf5
 
