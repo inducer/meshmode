@@ -54,6 +54,9 @@ def main():
               "recursivenodes",
               "dataclasses; python_version<='3.6'",
               ],
+          extras_require={
+              "visualization": ["h5py"],
+              },
           )
 
 

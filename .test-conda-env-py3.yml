@@ -23,6 +23,9 @@ dependencies:
 # for pymetis
 - pybind11
 
+# for xdmf/hdf5 visualizer
+- h5py
+
 # Only needed to make pylint succeed
 - matplotlib
 
