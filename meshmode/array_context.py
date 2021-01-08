@@ -34,6 +34,7 @@ __doc__ = """
 .. autoclass:: ArrayContext
 .. autoclass:: PyOpenCLArrayContext
 .. autofunction:: pytest_generate_tests_for_pyopencl_array_context
+.. autofunction:: generate_pytest_generate_tests
 """
 
 
@@ -574,34 +575,15 @@ class PyOpenCLArrayContext(ArrayContext):
 
 # {{{ pytest integration
 
-def pytest_generate_tests_for_pyopencl_array_context(metafunc):
-    """Parametrize tests for pytest to use a :mod:`pyopencl` array context.
 
-    Performs device enumeration analogously to
-    :func:`pyopencl.tools.pytest_generate_tests_for_pyopencl`.
-
-    Using the line:
-
-    .. code-block:: python
-
-       from meshmode.array_context import pytest_generate_tests_for_pyopencl \
-            as pytest_generate_tests
-
-    in your pytest test scripts allows you to use the arguments ctx_factory,
-    device, or platform in your test functions, and they will automatically be
-    run for each OpenCL device/platform in the system, as appropriate.
-
-    It also allows you to specify the ``PYOPENCL_TEST`` environment variable
-    for device selection.
-    """
-
+def _pytest_generate_tests_for_pyopencl_array_context(array_context_type, metafunc):
     import pyopencl as cl
     from pyopencl.tools import _ContextFactory
 
     class ArrayContextFactory(_ContextFactory):
         def __call__(self):
             ctx = super().__call__()
-            return PyOpenCLArrayContext(cl.CommandQueue(ctx))
+            return array_context_type(cl.CommandQueue(ctx))
 
         def __str__(self):
             return ("<array context factory for <pyopencl.Device '%s' on '%s'>" %
@@ -630,6 +612,62 @@ def pytest_generate_tests_for_pyopencl_array_context(metafunc):
             ]
 
     metafunc.parametrize(arg_names, arg_values, ids=ids)
+
+
+def generate_pytest_generate_tests(array_context_type):
+    """Generate a function to parametrize tests for pytest to use
+    a :mod:`pyopencl` array context of the specified subtype.
+
+    The returned function performs device enumeration analogously to
+    :func:`pyopencl.tools.pytest_generate_tests_for_pyopencl`.
+
+    Using the line:
+
+    .. code-block:: python
+
+       from meshmode.array_context import generate_pytest_generate_tests
+       pytest_generate_tests =
+            generate_pytest_generate_tests(<PyOpenCLArrayContext>)
+
+
+    in your pytest test scripts allows you to use the arguments ctx_factory,
+    device, or platform in your test functions, and they will automatically be
+    run for each OpenCL device/platform in the system, as appropriate.
+
+    It also allows you to specify the ``PYOPENCL_TEST`` environment variable
+    for device selection.
+    """
+
+    from functools import partial
+
+    return lambda metafunc: partial(
+            _pytest_generate_tests_for_pyopencl_array_context,
+            array_context_type)(metafunc)
+
+
+def pytest_generate_tests_for_pyopencl_array_context(metafunc):
+    """Parametrize tests for pytest to use a :mod:`pyopencl` array context.
+
+    Performs device enumeration analogously to
+    :func:`pyopencl.tools.pytest_generate_tests_for_pyopencl`.
+
+    Using the line:
+
+    .. code-block:: python
+
+       from meshmode.array_context import pytest_generate_tests_for_pyopencl \
+            as pytest_generate_tests
+
+    in your pytest test scripts allows you to use the arguments ctx_factory,
+    device, or platform in your test functions, and they will automatically be
+    run for each OpenCL device/platform in the system, as appropriate.
+
+    It also allows you to specify the ``PYOPENCL_TEST`` environment variable
+    for device selection.
+    """
+
+    generate_pytest_generate_tests(PyOpenCLArrayContext)(metafunc)
+
 
 # }}}
 
