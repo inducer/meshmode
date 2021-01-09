@@ -247,7 +247,7 @@ class DOFArray:
         if self.array_context is not actx:
             ary = thaw(actx, freeze(self))
 
-        return [ary_i.shape for ary_i in ary._data], actx.to_numpy(flatten(ary))
+        return [actx.to_numpy(ary_i) for ary_i in ary._data]
 
     def __setstate__(self, state):
         try:
@@ -259,10 +259,8 @@ class DOFArray:
             raise RuntimeError("DOFArray instances can only be unpickled while "
                     "array_context_for_pickling is active.")
 
-        group_shapes, np_array = state
-        res = _unflatten(actx, group_shapes, actx.from_numpy(np_array))
-        self._data = res._data
         self.array_context = actx
+        self._data = [actx.from_numpy(ary_i) for ary_i in state]
 
     # }}}
 
