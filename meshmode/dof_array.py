@@ -260,7 +260,7 @@ class DOFArray:
                     "array_context_for_pickling is active.")
 
         self.array_context = actx
-        self._data = [actx.from_numpy(ary_i) for ary_i in state]
+        self._data = tuple([actx.from_numpy(ary_i) for ary_i in state])
 
     # }}}
 
