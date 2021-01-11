@@ -20,13 +20,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import itertools
+from functools import partial
 
 import numpy as np
-import itertools
-from pytools import RecordWithoutPickling
-from meshmode.mesh.refinement.no_adjacency import (  # noqa: F401
-        RefinerWithoutAdjacency)
 
+from meshmode.mesh.refinement.no_adjacency import RefinerWithoutAdjacency
+from meshmode.mesh.refinement.tesselate import \
+        ElementTesselationInfo, GroupRefinementRecord
 
 import logging
 logger = logging.getLogger(__name__)
@@ -36,6 +37,43 @@ __doc__ = """
 .. autoclass :: RefinerWithoutAdjacency
 .. autofunction :: refine_uniformly
 """
+
+__all__ = [
+    "Refiner", "RefinerWithoutAdjacency", "refine_uniformly"
+]
+
+
+# {{{ deprecated
+
+class SimplexResampler:
+    @staticmethod
+    def get_vertex_pair_to_midpoint_order(dim):
+        nmidpoints = dim * (dim + 1) // 2
+        return dict(zip(
+            ((i, j) for j in range(dim + 1) for i in range(j)),
+            range(nmidpoints)
+            ))
+
+    @staticmethod
+    def get_midpoints(group, el_tess_info, elements):
+        import meshmode.mesh.refinement.tesselate as tess
+        return tess.get_group_midpoints(group, el_tess_info, elements)
+
+    @staticmethod
+    def get_tesselated_nodes(group, el_tess_info, elements):
+        import meshmode.mesh.refinement.tesselate as tess
+        return tess.get_group_tesselated_nodes(group, el_tess_info, elements)
+
+
+def tesselate_simplex(dim):
+    import modepy as mp
+    shape = mp.Simplex(dim)
+    space = mp.space_for_shape(shape, 2)
+
+    node_tuples = mp.node_tuples_for_space(space)
+    return node_tuples, mp.submesh_for_shape(shape, node_tuples)
+
+# }}}
 
 
 class TreeRayNode:
@@ -65,21 +103,6 @@ class TreeRayNode:
         self.adjacent_add_diff = []
 
 
-class _Tesselation(RecordWithoutPickling):
-
-    def __init__(self, children, ref_vertices):
-        RecordWithoutPickling.__init__(self,
-                children=children,
-                ref_vertices=ref_vertices,)
-
-
-class _GroupRefinementRecord(RecordWithoutPickling):
-
-    def __init__(self, tesselation, element_mapping):
-        RecordWithoutPickling.__init__(self,
-            tesselation=tesselation, element_mapping=element_mapping)
-
-
 class Refiner:
     """An older that mostly succeeds at preserving adjacency across
     non-conformal refinement.
@@ -100,20 +123,22 @@ class Refiner:
     # {{{ constructor
 
     def __init__(self, mesh):
+        from warnings import warn
+        warn("Refiner is deprecated and will be removed in 2022.",
+                DeprecationWarning, stacklevel=2)
+
         if mesh.is_conforming is not True:
             raise ValueError("Refiner can only be used with meshes that are known "
                     "to be conforming. If you would like to refine non-conforming "
                     "meshes and do not need adjacency information, consider "
                     "using RefinerWithoutAdjacency.")
 
-        from meshmode.mesh.refinement.tesselate import \
-                tesselateseg, tesselatetet, tesselatetri
         self.lazy = False
         self.seen_tuple = {}
         self.group_refinement_records = []
-        seg_node_tuples, seg_result = tesselateseg()
-        tri_node_tuples, tri_result = tesselatetri()
-        tet_node_tuples, tet_result = tesselatetet()
+        seg_node_tuples, seg_result = tesselate_simplex(1)
+        tri_node_tuples, tri_result = tesselate_simplex(2)
+        tet_node_tuples, tet_result = tesselate_simplex(3)
         #quadrilateral_node_tuples = [
         #print tri_result, tet_result
         self.simplex_node_tuples = [
@@ -597,11 +622,16 @@ class Refiner:
         nelements_in_grp = grp.nelements
         del self.group_refinement_records[:]
 
+        from meshmode.mesh import SimplexElementGroup
         for grp_idx, grp in enumerate(self.last_mesh.groups):
+            if not isinstance(grp, SimplexElementGroup):
+                raise TypeError("refinement not supported for groups of type "
+                        f"'{type(grp).__name__}'")
+
             iel_base = grp.element_nr_base
             # List of lists mapping element number to new element number(s).
             element_mapping = []
-            tesselation = None
+            el_tess_info = None
 
             # {{{ get midpoint coordinates for vertices
 
@@ -613,19 +643,17 @@ class Refiner:
                     if len(grp.vertex_indices[iel_grp]) == grp.dim + 1:
                         midpoints_to_find.append(iel_grp)
                         if not resampler:
-                            from meshmode.mesh.refinement.resampler import (
-                                SimplexResampler)
                             resampler = SimplexResampler()
-                            tesselation = _Tesselation(
-                                self.simplex_result[grp.dim],
-                                self.simplex_node_tuples[grp.dim])
+                            el_tess_info = ElementTesselationInfo(
+                                children=self.simplex_result[grp.dim],
+                                ref_vertices=self.simplex_node_tuples[grp.dim])
                     else:
                         raise NotImplementedError("unimplemented: midpoint finding"
                                                   "for non simplex elements")
 
             if midpoints_to_find:
                 midpoints = resampler.get_midpoints(
-                        grp, tesselation, midpoints_to_find)
+                        grp, el_tess_info, midpoints_to_find)
                 midpoint_order = resampler.get_vertex_pair_to_midpoint_order(grp.dim)
 
             del midpoints_to_find
@@ -703,7 +731,10 @@ class Refiner:
 #                            if len(cur_list[len(cur_list)-1])
 
             self.group_refinement_records.append(
-                _GroupRefinementRecord(tesselation, element_mapping))
+                GroupRefinementRecord(
+                    el_tess_info=el_tess_info,
+                    element_mapping=element_mapping)
+                )
 
         #clear connectivity data
         for grp in self.last_mesh.groups:
@@ -760,10 +791,9 @@ class Refiner:
             if to_resample:
                 # if simplex
                 if is_simplex:
-                    from meshmode.mesh.refinement.resampler import SimplexResampler
                     resampler = SimplexResampler()
                     new_nodes = resampler.get_tesselated_nodes(
-                        prev_group, refinement_record.tesselation, to_resample)
+                        prev_group, refinement_record.el_tess_info, to_resample)
                 else:
                     raise NotImplementedError(
                         "unimplemented: node resampling for non simplex elements")
@@ -948,9 +978,13 @@ class Refiner:
 
 def refine_uniformly(mesh, iterations, with_adjacency=False):
     if with_adjacency:
-        refiner = Refiner(mesh)
-    else:
-        refiner = RefinerWithoutAdjacency(mesh)
+        # For conforming meshes, even RefinerWithoutAdjacency will reconstruct
+        # adjacency from vertex identity.
+
+        if not mesh.is_conforming:
+            raise ValueError("mesh must be conforming if adjacency is desired")
+
+    refiner = RefinerWithoutAdjacency(mesh)
 
     for _ in range(iterations):
         refiner.refine_uniformly()

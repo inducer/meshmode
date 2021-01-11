@@ -333,13 +333,11 @@ def make_group_from_vertices(vertices, vertex_indices, order,
 
         # dim, nunit_nodes
         if unit_nodes is None:
-            if dim <= 3:
-                unit_nodes = mp.warp_and_blend_nodes(dim, order)
-            else:
-                unit_nodes = mp.equidistant_nodes(dim, order)
+            shape = mp.Simplex(dim)
+            space = mp.space_for_shape(shape, order)
+            unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
 
         unit_nodes_01 = 0.5 + 0.5*unit_nodes
-
         nodes = np.einsum(
                 "si,des->dei",
                 unit_nodes_01, spanning_vectors) + el_origins
@@ -352,22 +350,22 @@ def make_group_from_vertices(vertices, vertex_indices, order,
             raise ValueError("invalid number of vertices for tensor-product "
                     "elements, must be power of two")
 
+        shape = mp.Hypercube(dim)
+        space = mp.space_for_shape(shape, order)
+
         if unit_nodes is None:
-            from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
-            unit_nodes = mp.tensor_product_nodes(dim,
-                    legendre_gauss_lobatto_nodes(order))
+            unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
 
         # shape: (dim, nnodes)
         unit_nodes_01 = 0.5 + 0.5*unit_nodes
         _, nnodes = unit_nodes.shape
 
-        from pytools import generate_nonnegative_integer_tuples_below as gnitb
-        id_tuples = list(gnitb(2, dim))
-        assert len(id_tuples) == nvertices
+        vertex_tuples = mp.node_tuples_for_space(type(space)(dim, 1))
+        assert len(vertex_tuples) == nvertices
 
         vdm = np.empty((nvertices, nvertices))
-        for i, vertex_tuple in enumerate(id_tuples):
-            for j, func_tuple in enumerate(id_tuples):
+        for i, vertex_tuple in enumerate(vertex_tuples):
+            for j, func_tuple in enumerate(vertex_tuples):
                 vertex_ref = np.array(vertex_tuple, dtype=np.float64)
                 vdm[i, j] = np.prod(vertex_ref**func_tuple)
 
@@ -377,7 +375,7 @@ def make_group_from_vertices(vertices, vertex_indices, order,
             coeffs[d] = la.solve(vdm, el_vertices[d].T).T
 
         vdm_nodes = np.zeros((nnodes, nvertices))
-        for j, func_tuple in enumerate(id_tuples):
+        for j, func_tuple in enumerate(vertex_tuples):
             vdm_nodes[:, j] = np.prod(
                     unit_nodes_01 ** np.array(func_tuple).reshape(-1, 1),
                     axis=0)
@@ -767,7 +765,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
     if dim == 1:
         if mesh_type is not None:
-            raise ValueError("unsupported mesh_type")
+            raise ValueError(f"unsupported mesh type: '{mesh_type}'")
 
         for i in range(shape[0]-1):
             # a--b
@@ -801,7 +799,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
             pass
 
         else:
-            raise ValueError("unsupported mesh_type")
+            raise ValueError(f"unsupported mesh type: '{mesh_type}'")
 
         for i in range(shape[0]-1):
             for j in range(shape[1]-1):
@@ -849,8 +847,8 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
                     if is_tp:
                         el_vertices.append(
-                                (a000, a001, a010, a011,
-                                    a100, a101, a110, a111))
+                                (a000, a100, a010, a110,
+                                    a001, a101, a011, a111))
 
                     else:
                         el_vertices.append((a000, a100, a010, a001))
@@ -957,7 +955,8 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
       on [a,b].
     :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
         See :func:`generate_box_mesh`.
-    :param mesh_type: See :func:`generate_box_mesh`.
+    :param group_cls: see :func:`generate_box_mesh`.
+    :param mesh_type: see :func:`generate_box_mesh`.
     """
     if min(n) < 2:
         raise ValueError("need at least two points in each direction")
@@ -975,7 +974,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
 
 # {{{ generate_warped_rect_mesh
 
-def generate_warped_rect_mesh(dim, order, n):
+def generate_warped_rect_mesh(dim, order, n, *, group_cls=None):
     """Generate a mesh of a warped line/square/cube. Mainly useful for testing
     functionality with curvilinear meshes.
     """
@@ -983,7 +982,7 @@ def generate_warped_rect_mesh(dim, order, n):
     assert dim in [1, 2, 3]
     mesh = generate_regular_rect_mesh(
             a=(-0.5,)*dim, b=(0.5,)*dim,
-            n=(n,)*dim, order=order)
+            n=(n,)*dim, order=order, group_cls=group_cls)
 
     def m(x):
         result = np.empty_like(x)

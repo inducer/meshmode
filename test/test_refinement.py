@@ -26,20 +26,24 @@ from functools import partial
 import numpy as np
 import pytest
 
-from meshmode.array_context import (  # noqa
+from meshmode import _acf               # noqa: F401
+from meshmode.array_context import (    # noqa: F401
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
 from meshmode.dof_array import thaw
-from meshmode.mesh.generation import (  # noqa
+from meshmode.mesh.generation import (  # noqa: F401
         generate_icosahedron, generate_box_mesh, make_curve_mesh, ellipse)
 from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
 from meshmode.mesh.refinement import Refiner, RefinerWithoutAdjacency
 
+from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
     InterpolatoryQuadratureSimplexGroupFactory,
     PolynomialWarpAndBlendGroupFactory,
     PolynomialEquidistantSimplexGroupFactory,
+    LegendreGaussLobattoTensorProductGroupFactory,
+    GaussLegendreTensorProductGroupFactory,
 )
 
 logger = logging.getLogger(__name__)
@@ -155,14 +159,17 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
         check_nodal_adj_against_geometry(mesh)
 
 
-@pytest.mark.parametrize("refiner_cls", [
-    Refiner,
-    RefinerWithoutAdjacency
-    ])
-@pytest.mark.parametrize("group_factory", [
-    InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
-    PolynomialEquidistantSimplexGroupFactory
+@pytest.mark.parametrize(("refiner_cls", "group_factory"), [
+    (Refiner, InterpolatoryQuadratureSimplexGroupFactory),
+    (Refiner, PolynomialWarpAndBlendGroupFactory),
+    (Refiner, PolynomialEquidistantSimplexGroupFactory),
+
+    (RefinerWithoutAdjacency, InterpolatoryQuadratureSimplexGroupFactory),
+    (RefinerWithoutAdjacency, PolynomialWarpAndBlendGroupFactory),
+    (RefinerWithoutAdjacency, PolynomialEquidistantSimplexGroupFactory),
+
+    (RefinerWithoutAdjacency, LegendreGaussLobattoTensorProductGroupFactory),
+    (RefinerWithoutAdjacency, GaussLegendreTensorProductGroupFactory),
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
     ("circle", 1, [20, 30, 40]),
@@ -181,13 +188,18 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
 def test_refinement_connection(
         actx_factory, refiner_cls, group_factory,
         mesh_name, dim, mesh_pars, mesh_order, refine_flags, visualize=False):
+    group_cls = group_factory.mesh_group_class
+    if issubclass(group_cls, TensorProductElementGroup):
+        if mesh_name in ["circle", "blob"]:
+            pytest.skip("mesh does not have tensor product support")
+
     from random import seed
     seed(13)
 
-    # Discretization order
-    order = 5
-
     actx = actx_factory()
+
+    # discretization order
+    order = 5
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
@@ -213,7 +225,8 @@ def test_refinement_connection(
             h = float(mesh_par)
         elif mesh_name == "warp":
             from meshmode.mesh.generation import generate_warped_rect_mesh
-            mesh = generate_warped_rect_mesh(dim, order=mesh_order, n=mesh_par)
+            mesh = generate_warped_rect_mesh(dim, order=mesh_order, n=mesh_par,
+                    group_cls=group_cls)
             h = 1/mesh_par
         else:
             raise ValueError("mesh_name not recognized")
@@ -289,12 +302,17 @@ def test_refinement_connection(
             or eoc_rec.max_error() < 1e-14)
 
 
-@pytest.mark.parametrize("with_adjacency", [True, False])
-def test_uniform_refinement(with_adjacency):
+@pytest.mark.parametrize(("group_cls", "with_adjacency"), [
+    (SimplexElementGroup, True),
+    (SimplexElementGroup, False),
+    (TensorProductElementGroup, False)
+    ])
+def test_uniform_refinement(group_cls, with_adjacency):
     make_mesh = partial(generate_box_mesh, (
             np.linspace(0.0, 1.0, 2),
             np.linspace(0.0, 1.0, 3),
-            np.linspace(0.0, 1.0, 2)), order=4)
+            np.linspace(0.0, 1.0, 2)),
+            order=4, group_cls=group_cls)
     mesh = make_mesh()
 
     from meshmode.mesh.refinement import refine_uniformly

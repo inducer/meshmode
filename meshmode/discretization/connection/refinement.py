@@ -69,8 +69,8 @@ def _build_interpolation_batches_for_group(
     """
     from meshmode.discretization.connection.direct import InterpolationBatch
 
-    num_children = len(record.tesselation.children) \
-                   if record.tesselation else 0
+    num_children = len(record.el_tess_info.children) \
+                   if record.el_tess_info else 0
     from_bins = [[] for i in range(1 + num_children)]
     to_bins = [[] for i in range(1 + num_children)]
     for elt_idx, refinement_result in enumerate(record.element_mapping):
@@ -87,9 +87,11 @@ def _build_interpolation_batches_for_group(
                 to_bin.append(child_idx)
 
     fine_unit_nodes = fine_discr_group.unit_nodes
+    fine_meg = fine_discr_group.mesh_el_group
+
     from meshmode.mesh.refinement.utils import map_unit_nodes_to_children
     mapped_unit_nodes = map_unit_nodes_to_children(
-        fine_unit_nodes, record.tesselation)
+            fine_meg, fine_unit_nodes, record.el_tess_info)
 
     from itertools import chain
     for from_bin, to_bin, unit_nodes in zip(

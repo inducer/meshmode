@@ -25,6 +25,12 @@ import numpy as np
 from typing import Optional, Iterable, Any, Tuple, Union
 from functools import partial
 from loopy import GlobalArg, auto
+from numbers import Number
+import operator as op
+import decorator
+import threading
+from contextlib import contextmanager
+
 
 from pytools import single_valued, memoize_in
 from pytools.obj_array import obj_array_vectorize, obj_array_vectorize_n_args
@@ -48,13 +54,15 @@ __doc__ = """
 
 .. autofunction:: flatten
 .. autofunction:: unflatten
+
+.. autofunction:: array_context_for_pickling
 """
 
 # {{{ DOFArray
 
 
 class DOFArray:
-    """This array type holds degree-of-freedom arrays for use with
+    r"""This array type holds degree-of-freedom arrays for use with
     :class:`~meshmode.discretization.Discretization`,
     with one entry in the :class:`DOFArray` for each
     :class:`~meshmode.discretization.ElementGroupBase`.
@@ -91,6 +99,16 @@ class DOFArray:
 
         :class:`DOFArray` instances support elementwise ``<``, ``>``,
         ``<=``, ``>=``. (:mod:`numpy` object arrays containing arrays do not.)
+
+    .. note::
+
+        :class:`DOFArray` instances can be pickled and unpickled while the context
+        manager :class:`array_context_for_pickling` is active. If, for an array
+        to be pickled, the :class:`~meshmode.array_context.ArrayContext` given to
+        :func:`array_context_for_pickling` does not agree with :attr:`array_context`,
+        the array is frozen and rethawed. If :attr:`array_context` is *None*,
+        the :class:`DOFArray` is :func:`thaw`\ ed into the array context given
+        to :func:`array_context_for_pickling`.
     """
 
     def __init__(self, actx: Optional[ArrayContext], data: Tuple[Any]):
@@ -215,6 +233,40 @@ class DOFArray:
     def __ror__(self, arg): return self._bop(operator.or_, arg, self)  # noqa: E704
 
     # bit shifts unimplemented for now
+
+    # {{{ pickling
+
+    def __getstate__(self):
+        try:
+            actx = _ARRAY_CONTEXT_FOR_PICKLING_TLS.actx
+        except AttributeError:
+            actx = None
+
+        if actx is None:
+            raise RuntimeError("DOFArray instances can only be pickled while "
+                    "array_context_for_pickling is active.")
+
+        ary = self
+
+        if self.array_context is not actx:
+            ary = thaw(actx, freeze(self))
+
+        return [actx.to_numpy(ary_i) for ary_i in ary._data]
+
+    def __setstate__(self, state):
+        try:
+            actx = _ARRAY_CONTEXT_FOR_PICKLING_TLS.actx
+        except AttributeError:
+            actx = None
+
+        if actx is None:
+            raise RuntimeError("DOFArray instances can only be unpickled while "
+                    "array_context_for_pickling is active.")
+
+        self.array_context = actx
+        self._data = tuple([actx.from_numpy(ary_i) for ary_i in state])
+
+    # }}}
 
 # }}}
 
@@ -359,18 +411,9 @@ def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
     return result
 
 
-def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
-        ndofs_per_element_per_group: Optional[Iterable[int]] = None) -> np.ndarray:
-    r"""Convert a 'flat' array returned by :func:`flatten` back to a :class:`DOFArray`.
-
-    Vectorizes over object arrays of :class:`DOFArray`\ s.
-    """
-    if isinstance(ary, np.ndarray):
-        return obj_array_vectorize(
-                lambda subary: unflatten(
-                    actx, discr, subary, ndofs_per_element_per_group),
-                ary)
-
+def _unflatten(
+        actx: ArrayContext, group_shapes: Iterable[Tuple[int, int]], ary: Any
+        ) -> DOFArray:
     @memoize_in(actx, (unflatten, "unflatten_prg"))
     def prg():
         return make_loopy_program(
@@ -382,14 +425,7 @@ def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
             ],
             name="unflatten")
 
-    if ndofs_per_element_per_group is None:
-        ndofs_per_element_per_group = [
-                grp.nunit_dofs for grp in discr.groups]
-
-    group_sizes = [
-            grp.nelements * ndofs_per_element
-            for grp, ndofs_per_element
-            in zip(discr.groups, ndofs_per_element_per_group)]
+    group_sizes = [nel * ndof for nel, ndof in group_shapes]
 
     if ary.size != sum(group_sizes):
         raise ValueError("array has size %d, expected %d"
@@ -401,13 +437,71 @@ def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
         actx.call_loopy(
             prg(),
             grp_start=grp_start, ary=ary,
-            nelements=grp.nelements,
-            ndofs_per_element=ndofs_per_element,
+            nelements=nel,
+            ndofs_per_element=ndof,
             )["result"]
-        for grp_start, grp, ndofs_per_element in zip(
-            group_starts,
-            discr.groups,
-            ndofs_per_element_per_group)))
+        for grp_start, (nel, ndof) in zip(group_starts, group_shapes)))
+
+
+def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
+        ndofs_per_element_per_group: Optional[Iterable[int]] = None) -> DOFArray:
+    r"""Convert a 'flat' array returned by :func:`flatten` back to a
+    :class:`DOFArray`.
+
+    :arg ndofs_per_element: Optional. If given, an iterable of numbers representing
+        the number of degrees of freedom per element, overriding the numbers
+        provided by the element groups in *discr*. May be used (for example)
+        to handle :class:`DOFArray`\ s that have only one DOF per element,
+        representing some per-element quantity.
+
+    Vectorizes over object arrays.
+    """
+    if isinstance(ary, np.ndarray):
+        return obj_array_vectorize(
+                lambda subary: unflatten(
+                    actx, discr, subary, ndofs_per_element_per_group),
+                ary)
+
+    if ndofs_per_element_per_group is None:
+        ndofs_per_element_per_group = [
+                grp.nunit_dofs for grp in discr.groups]
+
+    nel_ndof_per_element_per_group = [
+            (grp.nelements, ndofs_per_element)
+            for grp, ndofs_per_element
+            in zip(discr.groups, ndofs_per_element_per_group)]
+
+    return _unflatten(actx, nel_ndof_per_element_per_group, ary)
+
+# }}}
+
+
+# {{{ pickling
+
+_ARRAY_CONTEXT_FOR_PICKLING_TLS = threading.local()
+
+
+@contextmanager
+def array_context_for_pickling(actx: ArrayContext):
+    r"""For the current thread, set the array context to be used for pickling
+    and unpickling :class:`DOFArray`\ s to *actx*.
+
+    .. versionadded:: 2021.x
+    """
+    try:
+        existing_pickle_actx = _ARRAY_CONTEXT_FOR_PICKLING_TLS.actx
+    except AttributeError:
+        existing_pickle_actx = None
+
+    if existing_pickle_actx is not None:
+        raise RuntimeError("array_context_for_pickling should not be called "
+                "inside the context of its own invocation.")
+
+    _ARRAY_CONTEXT_FOR_PICKLING_TLS.actx = actx
+    try:
+        yield None
+    finally:
+        _ARRAY_CONTEXT_FOR_PICKLING_TLS.actx = None
 
 # }}}
 

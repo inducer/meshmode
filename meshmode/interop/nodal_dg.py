@@ -63,6 +63,9 @@ class NodalDGContext(object):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        # Work around https://github.com/pexpect/pexpect/issues/462
+        self.octave._engine.repl.delayafterterminate = 2
+
         self.octave.exit()
 
     REF_AXES = ["r", "s", "t"]
@@ -113,11 +116,11 @@ class NodalDGContext(object):
             unit_nodes_arrays = self.octave.eval(
                     f"Nodes{dim}D(N)", nout=dim, verbose=False)
 
-            equilat_to_biunit_func_name = (
+            equilat_to_unit_func_name = (
                     "".join(self.AXES[:dim] + ["to"] + self.REF_AXES[:dim]))
 
             unit_nodes_arrays = self.octave.feval(
-                    equilat_to_biunit_func_name, *unit_nodes_arrays,
+                    equilat_to_unit_func_name, *unit_nodes_arrays,
                     nout=dim, verbose=False)
 
             unit_nodes = np.array([a.reshape(-1) for a in unit_nodes_arrays])
