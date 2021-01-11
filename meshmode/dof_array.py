@@ -31,13 +31,8 @@ import decorator
 import threading
 from contextlib import contextmanager
 
-
 from pytools import single_valued, memoize_in
 from pytools.obj_array import obj_array_vectorize, obj_array_vectorize_n_args
-
-from numbers import Number
-import operator as op
-import decorator
 
 from meshmode.array_context import ArrayContext, make_loopy_program, IsDOFArray
 
