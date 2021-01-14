@@ -89,12 +89,31 @@ class DOFArray:
     .. automethod:: __len__
     .. automethod:: __getitem__
 
+    The following methods and attributes are implemented to mimic the
+    functionality of :class:`~numpy.ndarray`\ s. They require the
+    :class:`DOFArray` to be :func:`thaw`\ ed.
+
+    .. attribute:: shape
+    .. attribute:: size
+    .. automethod:: copy
+    .. automethod:: fill
+    .. automethod:: conj
+    .. attribute:: real
+    .. attribute:: imag
+
     This object supports arithmetic, comparisons, and logic operators.
 
     .. note::
 
         :class:`DOFArray` instances support elementwise ``<``, ``>``,
         ``<=``, ``>=``. (:mod:`numpy` object arrays containing arrays do not.)
+
+    Basic in-place operations are also supported.
+
+    .. automethod:: __iadd__
+    .. automethod:: __isub__
+    .. automethod:: __imul__
+    .. automethod:: __itruediv__
 
     .. note::
 
@@ -198,6 +217,7 @@ class DOFArray:
     # {{{ arithmetic
 
     def _ibop(self, f, arg):
+        """Generic in-place binary operator without any broadcast support."""
         if isinstance(arg, DOFArray):
             if len(self) != len(arg):
                 raise ValueError("'DOFArray' objects in binary operator must "
@@ -255,7 +275,12 @@ class DOFArray:
     def __neg__(self): return self._like_me([-self_i for self_i in self._data])  # noqa: E704, E501
     def __abs__(self): return self._like_me([abs(self_i) for self_i in self._data])  # noqa: E704, E501
 
-    def __iadd__(self, arg): return self._ibop(op.iadd, arg)            # noqa: E704
+    def __iadd__(self, arg):
+        """
+        :param arg: can be a :class:`~numbers.Number` or another :class:`DOFArray`.
+        """
+        return self._ibop(op.iadd, arg)
+
     def __isub__(self, arg): return self._ibop(op.isub, arg)            # noqa: E704
     def __imul__(self, arg): return self._ibop(op.imul, arg)            # noqa: E704
     def __itruediv__(self, arg): return self._ibop(op.itruediv, arg)    # noqa: E704
