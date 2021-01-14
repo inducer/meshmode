@@ -250,9 +250,10 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         top, tag_induced_boundary=cells_to_use is not None)
     boundary_tag_to_index = {bdy_tag: i for i, bdy_tag in enumerate(bdy_tags)}
     marker_to_neighbor_value = {}
+    from firedrake.mesh import unmarked as fd_unmarked
     from meshmode.mesh import _boundary_tag_bit
     # None for no marker
-    marker_to_neighbor_value[None] = \
+    marker_to_neighbor_value[fd_unmarked] = \
         -(_boundary_tag_bit(bdy_tags, boundary_tag_to_index, BTAG_REALLY_ALL)
           | _boundary_tag_bit(bdy_tags, boundary_tag_to_index, BTAG_ALL))
     for marker in top.exterior_facets.unique_markers:
