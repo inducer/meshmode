@@ -373,6 +373,8 @@ class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
         if ord is None:
             ord = 2
 
+        from numbers import Number
+
         # Handling DOFArrays here is not beautiful, but it sure does avoid
         # downstream headaches.
         from meshmode.dof_array import DOFArray
@@ -381,11 +383,12 @@ class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
             return la.norm(np.array([
                 self.norm(_flatten_grp_array(grp_ary), ord)
                 for grp_ary in array]), ord)
+        elif isinstance(array, Number):
+            return abs(array)
 
         if array.size == 0:
             return 0
 
-        from numbers import Number
         if ord == np.inf:
             return self._array_context.np.max(abs(array))
         elif isinstance(ord, Number) and ord > 0:
