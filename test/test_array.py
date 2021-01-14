@@ -111,6 +111,11 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
             # FIXME: Two outputs
             #(divmod, 2, False),
 
+            (operator.iadd, 2, False),
+            (operator.isub, 2, False),
+            (operator.imul, 2, False),
+            (operator.itruediv, 2, False),
+
             (operator.and_, 2, True),
             (operator.xor, 2, True),
             (operator.or_, 2, True),
@@ -133,6 +138,15 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
             if sum(is_array_flags) == 0:
                 # all scalars, no need to test
                 continue
+
+            if is_array_flags[0] == 0 and op_func in [
+                    operator.iadd, operator.isub,
+                    operator.imul, operator.itruediv,
+                    operator.ipow,
+                    ]:
+                # can't do in place operations with a scalar lhs
+                continue
+
             args = [
                     (0.5+np.random.rand(discr.ndofs)
                         if not use_integers else
@@ -143,7 +157,16 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
                         if not use_integers
                         else randrange(3, 200))
                     for is_array_flag in is_array_flags]
-            ref_result = op_func(*args)
+
+            # {{{ get reference numpy result
+
+            # make a copy for the in place operators
+            ref_args = [
+                    arg.copy() if isinstance(arg, np.ndarray) else arg
+                    for arg in args]
+            ref_result = op_func(*ref_args)
+
+            # }}}
 
             # {{{ test DOFArrays
 
@@ -171,6 +194,10 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
                     operator.eq, operator.ne,
                     operator.le, operator.lt,
                     operator.ge, operator.gt,
+
+                    operator.iadd, operator.isub,
+                    operator.imul, operator.itruediv,
+                    operator.ipow,
 
                     # All Python objects are real-valued, right?
                     get_imag,

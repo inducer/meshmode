@@ -160,12 +160,58 @@ class DOFArray:
 
     # }}}
 
+    # {{{ ndarray interface
+
+    def _like_me(self, data):
+        return DOFArray(self.array_context, tuple(data))
+
     @property
     def shape(self):
         return (len(self),)
 
-    def _like_me(self, data):
-        return DOFArray(self.array_context, tuple(data))
+    @property
+    def size(self):
+        return len(self)
+
+    def copy(self):
+        return self._like_me([subary.copy() for subary in self])
+
+    def fill(self, value):
+        for subary in self:
+            subary.fill(value)
+
+    def conj(self):
+        return self._like_me([subary.conj() for subary in self])
+
+    conjugate = conj
+
+    @property
+    def real(self):
+        return self._like_me([subary.real for subary in self])
+
+    @property
+    def imag(self):
+        return self._like_me([subary.imag for subary in self])
+
+    # }}}
+
+    # {{{ arithmetic
+
+    def _ibop(self, f, arg):
+        if isinstance(arg, DOFArray):
+            if len(self) != len(arg):
+                raise ValueError("'DOFArray' objects in binary operator must "
+                        "have the same length: {len(self)} != {len(arg)}")
+
+            for i, subary in enumerate(self):
+                f(subary, arg[i])
+        elif isinstance(arg, Number):
+            for subary in self:
+                f(subary, arg)
+        else:
+            raise NotImplementedError(f"operation for type {type(arg).__name__}")
+
+        return self
 
     def _bop(self, f, op1, op2):
         """Broadcasting logic for a generic binary operator."""
@@ -176,9 +222,9 @@ class DOFArray:
             return obj_array_vectorize(lambda op: self._bop(f, op1, op),
                 op2.astype(np.object, copy=False))
         if isinstance(op1, DOFArray) and isinstance(op2, DOFArray):
-            if len(op1._data) != len(op2._data):
+            if len(op1) != len(op2):
                 raise ValueError("DOFArray objects in binary operator must have "
-                        f"same length, got {len(op1._data)} and {len(op2._data)}")
+                        f"same length, got {len(op1)} and {len(op2)}")
             return self._like_me([
                 f(op1_i, op2_i)
                 for op1_i, op2_i in zip(op1._data, op2._data)])
@@ -187,7 +233,8 @@ class DOFArray:
         elif isinstance(op1, Number) and isinstance(op2, DOFArray):
             return self._like_me([f(op1, op2_i) for op2_i in op2._data])
         else:
-            return NotImplemented
+            raise NotImplementedError("operation for types "
+                f"{type(op1).__name__} and {type(op2).__name__}")
 
     def __add__(self, arg): return self._bop(op.add, self, arg)  # noqa: E704
     def __radd__(self, arg): return self._bop(op.add, arg, self)  # noqa: E704
@@ -208,11 +255,14 @@ class DOFArray:
     def __neg__(self): return self._like_me([-self_i for self_i in self._data])  # noqa: E704, E501
     def __abs__(self): return self._like_me([abs(self_i) for self_i in self._data])  # noqa: E704, E501
 
-    def conj(self): return self._like_me([self_i.conj() for self_i in self._data])  # noqa: E704, E501
-    @property
-    def real(self): return self._like_me([self_i.real for self_i in self._data])  # noqa: E704, E501
-    @property
-    def imag(self): return self._like_me([self_i.imag for self_i in self._data])  # noqa: E704, E501
+    def __iadd__(self, arg): return self._ibop(op.iadd, arg)            # noqa: E704
+    def __isub__(self, arg): return self._ibop(op.isub, arg)            # noqa: E704
+    def __imul__(self, arg): return self._ibop(op.imul, arg)            # noqa: E704
+    def __itruediv__(self, arg): return self._ibop(op.itruediv, arg)    # noqa: E704
+
+    # }}}
+
+    # {{{ comparison
 
     def __eq__(self, arg): return self._bop(op.eq, self, arg)  # noqa: E704
     def __ne__(self, arg): return self._bop(op.ne, self, arg)  # noqa: E704
@@ -221,12 +271,18 @@ class DOFArray:
     def __le__(self, arg): return self._bop(op.le, self, arg)  # noqa: E704
     def __ge__(self, arg): return self._bop(op.ge, self, arg)  # noqa: E704
 
+    # }}}
+
+    # {{{ logical
+
     def __and__(self, arg): return self._bop(operator.and_, self, arg)  # noqa: E704
     def __xor__(self, arg): return self._bop(operator.xor, self, arg)  # noqa: E704
     def __or__(self, arg): return self._bop(operator.or_, self, arg)  # noqa: E704
     def __rand__(self, arg): return self._bop(operator.and_, arg, self)  # noqa: E704
     def __rxor__(self, arg): return self._bop(operator.xor, arg, self)  # noqa: E704
     def __ror__(self, arg): return self._bop(operator.or_, arg, self)  # noqa: E704
+
+    # }}}
 
     # bit shifts unimplemented for now
 
