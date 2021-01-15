@@ -108,7 +108,9 @@ class DOFArray:
         :class:`DOFArray` instances support elementwise ``<``, ``>``,
         ``<=``, ``>=``. (:mod:`numpy` object arrays containing arrays do not.)
 
-    Basic in-place operations are also supported.
+    Basic in-place operations are also supported. Note that not all array types provided
+    by :class:`meshmode.array_context.ArrayContext` implementations support
+    in-place operations. Those based on lazy evaluation are a salient example.
 
     .. automethod:: __iadd__
     .. automethod:: __isub__
