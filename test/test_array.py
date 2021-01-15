@@ -108,6 +108,8 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
             # FIXME pyopencl.Array doesn't do mod.
             #(operator.mod, 2, True),
             #(operator.mod, 2, False),
+            #(operator.imod, 2, True),
+            #(operator.imod, 2, False),
             # FIXME: Two outputs
             #(divmod, 2, False),
 
@@ -120,7 +122,10 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
             (operator.xor, 2, True),
             (operator.or_, 2, True),
 
-            (operator.le, 2, False),
+            (operator.iand, 2, True),
+            (operator.ixor, 2, True),
+            (operator.ior, 2, True),
+
             (operator.ge, 2, False),
             (operator.lt, 2, False),
             (operator.gt, 2, False),
@@ -142,7 +147,7 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
             if is_array_flags[0] == 0 and op_func in [
                     operator.iadd, operator.isub,
                     operator.imul, operator.itruediv,
-                    operator.ipow,
+                    operator.iand, operator.ixor, operator.ior,
                     ]:
                 # can't do in place operations with a scalar lhs
                 continue
@@ -197,7 +202,7 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
 
                     operator.iadd, operator.isub,
                     operator.imul, operator.itruediv,
-                    operator.ipow,
+                    operator.iand, operator.ixor, operator.ior,
 
                     # All Python objects are real-valued, right?
                     get_imag,

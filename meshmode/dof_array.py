@@ -114,6 +114,9 @@ class DOFArray:
     .. automethod:: __isub__
     .. automethod:: __imul__
     .. automethod:: __itruediv__
+    .. automethod:: __iand__
+    .. automethod:: __ixor__
+    .. automethod:: __ior__
 
     .. note::
 
@@ -284,6 +287,7 @@ class DOFArray:
     def __isub__(self, arg): return self._ibop(op.isub, arg)            # noqa: E704
     def __imul__(self, arg): return self._ibop(op.imul, arg)            # noqa: E704
     def __itruediv__(self, arg): return self._ibop(op.itruediv, arg)    # noqa: E704
+    def __imod__(self, arg): return self._ibop(op.imod, arg)            # noqa: E704
 
     # }}}
 
@@ -306,6 +310,10 @@ class DOFArray:
     def __rand__(self, arg): return self._bop(operator.and_, arg, self)  # noqa: E704
     def __rxor__(self, arg): return self._bop(operator.xor, arg, self)  # noqa: E704
     def __ror__(self, arg): return self._bop(operator.or_, arg, self)  # noqa: E704
+
+    def __iand__(self, arg): return self._ibop(op.iand, arg)        # noqa: E704
+    def __ixor__(self, arg): return self._ibop(op.ixor, arg)        # noqa: E704
+    def __ior__(self, arg): return self._ibop(op.ior, arg)          # noqa: E704
 
     # }}}
 
