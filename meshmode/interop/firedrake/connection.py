@@ -288,7 +288,7 @@ class FiredrakeConnection:
         if ufl_elt.family() != self._ufl_element.family():
             raise ValueError(f"'{function_name}.function_space().ufl_element()"
                              f".family()' must be {self._ufl_element.family()}"
-                             f", not '{type(ufl_elt.family())}'")
+                             f", not '{ufl_elt.family()}'")
         if ufl_elt.degree() != self._ufl_element.degree():
             raise ValueError(f"'{function_name}.function_space().ufl_element()"
                              f".degree()' must be {self._ufl_element.degree()}"
