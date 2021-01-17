@@ -361,7 +361,8 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
             ext_elements[to_keep])
         ext_element_faces = ext_element_faces[to_keep]
         ext_neighbor_faces = ext_neighbor_faces[to_keep]
-        exterior_facet_markers = exterior_facet_markers[to_keep]
+        if exterior_facet_markers is not None:
+            exterior_facet_markers = exterior_facet_markers[to_keep]
 
     # tag the boundary, making sure to record custom tags
     # (firedrake "markers") if present
