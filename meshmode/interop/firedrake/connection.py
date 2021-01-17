@@ -129,6 +129,8 @@ class FiredrakeConnection:
          obtain firedrake unit dofs on the meshmode reference cell)
 
     .. automethod:: __init__
+    .. automethod:: from_meshmode
+    .. automethod:: from_firedrake
     """
     def __init__(self, discr, fdrake_fspace, mm2fd_node_mapping, group_nr=None):
         """
