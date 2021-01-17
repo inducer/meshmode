@@ -482,7 +482,7 @@ class FiredrakeConnection:
               representing a field of shape *mm_field.shape*
               on :attr:`discr`
 
-            See :class:`~meshmode.dof.DOFArray` for further requirements.
+            See :class:`~meshmode.dof_array.DOFArray` for further requirements.
             The :attr:`group_nr` entry of each
             :class:`~meshmode.dof_array.DOFArray`
             must be of shape *(nelements, nunit_dofs)* and
