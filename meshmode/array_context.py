@@ -483,17 +483,6 @@ class PyOpenCLArrayContext(ArrayContext):
     def call_loopy(self, program, **kwargs):
         program = self.transform_loopy_program(program)
 
-        # accommodate loopy with and without kernel callables
-        try:
-            options = program.options
-        except AttributeError:
-            options = program.root_kernel.options
-        if not (options.return_dict and options.no_numpy):
-            raise ValueError("Loopy program passed to call_loopy must "
-                    "have return_dict and no_numpy options set. "
-                    "Did you use meshmode.array_context.make_loopy_program "
-                    "to create this program?")
-
         evt, result = program(self.queue, **kwargs, allocator=self.allocator)
 
         if self._wait_event_queue_length is not False:
@@ -517,6 +506,17 @@ class PyOpenCLArrayContext(ArrayContext):
 
     @memoize_method
     def transform_loopy_program(self, program):
+        # accommodate loopy with and without kernel callables
+        try:
+            options = program.options
+        except AttributeError:
+            options = program.root_kernel.options
+        if not (options.return_dict and options.no_numpy):
+            raise ValueError("Loopy program passed to call_loopy must "
+                    "have return_dict and no_numpy options set. "
+                    "Did you use meshmode.array_context.make_loopy_program "
+                    "to create this program?")
+
         # FIXME: This could be much smarter.
         import loopy as lp
         # accommodate loopy with and without kernel callables
