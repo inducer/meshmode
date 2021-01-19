@@ -582,7 +582,8 @@ class PytatoArrayContext(ArrayContext):
                     "Did you use meshmode.array_context.make_loopy_program "
                     "to create this program?")
 
-        return pt.call_loopy(self.ns, program.copy(entrypoints=frozenset()),
+        from pytato.loopy import call_loopy
+        return call_loopy(self.ns, program.copy(entrypoints=frozenset()),
                              bindings, entrypoint)
 
     def freeze(self, array):
