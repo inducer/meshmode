@@ -54,8 +54,10 @@ def connection_is_permutation(actx, conn):
             point_pick_indices = conn._resample_point_pick_indices(
                     actx, i_tgrp, i_batch)
 
-            assert point_pick_indices is not None
-
+            if point_pick_indices is None:
+                return False
+                
+    return True
 
 @pytest.mark.parametrize("group_factory", [
         PolynomialWarpAndBlendGroupFactory,
