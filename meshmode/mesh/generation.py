@@ -986,13 +986,17 @@ def generate_warped_rect_mesh(dim, order, n, *, group_cls=None):
 
     def m(x):
         result = np.empty_like(x)
-        result[0] = (
-                1.5*x[0] + np.cos(x[0])
-                + 0.1*np.sin(10*x[1]))
-        result[1] = (
-                0.05*np.cos(10*x[0])
-                + 1.3*x[1] + np.sin(x[1]))
-        if len(x) == 3:
+        if len(x) >= 2:
+            result[0] = (
+                    1.5*x[0] + np.cos(x[0])
+                    + 0.1*np.sin(10*x[1]))
+            result[1] = (
+                    0.05*np.cos(10*x[0])
+                    + 1.3*x[1] + np.sin(x[1]))
+        else:
+            result[0] = 1.5*x[0] + np.cos(x[0])
+
+        if len(x) >= 3:
             result[2] = x[2] + np.sin(x[0] / 2) / 2
         return result
 
