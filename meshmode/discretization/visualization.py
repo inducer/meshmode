@@ -139,16 +139,18 @@ def preprocess_fields(names_and_fields):
     """Gets arrays out of dataclasses and removes empty arrays."""
     from dataclasses import fields, is_dataclass
 
+    def is_empty(field):
+        return field is None or (isinstance(field, np.ndarray)
+            and field.dtype.char == "O" and len(field) == 0)
+
     result = []
     for name, field in names_and_fields:
         if is_dataclass(field):
-            result.extend([
-                (f"{name}_{dcf.name}", value)
-                for dcf in fields(field)
-                for value in [getattr(field, dcf.name)]
-                if value is not None
-                ])
-        elif field is not None:
+            for attr in fields(field):
+                value = getattr(field, attr.name)
+                if not is_empty(value):
+                    result.append((f"{name}_{attr.name}", value))
+        elif not is_empty(field):
             result.append((name, field))
 
     return result
