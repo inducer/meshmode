@@ -24,7 +24,7 @@ THE SOFTWARE.
 import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
-from pytools import memoize_method
+from pytools import memoize_method, UniqueNameGenerator
 from pytools.obj_array import obj_array_vectorized_n_args
 import operator
 from functools import partialmethod
@@ -119,6 +119,10 @@ class ArrayContext:
 
     def __init__(self):
         self.np = self._get_fake_numpy_namespace()
+        self.name_generator = UniqueNameGenerator()
+
+    def generate_name(self, based_on):
+        return self.name_generator(based_on=based_on)
 
     def _get_fake_numpy_namespace(self):
         return _BaseFakeNumpyNamespace(self)
@@ -336,7 +340,9 @@ class PyOpenCLArrayContext(ArrayContext):
         return cla.zeros(self.queue, shape=shape, dtype=dtype,
                 allocator=self.allocator)
 
-    def from_numpy(self, np_array: np.ndarray):
+    def from_numpy(self, np_array: np.ndarray, shape=None):
+        if shape is not None:
+            assert np_array.shape == shape
         import pyopencl.array as cla
         return cla.to_device(self.queue, np_array, allocator=self.allocator)
 
@@ -467,28 +473,10 @@ class _PytatoFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def ns(self):
         return self._array_context.ns
 
-    def _math_func(self, op_name, x, res_dtype):
-        from pymbolic import var
-        from pymbolic.primitives import Subscript, Call
-        import pytato as pt
-
-        indices = tuple(var(f"_{i}") for i in range(len(x.shape)))
-        expr = Call(var(op_name), (Subscript(var("_in0"), indices), ))
-
-        return pt.IndexLambda(self.ns, expr, shape=x.shape,
-                dtype=res_dtype, bindings={"_in0": x})
-
     @obj_array_vectorized_n_args
     def exp(self, x):
-        if x.dtype.kind == "i":
-            res_dtype = np.float64
-        elif x.dtype.kind == "f":
-            res_dtype = x.dtype
-        else:
-            raise NotImplementedError
-
-        y = self._math_func("pytato.c99.exp", x, res_dtype)
-        return y
+        import pytato as pt
+        return pt.exp(x)
 
     @obj_array_vectorized_n_args
     def reshape(self, a, newshape):
@@ -544,47 +532,25 @@ class PytatoArrayContext(ArrayContext):
 
     def zeros(self, shape, dtype):
         import pytato as pt
-        return pt.IndexLambda(self.ns, 0, shape=shape, dtype=dtype)
+        return pt.zeros(self.ns, shape, dtype)
 
-    def from_numpy(self, np_array: np.ndarray):
+    def from_numpy(self, np_array: np.ndarray, shape=None):
+        if shape is not None and all(isinstance(dim, int) for dim in shape):
+            assert np_array.shape == shape
+
         import pytato as pt
         import pyopencl.array as cla
         cl_array = cla.to_device(self.queue, np_array)
-        return pt.make_data_wrapper(self.ns, cl_array)
+        return pt.make_data_wrapper(self.ns, cl_array, shape=shape)
 
     def to_numpy(self, array):
         cl_array = self.freeze(array).data
         return cl_array.get(queue=self.queue)
 
     def call_loopy(self, program, **kwargs):
-        # FIXME:always happens eagerly
-        import pytato as pt
-        from numbers import Number
-        bindings = {}
-
-        for arg_name, arg in kwargs.items():
-            if isinstance(arg, pt.array.Array):
-                bindings[arg_name] = arg
-            elif isinstance(arg, Number):
-                program = lp.fix_parameters(program, **{arg_name: arg})
-                # bindings[arg_name] = arg
-            else:
-                raise NotImplementedError(f"Not implemented for {arg_name} of"
-                        f" type {type(arg)}")
-
-        # FIXME: Take an entrypoint from the user
         entrypoint, = set(program.callables_table)
-
-        options = program[entrypoint].options
-        if not (options.return_dict and options.no_numpy):
-            raise ValueError("Loopy program passed to call_loopy must "
-                    "have return_dict and no_numpy options set. "
-                    "Did you use meshmode.array_context.make_loopy_program "
-                    "to create this program?")
-
         from pytato.loopy import call_loopy
-        return call_loopy(self.ns, program.copy(entrypoints=frozenset()),
-                             bindings, entrypoint)
+        return call_loopy(self.ns, program, kwargs, entrypoint)
 
     def freeze(self, array):
         import pytato as pt
@@ -595,7 +561,7 @@ class PytatoArrayContext(ArrayContext):
         prg = pt.generate_loopy(array, target=pt.PyOpenCLTarget(self.queue))
         evt, (cl_array,) = prg()
 
-        return pt.make_data_wrapper(self.ns, cl_array)
+        return pt.make_data_wrapper(self.ns, cl_array, shape=array.shape)
 
     def thaw(self, array):
         import pytato as pt

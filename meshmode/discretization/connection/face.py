@@ -362,7 +362,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
 
     from meshmode.discretization import Discretization
     bdry_discr = Discretization(
-            actx, bdry_mesh, group_factory)
+            actx, bdry_mesh, group_factory, id="bdry")
 
     connection = _build_boundary_connection(
             actx, discr, bdry_discr, connection_data,

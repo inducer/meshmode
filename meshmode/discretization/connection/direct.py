@@ -25,7 +25,9 @@ import numpy as np
 
 import loopy as lp
 from pytools import memoize_in, keyed_memoize_method
-from meshmode.array_context import ArrayContext, make_loopy_program
+from meshmode.discretization import Discretization, ElementGroupBase
+from meshmode.array_context import (ArrayContext, make_loopy_program,
+        PyOpenCLArrayContext, PytatoArrayContext)
 
 
 # {{{ interpolation batch
@@ -87,7 +89,7 @@ class InterpolationBatch:
 
     @property
     def nelements(self):
-        return len(self.from_element_indices)
+        return self.from_element_indices.shape[0]
 
 # }}}
 
@@ -251,6 +253,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
     def __call__(self, ary):
         from meshmode.dof_array import DOFArray
+        from meshmode.discretization import get_nelements_symbol_for_grp
         if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")
 
@@ -305,9 +308,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                             shape="nelements_result, n_to_nodes"),
                         lp.GlobalArg("ary", None,
                             shape="nelements_vec, n_from_nodes"),
-                        lp.ValueArg("nelements_result", np.int32),
-                        lp.ValueArg("nelements_vec", np.int32),
-                        lp.ValueArg("n_from_nodes", np.int32),
+                        lp.ValueArg("nelements_result", np.int),
+                        lp.ValueArg("nelements_vec", np.int),
+                        lp.ValueArg("n_from_nodes", np.int),
                         "...",
                     ],
                     name="resample_by_mat")
@@ -353,9 +356,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         shape="nelements_result, n_to_nodes"),
                     lp.GlobalArg("ary", None,
                         shape="nelements_vec, n_from_nodes"),
-                    lp.ValueArg("nelements_result", np.int32),
-                    lp.ValueArg("nelements_vec", np.int32),
-                    lp.ValueArg("n_from_nodes", np.int32),
+                    lp.ValueArg("nelements_result", np.int),
+                    lp.ValueArg("nelements_vec", np.int),
+                    lp.ValueArg("n_from_nodes", np.int),
                     "...",
                     ],
                 name="resample_by_picking")
@@ -393,7 +396,14 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     kwargs[f"pick_list_{i_batch}"] = point_pick_indices
                     knlname = "resample_by_picking"
 
+                knl = lp.fix_parameters(knl, n_from_nodes=ary[
+                        batch.from_group_index].shape[-1],
+                        n_to_nodes=tgrp.nunit_dofs)
+
                 # {{{ enforce different namespaces for the kernels
+
+                # necessary to avoid using same induction variable for
+                # loops across batches
 
                 for iname in sorted(knl[knlname].all_inames()):
                     knl = lp.rename_iname(knl, iname, f"{iname}_{i_batch}")
@@ -405,8 +415,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     f"to_element_indices_{i_batch}")
                 knl = lp.rename_argument(knl, "nelements",
                     f"nelements_{i_batch}")
-                knl = lp.rename_argument(knl, "n_from_nodes",
-                    f"n_from_nodes_{i_batch}")
                 knl = lp.rename_argument(knl, "nelements_vec",
                     f"nelements_vec_{i_batch}")
 
@@ -417,11 +425,12 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     batch.from_element_indices)
                 kwargs[f"to_element_indices_{i_batch}"] = (
                     batch.to_element_indices)
-                kwargs[f"nelements_{i_batch}"] = batch.to_element_indices.size
-                kwargs[f"nelements_vec_{i_batch}"] = ary[
-                        batch.from_group_index].shape[0]
-                kwargs[f"n_from_nodes_{i_batch}"] = ary[
-                        batch.from_group_index].shape[-1]
+                kwargs[f"nelements_{i_batch}"] = get_nelements_symbol_for_batch(
+                        self.to_discr, self.from_discr, tgrp, i_batch, batch, actx)
+
+                kwargs[f"nelements_vec_{i_batch}"] = get_nelements_symbol_for_grp(
+                        self.from_discr,
+                        self.from_discr.groups[batch.from_group_index], actx)
 
                 kernels.append(knl)
 
@@ -432,8 +441,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                                       force=True)
 
             result_dict = actx.call_loopy(fused_knl,
-                    nelements_result=tgrp.nelements,
-                    n_to_nodes=tgrp.nunit_dofs,
+                    nelements_result=get_nelements_symbol_for_grp(
+                        self.to_discr, tgrp, actx),
                     **kwargs)
 
             group_idx_to_result.append(result_dict["result"])
@@ -523,5 +532,25 @@ def make_direct_full_resample_matrix(actx, conn):
     return result
 
 # }}}
+
+
+def get_nelements_symbol_for_batch(to_discr: Discretization, from_discr:
+        Discretization, to_group: ElementGroupBase, ibatch: int,
+        batch: InterpolationBatch, actx: ArrayContext):
+    if isinstance(actx, PyOpenCLArrayContext):
+        return batch.nelements
+    elif isinstance(actx, PytatoArrayContext):
+        symbol_name = (
+                f"nelements_{to_discr.id}_{from_discr.id}_{to_group.index}_{ibatch}")
+        if symbol_name not in actx.ns:
+            # FIXME: probably needs to be provided via a method in ArrayContext
+            import pytato as pt
+            pt.make_data_wrapper(actx.ns, np.array(batch.nelements), symbol_name)
+
+        assert actx.ns[symbol_name].data == np.array(batch.nelements)
+
+        return symbol_name
+    else:
+        raise NotImplementedError()
 
 # vim: foldmethod=marker

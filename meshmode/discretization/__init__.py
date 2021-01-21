@@ -24,7 +24,8 @@ import numpy as np
 
 from pytools import memoize_in, memoize_method
 from pytools.obj_array import make_obj_array
-from meshmode.array_context import ArrayContext, make_loopy_program
+from meshmode.array_context import (ArrayContext, make_loopy_program,
+        PyOpenCLArrayContext, PytatoArrayContext)
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
@@ -174,6 +175,11 @@ class Discretization:
 
     .. attribute :: groups
 
+    .. attribute :: id
+
+        An instance of :class:`str` denoting the id. Discretizations built on the
+        same mesh must have unique ids.
+
     .. automethod:: empty
     .. automethod:: zeros
     .. automethod:: empty_like
@@ -187,7 +193,7 @@ class Discretization:
     """
 
     def __init__(self, actx: ArrayContext, mesh, group_factory,
-            real_dtype=np.float64):
+            real_dtype=np.float64, id="discr"):
         """
         :param actx: A :class:`ArrayContext` used to perform computation needed
             during initial set-up of the mesh.
@@ -215,6 +221,7 @@ class Discretization:
                 np.float64: np.complex128
                 }[self.real_dtype.type])
 
+        self.id = actx.generate_name(id)
         self._setup_actx = actx
 
     @property
@@ -238,7 +245,8 @@ class Discretization:
             dtype = np.dtype(dtype)
 
         return _DOFArray.from_list(actx, [
-            creation_func(shape=(grp.nelements, grp.nunit_dofs), dtype=dtype)
+            creation_func(shape=(get_nelements_symbol_for_grp(self, grp, actx),
+                grp.nunit_dofs), dtype=dtype)
             for grp in self.groups])
 
     def empty(self, actx: ArrayContext, dtype=None):
@@ -296,13 +304,14 @@ class Discretization:
                     mat = np.dot(next_mat, mat)
 
             return mat
+        import loopy as lp
 
         return _DOFArray.from_list(actx, [
                 actx.call_loopy(
-                    prg(), diff_mat=actx.from_numpy(get_mat(grp)),
+                    lp.fix_parameters(prg(), nunit_dofs=grp.nunit_dofs),
+                    diff_mat=actx.from_numpy(get_mat(grp)),
                     vec=vec[grp.index],
-                    nunit_dofs=grp.nunit_dofs,
-                    nelements=grp.nelements,
+                    nelements=get_nelements_symbol_for_grp(self, grp, actx),
                     )["result"]
                 for grp in self.groups])
 
@@ -334,6 +343,7 @@ class Discretization:
         :returns: object array of shape ``(ambient_dim,)`` containing
             :class:`~meshmode.dof_array.DOFArray`\ s of node coordinates.
         """
+        import loopy as lp
 
         actx = self._setup_actx
 
@@ -354,15 +364,36 @@ class Discretization:
             _DOFArray.from_list(None, [
                 actx.freeze(
                     actx.call_loopy(
-                        prg(),
+                        lp.fix_parameters(prg(),
+                            ndiscr_nodes=grp.nunit_dofs,
+                            nmesh_nodes=grp.mesh_el_group.nunit_nodes),
                         resampling_mat=actx.from_numpy(
                             grp.from_mesh_interp_matrix()),
-                        nodes=actx.from_numpy(grp.mesh_el_group.nodes[iaxis]),
-                        ndiscr_nodes=grp.nunit_dofs,
-                        nelements=grp.nelements,
-                        nmesh_nodes=grp.mesh_el_group.nunit_nodes,
+                        nodes=actx.from_numpy(grp.mesh_el_group.nodes[iaxis],
+                            shape=(get_nelements_symbol_for_grp(self, grp, actx),
+                                   grp.mesh_el_group.nunit_nodes)),
+                        nelements=get_nelements_symbol_for_grp(self, grp, actx),
                         )["result"])
                 for grp in self.groups])
             for iaxis in range(self.ambient_dim)])
+
+
+def get_nelements_symbol_for_grp(discr: Discretization,
+        grp: ElementGroupBase, actx: ArrayContext):
+    if isinstance(actx, PyOpenCLArrayContext):
+        return grp.nelements
+    elif isinstance(actx, PytatoArrayContext):
+        symbol_name = f"nelements_{discr.id}_{grp.index}"
+        if symbol_name not in actx.ns:
+            # FIXME: probably needs to be provided via a method in ArrayContext
+            import pytato as pt
+            pt.make_data_wrapper(actx.ns, np.array(grp.nelements), symbol_name)
+
+        assert actx.ns[symbol_name].data == np.array(grp.nelements)
+
+        return symbol_name
+    else:
+        raise NotImplementedError()
+
 
 # vim: fdm=marker
