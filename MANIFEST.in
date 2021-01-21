@@ -1,0 +1,20 @@
+include doc/*.rst
+include doc/Makefile
+include doc/*.py
+include doc/conf.py
+include doc/images/*.tex
+include doc/images/*.png
+include doc/images/Makefile
+
+include examples/*.py
+
+include test/*.step
+include test/blob2d*.msh
+include test/annulus.msh
+include test/hybrid-cube.msh
+include test/cubed-cube.msh
+include test/*.sh
+include test/ref-*.pvtu
+
+include README.rst
+include LICENSE
