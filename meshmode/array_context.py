@@ -23,6 +23,7 @@ THE SOFTWARE.
 
 import numpy as np
 import loopy as lp
+from typing import Callable, Any
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method
 from pytools.obj_array import obj_array_vectorized_n_args
@@ -43,7 +44,7 @@ def make_loopy_program(domains, statements, kernel_data=["..."],
     """Return a :class:`loopy.LoopKernel` suitable for use with
     :meth:`ArrayContext.call_loopy`.
     """
-    return lp.make_function(
+    return lp.make_kernel(
             domains,
             statements,
             kernel_data=kernel_data,
@@ -224,6 +225,19 @@ class ArrayContext:
         """
         raise NotImplementedError
 
+    def compile(self, f: Callable[[Any], Any],
+            input_like: np.array) -> Callable[[Any], Any]:
+        """
+        Returns a potentially more efficient implementation of the callable *f*.
+        *f* is a side-effect free function that accepts a numpy object array
+        of :class:`meshmode.dof_array.DOFArray`s shaped as *input_like* and returns
+        a numpy object array of :class:`meshmode.dof_aray.DOFArray`s shaped as
+        *output_like*.
+
+        :arg output_like: if output_like is *None*. Then defaulted to *input_like*.
+        """
+        raise NotImplementedError
+
 # }}}
 
 
@@ -350,7 +364,11 @@ class PyOpenCLArrayContext(ArrayContext):
         try:
             options = program.options
         except AttributeError:
-            options = program.root_kernel.options
+            try:
+                options = program.root_kernel.options
+            except AttributeError:
+                entrypoint, = program.entrypoints
+                options = program[entrypoint].options
         if not (options.return_dict and options.no_numpy):
             raise ValueError("Loopy program passed to call_loopy must "
                     "have return_dict and no_numpy options set. "
@@ -360,8 +378,12 @@ class PyOpenCLArrayContext(ArrayContext):
         evt, result = program(self.queue, **kwargs, allocator=self.allocator)
 
         if self._wait_event_queue_length is not False:
+            try:
+                name = program.name
+            except AttributeError:
+                name, = program.entrypoints
             wait_event_queue = self._kernel_name_to_wait_event_queue.setdefault(
-                    program.name, [])
+                    name, [])
 
             wait_event_queue.append(evt)
             if len(wait_event_queue) > self._wait_event_queue_length:
@@ -386,7 +408,11 @@ class PyOpenCLArrayContext(ArrayContext):
         try:
             all_inames = program.all_inames()
         except AttributeError:
-            all_inames = program.root_kernel.all_inames()
+            try:
+                all_inames = program.root_kernel.all_inames()
+            except AttributeError:
+                entrypoint, = program.entrypoints
+                all_inames = program[entrypoint].all_inames()
 
         inner_iname = None
         if "iel" not in all_inames and "i0" in all_inames:
@@ -407,6 +433,10 @@ class PyOpenCLArrayContext(ArrayContext):
         if inner_iname is not None:
             program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
         return lp.tag_inames(program, {outer_iname: "g.0"})
+
+    def compile(self, f: Callable[[Any], Any],
+            input_like: np.array) -> Callable[[Any], Any]:
+        return f
 
 # }}}
 
@@ -483,6 +513,46 @@ class _PytatoFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         return pt.concatenate(arrays, axis)
 
 
+class PytatoCompiledOperator:
+    def __init__(self, actx, pytato_program, input_spec, output_spec):
+        self.actx = actx
+        self.pytato_program = pytato_program
+        self.input_spec = input_spec
+        self.output_spec = output_spec
+
+    def __call__(self, fields):
+        import pytato as pt
+        import pyopencl.array as cla
+        from meshmode.dof_array import DOFArray
+        from pytools.obj_array import flat_obj_array
+
+        def from_obj_array_to_input_dict(array):
+            input_dict = {}
+            for i in range(len(self.input_spec)):
+                for j in range(self.input_spec[i]):
+                    ary = array[i][j]
+                    if isinstance(ary, pt.array.DataWrapper):
+                        input_dict[f"_msh_inp_{i}_{j}"] = ary.data
+                    elif isinstance(ary, cla.Array):
+                        input_dict[f"_msh_inp_{i}_{j}"] = ary
+                    else:
+                        raise TypeError("Expect pt.DataWrapper or CL-array, got "
+                                f"{type(ary)}")
+
+            return input_dict
+
+        def from_return_dict_to_obj_array(return_dict):
+            return flat_obj_array([DOFArray.from_list(self.actx,
+                [return_dict[f"_msh_out_{i}_{j}"]
+                 for j in range(self.output_spec[i])])
+                for i in range(len(self.output_spec))])
+
+        in_dict = from_obj_array_to_input_dict(fields)
+        _, out_dict = self.pytato_program(**in_dict)
+
+        return from_return_dict_to_obj_array(out_dict)
+
+
 class PytatoArrayContext(ArrayContext):
     """
     A :class:`ArrayContext` that uses :mod:`pytato` data types to represent
@@ -496,17 +566,11 @@ class PytatoArrayContext(ArrayContext):
 
         A :class:`pyopencl.CommandQueue`.
     """
-
-    def __init__(self, ctx, queue=None):
+    def __init__(self, queue):
         import pytato as pt
-        import pyopencl as cl
         super().__init__()
-        self.ns = pt.Namespace()
-        self.opencl_ctx = ctx
-        if queue is None:
-            queue = cl.CommandQueue(ctx)
-
         self.queue = queue
+        self.ns = pt.Namespace()
         self.np = self._get_fake_numpy_namespace()
 
     def _get_fake_numpy_namespace(self):
@@ -545,10 +609,13 @@ class PytatoArrayContext(ArrayContext):
 
     def freeze(self, array):
         import pytato as pt
+        import pyopencl.array as cla
 
         if isinstance(array, pt.Placeholder):
             raise ValueError("freezing placeholder would return garbage valued"
                     " arrays")
+        if isinstance(array, cla.Array):
+            return array.with_queue(None)
         if not isinstance(array, pt.Array):
             raise TypeError("PytatoArrayContext.freeze invoked with non-pt arrays")
 
@@ -569,6 +636,41 @@ class PytatoArrayContext(ArrayContext):
         return pt.make_data_wrapper(self.ns, array.with_queue(self.queue))
 
     # }}}
+
+    def compile(self, f: Callable[[Any], Any],
+            input_like: np.array) -> Callable[[Any], Any]:
+        from pytools.obj_array import flat_obj_array
+        from meshmode.dof_array import DOFArray
+        import pytato as pt
+
+        def make_placeholder_like(fields_obj_ary):
+            return flat_obj_array([DOFArray.from_list(self,
+                [pt.make_placeholder(self.ns, grp_ary.shape,
+                                     grp_ary.dtype, f"_msh_inp_{i}_{j}")
+                 for j, grp_ary in enumerate(dof_ary)])
+                for i, dof_ary in enumerate(fields_obj_ary)])
+
+        def as_dict_of_named_arrays(fields_obj_ary):
+            dict_of_named_arrays = {}
+            # output_spec: a list of length #fields; ith-entry denotes #groups in
+            # ith-field
+            output_spec = []
+            for i, field in enumerate(fields_obj_ary):
+                output_spec.append(len(field))
+                for j, grp in enumerate(field):
+                    dict_of_named_arrays[f"_msh_out_{i}_{j}"] = grp
+
+            return pt.make_dict_of_named_arrays(dict_of_named_arrays), output_spec
+
+        outputs = f(make_placeholder_like(input_like))
+        output_dict_of_named_arrays, output_spec = as_dict_of_named_arrays(outputs)
+
+        pytato_program = pt.generate_loopy(output_dict_of_named_arrays,
+                          options={"return_dict": True},
+                          target=pt.PyOpenCLTarget(self.queue))
+
+        return PytatoCompiledOperator(self, pytato_program, [len(field) for field in
+            input_like], output_spec)
 
 # }}}
 
