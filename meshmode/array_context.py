@@ -336,9 +336,7 @@ class PyOpenCLArrayContext(ArrayContext):
         return cla.zeros(self.queue, shape=shape, dtype=dtype,
                 allocator=self.allocator)
 
-    def from_numpy(self, np_array: np.ndarray, shape=None):
-        if shape is not None:
-            assert np_array.shape == shape
+    def from_numpy(self, np_array: np.ndarray):
         import pyopencl.array as cla
         return cla.to_device(self.queue, np_array, allocator=self.allocator)
 
@@ -530,14 +528,11 @@ class PytatoArrayContext(ArrayContext):
         import pytato as pt
         return pt.zeros(self.ns, shape, dtype)
 
-    def from_numpy(self, np_array: np.ndarray, shape=None):
-        if shape is not None and all(isinstance(dim, int) for dim in shape):
-            assert np_array.shape == shape
-
+    def from_numpy(self, np_array: np.ndarray):
         import pytato as pt
         import pyopencl.array as cla
         cl_array = cla.to_device(self.queue, np_array)
-        return pt.make_data_wrapper(self.ns, cl_array, shape=shape)
+        return pt.make_data_wrapper(self.ns, cl_array)
 
     def to_numpy(self, array):
         cl_array = self.freeze(array)

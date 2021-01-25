@@ -361,8 +361,7 @@ class Discretization:
                             nmesh_nodes=grp.mesh_el_group.nunit_nodes),
                         resampling_mat=actx.from_numpy(
                             grp.from_mesh_interp_matrix()),
-                        nodes=actx.from_numpy(grp.mesh_el_group.nodes[iaxis],
-                            shape=(grp.nelements, grp.mesh_el_group.nunit_nodes)),
+                        nodes=actx.from_numpy(grp.mesh_el_group.nodes[iaxis]),
                         nelements=grp.nelements,
                         )["result"])
                 for grp in self.groups])
