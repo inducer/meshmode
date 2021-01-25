@@ -25,9 +25,7 @@ import numpy as np
 
 import loopy as lp
 from pytools import memoize_in, keyed_memoize_method
-from meshmode.discretization import Discretization, ElementGroupBase
-from meshmode.array_context import (ArrayContext, make_loopy_program,
-        PyOpenCLArrayContext, PytatoArrayContext)
+from meshmode.array_context import ArrayContext, make_loopy_program
 
 
 # {{{ interpolation batch
@@ -253,7 +251,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
     def __call__(self, ary):
         from meshmode.dof_array import DOFArray
-        from meshmode.discretization import get_nelements_symbol_for_grp
         if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")
 
@@ -387,13 +384,13 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     knl = lp.rename_argument(knl, "resample_mat",
                         f"resample_mat_{i_batch}")
                     kwargs[f"resample_mat_{i_batch}"] = (
-                            self._resample_matrix(actx, i_tgrp, i_batch))
+                            actx.thaw(self._resample_matrix(actx, i_tgrp, i_batch)))
                     knlname = "resample_by_mat"
                 else:
                     knl = pick_knl()
                     knl = lp.rename_argument(knl, "pick_list",
                         f"pick_list_{i_batch}")
-                    kwargs[f"pick_list_{i_batch}"] = point_pick_indices
+                    kwargs[f"pick_list_{i_batch}"] = actx.thaw(point_pick_indices)
                     knlname = "resample_by_picking"
 
                 knl = lp.fix_parameters(knl, n_from_nodes=ary[
@@ -422,15 +419,13 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
                 kwargs[f"ary_{i_batch}"] = ary[batch.from_group_index]
                 kwargs[f"from_element_indices_{i_batch}"] = (
-                    batch.from_element_indices)
+                    actx.thaw(batch.from_element_indices))
                 kwargs[f"to_element_indices_{i_batch}"] = (
-                    batch.to_element_indices)
-                kwargs[f"nelements_{i_batch}"] = get_nelements_symbol_for_batch(
-                        self.to_discr, self.from_discr, tgrp, i_batch, batch, actx)
+                    actx.thaw(batch.to_element_indices))
+                kwargs[f"nelements_{i_batch}"] = batch.nelements
 
-                kwargs[f"nelements_vec_{i_batch}"] = get_nelements_symbol_for_grp(
-                        self.from_discr,
-                        self.from_discr.groups[batch.from_group_index], actx)
+                kwargs[f"nelements_vec_{i_batch}"] = (
+                        self.from_discr.groups[batch.from_group_index].nelements)
 
                 kernels.append(knl)
 
@@ -441,8 +436,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                                       force=True)
 
             result_dict = actx.call_loopy(fused_knl,
-                    nelements_result=get_nelements_symbol_for_grp(
-                        self.to_discr, tgrp, actx),
+                    nelements_result=tgrp.nelements,
                     **kwargs)
 
             group_idx_to_result.append(result_dict["result"])
@@ -533,24 +527,5 @@ def make_direct_full_resample_matrix(actx, conn):
 
 # }}}
 
-
-def get_nelements_symbol_for_batch(to_discr: Discretization, from_discr:
-        Discretization, to_group: ElementGroupBase, ibatch: int,
-        batch: InterpolationBatch, actx: ArrayContext):
-    if isinstance(actx, PyOpenCLArrayContext):
-        return batch.nelements
-    elif isinstance(actx, PytatoArrayContext):
-        symbol_name = (
-                f"nelements_{to_discr.id}_{from_discr.id}_{to_group.index}_{ibatch}")
-        if symbol_name not in actx.ns:
-            # FIXME: probably needs to be provided via a method in ArrayContext
-            import pytato as pt
-            pt.make_data_wrapper(actx.ns, np.array(batch.nelements), symbol_name)
-
-        assert actx.ns[symbol_name].data == np.array(batch.nelements)
-
-        return symbol_name
-    else:
-        raise NotImplementedError()
 
 # vim: foldmethod=marker

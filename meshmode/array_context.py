@@ -24,7 +24,7 @@ THE SOFTWARE.
 import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
-from pytools import memoize_method, UniqueNameGenerator
+from pytools import memoize_method
 from pytools.obj_array import obj_array_vectorized_n_args
 import operator
 from functools import partialmethod
@@ -119,10 +119,6 @@ class ArrayContext:
 
     def __init__(self):
         self.np = self._get_fake_numpy_namespace()
-        self.name_generator = UniqueNameGenerator()
-
-    def generate_name(self, based_on):
-        return self.name_generator(based_on=based_on)
 
     def _get_fake_numpy_namespace(self):
         return _BaseFakeNumpyNamespace(self)
@@ -544,7 +540,7 @@ class PytatoArrayContext(ArrayContext):
         return pt.make_data_wrapper(self.ns, cl_array, shape=shape)
 
     def to_numpy(self, array):
-        cl_array = self.freeze(array).data
+        cl_array = self.freeze(array)
         return cl_array.get(queue=self.queue)
 
     def call_loopy(self, program, **kwargs):
@@ -556,17 +552,26 @@ class PytatoArrayContext(ArrayContext):
         import pytato as pt
 
         if isinstance(array, pt.Placeholder):
-            raise NotImplementedError()
+            raise ValueError("freezing placeholder would return garbage valued"
+                    " arrays")
+        if not isinstance(array, pt.Array):
+            raise TypeError("PytatoArrayContext.freeze invoked with non-pt arrays")
 
         prg = pt.generate_loopy(array, target=pt.PyOpenCLTarget(self.queue))
         evt, (cl_array,) = prg()
+        evt.wait()
 
-        return pt.make_data_wrapper(self.ns, cl_array, shape=array.shape)
+        return cl_array.with_queue(None)
 
     def thaw(self, array):
         import pytato as pt
-        assert isinstance(array, pt.array.Array)
-        return array
+        import pyopencl.array as cla
+
+        if not isinstance(array, cla.Array):
+            raise TypeError("PytatoArrayContext.thaw expects CL arrays, got "
+                    f"{type(array)}")
+
+        return pt.make_data_wrapper(self.ns, array.with_queue(self.queue))
 
     # }}}
 

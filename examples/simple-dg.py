@@ -31,7 +31,7 @@ from pytools.obj_array import (
         obj_array_vectorize)
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
 from meshmode.dof_array import DOFArray, freeze, thaw
-from meshmode.array_context import (DebugArrayContext, PyOpenCLArrayContext,
+from meshmode.array_context import (PyOpenCLArrayContext,
         PytatoArrayContext, make_loopy_program)
 from time import time
 import warnings
@@ -69,7 +69,7 @@ class DGDiscretization:
         from meshmode.discretization.poly_element import \
                 PolynomialWarpAndBlendGroupFactory
         self.group_factory = PolynomialWarpAndBlendGroupFactory(order=order)
-        self.volume_discr = Discretization(actx, mesh, self.group_factory, id="vol")
+        self.volume_discr = Discretization(actx, mesh, self.group_factory)
 
         assert self.volume_discr.dim == 2
 
@@ -243,8 +243,6 @@ class DGDiscretization:
         return actx.freeze(actx.from_numpy(matrix))
 
     def inverse_mass(self, vec):
-        actx = self._setup_actx
-        from meshmode.discretization import get_nelements_symbol_for_grp
         if (isinstance(vec, np.ndarray)
                 and vec.dtype.char == "O"
                 and not isinstance(vec, DOFArray)):
@@ -271,8 +269,8 @@ class DGDiscretization:
             results.append(vec.array_context.call_loopy(
                     lp.fix_parameters(knl(), ndiscr_nodes_out=matrix.shape[0],
                                              ndiscr_nodes_in=matrix.shape[1]),
-                    mat=matrix,
-                    nelements=get_nelements_symbol_for_grp(discr, grp, actx),
+                    mat=self._setup_actx.thaw(matrix),
+                    nelements=grp.nelements,
                     vec=vec[grp.index])["result"])
 
         result = DOFArray.from_list(self._setup_actx, results)
@@ -304,7 +302,6 @@ class DGDiscretization:
         return actx.freeze(actx.from_numpy(matrix))
 
     def face_mass(self, vec):
-        from meshmode.discretization import get_nelements_symbol_for_grp
         if (isinstance(vec, np.ndarray)
                 and vec.dtype.char == "O"
                 and not isinstance(vec, DOFArray)):
@@ -312,17 +309,15 @@ class DGDiscretization:
                     lambda el: self.face_mass(el), vec)
 
         @memoize_in(self, "face_mass_knl")
-        def knl(nfaces, nvol_nodes, nface_nodes):
+        def knl():
             return make_loopy_program(
                 """{[iel,idof,f,j]:
                     0<=iel<nelements and
-                    0<=f<%d and
-                    0<=idof<%d and
-                    0<=j<%d}""" % (nfaces, nvol_nodes, nface_nodes),
+                    0<=f<nfaces and
+                    0<=idof<nvol_nodes and
+                    0<=j<nface_nodes}""",
                 "result[iel,idof] = "
-                "sum(f, sum(j, mat[idof, f, j] * vec[nelements*f + iel, j]))",
-                [lp.GlobalArg("vec", shape=(f"{nfaces+1}*nelements", nface_nodes)),
-                 ...],
+                "sum(f, sum(j, mat[idof, f, j] * vec[f, iel, j]))",
                 name="face_mass")
 
         all_faces_conn = self.get_connection("vol", "all_faces")
@@ -337,14 +332,18 @@ class DGDiscretization:
         results = []
 
         for afgrp, volgrp in zip(all_faces_discr.groups, vol_discr.groups):
+            nfaces = volgrp.mesh_el_group.nfaces
+
             matrix = self.get_local_face_mass_matrix(afgrp, volgrp, vec.entry_dtype)
 
-            results.append(vec.array_context.call_loopy(
-                    knl(matrix.shape[1], matrix.shape[0], matrix.shape[2]),
-                    mat=matrix,
-                    nelements=get_nelements_symbol_for_grp(vol_discr, volgrp,
-                        self._setup_actx),
-                    vec=vec[afgrp.index])["result"])
+            results.append(vec.array_context.call_loopy(knl(),
+                    mat=self._setup_actx.thaw(matrix),
+                    nelements=volgrp.nelements,
+                    nvol_nodes=matrix.shape[0],
+                    nfaces=matrix.shape[1],
+                    nface_nodes=matrix.shape[2],
+                    vec=self._setup_actx.np.reshape(vec[afgrp.index],
+                        (nfaces, volgrp.nelements, afgrp.nunit_dofs)))["result"])
 
         return DOFArray.from_list(self._setup_actx, results)
 
