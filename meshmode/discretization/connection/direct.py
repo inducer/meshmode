@@ -527,5 +527,4 @@ def make_direct_full_resample_matrix(actx, conn):
 
 # }}}
 
-
 # vim: foldmethod=marker

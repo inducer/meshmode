@@ -34,10 +34,7 @@ from meshmode.dof_array import DOFArray, freeze, thaw
 from meshmode.array_context import (PyOpenCLArrayContext,  # noqa: F401
         PytatoArrayContext, make_loopy_program)
 from time import time
-import warnings
 import loopy as lp
-
-warnings.filterwarnings("ignore")
 
 
 # Features lost vs. https://github.com/inducer/grudge:
@@ -479,8 +476,8 @@ def main():
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
 
-    # actx = PytatoArrayContext(queue)
-    actx = PyOpenCLArrayContext(queue)
+    actx = PytatoArrayContext(queue)
+    # actx = PyOpenCLArrayContext(queue)
 
     nel_1d = 16
     from meshmode.mesh.generation import generate_regular_rect_mesh
