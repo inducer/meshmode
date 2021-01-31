@@ -7,7 +7,6 @@ dependencies:
 - python=3
 - git
 - numpy
-- libhwloc=1
 - pocl
 - mako
 - pyopencl
