@@ -256,6 +256,12 @@ class DGDiscretization:
                 "result[iel,idof] = sum(j, mat[idof, j] * vec[iel, j])",
                 name="diff")
 
+        @memoize_in(self, "fix_params_inverse_mass_knl")
+        def fix_parameters(knl, ndiscr_nodes_out, ndiscr_nodes_in):
+            return lp.fix_parameters(knl,
+                ndiscr_nodes_out=ndiscr_nodes_out,
+                ndiscr_nodes_in=ndiscr_nodes_in)
+
         discr = self.volume_discr
 
         results = []
@@ -264,8 +270,7 @@ class DGDiscretization:
             matrix = self.get_inverse_mass_matrix(grp, vec.entry_dtype)
 
             results.append(vec.array_context.call_loopy(
-                    lp.fix_parameters(knl(), ndiscr_nodes_out=matrix.shape[0],
-                                             ndiscr_nodes_in=matrix.shape[1]),
+                    fix_parameters(knl(), matrix.shape[0], matrix.shape[1]),
                     mat=self._setup_actx.thaw(matrix),
                     nelements=grp.nelements,
                     vec=vec[grp.index])["result"])
@@ -506,7 +511,7 @@ def main():
     A = actx.compile(lambda y: rk4_step(y, 0, dt, rhs), fields)
 
     t = 0
-    t_final = 0.1
+    t_final = 3
     istep = 0
 
     start = time()

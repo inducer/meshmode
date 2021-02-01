@@ -249,12 +249,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         return make_direct_full_resample_matrix(actx, self)
 
-    def __call__(self, ary):
-        from meshmode.dof_array import DOFArray
-        if not isinstance(ary, DOFArray):
-            raise TypeError("non-array passed to discretization connection")
-
-        actx = ary.array_context
+    @keyed_memoize_method(key=lambda actx, i_tgrp: i_tgrp)
+    def get_resampling_knl(self, actx, i_tgrp):
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_mat_knl",
@@ -362,6 +358,84 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
             return knl
 
+        kernels = []   # get kernels for each batch; to be fused eventually
+        kwargs = {}  # kwargs to the fused kernel
+
+        cgrp = self.groups[i_tgrp]
+        tgrp = self.to_discr.groups[i_tgrp]
+
+        for i_batch, batch in enumerate(cgrp.batches):
+            if batch.from_element_indices.size == 0:
+                continue
+
+            point_pick_indices = self._resample_point_pick_indices(
+                    actx, i_tgrp, i_batch)
+
+            if point_pick_indices is None:
+                knl = mat_knl()
+                knl = lp.rename_argument(knl, "resample_mat",
+                    f"resample_mat_{i_batch}")
+                kwargs[f"resample_mat_{i_batch}"] = (
+                        actx.thaw(self._resample_matrix(actx, i_tgrp, i_batch)))
+                knlname = "resample_by_mat"
+            else:
+                knl = pick_knl()
+                knl = lp.rename_argument(knl, "pick_list",
+                    f"pick_list_{i_batch}")
+                kwargs[f"pick_list_{i_batch}"] = actx.thaw(point_pick_indices)
+                knlname = "resample_by_picking"
+
+            knl = lp.fix_parameters(knl,
+                    n_from_nodes=(
+                        self.from_discr.groups[batch.from_group_index].nunit_dofs),
+                    n_to_nodes=tgrp.nunit_dofs)
+
+            # {{{ enforce different namespaces for the kernels
+
+            # necessary to avoid using same induction variable for
+            # loops across batches
+
+            for iname in sorted(knl[knlname].all_inames()):
+                knl = lp.rename_iname(knl, iname, f"{iname}_{i_batch}")
+
+            knl = lp.rename_argument(knl, "ary", f"ary_{i_batch}")
+            knl = lp.rename_argument(knl, "from_element_indices",
+                f"from_element_indices_{i_batch}")
+            knl = lp.rename_argument(knl, "to_element_indices",
+                f"to_element_indices_{i_batch}")
+            knl = lp.rename_argument(knl, "nelements",
+                f"nelements_{i_batch}")
+            knl = lp.rename_argument(knl, "nelements_vec",
+                f"nelements_vec_{i_batch}")
+
+            # }}}
+
+            kwargs[f"from_element_indices_{i_batch}"] = (
+                actx.thaw(batch.from_element_indices))
+            kwargs[f"to_element_indices_{i_batch}"] = (
+                actx.thaw(batch.to_element_indices))
+            kwargs[f"nelements_{i_batch}"] = batch.nelements
+
+            kwargs[f"nelements_vec_{i_batch}"] = (
+                    self.from_discr.groups[batch.from_group_index].nelements)
+
+            kernels.append(knl)
+
+        fused_knl = lp.fuse_kernels(kernels)
+        # order of operations doesn't matter
+        fused_knl = lp.add_nosync(fused_knl, "global", "writes:result",
+                                  "writes:result", bidirectional=True,
+                                  force=True)
+
+        return fused_knl, kwargs
+
+    def __call__(self, ary):
+        from meshmode.dof_array import DOFArray
+        actx = ary.array_context
+
+        if not isinstance(ary, DOFArray):
+            raise TypeError("non-array passed to discretization connection")
+
         if ary.shape != (len(self.from_discr.groups),):
             raise ValueError("invalid shape of incoming resampling data")
 
@@ -369,73 +443,14 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         for i_tgrp, (tgrp, cgrp) in enumerate(
                 zip(self.to_discr.groups, self.groups)):
+            knl, kwargs = self.get_resampling_knl(actx, i_tgrp)
 
-            kernels = []   # get kernels for each batch; to be fused eventually
-            kwargs = {}  # kwargs to the fused kernel
             for i_batch, batch in enumerate(cgrp.batches):
                 if batch.from_element_indices.size == 0:
                     continue
-
-                point_pick_indices = self._resample_point_pick_indices(
-                        actx, i_tgrp, i_batch)
-
-                if point_pick_indices is None:
-                    knl = mat_knl()
-                    knl = lp.rename_argument(knl, "resample_mat",
-                        f"resample_mat_{i_batch}")
-                    kwargs[f"resample_mat_{i_batch}"] = (
-                            actx.thaw(self._resample_matrix(actx, i_tgrp, i_batch)))
-                    knlname = "resample_by_mat"
-                else:
-                    knl = pick_knl()
-                    knl = lp.rename_argument(knl, "pick_list",
-                        f"pick_list_{i_batch}")
-                    kwargs[f"pick_list_{i_batch}"] = actx.thaw(point_pick_indices)
-                    knlname = "resample_by_picking"
-
-                knl = lp.fix_parameters(knl, n_from_nodes=ary[
-                        batch.from_group_index].shape[-1],
-                        n_to_nodes=tgrp.nunit_dofs)
-
-                # {{{ enforce different namespaces for the kernels
-
-                # necessary to avoid using same induction variable for
-                # loops across batches
-
-                for iname in sorted(knl[knlname].all_inames()):
-                    knl = lp.rename_iname(knl, iname, f"{iname}_{i_batch}")
-
-                knl = lp.rename_argument(knl, "ary", f"ary_{i_batch}")
-                knl = lp.rename_argument(knl, "from_element_indices",
-                    f"from_element_indices_{i_batch}")
-                knl = lp.rename_argument(knl, "to_element_indices",
-                    f"to_element_indices_{i_batch}")
-                knl = lp.rename_argument(knl, "nelements",
-                    f"nelements_{i_batch}")
-                knl = lp.rename_argument(knl, "nelements_vec",
-                    f"nelements_vec_{i_batch}")
-
-                # }}}
-
                 kwargs[f"ary_{i_batch}"] = ary[batch.from_group_index]
-                kwargs[f"from_element_indices_{i_batch}"] = (
-                    actx.thaw(batch.from_element_indices))
-                kwargs[f"to_element_indices_{i_batch}"] = (
-                    actx.thaw(batch.to_element_indices))
-                kwargs[f"nelements_{i_batch}"] = batch.nelements
 
-                kwargs[f"nelements_vec_{i_batch}"] = (
-                        self.from_discr.groups[batch.from_group_index].nelements)
-
-                kernels.append(knl)
-
-            fused_knl = lp.fuse_kernels(kernels)
-            # order of operations doesn't matter
-            fused_knl = lp.add_nosync(fused_knl, "global", "writes:result",
-                                      "writes:result", bidirectional=True,
-                                      force=True)
-
-            result_dict = actx.call_loopy(fused_knl,
+            result_dict = actx.call_loopy(knl,
                     nelements_result=tgrp.nelements,
                     **kwargs)
 
