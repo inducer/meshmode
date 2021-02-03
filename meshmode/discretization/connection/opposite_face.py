@@ -234,7 +234,7 @@ def _make_cross_face_batches(actx,
 
     # {{{ find groups of src_unit_nodes
 
-    done_elements = np.zeros(nelements, dtype=np.bool)
+    done_elements = np.zeros(nelements, dtype=bool)
     while True:
         todo_elements, = np.where(~done_elements)
         if not len(todo_elements):

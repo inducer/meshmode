@@ -51,7 +51,7 @@ def map_unit_nodes_to_children(meg: MeshElementGroup,
 
 @map_unit_nodes_to_children.register(SimplexElementGroup)
 def _(meg: SimplexElementGroup, unit_nodes, el_tess_info):
-    ref_vertices = np.array(el_tess_info.ref_vertices, dtype=np.float).T
+    ref_vertices = np.array(el_tess_info.ref_vertices, dtype=np.float64).T
     assert len(unit_nodes.shape) == 2
 
     for child in el_tess_info.children:
@@ -64,7 +64,7 @@ def _(meg: SimplexElementGroup, unit_nodes, el_tess_info):
 
 @map_unit_nodes_to_children.register(TensorProductElementGroup)
 def _(meg: TensorProductElementGroup, unit_nodes, el_tess_info):
-    ref_vertices = np.array(el_tess_info.ref_vertices, dtype=np.float).T
+    ref_vertices = np.array(el_tess_info.ref_vertices, dtype=np.float64).T
     assert len(unit_nodes.shape) == 2
 
     # NOTE: nodes indices in the unit hypercube that form the `e_i` basis

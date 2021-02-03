@@ -64,12 +64,13 @@ class RefinerWithoutAdjacency:
 
     def refine(self, refine_flags):
         """
-        :arg refine_flags: a :class:`numpy.ndarray` of dtype bool of length
-            ``mesh.nelements`` indicating which elements should be split.
+        :arg refine_flags: an :class:`~numpy.ndarray` of :class:`~numpy.dtype`
+            :class:`bool` and length :attr:`meshmode.mesh.Mesh.nelements`
+            indicating which elements should be split.
         """
 
         mesh = self._current_mesh
-        refine_flags = np.asarray(refine_flags, dtype=np.bool)
+        refine_flags = np.asarray(refine_flags, dtype=bool)
 
         if len(refine_flags) != mesh.nelements:
             raise ValueError("length of refine_flags does not match "
