@@ -1033,7 +1033,7 @@ def warp_and_refine_until_resolved(
     iteration = 0
 
     while True:
-        refine_flags = np.zeros(unwarped_mesh.nelements, dtype=np.bool)
+        refine_flags = np.zeros(unwarped_mesh.nelements, dtype=bool)
 
         warped_mesh = warp_callable(unwarped_mesh)
 

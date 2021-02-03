@@ -652,7 +652,7 @@ def find_volume_mesh_element_group_orientation(vertices, grp):
 
     spanning_object_array = np.empty(
             (nspan_vectors, ambient_dim),
-            dtype=np.object)
+            dtype=object)
 
     for ispan in range(nspan_vectors):
         for idim in range(ambient_dim):
@@ -807,7 +807,7 @@ def perform_flips(mesh, flip_flags, skip_tests=False):
         flipped.
     """
 
-    flip_flags = flip_flags.astype(np.bool)
+    flip_flags = flip_flags.astype(bool)
 
     from meshmode.mesh import Mesh
 

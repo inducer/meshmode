@@ -342,7 +342,7 @@ class FiredrakeConnection:
                 raise ValueError("shape != () and '%s' is of type DOFArray"
                                  " instead of np.ndarray." % field_name)
             check_dof_array(field, field_name)
-        elif isinstance(field, np.ndarray) and field.dtype == np.object:
+        elif isinstance(field, np.ndarray) and field.dtype == object:
             if shape is not None and field.shape != shape:
                 raise ValueError(f"'{field_name}.shape' must be {shape}, not "
                                  f"'{field.shape}'")
@@ -431,7 +431,7 @@ class FiredrakeConnection:
             if fspace_shape == ():
                 out = self.discr.empty(actx, dtype=function_data.dtype)
             else:
-                out = np.ndarray(fspace_shape, dtype=np.object)
+                out = np.ndarray(fspace_shape, dtype=object)
                 for multi_index in np.ndindex(fspace_shape):
                     out[multi_index] = \
                         self.discr.empty(actx, dtype=function_data.dtype)

@@ -1341,7 +1341,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
 
         # An array of flags for each face indicating whether we have encountered
         # a boundary condition for that face.
-        seen = np.zeros_like(nb_el_bits, dtype=np.bool)
+        seen = np.zeros_like(nb_el_bits, dtype=bool)
 
         if true_boundary_only:
             tag_bit = mesh.boundary_tag_bit(BTAG_ALL)
