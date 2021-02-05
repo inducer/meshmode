@@ -1068,7 +1068,7 @@ class _FlatFacialAdjacencyData:
 
     .. attribute:: neighbor_groups
 
-        The group containing the adjacent element.
+        The group containing the adjacent element, or -1 if the face is not shared.
 
     .. attribute:: neighbors
 
@@ -1170,7 +1170,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
             adj.element_faces[:] = fid
             adj.neighbor_groups[:] = -1
             adj.neighbor_groups[has_neighbor] = ids[0, neighbor_adj_indices]
-            adj.neighbor_faces[:] = -1
+            adj.neighbor_faces[:] = 0
             adj.neighbor_faces[has_neighbor] = ids[1, neighbor_adj_indices]
             adj.neighbors[has_neighbor] = neighbor_adj_indices - face_nr_bases[
                 ids[0, neighbor_adj_indices], ids[1, neighbor_adj_indices]]
