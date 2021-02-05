@@ -1060,7 +1060,7 @@ class _FlatFacialAdjacencyData:
 
     .. attribute:: elements
 
-        The group-relative element index. (Defau
+        The group-relative element index.
 
     .. attribute:: element_faces
 
