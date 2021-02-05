@@ -1052,6 +1052,43 @@ def _boundary_tag_bit(boundary_tags, btag_to_index, boundary_tag):
 
 # {{{ vertex-based facial adjacency
 
+class _FlatFacialAdjacencyData:
+    """
+    Data structure for intermediate storage of facial adjacency data. Each attribute
+    is a :class:`numpy.ndarray` containing data for each stored face and its
+    adjacent neighbor.
+
+    .. attribute:: elements
+
+        The group-relative element index. (Defau
+
+    .. attribute:: element_faces
+
+        The index of the shared face inside the element.
+
+    .. attribute:: neighbor_groups
+
+        The group containing the adjacent element.
+
+    .. attribute:: neighbors
+
+        The mesh-wide element index of the adjacent element, or boundary tag
+        information if the face is not shared.
+
+    .. attribute:: neighbor_faces
+
+        The index of the shared face inside the adjacent element, or zero if the
+        face is not shared.
+
+    """
+    def __init__(self, nfaces, element_id_dtype, face_id_dtype):
+        self.elements = np.empty(nfaces, dtype=element_id_dtype)
+        self.element_faces = np.empty(nfaces, dtype=face_id_dtype)
+        self.neighbor_groups = np.empty(nfaces, dtype=np.int)
+        self.neighbors = np.empty(nfaces, dtype=element_id_dtype)
+        self.neighbor_faces = np.empty(nfaces, dtype=face_id_dtype)
+
+
 def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
                                      element_id_dtype,
                                      face_id_dtype,
@@ -1103,11 +1140,11 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
         order = np.lexsort(vertex_indices_increasing)
         diffs = np.diff(vertex_indices_increasing[:, order], axis=1)
         match_indices, = (~np.any(diffs, axis=0)).nonzero()
-        matches = (order[match_indices], order[match_indices+1])
+        matching_faces = (order[match_indices], order[match_indices+1])
         adj_indices = np.empty(nfaces, dtype=element_id_dtype)
         adj_indices[:] = -1
-        adj_indices[matches[0]] = matches[1]
-        adj_indices[matches[1]] = matches[0]
+        adj_indices[matching_faces[0]] = matching_faces[1]
+        adj_indices[matching_faces[1]] = matching_faces[0]
         adjacent_face_indices[nvertices] = adj_indices
 
     # {{{ build facial_adjacency_groups data structure
@@ -1117,12 +1154,8 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
     facial_adjacency_groups = []
     for igrp, grp in enumerate(groups):
         grp_map = {}
-        n_all_faces = grp.nelements*grp.nfaces
-        elements = np.empty(n_all_faces, dtype=element_id_dtype)
-        element_faces = np.empty(n_all_faces, dtype=face_id_dtype)
-        neighbor_groups = np.empty(n_all_faces, dtype=np.int)
-        neighbors = np.empty(n_all_faces, dtype=element_id_dtype)
-        neighbor_faces = np.empty(n_all_faces, dtype=face_id_dtype)
+        grp_adj = _FlatFacialAdjacencyData(grp.nelements*grp.nfaces,
+            element_id_dtype=element_id_dtype, face_id_dtype=face_id_dtype)
         for fid, ref_fvi in enumerate(grp.face_vertex_indices()):
             nvertices = len(ref_fvi)
             face_nr_base = face_nr_bases[igrp, fid]
@@ -1131,15 +1164,17 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
             has_neighbor = adj_indices >= 0
             neighbor_adj_indices = adj_indices[has_neighbor]
             ids = face_ids[nvertices]
-            face_neighbor_groups = np.empty(grp.nelements, dtype=np.int)
-            face_neighbor_groups[:] = -1
-            face_neighbor_groups[has_neighbor] = ids[0, neighbor_adj_indices]
-            face_neighbor_faces = np.zeros(grp.nelements, dtype=face_id_dtype)
-            face_neighbor_faces[has_neighbor] = ids[1, neighbor_adj_indices]
-            face_neighbors = np.empty(grp.nelements, dtype=element_id_dtype)
-            face_neighbors[has_neighbor] = neighbor_adj_indices - face_nr_bases[
+            adj = _FlatFacialAdjacencyData(grp.nelements,
+                element_id_dtype=element_id_dtype, face_id_dtype=face_id_dtype)
+            adj.elements = np.indices((grp.nelements,), dtype=element_id_dtype)
+            adj.element_faces[:] = fid
+            adj.neighbor_groups[:] = -1
+            adj.neighbor_groups[has_neighbor] = ids[0, neighbor_adj_indices]
+            adj.neighbor_faces[:] = -1
+            adj.neighbor_faces[has_neighbor] = ids[1, neighbor_adj_indices]
+            adj.neighbors[has_neighbor] = neighbor_adj_indices - face_nr_bases[
                 ids[0, neighbor_adj_indices], ids[1, neighbor_adj_indices]]
-            face_neighbors[~has_neighbor] = -(
+            adj.neighbors[~has_neighbor] = -(
                     boundary_tag_bit(BTAG_ALL)
                     | boundary_tag_bit(BTAG_REALLY_ALL))
             if face_vertex_indices_to_tags is not None:
@@ -1152,36 +1187,35 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
                         tag_mask = 0
                         for tag in tags:
                             tag_mask |= boundary_tag_bit(tag)
-                        face_neighbors[iel] = -((-face_neighbors[iel]) | tag_mask)
+                        adj.neighbors[iel] = -((-adj.neighbors[iel]) | tag_mask)
             istart = fid*grp.nelements
             iend = (fid+1)*grp.nelements
-            elements[istart:iend] = np.indices((grp.nelements,),
-                dtype=element_id_dtype)
-            element_faces[istart:iend] = fid
-            neighbor_groups[istart:iend] = face_neighbor_groups
-            neighbors[istart:iend] = face_neighbors
-            neighbor_faces[istart:iend] = face_neighbor_faces
-        unique_neighbor_groups = np.unique(neighbor_groups)
+            grp_adj.elements[istart:iend] = adj.elements
+            grp_adj.element_faces[istart:iend] = adj.element_faces
+            grp_adj.neighbor_groups[istart:iend] = adj.neighbor_groups
+            grp_adj.neighbors[istart:iend] = adj.neighbors
+            grp_adj.neighbor_faces[istart:iend] = adj.neighbor_faces
+        unique_neighbor_groups = np.unique(grp_adj.neighbor_groups)
         has_bdry = unique_neighbor_groups[0] == -1
         connected_groups = unique_neighbor_groups[unique_neighbor_groups >= 0]
         if has_bdry:
-            matches = neighbor_groups == -1
+            is_bdry = grp_adj.neighbor_groups == -1
             grp_map[None] = FacialAdjacencyGroup(
                     igroup=igrp,
                     ineighbor_group=None,
-                    elements=elements[matches],
-                    element_faces=element_faces[matches],
-                    neighbors=neighbors[matches],
-                    neighbor_faces=neighbor_faces[matches])
+                    elements=grp_adj.elements[is_bdry],
+                    element_faces=grp_adj.element_faces[is_bdry],
+                    neighbors=grp_adj.neighbors[is_bdry],
+                    neighbor_faces=grp_adj.neighbor_faces[is_bdry])
         for i_neighbor_grp in connected_groups:
-            matches = neighbor_groups == i_neighbor_grp
+            is_neighbor_adj = grp_adj.neighbor_groups == i_neighbor_grp
             grp_map[i_neighbor_grp] = FacialAdjacencyGroup(
                     igroup=igrp,
                     ineighbor_group=i_neighbor_grp,
-                    elements=elements[matches],
-                    element_faces=element_faces[matches],
-                    neighbors=neighbors[matches],
-                    neighbor_faces=neighbor_faces[matches])
+                    elements=grp_adj.elements[is_neighbor_adj],
+                    element_faces=grp_adj.element_faces[is_neighbor_adj],
+                    neighbors=grp_adj.neighbors[is_neighbor_adj],
+                    neighbor_faces=grp_adj.neighbor_faces[is_neighbor_adj])
         facial_adjacency_groups.append(grp_map)
 
     # }}}
