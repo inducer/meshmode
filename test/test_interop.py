@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize("dim", [1, 2, 3])
+@pytest.mark.octave
 def test_nodal_dg_interop(actx_factory, dim):
     pytest.importorskip("oct2py")
     actx = actx_factory()
