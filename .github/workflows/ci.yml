@@ -142,7 +142,7 @@ jobs:
                 fi
 
                 # Avoid slow or complicated tests in downstream projects
-                export PYTEST_ADDOPTS=${PYTEST_ADDOPTS:--k-slowtest --k-octave --k-mpi}
+                export PYTEST_ADDOPTS="-k-slowtest -k-octave -k-mpi"
 
                 if test "$DOWNSTREAM_PROJECT" = "mirgecom"; then
                     # can't turn off MPI in mirgecom
