@@ -148,6 +148,8 @@ jobs:
                     # can't turn off MPI in mirgecom
                     sudo apt-get update
                     sudo apt-get install openmpi-bin libopenmpi-dev
+                else
+                    sed -i "/mpi4py/ d" requirements.txt
                 fi
 
                 curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/ci-support.sh
