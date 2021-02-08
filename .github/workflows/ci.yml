@@ -125,6 +125,8 @@ jobs:
             run: |
                 if test "$DOWNSTREAM_PROJECT" = "mirgecom"; then
                     git clone "https://github.com/illinois-ceesd/$DOWNSTREAM_PROJECT.git"
+                else
+                    git clone "https://github.com/inducer/$DOWNSTREAM_PROJECT.git"
                 fi
 
                 cd "$DOWNSTREAM_PROJECT"
