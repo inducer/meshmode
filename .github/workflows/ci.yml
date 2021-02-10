@@ -148,10 +148,6 @@ jobs:
                     # can't turn off MPI in mirgecom
                     sudo apt-get update
                     sudo apt-get install openmpi-bin libopenmpi-dev
-
-                    # Runs out of memory otherwise.
-                    # e.g. https://github.com/inducer/meshmode/pull/114/checks?check_run_id=1857801097
-                    export CISUPPORT_PARALLEL_PYTEST="no"
                 else
                     sed -i "/mpi4py/ d" requirements.txt
                 fi
