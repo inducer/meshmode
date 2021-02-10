@@ -1123,11 +1123,11 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
             nvertices = len(ref_fvi)
             face_nr_base = face_nr_bases[igrp, fid]
             grp_fvi = grp.vertex_indices[:, ref_fvi]
-            vertex_indices = face_vertex_indices[nvertices]
-            ids = face_ids[nvertices]
-            vertex_indices[:, face_nr_base:face_nr_base+grp.nelements] = grp_fvi.T
-            ids[0, face_nr_base:face_nr_base+grp.nelements] = igrp
-            ids[1, face_nr_base:face_nr_base+grp.nelements] = fid
+            istart = face_nr_base
+            iend = face_nr_base + grp.nelements
+            face_vertex_indices[nvertices][:, istart:iend] = grp_fvi.T
+            face_ids[nvertices][0, istart:iend] = igrp
+            face_ids[nvertices][1, istart:iend] = fid
 
     del igrp
     del grp
