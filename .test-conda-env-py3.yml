@@ -6,6 +6,7 @@ channels:
 dependencies:
 - python=3
 - git
+- libhwloc=2
 - numpy
 - pocl
 - mako
