@@ -1163,17 +1163,18 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
                 face_nr_base+grp.nelements]
             has_neighbor = adj_indices >= 0
             neighbor_adj_indices = adj_indices[has_neighbor]
-            ids = face_ids[nvertices]
+            neighbor_igrps = face_ids[nvertices][0, neighbor_adj_indices]
+            neighbor_fids = face_ids[nvertices][1, neighbor_adj_indices]
             adj = _FlatFacialAdjacencyData(grp.nelements,
                 element_id_dtype=element_id_dtype, face_id_dtype=face_id_dtype)
             adj.elements = np.indices((grp.nelements,), dtype=element_id_dtype)
             adj.element_faces[:] = fid
             adj.neighbor_groups[:] = -1
-            adj.neighbor_groups[has_neighbor] = ids[0, neighbor_adj_indices]
+            adj.neighbor_groups[has_neighbor] = neighbor_igrps
             adj.neighbor_faces[:] = 0
-            adj.neighbor_faces[has_neighbor] = ids[1, neighbor_adj_indices]
+            adj.neighbor_faces[has_neighbor] = neighbor_fids
             adj.neighbors[has_neighbor] = neighbor_adj_indices - face_nr_bases[
-                ids[0, neighbor_adj_indices], ids[1, neighbor_adj_indices]]
+                neighbor_igrps, neighbor_fids]
             adj.neighbors[~has_neighbor] = -(
                     boundary_tag_bit(BTAG_ALL)
                     | boundary_tag_bit(BTAG_REALLY_ALL))
