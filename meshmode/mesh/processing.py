@@ -74,15 +74,14 @@ def _compute_global_elem_to_part_elem(part_per_element, parts, element_id_dtype)
         to its corresponding partition-wide index if that partition belongs to
         *parts* (and if not, to -1).
     """
-    n_elems_in_part = {ipart: 0 for ipart in parts}
     global_elem_to_part_elem = np.empty(len(part_per_element),
                 dtype=element_id_dtype)
     global_elem_to_part_elem[:] = -1
-    for ielem, ipart in enumerate(part_per_element):
-        if ipart not in parts:
-            continue
-        global_elem_to_part_elem[ielem] = n_elems_in_part[ipart]
-        n_elems_in_part[ipart] += 1
+    for ipart in parts:
+        belongs_to_part = part_per_element == ipart
+        global_elem_to_part_elem[belongs_to_part] = (
+            np.cumsum(belongs_to_part)[belongs_to_part]-1)
+
     return global_elem_to_part_elem
 
 
@@ -652,7 +651,7 @@ def find_volume_mesh_element_group_orientation(vertices, grp):
 
     spanning_object_array = np.empty(
             (nspan_vectors, ambient_dim),
-            dtype=np.object)
+            dtype=object)
 
     for ispan in range(nspan_vectors):
         for idim in range(ambient_dim):
@@ -807,7 +806,7 @@ def perform_flips(mesh, flip_flags, skip_tests=False):
         flipped.
     """
 
-    flip_flags = flip_flags.astype(np.bool)
+    flip_flags = flip_flags.astype(bool)
 
     from meshmode.mesh import Mesh
 
@@ -1038,10 +1037,8 @@ def map_mesh(mesh, f):  # noqa
 
     # }}}
 
-    from meshmode.mesh import Mesh
-    return Mesh(vertices, new_groups, skip_tests=True,
-            nodal_adjacency=mesh.nodal_adjacency_init_arg(),
-            facial_adjacency_groups=mesh._facial_adjacency_groups,
+    return mesh.copy(
+            vertices=vertices, groups=new_groups,
             is_conforming=mesh.is_conforming)
 
 # }}}

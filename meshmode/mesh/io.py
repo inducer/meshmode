@@ -176,7 +176,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
             bulk_el_types.add(group_el_type)
 
-            nodes = np.empty((ambient_dim, ngroup_elements, el_type.node_count()),
+            nodes = np.empty(
+                    (ambient_dim, ngroup_elements, group_el_type.node_count()),
                     np.float64)
             el_vertex_count = group_el_type.vertex_count()
             vertex_indices = np.empty(
@@ -190,13 +191,23 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     continue
 
                 nodes[:, i] = self.points[el_nodes].T
-                vertex_indices[i] = [vertex_gmsh_index_to_mine[v_nr]
-                        for v_nr in el_vertices]
+                vertex_indices[i] = [
+                        vertex_gmsh_index_to_mine[v_nr] for v_nr in el_vertices
+                        ]
 
                 i += 1
 
-            unit_nodes = (np.array(group_el_type.lexicographic_node_tuples(),
-                    dtype=np.float64).T/group_el_type.order)*2 - 1
+            import modepy as mp
+            if isinstance(group_el_type, GmshSimplexElementBase):
+                shape = mp.Simplex(group_el_type.dimensions)
+            elif isinstance(group_el_type, GmshTensorProductElementBase):
+                shape = mp.Hypercube(group_el_type.dimensions)
+            else:
+                raise NotImplementedError(
+                        f"gmsh element type: {type(group_el_type).__name__}")
+
+            space = mp.space_for_shape(shape, group_el_type.order)
+            unit_nodes = mp.equispaced_nodes_for_space(space, shape)
 
             if isinstance(group_el_type, GmshSimplexElementBase):
                 group = SimplexElementGroup(
@@ -209,19 +220,11 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 if group.dim == 2:
                     from meshmode.mesh.processing import flip_simplex_element_group
                     group = flip_simplex_element_group(vertices, group,
-                            np.ones(ngroup_elements, np.bool))
+                            np.ones(ngroup_elements, bool))
 
             elif isinstance(group_el_type, GmshTensorProductElementBase):
-                gmsh_vertex_tuples = type(group_el_type)(order=1).gmsh_node_tuples()
-                gmsh_vertex_tuples_loc_dict = {
-                        gvt: i
-                        for i, gvt in enumerate(gmsh_vertex_tuples)}
-
-                from pytools import (
-                        generate_nonnegative_integer_tuples_below as gnitb)
-                vertex_shuffle = np.array([
-                    gmsh_vertex_tuples_loc_dict[vt]
-                    for vt in gnitb(2, group_el_type.dimensions)])
+                vertex_shuffle = type(group_el_type)(
+                        order=1).get_lexicographic_gmsh_node_indices()
 
                 group = TensorProductElementGroup(
                     group_el_type.order,
@@ -230,8 +233,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     unit_nodes=unit_nodes
                     )
             else:
-                raise NotImplementedError("gmsh element type: %s"
-                        % type(group_el_type).__name__)
+                # NOTE: already checked above
+                assert False
 
             groups.append(group)
 

@@ -149,9 +149,7 @@ class DGDiscretization:
             raise ValueError(f"locations '{src}'->'{tgt}' not understood")
 
     def interp(self, src, tgt, vec):
-        if (isinstance(vec, np.ndarray)
-                and vec.dtype.char == "O"
-                and not isinstance(vec, DOFArray)):
+        if isinstance(vec, np.ndarray):
             return obj_array_vectorize(
                     lambda el: self.interp(src, tgt, el), vec)
 
@@ -240,9 +238,7 @@ class DGDiscretization:
         return actx.freeze(actx.from_numpy(matrix))
 
     def inverse_mass(self, vec):
-        if (isinstance(vec, np.ndarray)
-                and vec.dtype.char == "O"
-                and not isinstance(vec, DOFArray)):
+        if isinstance(vec, np.ndarray):
             return obj_array_vectorize(
                     lambda el: self.inverse_mass(el), vec)
 
@@ -290,12 +286,13 @@ class DGDiscretization:
                     afgrp.nunit_dofs),
                 dtype=dtype)
 
-        from modepy.tools import UNIT_VERTICES
         import modepy as mp
-        for iface, fvi in enumerate(
-                volgrp.mesh_el_group.face_vertex_indices()):
-            face_vertices = UNIT_VERTICES[volgrp.dim][np.array(fvi)].T
-            matrix[:, iface, :] = mp.nodal_face_mass_matrix(
+        shape = mp.Simplex(volgrp.dim)
+        unit_vertices = mp.unit_vertices_for_shape(shape).T
+
+        for face in mp.faces_for_shape(shape):
+            face_vertices = unit_vertices[np.array(face.volume_vertex_indices)].T
+            matrix[:, face.face_index, :] = mp.nodal_face_mass_matrix(
                     volgrp.basis(), volgrp.unit_nodes, afgrp.unit_nodes,
                     volgrp.order,
                     face_vertices)
@@ -304,11 +301,8 @@ class DGDiscretization:
         return actx.freeze(actx.from_numpy(matrix))
 
     def face_mass(self, vec):
-        if (isinstance(vec, np.ndarray)
-                and vec.dtype.char == "O"
-                and not isinstance(vec, DOFArray)):
-            return obj_array_vectorize(
-                    lambda el: self.face_mass(el), vec)
+        if isinstance(vec, np.ndarray):
+            return obj_array_vectorize(lambda el: self.face_mass(el), vec)
 
         @memoize_in(self, "face_mass_knl")
         def knl():
@@ -481,8 +475,8 @@ def main():
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
 
-    actx = PytatoArrayContext(queue)
-    # actx = PyOpenCLArrayContext(queue)
+    # actx = PytatoArrayContext(queue)
+    actx = PyOpenCLArrayContext(queue)
 
     nel_1d = 16
     from meshmode.mesh.generation import generate_regular_rect_mesh

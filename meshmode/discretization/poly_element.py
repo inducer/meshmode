@@ -41,6 +41,8 @@ Group types
 .. autoclass:: PolynomialRecursiveNodesElementGroup
 .. autoclass:: PolynomialEquidistantSimplexElementGroup
 .. autoclass:: PolynomialGivenNodesElementGroup
+
+.. autoclass:: GaussLegendreTensorProductElementGroup
 .. autoclass:: LegendreGaussLobattoTensorProductElementGroup
 .. autoclass:: EquidistantTensorProductElementGroup
 
@@ -48,12 +50,16 @@ Group factories
 ^^^^^^^^^^^^^^^
 
 .. autoclass:: ElementGroupFactory
+.. autoclass:: OrderAndTypeBasedGroupFactory
+
 .. autoclass:: InterpolatoryQuadratureSimplexGroupFactory
 .. autoclass:: QuadratureSimplexGroupFactory
 .. autoclass:: PolynomialWarpAndBlendGroupFactory
 .. autoclass:: PolynomialRecursiveNodesGroupFactory
 .. autoclass:: PolynomialEquidistantSimplexGroupFactory
 .. autoclass:: PolynomialGivenNodesGroupFactory
+
+.. autoclass:: GaussLegendreTensorProductGroupFactory
 .. autoclass:: LegendreGaussLobattoTensorProductGroupFactory
 """
 
@@ -98,11 +104,22 @@ class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
 # {{{ concrete element groups for simplices
 
 class SimplexElementGroupBase(ElementGroupBase):
+    @property
+    @memoize_method
+    def _shape(self):
+        return mp.Simplex(self.dim)
+
+    @property
+    @memoize_method
+    def _space(self):
+        return mp.PN(self.dim, self.order)
+
     @memoize_method
     def from_mesh_interp_matrix(self):
         meg = self.mesh_el_group
+        meg_space = mp.PN(meg.dim, meg.order)
         return mp.resampling_matrix(
-                mp.simplex_best_available_basis(meg.dim, meg.order),
+                mp.basis_for_space(meg_space, self._shape).functions,
                 self.unit_nodes,
                 meg.unit_nodes)
 
@@ -112,28 +129,19 @@ class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase,
     def is_orthogonal_basis(self):
         return self.dim <= 3
 
+    @property
     @memoize_method
-    def _mode_ids_and_basis(self):
-        # for now, see https://gitlab.tiker.net/inducer/modepy/-/merge_requests/14
-        import modepy.modes as modes
-        if self.dim <= 3:
-            return modes.simplex_onb_with_mode_ids(self.dim, self.order)
-        else:
-            return modes.simplex_monomial_basis_with_mode_ids(self.dim, self.order)
+    def _basis(self):
+        return mp.basis_for_space(self._space, self._shape)
 
     def basis(self):
-        mode_ids, basis = self._mode_ids_and_basis()
-        return basis
+        return self._basis.functions
 
     def mode_ids(self):
-        mode_ids, basis = self._mode_ids_and_basis()
-        return mode_ids
+        return self._basis.mode_ids
 
     def grad_basis(self):
-        if self.dim <= 3:
-            return mp.grad_simplex_onb(self.dim, self.order)
-        else:
-            return mp.grad_simplex_monomial_basis(self.dim, self.order)
+        return self._basis.gradients
 
 
 class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
@@ -340,52 +348,153 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
 
         return self._unit_nodes
 
-
 # }}}
 
 
 # {{{ concrete element groups for tensor product elements
 
-class LegendreGaussLobattoTensorProductElementGroup(PolynomialElementGroupBase):
-    def is_orthogonal_basis(self):
-        return True
-
-    def basis(self):
-        from modepy.modes import tensor_product_basis, jacobi
-        from functools import partial
-        return tensor_product_basis(
-                self.dim, tuple(
-                    partial(jacobi, 0, 0, i)
-                    for i in range(self.order+1)))
-
-    def grad_basis(self):
-        raise NotImplementedError()
+class HypercubeElementGroupBase(ElementGroupBase):
+    @property
+    @memoize_method
+    def _shape(self):
+        return mp.Hypercube(self.dim)
 
     @property
     @memoize_method
-    def unit_nodes(self):
-        from modepy.nodes import tensor_product_nodes
-        from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
-        return tensor_product_nodes(
-                self.dim, legendre_gauss_lobatto_nodes(self.order))
+    def _space(self):
+        return mp.QN(self.dim, self.order)
 
     @memoize_method
     def from_mesh_interp_matrix(self):
         meg = self.mesh_el_group
+        meg_space = mp.QN(meg.dim, meg.order)
         return mp.resampling_matrix(
-                self.basis(),
+                mp.basis_for_space(meg_space, self._shape).functions,
                 self.unit_nodes,
                 meg.unit_nodes)
 
 
-class EquidistantTensorProductElementGroup(
-        LegendreGaussLobattoTensorProductElementGroup):
+class TensorProductElementGroupBase(PolynomialElementGroupBase,
+        HypercubeElementGroupBase):
+    def __init__(self, mesh_el_group, order, index, *, basis, unit_nodes):
+        """
+        :arg basis: a :class:`modepy.TensorProductBasis`.
+        :arg unit_nodes: unit nodes for the tensor product, obtained by
+            using :func:`modepy.tensor_product_nodes`, for example.
+        """
+        super().__init__(mesh_el_group, order, index)
+
+        if basis._dim != mesh_el_group.dim:
+            raise ValueError("basis dimension does not match element group: "
+                    f"expected {mesh_el_group.dim}, got {basis._dim}.")
+
+        if unit_nodes.shape[0] != mesh_el_group.dim:
+            raise ValueError("unit node dimension does not match element group: "
+                    f"expected {mesh_el_group.dim}, got {unit_nodes.shape[0]}.")
+
+        self._basis = basis
+        self._unit_nodes = unit_nodes
+
+    def is_orthogonal_basis(self):
+        try:
+            # NOTE: meshmode kind of assumes that the basis is orthonormal
+            # with weight 1, which is why this check is stricter than expected.
+            return self._basis.orthonormality_weight() == 1
+        except mp.BasisNotOrthonormal:
+            return False
+
+    @memoize_method
+    def mode_ids(self):
+        return self._basis.mode_ids
+
+    @memoize_method
+    def basis(self):
+        return self._basis.functions
+
+    @memoize_method
+    def grad_basis(self):
+        return self._basis.gradients
+
+    @property
+    def unit_nodes(self):
+        return self._unit_nodes
+
     @property
     @memoize_method
-    def unit_nodes(self):
-        from modepy.nodes import tensor_product_nodes, equidistant_nodes
-        return tensor_product_nodes(
-                self.dim, equidistant_nodes(1, self.order))
+    def weights(self):
+        return np.dot(
+                self.mass_matrix(),
+                np.ones(len(self.basis())))
+
+
+class LegendreTensorProductElementGroup(TensorProductElementGroupBase):
+    def __init__(self, mesh_el_group, order, index, *, unit_nodes):
+        basis = mp.orthonormal_basis_for_space(
+                mp.QN(mesh_el_group.dim, order),
+                mp.Hypercube(mesh_el_group.dim))
+
+        super().__init__(mesh_el_group, order, index,
+                basis=basis,
+                unit_nodes=unit_nodes)
+
+
+class GaussLegendreTensorProductElementGroup(LegendreTensorProductElementGroup):
+    """Elemental discretization supplying a high-order quadrature rule
+    with a number of nodes matching the number of polynomials in the tensor
+    product basis, hence usable for differentiation and interpolation.
+
+    No interpolation nodes are present on the boundary of the hypercube.
+    """
+
+    def __init__(self, mesh_el_group, order, index):
+        self._quadrature_rule = mp.LegendreGaussTensorProductQuadrature(
+                order, mesh_el_group.dim)
+
+        super().__init__(mesh_el_group, order, index,
+                unit_nodes=self._quadrature_rule.nodes)
+
+    @property
+    def weights(self):
+        return self._quadrature_rule.weights
+
+
+class LegendreGaussLobattoTensorProductElementGroup(
+        LegendreTensorProductElementGroup):
+    """Elemental discretization supplying a high-order quadrature rule
+    with a number of nodes matching the number of polynomials in the tensor
+    product basis, hence usable for differentiation and interpolation.
+    Nodes sufficient for unisolvency are present on the boundary of the hypercube.
+
+    Uses :func:`~modepy.quadrature.jacobi_gauss.legendre_gauss_lobatto_nodes`.
+    """
+
+    def __init__(self, mesh_el_group, order, index):
+        from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
+        unit_nodes_1d = legendre_gauss_lobatto_nodes(order)
+
+        super().__init__(mesh_el_group, order, index,
+                unit_nodes=mp.tensor_product_nodes(
+                    [unit_nodes_1d] * mesh_el_group.dim)
+                )
+
+
+class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
+    """Elemental discretization supplying a high-order quadrature rule
+    with a number of nodes matching the number of polynomials in the tensor
+    product basis, hence usable for differentiation and interpolation.
+    Nodes sufficient for unisolvency are present on the boundary of the hypercube.
+
+    Uses :func:`~modepy.equidistant_nodes`.
+    """
+
+    def __init__(self, mesh_el_group, order, index):
+        from modepy.nodes import equidistant_nodes
+        unit_nodes_1d = equidistant_nodes(1, order)[0]
+
+        super().__init__(mesh_el_group, order, index,
+                unit_nodes=mp.tensor_product_nodes(
+                    [unit_nodes_1d] * mesh_el_group.dim)
+                )
 
 # }}}
 
@@ -483,13 +592,23 @@ class PolynomialGivenNodesGroupFactory(HomogeneousOrderBasedGroupFactory):
 
         return PolynomialGivenNodesElementGroup(
                 mesh_el_group, self.order, self.unit_nodes, index)
+
 # }}}
+
+
+# {{{ group factories for tensor products
+
+class GaussLegendreTensorProductGroupFactory(HomogeneousOrderBasedGroupFactory):
+    mesh_group_class = _MeshTensorProductElementGroup
+    group_class = GaussLegendreTensorProductElementGroup
 
 
 class LegendreGaussLobattoTensorProductGroupFactory(
         HomogeneousOrderBasedGroupFactory):
     mesh_group_class = _MeshTensorProductElementGroup
     group_class = LegendreGaussLobattoTensorProductElementGroup
+
+# }}}
 
 # }}}
 

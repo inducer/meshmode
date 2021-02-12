@@ -1,4 +1,4 @@
-__copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
+__copyright__ = "Copyright (C) 2020 Andreas Kloeckner"
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -20,52 +20,38 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-
-import numpy as np
-import pytest
-
 import meshmode         # noqa: F401
 from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests,
-        PyOpenCLArrayContext)
-from meshmode.dof_array import thaw
+        as pytest_generate_tests)
+
+import meshmode.mesh.generation as mgen
+from meshmode import _acf  # noqa: F401
+
 
 import logging
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize("dim", [1, 2, 3])
-@pytest.mark.octave
-def test_nodal_dg_interop(actx_factory, dim):
-    pytest.importorskip("oct2py")
+def test_nonequal_rect_mesh_generation(actx_factory, visualize=False):
+    """Test that ``generate_regular_rect_mesh`` works with non-equal arguments
+    across axes.
+    """
     actx = actx_factory()
 
-    from meshmode.interop.nodal_dg import download_nodal_dg_if_not_present
-    download_nodal_dg_if_not_present()
-    order = 4
+    mesh = mgen.generate_regular_rect_mesh(
+            a=(0, 0)*2, b=(5, 3), n=(10, 6,), order=3)
 
-    from meshmode.mesh.generation import generate_regular_rect_mesh
-    mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*dim, b=(0.5,)*dim, n=(8,)*dim, order=order)
+    from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import \
+            PolynomialWarpAndBlendGroupFactory as GroupFactory
+    discr = Discretization(actx, mesh, GroupFactory(3))
 
-    from meshmode.interop.nodal_dg import NodalDGContext
-    with NodalDGContext("./nodal-dg/Codes1.1") as ndgctx:
-        ndgctx.set_mesh(mesh, order=order)
+    if visualize:
+        from meshmode.discretization.visualization import make_visualizer
+        vis = make_visualizer(actx, discr, 3)
 
-        discr = ndgctx.get_discr(actx)
-
-        for ax in range(dim):
-            x_ax = ndgctx.pull_dof_array(actx, ndgctx.AXES[ax])
-            err = actx.np.linalg.norm(x_ax-discr.nodes()[ax], np.inf)
-            assert err < 1e-15
-
-        n0 = thaw(actx, discr.nodes()[0])
-
-        ndgctx.push_dof_array("n0", n0)
-        n0_2 = ndgctx.pull_dof_array(actx, "n0")
-
-        assert actx.np.linalg.norm(n0 - n0_2, np.inf) < 1e-15
+        vis.write_vtk_file("nonuniform.vtu", [], overwrite=True)
 
 
 if __name__ == "__main__":

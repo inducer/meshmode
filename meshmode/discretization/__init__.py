@@ -91,15 +91,15 @@ class ElementGroupBase:
 
     @property
     def nunit_dofs(self):
-        """The number of (for now: nodal) degrees of freedom ("DOFs") associated with a
-        single element.
+        """The number of (for now: nodal) degrees of freedom ("DOFs")
+        associated with a single element.
         """
         return self.unit_nodes.shape[-1]
 
     @property
     def ndofs(self):
-        """The total number of (for now: nodal) degrees of freedom ("DOFs") associated with
-        the element group.
+        """The total number of (for now: nodal) degrees of freedom ("DOFs")
+        associated with the element group.
         """
         return self.nunit_dofs * self.nelements
 
@@ -237,9 +237,9 @@ class Discretization:
         else:
             dtype = np.dtype(dtype)
 
-        return _DOFArray.from_list(actx, [
+        return _DOFArray(actx, tuple(
             creation_func(shape=(grp.nelements, grp.nunit_dofs), dtype=dtype)
-            for grp in self.groups])
+            for grp in self.groups))
 
     def empty(self, actx: ArrayContext, dtype=None):
         """Return an empty :class:`~meshmode.dof_array.DOFArray`.
@@ -298,14 +298,14 @@ class Discretization:
             return mat
         import loopy as lp
 
-        return _DOFArray.from_list(actx, [
+        return _DOFArray(actx, tuple(
                 actx.call_loopy(
                     lp.fix_parameters(prg(), nunit_dofs=grp.nunit_dofs),
                     mat=actx.from_numpy(get_mat(grp)),
                     vec=vec[grp.index],
                     nelements=grp.nelements,
                     )["result"]
-                for grp in self.groups])
+                for grp in self.groups))
 
     @memoize_method
     def quad_weights(self):
@@ -320,14 +320,14 @@ class Discretization:
                 "result[iel,idof] = weights[idof]",
                 name="quad_weights")
 
-        return _DOFArray.from_list(None, [
+        return _DOFArray(None, tuple(
                 actx.freeze(
                     actx.call_loopy(
                         prg(),
                         weights=actx.from_numpy(grp.weights),
                         nelements=grp.nelements,
                         )["result"])
-                for grp in self.groups])
+                for grp in self.groups))
 
     @memoize_method
     def nodes(self):
@@ -353,7 +353,7 @@ class Discretization:
                 name="lp_nodes")
 
         return make_obj_array([
-            _DOFArray.from_list(None, [
+            _DOFArray(None, tuple(
                 actx.freeze(
                     actx.call_loopy(
                         lp.fix_parameters(prg(),
@@ -364,7 +364,7 @@ class Discretization:
                         nodes=actx.from_numpy(grp.mesh_el_group.nodes[iaxis]),
                         nelements=grp.nelements,
                         )["result"])
-                for grp in self.groups])
+                for grp in self.groups))
             for iaxis in range(self.ambient_dim)])
 
 

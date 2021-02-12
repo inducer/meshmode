@@ -1,4 +1,7 @@
-__copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
+__copyright__ = """
+Copyright (C) 2014 Andreas Kloeckner
+Copyright (C) 2020 Alexandru Fikl
+"""
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -20,10 +23,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from functools import singledispatch
+
 import numpy as np
+
 from pytools import memoize_method, Record
+from pytools.obj_array import make_obj_array
 from meshmode.dof_array import DOFArray, flatten, thaw
 
+from modepy.shapes import Shape, Simplex, Hypercube
 
 __doc__ = """
 
@@ -72,21 +80,80 @@ def separate_by_real_and_imag(names_and_fields, real_only):
                 yield (name, field)
 
 
-def resample_to_numpy(conn, vec):
-    if (isinstance(vec, np.ndarray)
-            and vec.dtype.char == "O"
-            and not isinstance(vec, DOFArray)):
+def _stack_object_array(vec, *, by_group=False):
+    if not by_group:
+        return np.stack(vec)
+
+    return make_obj_array([
+        np.stack([ri[igrp] for ri in vec])
+        for igrp in range(vec[0].size)
+        ])
+
+
+def resample_to_numpy(conn, vec, *, stack=False, by_group=False):
+    """
+    :arg stack: if *True* object arrays are stacked into a single
+        :class:`~numpy.ndarray`.
+    :arg by_group: if *True*, the per-group arrays in a :class:`DOFArray`
+        are flattened separately. This can be used to write each group as a
+        separate mesh (in supporting formats).
+    """
+    # "stack" exists as mainly as a workaround for Xdmf. See here:
+    # https://github.com/inducer/pyvisfile/pull/12#discussion_r550959081
+    # for (minimal) discussion.
+    if isinstance(vec, np.ndarray) and vec.dtype.char == "O":
         from pytools.obj_array import obj_array_vectorize
-        return obj_array_vectorize(lambda x: resample_to_numpy(conn, x), vec)
+        r = obj_array_vectorize(
+                lambda x: resample_to_numpy(conn, x, by_group=by_group),
+                vec)
+
+        return _stack_object_array(r, by_group=by_group) if stack else r
+
+    if isinstance(vec, DOFArray):
+        actx = vec.array_context
+        vec = conn(vec)
 
     from numbers import Number
-    if isinstance(vec, Number):
-        nnodes = sum(grp.ndofs for grp in conn.to_discr.groups)
-        return np.ones(nnodes) * vec
+    if by_group:
+        if isinstance(vec, Number):
+            return make_obj_array([
+                np.full(grp.ndofs, vec) for grp in conn.to_discr.groups
+                ])
+        elif isinstance(vec, DOFArray):
+            return make_obj_array([
+                actx.to_numpy(ivec).reshape(-1) for ivec in vec
+                ])
+        else:
+            raise TypeError(f"unsupported array type: {type(vec).__name__}")
     else:
-        resampled = conn(vec)
-        actx = resampled.array_context
-        return actx.to_numpy(flatten(resampled))
+        if isinstance(vec, Number):
+            nnodes = sum(grp.ndofs for grp in conn.to_discr.groups)
+            return np.full(nnodes, vec)
+        elif isinstance(vec, DOFArray):
+            return actx.to_numpy(flatten(vec))
+        else:
+            raise TypeError(f"unsupported array type: {type(vec).__name__}")
+
+
+def preprocess_fields(names_and_fields):
+    """Gets arrays out of dataclasses and removes empty arrays."""
+    from dataclasses import fields, is_dataclass
+
+    def is_empty(field):
+        return field is None or (isinstance(field, np.ndarray)
+            and field.dtype.char == "O" and len(field) == 0)
+
+    result = []
+    for name, field in names_and_fields:
+        if is_dataclass(field):
+            for attr in fields(field):
+                value = getattr(field, attr.name)
+                if not is_empty(value):
+                    result.append((f"{name}_{attr.name}", value))
+        elif not is_empty(field):
+            result.append((name, field))
+
+    return result
 
 
 class _VisConnectivityGroup(Record):
@@ -115,6 +182,56 @@ class _VisConnectivityGroup(Record):
     @property
     def primitive_element_size(self):
         return self.vis_connectivity.shape[2]
+
+# }}}
+
+
+# {{{ vtk submeshes
+
+@singledispatch
+def vtk_submesh_for_shape(shape: Shape, node_tuples):
+    raise NotImplementedError(type(shape).__name__)
+
+
+@vtk_submesh_for_shape.register(Simplex)
+def _(shape: Simplex, node_tuples):
+    import modepy as mp
+    return mp.submesh_for_shape(shape, node_tuples)
+
+
+@vtk_submesh_for_shape.register(Hypercube)
+def _(shape: Hypercube, node_tuples):
+    node_tuple_to_index = {nt: i for i, nt in enumerate(node_tuples)}
+
+    # NOTE: this can't use mp.submesh_for_shape because VTK vertex order is
+    # counterclockwise instead of z order
+    el_offsets = {
+            1: [(0,), (1,)],
+            2: [(0, 0), (1, 0), (1, 1), (0, 1)],
+            3: [
+                (0, 0, 0),
+                (1, 0, 0),
+                (1, 1, 0),
+                (0, 1, 0),
+                (0, 0, 1),
+                (1, 0, 1),
+                (1, 1, 1),
+                (0, 1, 1),
+                ]
+            }[shape.dim]
+
+    from pytools import add_tuples
+    elements = []
+    for origin in node_tuples:
+        try:
+            elements.append(tuple(
+                node_tuple_to_index[add_tuples(origin, offset)]
+                for offset in el_offsets
+                ))
+        except KeyError:
+            pass
+
+    return elements
 
 # }}}
 
@@ -157,51 +274,24 @@ class VTKConnectivity:
                 }
 
     def connectivity_for_element_group(self, grp):
-        from pytools import (
-                generate_nonnegative_integer_tuples_summing_to_at_most as gnitstam,
-                generate_nonnegative_integer_tuples_below as gnitb)
-        from meshmode.mesh import TensorProductElementGroup, SimplexElementGroup
+        import modepy as mp
+        from meshmode.mesh import _ModepyElementGroup
 
-        if isinstance(grp.mesh_el_group, SimplexElementGroup):
-            node_tuples = list(gnitstam(grp.order, grp.dim))
+        if isinstance(grp.mesh_el_group, _ModepyElementGroup):
+            shape = grp.mesh_el_group._modepy_shape
+            space = type(grp.mesh_el_group._modepy_space)(grp.dim, grp.order)
+            node_tuples = mp.node_tuples_for_space(space)
 
-            from modepy.tools import simplex_submesh
             el_connectivity = np.array(
-                    simplex_submesh(node_tuples),
+                    vtk_submesh_for_shape(shape, node_tuples),
                     dtype=np.intp)
 
-            vtk_cell_type = self.simplex_cell_types[grp.dim]
-
-        elif isinstance(grp.mesh_el_group, TensorProductElementGroup):
-            node_tuples = list(gnitb(grp.order+1, grp.dim))
-            node_tuple_to_index = {
-                    nt: i for i, nt in enumerate(node_tuples)}
-
-            def add_tuple(a, b):
-                return tuple(ai+bi for ai, bi in zip(a, b))
-
-            el_offsets = {
-                    1: [(0,), (1,)],
-                    2: [(0, 0), (1, 0), (1, 1), (0, 1)],
-                    3: [
-                        (0, 0, 0),
-                        (1, 0, 0),
-                        (1, 1, 0),
-                        (0, 1, 0),
-                        (0, 0, 1),
-                        (1, 0, 1),
-                        (1, 1, 1),
-                        (0, 1, 1),
-                        ]
-                    }[grp.dim]
-
-            el_connectivity = np.array([
-                    [
-                        node_tuple_to_index[add_tuple(origin, offset)]
-                        for offset in el_offsets]
-                    for origin in gnitb(grp.order, grp.dim)])
-
-            vtk_cell_type = self.tensor_cell_types[grp.dim]
+            if isinstance(shape, Simplex):
+                vtk_cell_type = self.simplex_cell_types[shape.dim]
+            elif isinstance(shape, Hypercube):
+                vtk_cell_type = self.tensor_cell_types[shape.dim]
+            else:
+                raise TypeError(f"unsupported shape: {type(shape)}")
 
         else:
             raise NotImplementedError("visualization for element groups "
@@ -256,9 +346,6 @@ class VTKLagrangeConnectivity(VTKConnectivity):
 
     @property
     def version(self):
-        # NOTE: version 2.2 has an updated ordering for the hexahedron
-        # elements that is not supported currently
-        # https://gitlab.kitware.com/vtk/vtk/-/merge_requests/6678
         return "2.0"
 
     @property
@@ -280,20 +367,34 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                 }
 
     def connectivity_for_element_group(self, grp):
-        from meshmode.mesh import SimplexElementGroup
+        from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
+        vtk_version = tuple(int(v) for v in self.version.split("."))
         if isinstance(grp.mesh_el_group, SimplexElementGroup):
             from pyvisfile.vtk.vtk_ordering import (
                     vtk_lagrange_simplex_node_tuples,
                     vtk_lagrange_simplex_node_tuples_to_permutation)
 
             node_tuples = vtk_lagrange_simplex_node_tuples(
-                    grp.dim, grp.order, is_consistent=True)
+                    grp.dim, grp.order, vtk_version=vtk_version)
             el_connectivity = np.array(
                     vtk_lagrange_simplex_node_tuples_to_permutation(node_tuples),
                     dtype=np.intp).reshape(1, 1, -1)
 
             vtk_cell_type = self.simplex_cell_types[grp.dim]
+
+        elif isinstance(grp.mesh_el_group, TensorProductElementGroup):
+            from pyvisfile.vtk.vtk_ordering import (
+                    vtk_lagrange_quad_node_tuples,
+                    vtk_lagrange_quad_node_tuples_to_permutation)
+
+            node_tuples = vtk_lagrange_quad_node_tuples(
+                    grp.dim, grp.order, vtk_version=vtk_version)
+            el_connectivity = np.array(
+                    vtk_lagrange_quad_node_tuples_to_permutation(node_tuples),
+                    dtype=np.intp).reshape(1, 1, -1)
+
+            vtk_cell_type = self.tensor_cell_types[grp.dim]
 
         else:
             raise NotImplementedError("visualization for element groups "
@@ -340,6 +441,7 @@ class Visualizer:
     .. automethod:: show_scalar_in_matplotlib_3d
     .. automethod:: write_vtk_file
     .. automethod:: write_parallel_vtk_file
+    .. automethod:: write_xdmf_file
     """
 
     def __init__(self, connection,
@@ -383,7 +485,7 @@ class Visualizer:
 
             args = tuple(nodes) + (field,)
 
-            # http://docs.enthought.com/mayavi/mayavi/auto/example_plotting_many_lines.html  # noqa
+            # https://docs.enthought.com/mayavi/mayavi/auto/example_plotting_many_lines.html  # noqa
             src = mlab.pipeline.scalar_scatter(*args)
 
             src.mlab_source.dataset.lines = vis_connectivity.reshape(-1, 2)
@@ -539,28 +641,11 @@ class Visualizer:
 
         nodes = self._vis_nodes_numpy()
 
-        # {{{ expand dataclasses in names_and_fields
-
-        new_names_and_fields = []
-        for name, fld in names_and_fields:
-            if hasattr(type(fld), "__dataclass_fields__"):
-                import dataclasses
-                new_names_and_fields.extend(
-                        (f"{name}_{dclass_field.name}",
-                            getattr(fld, dclass_field.name))
-                        for dclass_field in dataclasses.fields(fld)
-                        if getattr(fld, dclass_field.name) is not None)
-            elif fld is not None:
-                new_names_and_fields.append((name, fld))
-
-        names_and_fields = new_names_and_fields
-        del new_names_and_fields
-
-        # }}}
-
+        names_and_fields = preprocess_fields(names_and_fields)
         names_and_fields = [
                 (name, resample_to_numpy(self.connection, fld))
-                for name, fld in names_and_fields]
+                for name, fld in names_and_fields
+                ]
 
         # {{{ create cell_types
 
@@ -660,6 +745,181 @@ class Visualizer:
                 with open(par_manifest_filename, "w") as outf:
                     generator = ParallelXMLGenerator(par_file_names)
                     generator(grid).write(outf)
+
+        # }}}
+
+    # }}}
+
+    # {{{ xdmf
+
+    @memoize_method
+    def _xdmf_nodes_numpy(self):
+        actx = self.vis_discr._setup_actx
+        return resample_to_numpy(
+                lambda x: x,
+                thaw(actx, self.vis_discr.nodes()),
+                stack=True, by_group=True)
+
+    def _vtk_to_xdmf_cell_type(self, cell_type):
+        import pyvisfile.vtk as vtk
+        from pyvisfile.xdmf import TopologyType
+        return {
+                vtk.VTK_LINE: TopologyType.Polyline,
+                vtk.VTK_TRIANGLE: TopologyType.Triangle,
+                vtk.VTK_TETRA: TopologyType.Tetrahedron,
+                vtk.VTK_QUAD: TopologyType.Quadrilateral,
+                vtk.VTK_HEXAHEDRON: TopologyType.Hexahedron,
+                }[cell_type]
+
+    def write_xdmf_file(self, file_name, names_and_fields,
+            attrs=None, h5_file_options=None, dataset_options=None,
+            real_only=False, overwrite=False):
+        """Write an XDMF file (with an ``.xmf`` extension) containing the
+        arrays in *names_and_fields*. The heavy data is written to binary
+        HDF5 files, which requires installing :ref:`h5py <h5py:install>`.
+        Distributed memory visualization is not yet supported.
+
+        :arg names_and_fields: a list of ``(name, array)``, where *array* is
+            an array-like object (see :meth:`Visualizer.write_vtk_file`).
+        :arg attrs: a :class:`dict` of scalar attributes that will be saved
+            in the root HDF5 group.
+        :arg h5_file_options: a :class:`dict` passed directly to
+            :class:`h5py.File` that allows controlling chunking, compatibility, etc.
+        :arg dataset_options: a :class:`dict` passed directly to
+            :meth:`h5py.Group.create_dataset`.
+        """
+        if attrs is None:
+            attrs = {}
+
+        if h5_file_options is None:
+            h5_file_options = {}
+
+        dataset_defaults = {"compression": "gzip", "compression_opts": 6}
+        if dataset_options is not None:
+            dataset_defaults.update(dataset_options)
+        dataset_options = dataset_defaults
+
+        if "comm" in h5_file_options \
+                or h5_file_options.get("driver", None) == "mpio":
+            raise NotImplementedError("distributed memory visualization")
+
+        # {{{ hdf5
+
+        try:
+            import h5py
+        except ImportError as exc:
+            raise ImportError("'write_xdmf_file' requires 'h5py'") from exc
+
+        import os
+        h5_file_name = "{}.h5".format(os.path.splitext(file_name)[0])
+
+        # }}}
+
+        # {{{ expand -> filter -> resample -> to_numpy fields
+
+        names_and_fields = preprocess_fields(names_and_fields)
+        names_and_fields = [
+                (name, resample_to_numpy(
+                    self.connection, field,
+                    stack=True, by_group=True))
+                for name, field in names_and_fields
+                ]
+
+        # }}}
+
+        # {{{ write hdf5 + create xml tree
+
+        # NOTE: 01-03-2021 based on Paraview 5.8.1 with (internal) VTK 8.90.0
+        #
+        # The current setup writes a grid for each element group. The grids
+        # are completely separate, i.e. each one gets its own subset of the
+        # nodes / connectivity / fields. This seems to work reasonably well.
+        #
+        # This mostly works with the Xdmf3ReaderS (S for spatial) Paraview
+        # plugin. It seems to also work with the XMDFReader (for Xdmf2) plugin,
+        # but that's not very tested.
+        #
+        # A few nice-to-haves / improvements
+        #
+        # * writing a single grid per meshmode.Mesh. `meshio` actually does this
+        #   using the XDMF `TopologyType.Mixed`
+        # * writing object ndarrays as separate `DataItem`s. Tried this using
+        #   an Xdmf `DataItemType.Function`, but Paraview did not recognize it.
+        # * Using `Reference` DataItems to e.g. store the nodes globally on the
+        #   domain and just reference it in the individual grids. This crashed
+        #   Paraview.
+
+        from pyvisfile.xdmf import (
+                XdmfUnstructuredGrid, DataArray,
+                GeometryType, Information)
+
+        if self.vis_discr.ambient_dim == 2:
+            geometry_type = GeometryType.XY
+        elif self.vis_discr.ambient_dim == 3:
+            geometry_type = GeometryType.XYZ
+        else:
+            raise ValueError(f"unsupported dimension: {self.vis_discr.dim}")
+
+        with h5py.File(h5_file_name, "w", **h5_file_options) as h5:
+            tags = []
+            for key, value in attrs.items():
+                h5.attrs[key] = value
+                tags.append(Information(name=key, value=str(value)))
+
+            # {{{ create grids
+
+            nodes = self._xdmf_nodes_numpy()
+            connectivity = self._vtk_connectivity
+
+            # global nodes
+            h5grid = h5.create_group("Grid")
+
+            grids = []
+            node_nr_base = 0
+            for igrp, (vgrp, gnodes) in enumerate(zip(connectivity.groups, nodes)):
+                grp_name = f"Group_{igrp:05d}"
+                h5grp = h5grid.create_group(grp_name)
+
+                # offset connectivity back to local numbering
+                visconn = vgrp.vis_connectivity.reshape(vgrp.nsubelements, -1) \
+                        - node_nr_base
+                node_nr_base += self.vis_discr.groups[igrp].ndofs
+
+                # hdf5 side
+                dset = h5grp.create_dataset("Nodes", data=gnodes.T,
+                        **dataset_options)
+                gnodes = DataArray.from_dataset(dset)
+
+                dset = h5grp.create_dataset("Connectivity", data=visconn,
+                        **dataset_options)
+                gconnectivity = DataArray.from_dataset(dset)
+
+                # xdmf side
+                topology_type = self._vtk_to_xdmf_cell_type(vgrp.vtk_cell_type)
+                grid = XdmfUnstructuredGrid(
+                        gnodes, gconnectivity,
+                        topology_type=topology_type,
+                        geometry_type=geometry_type,
+                        name=grp_name)
+
+                # fields
+                for name, field in separate_by_real_and_imag(
+                        names_and_fields, real_only):
+                    dset = h5grp.create_dataset(name, data=field[igrp],
+                            **dataset_options)
+                    grid.add_attribute(DataArray.from_dataset(dset))
+
+                grids.append(grid)
+
+            # }}}
+
+        # }}}
+
+        # {{{ write xdmf
+
+        from pyvisfile.xdmf import XdmfWriter
+        writer = XdmfWriter(tuple(grids), tags=tuple(tags))
+        writer.write_pretty(file_name)
 
         # }}}
 

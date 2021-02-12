@@ -2,7 +2,6 @@ Python 3 POCL:
   script: |
     export PY_EXE=python3
     export PYOPENCL_TEST=portable:pthread
-    (cd test; git clone https://github.com/tcew/nodal-dg)
     # cython is here because pytential (for now, for TS) depends on it
     export EXTRA_INSTALL="pybind11 cython numpy mako mpi4py oct2py"
     curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
@@ -22,7 +21,6 @@ Python 3 Nvidia Titan V:
     export PY_EXE=python3
     export PYOPENCL_TEST=nvi:titan
     export EXTRA_INSTALL="pybind11 cython numpy mako oct2py"
-    (cd test; git clone https://github.com/tcew/nodal-dg)
     # cython is here because pytential (for now, for TS) depends on it
     curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
     . ./build-and-test-py-project.sh
@@ -77,7 +75,8 @@ Python 3 POCL Firedrake Examples:
 Python 3 Conda:
   script: |
     CONDA_ENVIRONMENT=.test-conda-env-py3.yml
-    (cd test; git clone https://github.com/tcew/nodal-dg)
+    export MPLBACKEND=Agg
+
     curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project-within-miniconda.sh
     . ./build-and-test-py-project-within-miniconda.sh
   tags:

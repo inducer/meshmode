@@ -25,6 +25,7 @@ import numpy as np
 
 import loopy as lp
 from pytools import memoize_in, keyed_memoize_method
+from pytools.obj_array import obj_array_vectorized_n_args
 from meshmode.array_context import ArrayContext, make_loopy_program
 
 
@@ -429,6 +430,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         return fused_knl, kwargs
 
+    @obj_array_vectorized_n_args
     def __call__(self, ary):
         from meshmode.dof_array import DOFArray
         actx = ary.array_context

@@ -11,12 +11,12 @@ git+https://github.com/inducer/islpy.git#egg=islpy
 git+https://github.com/inducer/pymbolic.git#egg=pymbolic
 
 # also depends on pymbolic, so should come after it
-git+https://github.com/inducer/loopy.git#egg=loo.py
+git+https://github.com/inducer/loopy.git#egg=loopy
 
 # more pytential dependencies
 git+https://github.com/inducer/boxtree.git#egg=boxtree
 git+https://github.com/inducer/sumpy.git#egg=sumpy
-git+https://github.com/inducer/pytential.git#pytential
+git+https://github.com/inducer/pytential.git#egg=pytential
 
 # requires pymetis for tests for partition_mesh
 git+https://github.com/inducer/pymetis.git#egg=pymetis

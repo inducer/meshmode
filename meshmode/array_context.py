@@ -21,21 +21,18 @@ THE SOFTWARE.
 """
 
 
+from functools import partial
 import numpy as np
 import loopy as lp
 from typing import Callable, Any
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method
-from pytools.obj_array import obj_array_vectorized_n_args
-import operator
-from functools import partialmethod
-from numbers import Number
-import time
 
 __doc__ = """
 .. autofunction:: make_loopy_program
 .. autoclass:: ArrayContext
 .. autoclass:: PyOpenCLArrayContext
+.. autofunction:: pytest_generate_tests_for_pyopencl_array_context
 """
 
 
@@ -62,28 +59,120 @@ def make_loopy_program(domains, statements, kernel_data=["..."],
 class _BaseFakeNumpyNamespace:
     def __init__(self, array_context):
         self._array_context = array_context
+        self.linalg = self._get_fake_numpy_linalg_namespace()
+
+    def _get_fake_numpy_linalg_namespace(self):
+        return _BaseFakeNumpyLinalgNamespace(self.array_context)
+
+    _numpy_math_functions = frozenset({
+        # https://numpy.org/doc/stable/reference/routines.math.html
+
+        # FIXME: Heads up: not all of these are supported yet.
+        # But I felt it was important to only dispatch actually existing
+        # numpy functions to loopy.
+
+        # Trigonometric functions
+        "sin", "cos", "tan", "arcsin", "arccos", "arctan", "hypot", "arctan2",
+        "degrees", "radians", "unwrap", "deg2rad", "rad2deg",
+
+        # Hyperbolic functions
+        "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh",
+
+        # Rounding
+        "around", "round_", "rint", "fix", "floor", "ceil", "trunc",
+
+        # Sums, products, differences
+
+        # FIXME: Many of These are reductions or scans.
+        # "prod", "sum", "nanprod", "nansum", "cumprod", "cumsum", "nancumprod",
+        # "nancumsum", "diff", "ediff1d", "gradient", "cross", "trapz",
+
+        # Exponents and logarithms
+        "exp", "expm1", "exp2", "log", "log10", "log2", "log1p", "logaddexp",
+        "logaddexp2",
+
+        # Other special functions
+        "i0", "sinc",
+
+        # Floating point routines
+        "signbit", "copysign", "frexp", "ldexp", "nextafter", "spacing",
+        # Rational routines
+        "lcm", "gcd",
+
+        # Arithmetic operations
+        "add", "reciprocal", "positive", "negative", "multiply", "divide", "power",
+        "subtract", "true_divide", "floor_divide", "float_power", "fmod", "mod",
+        "modf", "remainder", "divmod",
+
+        # Handling complex numbers
+        "angle", "real", "imag",
+        # Implemented below:
+        # "conj", "conjugate",
+
+        # Miscellaneous
+        "convolve", "clip", "sqrt", "cbrt", "square", "absolute", "abs", "fabs",
+        "sign", "heaviside", "maximum", "fmax", "nan_to_num",
+
+        # FIXME:
+        # "interp",
+
+        })
+
+    _numpy_to_c_arc_functions = {
+            "arcsin": "asin",
+            "arccos": "acos",
+            "arctan": "atan",
+            "arctan2": "atan2",
+
+            "arcsinh": "asinh",
+            "arccosh": "acosh",
+            "arctanh": "atanh",
+            }
+
+    _c_to_numpy_arc_functions = {c_name: numpy_name
+            for numpy_name, c_name in _numpy_to_c_arc_functions.items()}
 
     def __getattr__(self, name):
-        def f(*args):
+        def loopy_implemented_elwise_func(*args):
             actx = self._array_context
             # FIXME: Maybe involve loopy type inference?
             result = actx.empty(args[0].shape, args[0].dtype)
             prg = actx._get_scalar_func_loopy_program(
-                    name, nargs=len(args), naxes=len(args[0].shape))
+                    c_name, nargs=len(args), naxes=len(args[0].shape))
             actx.call_loopy(prg, out=result,
                     **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result
 
-        return obj_array_vectorized_n_args(f)
+        if name in self._c_to_numpy_arc_functions:
+            from warnings import warn
+            warn(f"'{name}' in ArrayContext.np is deprecated. "
+                    "Use '{c_to_numpy_arc_functions[name]}' as in numpy. "
+                    "The old name will stop working in 2021.",
+                    DeprecationWarning, stacklevel=3)
 
-    @obj_array_vectorized_n_args
+        # normalize to C names anyway
+        c_name = self._numpy_to_c_arc_functions.get(name, name)
+
+        # limit which functions we try to hand off to loopy
+        if name in self._numpy_math_functions:
+            from meshmode.dof_array import obj_or_dof_array_vectorized_n_args
+            return obj_or_dof_array_vectorized_n_args(loopy_implemented_elwise_func)
+        else:
+            raise AttributeError(name)
+
     def conjugate(self, x):
-        # NOTE: conjugate distribute over object arrays, but it looks for a
+        # NOTE: conjugate distributes over object arrays, but it looks for a
         # `conjugate` ufunc, while some implementations only have the shorter
-        # `conj` (e.g. cl.array.Array), so this should work for everybody
-        return x.conj()
+        # `conj` (e.g. cl.array.Array), so this should work for everybody.
+        from meshmode.dof_array import obj_or_dof_array_vectorize
+        return obj_or_dof_array_vectorize(lambda obj: obj.conj(), x)
 
     conj = conjugate
+
+
+class _BaseFakeNumpyLinalgNamespace:
+    def __init__(self, array_context):
+        self._array_context = array_context
 
 
 class ArrayContext:
@@ -166,15 +255,7 @@ class ArrayContext:
         raise NotImplementedError
 
     @memoize_method
-    def _get_scalar_func_loopy_program(self, name, nargs, naxes):
-        if name == "arctan2":
-            name = "atan2"
-        elif name == "atan2":
-            from warnings import warn
-            warn("'atan2' in ArrayContext.np is deprecated. Use 'arctan2', "
-                    "as in numpy2. This will be disallowed in 2021.",
-                    DeprecationWarning, stacklevel=3)
-
+    def _get_scalar_func_loopy_program(self, c_name, nargs, naxes):
         from pymbolic import var
 
         var_names = ["i%d" % i for i in range(naxes)]
@@ -193,10 +274,10 @@ class ArrayContext:
                 [
                     lp.Assignment(
                         var("out")[subscript],
-                        var(name)(*[
+                        var(c_name)(*[
                             var("inp%d" % i)[subscript] for i in range(nargs)]))
                     ],
-                name="actx_special_%s" % name)
+                name="actx_special_%s" % c_name)
 
     def freeze(self, array):
         """Return a version of the context-defined array *array* that is
@@ -244,31 +325,97 @@ class ArrayContext:
 # {{{ PyOpenCLArrayContext
 
 class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
-    @obj_array_vectorized_n_args
+    def _get_fake_numpy_linalg_namespace(self):
+        return _PyOpenCLFakeNumpyLinalgNamespace(self._array_context)
+
     def maximum(self, x, y):
         import pyopencl.array as cl_array
-        return cl_array.maximum(x, y)
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(
+                partial(cl_array.maximum, queue=self._array_context.queue),
+                x, y)
 
-    @obj_array_vectorized_n_args
     def minimum(self, x, y):
         import pyopencl.array as cl_array
-        return cl_array.minimum(x, y)
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(
+                partial(cl_array.minimum, queue=self._array_context.queue),
+                x, y)
 
-    @obj_array_vectorized_n_args
     def where(self, criterion, then, else_):
         import pyopencl.array as cl_array
-        return cl_array.if_positive(criterion != 0, then, else_)
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
 
-    @obj_array_vectorized_n_args
+        def where_inner(inner_crit, inner_then, inner_else):
+            return cl_array.if_positive(inner_crit != 0, inner_then, inner_else,
+                    queue=self._array_context.queue)
+
+        return obj_or_dof_array_vectorize_n_args(where_inner, criterion, then, else_)
+
+    def sum(self, a, dtype=None):
+        import pyopencl.array as cl_array
+        return cl_array.sum(
+                a, dtype=dtype, queue=self._array_context.queue).get()[()]
+
+    def min(self, a):
+        import pyopencl.array as cl_array
+        return cl_array.min(a, queue=self._array_context.queue).get()[()]
+
+    def max(self, a):
+        import pyopencl.array as cl_array
+        return cl_array.max(a, queue=self._array_context.queue).get()[()]
+
     def reshape(self, a, newshape):
         import pyopencl.array as cl_array
         return cl_array.reshape(a, newshape)
 
-    @obj_array_vectorized_n_args
     def concatenate(self, arrays, axis=0):
         import pyopencl.array as cl_array
         return cl_array.concatenate(arrays, axis,
                 self._array_context.queue, self._array_context.allocator)
+
+
+def _flatten_grp_array(grp_ary):
+    if grp_ary.size == 0:
+        # Work around https://github.com/inducer/pyopencl/pull/402
+        return grp_ary._new_with_changes(
+                data=None, offset=0, shape=(0,), strides=(grp_ary.dtype.itemsize,))
+    if grp_ary.flags.f_contiguous:
+        return grp_ary.reshape(-1, order="F")
+    elif grp_ary.flags.c_contiguous:
+        return grp_ary.reshape(-1, order="C")
+    else:
+        raise ValueError("cannot flatten group array of DOFArray for norm, "
+                f"with strides {grp_ary.strides} of {grp_ary.dtype}")
+
+
+class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
+    def norm(self, array, ord=None):
+        if len(array.shape) != 1:
+            raise NotImplementedError("only vector norms are implemented")
+
+        if ord is None:
+            ord = 2
+
+        # Handling DOFArrays here is not beautiful, but it sure does avoid
+        # downstream headaches.
+        from meshmode.dof_array import DOFArray
+        if isinstance(array, DOFArray):
+            import numpy.linalg as la
+            return la.norm(np.array([
+                self.norm(_flatten_grp_array(grp_ary), ord)
+                for grp_ary in array]), ord)
+
+        if array.size == 0:
+            return 0
+
+        from numbers import Number
+        if ord == np.inf:
+            return self._array_context.np.max(abs(array))
+        elif isinstance(ord, Number) and ord > 0:
+            return self._array_context.np.sum(abs(array)**ord)**(1/ord)
+        else:
+            raise NotImplementedError(f"unsupported value of 'ord': {ord}")
 
 
 class PyOpenCLArrayContext(ArrayContext):
@@ -360,21 +507,6 @@ class PyOpenCLArrayContext(ArrayContext):
     def call_loopy(self, program, **kwargs):
         program = self.transform_loopy_program(program)
 
-        # accommodate loopy with and without kernel callables
-        try:
-            options = program.options
-        except AttributeError:
-            try:
-                options = program.root_kernel.options
-            except AttributeError:
-                entrypoint, = program.entrypoints
-                options = program[entrypoint].options
-        if not (options.return_dict and options.no_numpy):
-            raise ValueError("Loopy program passed to call_loopy must "
-                    "have return_dict and no_numpy options set. "
-                    "Did you use meshmode.array_context.make_loopy_program "
-                    "to create this program?")
-
         evt, result = program(self.queue, **kwargs, allocator=self.allocator)
 
         if self._wait_event_queue_length is not False:
@@ -402,6 +534,21 @@ class PyOpenCLArrayContext(ArrayContext):
 
     @memoize_method
     def transform_loopy_program(self, program):
+        # accommodate loopy with and without kernel callables
+        try:
+            options = program.options
+        except AttributeError:
+            try:
+                options = program.root_kernel.options
+            except AttributeError:
+                entrypoint, = program.entrypoints
+                options = program[entrypoint].options
+        if not (options.return_dict and options.no_numpy):
+            raise ValueError("Loopy program passed to call_loopy must "
+                    "have return_dict and no_numpy options set. "
+                    "Did you use meshmode.array_context.make_loopy_program "
+                    "to create this program?")
+
         # FIXME: This could be much smarter.
         import loopy as lp
         # accommodate loopy with and without kernel callables
@@ -444,19 +591,33 @@ class PyOpenCLArrayContext(ArrayContext):
 # {{{ pytest integration
 
 def pytest_generate_tests_for_pyopencl_array_context(metafunc):
+    """Parametrize tests for pytest to use a :mod:`pyopencl` array context.
+
+    Performs device enumeration analogously to
+    :func:`pyopencl.tools.pytest_generate_tests_for_pyopencl`.
+
+    Using the line:
+
+    .. code-block:: python
+
+       from meshmode.array_context import pytest_generate_tests_for_pyopencl \
+            as pytest_generate_tests
+
+    in your pytest test scripts allows you to use the arguments ctx_factory,
+    device, or platform in your test functions, and they will automatically be
+    run for each OpenCL device/platform in the system, as appropriate.
+
+    It also allows you to specify the ``PYOPENCL_TEST`` environment variable
+    for device selection.
+    """
+
     import pyopencl as cl
     from pyopencl.tools import _ContextFactory
 
     class ArrayContextFactory(_ContextFactory):
         def __call__(self):
             ctx = super().__call__()
-            return PyOpenCLArrayContext(
-                    cl.CommandQueue(ctx),
-                    # CI machines are often quite limited in their memory.
-                    # Avoid enqueueing ahead by too much. See
-                    # https://github.com/inducer/grudge/pull/23
-                    # for the saga that led to this. Bring popcorn.
-                    wait_event_queue_length=2)
+            return PyOpenCLArrayContext(cl.CommandQueue(ctx))
 
         def __str__(self):
             return ("<array context factory for <pyopencl.Device '%s' on '%s'>" %
@@ -491,24 +652,32 @@ def pytest_generate_tests_for_pyopencl_array_context(metafunc):
 
 # {{{ PytatoArrayContext
 
+class _PytatoFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
+    def norm(self, array, ord=None):
+        raise NotImplementedError
+
+
 class _PytatoFakeNumpyNamespace(_BaseFakeNumpyNamespace):
+    def _get_fake_numpy_linalg_namespace(self):
+        return _PytatoFakeNumpyLinalgNamespace(self._array_context)
 
     @property
     def ns(self):
         return self._array_context.ns
 
-    @obj_array_vectorized_n_args
     def exp(self, x):
         import pytato as pt
-        return pt.exp(x)
+        from meshmode.dof_array import obj_or_dof_array_vectorize
+        return obj_or_dof_array_vectorize(pt.exp, x)
 
-    @obj_array_vectorized_n_args
     def reshape(self, a, newshape):
         import pytato as pt
-        return pt.reshape(a, newshape)
 
-    @obj_array_vectorized_n_args
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(pt.reshape, a, newshape)
+
     def concatenate(self, arrays, axis=0):
+        raise NotImplementedError
         import pytato as pt
         return pt.concatenate(arrays, axis)
 
@@ -671,241 +840,6 @@ class PytatoArrayContext(ArrayContext):
 
         return PytatoCompiledOperator(self, pytato_program, [len(field) for field in
             input_like], output_spec)
-
-# }}}
-
-
-# {{{ DebugArrayContext
-
-class _DebugFakeNumpyNamespace(_BaseFakeNumpyNamespace):
-    @property
-    def actx_np(self):
-        return self._array_context.actx.np
-
-    @property
-    def ref_actx_np(self):
-        return self._array_context.ref_actx.np
-
-    @obj_array_vectorized_n_args
-    def exp(self, x):
-        ary = self.actx_np.exp(x.array)
-        ref_ary = self.ref_actx_np.exp(x.ref_array)
-
-        result_dbg_ary = DebugArray(x.actx, ary,
-                                    x.ref_actx, ref_ary)
-
-        # DEBUG #
-        result_dbg_ary.debug()
-
-        return result_dbg_ary
-
-    @obj_array_vectorized_n_args
-    def reshape(self, a, newshape):
-        ary = self.actx_np.reshape(a.array, newshape)
-        ref_ary = self.ref_actx_np.reshape(a.ref_array, newshape)
-
-        result_dbg_ary = DebugArray(a.actx, ary,
-                                    a.ref_actx, ref_ary)
-
-        # DEBUG #
-        result_dbg_ary.debug()
-
-        return result_dbg_ary
-
-    @obj_array_vectorized_n_args
-    def concatenate(self, arrays, axis=0):
-        ary = self.actx_np.concatenate([array.array for array in arrays], axis)
-        ref_ary = self.ref_actx_np.concatenate([array.ref_array
-                                                for array in arrays], axis)
-
-        result_dbg_ary = DebugArray(arrays[0].actx, ary,
-                                    arrays[0].ref_actx, ref_ary)
-
-        # DEBUG #
-        result_dbg_ary.debug()
-
-        return result_dbg_ary
-
-
-class DebugArray:
-    def __init__(self, actx, array, ref_actx, ref_array):
-        self.array = array
-        self.ref_array = ref_array
-        self.actx = actx
-        self.ref_actx = ref_actx
-
-        assert isinstance(actx, ArrayContext)
-        assert isinstance(ref_actx, ArrayContext)
-
-    def __getitem__(self, key):
-        ary = self.array[key]
-        ref_ary = self.ref_array[key]
-
-        result_dbg_ary = DebugArray(self.actx, ary,
-                                    self.ref_actx, ref_ary)
-
-        # DEBUG #
-        result_dbg_ary.debug()
-
-        return result_dbg_ary
-
-    def debug(self):
-        np_array = self.actx.to_numpy(self.array)
-        np_ref_array = self.ref_actx.to_numpy(self.ref_array)
-        np.testing.assert_almost_equal(np_array, np_ref_array)
-        print(f"[{time.asctime()}]: Verified")
-
-    def _binary_op(self, op, other, reverse=False):
-        if isinstance(other, DebugArray):
-            ary = op(self.array, other.array)
-            ref_ary = op(self.ref_array, other.ref_array)
-        else:
-            assert isinstance(other, Number)
-            ary = op(self.array, other)
-            ref_ary = op(self.ref_array, other)
-
-        result_dbg_ary = DebugArray(self.actx, ary,
-                                    self.ref_actx, ref_ary)
-
-        # DEBUG #
-        result_dbg_ary.debug()
-
-        return result_dbg_ary
-
-    def _unary_op(self, op):
-        ary = op(self.array)
-        ref_ary = op(self.ref_array)
-
-        result_dbg_ary = DebugArray(self.actx, ary,
-                                    self.ref_actx, ref_ary)
-
-        # DEBUG #
-        result_dbg_ary.debug()
-
-        return result_dbg_ary
-
-    @property
-    def shape(self):
-        assert self.array.shape == self.ref_array.shape
-        return self.array.shape
-
-    @property
-    def dtype(self):
-        assert self.array.dtype == self.ref_array.dtype
-        return self.array.dtype
-
-    @property
-    def size(self):
-        assert self.array.size == self.ref_array.size
-        return self.array.size
-
-    __mul__ = partialmethod(_binary_op, operator.mul)
-    __rmul__ = partialmethod(_binary_op, operator.mul, reverse=True)
-
-    __add__ = partialmethod(_binary_op, operator.add)
-    __radd__ = partialmethod(_binary_op, operator.add, reverse=True)
-
-    __sub__ = partialmethod(_binary_op, operator.sub)
-    __rsub__ = partialmethod(_binary_op, operator.sub, reverse=True)
-
-    __truediv__ = partialmethod(_binary_op, operator.truediv)
-    __rtruediv__ = partialmethod(_binary_op, operator.truediv, reverse=True)
-
-    __pow__ = partialmethod(_binary_op, operator.pow)
-    __rpow__ = partialmethod(_binary_op, operator.pow, reverse=True)
-
-    __neg__ = partialmethod(_unary_op, operator.neg)
-
-
-class DebugArrayContext(ArrayContext):
-    """
-    An array context to debug between 2 array contexts.
-
-    .. attribute:: actx
-
-        A :class:`meshmode.ArrayContext`.
-
-    .. attribute:: ref_actx
-
-        Reference :class:`meshmode.ArrayContext`.
-    """
-
-    def __init__(self, actx, ref_actx):
-        super().__init__()
-        self.actx = actx
-        self.ref_actx = ref_actx
-
-    def _get_fake_numpy_namespace(self):
-        return _DebugFakeNumpyNamespace(self)
-
-    # {{{ ArrayContext interface
-
-    def empty(self, shape, dtype):
-        return DebugArray(self.actx, self.actx.empty(shape, dtype),
-                          self.ref_actx, self.ref_actx.empty(shape, dtype))
-
-    def zeros(self, shape, dtype):
-        return DebugArray(self.actx, self.actx.zeros(shape, dtype),
-                          self.ref_actx, self.ref_actx.zeros(shape, dtype))
-
-    def from_numpy(self, np_array: np.ndarray):
-        return DebugArray(self.actx, self.actx.from_numpy(np_array),
-                          self.ref_actx, self.ref_actx.from_numpy(np_array))
-
-    def to_numpy(self, array):
-        assert isinstance(array, DebugArray)
-
-        # DEBUG #
-        array.debug()
-
-        return self.actx.to_numpy(array.array)
-
-    def call_loopy(self, program, **kwargs):
-        unmangled_kwargs = {key: val.array if isinstance(val, DebugArray) else val
-                            for key, val in kwargs.items()}
-        unmangled_ref_kwargs = {key: val.ref_array if isinstance(val, DebugArray)
-                                     else val
-                                for key, val in kwargs.items()}
-        result = self.actx.call_loopy(program, **unmangled_kwargs)
-        ref_result = self.ref_actx.call_loopy(program, **unmangled_ref_kwargs)
-
-        assert result.keys() == ref_result.keys()
-
-        dbg_array_result_dict = {}
-
-        for key in result.keys():
-            val = result[key]
-            ref_val = ref_result[key]
-
-            result_as_debug_array = DebugArray(self.actx, val,
-                                               self.ref_actx, ref_val)
-
-            # DEBUG #
-            result_as_debug_array.debug()
-
-            dbg_array_result_dict[key] = result_as_debug_array
-
-        return dbg_array_result_dict
-
-    def freeze(self, array):
-        result = DebugArray(self.actx, self.actx.freeze(array.array),
-                            self.ref_actx, self.ref_actx.freeze(array.ref_array))
-
-        # DEBUG #
-        result.debug()
-
-        return result
-
-    def thaw(self, array):
-        result = DebugArray(self.actx, self.actx.thaw(array.array),
-                            self.ref_actx, self.ref_actx.thaw(array.ref_array))
-
-        # DEBUG #
-        result.debug()
-
-        return result
-
-    # }}}
 
 # }}}
 

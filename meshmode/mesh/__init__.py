@@ -199,32 +199,33 @@ class MeshElementGroup(Record):
 
     def __init__(self, order, vertex_indices, nodes,
             element_nr_base=None, node_nr_base=None,
-            unit_nodes=None, dim=None):
+            unit_nodes=None, dim=None, **kwargs):
         """
         :arg order: the maximum total degree used for interpolation.
-        :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
+        :arg nodes: ``(ambient_dim, nelements, nunit_nodes)``
             The nodes are assumed to be mapped versions of *unit_nodes*.
-        :arg unit_nodes: ``[dim, nunit_nodes]``
-            The unit nodes of which *nodes* is a mapped
-            version.
+        :arg unit_nodes: ``(dim, nunit_nodes)`` The unit nodes of which *nodes*
+            is a mapped version.
 
         Do not supply *element_nr_base* and *node_nr_base*, they will be
         automatically assigned.
         """
 
-        Record.__init__(self,
+        super().__init__(
             order=order,
             vertex_indices=vertex_indices,
             nodes=nodes,
             unit_nodes=unit_nodes,
-            element_nr_base=element_nr_base, node_nr_base=node_nr_base)
+            element_nr_base=element_nr_base, node_nr_base=node_nr_base,
+            **kwargs)
 
-    def copy(self, **kwargs):
+    def get_copy_kwargs(self, **kwargs):
         if "element_nr_base" not in kwargs:
             kwargs["element_nr_base"] = None
         if "node_nr_base" not in kwargs:
             kwargs["node_nr_base"] = None
-        return Record.copy(self, **kwargs)
+
+        return super().get_copy_kwargs(**kwargs)
 
     @property
     def dim(self):
@@ -255,20 +256,20 @@ class MeshElementGroup(Record):
 
     @property
     def is_affine(self):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def face_vertex_indices(self):
         """Return a tuple of tuples indicating which vertices
         (in mathematically positive ordering) make up each face
         of an element in this group.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def vertex_unit_coordinates(self):
         """Return an array of shape ``(nfaces, dim)`` with the unit
         coordinates of each vertex.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @property
     def nfaces(self):
@@ -290,134 +291,94 @@ class MeshElementGroup(Record):
 # }}}
 
 
-# {{{ simplex
+# {{{ modepy-based element group
 
-class SimplexElementGroup(MeshElementGroup):
-    """
-    .. automethod:: __init__
-    """
-
+class _ModepyElementGroup(MeshElementGroup):
     def __init__(self, order, vertex_indices, nodes,
             element_nr_base=None, node_nr_base=None,
-            unit_nodes=None, dim=None):
+            unit_nodes=None, dim=None, **kwargs):
         """
         :arg order: the maximum total degree used for interpolation.
-        :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
+        :arg nodes: ``(ambient_dim, nelements, nunit_nodes)``
             The nodes are assumed to be mapped versions of *unit_nodes*.
-        :arg unit_nodes: ``[dim, nunit_nodes]``
-            The unit nodes of which *nodes* is a mapped
-            version. If unspecified, the nodes from
-            :func:`modepy.warp_and_blend_nodes` for *dim*
-            are assumed. These must be in unit coordinates
-            as defined in :mod:`modepy`.
-        :arg dim: only used if *unit_nodes* is None, to get
+        :arg unit_nodes: ``(dim, nunit_nodes)`` The unit nodes of which
+            *nodes* is a mapped version. If unspecified, the nodes from
+            :func:`modepy.edge_clustered_nodes_for_space` are assumed.
+            These must be in unit coordinates as defined in :mod:`modepy`.
+        :arg dim: only used if *unit_nodes* is *None*, to get
             the default unit nodes.
 
         Do not supply *element_nr_base* and *node_nr_base*, they will be
         automatically assigned.
         """
 
-        if unit_nodes is None:
-            if dim is None:
-                raise TypeError("'dim' must be passed "
-                        "if 'unit_nodes' is not passed")
-
-            if dim <= 3:
-                unit_nodes = mp.warp_and_blend_nodes(dim, order)
+        if unit_nodes is not None:
+            _dim = unit_nodes.shape[0]
+            if dim is not None and _dim != dim:
+                raise ValueError("'dim' does not match 'unit_nodes' dimension")
             else:
-                unit_nodes = mp.equidistant_nodes(dim, order)
+                dim = _dim
+        else:
+            if dim is None:
+                raise TypeError("'dim' must be passed if 'unit_nodes' is not passed")
 
-        dims = unit_nodes.shape[0]
+        # dim is now usable
+        shape = self._modepy_shape_cls(dim)
+        space = mp.space_for_shape(shape, order)
+
+        if unit_nodes is None:
+            unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
+
+        if nodes is not None:
+            if unit_nodes.shape[-1] != nodes.shape[-1]:
+                raise ValueError(
+                        "'nodes' has wrong number of unit nodes per element."
+                        f" expected {unit_nodes.shape[-1]}, "
+                        f" but got {nodes.shape[-1]}.")
 
         if vertex_indices is not None:
             if not issubclass(vertex_indices.dtype.type, np.integer):
-                raise TypeError("vertex_indices must be integral")
+                raise TypeError("'vertex_indices' must be integral")
 
-            if vertex_indices.shape[-1] != dims+1:
-                raise ValueError("vertex_indices has wrong number of vertices per "
-                        "element. expected: %d, got: %d" % (dims+1,
-                            vertex_indices.shape[-1]))
+            if vertex_indices.shape[-1] != shape.nvertices:
+                raise ValueError(
+                        "'vertex_indices' has wrong number of vertices per element."
+                        f" expected {shape.nvertices},"
+                        f" got {vertex_indices.shape[-1]}")
 
         super().__init__(order, vertex_indices, nodes,
-                element_nr_base, node_nr_base, unit_nodes, dim)
+                element_nr_base=element_nr_base,
+                node_nr_base=node_nr_base,
+                unit_nodes=unit_nodes,
+                dim=dim,
+                _modepy_shape=shape,
+                _modepy_space=space)
+
+    @property
+    @memoize_method
+    def _modepy_faces(self):
+        return mp.faces_for_shape(self._modepy_shape)
+
+    def face_vertex_indices(self):
+        return tuple(face.volume_vertex_indices for face in self._modepy_faces)
+
+    def vertex_unit_coordinates(self):
+        return mp.unit_vertices_for_shape(self._modepy_shape).T
+
+# }}}
+
+
+class SimplexElementGroup(_ModepyElementGroup):
+    _modepy_shape_cls = mp.Simplex
 
     @property
     @memoize_method
     def is_affine(self):
         return is_affine_simplex_group(self)
 
-    def face_vertex_indices(self):
-        if self.dim == 1:
-            return (
-                (0,),
-                (1,),
-                )
-        elif self.dim == 2:
-            return (
-                (0, 1),
-                (2, 0),
-                (1, 2),
-                )
-        elif self.dim == 3:
-            return (
-                (0, 2, 1),
-                (0, 1, 3),
-                (0, 3, 2),
-                (1, 2, 3)
-                )
-        else:
-            raise NotImplementedError("dim=%d" % self.dim)
 
-    def vertex_unit_coordinates(self):
-        from modepy.tools import unit_vertices
-        return unit_vertices(self.dim)
-
-# }}}
-
-
-# {{{ tensor-product
-
-class TensorProductElementGroup(MeshElementGroup):
-    """
-    .. automethod:: __init__
-    """
-
-    def __init__(self, order, vertex_indices, nodes,
-            element_nr_base=None, node_nr_base=None,
-            unit_nodes=None):
-        """
-        :arg order: the maximum total degree used for interpolation.
-        :arg nodes: ``[ambient_dim, nelements, nunit_nodes]``
-            The nodes are assumed to be mapped versions of *unit_nodes*.
-        :arg unit_nodes: ``[dim, nunit_nodes]``
-            The unit nodes of which *nodes* is a mapped
-            version.
-
-        Do not supply *element_nr_base* and *node_nr_base*, they will be
-        automatically assigned.
-        """
-
-        dims = unit_nodes.shape[0]
-
-        if vertex_indices is not None:
-            if not issubclass(vertex_indices.dtype.type, np.integer):
-                raise TypeError("vertex_indices must be integral")
-
-            if vertex_indices.shape[-1] != 2**dims:
-                raise ValueError("vertex_indices has wrong number of vertices per "
-                        "element. expected: %d, got: %d" % (2**dims,
-                            vertex_indices.shape[-1]))
-
-        super().__init__(order, vertex_indices, nodes,
-                element_nr_base, node_nr_base, unit_nodes)
-
-    def face_vertex_indices(self):
-        raise NotImplementedError()
-
-    def vertex_unit_coordinates(self):
-        raise NotImplementedError()
-
-# }}}
+class TensorProductElementGroup(_ModepyElementGroup):
+    _modepy_shape_cls = mp.Hypercube
 
 # }}}
 
@@ -872,8 +833,10 @@ class Mesh(Record):
         set_if_not_present("boundary_tags")
         set_if_not_present("nodal_adjacency", "_nodal_adjacency")
         set_if_not_present("facial_adjacency_groups", "_facial_adjacency_groups")
+        set_if_not_present("boundary_tags")
         set_if_not_present("vertex_id_dtype")
         set_if_not_present("element_id_dtype")
+        set_if_not_present("is_conforming")
 
         return kwargs
 
@@ -951,10 +914,8 @@ class Mesh(Record):
                 and self.groups == other.groups
                 and self.vertex_id_dtype == other.vertex_id_dtype
                 and self.element_id_dtype == other.element_id_dtype
-                and (self._nodal_adjacency
-                        == other._nodal_adjacency)
-                and (self._facial_adjacency_groups
-                        == other._facial_adjacency_groups)
+                and self._nodal_adjacency == other._nodal_adjacency
+                and self._facial_adjacency_groups == other._facial_adjacency_groups
                 and self.boundary_tags == other.boundary_tags
                 and self.is_conforming == other.is_conforming)
 
@@ -971,15 +932,20 @@ class Mesh(Record):
 
 # {{{ node-vertex consistency test
 
-def _test_node_vertex_consistency_simplex(mesh, mgrp, tol):
+def _test_node_vertex_consistency_resampling(mesh, mgrp, tol):
     if mesh.vertices is None:
         return True
 
     if mgrp.nelements == 0:
         return True
 
+    if isinstance(mgrp, _ModepyElementGroup):
+        basis = mp.basis_for_space(mgrp._modepy_space, mgrp._modepy_shape).functions
+    else:
+        raise TypeError(f"unsupported group type: {type(mgrp).__name__}")
+
     resampling_mat = mp.resampling_matrix(
-            mp.simplex_best_available_basis(mgrp.dim, mgrp.order),
+            basis,
             mgrp.vertex_unit_coordinates().T,
             mgrp.unit_nodes)
 
@@ -1013,8 +979,8 @@ def _test_node_vertex_consistency(mesh, tol):
     """
 
     for mgrp in mesh.groups:
-        if isinstance(mgrp, SimplexElementGroup):
-            assert _test_node_vertex_consistency_simplex(mesh, mgrp, tol)
+        if isinstance(mgrp, _ModepyElementGroup):
+            assert _test_node_vertex_consistency_resampling(mesh, mgrp, tol)
         else:
             from warnings import warn
             warn("not implemented: node-vertex consistency check for '%s'"
@@ -1375,7 +1341,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
 
         # An array of flags for each face indicating whether we have encountered
         # a boundary condition for that face.
-        seen = np.zeros_like(nb_el_bits, dtype=np.bool)
+        seen = np.zeros_like(nb_el_bits, dtype=bool)
 
         if true_boundary_only:
             tag_bit = mesh.boundary_tag_bit(BTAG_ALL)
@@ -1435,11 +1401,10 @@ def is_affine_simplex_group(group, abs_tol=None):
                 type(group).__name__)
 
     # get matrices
-    basis = mp.simplex_best_available_basis(group.dim, group.order)
-    grad_basis = mp.grad_simplex_best_available_basis(group.dim, group.order)
-
-    vinv = la.inv(mp.vandermonde(basis, group.unit_nodes))
-    diff = mp.differentiation_matrices(basis, grad_basis, group.unit_nodes)
+    basis = mp.basis_for_space(group._modepy_space, group._modepy_shape)
+    vinv = la.inv(mp.vandermonde(basis.functions, group.unit_nodes))
+    diff = mp.differentiation_matrices(
+            basis.functions, basis.gradients, group.unit_nodes)
     if not isinstance(diff, tuple):
         diff = (diff,)
 

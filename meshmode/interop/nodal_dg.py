@@ -4,6 +4,8 @@ book "Nodal Discontinuous Galerkin Methods" by Jan Hesthaven
 and Tim Warburton (Springer, 2008).
 
 .. autoclass:: NodalDGContext
+
+.. autofunction:: download_nodal_dg_if_not_present
 """
 
 __copyright__ = "Copyright (C) 2020 Andreas Kloeckner"
@@ -61,6 +63,9 @@ class NodalDGContext(object):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        # Work around https://github.com/pexpect/pexpect/issues/462
+        self.octave._engine.repl.delayafterterminate = 2
+
         self.octave.exit()
 
     REF_AXES = ["r", "s", "t"]
@@ -74,7 +79,7 @@ class NodalDGContext(object):
 
         .. warning::
 
-            High-order geometryinformation is currently silently ignored.
+            High-order geometry information is currently silently ignored.
         """
         if len(mesh.groups) != 1:
             raise ValueError("mesh must have exactly one element group")
@@ -111,11 +116,11 @@ class NodalDGContext(object):
             unit_nodes_arrays = self.octave.eval(
                     f"Nodes{dim}D(N)", nout=dim, verbose=False)
 
-            equilat_to_biunit_func_name = (
+            equilat_to_unit_func_name = (
                     "".join(self.AXES[:dim] + ["to"] + self.REF_AXES[:dim]))
 
             unit_nodes_arrays = self.octave.feval(
-                    equilat_to_biunit_func_name, *unit_nodes_arrays,
+                    equilat_to_unit_func_name, *unit_nodes_arrays,
                     nout=dim, verbose=False)
 
             unit_nodes = np.array([a.reshape(-1) for a in unit_nodes_arrays])
@@ -154,4 +159,31 @@ class NodalDGContext(object):
             ) -> meshmode.dof_array.DOFArray:
         ary = self.octave.pull(name).T
 
-        return meshmode.dof_array.DOFArray.from_list(actx, [actx.from_numpy(ary)])
+        return meshmode.dof_array.DOFArray(actx, (actx.from_numpy(ary),))
+
+
+def download_nodal_dg_if_not_present(path="nodal-dg"):
+    """Download the nodal-DG source code.
+
+    :arg path: The destination path.
+    """
+    import os
+    if os.path.exists(path):
+        return
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        filename = os.path.join(tmp, "master.zip")
+
+        from pytools import download_from_web_if_not_present
+        download_from_web_if_not_present(
+                url="https://github.com/tcew/nodal-dg/archive/master.zip",
+                local_name=filename)
+
+        import zipfile
+        with zipfile.ZipFile(filename, "r") as zp:
+            zp.extractall(tmp)
+
+        if not os.path.exists(path):
+            import shutil
+            shutil.move(os.path.join(tmp, "nodal-dg-master"), path)

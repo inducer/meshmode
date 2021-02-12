@@ -30,12 +30,15 @@ jobs:
         -   name: "Main Script"
             run: |
                 sudo apt update
-                sudo apt install octave
+                sudo apt install octave openmpi-bin libopenmpi-dev libhdf5-dev
 
                 CONDA_ENVIRONMENT=.test-conda-env-py3.yml
-                (cd test; git clone https://github.com/tcew/nodal-dg)
-                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project-within-miniconda.sh
-                . ./build-and-test-py-project-within-miniconda.sh
+                export MPLBACKEND=Agg
+                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/ci-support.sh
+                . ./ci-support.sh
+                build_py_project_in_conda_env
+                with_echo python -m pip install mpi4py
+                test_py_project
 
     firedrake:
         name: Pytest Firedrake
@@ -75,6 +78,7 @@ jobs:
         -   uses: actions/checkout@v2
         -   name: "Main Script"
             run: |
+                export MPLBACKEND=Agg
                 CONDA_ENVIRONMENT=.test-conda-env-py3.yml
                 USE_CONDA_BUILD=1
                 curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-py-project-and-run-examples.sh
@@ -106,5 +110,51 @@ jobs:
                 rm doc/interop.rst
 
                 build_docs
+
+    downstream_tests:
+        strategy:
+            matrix:
+                # Reinstate when
+                # https://github.com/illinois-ceesd/mirgecom/issues/212
+                # is fixed:
+                # downstream_project: [grudge, pytential, mirgecom]
+
+                downstream_project: [grudge, pytential]
+        name: Tests for downstream project ${{ matrix.downstream_project }}
+        runs-on: ubuntu-latest
+        steps:
+        -   uses: actions/checkout@v2
+        -   name: "Main Script"
+            env:
+                DOWNSTREAM_PROJECT: ${{ matrix.downstream_project }}
+            run: |
+                if test "$DOWNSTREAM_PROJECT" = "mirgecom"; then
+                    git clone "https://github.com/illinois-ceesd/$DOWNSTREAM_PROJECT.git"
+                else
+                    git clone "https://github.com/inducer/$DOWNSTREAM_PROJECT.git"
+                fi
+
+                cd "$DOWNSTREAM_PROJECT"
+                echo "*** $DOWNSTREAM_PROJECT version: $(git rev-parse --short HEAD)"
+
+                sed -i "/egg=meshmode/ c git+file://$(readlink -f ..)#egg=meshmode" requirements.txt
+
+                export CONDA_ENVIRONMENT=.test-conda-env-py3.yml
+
+                # Avoid slow or complicated tests in downstream projects
+                export PYTEST_ADDOPTS="-k 'not (slowtest or octave or mpi)'"
+
+                if test "$DOWNSTREAM_PROJECT" = "mirgecom"; then
+                    # can't turn off MPI in mirgecom
+                    sudo apt-get update
+                    sudo apt-get install openmpi-bin libopenmpi-dev
+                else
+                    sed -i "/mpi4py/ d" requirements.txt
+                fi
+
+                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/ci-support.sh
+                . ./ci-support.sh
+                build_py_project_in_conda_env
+                test_py_project
 
 # vim: sw=4

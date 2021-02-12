@@ -25,6 +25,7 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
+from pytools import deprecate_keyword
 import logging
 logger = logging.getLogger(__name__)
 
@@ -307,18 +308,9 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 
 # {{{ make_group_from_vertices
 
+@deprecate_keyword("group_factory", "group_cls")
 def make_group_from_vertices(vertices, vertex_indices, order,
-        group_cls=None, unit_nodes=None, group_factory=None):
-    if group_factory is not None:
-        from warnings import warn
-        warn("'group_factory' is deprecated, use 'group_cls' instead",
-                DeprecationWarning, stacklevel=2)
-
-        if group_cls is not None:
-            raise ValueError("cannot set both 'group_cls' and 'group_factory'")
-
-        group_cls = group_factory
-
+        group_cls=None, unit_nodes=None):
     # shape: (ambient_dim, nelements, nvertices)
     ambient_dim = vertices.shape[0]
     el_vertices = vertices[:, vertex_indices]
@@ -341,13 +333,11 @@ def make_group_from_vertices(vertices, vertex_indices, order,
 
         # dim, nunit_nodes
         if unit_nodes is None:
-            if dim <= 3:
-                unit_nodes = mp.warp_and_blend_nodes(dim, order)
-            else:
-                unit_nodes = mp.equidistant_nodes(dim, order)
+            shape = mp.Simplex(dim)
+            space = mp.space_for_shape(shape, order)
+            unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
 
         unit_nodes_01 = 0.5 + 0.5*unit_nodes
-
         nodes = np.einsum(
                 "si,des->dei",
                 unit_nodes_01, spanning_vectors) + el_origins
@@ -360,22 +350,22 @@ def make_group_from_vertices(vertices, vertex_indices, order,
             raise ValueError("invalid number of vertices for tensor-product "
                     "elements, must be power of two")
 
+        shape = mp.Hypercube(dim)
+        space = mp.space_for_shape(shape, order)
+
         if unit_nodes is None:
-            from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
-            unit_nodes = mp.tensor_product_nodes(dim,
-                    legendre_gauss_lobatto_nodes(order))
+            unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
 
         # shape: (dim, nnodes)
         unit_nodes_01 = 0.5 + 0.5*unit_nodes
         _, nnodes = unit_nodes.shape
 
-        from pytools import generate_nonnegative_integer_tuples_below as gnitb
-        id_tuples = list(gnitb(2, dim))
-        assert len(id_tuples) == nvertices
+        vertex_tuples = mp.node_tuples_for_space(type(space)(dim, 1))
+        assert len(vertex_tuples) == nvertices
 
         vdm = np.empty((nvertices, nvertices))
-        for i, vertex_tuple in enumerate(id_tuples):
-            for j, func_tuple in enumerate(id_tuples):
+        for i, vertex_tuple in enumerate(vertex_tuples):
+            for j, func_tuple in enumerate(vertex_tuples):
                 vertex_ref = np.array(vertex_tuple, dtype=np.float64)
                 vdm[i, j] = np.prod(vertex_ref**func_tuple)
 
@@ -385,7 +375,7 @@ def make_group_from_vertices(vertices, vertex_indices, order,
             coeffs[d] = la.solve(vdm, el_vertices[d].T).T
 
         vdm_nodes = np.zeros((nnodes, nvertices))
-        for j, func_tuple in enumerate(id_tuples):
+        for j, func_tuple in enumerate(vertex_tuples):
             vdm_nodes[:, j] = np.prod(
                     unit_nodes_01 ** np.array(func_tuple).reshape(-1, 1),
                     axis=0)
@@ -407,7 +397,7 @@ def make_group_from_vertices(vertices, vertex_indices, order,
 # {{{ generate_icosahedron
 
 def generate_icosahedron(r, order):
-    # http://en.wikipedia.org/w/index.php?title=Icosahedron&oldid=387737307
+    # https://en.wikipedia.org/w/index.php?title=Icosahedron&oldid=387737307
 
     phi = (1+5**(1/2))/2
 
@@ -679,15 +669,16 @@ def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
 
 # {{{ generate_box_mesh
 
+@deprecate_keyword("group_factory", "group_cls")
 def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
-        group_factory=None, boundary_tag_to_face=None,
+        group_cls=None, boundary_tag_to_face=None,
         mesh_type=None):
     r"""Create a semi-structured mesh.
 
     :param axis_coords: a tuple with a number of entries corresponding
         to the number of dimensions, with each entry a numpy array
         specifying the coordinates to be used along that axis.
-    :param group_factory: One of :class:`meshmode.mesh.SimplexElementGroup`
+    :param group_cls: One of :class:`meshmode.mesh.SimplexElementGroup`
         or :class:`meshmode.mesh.TensorProductElementGroup`.
     :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
         The keys correspond to custom boundary tags, with the values giving
@@ -729,6 +720,10 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     .. versionchanged:: 2020.1
 
         *boundary_tag_to_face* parameter added.
+
+    .. versionchanged:: 2020.3
+
+        *group_factory* deprecated and renamed to *group_cls*.
     """
 
     if boundary_tag_to_face is None:
@@ -746,32 +741,31 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     from pytools import product
     nvertices = product(shape)
 
-    vertex_indices = np.arange(nvertices).reshape(*shape, order="F")
+    vertex_indices = np.arange(nvertices).reshape(*shape)
 
     vertices = np.empty((dim,)+shape, dtype=coord_dtype)
     for idim in range(dim):
-        vshape = (shape[idim],) + (1,)*idim
+        vshape = (shape[idim],) + (1,)*(dim-1-idim)
         vertices[idim] = axis_coords[idim].reshape(*vshape)
 
     vertices = vertices.reshape(dim, -1)
 
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-    if group_factory is None:
-        group_factory = SimplexElementGroup
+    if group_cls is None:
+        group_cls = SimplexElementGroup
 
-    if issubclass(group_factory, SimplexElementGroup):
+    if issubclass(group_cls, SimplexElementGroup):
         is_tp = False
-    elif issubclass(group_factory, TensorProductElementGroup):
+    elif issubclass(group_cls, TensorProductElementGroup):
         is_tp = True
     else:
-        raise ValueError("unsupported value for 'group_factory': %s"
-                % group_factory)
+        raise ValueError(f"unsupported value for 'group_cls': {group_cls}")
 
     el_vertices = []
 
     if dim == 1:
         if mesh_type is not None:
-            raise ValueError("unsupported mesh_type")
+            raise ValueError(f"unsupported mesh type: '{mesh_type}'")
 
         for i in range(shape[0]-1):
             # a--b
@@ -805,7 +799,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
             pass
 
         else:
-            raise ValueError("unsupported mesh_type")
+            raise ValueError(f"unsupported mesh type: '{mesh_type}'")
 
         for i in range(shape[0]-1):
             for j in range(shape[1]-1):
@@ -853,8 +847,8 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
                     if is_tp:
                         el_vertices.append(
-                                (a000, a001, a010, a011,
-                                    a100, a101, a110, a111))
+                                (a000, a100, a010, a110,
+                                    a001, a101, a011, a111))
 
                     else:
                         el_vertices.append((a000, a100, a010, a001))
@@ -872,7 +866,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
     grp = make_group_from_vertices(
             vertices.reshape(dim, -1), el_vertices, order,
-            group_cls=group_factory)
+            group_cls=group_cls)
 
     # {{{ compute facial adjacency for mesh if there is tag information
 
@@ -947,9 +941,10 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
 # {{{ generate_regular_rect_mesh
 
+@deprecate_keyword("group_factory", "group_cls")
 def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
                                boundary_tag_to_face=None,
-                               group_factory=None,
+                               group_cls=None,
                                mesh_type=None,
                                ):
     """Create a semi-structured rectangular mesh with equispaced elements.
@@ -960,7 +955,8 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
       on [a,b].
     :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
         See :func:`generate_box_mesh`.
-    :param mesh_type: See :func:`generate_box_mesh`.
+    :param group_cls: see :func:`generate_box_mesh`.
+    :param mesh_type: see :func:`generate_box_mesh`.
     """
     if min(n) < 2:
         raise ValueError("need at least two points in each direction")
@@ -970,7 +966,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
 
     return generate_box_mesh(axis_coords, order=order,
                              boundary_tag_to_face=boundary_tag_to_face,
-                             group_factory=group_factory,
+                             group_cls=group_cls,
                              mesh_type=mesh_type)
 
 # }}}
@@ -978,7 +974,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
 
 # {{{ generate_warped_rect_mesh
 
-def generate_warped_rect_mesh(dim, order, n):
+def generate_warped_rect_mesh(dim, order, n, *, group_cls=None):
     """Generate a mesh of a warped line/square/cube. Mainly useful for testing
     functionality with curvilinear meshes.
     """
@@ -986,7 +982,7 @@ def generate_warped_rect_mesh(dim, order, n):
     assert dim in [1, 2, 3]
     mesh = generate_regular_rect_mesh(
             a=(-0.5,)*dim, b=(0.5,)*dim,
-            n=(n,)*dim, order=order)
+            n=(n,)*dim, order=order, group_cls=group_cls)
 
     def m(x):
         result = np.empty_like(x)
@@ -1037,7 +1033,7 @@ def warp_and_refine_until_resolved(
     iteration = 0
 
     while True:
-        refine_flags = np.zeros(unwarped_mesh.nelements, dtype=np.bool)
+        refine_flags = np.zeros(unwarped_mesh.nelements, dtype=bool)
 
         warped_mesh = warp_callable(unwarped_mesh)
 
