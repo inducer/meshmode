@@ -31,7 +31,12 @@ This set of instructions is intended for 64-bit Linux and MacOS computers.
 
 #.  Type the following command::
 
-        hash -r; for i in pymbolic cgen genpy modepy pyvisfile loopy meshmode; do python -m pip install git+https://github.com/inducer/$i.git; done
+        hash -r; for i in pymbolic cgen genpy modepy pyvisfile loopy meshmode; do python -m pip install --editable "git+https://github.com/inducer/$i.git#egg=$i"; done
+
+.. note::
+
+    In each case, you may leave out the ``--editable`` flag if you would not like
+    a checkout of the source code.
 
 Next time you want to use :mod:`meshmode`, just run the following command::
 
