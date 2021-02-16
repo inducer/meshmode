@@ -306,7 +306,7 @@ class Discretization:
         return _DOFArray(actx, tuple(
                 actx.call_loopy(
                     prg(), diff_mat=actx.from_numpy(get_mat(grp)), vec=vec[grp.index]
-                    )["result"]
+                    )[1]["result"]
                 for grp in self.groups))
 
     @memoize_method
@@ -369,7 +369,7 @@ class Discretization:
                         resampling_mat=actx.from_numpy(
                             grp.from_mesh_interp_matrix()),
                         nodes=actx.from_numpy(grp.mesh_el_group.nodes[iaxis])
-                        )["result"])
+                        )[1]["result"])
                 for grp in self.groups))
             for iaxis in range(self.ambient_dim)])
 
