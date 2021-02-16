@@ -103,7 +103,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
             return det_v
 
         weights = {}
-        jac = np.empty(self.to_discr.dim, dtype=np.object)
+        jac = np.empty(self.to_discr.dim, dtype=object)
 
         for igrp, grp in enumerate(self.to_discr.groups):
             for ibatch, batch in enumerate(self.conn.groups[igrp].batches):

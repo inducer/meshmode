@@ -129,6 +129,8 @@ class FiredrakeConnection:
          obtain firedrake unit dofs on the meshmode reference cell)
 
     .. automethod:: __init__
+    .. automethod:: from_meshmode
+    .. automethod:: from_firedrake
     """
     def __init__(self, discr, fdrake_fspace, mm2fd_node_mapping, group_nr=None):
         """
@@ -288,7 +290,7 @@ class FiredrakeConnection:
         if ufl_elt.family() != self._ufl_element.family():
             raise ValueError(f"'{function_name}.function_space().ufl_element()"
                              f".family()' must be {self._ufl_element.family()}"
-                             f", not '{type(ufl_elt.family())}'")
+                             f", not '{ufl_elt.family()}'")
         if ufl_elt.degree() != self._ufl_element.degree():
             raise ValueError(f"'{function_name}.function_space().ufl_element()"
                              f".degree()' must be {self._ufl_element.degree()}"
@@ -340,7 +342,7 @@ class FiredrakeConnection:
                 raise ValueError("shape != () and '%s' is of type DOFArray"
                                  " instead of np.ndarray." % field_name)
             check_dof_array(field, field_name)
-        elif isinstance(field, np.ndarray) and field.dtype == np.object:
+        elif isinstance(field, np.ndarray) and field.dtype == object:
             if shape is not None and field.shape != shape:
                 raise ValueError(f"'{field_name}.shape' must be {shape}, not "
                                  f"'{field.shape}'")
@@ -429,7 +431,7 @@ class FiredrakeConnection:
             if fspace_shape == ():
                 out = self.discr.empty(actx, dtype=function_data.dtype)
             else:
-                out = np.ndarray(fspace_shape, dtype=np.object)
+                out = np.ndarray(fspace_shape, dtype=object)
                 for multi_index in np.ndindex(fspace_shape):
                     out[multi_index] = \
                         self.discr.empty(actx, dtype=function_data.dtype)
@@ -480,7 +482,7 @@ class FiredrakeConnection:
               representing a field of shape *mm_field.shape*
               on :attr:`discr`
 
-            See :class:`~meshmode.dof.DOFArray` for further requirements.
+            See :class:`~meshmode.dof_array.DOFArray` for further requirements.
             The :attr:`group_nr` entry of each
             :class:`~meshmode.dof_array.DOFArray`
             must be of shape *(nelements, nunit_dofs)* and

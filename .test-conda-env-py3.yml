@@ -6,8 +6,8 @@ channels:
 dependencies:
 - python=3
 - git
+- libhwloc=2
 - numpy
-- libhwloc=1
 - pocl
 - mako
 - pyopencl

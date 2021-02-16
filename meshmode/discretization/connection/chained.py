@@ -85,7 +85,7 @@ def _iterbatches(groups):
 
 
 def _build_element_lookup_table(actx, conn):
-    el_table = [np.full(g.nelements, -1, dtype=np.int)
+    el_table = [np.full(g.nelements, -1, dtype=np.int64)
                 for g in conn.to_discr.groups]
 
     for (igrp, _), (_, batch) in _iterbatches(conn.groups):
@@ -220,8 +220,8 @@ def flatten_chained_connection(actx, connection):
         grp_to_grp, batch_info = _build_new_group_table(from_conn, to_conn)
 
         # distribute the indices to new groups and batches
-        from_bins = [[np.empty(0, dtype=np.int) for _ in g] for g in batch_info]
-        to_bins = [[np.empty(0, dtype=np.int) for _ in g] for g in batch_info]
+        from_bins = [[np.empty(0, dtype=np.int64) for _ in g] for g in batch_info]
+        to_bins = [[np.empty(0, dtype=np.int64) for _ in g] for g in batch_info]
 
         for (igrp, ibatch), (_, from_batch) in _iterbatches(from_conn.groups):
             from_to_element_indices = actx.to_numpy(from_batch.to_element_indices)

@@ -1628,7 +1628,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
     from meshmode.mesh.processing import split_mesh_groups
     element_flags = np.any(
             mesh.vertices[0, mesh.groups[0].vertex_indices] < 0.0,
-            axis=1).astype(np.int)
+            axis=1).astype(np.int64)
     mesh = split_mesh_groups(mesh, element_flags)
 
     assert len(mesh.groups) == 2
@@ -1652,7 +1652,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
     discr = Discretization(actx, mesh, GroupFactory(order))
 
     if visualize:
-        group_id = discr.empty(actx, dtype=np.int)
+        group_id = discr.empty(actx, dtype=np.int32)
         for igrp, vec in enumerate(group_id):
             vec.fill(igrp)
 
