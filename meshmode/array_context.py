@@ -151,8 +151,11 @@ class _BaseFakeNumpyNamespace:
             # FIXME: Maybe involve loopy type inference?
             result = actx.empty(args[0].shape, args[0].dtype)
             prg = actx._get_scalar_func_loopy_program(
-                    c_name, nargs=len(args), naxes=len(args[0].shape),
-                    shape=args[0].shape)
+                    c_name, nargs=len(args), naxes=len(args[0].shape))
+            # FIXME: Specifying shape breaks some tests
+            #prg = actx._get_scalar_func_loopy_program(
+            #        c_name, nargs=len(args), naxes=len(args[0].shape),
+            #        shape=args[0].shape)
             actx.call_loopy(prg, out=result,
                     **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result
