@@ -966,7 +966,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
     axis_coords = [np.linspace(a_i, b_i, n_i)
             for a_i, b_i, n_i in zip(a, b, n)]
 
-    return generate_box_mesh(axis_coords, order=order, coord_dtype=np.float64,
+    return generate_box_mesh(axis_coords, order=order, coord_dtype=coord_dtype,
                              boundary_tag_to_face=boundary_tag_to_face,
                              group_cls=group_cls,
                              mesh_type=mesh_type)
