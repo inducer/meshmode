@@ -958,6 +958,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
         See :func:`generate_box_mesh`.
     :param group_cls: see :func:`generate_box_mesh`.
     :param mesh_type: see :func:`generate_box_mesh`.
+    :param coord_dtype: see :func: `generate_box_mesh`.
     """
     if min(n) < 2:
         raise ValueError("need at least two points in each direction")
