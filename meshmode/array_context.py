@@ -151,7 +151,8 @@ class _BaseFakeNumpyNamespace:
             # FIXME: Maybe involve loopy type inference?
             result = actx.empty(args[0].shape, args[0].dtype)
             prg = actx._get_scalar_func_loopy_program(
-                    c_name, nargs=len(args), naxes=len(args[0].shape))
+                    c_name, nargs=len(args), naxes=len(args[0].shape),
+                    shape=args[0].shape)
             actx.call_loopy(prg, out=result,
                     **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result
@@ -268,7 +269,7 @@ class ArrayContext:
         raise NotImplementedError
 
     @memoize_method
-    def _get_scalar_func_loopy_program(self, c_name, nargs, naxes):
+    def _get_scalar_func_loopy_program(self, c_name, nargs, naxes, shape=None):
         from pymbolic import var
 
         var_names = ["i%d" % i for i in range(naxes)]
@@ -282,7 +283,7 @@ class ArrayContext:
 
         domain_bset, = domain.get_basic_sets()
 
-        return make_loopy_program(
+        prog = make_loopy_program(
                 [domain_bset],
                 [
                     lp.Assignment(
@@ -291,6 +292,16 @@ class ArrayContext:
                             var("inp%d" % i)[subscript] for i in range(nargs)]))
                     ],
                 name="actx_special_%s" % c_name)
+
+        if shape is not None:
+            prog = lp.fix_parameters(prog,
+                    **{"n%d" % i: val for i, val in enumerate(shape)})
+
+        for arg in prog.args:
+            if isinstance(arg, lp.ArrayArg):
+                arg.tags = IsDOFArray()
+
+        return prog
 
     def freeze(self, array):
         """Return a version of the context-defined array *array* that is
@@ -519,7 +530,7 @@ class PyOpenCLArrayContext(ArrayContext):
             if len(wait_event_queue) > self._wait_event_queue_length:
                 wait_event_queue.pop(0).wait()
 
-        return result
+        return evt, result
 
     def freeze(self, array):
         array.finish()
@@ -548,15 +559,15 @@ class PyOpenCLArrayContext(ArrayContext):
                 has_dof_array = True
                 break
 
-        if program.name == "conn_projection_knl":
+        if len(all_inames) == 1:
+            outer_iname = all_inames[0]
+        elif program.name == "conn_projection_knl":
             outer_iname = "iel"
         # Needed for act_special_exp etc.
         elif "i0" in all_inames:
             outer_iname = "i0"
             if "i1" in all_inames:
                 inner_iname = "i1"
-        elif len(all_inames) == 1:
-            outer_iname = all_inames[0]
         elif has_dof_array:
             # Ce n'est pas tout à fait correct. Whether or not an array is a dof
             # array has no bearing on the names of the loop variables. The "special"
