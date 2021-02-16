@@ -332,7 +332,7 @@ class Discretization:
                         prg(),
                         weights=actx.from_numpy(grp.weights),
                         nelements=grp.nelements,
-                        )["result"])
+                        )[1]["result"])
                 for grp in self.groups))
 
     @memoize_method

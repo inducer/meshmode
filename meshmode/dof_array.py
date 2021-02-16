@@ -526,7 +526,7 @@ def _unflatten(
             grp_start=grp_start, ary=ary,
             nelements=nel,
             ndofs_per_element=ndof,
-            )["result"]
+            )[1]["result"]
         for grp_start, (nel, ndof) in zip(group_starts, group_shapes)))
 
 
