@@ -377,13 +377,13 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 knl = lp.rename_argument(knl, "resample_mat",
                     f"resample_mat_{i_batch}")
                 kwargs[f"resample_mat_{i_batch}"] = (
-                        actx.thaw(self._resample_matrix(actx, i_tgrp, i_batch)))
+                        self._resample_matrix(actx, i_tgrp, i_batch))
                 knlname = "resample_by_mat"
             else:
                 knl = pick_knl()
                 knl = lp.rename_argument(knl, "pick_list",
                     f"pick_list_{i_batch}")
-                kwargs[f"pick_list_{i_batch}"] = actx.thaw(point_pick_indices)
+                kwargs[f"pick_list_{i_batch}"] = point_pick_indices
                 knlname = "resample_by_picking"
 
             knl = lp.fix_parameters(knl,
@@ -412,9 +412,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             # }}}
 
             kwargs[f"from_element_indices_{i_batch}"] = (
-                actx.thaw(batch.from_element_indices))
+                batch.from_element_indices)
             kwargs[f"to_element_indices_{i_batch}"] = (
-                actx.thaw(batch.to_element_indices))
+                batch.to_element_indices)
             kwargs[f"nelements_{i_batch}"] = batch.nelements
 
             kwargs[f"nelements_vec_{i_batch}"] = (

@@ -772,8 +772,14 @@ class PytatoArrayContext(ArrayContext):
         return cl_array.get(queue=self.queue)
 
     def call_loopy(self, program, **kwargs):
-        entrypoint, = set(program.callables_table)
         from pytato.loopy import call_loopy
+        import pyopencl.array as cla
+        entrypoint, = set(program.callables_table)
+
+        # thaw frozen arrays
+        kwargs = {kw: (self.thaw(arg) if isinstance(arg, cla.Array) else arg)
+                  for kw, arg in kwargs.items()}
+
         return call_loopy(self.ns, program, kwargs, entrypoint)
 
     def freeze(self, array):

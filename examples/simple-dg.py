@@ -267,7 +267,7 @@ class DGDiscretization:
 
             results.append(vec.array_context.call_loopy(
                     fix_parameters(knl(), matrix.shape[0], matrix.shape[1]),
-                    mat=self._setup_actx.thaw(matrix),
+                    mat=matrix,
                     nelements=grp.nelements,
                     vec=vec[grp.index])["result"])
 
@@ -333,7 +333,7 @@ class DGDiscretization:
             matrix = self.get_local_face_mass_matrix(afgrp, volgrp, vec.entry_dtype)
 
             results.append(vec.array_context.call_loopy(knl(),
-                    mat=self._setup_actx.thaw(matrix),
+                    mat=matrix,
                     nelements=volgrp.nelements,
                     nvol_nodes=matrix.shape[0],
                     nfaces=matrix.shape[1],
@@ -475,8 +475,8 @@ def main():
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
 
-    # actx = PytatoArrayContext(queue)
-    actx = PyOpenCLArrayContext(queue)
+    actx = PytatoArrayContext(queue)
+    # actx = PyOpenCLArrayContext(queue)
 
     nel_1d = 16
     from meshmode.mesh.generation import generate_regular_rect_mesh
