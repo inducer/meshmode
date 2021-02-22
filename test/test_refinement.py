@@ -330,7 +330,7 @@ def test_conformity_of_uniform_mesh(refinement_rounds):
     assert is_boundary_tag_empty(mesh, BTAG_ALL)
 
 
-@pytest.parametrize("mesh_name", ["torus", "icosphere"])
+@pytest.mark.parametrize("mesh_name", ["torus", "icosphere"])
 def test_refine_surfaces(actx_factory, mesh_name, visualize=False):
     if mesh_name == "torus":
         mesh = mgen.generate_torus(10, 1, 40, 4, order=4)
