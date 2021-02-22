@@ -27,6 +27,7 @@ import loopy as lp
 from typing import Callable, Any
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method
+import re
 
 __doc__ = """
 .. autofunction:: make_loopy_program
@@ -374,6 +375,10 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         return cl_array.concatenate(arrays, axis,
                 self._array_context.queue, self._array_context.allocator)
 
+    def transpose(self, a, axes=None):
+        import pyopencl.array as cl_array
+        return cl_array.transpose(a, axes)
+
 
 def _flatten_grp_array(grp_ary):
     if grp_ary.size == 0:
@@ -676,6 +681,12 @@ class _PytatoFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
         return obj_or_dof_array_vectorize_n_args(pt.reshape, a, newshape)
 
+    def transpose(self, a, axes=None):
+        import pytato as pt
+
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(pt.transpose, a, axes)
+
     def concatenate(self, arrays, axis=0):
         raise NotImplementedError
         import pytato as pt
@@ -717,7 +728,8 @@ class PytatoCompiledOperator:
                 for i in range(len(self.output_spec))])
 
         in_dict = from_obj_array_to_input_dict(fields)
-        _, out_dict = self.pytato_program(**in_dict)
+        evt, out_dict = self.pytato_program(**in_dict)
+        # evt.wait()
 
         return from_return_dict_to_obj_array(out_dict)
 
@@ -844,8 +856,53 @@ class PytatoArrayContext(ArrayContext):
                           options={"return_dict": True},
                           target=pt.PyOpenCLTarget(self.queue))
 
+        if False:
+            # transforming leads to compile-time slow downs (turning off for now)
+            pytato_program.program = self.transform_loopy_program(
+                    pytato_program.program)
+
         return PytatoCompiledOperator(self, pytato_program, [len(field) for field in
             input_like], output_spec)
+
+    def transform_loopy_program(self, prg):
+        from loopy.program import iterate_over_kernels_if_given_program
+
+        GROUP = (16, 2)
+
+        @iterate_over_kernels_if_given_program
+        def gridify(knl):
+            # {{{ Pattern matching inames
+
+            all_inames = sorted(knl.all_inames())
+            iname_to_insns = knl.iname_to_insns()
+
+            for iname in all_inames:
+                if (re.match(r"(_pt_temp|_msh_out((_[\d]+)?))((_[\d]+)?)_dim0",
+                             iname)
+                        or iname.startswith("iel")):
+                    insn_id, = iname_to_insns[iname]
+                    insn = knl.id_to_insn[insn_id]
+                    if isinstance(insn, lp.Assignment):
+                        knl = lp.split_iname(knl, iname, GROUP[0],
+                                outer_tag="g.0", inner_tag="l.1")
+                elif (re.match(r"(_pt_temp|_msh_out((_[\d]+)?))((_[\d]+)?)_dim1",
+                               iname)
+                        or iname.startswith("idof")):
+                    insn_id, = iname_to_insns[iname]
+                    insn = knl.id_to_insn[insn_id]
+                    if isinstance(insn, lp.Assignment):
+                        knl = lp.split_iname(knl, iname, GROUP[1],
+                                inner_tag="l.0")
+                else:
+                    pass
+
+            # }}}
+
+            return knl
+
+        prg = lp.set_options(prg, "insert_additional_gbarriers")
+
+        return gridify(prg)
 
 # }}}
 
