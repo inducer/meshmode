@@ -330,6 +330,30 @@ def test_conformity_of_uniform_mesh(refinement_rounds):
     assert is_boundary_tag_empty(mesh, BTAG_ALL)
 
 
+@pytest.parametrize("mesh_name", ["torus", "icosphere"])
+def test_refine_surfaces(actx_factory, mesh_name, visualize=False):
+    if mesh_name == "torus":
+        mesh = mgen.generate_torus(10, 1, 40, 4, order=4)
+    elif mesh_name == "icosphere":
+        mesh = mgen.generate_icosphere(1, order=4)
+    else:
+        raise ValueError(f"invalid mesh name '{mesh_name}'")
+
+    if visualize:
+        actx = actx_factory()
+        from meshmode.mesh.visualization import vtk_visualize_mesh
+        vtk_visualize_mesh(actx, mesh, "surface.vtu")
+
+    # check for absence of node-vertex consistency error
+    from meshmode.mesh.refinement import refine_uniformly
+    refined_mesh = refine_uniformly(mesh, 1)
+
+    if visualize:
+        actx = actx_factory()
+        from meshmode.mesh.visualization import vtk_visualize_mesh
+        vtk_visualize_mesh(actx, refined_mesh, "surface-refined.vtu")
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
