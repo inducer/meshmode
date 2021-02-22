@@ -313,7 +313,7 @@ class DGDiscretization:
                     0<=idof<nvol_nodes and
                     0<=j<nface_nodes}""",
                 "result[iel,idof] = "
-                "sum(f, sum(j, mat[idof, f, j] * vec[f, iel, j]))",
+                "sum(f, sum(j, mat[idof, f, j] * vec[iel, f, j]))",
                 name="face_mass")
 
         all_faces_conn = self.get_connection("vol", "all_faces")
@@ -338,8 +338,10 @@ class DGDiscretization:
                     nvol_nodes=matrix.shape[0],
                     nfaces=matrix.shape[1],
                     nface_nodes=matrix.shape[2],
-                    vec=self._setup_actx.np.reshape(vec[afgrp.index],
-                        (nfaces, volgrp.nelements, afgrp.nunit_dofs)))["result"])
+                    vec=self._setup_actx.np.transpose(
+                        self._setup_actx.np.reshape(vec[afgrp.index],
+                            [nfaces, volgrp.nelements, afgrp.nunit_dofs]),
+                        axes=[1, 0, 2]))["result"])
 
         return DOFArray.from_list(self._setup_actx, results)
 
