@@ -27,7 +27,6 @@ import loopy as lp
 from typing import Callable, Any
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method
-import re
 
 __doc__ = """
 .. autofunction:: make_loopy_program
@@ -857,9 +856,13 @@ class PytatoArrayContext(ArrayContext):
                           target=pt.PyOpenCLTarget(self.queue))
 
         if False:
+            from time import time
+            start = time()
             # transforming leads to compile-time slow downs (turning off for now)
             pytato_program.program = self.transform_loopy_program(
                     pytato_program.program)
+            end = time()
+            print(f"Transforming took {end-start} secs")
 
         return PytatoCompiledOperator(self, pytato_program, [len(field) for field in
             input_like], output_spec)
@@ -873,28 +876,37 @@ class PytatoArrayContext(ArrayContext):
         def gridify(knl):
             # {{{ Pattern matching inames
 
-            all_inames = sorted(knl.all_inames())
-            iname_to_insns = knl.iname_to_insns()
-
-            for iname in all_inames:
-                if (re.match(r"(_pt_temp|_msh_out((_[\d]+)?))((_[\d]+)?)_dim0",
-                             iname)
-                        or iname.startswith("iel")):
-                    insn_id, = iname_to_insns[iname]
-                    insn = knl.id_to_insn[insn_id]
-                    if isinstance(insn, lp.Assignment):
-                        knl = lp.split_iname(knl, iname, GROUP[0],
-                                outer_tag="g.0", inner_tag="l.1")
-                elif (re.match(r"(_pt_temp|_msh_out((_[\d]+)?))((_[\d]+)?)_dim1",
-                               iname)
-                        or iname.startswith("idof")):
-                    insn_id, = iname_to_insns[iname]
-                    insn = knl.id_to_insn[insn_id]
-                    if isinstance(insn, lp.Assignment):
-                        knl = lp.split_iname(knl, iname, GROUP[1],
-                                inner_tag="l.0")
-                else:
+            for insn in knl.instructions:
+                if isinstance(insn, lp.CallInstruction):
+                    # must be a callable kernel, don't touch.
                     pass
+                elif isinstance(insn, lp.Assignment):
+                    bigger_loop = None
+                    smaller_loop = None
+                    for iname in insn.within_inames:
+                        if iname.startswith("iel"):
+                            assert bigger_loop is None
+                            bigger_loop = iname
+                        if iname.startswith("idof"):
+                            assert smaller_loop is None
+                            smaller_loop = iname
+
+                    if bigger_loop or smaller_loop:
+                        assert bigger_loop is not None and smaller_loop is not None
+                    else:
+                        sorted_inames = sorted(tuple(insn.within_inames),
+                                key=knl.get_constant_iname_length)
+                        bigger_loop = sorted_inames[0]
+                        smaller_loop = sorted_inames[1]
+
+                    knl = lp.split_iname(knl, bigger_loop, GROUP[0],
+                            outer_tag="g.0", inner_tag="l.1")
+                    knl = lp.split_iname(knl, smaller_loop, GROUP[1],
+                            inner_tag="l.0")
+                elif isinstance(insn, lp.BarrierInstruction):
+                    pass
+                else:
+                    raise NotImplementedError
 
             # }}}
 
@@ -903,6 +915,7 @@ class PytatoArrayContext(ArrayContext):
         prg = lp.set_options(prg, "insert_additional_gbarriers")
 
         return gridify(prg)
+
 
 # }}}
 

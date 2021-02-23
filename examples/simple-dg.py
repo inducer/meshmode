@@ -313,8 +313,15 @@ class DGDiscretization:
                     0<=idof<nvol_nodes and
                     0<=j<nface_nodes}""",
                 "result[iel,idof] = "
-                "sum(f, sum(j, mat[idof, f, j] * vec[iel, f, j]))",
+                "sum(f, sum(j, mat[idof, f, j] * vec[f, iel, j]))",
                 name="face_mass")
+
+        @memoize_in(self, "fix_params_face_mass")
+        def fix_parameters(knl, nvol_nodes, nfaces, nface_nodes):
+            return lp.fix_parameters(knl,
+                    nvol_nodes=nvol_nodes,
+                    nface_nodes=nface_nodes,
+                    nfaces=nfaces)
 
         all_faces_conn = self.get_connection("vol", "all_faces")
         all_faces_discr = all_faces_conn.to_discr
@@ -329,19 +336,15 @@ class DGDiscretization:
 
         for afgrp, volgrp in zip(all_faces_discr.groups, vol_discr.groups):
             nfaces = volgrp.mesh_el_group.nfaces
-
             matrix = self.get_local_face_mass_matrix(afgrp, volgrp, vec.entry_dtype)
 
-            results.append(vec.array_context.call_loopy(knl(),
+            results.append(vec.array_context.call_loopy(
+                    fix_parameters(knl(), matrix.shape[0], matrix.shape[1],
+                        matrix.shape[2]),
                     mat=matrix,
                     nelements=volgrp.nelements,
-                    nvol_nodes=matrix.shape[0],
-                    nfaces=matrix.shape[1],
-                    nface_nodes=matrix.shape[2],
-                    vec=self._setup_actx.np.transpose(
-                        self._setup_actx.np.reshape(vec[afgrp.index],
-                            [nfaces, volgrp.nelements, afgrp.nunit_dofs]),
-                        axes=[1, 0, 2]))["result"])
+                    vec=self._setup_actx.np.reshape(vec[afgrp.index],
+                        (nfaces, volgrp.nelements, afgrp.nunit_dofs)))["result"])
 
         return DOFArray.from_list(self._setup_actx, results)
 
