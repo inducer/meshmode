@@ -136,11 +136,13 @@ class _BaseFakeNumpyNamespace:
         def loopy_implemented_elwise_func(*args):
             actx = self._array_context
             # FIXME: Maybe involve loopy type inference?
-            result = actx.empty(args[0].shape, args[0].dtype)
             prg = actx._get_scalar_func_loopy_program(
                     c_name, nargs=len(args), naxes=len(args[0].shape))
-            actx.call_loopy(prg, out=result,
-                    **{"inp%d" % i: arg for i, arg in enumerate(args)})
+            result = actx.call_loopy(prg,
+                    **{"inp%d" % i: arg for i, arg in enumerate(args)},
+                    **{"n%d" % i: axis_len
+                        for i, axis_len in enumerate(args[0].shape)},
+                    )["out"]
             return result
 
         if name in self._c_to_numpy_arc_functions:
@@ -759,10 +761,7 @@ class PytatoArrayContext(ArrayContext):
     # {{{ ArrayContext interface
 
     def empty(self, shape, dtype):
-        raise NotImplementedError("Debugging phase: should not call empty")
-        import pytato as pt
-        return pt.make_placeholder(self.ns, name=self.ns.name_gen("u"),
-                shape=shape, dtype=dtype)
+        raise ValueError("PytatoArrayContext does not support empty")
 
     def symbolic_array_var(self, shape, dtype, name=None):
         import pytato as pt
