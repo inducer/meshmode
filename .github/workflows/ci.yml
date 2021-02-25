@@ -25,10 +25,14 @@ jobs:
     pytest3:
         name: Pytest Conda Py3
         runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                loopy-branch: [master, kernel_callables_v3-edit2]
         steps:
         -   uses: actions/checkout@v2
         -   name: "Main Script"
             run: |
+                sed -i "s/loopy.git/loopy.git@${{ matrix.loopy-branch }}/g" requirements.txt
                 sudo apt update
                 sudo apt install octave openmpi-bin libopenmpi-dev libhdf5-dev
 
@@ -74,10 +78,14 @@ jobs:
     examples3:
         name: Examples Conda Py3
         runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                loopy-branch: [master, kernel_callables_v3-edit2]
         steps:
         -   uses: actions/checkout@v2
         -   name: "Main Script"
             run: |
+                sed -i "s/loopy.git/loopy.git@${{ matrix.loopy-branch }}/g" requirements.txt
                 export MPLBACKEND=Agg
                 CONDA_ENVIRONMENT=.test-conda-env-py3.yml
                 USE_CONDA_BUILD=1

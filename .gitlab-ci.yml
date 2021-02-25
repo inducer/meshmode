@@ -1,5 +1,6 @@
 Python 3 POCL:
   script: |
+    sed -i "s/loopy.git/loopy.git@$LOOPY_BRANCH/g" requirements.txt
     export PY_EXE=python3
     export PYOPENCL_TEST=portable:pthread
     # cython is here because pytential (for now, for TS) depends on it
@@ -15,9 +16,14 @@ Python 3 POCL:
   artifacts:
     reports:
       junit: test/pytest.xml
+  parallel:
+    matrix:
+      - LOOPY_BRANCH: master
+      - LOOPY_BRANCH: kernel_callables_v3-edit2
 
 Python 3 Nvidia Titan V:
   script: |
+    sed -i "s/loopy.git/loopy.git@$LOOPY_BRANCH/g" requirements.txt
     export PY_EXE=python3
     export PYOPENCL_TEST=nvi:titan
     export EXTRA_INSTALL="pybind11 cython numpy mako oct2py"
@@ -32,9 +38,14 @@ Python 3 Nvidia Titan V:
   artifacts:
     reports:
       junit: test/pytest.xml
+  parallel:
+    matrix:
+      - LOOPY_BRANCH: master
+      - LOOPY_BRANCH: kernel_callables_v3-edit2
 
 Python 3 POCL Examples:
   script:
+  - sed -i "s/loopy.git/loopy.git@$LOOPY_BRANCH/g" requirements.txt
   - test -n "$SKIP_EXAMPLES" && exit
   - export PY_EXE=python3
   - export PYOPENCL_TEST=portable:pthread
@@ -48,6 +59,10 @@ Python 3 POCL Examples:
   - large-node
   except:
   - tags
+  parallel:
+    matrix:
+      - LOOPY_BRANCH: master
+      - LOOPY_BRANCH: kernel_callables_v3-edit2
 
 Python 3 POCL Firedrake:
   tags:
@@ -74,6 +89,7 @@ Python 3 POCL Firedrake Examples:
 
 Python 3 Conda:
   script: |
+    sed -i "s/loopy.git/loopy.git@$LOOPY_BRANCH/g" requirements.txt
     CONDA_ENVIRONMENT=.test-conda-env-py3.yml
     export MPLBACKEND=Agg
 
@@ -85,6 +101,10 @@ Python 3 Conda:
   - large-node
   except:
   - tags
+  parallel:
+    matrix:
+      - LOOPY_BRANCH: master
+      - LOOPY_BRANCH: kernel_callables_v3-edit2
 
 Documentation:
   script:
