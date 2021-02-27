@@ -729,8 +729,8 @@ class PytatoCompiledOperator:
                 for i in range(len(self.output_spec))])
 
         in_dict = from_obj_array_to_input_dict(fields)
-        evt, out_dict = self.pytato_program(**in_dict)
-        # evt.wait()
+        evt, out_dict = self.pytato_program(allocator=self.actx.allocator, **in_dict)
+        evt.wait()
 
         return from_return_dict_to_obj_array(out_dict)
 
@@ -748,10 +748,11 @@ class PytatoArrayContext(ArrayContext):
 
         A :class:`pyopencl.CommandQueue`.
     """
-    def __init__(self, queue):
+    def __init__(self, queue, allocator=None):
         import pytato as pt
         super().__init__()
         self.queue = queue
+        self.allocator = allocator
         self.ns = pt.Namespace()
         self.np = self._get_fake_numpy_namespace()
 
@@ -869,7 +870,8 @@ class PytatoArrayContext(ArrayContext):
     def transform_loopy_program(self, prg):
         from loopy.program import iterate_over_kernels_if_given_program
 
-        GROUP = (16, 2)
+        nwg = 48
+        nwi = (16, 2)
 
         @iterate_over_kernels_if_given_program
         def gridify(knl):
@@ -898,10 +900,12 @@ class PytatoArrayContext(ArrayContext):
                         bigger_loop = sorted_inames[0]
                         smaller_loop = sorted_inames[1]
 
-                    knl = lp.split_iname(knl, bigger_loop, GROUP[0],
-                            outer_tag="g.0", inner_tag="l.1")
-                    knl = lp.split_iname(knl, smaller_loop, GROUP[1],
-                            inner_tag="l.0")
+                    knl = lp.chunk_iname(knl, bigger_loop, nwg,
+                            outer_tag="g.0")
+                    knl = lp.split_iname(knl, f"{bigger_loop}_inner",
+                            nwi[0], inner_tag="l.1")
+                    knl = lp.split_iname(knl, smaller_loop,
+                            nwi[1], inner_tag="l.0")
                 elif isinstance(insn, lp.BarrierInstruction):
                     pass
                 else:
