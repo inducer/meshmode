@@ -897,8 +897,8 @@ class PytatoArrayContext(ArrayContext):
                     else:
                         sorted_inames = sorted(tuple(insn.within_inames),
                                 key=knl.get_constant_iname_length)
-                        bigger_loop = sorted_inames[0]
-                        smaller_loop = sorted_inames[1]
+                        smaller_loop = sorted_inames[0]
+                        bigger_loop = sorted_inames[1]
 
                     knl = lp.chunk_iname(knl, bigger_loop, nwg,
                             outer_tag="g.0")
