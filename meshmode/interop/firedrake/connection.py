@@ -684,8 +684,8 @@ PolynomialWarpAndBlendGroupFactory` is used.
         # make sure restrict_to_boundary is of correct type
         type_check = isinstance(restrict_to_boundary, int)
         if not type_check:
-            isTuple = isinstance(restrict_to_boundary, tuple)
-            if isTuple:
+            is_tuple = isinstance(restrict_to_boundary, tuple)
+            if is_tuple:
                 type_check = all([isinstance(x, int) for x in restrict_to_boundary])
             else:
                 type_check = restrict_to_boundary == "on_boundary"
