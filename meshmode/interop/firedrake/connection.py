@@ -682,14 +682,14 @@ PolynomialWarpAndBlendGroupFactory` is used.
         uniq_markers = fdrake_fspace.mesh().exterior_facets.unique_markers
         allowable_bdy_ids = list(uniq_markers) + ["on_boundary"]
         # make sure restrict_to_boundary is of correct type
-        typeCheck = isinstance(restrict_to_boundary, int)
-        if not typeCheck:
+        type_check = isinstance(restrict_to_boundary, int)
+        if not type_check:
             isTuple = isinstance(restrict_to_boundary, tuple)
             if isTuple:
-                typeCheck = all([isinstance(x, int) for x in restrict_to_boundary])
+                type_check = all([isinstance(x, int) for x in restrict_to_boundary])
             else:
-                typeCheck = restrict_to_boundary == "on_boundary"
-            if not typeCheck:
+                type_check = restrict_to_boundary == "on_boundary"
+            if not type_check:
                 raise TypeError("restrict_to_boundary must be an int, a tuple"
                                 " of ints, or the string 'on_boundary', not"
                                 f" of type {type(restrict_to_boundary)}")
