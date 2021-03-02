@@ -672,11 +672,29 @@ PolynomialWarpAndBlendGroupFactory` is used.
     if restrict_to_boundary is not None:
         uniq_markers = fdrake_fspace.mesh().exterior_facets.unique_markers
         allowable_bdy_ids = list(uniq_markers) + ["on_boundary"]
-        if restrict_to_boundary not in allowable_bdy_ids:
-            raise ValueError("'restrict_to_boundary' must be one of"
-                            " the following allowable boundary ids: "
-                            f"{allowable_bdy_ids}, not "
-                            f"'{restrict_to_boundary}'")
+        # make sure restrict_to_boundary is of correct type
+        typeCheck = isinstance(restrict_to_boundary, int)
+        if not typeCheck:
+            isTuple = isinstance(restrict_to_boundary, tuple)
+            if isTuple:
+                typeCheck = all([isinstance(x, int) for x in restrict_to_boundary])
+            else:
+                typeCheck = restrict_to_boundary == "on_boundary"
+            if not typeCheck:
+                raise TypeError("restrict_to_boundary must be an int, a tuple"
+                                " of ints, or the string \"on_boundary\", not"
+                                f" of type {type(restrict_to_boundary)}")
+        # convert int to tuple to avoid corner cases
+        else:
+            restrict_to_boundary = (restrict_to_boundary,)
+        # make sure all markers are valid
+        if restrict_to_boundary != "on_boundary":
+            for marker in restrict_to_boundary:
+                if marker not in allowable_bdy_ids:
+                    raise ValueError("'restrict_to_boundary' must be one of"
+                                    " the following allowable boundary ids: "
+                                    f"{allowable_bdy_ids}, not "
+                                    f"'{restrict_to_boundary}'")
 
     # If only converting a portion of the mesh near the boundary, get
     # *cells_to_use* as described in
