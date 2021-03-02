@@ -691,7 +691,7 @@ PolynomialWarpAndBlendGroupFactory` is used.
                 typeCheck = restrict_to_boundary == "on_boundary"
             if not typeCheck:
                 raise TypeError("restrict_to_boundary must be an int, a tuple"
-                                " of ints, or the string \"on_boundary\", not"
+                                " of ints, or the string 'on_boundary', not"
                                 f" of type {type(restrict_to_boundary)}")
         # convert int to tuple to avoid corner cases
         else:
