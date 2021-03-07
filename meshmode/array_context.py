@@ -693,6 +693,30 @@ class _PytatoFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
         return obj_or_dof_array_vectorize_n_args(pt.concatenate, arrays, axis)
 
+    def maximum(self, x, y):
+        import pytato as pt
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(pt.maximum, x, y)
+
+    def minimum(self, x, y):
+        import pytato as pt
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(pt.minimum, x, y)
+
+    def sum(self, a, dtype=None):
+        import pytato as pt
+        if dtype not in [a.dtype, None]:
+            raise NotImplementedError
+        return pt.sum(a)
+
+    def min(self, a):
+        import pytato as pt
+        return pt.amin(a)
+
+    def max(self, a):
+        import pytato as pt
+        return pt.amax(a)
+
 
 class PytatoCompiledOperator:
     def __init__(self, actx, pytato_program, input_spec, output_spec):
