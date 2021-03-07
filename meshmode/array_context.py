@@ -805,7 +805,7 @@ class PytatoArrayContext(ArrayContext):
         if not isinstance(array, pt.Array):
             raise TypeError("PytatoArrayContext.freeze invoked with non-pt arrays")
 
-        prg = pt.generate_loopy(array, target=pt.PyOpenCLTarget(self.queue))
+        prg = pt.generate_loopy(array, target=pt.LoopyPyOpenCLTarget(self.queue))
         evt, (cl_array,) = prg()
         evt.wait()
 
@@ -853,7 +853,7 @@ class PytatoArrayContext(ArrayContext):
 
         pytato_program = pt.generate_loopy(output_dict_of_named_arrays,
                           options={"return_dict": True},
-                          target=pt.PyOpenCLTarget(self.queue))
+                          target=pt.LoopyPyOpenCLTarget(self.queue))
 
         if False:
             from time import time
