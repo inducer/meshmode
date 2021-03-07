@@ -689,9 +689,9 @@ class _PytatoFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         return obj_or_dof_array_vectorize_n_args(pt.transpose, a, axes)
 
     def concatenate(self, arrays, axis=0):
-        raise NotImplementedError
         import pytato as pt
-        return pt.concatenate(arrays, axis)
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(pt.concatenate, arrays, axis)
 
 
 class PytatoCompiledOperator:
