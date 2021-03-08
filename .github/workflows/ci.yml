@@ -2,7 +2,7 @@ name: CI
 on:
     push:
         branches:
-        - master
+        - main
     pull_request:
     schedule:
         - cron:  '17 3 * * 0'
@@ -19,7 +19,7 @@ jobs:
                 python-version: '3.x'
         -   name: "Main Script"
             run: |
-                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-flake8.sh
+                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/prepare-and-run-flake8.sh
                 . ./prepare-and-run-flake8.sh "$(basename $GITHUB_REPOSITORY)" test examples
 
     pytest3:
@@ -27,7 +27,7 @@ jobs:
         runs-on: ubuntu-latest
         strategy:
             matrix:
-                loopy-branch: [master, kernel_callables_v3-edit2]
+                loopy-branch: [main, kernel_callables_v3-edit2]
         steps:
         -   uses: actions/checkout@v2
         -   name: "Main Script"
@@ -38,7 +38,7 @@ jobs:
 
                 CONDA_ENVIRONMENT=.test-conda-env-py3.yml
                 export MPLBACKEND=Agg
-                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/ci-support.sh
+                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/ci-support.sh
                 . ./ci-support.sh
                 build_py_project_in_conda_env
                 with_echo python -m pip install mpi4py
@@ -80,7 +80,7 @@ jobs:
         runs-on: ubuntu-latest
         strategy:
             matrix:
-                loopy-branch: [master, kernel_callables_v3-edit2]
+                loopy-branch: [main, kernel_callables_v3-edit2]
         steps:
         -   uses: actions/checkout@v2
         -   name: "Main Script"
@@ -89,7 +89,7 @@ jobs:
                 export MPLBACKEND=Agg
                 CONDA_ENVIRONMENT=.test-conda-env-py3.yml
                 USE_CONDA_BUILD=1
-                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-py-project-and-run-examples.sh
+                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/build-py-project-and-run-examples.sh
                 . ./build-py-project-and-run-examples.sh
 
     docs:
@@ -104,7 +104,7 @@ jobs:
         -   name: "Main Script"
             run: |
                 CONDA_ENVIRONMENT=.test-conda-env-py3.yml
-                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/ci-support.sh
+                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/ci-support.sh
                 . ci-support.sh
                 build_py_project_in_conda_env
                 conda install graphviz
@@ -158,7 +158,7 @@ jobs:
                     sed -i "/mpi4py/ d" requirements.txt
                 fi
 
-                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/ci-support.sh
+                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/ci-support.sh
                 . ./ci-support.sh
                 build_py_project_in_conda_env
                 test_py_project
