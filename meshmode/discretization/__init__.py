@@ -174,6 +174,7 @@ class Discretization:
 
     .. attribute :: groups
 
+    .. automethod:: copy
     .. automethod:: empty
     .. automethod:: zeros
     .. automethod:: empty_like
@@ -219,6 +220,11 @@ class Discretization:
         self._group_factory = group_factory
 
     def copy(self, actx=None, mesh=None, group_factory=None, real_dtype=None):
+        """Creates a new object of the same type with all arguments that are not
+        *None* replaced. The copy is not recursive (e.g. it does not call
+        :meth:`meshmode.mesh.Mesh.copy`).
+        """
+
         return type(self)(
                 self._setup_actx if actx is None else actx,
                 self.mesh if mesh is None else mesh,
