@@ -507,15 +507,15 @@ def main():
     def rhs(t, w):
         return wave_operator(actx, discr, c=1, w=w)
 
-    A = actx.compile(lambda y: rk4_step(y, 0, dt, rhs), fields)
+    A = actx.compile(lambda y, t: rk4_step(y, t, dt, rhs), [fields, np.float64(0)])
 
-    t = 0
+    t = np.float64(0)
     t_final = 3
     istep = 0
 
     start = time()
     while t < t_final:
-        fields = A(fields)
+        fields = A(fields, t)
         t += dt
         istep += 1
 

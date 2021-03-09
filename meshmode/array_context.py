@@ -24,9 +24,11 @@ THE SOFTWARE.
 from functools import partial
 import numpy as np
 import loopy as lp
-from typing import Callable, Any
+from typing import Callable, Any, Union, Tuple
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method
+from numbers import Number
+
 
 __doc__ = """
 .. autofunction:: make_loopy_program
@@ -308,8 +310,8 @@ class ArrayContext:
         """
         raise NotImplementedError
 
-    def compile(self, f: Callable[[Any], Any],
-            input_like: np.array) -> Callable[[Any], Any]:
+    def compile(self, f: Callable[..., Any],
+            input_like: Tuple[Union[Number, np.array], ...]) -> Callable[..., Any]:
         """
         Returns a potentially more efficient implementation of the callable *f*.
         *f* is a side-effect free function that accepts a numpy object array
@@ -587,8 +589,8 @@ class PyOpenCLArrayContext(ArrayContext):
             program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
         return lp.tag_inames(program, {outer_iname: "g.0"})
 
-    def compile(self, f: Callable[[Any], Any],
-            input_like: np.array) -> Callable[[Any], Any]:
+    def compile(self, f: Callable[..., Any],
+            input_like: Tuple[Union[Number, np.array], ...]) -> Callable[..., Any]:
         return f
 
 # }}}
@@ -725,21 +727,27 @@ class PytatoCompiledOperator:
         self.input_spec = input_spec
         self.output_spec = output_spec
 
-    def __call__(self, fields):
+    def __call__(self, *args):
         import pytato as pt
         import pyopencl.array as cla
         from meshmode.dof_array import DOFArray
         from pytools.obj_array import flat_obj_array
 
-        def from_obj_array_to_input_dict(array):
+        updated_kwargs = {}
+
+        def from_obj_array_to_input_dict(array, pos):
             input_dict = {}
-            for i in range(len(self.input_spec)):
-                for j in range(self.input_spec[i]):
+            for i in range(len(self.input_spec[pos])):
+                for j in range(self.input_spec[pos][i]):
                     ary = array[i][j]
+                    arg_name = f"_msh_inp_{pos}_{i}_{j}"
+                    if arg_name not in (
+                            self.pytato_program.program["_pt_kernel"].arg_dict):
+                        continue
                     if isinstance(ary, pt.array.DataWrapper):
-                        input_dict[f"_msh_inp_{i}_{j}"] = ary.data
+                        input_dict[arg_name] = ary.data
                     elif isinstance(ary, cla.Array):
-                        input_dict[f"_msh_inp_{i}_{j}"] = ary
+                        input_dict[arg_name] = ary
                     else:
                         raise TypeError("Expect pt.DataWrapper or CL-array, got "
                                 f"{type(ary)}")
@@ -752,8 +760,24 @@ class PytatoCompiledOperator:
                  for j in range(self.output_spec[i])])
                 for i in range(len(self.output_spec))])
 
-        in_dict = from_obj_array_to_input_dict(fields)
-        evt, out_dict = self.pytato_program(allocator=self.actx.allocator, **in_dict)
+        for iarg, arg in enumerate(args):
+            if isinstance(arg, np.number):
+                arg_name = f"_msh_inp_{iarg}"
+                if arg_name not in (
+                        self.pytato_program.program["_pt_kernel"].arg_dict):
+                    continue
+
+                updated_kwargs[arg_name] = cla.to_device(self.actx.queue,
+                        np.array(arg))
+            elif isinstance(arg, np.ndarray) and all(isinstance(el, DOFArray)
+                                                     for el in arg):
+                updated_kwargs.update(from_obj_array_to_input_dict(arg, iarg))
+            else:
+                raise NotImplementedError("PytatoCompiledOperator cannot handle"
+                                          f" '{type(arg)}'s")
+
+        evt, out_dict = self.pytato_program(allocator=self.actx.allocator,
+                                            **updated_kwargs)
         evt.wait()
 
         return from_return_dict_to_obj_array(out_dict)
@@ -848,17 +872,24 @@ class PytatoArrayContext(ArrayContext):
     # }}}
 
     def compile(self, f: Callable[[Any], Any],
-            input_like: np.array) -> Callable[[Any], Any]:
+            inputs_like: Tuple[Union[Number, np.array], ...]) -> Callable[..., Any]:
         from pytools.obj_array import flat_obj_array
         from meshmode.dof_array import DOFArray
         import pytato as pt
 
-        def make_placeholder_like(fields_obj_ary):
-            return flat_obj_array([DOFArray.from_list(self,
-                [pt.make_placeholder(self.ns, grp_ary.shape,
-                                     grp_ary.dtype, f"_msh_inp_{i}_{j}")
-                 for j, grp_ary in enumerate(dof_ary)])
-                for i, dof_ary in enumerate(fields_obj_ary)])
+        def make_placeholder_like(input_like, pos):
+            if isinstance(input_like, np.number):
+                return pt.make_placeholder(self.ns, (), input_like.dtype,
+                                           f"_msh_inp_{pos}")
+            elif isinstance(input_like, np.ndarray) and all(isinstance(e, DOFArray)
+                                                            for e in input_like):
+                return flat_obj_array([DOFArray.from_list(self,
+                    [pt.make_placeholder(self.ns, grp_ary.shape,
+                                         grp_ary.dtype, f"_msh_inp_{pos}_{i}_{j}")
+                     for j, grp_ary in enumerate(dof_ary)])
+                    for i, dof_ary in enumerate(input_like)])
+
+            raise NotImplementedError(f"Unknown input type '{type(input_like)}'.")
 
         def as_dict_of_named_arrays(fields_obj_ary):
             dict_of_named_arrays = {}
@@ -872,7 +903,15 @@ class PytatoArrayContext(ArrayContext):
 
             return pt.make_dict_of_named_arrays(dict_of_named_arrays), output_spec
 
-        outputs = f(make_placeholder_like(input_like))
+        outputs = f(*[make_placeholder_like(el, iel)
+                      for iel, el in enumerate(inputs_like)])
+
+        if not (isinstance(outputs, np.ndarray)
+                and all(isinstance(e, DOFArray)
+                        for e in outputs)):
+            raise TypeError("Can only pass in functions that return numpy"
+                            " array of DOFArrays.")
+
         output_dict_of_named_arrays, output_spec = as_dict_of_named_arrays(outputs)
 
         pytato_program = pt.generate_loopy(output_dict_of_named_arrays,
@@ -888,8 +927,13 @@ class PytatoArrayContext(ArrayContext):
             end = time()
             print(f"Transforming took {end-start} secs")
 
-        return PytatoCompiledOperator(self, pytato_program, [len(field) for field in
-            input_like], output_spec)
+        return PytatoCompiledOperator(self, pytato_program,
+                                      [[len(arg) for arg in input_like]
+                                       if isinstance(input_like, np.ndarray)
+                                       else []
+
+                                       for input_like in inputs_like],
+                                      output_spec)
 
     def transform_loopy_program(self, prg):
         from loopy.program import iterate_over_kernels_if_given_program
