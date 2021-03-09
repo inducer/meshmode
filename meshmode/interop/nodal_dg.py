@@ -63,6 +63,9 @@ class NodalDGContext:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        # Work around https://github.com/pexpect/pexpect/issues/462
+        self.octave._engine.repl.delayafterterminate = 2
+
         self.octave.exit()
 
     REF_AXES = ["r", "s", "t"]
@@ -76,7 +79,7 @@ class NodalDGContext:
 
         .. warning::
 
-            High-order geometryinformation is currently silently ignored.
+            High-order geometry information is currently silently ignored.
         """
         if len(mesh.groups) != 1:
             raise ValueError("mesh must have exactly one element group")

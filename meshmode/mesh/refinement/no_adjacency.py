@@ -24,35 +24,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-
 import numpy as np
-from pytools import RecordWithoutPickling
-
-from pytools import memoize_method
-
 
 import logging
 logger = logging.getLogger(__name__)
-
-
-class _TesselationInfo(RecordWithoutPickling):
-
-    def __init__(self, children, ref_vertices, orig_vertex_indices,
-            midpoint_indices, midpoint_vertex_pairs, resampler):
-        RecordWithoutPickling.__init__(self,
-                children=children,
-                ref_vertices=ref_vertices,
-                orig_vertex_indices=orig_vertex_indices,
-                midpoint_indices=midpoint_indices,
-                midpoint_vertex_pairs=midpoint_vertex_pairs,
-                resampler=resampler)
-
-
-class _GroupRefinementRecord(RecordWithoutPickling):
-
-    def __init__(self, tesselation, element_mapping):
-        RecordWithoutPickling.__init__(self,
-            tesselation=tesselation, element_mapping=element_mapping)
 
 
 class RefinerWithoutAdjacency:
@@ -81,61 +56,6 @@ class RefinerWithoutAdjacency:
         self.group_refinement_records = None
         self.global_vertex_pair_to_midpoint = {}
 
-    # {{{ build tesselation info
-
-    @memoize_method
-    def _get_bisection_tesselation_info(self, group_type, dim):
-        from meshmode.mesh import SimplexElementGroup
-        if issubclass(group_type, SimplexElementGroup):
-            from meshmode.mesh.refinement.tesselate import \
-                    tesselate_simplex_bisection, add_tuples, halve_tuple
-            ref_vertices, children = tesselate_simplex_bisection(dim)
-
-            orig_vertex_tuples = [(0,) * dim] + [
-                    (0,) * i + (2,) + (0,) * (dim-i-1)
-                    for i in range(dim)]
-            node_dict = {
-                  ituple: idx
-                  for idx, ituple in enumerate(ref_vertices)}
-            orig_vertex_indices = [node_dict[vt] for vt in orig_vertex_tuples]
-
-            from meshmode.mesh.refinement.resampler import SimplexResampler
-            resampler = SimplexResampler()
-            vertex_pair_to_midpoint_order = \
-                    resampler.get_vertex_pair_to_midpoint_order(dim)
-
-            midpoint_idx_to_vertex_pair = {}
-            for vpair, mpoint_idx in vertex_pair_to_midpoint_order.items():
-                midpoint_idx_to_vertex_pair[mpoint_idx] = vpair
-
-            midpoint_vertex_pairs = [
-                    midpoint_idx_to_vertex_pair[i]
-                    for i in range(len(midpoint_idx_to_vertex_pair))]
-
-            midpoint_indices = [
-                    node_dict[
-                        halve_tuple(
-                            add_tuples(
-                                orig_vertex_tuples[v1],
-                                orig_vertex_tuples[v2]))]
-                    for v1, v2 in midpoint_vertex_pairs]
-
-            return _TesselationInfo(
-                    ref_vertices=ref_vertices,
-                    children=np.array(children),
-                    orig_vertex_indices=np.array(orig_vertex_indices),
-                    midpoint_indices=np.array(midpoint_indices),
-                    midpoint_vertex_pairs=midpoint_vertex_pairs,
-                    resampler=resampler,
-                    )
-
-        else:
-            raise NotImplementedError(
-                    "bisection for elements groups of type %s"
-                    % group_type.__name__)
-
-    # }}}
-
     def refine_uniformly(self):
         flags = np.ones(self._current_mesh.nelements, dtype=bool)
         return self.refine(flags)
@@ -144,12 +64,13 @@ class RefinerWithoutAdjacency:
 
     def refine(self, refine_flags):
         """
-        :arg refine_flags: a :class:`numpy.ndarray` of dtype bool of length
-            ``mesh.nelements`` indicating which elements should be split.
+        :arg refine_flags: an :class:`~numpy.ndarray` of :class:`~numpy.dtype`
+            :class:`bool` and length :attr:`meshmode.mesh.Mesh.nelements`
+            indicating which elements should be split.
         """
 
         mesh = self._current_mesh
-        refine_flags = np.asarray(refine_flags, dtype=np.bool)
+        refine_flags = np.asarray(refine_flags, dtype=bool)
 
         if len(refine_flags) != mesh.nelements:
             raise ValueError("length of refine_flags does not match "
@@ -163,9 +84,13 @@ class RefinerWithoutAdjacency:
         if perform_vertex_updates:
             inew_vertex = mesh.nvertices
 
-        for group in mesh.groups:
-            bisection_info = self._get_bisection_tesselation_info(
-                    type(group), group.dim)
+        from meshmode.mesh.refinement.tesselate import (
+                get_group_tesselation_info,
+                get_group_midpoints,
+                get_group_tesselated_nodes)
+
+        for igrp, group in enumerate(mesh.groups):
+            el_tess_info = get_group_tesselation_info(group)
 
             # {{{ compute counts and index arrays
 
@@ -173,7 +98,7 @@ class RefinerWithoutAdjacency:
                     group.element_nr_base:
                     group.element_nr_base+group.nelements]
 
-            nchildren = len(bisection_info.children)
+            nchildren = len(el_tess_info.children)
             nchild_elements = np.ones(group.nelements, dtype=mesh.element_id_dtype)
             nchild_elements[grp_flags] = nchildren
 
@@ -189,9 +114,10 @@ class RefinerWithoutAdjacency:
 
             # }}}
 
+            from meshmode.mesh.refinement.tesselate import GroupRefinementRecord
             group_refinement_records.append(
-                    _GroupRefinementRecord(
-                        tesselation=bisection_info,
+                    GroupRefinementRecord(
+                        el_tess_info=el_tess_info,
                         element_mapping=[
                             list(range(
                                 child_el_indices[iel],
@@ -201,8 +127,8 @@ class RefinerWithoutAdjacency:
             # {{{ get new vertices together
 
             if perform_vertex_updates:
-                midpoints = bisection_info.resampler.get_midpoints(
-                        group, bisection_info, refining_el_old_indices)
+                midpoints = get_group_midpoints(
+                        group, el_tess_info, refining_el_old_indices)
 
                 new_vertex_indices = np.empty(
                     (new_nelements, group.vertex_indices.shape[1]),
@@ -216,17 +142,17 @@ class RefinerWithoutAdjacency:
                 for old_iel in refining_el_old_indices:
                     new_iel_base = child_el_indices[old_iel]
 
-                    refining_vertices = np.empty(len(bisection_info.ref_vertices),
+                    refining_vertices = np.empty(len(el_tess_info.ref_vertices),
                         dtype=mesh.vertex_id_dtype)
                     refining_vertices.fill(-17)
 
                     # carry over old vertices
-                    refining_vertices[bisection_info.orig_vertex_indices] = \
+                    refining_vertices[el_tess_info.orig_vertex_indices] = \
                             group.vertex_indices[old_iel]
 
                     for imidpoint, (iref_midpoint, (v1, v2)) in enumerate(zip(
-                            bisection_info.midpoint_indices,
-                            bisection_info.midpoint_vertex_pairs)):
+                            el_tess_info.midpoint_indices,
+                            el_tess_info.midpoint_vertex_pairs)):
 
                         global_v1 = group.vertex_indices[old_iel, v1]
                         global_v2 = group.vertex_indices[old_iel, v2]
@@ -250,7 +176,7 @@ class RefinerWithoutAdjacency:
                     assert (refining_vertices >= 0).all()
 
                     new_vertex_indices[new_iel_base:new_iel_base+nchildren] = \
-                            refining_vertices[bisection_info.children]
+                            refining_vertices[el_tess_info.children]
 
                 assert (new_vertex_indices >= 0).all()
             else:
@@ -269,8 +195,8 @@ class RefinerWithoutAdjacency:
             # copy over unchanged nodes
             new_nodes[:, unrefined_el_new_indices] = group.nodes[:, ~grp_flags]
 
-            tesselated_nodes = bisection_info.resampler.get_tesselated_nodes(
-                    group, bisection_info, refining_el_old_indices)
+            tesselated_nodes = get_group_tesselated_nodes(
+                    group, el_tess_info, refining_el_old_indices)
 
             for old_iel in refining_el_old_indices:
                 new_iel_base = child_el_indices[old_iel]

@@ -14,6 +14,8 @@ distribute*tar.gz
 a.out
 *.vtu
 *.pvtu
+*.h5
+*.xmf
 
 .cache
 .pytest_cache

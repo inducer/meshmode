@@ -377,62 +377,66 @@ class HypercubeElementGroupBase(ElementGroupBase):
 
 class TensorProductElementGroupBase(PolynomialElementGroupBase,
         HypercubeElementGroupBase):
-    def __init__(self, mesh_el_group, order, index, *,
-            basis, unit_nodes_1d, quad_weights_1d=None):
+    def __init__(self, mesh_el_group, order, index, *, basis, unit_nodes):
+        """
+        :arg basis: a :class:`modepy.TensorProductBasis`.
+        :arg unit_nodes: unit nodes for the tensor product, obtained by
+            using :func:`modepy.tensor_product_nodes`, for example.
+        """
         super().__init__(mesh_el_group, order, index)
 
+        if basis._dim != mesh_el_group.dim:
+            raise ValueError("basis dimension does not match element group: "
+                    f"expected {mesh_el_group.dim}, got {basis._dim}.")
+
+        if unit_nodes.shape[0] != mesh_el_group.dim:
+            raise ValueError("unit node dimension does not match element group: "
+                    f"expected {mesh_el_group.dim}, got {unit_nodes.shape[0]}.")
+
         self._basis = basis
-        self._unit_nodes_1d = unit_nodes_1d
-        self._quad_weights_1d = quad_weights_1d
+        self._unit_nodes = unit_nodes
 
     def is_orthogonal_basis(self):
         try:
-            self._basis.orthonormality_weight()
-            return True
+            # NOTE: meshmode kind of assumes that the basis is orthonormal
+            # with weight 1, which is why this check is stricter than expected.
+            return self._basis.orthonormality_weight() == 1
         except mp.BasisNotOrthonormal:
             return False
 
+    @memoize_method
     def mode_ids(self):
         return self._basis.mode_ids
 
+    @memoize_method
     def basis(self):
         return self._basis.functions
 
+    @memoize_method
     def grad_basis(self):
         return self._basis.gradients
 
     @property
-    @memoize_method
     def unit_nodes(self):
-        # FIXME: allow non-homogeneous tensor products
-        return mp.tensor_product_nodes(self.dim, self._unit_nodes_1d)
+        return self._unit_nodes
 
     @property
     @memoize_method
     def weights(self):
-        if self._quad_weights_1d is None:
-            return np.dot(
-                    self.mass_matrix(),
-                    np.ones(len(self.basis())))
-        else:
-            # FIXME: allow non-homogeneous tensor products
-            return np.prod(
-                mp.tensor_product_nodes(self.dim, self._quad_weights_1d),
-                axis=0)
+        return np.dot(
+                self.mass_matrix(),
+                np.ones(len(self.basis())))
 
 
 class LegendreTensorProductElementGroup(TensorProductElementGroupBase):
-    def __init__(self, mesh_el_group, order, index, *,
-            unit_nodes_1d=None, quad_weights_1d=None):
-
+    def __init__(self, mesh_el_group, order, index, *, unit_nodes):
         basis = mp.orthonormal_basis_for_space(
                 mp.QN(mesh_el_group.dim, order),
                 mp.Hypercube(mesh_el_group.dim))
 
         super().__init__(mesh_el_group, order, index,
                 basis=basis,
-                unit_nodes_1d=unit_nodes_1d,
-                quad_weights_1d=quad_weights_1d)
+                unit_nodes=unit_nodes)
 
 
 class GaussLegendreTensorProductElementGroup(LegendreTensorProductElementGroup):
@@ -442,12 +446,17 @@ class GaussLegendreTensorProductElementGroup(LegendreTensorProductElementGroup):
 
     No interpolation nodes are present on the boundary of the hypercube.
     """
+
     def __init__(self, mesh_el_group, order, index):
-        quad = mp.LegendreGaussQuadrature(order)
+        self._quadrature_rule = mp.LegendreGaussTensorProductQuadrature(
+                order, mesh_el_group.dim)
 
         super().__init__(mesh_el_group, order, index,
-                unit_nodes_1d=quad.nodes,
-                quad_weights_1d=quad.weights)
+                unit_nodes=self._quadrature_rule.nodes)
+
+    @property
+    def weights(self):
+        return self._quadrature_rule.weights
 
 
 class LegendreGaussLobattoTensorProductElementGroup(
@@ -462,8 +471,12 @@ class LegendreGaussLobattoTensorProductElementGroup(
 
     def __init__(self, mesh_el_group, order, index):
         from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
+        unit_nodes_1d = legendre_gauss_lobatto_nodes(order)
+
         super().__init__(mesh_el_group, order, index,
-                unit_nodes_1d=legendre_gauss_lobatto_nodes(order))
+                unit_nodes=mp.tensor_product_nodes(
+                    [unit_nodes_1d] * mesh_el_group.dim)
+                )
 
 
 class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
@@ -477,8 +490,12 @@ class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
 
     def __init__(self, mesh_el_group, order, index):
         from modepy.nodes import equidistant_nodes
+        unit_nodes_1d = equidistant_nodes(1, order)[0]
+
         super().__init__(mesh_el_group, order, index,
-                unit_nodes_1d=equidistant_nodes(1, order)[0])
+                unit_nodes=mp.tensor_product_nodes(
+                    [unit_nodes_1d] * mesh_el_group.dim)
+                )
 
 # }}}
 

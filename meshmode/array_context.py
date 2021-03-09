@@ -31,6 +31,7 @@ __doc__ = """
 .. autofunction:: make_loopy_program
 .. autoclass:: ArrayContext
 .. autoclass:: PyOpenCLArrayContext
+.. autofunction:: pytest_generate_tests_for_pyopencl_array_context
 """
 
 
@@ -484,23 +485,19 @@ class PyOpenCLArrayContext(ArrayContext):
 
     def call_loopy(self, program, **kwargs):
         program = self.transform_loopy_program(program)
-
-        # accommodate loopy with and without kernel callables
         try:
-            options = program.options
+            prg_name = program.name
         except AttributeError:
-            options = program.root_kernel.options
-        if not (options.return_dict and options.no_numpy):
-            raise ValueError("Loopy program passed to call_loopy must "
-                    "have return_dict and no_numpy options set. "
-                    "Did you use meshmode.array_context.make_loopy_program "
-                    "to create this program?")
+            try:
+                prg_name = program.root_kernel.name
+            except AttributeError:
+                prg_name, = program.entrypoints
 
         evt, result = program(self.queue, **kwargs, allocator=self.allocator)
 
         if self._wait_event_queue_length is not False:
             wait_event_queue = self._kernel_name_to_wait_event_queue.setdefault(
-                    program.name, [])
+                    prg_name, [])
 
             wait_event_queue.append(evt)
             if len(wait_event_queue) > self._wait_event_queue_length:
@@ -519,12 +516,31 @@ class PyOpenCLArrayContext(ArrayContext):
 
     @memoize_method
     def transform_loopy_program(self, program):
+        # accommodate loopy with and without kernel callables
+        try:
+            options = program.options
+        except AttributeError:
+            try:
+                options = program.root_kernel.options
+            except AttributeError:
+                entrypoint, = program.entrypoints
+                options = program[entrypoint].options
+        if not (options.return_dict and options.no_numpy):
+            raise ValueError("Loopy program passed to call_loopy must "
+                    "have return_dict and no_numpy options set. "
+                    "Did you use meshmode.array_context.make_loopy_program "
+                    "to create this program?")
+
         # FIXME: This could be much smarter.
         # accommodate loopy with and without kernel callables
         try:
             all_inames = program.all_inames()
         except AttributeError:
-            all_inames = program.root_kernel.all_inames()
+            try:
+                all_inames = program.root_kernel.all_inames()
+            except AttributeError:
+                entrypoint, = program.entrypoints
+                all_inames = program[entrypoint].all_inames()
 
         inner_iname = None
         if "iel" not in all_inames and "i0" in all_inames:
@@ -548,6 +564,26 @@ class PyOpenCLArrayContext(ArrayContext):
 # {{{ pytest integration
 
 def pytest_generate_tests_for_pyopencl_array_context(metafunc):
+    """Parametrize tests for pytest to use a :mod:`pyopencl` array context.
+
+    Performs device enumeration analogously to
+    :func:`pyopencl.tools.pytest_generate_tests_for_pyopencl`.
+
+    Using the line:
+
+    .. code-block:: python
+
+       from meshmode.array_context import pytest_generate_tests_for_pyopencl \
+            as pytest_generate_tests
+
+    in your pytest test scripts allows you to use the arguments ctx_factory,
+    device, or platform in your test functions, and they will automatically be
+    run for each OpenCL device/platform in the system, as appropriate.
+
+    It also allows you to specify the ``PYOPENCL_TEST`` environment variable
+    for device selection.
+    """
+
     import pyopencl as cl
     from pyopencl.tools import _ContextFactory
 

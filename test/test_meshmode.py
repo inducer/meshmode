@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from dataclasses import dataclass
 from functools import partial
 import numpy as np
 import numpy.linalg as la
@@ -144,20 +145,25 @@ def test_parallel_vtk_file(actx_factory, dim):
     assert filecmp.cmp(f"ref-{pvtu_filename}", pvtu_filename)
 
 
-@pytest.mark.parametrize(("dim", "group_factory"), [
+@dataclass
+class VisualizerData:
+    g: np.ndarray
+
+
+@pytest.mark.parametrize(("dim", "group_cls"), [
     (1, SimplexElementGroup),
     (2, SimplexElementGroup),
     (3, SimplexElementGroup),
     (2, TensorProductElementGroup),
     (3, TensorProductElementGroup),
     ])
-def test_visualizers(actx_factory, dim, group_factory):
+def test_visualizers(actx_factory, dim, group_cls):
     actx = actx_factory()
 
     nelements = 64
     target_order = 4
 
-    is_simplex = issubclass(group_factory, SimplexElementGroup)
+    is_simplex = issubclass(group_cls, SimplexElementGroup)
     if dim == 1:
         mesh = mgen.make_curve_mesh(
                 mgen.NArmedStarfish(5, 0.25),
@@ -169,7 +175,7 @@ def test_visualizers(actx_factory, dim, group_factory):
         else:
             mesh = mgen.generate_regular_rect_mesh(
                     a=(0,)*dim, b=(1,)*dim, n=(5,)*dim,
-                    group_cls=group_factory,
+                    group_cls=group_cls,
                     order=target_order)
     elif dim == 3:
         if is_simplex:
@@ -177,36 +183,41 @@ def test_visualizers(actx_factory, dim, group_factory):
         else:
             mesh = mgen.generate_regular_rect_mesh(
                     a=(0,)*dim, b=(1,)*dim, n=(5,)*dim,
-                    group_cls=group_factory,
+                    group_cls=group_cls,
                     order=target_order)
     else:
         raise ValueError("unknown dimensionality")
 
     if is_simplex:
-        discr_group_factory = InterpolatoryQuadratureSimplexGroupFactory
+        group_factory = InterpolatoryQuadratureSimplexGroupFactory
     else:
-        discr_group_factory = LegendreGaussLobattoTensorProductGroupFactory
+        group_factory = LegendreGaussLobattoTensorProductGroupFactory
 
     from meshmode.discretization import Discretization
-    discr = Discretization(actx, mesh, discr_group_factory(target_order))
+    discr = Discretization(actx, mesh, group_factory(target_order))
 
     nodes = thaw(actx, discr.nodes())
     f = actx.np.sqrt(sum(nodes**2)) + 1j*nodes[0]
+    g = VisualizerData(g=f)
+    names_and_fields = [("f", f), ("g", g)]
+    names_and_fields = [("f", f)]
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order)
 
-    if is_simplex:
-        basename = f"visualizer_vtk_simplex_{dim}d"
-    else:
-        basename = f"visualizer_vtk_box_{dim}d"
-
-    vis.write_vtk_file(f"{basename}_linear.vtu",
-            [("f", f)], overwrite=True)
+    eltype = "simplex" if is_simplex else "box"
+    basename = f"visualizer_vtk_{eltype}_{dim}d"
+    vis.write_vtk_file(f"{basename}_linear.vtu", names_and_fields, overwrite=True)
 
     with pytest.raises(RuntimeError):
         vis.write_vtk_file(f"{basename}_lagrange.vtu",
-                [("f", f)], overwrite=True, use_high_order=True)
+                names_and_fields, overwrite=True, use_high_order=True)
+
+    try:
+        basename = f"visualizer_xdmf_{eltype}_{dim}d"
+        vis.write_xdmf_file(f"{basename}.xmf", names_and_fields, overwrite=True)
+    except ImportError:
+        logger.info("h5py not available")
 
     if mesh.dim == 2 and is_simplex:
         try:
@@ -218,12 +229,14 @@ def test_visualizers(actx_factory, dim, group_factory):
         try:
             vis.show_scalar_in_mayavi(f, do_show=False)
         except ImportError:
-            logger.info("mayavi not avaiable")
+            logger.info("mayavi not available")
 
     vis = make_visualizer(actx, discr, target_order,
             force_equidistant=True)
+
+    basename = f"visualizer_vtk_{eltype}_{dim}d"
     vis.write_vtk_file(f"{basename}_lagrange.vtu",
-            [("f", f)], overwrite=True, use_high_order=True)
+            names_and_fields, overwrite=True, use_high_order=True)
 
 # }}}
 
@@ -332,6 +345,8 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
         num_on_bdy = dim * (nelem-1)**(dim-1)
     elif group_cls is SimplexElementGroup:
         num_on_bdy = dim * (dim-1) * (nelem-1)**(dim-1)
+    else:
+        assert False
 
     assert not is_boundary_tag_empty(mesh, "btag_test_1")
     assert not is_boundary_tag_empty(mesh, "btag_test_2")
@@ -490,7 +505,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
     print(eoc_rec)
     assert (
             eoc_rec.order_estimate() >= order-order_slack
-            or eoc_rec.max_error() < 1.5e-13)
+            or eoc_rec.max_error() < 3e-13)
 
 # }}}
 
@@ -1598,7 +1613,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
     from meshmode.mesh.processing import split_mesh_groups
     element_flags = np.any(
             mesh.vertices[0, mesh.groups[0].vertex_indices] < 0.0,
-            axis=1).astype(np.int)
+            axis=1).astype(np.int64)
     mesh = split_mesh_groups(mesh, element_flags)
 
     assert len(mesh.groups) == 2            # pylint: disable=E1101
@@ -1620,7 +1635,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
     discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
 
     if visualize:
-        group_id = discr.empty(actx, dtype=np.int)
+        group_id = discr.empty(actx, dtype=np.int32)
         for igrp, vec in enumerate(group_id):
             vec.fill(igrp)
 

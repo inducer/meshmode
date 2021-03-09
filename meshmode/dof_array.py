@@ -26,6 +26,9 @@ from typing import Optional, Iterable, Any, Tuple, Union
 from functools import partial
 from numbers import Number
 import decorator
+import threading
+from contextlib import contextmanager
+
 
 from pytools import single_valued, memoize_in
 from pytools.obj_array import obj_array_vectorize
@@ -46,13 +49,15 @@ __doc__ = """
 
 .. autofunction:: flatten
 .. autofunction:: unflatten
+
+.. autofunction:: array_context_for_pickling
 """
 
 
 # {{{ DOFArray
 
 class DOFArray:
-    """This array type holds degree-of-freedom arrays for use with
+    r"""This array type holds degree-of-freedom arrays for use with
     :class:`~meshmode.discretization.Discretization`,
     with one entry in the :class:`DOFArray` for each
     :class:`~meshmode.discretization.ElementGroupBase`.
@@ -83,12 +88,47 @@ class DOFArray:
     .. automethod:: __len__
     .. automethod:: __getitem__
 
+    The following methods and attributes are implemented to mimic the
+    functionality of :class:`~numpy.ndarray`\ s. They require the
+    :class:`DOFArray` to be :func:`thaw`\ ed.
+
+    .. attribute:: shape
+    .. attribute:: size
+    .. automethod:: copy
+    .. automethod:: fill
+    .. automethod:: conj
+    .. attribute:: real
+    .. attribute:: imag
+
     This object supports arithmetic, comparisons, and logic operators.
 
     .. note::
 
         :class:`DOFArray` instances support elementwise ``<``, ``>``,
         ``<=``, ``>=``. (:mod:`numpy` object arrays containing arrays do not.)
+
+    Basic in-place operations are also supported. Note that not all array types
+    provided by :class:`meshmode.array_context.ArrayContext` implementations
+    support in-place operations. Those based on lazy evaluation are a salient
+    example.
+
+    .. automethod:: __iadd__
+    .. automethod:: __isub__
+    .. automethod:: __imul__
+    .. automethod:: __itruediv__
+    .. automethod:: __iand__
+    .. automethod:: __ixor__
+    .. automethod:: __ior__
+
+    .. note::
+
+        :class:`DOFArray` instances can be pickled and unpickled while the context
+        manager :class:`array_context_for_pickling` is active. If, for an array
+        to be pickled, the :class:`~meshmode.array_context.ArrayContext` given to
+        :func:`array_context_for_pickling` does not agree with :attr:`array_context`,
+        the array is frozen and rethawed. If :attr:`array_context` is *None*,
+        the :class:`DOFArray` is :func:`thaw`\ ed into the array context given
+        to :func:`array_context_for_pickling`.
     """
 
     def __init__(self, actx: Optional[ArrayContext], data: Tuple[Any]):
@@ -144,25 +184,72 @@ class DOFArray:
 
     # }}}
 
+    # {{{ ndarray interface
+
+    def _like_me(self, data):
+        return DOFArray(self.array_context, tuple(data))
+
     @property
     def shape(self):
         return (len(self),)
 
-    def _like_me(self, data):
-        return DOFArray(self.array_context, tuple(data))
+    @property
+    def size(self):
+        return len(self)
+
+    def copy(self):
+        return self._like_me([subary.copy() for subary in self])
+
+    def fill(self, value):
+        for subary in self:
+            subary.fill(value)
+
+    def conj(self):
+        return self._like_me([subary.conj() for subary in self])
+
+    conjugate = conj
+
+    @property
+    def real(self):
+        return self._like_me([subary.real for subary in self])
+
+    @property
+    def imag(self):
+        return self._like_me([subary.imag for subary in self])
+
+    # }}}
+
+    # {{{ arithmetic
+
+    def _ibop(self, f, arg):
+        """Generic in-place binary operator without any broadcast support."""
+        if isinstance(arg, DOFArray):
+            if len(self) != len(arg):
+                raise ValueError("'DOFArray' objects in binary operator must "
+                        "have the same length: {len(self)} != {len(arg)}")
+
+            for i, subary in enumerate(self):
+                f(subary, arg[i])
+        elif isinstance(arg, Number):
+            for subary in self:
+                f(subary, arg)
+        else:
+            raise NotImplementedError(f"operation for type {type(arg).__name__}")
+
+        return self
 
     def _bop(self, f, op1, op2):
         """Broadcasting logic for a generic binary operator."""
         if isinstance(op1, np.ndarray):
             return obj_array_vectorize(lambda op: self._bop(f, op, op2),
-                op1.astype(np.object, copy=False))
+                op1.astype(object, copy=False))
         if isinstance(op2, np.ndarray):
             return obj_array_vectorize(lambda op: self._bop(f, op1, op),
-                op2.astype(np.object, copy=False))
+                op2.astype(object, copy=False))
         if isinstance(op1, DOFArray) and isinstance(op2, DOFArray):
-            if len(op1._data) != len(op2._data):
+            if len(op1) != len(op2):
                 raise ValueError("DOFArray objects in binary operator must have "
-                        f"same length, got {len(op1._data)} and {len(op2._data)}")
+                        f"same length, got {len(op1)} and {len(op2)}")
             return self._like_me([
                 f(op1_i, op2_i)
                 for op1_i, op2_i in zip(op1._data, op2._data)])
@@ -171,81 +258,102 @@ class DOFArray:
         elif isinstance(op1, Number) and isinstance(op2, DOFArray):
             return self._like_me([f(op1, op2_i) for op2_i in op2._data])
         else:
-            return NotImplemented
+            raise NotImplementedError("operation for types "
+                f"{type(op1).__name__} and {type(op2).__name__}")
 
-    def __add__(self, arg):
-        return self._bop(op.add, self, arg)
-    def __radd__(self, arg):
-        return self._bop(op.add, arg, self)
-    def __sub__(self, arg):
-        return self._bop(op.sub, self, arg)
-    def __rsub__(self, arg):
-        return self._bop(op.sub, arg, self)
-    def __mul__(self, arg):
-        return self._bop(op.mul, self, arg)
-    def __rmul__(self, arg):
-        return self._bop(op.mul, arg, self)
-    def __truediv__(self, arg):
-        return self._bop(op.truediv, self, arg)
-    def __rtruediv__(self, arg):
-        return self._bop(op.truediv, arg, self)
-    def __pow__(self, arg):
-        return self._bop(op.pow, self, arg)
-    def __rpow__(self, arg):
-        return self._bop(op.pow, arg, self)
-    def __mod__(self, arg):
-        return self._bop(op.mod, self, arg)
-    def __rmod__(self, arg):
-        return self._bop(op.mod, arg, self)
-    def __divmod__(self, arg):
-        return self._bop(divmod, self, arg)
-    def __rdivmod__(self, arg):
-        return self._bop(divmod, arg, self)
+    def __add__(self, arg): return self._bop(op.add, self, arg)  # noqa: E704
+    def __radd__(self, arg): return self._bop(op.add, arg, self)  # noqa: E704
+    def __sub__(self, arg): return self._bop(op.sub, self, arg)  # noqa: E704
+    def __rsub__(self, arg): return self._bop(op.sub, arg, self)  # noqa: E704
+    def __mul__(self, arg): return self._bop(op.mul, self, arg)  # noqa: E704
+    def __rmul__(self, arg): return self._bop(op.mul, arg, self)  # noqa: E704
+    def __truediv__(self, arg): return self._bop(op.truediv, self, arg)  # noqa: E704
+    def __rtruediv__(self, arg): return self._bop(op.truediv, arg, self)  # noqa: E704, E501
+    def __pow__(self, arg): return self._bop(op.pow, self, arg)  # noqa: E704
+    def __rpow__(self, arg): return self._bop(op.pow, arg, self)  # noqa: E704
+    def __mod__(self, arg): return self._bop(op.mod, self, arg)  # noqa: E704
+    def __rmod__(self, arg): return self._bop(op.mod, arg, self)  # noqa: E704
+    def __divmod__(self, arg): return self._bop(divmod, self, arg)  # noqa: E704
+    def __rdivmod__(self, arg): return self._bop(divmod, arg, self)  # noqa: E704
 
-    def __pos__(self):
-        return self  # noqa: E704
-    def __neg__(self):
-        return self._like_me([-self_i for self_i in self._data])
-    def __abs__(self):
-        return self._like_me([abs(self_i) for self_i in self._data])
+    def __pos__(self): return self  # noqa: E704
+    def __neg__(self): return self._like_me([-self_i for self_i in self._data])  # noqa: E704, E501
+    def __abs__(self): return self._like_me([abs(self_i) for self_i in self._data])  # noqa: E704, E501
 
-    def conj(self):
-        return self._like_me([self_i.conj() for self_i in self._data])
+    def __iadd__(self, arg):
+        """
+        :param arg: can be a :class:`~numbers.Number` or another :class:`DOFArray`.
+        """
+        return self._ibop(op.iadd, arg)
 
-    @property
-    def real(self):
-        return self._like_me([self_i.real for self_i in self._data])
-    @property
-    def imag(self):
-        return self._like_me([self_i.imag for self_i in self._data])
+    def __isub__(self, arg): return self._ibop(op.isub, arg)            # noqa: E704
+    def __imul__(self, arg): return self._ibop(op.imul, arg)            # noqa: E704
+    def __itruediv__(self, arg): return self._ibop(op.itruediv, arg)    # noqa: E704
+    def __imod__(self, arg): return self._ibop(op.imod, arg)            # noqa: E704
 
-    def __eq__(self, arg):
-        return self._bop(op.eq, self, arg)
-    def __ne__(self, arg):
-        return self._bop(op.ne, self, arg)
-    def __lt__(self, arg):
-        return self._bop(op.lt, self, arg)
-    def __gt__(self, arg):
-        return self._bop(op.gt, self, arg)
-    def __le__(self, arg):
-        return self._bop(op.le, self, arg)
-    def __ge__(self, arg):
-        return self._bop(op.ge, self, arg)
+    # }}}
 
-    def __and__(self, arg):
-        return self._bop(op.and_, self, arg)
-    def __xor__(self, arg):
-        return self._bop(op.xor, self, arg)
-    def __or__(self, arg):
-        return self._bop(op.or_, self, arg)
-    def __rand__(self, arg):
-        return self._bop(op.and_, arg, self)
-    def __rxor__(self, arg):
-        return self._bop(op.xor, arg, self)
-    def __ror__(self, arg):
-        return self._bop(op.or_, arg, self)
+    # {{{ comparison
+
+    def __eq__(self, arg): return self._bop(op.eq, self, arg)  # noqa: E704
+    def __ne__(self, arg): return self._bop(op.ne, self, arg)  # noqa: E704
+    def __lt__(self, arg): return self._bop(op.lt, self, arg)  # noqa: E704
+    def __gt__(self, arg): return self._bop(op.gt, self, arg)  # noqa: E704
+    def __le__(self, arg): return self._bop(op.le, self, arg)  # noqa: E704
+    def __ge__(self, arg): return self._bop(op.ge, self, arg)  # noqa: E704
+
+    # }}}
+
+    # {{{ logical
+
+    def __and__(self, arg): return self._bop(operator.and_, self, arg)  # noqa: E704
+    def __xor__(self, arg): return self._bop(operator.xor, self, arg)  # noqa: E704
+    def __or__(self, arg): return self._bop(operator.or_, self, arg)  # noqa: E704
+    def __rand__(self, arg): return self._bop(operator.and_, arg, self)  # noqa: E704
+    def __rxor__(self, arg): return self._bop(operator.xor, arg, self)  # noqa: E704
+    def __ror__(self, arg): return self._bop(operator.or_, arg, self)  # noqa: E704
+
+    def __iand__(self, arg): return self._ibop(op.iand, arg)        # noqa: E704
+    def __ixor__(self, arg): return self._ibop(op.ixor, arg)        # noqa: E704
+    def __ior__(self, arg): return self._ibop(op.ior, arg)          # noqa: E704
+
+    # }}}
 
     # bit shifts unimplemented for now
+
+    # {{{ pickling
+
+    def __getstate__(self):
+        try:
+            actx = _ARRAY_CONTEXT_FOR_PICKLING_TLS.actx
+        except AttributeError:
+            actx = None
+
+        if actx is None:
+            raise RuntimeError("DOFArray instances can only be pickled while "
+                    "array_context_for_pickling is active.")
+
+        ary = self
+
+        if self.array_context is not actx:
+            ary = thaw(actx, freeze(self))
+
+        return [actx.to_numpy(ary_i) for ary_i in ary._data]
+
+    def __setstate__(self, state):
+        try:
+            actx = _ARRAY_CONTEXT_FOR_PICKLING_TLS.actx
+        except AttributeError:
+            actx = None
+
+        if actx is None:
+            raise RuntimeError("DOFArray instances can only be unpickled while "
+                    "array_context_for_pickling is active.")
+
+        self.array_context = actx
+        self._data = tuple([actx.from_numpy(ary_i) for ary_i in state])
+
+    # }}}
 
 # }}}
 
@@ -387,18 +495,9 @@ def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
     return result
 
 
-def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
-        ndofs_per_element_per_group: Optional[Iterable[int]] = None) -> np.ndarray:
-    r"""Convert a 'flat' array returned by :func:`flatten` back to a :class:`DOFArray`.
-
-    Vectorizes over object arrays of :class:`DOFArray`\ s.
-    """
-    if isinstance(ary, np.ndarray):
-        return obj_array_vectorize(
-                lambda subary: unflatten(
-                    actx, discr, subary, ndofs_per_element_per_group),
-                ary)
-
+def _unflatten(
+        actx: ArrayContext, group_shapes: Iterable[Tuple[int, int]], ary: Any
+        ) -> DOFArray:
     @memoize_in(actx, (unflatten, "unflatten_prg"))
     def prg():
         return make_loopy_program(
@@ -406,14 +505,7 @@ def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
             "result[iel, idof] = ary[grp_start + iel*ndofs_per_element + idof]",
             name="unflatten")
 
-    if ndofs_per_element_per_group is None:
-        ndofs_per_element_per_group = [
-                grp.nunit_dofs for grp in discr.groups]
-
-    group_sizes = [
-            grp.nelements * ndofs_per_element
-            for grp, ndofs_per_element
-            in zip(discr.groups, ndofs_per_element_per_group)]
+    group_sizes = [nel * ndof for nel, ndof in group_shapes]
 
     if ary.size != sum(group_sizes):
         raise ValueError("array has size %d, expected %d"
@@ -425,13 +517,71 @@ def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
         actx.call_loopy(
             prg(),
             grp_start=grp_start, ary=ary,
-            nelements=grp.nelements,
-            ndofs_per_element=ndofs_per_element,
+            nelements=nel,
+            ndofs_per_element=ndof,
             )["result"]
-        for grp_start, grp, ndofs_per_element in zip(
-            group_starts,
-            discr.groups,
-            ndofs_per_element_per_group)))
+        for grp_start, (nel, ndof) in zip(group_starts, group_shapes)))
+
+
+def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
+        ndofs_per_element_per_group: Optional[Iterable[int]] = None) -> DOFArray:
+    r"""Convert a 'flat' array returned by :func:`flatten` back to a
+    :class:`DOFArray`.
+
+    :arg ndofs_per_element: Optional. If given, an iterable of numbers representing
+        the number of degrees of freedom per element, overriding the numbers
+        provided by the element groups in *discr*. May be used (for example)
+        to handle :class:`DOFArray`\ s that have only one DOF per element,
+        representing some per-element quantity.
+
+    Vectorizes over object arrays.
+    """
+    if isinstance(ary, np.ndarray):
+        return obj_array_vectorize(
+                lambda subary: unflatten(
+                    actx, discr, subary, ndofs_per_element_per_group),
+                ary)
+
+    if ndofs_per_element_per_group is None:
+        ndofs_per_element_per_group = [
+                grp.nunit_dofs for grp in discr.groups]
+
+    nel_ndof_per_element_per_group = [
+            (grp.nelements, ndofs_per_element)
+            for grp, ndofs_per_element
+            in zip(discr.groups, ndofs_per_element_per_group)]
+
+    return _unflatten(actx, nel_ndof_per_element_per_group, ary)
+
+# }}}
+
+
+# {{{ pickling
+
+_ARRAY_CONTEXT_FOR_PICKLING_TLS = threading.local()
+
+
+@contextmanager
+def array_context_for_pickling(actx: ArrayContext):
+    r"""For the current thread, set the array context to be used for pickling
+    and unpickling :class:`DOFArray`\ s to *actx*.
+
+    .. versionadded:: 2021.x
+    """
+    try:
+        existing_pickle_actx = _ARRAY_CONTEXT_FOR_PICKLING_TLS.actx
+    except AttributeError:
+        existing_pickle_actx = None
+
+    if existing_pickle_actx is not None:
+        raise RuntimeError("array_context_for_pickling should not be called "
+                "inside the context of its own invocation.")
+
+    _ARRAY_CONTEXT_FOR_PICKLING_TLS.actx = actx
+    try:
+        yield None
+    finally:
+        _ARRAY_CONTEXT_FOR_PICKLING_TLS.actx = None
 
 # }}}
 

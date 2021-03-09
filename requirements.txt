@@ -3,7 +3,7 @@ recursivenodes
 git+https://github.com/inducer/pytools.git#egg=pytools
 git+https://github.com/inducer/gmsh_interop.git#egg=gmsh_interop
 git+https://github.com/inducer/pyvisfile.git#egg=pyvisfile
-git+https://github.com/alexfikl/modepy.git@tensor-face-mass-matrix#egg=modepy
+git+https://github.com/inducer/modepy.git#egg=modepy
 git+https://github.com/inducer/pyopencl.git#egg=pyopencl
 git+https://github.com/inducer/islpy.git#egg=islpy
 
@@ -16,7 +16,7 @@ git+https://github.com/inducer/loopy.git#egg=loopy
 # more pytential dependencies
 git+https://github.com/inducer/boxtree.git#egg=boxtree
 git+https://github.com/inducer/sumpy.git#egg=sumpy
-git+https://github.com/inducer/pytential.git#pytential
+git+https://github.com/inducer/pytential.git#egg=pytential
 
 # requires pymetis for tests for partition_mesh
 git+https://github.com/inducer/pymetis.git#egg=pymetis

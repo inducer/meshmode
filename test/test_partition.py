@@ -516,7 +516,9 @@ def test_mpi_communication(num_partitions, order):
     from subprocess import check_call
     import sys
     check_call([
-        "mpiexec", "-np", str(num_ranks),
+        "mpiexec",
+        "--oversubscribe",
+        "-np", str(num_ranks),
         "-x", "RUN_WITHIN_MPI=1",
         "-x", "order=%d" % order,
 

@@ -293,7 +293,7 @@ def test_chained_to_direct(actx_factory, ndim, chain_type,
 
     if chain_type < 3:
         to_element_indices = np.full(direct.to_discr.mesh.nelements, 0,
-                                     dtype=np.int)
+                                     dtype=np.int64)
         for grp in direct.groups:
             for batch in grp.batches:
                 for i in batch.to_element_indices.get(actx.queue):

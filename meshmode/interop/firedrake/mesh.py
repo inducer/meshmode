@@ -81,8 +81,7 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
     # If you don't understand dmplex, look at the PETSc reference
     # here: https://cse.buffalo.edu/~knepley/classes/caam519/CSBook.pdf
     # used to get topology info
-    # FIXME : not sure how to get around the private access
-    top_dm = top._topology_dm
+    top_dm = top.topology_dm
 
     # Get range of dmplex ids for cells, facets, and vertices
     f_start, f_end = top_dm.getHeightStratum(1)
@@ -252,10 +251,16 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     boundary_tag_to_index = {bdy_tag: i for i, bdy_tag in enumerate(bdy_tags)}
     marker_to_neighbor_value = {}
     from meshmode.mesh import _boundary_tag_bit
-    # None for no marker
+    # for convenience,
+    # None maps to the boundary tag for a boundary facet with no marker
     marker_to_neighbor_value[None] = \
         -(_boundary_tag_bit(bdy_tags, boundary_tag_to_index, BTAG_REALLY_ALL)
           | _boundary_tag_bit(bdy_tags, boundary_tag_to_index, BTAG_ALL))
+    # firedrake exterior facets with no marker are assigned the
+    # a dummy marker
+    from firedrake.mesh import unmarked as fd_unmarked
+    marker_to_neighbor_value[fd_unmarked] = marker_to_neighbor_value[None]
+    # Now figure out the appropriate tags for each firedrake markers
     for marker in top.exterior_facets.unique_markers:
         marker_to_neighbor_value[marker] = \
             -(_boundary_tag_bit(bdy_tags, boundary_tag_to_index, marker)
@@ -349,18 +354,21 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                   dtype=Mesh.face_id_dtype)
     # If only using some of the cells, throw away unused cells and
     # move to new cell index
+    exterior_facet_markers = top.exterior_facets.markers
     if cells_to_use is not None:
         to_keep = np.isin(ext_elements, cells_to_use)
         ext_elements = np.vectorize(cells_to_use_inv.__getitem__)(
             ext_elements[to_keep])
         ext_element_faces = ext_element_faces[to_keep]
         ext_neighbor_faces = ext_neighbor_faces[to_keep]
+        if exterior_facet_markers is not None:
+            exterior_facet_markers = exterior_facet_markers[to_keep]
 
     # tag the boundary, making sure to record custom tags
     # (firedrake "markers") if present
     if top.exterior_facets.markers is not None:
         ext_neighbors = np.zeros(ext_elements.shape, dtype=IntType)
-        for ifac, marker in enumerate(top.exterior_facets.markers):
+        for ifac, marker in enumerate(exterior_facet_markers):
             ext_neighbors[ifac] = marker_to_neighbor_value[marker]
     else:
         ext_neighbors = np.full(ext_elements.shape,
@@ -851,10 +859,10 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     # Get new element ordering:
     with ProcessLogger(logger, "Determining permutations applied"
                        " to local vertex numbers"):
-        c_start, c_end = top._topology_dm.getHeightStratum(0)
+        c_start, c_end = top.topology_dm.getHeightStratum(0)
         cell_index_mm2fd = np.vectorize(top._cell_numbering.getOffset)(
             np.arange(c_start, c_end))
-        v_start, v_end = top._topology_dm.getDepthStratum(0)
+        v_start, v_end = top.topology_dm.getDepthStratum(0)
 
         # Firedrake goes crazy reordering local vertex numbers,
         # we've got to work to figure out what changes they made.

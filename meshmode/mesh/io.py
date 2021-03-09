@@ -221,7 +221,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 if group.dim == 2:
                     from meshmode.mesh.processing import flip_simplex_element_group
                     group = flip_simplex_element_group(vertices, group,
-                            np.ones(ngroup_elements, np.bool))
+                            np.ones(ngroup_elements, bool))
 
             elif isinstance(group_el_type, GmshTensorProductElementBase):
                 vertex_shuffle = type(group_el_type)(
@@ -234,7 +234,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     unit_nodes=unit_nodes
                     )
             else:
-                pass
+                # NOTE: already checked above
+                assert False
 
             groups.append(group)
 
