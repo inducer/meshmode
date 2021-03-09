@@ -466,6 +466,7 @@ class Visualizer:
     # {{{ mayavi
 
     def show_scalar_in_mayavi(self, field, **kwargs):
+        # pylint: disable=import-error
         import mayavi.mlab as mlab
 
         do_show = kwargs.pop("do_show", True)
@@ -1042,6 +1043,7 @@ def draw_curve(discr):
     import matplotlib.pyplot as plt
     plt.plot(mesh.vertices[0], mesh.vertices[1], "o")
 
+    # pylint: disable=no-member
     color = plt.cm.rainbow(np.linspace(0, 1, len(discr.groups)))
     for igrp, _ in enumerate(discr.groups):
         group_nodes = np.array([

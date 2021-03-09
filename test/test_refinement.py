@@ -269,10 +269,13 @@ def test_refinement_connection(
 
         if visualize == "dots":
             import matplotlib.pyplot as plt
+            import matplotlib.cm as cm
+
             x = x.get(actx.queue)
             err = np.array(np.log10(
                 1e-16 + np.abs((f_interp - f_true).get(actx.queue))), dtype=float)
-            import matplotlib.cm as cm
+
+            # pylint: disable=no-member
             cmap = cm.ScalarMappable(cmap=cm.jet)
             cmap.set_array(err)
             plt.scatter(x[0], x[1], c=cmap.to_rgba(err), s=20, cmap=cmap)

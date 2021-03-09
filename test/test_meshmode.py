@@ -982,6 +982,7 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
     logging.basicConfig(level=logging.INFO)
     actx = actx_factory()
 
+    # pylint: disable=import-error
     from scipy.spatial import Delaunay
     verts = np.random.rand(1000, dim)
     dtri = Delaunay(verts)

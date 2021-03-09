@@ -124,11 +124,11 @@ Flake8:
   - tags
 
 Pylint:
-  script:
-  - export PY_EXE=python3
-  - EXTRA_INSTALL="Cython pybind11 numpy mako matplotlib"
-  - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
-  - . ./prepare-and-run-pylint.sh "$CI_PROJECT_NAME" examples/*.py test/test_*.py
+  script: |
+    export PY_EXE=python3
+    EXTRA_INSTALL="Cython pybind11 numpy mako matplotlib mpi4py"
+    curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
+    . ./prepare-and-run-pylint.sh "$CI_PROJECT_NAME" examples/*.py test/test_*.py
   tags:
   - python3
   except:

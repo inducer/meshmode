@@ -4,3 +4,5 @@
     - to_firedrake.py
     - from_firedrake.py
     - test_firedrake_interop.py
+- arg: extension-pkg-whitelist
+  val: mayavi

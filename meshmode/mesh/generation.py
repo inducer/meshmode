@@ -595,6 +595,7 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
         theta = np.arccos(z/r)
         phi = np.arctan2(y, x)
 
+        # pylint: disable=import-error
         import scipy.special as sps
         # Note: This matches the spherical harmonic
         # convention in the QBX3D paper:
