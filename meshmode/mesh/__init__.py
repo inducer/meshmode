@@ -662,6 +662,7 @@ class Mesh(Record):
         *False* if it is known that some element interfaces are non-conforming.
         *None* if neither of the two is known.
 
+    .. automethod:: copy
     .. automethod:: __eq__
     .. automethod:: __ne__
     """
