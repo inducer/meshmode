@@ -216,6 +216,15 @@ class Discretization:
                 }[self.real_dtype.type])
 
         self._setup_actx = actx
+        self._group_factory = group_factory
+
+    def copy(self, actx=None, mesh=None, group_factory=None, real_dtype=None):
+        return type(self)(
+                self._setup_actx if actx is None else actx,
+                self.mesh if mesh is None else mesh,
+                self._group_factory if group_factory is None else group_factory,
+                self.real_dtype if real_dtype is None else real_dtype,
+                )
 
     @property
     def dim(self):
