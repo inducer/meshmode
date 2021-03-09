@@ -1674,7 +1674,9 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
 
 
 @pytest.mark.parametrize("ambient_dim", [2, 3])
-def test_mesh_with_interior_unit_nodes(ambient_dim):
+def test_mesh_with_interior_unit_nodes(actx_factory, ambient_dim):
+    actx = actx_factory()
+
     # NOTE: smaller orders or coarser meshes make the cases fail the
     # node_vertex_consistency test; the default warp_and_blend_nodes have
     # nodes at the vertices, so they pass for much smaller tolerances
@@ -1708,6 +1710,17 @@ def test_mesh_with_interior_unit_nodes(ambient_dim):
 
     assert mesh.facial_adjacency_groups
     assert mesh.nodal_adjacency
+
+    from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import QuadratureSimplexGroupFactory
+    discr = Discretization(actx, mesh,
+            QuadratureSimplexGroupFactory(order))
+
+    from meshmode.discretization.connection import make_face_restriction
+    conn = make_face_restriction(actx, discr,
+            group_factory=QuadratureSimplexGroupFactory(order),
+            boundary_tag=FACE_RESTR_ALL)
+    assert conn
 
 
 if __name__ == "__main__":

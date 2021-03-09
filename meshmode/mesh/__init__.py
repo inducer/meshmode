@@ -1085,7 +1085,7 @@ class _FlatFacialAdjacencyData:
     def __init__(self, nfaces, element_id_dtype, face_id_dtype):
         self.elements = np.empty(nfaces, dtype=element_id_dtype)
         self.element_faces = np.empty(nfaces, dtype=face_id_dtype)
-        self.neighbor_groups = np.empty(nfaces, dtype=np.int)
+        self.neighbor_groups = np.empty(nfaces, dtype=np.int64)
         self.neighbors = np.empty(nfaces, dtype=element_id_dtype)
         self.neighbor_faces = np.empty(nfaces, dtype=face_id_dtype)
 
