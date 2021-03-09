@@ -210,6 +210,7 @@ class ArrayContext:
 
     .. versionadded:: 2020.2
     """
+    _array_type_ = None
 
     def __init__(self):
         self.np = self._get_fake_numpy_namespace()
@@ -448,6 +449,8 @@ class PyOpenCLArrayContext(ArrayContext):
         may become significant. Using e.g. :class:`pyopencl.tools.MemoryPool`
         as the allocator can help avoid this cost.
     """
+    import pyopencl.array as cla
+    _array_type_ = cla.Array
 
     def __init__(self, queue, allocator=None, wait_event_queue_length=None):
         r"""
@@ -796,6 +799,9 @@ class PytatoArrayContext(ArrayContext):
 
         A :class:`pyopencl.CommandQueue`.
     """
+    import pytato as pt
+    _array_type_ = pt.Array
+
     def __init__(self, queue, allocator=None):
         import pytato as pt
         super().__init__()

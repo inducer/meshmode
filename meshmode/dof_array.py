@@ -258,6 +258,12 @@ class DOFArray:
             return self._like_me([f(op1_i, op2) for op1_i in op1._data])
         elif isinstance(op1, Number) and isinstance(op2, DOFArray):
             return self._like_me([f(op1, op2_i) for op2_i in op2._data])
+        elif isinstance(op1, DOFArray) and isinstance(op2,
+                self.array_context._array_type_):
+            return self._like_me([f(op1_i, op2) for op1_i in op1._data])
+        elif isinstance(op1, self.array_context._array_type_) and (
+                isinstance(op2, DOFArray)):
+            return self._like_me([f(op1, op2_i) for op2_i in op2._data])
         else:
             raise NotImplementedError("operation for types "
                 f"{type(op1).__name__} and {type(op2).__name__}")
