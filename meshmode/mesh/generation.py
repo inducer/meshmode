@@ -286,12 +286,15 @@ def make_curve_mesh(curve_f, element_boundaries, order,
     t = t.ravel()
     nodes = curve_f(t).reshape(vertices.shape[0], nelements, -1)
 
+    regions = np.zeros(nelements, dtype=np.int32)
+
     from meshmode.mesh import Mesh, SimplexElementGroup
     egroup = SimplexElementGroup(
             order,
             vertex_indices=vertex_indices,
             nodes=nodes,
-            unit_nodes=unit_nodes)
+            unit_nodes=unit_nodes,
+            regions=regions)
 
     mesh = Mesh(
             vertices=vertices, groups=[egroup],
@@ -387,9 +390,11 @@ def make_group_from_vertices(vertices, vertex_indices, order,
     # make contiguous
     nodes = nodes.copy()
 
+    regions = np.zeros(vertex_indices.shape[0], dtype=np.int32)
+
     return group_cls(
             order, vertex_indices, nodes,
-            unit_nodes=unit_nodes)
+            unit_nodes=unit_nodes, regions=regions)
 
 # }}}
 

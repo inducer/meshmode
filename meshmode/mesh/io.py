@@ -169,11 +169,20 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         from meshmode.mesh import (Mesh,
                 SimplexElementGroup, TensorProductElementGroup)
 
+        # construct region tags for mesh
+        from meshmode.mesh import make_region_tags
+        gmsh_region_tags = [tag for tag, dim in self.tags if
+                            dim == mesh_bulk_dim] if self.tags else None
+        region_tags = make_region_tags(user_tags=gmsh_region_tags)
+
         # construct boundary tags for mesh
         from meshmode.mesh import make_boundary_tags
         gmsh_boundary_tags = [tag for tag, dim in self.tags if
                               dim == mesh_bulk_dim-1] if self.tags else None
         boundary_tags = make_boundary_tags(user_tags=gmsh_boundary_tags)
+
+        from meshmode.mesh import index_tags, get_tag_bit
+        rtag_to_index = index_tags(region_tags)
 
         bulk_el_types = set()
 
@@ -190,6 +199,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             vertex_indices = np.empty(
                     (ngroup_elements, el_vertex_count),
                     np.int32)
+            regions = np.zeros(ngroup_elements, np.int32)
             i = 0
 
             for element, (el_vertices, el_nodes, el_type) in enumerate(zip(
@@ -201,6 +211,12 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 vertex_indices[i] = [
                         vertex_gmsh_index_to_mine[v_nr] for v_nr in el_vertices
                         ]
+
+                el_markers = self.element_markers[element]
+                if el_markers is not None:
+                    for t in el_markers:
+                        regions[i] |= get_tag_bit(rtag_to_index,
+                            self.tags[self.gmsh_tag_index_to_mine[t]][0])
 
                 i += 1
 
@@ -221,7 +237,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     group_el_type.order,
                     vertex_indices,
                     nodes,
-                    unit_nodes=unit_nodes
+                    unit_nodes=unit_nodes,
+                    regions=regions
                     )
 
                 if group.dim == 2:
@@ -237,7 +254,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     group_el_type.order,
                     vertex_indices[:, vertex_shuffle],
                     nodes,
-                    unit_nodes=unit_nodes
+                    unit_nodes=unit_nodes,
+                    regions=regions
                     )
             else:
                 # NOTE: already checked above
@@ -263,6 +281,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 vertices, groups,
                 is_conforming=is_conforming,
                 facial_adjacency_groups=facial_adjacency_groups,
+                region_tags=region_tags,
                 boundary_tags=boundary_tags,
                 **self.mesh_construction_kwargs)
 

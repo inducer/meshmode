@@ -38,6 +38,7 @@ __doc__ = """
 .. autoclass:: FacialAdjacencyGroup
 .. autoclass:: InterPartitionAdjacencyGroup
 
+.. autofunction:: make_region_tags
 .. autofunction:: make_boundary_tags
 .. autofunction:: index_tags
 .. autofunction:: get_tag_bit
@@ -45,6 +46,12 @@ __doc__ = """
 .. autofunction:: as_python
 .. autofunction:: check_bc_coverage
 .. autofunction:: is_boundary_tag_empty
+
+Predefined Region tags
+----------------------
+
+.. autoclass:: RTAG_NONE
+.. autoclass:: RTAG_ALL
 
 Predefined Boundary tags
 ------------------------
@@ -59,6 +66,16 @@ Predefined Boundary tags
 
 
 # {{{ element tags
+
+class RTAG_NONE:  # noqa: N801
+    """A region tag representing an empty region."""
+    pass
+
+
+class RTAG_ALL:  # noqa: N801
+    """A region tag representing all regions."""
+    pass
+
 
 class BTAG_NONE:  # noqa: N801
     """A boundary tag representing an empty boundary."""
@@ -138,6 +155,9 @@ class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801
     # firedrakeproject.org seems to reject connections from Github.
 
 
+SYSTEM_RTAGS = {RTAG_NONE, RTAG_ALL}
+
+
 SYSTEM_BTAGS = {BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
                    BTAG_PARTITION, BTAG_INDUCED_BOUNDARY}
 
@@ -166,6 +186,11 @@ class MeshElementGroup(Record):
     .. attribute:: unit_nodes
 
         *(dim, nunit_nodes)*
+
+    .. attribute:: regions
+
+        An array *(nelements)*, with the bits of ``regions[i]`` indicating the
+        mesh regions that contain element ``i``.
 
     .. attribute:: element_nr_base
 
@@ -196,7 +221,7 @@ class MeshElementGroup(Record):
     """
 
     def __init__(self, order, vertex_indices, nodes,
-            element_nr_base=None, node_nr_base=None,
+            regions=None, element_nr_base=None, node_nr_base=None,
             unit_nodes=None, dim=None, **kwargs):
         """
         :arg order: the maximum total degree used for interpolation.
@@ -214,6 +239,7 @@ class MeshElementGroup(Record):
             vertex_indices=vertex_indices,
             nodes=nodes,
             unit_nodes=unit_nodes,
+            regions=regions,
             element_nr_base=element_nr_base, node_nr_base=node_nr_base,
             **kwargs)
 
@@ -293,7 +319,7 @@ class MeshElementGroup(Record):
 
 class _ModepyElementGroup(MeshElementGroup):
     def __init__(self, order, vertex_indices, nodes,
-            element_nr_base=None, node_nr_base=None,
+            regions=None, element_nr_base=None, node_nr_base=None,
             unit_nodes=None, dim=None, **kwargs):
         """
         :arg order: the maximum total degree used for interpolation.
@@ -345,6 +371,7 @@ class _ModepyElementGroup(MeshElementGroup):
                         f" got {vertex_indices.shape[-1]}")
 
         super().__init__(order, vertex_indices, nodes,
+                regions=regions,
                 element_nr_base=element_nr_base,
                 node_nr_base=node_nr_base,
                 unit_nodes=unit_nodes,
@@ -634,6 +661,15 @@ class Mesh(Record):
         (Note that element groups are not necessarily geometrically contiguous
         like the figure may suggest.)
 
+    .. attribute:: region_tags
+
+        A list of region tag identifiers. :class:`RTAG_ALL` is guaranteed to exist.
+
+    .. attribute:: rtag_to_index
+
+        A mapping that maps region tag identifiers to their
+        corresponding index.
+
     .. attribute:: boundary_tags
 
         A list of boundary tag identifiers. :class:`BTAG_ALL` and
@@ -666,6 +702,7 @@ class Mesh(Record):
             skip_element_orientation_test=False,
             nodal_adjacency=None,
             facial_adjacency_groups=None,
+            region_tags=None,
             boundary_tags=None,
             vertex_id_dtype=np.int32,
             element_id_dtype=np.int32,
@@ -709,6 +746,20 @@ class Mesh(Record):
             el_nr += ng.nelements
             node_nr += ng.nnodes
 
+        # {{{ region tags
+
+        region_tags = make_region_tags(user_tags=region_tags)
+
+        max_region_tag_count = int(
+                np.log(np.iinfo(element_id_dtype).max)/np.log(2))
+        if len(region_tags) > max_region_tag_count:
+            raise ValueError("too few bits in element_id_dtype to represent all "
+                    "region tags")
+
+        rtag_to_index = index_tags(region_tags)
+
+        # }}}
+
         # {{{ boundary tags
 
         boundary_tags = make_boundary_tags(user_tags=boundary_tags)
@@ -746,6 +797,8 @@ class Mesh(Record):
                 self, vertices=vertices, groups=new_groups,
                 _nodal_adjacency=nodal_adjacency,
                 _facial_adjacency_groups=facial_adjacency_groups,
+                region_tags=region_tags,
+                rtag_to_index=rtag_to_index,
                 boundary_tags=boundary_tags,
                 btag_to_index=btag_to_index,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),
@@ -809,6 +862,7 @@ class Mesh(Record):
         set_if_not_present("vertices")
         if "groups" not in kwargs:
             kwargs["groups"] = [group.copy() for group in self.groups]
+        set_if_not_present("region_tags")
         set_if_not_present("boundary_tags")
         set_if_not_present("nodal_adjacency", "_nodal_adjacency")
         set_if_not_present("facial_adjacency_groups", "_facial_adjacency_groups")
@@ -885,6 +939,9 @@ class Mesh(Record):
 
         return self._facial_adjacency_groups
 
+    def region_tag_bit(self, region_tag):
+        return get_tag_bit(self.rtag_to_index, region_tag)
+
     def boundary_tag_bit(self, boundary_tag):
         return get_tag_bit(self.btag_to_index, boundary_tag)
 
@@ -897,6 +954,7 @@ class Mesh(Record):
                 and self.element_id_dtype == other.element_id_dtype
                 and self._nodal_adjacency == other._nodal_adjacency
                 and self._facial_adjacency_groups == other._facial_adjacency_groups
+                and self.region_tags == other.region_tags
                 and self.boundary_tags == other.boundary_tags
                 and self.is_conforming == other.is_conforming)
 
@@ -1016,6 +1074,21 @@ def _compute_nodal_adjacency_from_vertices(mesh):
 
 # {{{ tags
 
+def make_region_tags(user_tags=None):
+    """Create a region tag list, optionally including extra *user_tags*."""
+    region_tags = []
+
+    if user_tags is not None:
+        if RTAG_NONE in user_tags:
+            raise ValueError("RTAG_NONE is not allowed to be part of region_tags")
+        region_tags.extend(user_tags)
+
+    if RTAG_ALL not in region_tags:
+        region_tags.append(RTAG_ALL)
+
+    return region_tags
+
+
 def make_boundary_tags(user_tags=None):
     """Create a boundary tag list, optionally including extra *user_tags*."""
     boundary_tags = []
@@ -1040,7 +1113,7 @@ def index_tags(tags):
 
 def get_tag_bit(tag_to_index, tag):
     """Get the bit in a tag bitfield that corresponds to *tag*."""
-    if tag is BTAG_NONE:
+    if tag is RTAG_NONE or tag is BTAG_NONE:
         return 0
 
     if tag not in tag_to_index:
@@ -1393,6 +1466,26 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
 
         if not incomplete_ok and not seen.all():
             raise RuntimeError("found faces without boundary conditions")
+
+# }}}
+
+
+# {{{ is_region_tag_empty
+
+def is_region_tag_empty(mesh, region_tag):
+    """Return *True* if the corresponding region tag does not occur as part of
+    *mesh*.
+    """
+
+    rtag_bit = mesh.region_tag_bit(region_tag)
+    if not rtag_bit:
+        return True
+
+    for grp in mesh.groups:
+        if (grp.regions & rtag_bit).any():
+            return False
+
+    return True
 
 # }}}
 
