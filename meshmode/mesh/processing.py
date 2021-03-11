@@ -587,17 +587,18 @@ def partition_mesh(mesh, part_per_element, part_num):
                 group_neighbor_parts else set()
 
     boundary_tags = mesh.boundary_tags[:]
-    btag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
-
-    def boundary_tag_bit(boundary_tag):
-        from meshmode.mesh import _boundary_tag_bit
-        return _boundary_tag_bit(boundary_tags, btag_to_index, boundary_tag)
 
     from meshmode.mesh import BTAG_PARTITION
     for i_neighbor_part in all_neighbor_parts:
         part_tag = BTAG_PARTITION(i_neighbor_part)
         boundary_tags.append(part_tag)
-        btag_to_index[part_tag] = len(boundary_tags)-1
+
+    from meshmode.mesh import index_tags
+    btag_to_index = index_tags(boundary_tags)
+
+    def boundary_tag_bit(boundary_tag):
+        from meshmode.mesh import get_tag_bit
+        return get_tag_bit(btag_to_index, boundary_tag)
 
     inter_partition_adj_groups = _create_inter_partition_adjacency_groups(mesh,
                 part_per_element, part_mesh_groups, all_neighbor_parts,

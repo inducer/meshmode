@@ -38,6 +38,10 @@ __doc__ = """
 .. autoclass:: FacialAdjacencyGroup
 .. autoclass:: InterPartitionAdjacencyGroup
 
+.. autofunction:: make_boundary_tags
+.. autofunction:: index_tags
+.. autofunction:: get_tag_bit
+
 .. autofunction:: as_python
 .. autofunction:: check_bc_coverage
 .. autofunction:: is_boundary_tag_empty
@@ -57,11 +61,11 @@ Predefined Boundary tags
 # {{{ element tags
 
 class BTAG_NONE:  # noqa: N801
-    """A boundary tag representing an empty boundary or volume."""
+    """A boundary tag representing an empty boundary."""
 
 
 class BTAG_ALL:  # noqa: N801
-    """A boundary tag representing the entire boundary or volume.
+    """A boundary tag representing the entire boundary.
 
     In the case of the boundary, :class:`BTAG_ALL` does not include rank boundaries,
     or, more generally, anything tagged with :class:`BTAG_NO_BOUNDARY`.
@@ -134,7 +138,7 @@ class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801
     # firedrakeproject.org seems to reject connections from Github.
 
 
-SYSTEM_TAGS = {BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
+SYSTEM_BTAGS = {BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
                    BTAG_PARTITION, BTAG_INDUCED_BOUNDARY}
 
 # }}}
@@ -640,11 +644,6 @@ class Mesh(Record):
         A mapping that maps boundary tag identifiers to their
         corresponding index.
 
-        .. note::
-
-            Elements of :attr:`boundary_tags` that do not cover any
-            part of the boundary will not be keys in this dictionary.
-
     .. attribute:: vertex_id_dtype
 
     .. attribute:: element_id_dtype
@@ -712,18 +711,7 @@ class Mesh(Record):
 
         # {{{ boundary tags
 
-        if boundary_tags is None:
-            boundary_tags = []
-        else:
-            boundary_tags = boundary_tags[:]
-
-        if BTAG_NONE in boundary_tags:
-            raise ValueError("BTAG_NONE is not allowed to be part of "
-                    "boundary_tags")
-        if BTAG_ALL not in boundary_tags:
-            boundary_tags.append(BTAG_ALL)
-        if BTAG_REALLY_ALL not in boundary_tags:
-            boundary_tags.append(BTAG_REALLY_ALL)
+        boundary_tags = make_boundary_tags(user_tags=boundary_tags)
 
         max_boundary_tag_count = int(
                 np.log(np.iinfo(element_id_dtype).max)/np.log(2))
@@ -731,8 +719,7 @@ class Mesh(Record):
             raise ValueError("too few bits in element_id_dtype to represent all "
                     "boundary tags")
 
-        btag_to_index = {
-                btag: i for i, btag in enumerate(boundary_tags)}
+        btag_to_index = index_tags(boundary_tags)
 
         # }}}
 
@@ -825,7 +812,6 @@ class Mesh(Record):
         set_if_not_present("boundary_tags")
         set_if_not_present("nodal_adjacency", "_nodal_adjacency")
         set_if_not_present("facial_adjacency_groups", "_facial_adjacency_groups")
-        set_if_not_present("boundary_tags")
         set_if_not_present("vertex_id_dtype")
         set_if_not_present("element_id_dtype")
         set_if_not_present("is_conforming")
@@ -900,8 +886,7 @@ class Mesh(Record):
         return self._facial_adjacency_groups
 
     def boundary_tag_bit(self, boundary_tag):
-        return _boundary_tag_bit(self.boundary_tags, self.btag_to_index,
-                        boundary_tag)
+        return get_tag_bit(self.btag_to_index, boundary_tag)
 
     def __eq__(self, other):
         return (
@@ -1029,17 +1014,40 @@ def _compute_nodal_adjacency_from_vertices(mesh):
 # }}}
 
 
-# {{{ boundary tag to bit
+# {{{ tags
 
-def _boundary_tag_bit(boundary_tags, btag_to_index, boundary_tag):
-    if boundary_tag is BTAG_NONE:
+def make_boundary_tags(user_tags=None):
+    """Create a boundary tag list, optionally including extra *user_tags*."""
+    boundary_tags = []
+
+    if user_tags is not None:
+        if BTAG_NONE in user_tags:
+            raise ValueError("BTAG_NONE is not allowed to be part of boundary_tags")
+        boundary_tags.extend(user_tags)
+
+    if BTAG_ALL not in boundary_tags:
+        boundary_tags.append(BTAG_ALL)
+    if BTAG_REALLY_ALL not in boundary_tags:
+        boundary_tags.append(BTAG_REALLY_ALL)
+
+    return boundary_tags
+
+
+def index_tags(tags):
+    """Create a dict that maps tags to their respective index in the tag list."""
+    return {tag: i for i, tag in enumerate(tags)}
+
+
+def get_tag_bit(tag_to_index, tag):
+    """Get the bit in a tag bitfield that corresponds to *tag*."""
+    if tag is BTAG_NONE:
         return 0
 
-    if boundary_tag not in boundary_tags:
-        raise ValueError("boundary tag '%s' is not known" % boundary_tag)
+    if tag not in tag_to_index:
+        raise ValueError("tag '%s' is not known" % tag)
 
     try:
-        return 1 << btag_to_index[boundary_tag]
+        return 1 << tag_to_index[tag]
     except KeyError:
         return 0
 
@@ -1091,10 +1099,10 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
                                      face_vertex_indices_to_tags=None):
     if not groups:
         return None
-    boundary_tag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
+    boundary_tag_to_index = index_tags(boundary_tags)
 
     def boundary_tag_bit(boundary_tag):
-        return _boundary_tag_bit(boundary_tags, boundary_tag_to_index, boundary_tag)
+        return get_tag_bit(boundary_tag_to_index, boundary_tag)
 
     max_faces = max([grp.nfaces for grp in groups])
     max_face_vertices = max([len(ref_fvi) for grp in groups

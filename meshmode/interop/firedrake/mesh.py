@@ -248,14 +248,14 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     # groups
     bdy_tags = _get_firedrake_boundary_tags(
         top, tag_induced_boundary=cells_to_use is not None)
-    boundary_tag_to_index = {bdy_tag: i for i, bdy_tag in enumerate(bdy_tags)}
+    from meshmode.mesh import index_tags, get_tag_bit
+    boundary_tag_to_index = index_tags(bdy_tags)
     marker_to_neighbor_value = {}
-    from meshmode.mesh import _boundary_tag_bit
     # for convenience,
     # None maps to the boundary tag for a boundary facet with no marker
     marker_to_neighbor_value[None] = \
-        -(_boundary_tag_bit(bdy_tags, boundary_tag_to_index, BTAG_REALLY_ALL)
-          | _boundary_tag_bit(bdy_tags, boundary_tag_to_index, BTAG_ALL))
+        -(get_tag_bit(boundary_tag_to_index, BTAG_REALLY_ALL)
+          | get_tag_bit(boundary_tag_to_index, BTAG_ALL))
     # firedrake exterior facets with no marker are assigned the
     # a dummy marker
     from firedrake.mesh import unmarked as fd_unmarked
@@ -263,7 +263,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     # Now figure out the appropriate tags for each firedrake markers
     for marker in top.exterior_facets.unique_markers:
         marker_to_neighbor_value[marker] = \
-            -(_boundary_tag_bit(bdy_tags, boundary_tag_to_index, marker)
+            -(get_tag_bit(boundary_tag_to_index, marker)
               | -marker_to_neighbor_value[None])
 
     # {{{ build the FacialAdjacencyGroup for internal connectivity
@@ -314,12 +314,10 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                               newly_created_exterior_facs)
         new_ext_elements = int_elements[newly_created_exterior_facs]
         new_ext_element_faces = int_element_faces[newly_created_exterior_facs]
-        new_ext_neighbor_tag = -(_boundary_tag_bit(bdy_tags,
-                                                  boundary_tag_to_index,
-                                                  BTAG_REALLY_ALL)
-                                | _boundary_tag_bit(bdy_tags,
-                                                    boundary_tag_to_index,
-                                                    BTAG_INDUCED_BOUNDARY))
+        new_ext_neighbor_tag = -(get_tag_bit(boundary_tag_to_index,
+                                             BTAG_REALLY_ALL)
+                                | get_tag_bit(boundary_tag_to_index,
+                                              BTAG_INDUCED_BOUNDARY))
         new_ext_neighbors = np.full(new_ext_elements.shape,
                                     new_ext_neighbor_tag,
                                     dtype=IntType)

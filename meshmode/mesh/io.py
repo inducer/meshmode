@@ -169,6 +169,12 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         from meshmode.mesh import (Mesh,
                 SimplexElementGroup, TensorProductElementGroup)
 
+        # construct boundary tags for mesh
+        from meshmode.mesh import make_boundary_tags
+        gmsh_boundary_tags = [tag for tag, dim in self.tags if
+                              dim == mesh_bulk_dim-1] if self.tags else None
+        boundary_tags = make_boundary_tags(user_tags=gmsh_boundary_tags)
+
         bulk_el_types = set()
 
         for group_el_type, ngroup_elements in el_type_hist.items():
@@ -244,13 +250,6 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             is_conforming = True
         else:
             is_conforming = mesh_bulk_dim < 3
-
-        # construct boundary tags for mesh
-        from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL
-        boundary_tags = [BTAG_ALL, BTAG_REALLY_ALL]
-        if self.tags:
-            boundary_tags += [tag for tag, dim in self.tags if
-                              dim == mesh_bulk_dim-1]
 
         # compute facial adjacency for Mesh if there is tag information
         facial_adjacency_groups = None
