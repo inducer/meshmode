@@ -751,6 +751,9 @@ class PytatoCompiledOperator:
                         input_dict[arg_name] = ary.data
                     elif isinstance(ary, cla.Array):
                         input_dict[arg_name] = ary
+                    elif isinstance(ary, pt.Array):
+                        input_dict[arg_name] = self.actx.freeze(
+                                ary).with_queue(self.actx.queue)
                     else:
                         raise TypeError("Expect pt.DataWrapper or CL-array, got "
                                 f"{type(ary)}")
@@ -759,7 +762,7 @@ class PytatoCompiledOperator:
 
         def from_return_dict_to_obj_array(return_dict):
             return flat_obj_array([DOFArray.from_list(self.actx,
-                [return_dict[f"_msh_out_{i}_{j}"]
+                [self.actx.thaw(return_dict[f"_msh_out_{i}_{j}"])
                  for j in range(self.output_spec[i])])
                 for i in range(len(self.output_spec))])
 
