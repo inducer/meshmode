@@ -189,8 +189,8 @@ class MeshElementGroup(Record):
 
     .. attribute:: regions
 
-        An array *(nelements)*, with the bits of ``regions[i]`` indicating the
-        mesh regions that contain element ``i``.
+        An array *(nelements)* of integers, with the bits of ``regions[i]``
+        indicating the mesh regions that contain element ``i``.
 
     .. attribute:: element_nr_base
 
