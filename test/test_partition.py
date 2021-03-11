@@ -103,8 +103,8 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
             for i_remote_part in neighbors:
                 connected_parts.add((i_local_part, i_remote_part))
 
-        from meshmode.discretization import Discretization
-        vol_discrs = [Discretization(actx, part_meshes[i], group_factory(order))
+        from meshmode.discretization.nodal import NodalDiscretization
+        vol_discrs = [NodalDiscretization(actx, part_meshes[i], group_factory(order))
                         for i in range(num_parts)]
 
         from meshmode.mesh import BTAG_PARTITION
@@ -348,8 +348,8 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(queue)
 
-    from meshmode.discretization import Discretization
-    vol_discr = Discretization(actx, local_mesh, group_factory)
+    from meshmode.discretization.nodal import NodalDiscretization
+    vol_discr = NodalDiscretization(actx, local_mesh, group_factory)
 
     from meshmode.distributed import get_connected_partitions
     connected_parts = get_connected_partitions(local_mesh)

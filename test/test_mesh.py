@@ -42,10 +42,10 @@ def test_nonequal_rect_mesh_generation(actx_factory, visualize=False):
     mesh = mgen.generate_regular_rect_mesh(
             a=(0, 0)*2, b=(5, 3), n=(10, 6,), order=3)
 
-    from meshmode.discretization import Discretization
+    from meshmode.discretization.nodal import NodalDiscretization
     from meshmode.discretization.poly_element import \
             PolynomialWarpAndBlendGroupFactory as GroupFactory
-    discr = Discretization(actx, mesh, GroupFactory(3))
+    discr = NodalDiscretization(actx, mesh, GroupFactory(3))
 
     if visualize:
         from meshmode.discretization.visualization import make_visualizer

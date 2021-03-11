@@ -29,7 +29,7 @@ from pyopencl.tools import (  # noqa
 
 from meshmode.array_context import PyOpenCLArrayContext
 
-from meshmode.discretization import Discretization
+from meshmode.discretization.nodal import NodalDiscretization
 from meshmode.discretization.poly_element import (
     InterpolatoryQuadratureSimplexGroupFactory)
 
@@ -192,7 +192,7 @@ def test_to_fd_consistency(ctx_factory, mm_mesh, fspace_degree):
     actx = PyOpenCLArrayContext(queue)
 
     factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
-    discr = Discretization(actx, mm_mesh, factory)
+    discr = NodalDiscretization(actx, mm_mesh, factory)
     fdrake_connection = build_connection_to_firedrake(discr)
     fdrake_fspace = fdrake_connection.firedrake_fspace()
     # Check consistency
@@ -538,7 +538,7 @@ def test_to_fd_transfer(ctx_factory, fspace_degree, mesh_name, mesh_pars, dim):
 
         # Make discr and connect it to firedrake
         factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
-        discr = Discretization(actx, mm_mesh, factory)
+        discr = NodalDiscretization(actx, mm_mesh, factory)
 
         fdrake_connection = build_connection_to_firedrake(discr)
         fdrake_fspace = fdrake_connection.firedrake_fspace()
@@ -658,7 +658,7 @@ def test_to_fd_idempotency(ctx_factory, mm_mesh, fspace_degree):
 
     # Make a function space and a function with unique values at each node
     factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
-    discr = Discretization(actx, mm_mesh, factory)
+    discr = NodalDiscretization(actx, mm_mesh, factory)
     fdrake_connection = build_connection_to_firedrake(discr)
     fdrake_mesh = fdrake_connection.firedrake_fspace().mesh()
     dtype = fdrake_mesh.coordinates.dat.data.dtype

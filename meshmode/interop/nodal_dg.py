@@ -102,7 +102,7 @@ class NodalDGContext:
 
         self.octave.eval(f"StartUp{mesh.dim}D;")
 
-    def get_discr(self, actx) -> meshmode.discretization.Discretization:
+    def get_discr(self, actx) -> meshmode.discretization.nodal.NodalDiscretization:
         """Get a discretization with nodes exactly matching the ones used
         by the nodal-DG code.
 
@@ -144,10 +144,10 @@ class NodalDGContext:
 
         mesh = Mesh(vertices=vertices, groups=[egroup], is_conforming=True)
 
-        from meshmode.discretization import Discretization
+        from meshmode.discretization.nodal import NodalDiscretization
         from meshmode.discretization.poly_element import (
                 PolynomialGivenNodesGroupFactory)
-        return Discretization(actx, mesh,
+        return NodalDiscretization(actx, mesh,
                 PolynomialGivenNodesGroupFactory(order, unit_nodes))
 
     def push_dof_array(self, name, ary: meshmode.dof_array.DOFArray):
