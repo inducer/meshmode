@@ -1004,7 +1004,7 @@ def make_visualizer(actx, discr, vis_order,
         equidistant nodes. If plotting high-order Lagrange VTK elements, this
         needs to be set to *True*.
     """
-    from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import OrderAndTypeBasedGroupFactory
 
     if force_equidistant:
         from meshmode.discretization.poly_element import (
@@ -1015,14 +1015,13 @@ def make_visualizer(actx, discr, vis_order,
                 PolynomialWarpAndBlendElementGroup as SimplexElementGroup,
                 LegendreGaussLobattoTensorProductElementGroup as TensorElementGroup)
 
-    from meshmode.discretization.poly_element import OrderAndTypeBasedGroupFactory
-    vis_discr = Discretization(
-            actx, discr.mesh,
-            OrderAndTypeBasedGroupFactory(
+    vis_discr = discr.copy(
+            actx=actx,
+            group_factory=OrderAndTypeBasedGroupFactory(
                 vis_order,
                 simplex_group_class=SimplexElementGroup,
                 tensor_product_group_class=TensorElementGroup),
-            real_dtype=discr.real_dtype)
+            )
 
     from meshmode.discretization.connection import \
             make_same_mesh_connection

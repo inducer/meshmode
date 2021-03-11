@@ -396,7 +396,7 @@ def make_group_from_vertices(vertices, vertex_indices, order,
 
 # {{{ generate_icosahedron
 
-def generate_icosahedron(r, order):
+def generate_icosahedron(r, order, unit_nodes=None):
     # https://en.wikipedia.org/w/index.php?title=Icosahedron&oldid=387737307
 
     phi = (1+5**(1/2))/2
@@ -426,7 +426,8 @@ def generate_icosahedron(r, order):
 
     vertex_indices = np.array(tris, dtype=np.int32)
 
-    grp = make_group_from_vertices(vertices, vertex_indices, order)
+    grp = make_group_from_vertices(vertices, vertex_indices, order,
+            unit_nodes=unit_nodes)
 
     from meshmode.mesh import Mesh
     return Mesh(
@@ -438,8 +439,8 @@ def generate_icosahedron(r, order):
 
 # {{{ generate_icosphere
 
-def generate_icosphere(r, order, uniform_refinement_rounds=0):
-    mesh = generate_icosahedron(r, order)
+def generate_icosphere(r, order, uniform_refinement_rounds=0, unit_nodes=None):
+    mesh = generate_icosahedron(r, order, unit_nodes=unit_nodes)
 
     if uniform_refinement_rounds:
         # These come out conforming, so we're OK to use the faster refiner.
@@ -466,7 +467,8 @@ def generate_icosphere(r, order, uniform_refinement_rounds=0):
 # {{{ generate_torus_and_cycle_vertices
 
 def generate_torus_and_cycle_vertices(r_major, r_minor,
-        n_major=20, n_minor=10, order=1):
+        n_major=20, n_minor=10, order=1,
+        unit_nodes=None):
     a = r_major
     b = r_minor
     u, v = np.mgrid[0:2*np.pi:2*np.pi/n_major, 0:2*np.pi:2*np.pi/n_minor]
@@ -486,7 +488,8 @@ def generate_torus_and_cycle_vertices(r_major, r_minor,
             for i in range(n_major) for j in range(n_minor)])
 
     vertex_indices = np.array(vertex_indices, dtype=np.int32)
-    grp = make_group_from_vertices(vertices, vertex_indices, order)
+    grp = make_group_from_vertices(vertices, vertex_indices, order,
+            unit_nodes=unit_nodes)
 
     # ambient_dim, nelements, nunit_nodes
     nodes = grp.nodes.copy()
@@ -530,7 +533,8 @@ def generate_torus_and_cycle_vertices(r_major, r_minor,
 # }}}
 
 
-def generate_torus(r_major, r_minor, n_major=20, n_minor=10, order=1):
+def generate_torus(r_major, r_minor, n_major=20, n_minor=10, order=1,
+        unit_nodes=None):
     r"""Generate a torus.
 
     .. figure:: images/torus.png
@@ -564,7 +568,9 @@ def generate_torus(r_major, r_minor, n_major=20, n_minor=10, order=1):
 
     """
     mesh, _, _ = generate_torus_and_cycle_vertices(
-            r_major, r_minor, n_major, n_minor, order)
+            r_major, r_minor, n_major, n_minor, order,
+            unit_nodes=unit_nodes)
+
     return mesh
 
 

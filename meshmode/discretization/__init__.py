@@ -178,6 +178,7 @@ class Discretization:
 
     .. attribute :: groups
 
+    .. automethod:: copy
     .. automethod:: empty
     .. automethod:: zeros
     .. automethod:: empty_like
@@ -220,6 +221,20 @@ class Discretization:
                 }[self.real_dtype.type])
 
         self._setup_actx = actx
+        self._group_factory = group_factory
+
+    def copy(self, actx=None, mesh=None, group_factory=None, real_dtype=None):
+        """Creates a new object of the same type with all arguments that are not
+        *None* replaced. The copy is not recursive (e.g. it does not call
+        :meth:`meshmode.mesh.Mesh.copy`).
+        """
+
+        return type(self)(
+                self._setup_actx if actx is None else actx,
+                self.mesh if mesh is None else mesh,
+                self._group_factory if group_factory is None else group_factory,
+                self.real_dtype if real_dtype is None else real_dtype,
+                )
 
     @property
     def dim(self):
