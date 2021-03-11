@@ -61,11 +61,11 @@ def main():
 
     order = 3
 
-    from meshmode.discretization import Discretization
+    from meshmode.discretization.nodal import NodalDiscretization
     from meshmode.discretization.poly_element import \
         InterpolatoryQuadratureSimplexGroupFactory
     group_factory = InterpolatoryQuadratureSimplexGroupFactory(order=order)
-    discr = Discretization(actx, mesh, group_factory)
+    discr = NodalDiscretization(actx, mesh, group_factory)
 
     # Get our solution: we will use
     # Real(e^z) = Real(e^{x+iy})

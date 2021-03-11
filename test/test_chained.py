@@ -70,10 +70,10 @@ def create_discretization(actx, ndim,
         raise ValueError(f"unsupported dimension: {ndim}")
 
     # create discretization
-    from meshmode.discretization import Discretization
+    from meshmode.discretization.nodal import NodalDiscretization
     from meshmode.discretization.poly_element import \
             InterpolatoryQuadratureSimplexGroupFactory
-    discr = Discretization(actx, mesh,
+    discr = NodalDiscretization(actx, mesh,
             InterpolatoryQuadratureSimplexGroupFactory(order))
 
     return discr
