@@ -586,7 +586,7 @@ def array_context_for_pickling(actx: ArrayContext):
 # }}}
 
 
-def flat_norm(ary: DOFArray, ord=None):     # pylint: disable=W0622
+def flat_norm(ary: DOFArray, ord=None):
     from warnings import warn
     warn("flat_norm is deprecated. Use array_context.np.linalg.norm instead. "
             "flat_norm will disappear in 2022.",

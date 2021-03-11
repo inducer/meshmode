@@ -126,7 +126,7 @@ Flake8:
 Pylint:
   script: |
     export PY_EXE=python3
-    EXTRA_INSTALL="Cython pybind11 numpy mako matplotlib mpi4py"
+    EXTRA_INSTALL="Cython pybind11 numpy mako matplotlib scipy mpi4py oct2py"
     curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
     . ./prepare-and-run-pylint.sh "$CI_PROJECT_NAME" examples/*.py test/test_*.py
   tags:

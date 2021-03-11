@@ -236,7 +236,6 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
             for i, (elem, face) in enumerate(zip(adj.elements, adj.element_faces)):
                 index_lookup_table[ipart, igrp, elem, face] = i
 
-    # pylint: disable=too-many-nested-blocks
     for part_num in range(num_parts):
         part, part_to_global = new_meshes[part_num]
         for grp_num in range(len(part.groups)):

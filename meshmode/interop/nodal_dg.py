@@ -56,7 +56,6 @@ class NodalDGContext:
         self.octave = None
 
     def __enter__(self):
-        # pylint: disable=import-error
         import oct2py
         self.octave = oct2py.Oct2Py()
         self.octave.eval(f'cd "{self.path}"')

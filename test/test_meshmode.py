@@ -860,7 +860,7 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
             b=np.array([2, 0, 0])[:mesh.ambient_dim])
 
     mesh3 = merge_disjoint_meshes((mesh2, mesh))
-    mesh3.facial_adjacency_groups       # pylint: disable=pointless-statement
+    assert mesh3.facial_adjacency_groups
 
     mesh4 = mesh3.copy()
 
@@ -976,8 +976,7 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
     logging.basicConfig(level=logging.INFO)
     actx = actx_factory()
 
-    # pylint: disable=import-error
-    from scipy.spatial import Delaunay
+    from scipy.spatial import Delaunay          # pylint: disable=no-name-in-module
     verts = np.random.rand(1000, dim)
     dtri = Delaunay(verts)
 
@@ -1176,8 +1175,8 @@ def test_as_python():
     mesh = mgen.generate_box_mesh(3*(np.linspace(0, 1, 5),))
 
     # These implicitly compute these adjacency structures.
-    mesh.nodal_adjacency                # pylint: disable=pointless-statement
-    mesh.facial_adjacency_groups        # pylint: disable=pointless-statement
+    assert mesh.nodal_adjacency
+    assert mesh.facial_adjacency_groups
 
     from meshmode.mesh import as_python
     code = as_python(mesh)

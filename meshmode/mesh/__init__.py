@@ -859,8 +859,9 @@ class Mesh(Record):
 
     @property
     def nodal_adjacency(self):
-        # pylint: disable=E0203,W0201
         from meshmode import DataUnavailable
+
+        # pylint: disable=E0203
         if self._nodal_adjacency is False:
             raise DataUnavailable("nodal_adjacency")
 
@@ -882,8 +883,9 @@ class Mesh(Record):
 
     @property
     def facial_adjacency_groups(self):
-        # pylint: disable=E0203,W0201
         from meshmode import DataUnavailable
+
+        # pylint: disable=E0203
         if self._facial_adjacency_groups is False:
             raise DataUnavailable("facial_adjacency_groups")
 

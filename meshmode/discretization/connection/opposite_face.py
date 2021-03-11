@@ -237,7 +237,7 @@ def _make_cross_face_batches(actx,
     done_elements = np.zeros(nelements, dtype=bool)
     while True:
         todo_elements, = np.where(~done_elements)
-        if len(todo_elements) == 0:
+        if not len(todo_elements):
             return
 
         template_unit_nodes = src_unit_nodes[:, todo_elements[0], :]

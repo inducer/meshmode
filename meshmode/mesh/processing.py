@@ -453,7 +453,7 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             element_faces = nl.element_faces
             neighbor_parts = nl.neighbor_parts
             neighbors = np.empty_like(elements)
-            for inonlocal in range(len(neighbors)):     # pylint: disable=C0200
+            for inonlocal in range(len(neighbors)):
                 i_neighbor_part = neighbor_parts[inonlocal]
                 from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
                 neighbors[inonlocal] = -(

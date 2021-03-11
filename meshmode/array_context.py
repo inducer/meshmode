@@ -20,7 +20,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-
 from functools import partial
 import numpy as np
 import loopy as lp
@@ -369,7 +368,7 @@ def _flatten_grp_array(grp_ary):
 
 
 class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
-    def norm(self, array, ord=None):    # pylint: disable=W0622
+    def norm(self, array, ord=None):
         if len(array.shape) != 1:
             raise NotImplementedError("only vector norms are implemented")
 

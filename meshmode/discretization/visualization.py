@@ -490,7 +490,7 @@ class Visualizer:
             src = mlab.pipeline.scalar_scatter(*args)
 
             src.mlab_source.dataset.lines = vis_connectivity.reshape(-1, 2)
-            lines = mlab.pipeline.stripper(src)     # pylint: disable=E1101
+            lines = mlab.pipeline.stripper(src)
             mlab.pipeline.surface(lines, **kwargs)
 
         elif self.vis_discr.dim == 2:
@@ -1044,6 +1044,7 @@ def draw_curve(discr):
 
     # pylint: disable=no-member
     color = plt.cm.rainbow(np.linspace(0, 1, len(discr.groups)))
+
     for igrp, _ in enumerate(discr.groups):
         group_nodes = np.array([
             discr._setup_actx.to_numpy(discr.nodes()[iaxis][igrp])

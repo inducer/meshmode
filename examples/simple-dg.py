@@ -55,7 +55,7 @@ def parametrization_derivative(actx, discr):
     return result
 
 
-class DGDiscretization:         # pylint: disable=too-many-public-methods
+class DGDiscretization:
     def __init__(self, actx, mesh, order):
         self.order = order
 
