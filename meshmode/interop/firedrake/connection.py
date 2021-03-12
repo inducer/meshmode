@@ -131,6 +131,7 @@ class FiredrakeConnection:
     .. automethod:: __init__
     .. automethod:: from_meshmode
     .. automethod:: from_firedrake
+    .. automethod:: firedrake_fspace
     """
     def __init__(self, discr, fdrake_fspace, mm2fd_node_mapping, group_nr=None):
         """
@@ -630,8 +631,14 @@ PolynomialRecursiveNodesGroupFactory` with ``"lgl"`` nodes is used.
         imported, a :class:`~meshmode.discretization.poly_element.\
 PolynomialWarpAndBlendGroupFactory` is used.
     :arg restrict_to_boundary: (optional)
-        If not *None*, then must be a valid boundary marker for
-        ``fdrake_fspace.mesh()``. In this case, creates a
+        If not *None*, then must be one of the following:
+
+        * A valid boundary marker for ``fdrake_fspace.mesh()``
+        * A tuple of valid boundary markers for ``fdrake_fspace.mesh()``
+        * The string ``"on_boundary"`` (:mod:`firedrake` equivalent
+          to :class:`~meshmode.mesh.BTAG_ALL`).
+
+        If not *None*, creates a
         :class:`~meshmode.discretization.Discretization` on a submesh
         of ``fdrake_fspace.mesh()`` created from the cells with at least
         one vertex on a facet marked with the marker
