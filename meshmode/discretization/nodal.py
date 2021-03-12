@@ -1,6 +1,6 @@
 __copyright__ = """
 Copyright (C) 2013-2021 Andreas Kloeckner
-Copyright (C) 2021 Thomas Gibson
+Copyright (C) 2021 University of Illinois Board of Trustees
 """
 
 __license__ = """
