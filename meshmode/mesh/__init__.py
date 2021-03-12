@@ -271,7 +271,7 @@ class MeshElementGroup(Record):
 
     def __eq__(self, other):
         return (
-                isinstance(self, type(other))
+                type(self) == type(other)
                 and self.order == other.order
                 and np.array_equal(self.vertex_indices, other.vertex_indices)
                 and np.array_equal(self.nodes, other.nodes)
@@ -403,9 +403,8 @@ class NodalAdjacency(Record):
 
     def __eq__(self, other):
         return (
-                isinstance(self, type(other))
-                and np.array_equal(self.neighbors_starts,
-                    other.neighbors_starts)
+                type(self) == type(other)
+                and np.array_equal(self.neighbors_starts, other.neighbors_starts)
                 and np.array_equal(self.neighbors, other.neighbors))
 
     def __ne__(self, other):
@@ -475,7 +474,7 @@ class FacialAdjacencyGroup(Record):
 
     def __eq__(self, other):
         return (
-                isinstance(self, type(other))
+                type(self) == type(other)
                 and self.igroup == other.igroup
                 and self.ineighbor_group == other.ineighbor_group
                 and np.array_equal(self.elements, other.elements)
@@ -908,7 +907,7 @@ class Mesh(Record):
 
     def __eq__(self, other):
         return (
-                isinstance(self, type(other))
+                type(self) == type(other)
                 and np.array_equal(self.vertices, other.vertices)
                 and self.groups == other.groups
                 and self.vertex_id_dtype == other.vertex_id_dtype
