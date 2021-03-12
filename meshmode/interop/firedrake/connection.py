@@ -686,32 +686,36 @@ PolynomialWarpAndBlendGroupFactory` is used.
         except ImportError:
             # If cannot be imported, uses warp-and-blend nodes
             grp_factory = PolynomialWarpAndBlendGroupFactory(degree)
+    # validate restrict_to_boundary, if present
     if restrict_to_boundary is not None:
-        uniq_markers = fdrake_fspace.mesh().exterior_facets.unique_markers
-        allowable_bdy_ids = list(uniq_markers) + ["on_boundary"]
-        # make sure restrict_to_boundary is of correct type
-        type_check = isinstance(restrict_to_boundary, int)
-        if not type_check:
-            is_tuple = isinstance(restrict_to_boundary, tuple)
-            if is_tuple:
-                type_check = all([isinstance(x, int) for x in restrict_to_boundary])
-            else:
-                type_check = restrict_to_boundary == "on_boundary"
-            if not type_check:
-                raise TypeError("restrict_to_boundary must be an int, a tuple"
-                                " of ints, or the string 'on_boundary', not"
-                                f" of type {type(restrict_to_boundary)}")
-        # convert int to tuple to avoid corner cases
+        firedrake_bdy_ids = fdrake_fspace.mesh().exterior_facets.unique_markers
+        # Integer case, just make sure it is a valid bdy id
+        if isinstance(restrict_to_boundary, int):
+            if restrict_to_boundary not in firedrake_bdy_ids:
+                raise ValueError("Unrecognized boundary id "
+                                 f"{restrict_to_boundary}. Valid boundary "
+                                 f"ids: {firedrake_bdy_ids}")
+        # Tuple case, make sure it is a tuple of valid bdy ids
+        elif isinstance(restrict_to_boundary, tuple):
+            for bdy_id in restrict_to_boundary:
+                if not isinstance(bdy_id, int):
+                    raise TypeError(f"Invalid type {type(bdy_id)} in "
+                                    "restrict_to_boundary. When "
+                                    "restrict_to_boundary is a tuple, each "
+                                    "entry must be of type int")
+                if bdy_id not in firedrake_bdy_ids:
+                    raise ValueError(f"Unrecognized boundary id {bdy_id}. Valid"
+                                     f" boundary ids: {firedrake_bdy_ids}.")
+        # String case, must be "on_boundary"
+        elif isinstance(restrict_to_boundary, str):
+            if restrict_to_boundary != "on_boundary":
+                raise ValueError(f"Unexpected value '{restrict_to_boundary}' "
+                                 "for restrict_to_boundary. Only valid string "
+                                 "is 'on_boundary'")
         else:
-            restrict_to_boundary = (restrict_to_boundary,)
-        # make sure all markers are valid
-        if restrict_to_boundary != "on_boundary":
-            for marker in restrict_to_boundary:
-                if marker not in allowable_bdy_ids:
-                    raise ValueError("'restrict_to_boundary' must be one of"
-                                    " the following allowable boundary ids: "
-                                    f"{allowable_bdy_ids}, not "
-                                    f"'{restrict_to_boundary}'")
+            raise TypeError(f"Invalid type {type(restrict_to_boundary)} for "
+                            "restrict_to_boundary. Must be an int, a tuple "
+                            "of ints, or the string 'on_boundary'.")
 
     # If only converting a portion of the mesh near the boundary, get
     # *cells_to_use* as described in
