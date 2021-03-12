@@ -132,7 +132,7 @@ def test_chained_batch_table(actx_factory, ndim, visualize=False):
     conn = chained.connections[0]
     el_table = _build_element_lookup_table(actx, conn)
     for igrp, grp in enumerate(conn.groups):
-        for ibatch, batch in enumerate(grp.batches):
+        for batch in grp.batches:
             ifrom = batch.from_element_indices.get(actx.queue)
             jfrom = el_table[igrp][batch.to_element_indices.get(actx.queue)]
 
@@ -167,7 +167,7 @@ def test_chained_new_group_table(actx_factory, ndim, visualize=False):
             print(k)
             print(v)
 
-            igrp, ibatch, jgrp, jbatch = k
+            igrp, ibatch, _, _ = k
             mgroup, mbatch = v
             from_group_index = connections[0].groups[igrp] \
                     .batches[ibatch].from_group_index

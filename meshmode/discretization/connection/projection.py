@@ -185,8 +185,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         # perform dot product (on reference element) to get basis coefficients
         c = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
 
-        for igrp, (tgrp, cgrp) in enumerate(
-                zip(self.to_discr.groups, self.conn.groups)):
+        for igrp, cgrp in enumerate(self.conn.groups):
             for ibatch, batch in enumerate(cgrp.batches):
                 sgrp = self.from_discr.groups[batch.from_group_index]
 

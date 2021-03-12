@@ -148,6 +148,7 @@ class Refiner:
         #print tri_node_tuples, tri_result
         #self.simplex_node_tuples, self.simplex_result = tesselatetet()
         self.last_mesh = mesh
+        self.last_split_elements = None
 
         # {{{ initialization
 

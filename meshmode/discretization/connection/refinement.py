@@ -22,10 +22,9 @@ THE SOFTWARE.
 
 import numpy as np
 
+from pytools import log_process
 import logging
 logger = logging.getLogger(__name__)
-
-from pytools import log_process
 
 
 # {{{ Build interpolation batches for group

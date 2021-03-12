@@ -38,7 +38,7 @@ import meshmode.dof_array
 import meshmode.array_context
 
 
-class NodalDGContext(object):
+class NodalDGContext:
     """Should be used as a context manager to ensure proper cleanup.
 
     .. automethod:: __init__
@@ -148,8 +148,6 @@ class NodalDGContext(object):
                 PolynomialGivenNodesGroupFactory(order, unit_nodes))
 
     def push_dof_array(self, name, ary: meshmode.dof_array.DOFArray):
-        """
-        """
         grp_array, = ary
         ary = ary.array_context.to_numpy(grp_array)
         self.octave.push(name, ary.T)

@@ -27,6 +27,8 @@ __doc__ = """
 .. exception:: FileExistsError
 """
 
+from builtins import FileExistsError  # noqa: F401
+
 
 class Error(RuntimeError):
     pass
@@ -34,9 +36,6 @@ class Error(RuntimeError):
 
 class DataUnavailable(Error):
     pass
-
-
-from builtins import FileExistsError  # noqa: F401
 
 
 def _acf():

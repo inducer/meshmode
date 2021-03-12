@@ -24,7 +24,7 @@ THE SOFTWARE.
 """
 
 from dataclasses import dataclass
-import numpy as np  # noqa
+import numpy as np
 
 from meshmode.mesh import InterPartitionAdjacencyGroup
 
@@ -171,6 +171,8 @@ class MPIBoundaryCommSetupHelper:
         self.local_bdry_conn = local_bdry_conn
         self.bdry_grp_factory = bdry_grp_factory
 
+        self.send_req = None
+
     def _post_send_boundary_data(self):
 
         return self.mpi_comm.isend(
@@ -280,7 +282,6 @@ def get_connected_partitions(mesh):
     :returns: the set of partition numbers that are connected to `mesh`
     """
     connected_parts = set()
-    from meshmode.mesh import InterPartitionAdjacencyGroup
     for adj in mesh.facial_adjacency_groups:
         grp = adj.get(None, None)
         if isinstance(grp, InterPartitionAdjacencyGroup):

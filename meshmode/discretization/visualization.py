@@ -379,7 +379,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                     grp.dim, grp.order, vtk_version=vtk_version)
             el_connectivity = np.array(
                     vtk_lagrange_simplex_node_tuples_to_permutation(node_tuples),
-                    dtype=np.intp).reshape(1, 1, -1)
+                    dtype=np.intp).reshape((1, 1, -1))
 
             vtk_cell_type = self.simplex_cell_types[grp.dim]
 
@@ -392,7 +392,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                     grp.dim, grp.order, vtk_version=vtk_version)
             el_connectivity = np.array(
                     vtk_lagrange_quad_node_tuples_to_permutation(node_tuples),
-                    dtype=np.intp).reshape(1, 1, -1)
+                    dtype=np.intp).reshape((1, 1, -1))
 
             vtk_cell_type = self.tensor_cell_types[grp.dim]
 
@@ -466,6 +466,7 @@ class Visualizer:
     # {{{ mayavi
 
     def show_scalar_in_mayavi(self, field, **kwargs):
+        # pylint: disable=import-error
         import mayavi.mlab as mlab
 
         do_show = kwargs.pop("do_show", True)
@@ -957,7 +958,7 @@ class Visualizer:
                 nodes.append(0*nodes[0])
 
             from matplotlib.tri.triangulation import Triangulation
-            tri, args, kwargs = \
+            tri, _, kwargs = \
                 Triangulation.get_from_args_and_kwargs(
                         *nodes,
                         triangles=vis_connectivity.vis_connectivity.reshape(-1, 3))
@@ -1041,8 +1042,10 @@ def draw_curve(discr):
     import matplotlib.pyplot as plt
     plt.plot(mesh.vertices[0], mesh.vertices[1], "o")
 
+    # pylint: disable=no-member
     color = plt.cm.rainbow(np.linspace(0, 1, len(discr.groups)))
-    for igrp, group in enumerate(discr.groups):
+
+    for igrp, _ in enumerate(discr.groups):
         group_nodes = np.array([
             discr._setup_actx.to_numpy(discr.nodes()[iaxis][igrp])
             for iaxis in range(discr.ambient_dim)

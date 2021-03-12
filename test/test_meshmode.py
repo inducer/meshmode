@@ -139,10 +139,10 @@ def test_parallel_vtk_file(actx_factory, dim):
             overwrite=True)
 
     import os
-    assert(os.path.exists(pvtu_filename))
+    assert os.path.exists(pvtu_filename)
 
     import filecmp
-    assert(filecmp.cmp("ref-"+pvtu_filename, pvtu_filename))
+    assert filecmp.cmp(f"ref-{pvtu_filename}", pvtu_filename)
 
 
 @dataclass
@@ -266,7 +266,7 @@ def test_boundary_tags():
         if bdry_fagrp is None:
             continue
 
-        for i, nbrs in enumerate(bdry_fagrp.neighbors):
+        for nbrs in bdry_fagrp.neighbors:
             if (-nbrs) & outer_btag_bit:
                 num_marked_outer_bdy += 1
             if (-nbrs) & inner_btag_bit:
@@ -362,7 +362,7 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
         if bdry_fagrp is None:
             continue
 
-        for i, nbrs in enumerate(bdry_fagrp.neighbors):
+        for nbrs in bdry_fagrp.neighbors:
             if (-nbrs) & btag_1_bit:
                 num_marked_bdy_1 += 1
             if (-nbrs) & btag_2_bit:
@@ -754,7 +754,7 @@ def test_element_orientation():
 
     from random import randrange
     flippy = np.zeros(mesh.nelements, np.int8)
-    for i in range(int(0.3*mesh.nelements)):
+    for _ in range(int(0.3*mesh.nelements)):
         flippy[randrange(0, mesh.nelements)] = 1
 
     mesh = perform_flips(mesh, flippy, skip_tests=True)
@@ -781,7 +781,7 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
 
     mesh = mesh_gen_func()
 
-    logger.info("%d elements" % mesh.nelements)
+    logger.info("%d elements", mesh.nelements)
 
     from meshmode.discretization import Discretization
     discr = Discretization(actx, mesh,
@@ -833,9 +833,6 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
     ])
 def test_merge_and_map(actx_factory, group_cls, visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
-    from meshmode.discretization.poly_element import (
-            PolynomialWarpAndBlendGroupFactory,
-            LegendreGaussLobattoTensorProductGroupFactory)
 
     order = 3
     mesh_order = 3
@@ -863,14 +860,14 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
             b=np.array([2, 0, 0])[:mesh.ambient_dim])
 
     mesh3 = merge_disjoint_meshes((mesh2, mesh))
-    mesh3.facial_adjacency_groups
+    assert mesh3.facial_adjacency_groups
 
-    mesh3.copy()
+    mesh4 = mesh3.copy()
 
     if visualize:
         from meshmode.discretization import Discretization
         actx = actx_factory()
-        discr = Discretization(actx, mesh3, discr_grp_factory)
+        discr = Discretization(actx, mesh4, discr_grp_factory)
 
         from meshmode.discretization.visualization import make_visualizer
         vis = make_visualizer(actx, discr, 3, element_shrink_factor=0.8)
@@ -893,11 +890,9 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     actx = actx_factory()
 
     if group_cls is SimplexElementGroup:
-        from meshmode.discretization.poly_element import \
-                PolynomialWarpAndBlendGroupFactory as GroupFactory
+        group_factory = PolynomialWarpAndBlendGroupFactory(mesh_order + 3)
     elif group_cls is TensorProductElementGroup:
-        from meshmode.discretization.poly_element import \
-                LegendreGaussLobattoTensorProductGroupFactory as GroupFactory
+        group_factory = LegendreGaussLobattoTensorProductGroupFactory(mesh_order + 3)
     else:
         raise TypeError
 
@@ -912,12 +907,11 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     center = np.empty(dim, np.float64)
     center.fill(-0.5)
 
-    from meshmode.mesh import Mesh, BTAG_ALL
     mg = group_cls(mesh_order, vertex_indices, nodes, dim=dim)
     mesh = Mesh(vertices, [mg], is_conforming=True)
 
     from meshmode.discretization import Discretization
-    vol_discr = Discretization(actx, mesh, GroupFactory(mesh_order + 3))
+    vol_discr = Discretization(actx, mesh, group_factory)
 
     # {{{ volume calculation check
 
@@ -944,7 +938,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
 
     from meshmode.discretization.connection import make_face_restriction
     bdry_connection = make_face_restriction(
-            actx, vol_discr, GroupFactory(mesh_order + 3),
+            actx, vol_discr, group_factory,
             BTAG_ALL)
     bdry_discr = bdry_connection.to_discr
 
@@ -982,10 +976,11 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
     logging.basicConfig(level=logging.INFO)
     actx = actx_factory()
 
-    from scipy.spatial import Delaunay
+    from scipy.spatial import Delaunay          # pylint: disable=no-name-in-module
     verts = np.random.rand(1000, dim)
     dtri = Delaunay(verts)
 
+    # pylint: disable=no-member
     from meshmode.mesh.io import from_vertices_and_simplices
     mesh = from_vertices_and_simplices(dtri.points.T, dtri.simplices,
             fix_orientation=True)
@@ -1051,7 +1046,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
                 force_ambient_dim=dim,
                 target_unit="MM")
 
-        logger.info("%d elements" % mesh.nelements)
+        logger.info("%d elements", mesh.nelements)
 
         # {{{ discretizations and connections
 
@@ -1157,8 +1152,6 @@ def test_box_mesh(actx_factory, visualize=False):
 
     if visualize:
         from meshmode.discretization import Discretization
-        from meshmode.discretization.poly_element import \
-                PolynomialWarpAndBlendGroupFactory
 
         actx = actx_factory()
         discr = Discretization(actx, mesh,
@@ -1182,8 +1175,8 @@ def test_as_python():
     mesh = mgen.generate_box_mesh(3*(np.linspace(0, 1, 5),))
 
     # These implicitly compute these adjacency structures.
-    mesh.nodal_adjacency
-    mesh.facial_adjacency_groups
+    assert mesh.nodal_adjacency
+    assert mesh.facial_adjacency_groups
 
     from meshmode.mesh import as_python
     code = as_python(mesh)
@@ -1212,7 +1205,7 @@ def test_lookup_tree(visualize=False):
 
     extent = bbox_max-bbox_min
 
-    for i in range(20):
+    for _ in range(20):
         pt = bbox_min + np.random.rand(2) * extent
         print(pt)
         for igrp, iel in tree.generate_matches(pt):
@@ -1412,8 +1405,6 @@ def test_vtk_overwrite(actx_factory):
     mesh = mgen.generate_torus(10.0, 2.0, order=target_order)
 
     from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-            InterpolatoryQuadratureSimplexGroupFactory
     discr = Discretization(
             actx, mesh,
             InterpolatoryQuadratureSimplexGroupFactory(target_order))
@@ -1459,18 +1450,15 @@ def test_mesh_to_tikz():
 def test_affine_map():
     from meshmode.mesh.tools import AffineMap
     for d in range(1, 5):
-        for i in range(100):
+        for _ in range(100):
             a = np.random.randn(d, d)+10*np.eye(d)
             b = np.random.randn(d)
 
             m = AffineMap(a, b)
-
             assert la.norm(m.inverted().matrix - la.inv(a)) < 1e-10*la.norm(a)
 
             x = np.random.randn(d)
-
             m_inv = m.inverted()
-
             assert la.norm(x-m_inv(m(x))) < 1e-10
 
 
@@ -1481,7 +1469,6 @@ def test_mesh_without_vertices(actx_factory):
     mesh = mgen.generate_icosphere(r=1.0, order=4)
 
     # create one without the vertices
-    from meshmode.mesh import Mesh
     grp, = mesh.groups
     groups = [grp.copy(nodes=grp.nodes, vertex_indices=None) for grp in mesh.groups]
     mesh = Mesh(None, groups, is_conforming=False)
@@ -1492,9 +1479,8 @@ def test_mesh_without_vertices(actx_factory):
 
     # make sure the world doesn't end
     from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-            InterpolatoryQuadratureSimplexGroupFactory as GroupFactory
-    discr = Discretization(actx, mesh, GroupFactory(4))
+    discr = Discretization(actx, mesh,
+            InterpolatoryQuadratureSimplexGroupFactory(4))
     thaw(actx, discr.nodes())
 
     from meshmode.discretization.visualization import make_visualizer
@@ -1604,7 +1590,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
             axis=1).astype(np.int64)
     mesh = split_mesh_groups(mesh, element_flags)
 
-    assert len(mesh.groups) == 2
+    assert len(mesh.groups) == 2            # pylint: disable=no-member
     assert mesh.facial_adjacency_groups
     assert mesh.nodal_adjacency
 
@@ -1620,9 +1606,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
         plt.savefig("test_mesh_multiple_groups_2d_elements.png", dpi=300)
 
     from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlendGroupFactory as GroupFactory
-    discr = Discretization(actx, mesh, GroupFactory(order))
+    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
 
     if visualize:
         group_id = discr.empty(actx, dtype=np.int32)
@@ -1642,7 +1626,8 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
             make_opposite_face_connection,
             check_connection)
     for boundary_tag in [BTAG_ALL, FACE_RESTR_INTERIOR, FACE_RESTR_ALL]:
-        conn = make_face_restriction(actx, discr, GroupFactory(order),
+        conn = make_face_restriction(actx, discr,
+                group_factory=PolynomialWarpAndBlendGroupFactory(order),
                 boundary_tag=boundary_tag,
                 per_face_groups=False)
         check_connection(actx, conn)

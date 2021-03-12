@@ -55,12 +55,12 @@ class ElementGroupBase:
     .. autoattribute:: ndofs
     .. autoattribute:: dim
 
-    .. method:: unit_nodes()
+    .. attribute:: unit_nodes
 
         Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
         of reference coordinates of interpolation nodes.
 
-    .. method:: weights()
+    .. attribute:: weights
 
         Returns an array of length :attr:`nunit_dofs` containing
         quadrature weights.
@@ -106,6 +106,10 @@ class ElementGroupBase:
     @property
     def dim(self):
         return self.mesh_el_group.dim
+
+    @property
+    def unit_nodes(self):
+        raise NotImplementedError
 
     def basis(self):
         raise NoninterpolatoryElementGroupError("'{}' "

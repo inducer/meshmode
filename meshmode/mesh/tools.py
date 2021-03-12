@@ -91,7 +91,7 @@ def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None):
     # has length sqrt(2) to eliminate the 2 in the Householder matrix.
 
     r = np.sqrt(z)
-    Vx, Vy, Vz = V = (  # noqa: N806
+    V = (  # noqa: N806
         np.sin(phi) * r,
         np.cos(phi) * r,
         np.sqrt(2.0 - z)
