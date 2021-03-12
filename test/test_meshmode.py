@@ -1590,7 +1590,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
             axis=1).astype(np.int64)
     mesh = split_mesh_groups(mesh, element_flags)
 
-    assert len(mesh.groups) == 2            # pylint: disable=E1101
+    assert len(mesh.groups) == 2            # pylint: disable=no-member
     assert mesh.facial_adjacency_groups
     assert mesh.nodal_adjacency
 

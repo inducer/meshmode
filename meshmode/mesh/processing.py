@@ -664,7 +664,7 @@ def find_volume_mesh_element_group_orientation(vertices, grp):
     mvs = [MultiVector(vec) for vec in spanning_object_array]
 
     from operator import xor
-    outer_prod = -reduce(xor, mvs)      # pylint: disable=E1130
+    outer_prod = -reduce(xor, mvs)      # pylint: disable=invalid-unary-operand-type
 
     if grp.dim == 1:
         # FIXME: This is a little weird.
