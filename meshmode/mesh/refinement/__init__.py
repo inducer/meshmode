@@ -20,7 +20,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-# pylint: disable-all
 import itertools
 from functools import partial
 
@@ -149,6 +148,7 @@ class Refiner:
         #print tri_node_tuples, tri_result
         #self.simplex_node_tuples, self.simplex_result = tesselatetet()
         self.last_mesh = mesh
+        self.last_split_elements = None
 
         # {{{ initialization
 
