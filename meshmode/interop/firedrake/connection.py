@@ -283,18 +283,19 @@ class FiredrakeConnection:
         """
         # Validate that *function* is convertible
         from firedrake.function import Function
+        function_is_function_type = isinstance(function, Function)
         # FIXME : Once ExternalOperator is fully implemented, we don't need
         #         to try/except this block
-        try:
-            from firedrake.pointwise_operators import ExternalOperator
-            if not isinstance(function, (Function, ExternalOperator)):
-                raise TypeError(f"'{function_name} must be a firedrake Function"
-                                " or ExternalOperator, "
-                                f" but is of unexpected type '{type(function)}'")
-        except ImportError:
-            if not isinstance(function, Function):
-                raise TypeError(f"'{function_name} must be a firedrake Function"
-                                f" but is of unexpected type '{type(function)}'")
+        if not function_is_function_type:
+            try:
+                from firedrake.pointwise_operators import ExternalOperator
+                function_is_extop_type = isinstance(function, ExternalOperator)
+            except ImportError:
+                function_is_extop_type = False
+        if not function_is_function_type and not function_is_extop_type:
+            raise TypeError(f"'{function_name} must be a firedrake Function"
+                            " or ExternalOperator, "
+                            f" but is of unexpected type '{type(function)}'")
         ufl_elt = function.function_space().ufl_element()
         if ufl_elt.family() != self._ufl_element.family():
             raise ValueError(f"'{function_name}.function_space().ufl_element()"
