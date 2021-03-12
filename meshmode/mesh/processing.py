@@ -123,6 +123,8 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
     for i_new_grp, i_old_grp in enumerate(new_group_to_old_group):
         group_to_new_group[i_old_grp] = i_new_grp
 
+    del grp
+
     # }}}
 
     # {{{ filter vertex indices
@@ -905,7 +907,7 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
                     order = group.order
                     unit_nodes = group.unit_nodes
                 else:
-                    assert isinstance(group, grp_cls)
+                    assert type(group) == grp_cls
                     assert group.order == order
                     assert np.array_equal(unit_nodes, group.unit_nodes)
 
