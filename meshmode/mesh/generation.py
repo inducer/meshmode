@@ -25,11 +25,11 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
-from pytools import deprecate_keyword
+from pytools import log_process, deprecate_keyword
+
 import logging
 logger = logging.getLogger(__name__)
 
-from pytools import log_process
 
 __doc__ = """
 
@@ -396,7 +396,7 @@ def make_group_from_vertices(vertices, vertex_indices, order,
 
 # {{{ generate_icosahedron
 
-def generate_icosahedron(r, order):
+def generate_icosahedron(r, order, unit_nodes=None):
     # https://en.wikipedia.org/w/index.php?title=Icosahedron&oldid=387737307
 
     phi = (1+5**(1/2))/2
@@ -426,7 +426,8 @@ def generate_icosahedron(r, order):
 
     vertex_indices = np.array(tris, dtype=np.int32)
 
-    grp = make_group_from_vertices(vertices, vertex_indices, order)
+    grp = make_group_from_vertices(vertices, vertex_indices, order,
+            unit_nodes=unit_nodes)
 
     from meshmode.mesh import Mesh
     return Mesh(
@@ -438,14 +439,14 @@ def generate_icosahedron(r, order):
 
 # {{{ generate_icosphere
 
-def generate_icosphere(r, order, uniform_refinement_rounds=0):
-    mesh = generate_icosahedron(r, order)
+def generate_icosphere(r, order, uniform_refinement_rounds=0, unit_nodes=None):
+    mesh = generate_icosahedron(r, order, unit_nodes=unit_nodes)
 
     if uniform_refinement_rounds:
         # These come out conforming, so we're OK to use the faster refiner.
         from meshmode.mesh.refinement import RefinerWithoutAdjacency
         refiner = RefinerWithoutAdjacency(mesh)
-        for i in range(uniform_refinement_rounds):
+        for _ in range(uniform_refinement_rounds):
             refiner.refine_uniformly()
 
         mesh = refiner.get_current_mesh()
@@ -466,7 +467,8 @@ def generate_icosphere(r, order, uniform_refinement_rounds=0):
 # {{{ generate_torus_and_cycle_vertices
 
 def generate_torus_and_cycle_vertices(r_major, r_minor,
-        n_major=20, n_minor=10, order=1):
+        n_major=20, n_minor=10, order=1,
+        unit_nodes=None):
     a = r_major
     b = r_minor
     u, v = np.mgrid[0:2*np.pi:2*np.pi/n_major, 0:2*np.pi:2*np.pi/n_minor]
@@ -486,7 +488,8 @@ def generate_torus_and_cycle_vertices(r_major, r_minor,
             for i in range(n_major) for j in range(n_minor)])
 
     vertex_indices = np.array(vertex_indices, dtype=np.int32)
-    grp = make_group_from_vertices(vertices, vertex_indices, order)
+    grp = make_group_from_vertices(vertices, vertex_indices, order,
+            unit_nodes=unit_nodes)
 
     # ambient_dim, nelements, nunit_nodes
     nodes = grp.nodes.copy()
@@ -530,7 +533,8 @@ def generate_torus_and_cycle_vertices(r_major, r_minor,
 # }}}
 
 
-def generate_torus(r_major, r_minor, n_major=20, n_minor=10, order=1):
+def generate_torus(r_major, r_minor, n_major=20, n_minor=10, order=1,
+        unit_nodes=None):
     r"""Generate a torus.
 
     .. figure:: images/torus.png
@@ -563,8 +567,10 @@ def generate_torus(r_major, r_minor, n_major=20, n_minor=10, order=1):
     :returns: a :class:`meshmode.mesh.Mesh` of a torus
 
     """
-    mesh, a_cycle, b_cycle = generate_torus_and_cycle_vertices(
-            r_major, r_minor, n_major, n_minor, order)
+    mesh, _, _ = generate_torus_and_cycle_vertices(
+            r_major, r_minor, n_major, n_minor, order,
+            unit_nodes=unit_nodes)
+
     return mesh
 
 
@@ -603,7 +609,7 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
         # Numpy takes arguments in the order (theta, phi)
         # *and* swaps their meanings, so passing the
         # arguments swapped maintains the intended meaning.
-        return sps.sph_harm(m, n, phi, theta)
+        return sps.sph_harm(m, n, phi, theta)       # pylint: disable=no-member
 
     def map_coords(pts):
         r = np.sqrt(np.sum(pts**2, axis=0))
@@ -631,7 +637,7 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
 
     # These come out conformal, so we're OK to use the faster refiner.
     refiner = RefinerWithoutAdjacency(unwarped_mesh)
-    for i in range(uniform_refinement_rounds):
+    for _ in range(uniform_refinement_rounds):
         refiner.refine_uniformly()
 
     nodes_sph = sph_harm(m, n, unwarped_mesh.groups[0].nodes).real
@@ -880,7 +886,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
                 vertex_indices[itup]: itup
                 for itup in np.ndindex(shape)}
 
-    for tag_idx, tag in enumerate(boundary_tags):
+    for tag in boundary_tags:
         # Need to map the correct face vertices to the boundary tags
         for face in boundary_tag_to_face[tag]:
             if len(face) != 2:
@@ -890,8 +896,9 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
             side, axis = face
             try:
                 axis = axes.index(axis)
-            except ValueError:
-                raise ValueError("unrecognized axis in face identifier '%s'" % face)
+            except ValueError as exc:
+                raise ValueError(
+                        f"unrecognized axis in face identifier '{face}'") from exc
             if axis >= dim:
                 raise ValueError("axis in face identifier '%s' does not exist in %dD"
                         % (face, dim))
@@ -1048,7 +1055,7 @@ def warp_and_refine_until_resolved(
                                          "(NaN or Inf)")
 
         for egrp in warped_mesh.groups:
-            dim, nunit_nodes = egrp.unit_nodes.shape
+            dim, _ = egrp.unit_nodes.shape
 
             interp_err_est_mat = simplex_interp_error_coefficient_estimator_matrix(
                     egrp.unit_nodes, egrp.order,

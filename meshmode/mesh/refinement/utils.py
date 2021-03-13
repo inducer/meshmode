@@ -104,9 +104,6 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
     tree = make_element_lookup_tree(mesh, eps=tol)
     logger.debug("nodal adj test: tree build done")
 
-    from meshmode.mesh.processing import find_bounding_box
-    bbox_min, bbox_max = find_bounding_box(mesh)
-
     nadj = mesh.nodal_adjacency
     nvertices_per_element = len(mesh.groups[0].vertex_indices[0])
 

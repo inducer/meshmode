@@ -316,8 +316,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         else:
             result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
 
-        for i_tgrp, (tgrp, cgrp) in enumerate(
-                zip(self.to_discr.groups, self.groups)):
+        for i_tgrp, cgrp in enumerate(self.groups):
             for i_batch, batch in enumerate(cgrp.batches):
                 if not len(batch.from_element_indices):
                     continue

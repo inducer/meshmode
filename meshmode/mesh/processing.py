@@ -53,9 +53,10 @@ def find_group_indices(groups, meshwide_elems):
     """
     grps = np.zeros_like(meshwide_elems)
     next_grp_boundary = 0
-    for igrp, grp in enumerate(groups):
+    for grp in groups:
         next_grp_boundary += grp.nelements
         grps += meshwide_elems >= next_grp_boundary
+
     return grps
 
 
@@ -663,7 +664,7 @@ def find_volume_mesh_element_group_orientation(vertices, grp):
     mvs = [MultiVector(vec) for vec in spanning_object_array]
 
     from operator import xor
-    outer_prod = -reduce(xor, mvs)
+    outer_prod = -reduce(xor, mvs)      # pylint: disable=invalid-unary-operand-type
 
     if grp.dim == 1:
         # FIXME: This is a little weird.

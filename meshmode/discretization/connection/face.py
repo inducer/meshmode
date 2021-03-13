@@ -128,7 +128,7 @@ def _get_face_vertices(mesh, boundary_tag):
             nb_el_bits = -bdry_grp.neighbors
             face_relevant_flags = (nb_el_bits & btag_bit) != 0
 
-            for iface, fvi in enumerate(grp.face_vertex_indices()):
+            for fvi in grp.face_vertex_indices():
                 bdry_vertex_vol_nrs.update(
                         grp.vertex_indices
                         [bdry_grp.elements[face_relevant_flags]]
@@ -340,9 +340,10 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
 
     bdry_mesh = Mesh(bdry_vertices, bdry_mesh_groups)
 
-    from meshmode.discretization import Discretization
-    bdry_discr = Discretization(
-            actx, bdry_mesh, group_factory)
+    bdry_discr = discr.copy(
+            actx=actx,
+            mesh=bdry_mesh,
+            group_factory=group_factory)
 
     connection = _build_boundary_connection(
             actx, discr, bdry_discr, connection_data,
@@ -406,7 +407,7 @@ def make_face_to_all_faces_embedding(actx, faces_connection, all_faces_discr,
     i_faces_grp = 0
 
     groups = []
-    for ivol_grp, vol_grp in enumerate(vol_discr.groups):
+    for vol_grp in vol_discr.groups:
         batches = []
 
         nfaces = vol_grp.mesh_el_group.nfaces

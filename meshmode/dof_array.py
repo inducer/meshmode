@@ -20,12 +20,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import operator
+import operator as op
 import numpy as np
 from typing import Optional, Iterable, Any, Tuple, Union
 from functools import partial
 from numbers import Number
-import operator as op
 import decorator
 import threading
 from contextlib import contextmanager
@@ -307,12 +306,12 @@ class DOFArray:
 
     # {{{ logical
 
-    def __and__(self, arg): return self._bop(operator.and_, self, arg)  # noqa: E704
-    def __xor__(self, arg): return self._bop(operator.xor, self, arg)  # noqa: E704
-    def __or__(self, arg): return self._bop(operator.or_, self, arg)  # noqa: E704
-    def __rand__(self, arg): return self._bop(operator.and_, arg, self)  # noqa: E704
-    def __rxor__(self, arg): return self._bop(operator.xor, arg, self)  # noqa: E704
-    def __ror__(self, arg): return self._bop(operator.or_, arg, self)  # noqa: E704
+    def __and__(self, arg): return self._bop(op.and_, self, arg)  # noqa: E704
+    def __xor__(self, arg): return self._bop(op.xor, self, arg)  # noqa: E704
+    def __or__(self, arg): return self._bop(op.or_, self, arg)  # noqa: E704
+    def __rand__(self, arg): return self._bop(op.and_, arg, self)  # noqa: E704
+    def __rxor__(self, arg): return self._bop(op.xor, arg, self)  # noqa: E704
+    def __ror__(self, arg): return self._bop(op.or_, arg, self)  # noqa: E704
 
     def __iand__(self, arg): return self._ibop(op.iand, arg)        # noqa: E704
     def __ixor__(self, arg): return self._ibop(op.ixor, arg)        # noqa: E704

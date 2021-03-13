@@ -111,8 +111,8 @@ def _build_new_group_table(from_conn, to_conn):
     # the `result_unit_nodes` and only adding a new batch if necessary
     grp_to_grp = {}
     batch_info = [[] for i in range(nfrom_groups * nto_groups)]
-    for (igrp, ibatch), (fgrp, fbatch) in _iterbatches(from_conn.groups):
-        for (jgrp, jbatch), (tgrp, tbatch) in _iterbatches(to_conn.groups):
+    for (igrp, ibatch), (_, fbatch) in _iterbatches(from_conn.groups):
+        for (jgrp, jbatch), (_, tbatch) in _iterbatches(to_conn.groups):
             # compute result_unit_nodes
             ffgrp = from_conn.from_discr.groups[fbatch.from_group_index]
             from_matrix = mp.resampling_matrix(

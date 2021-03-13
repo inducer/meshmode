@@ -24,7 +24,7 @@ THE SOFTWARE.
 """
 
 from dataclasses import dataclass
-import numpy as np  # noqa
+import numpy as np
 
 from meshmode.mesh import InterPartitionAdjacencyGroup
 
@@ -171,6 +171,8 @@ class MPIBoundaryCommSetupHelper:
         self.local_bdry_conn = local_bdry_conn
         self.bdry_grp_factory = bdry_grp_factory
 
+        self.send_req = None
+
     def _post_send_boundary_data(self):
 
         return self.mpi_comm.isend(
@@ -205,17 +207,16 @@ class MPIBoundaryCommSetupHelper:
         logger.debug("rank %d: Received rank %d data",
                      self.i_local_part, self.i_remote_part)
 
-        from meshmode.discretization import Discretization
-
         # Connect local_mesh to remote_mesh
         from meshmode.discretization.connection import make_partition_connection
         remote_to_local_bdry_conn = make_partition_connection(
                 self.array_context,
                 local_bdry_conn=self.local_bdry_conn,
                 i_local_part=self.i_local_part,
-                remote_bdry_discr=Discretization(
-                    self.array_context, remote_bdry_mesh,
-                    self.bdry_grp_factory),
+                remote_bdry_discr=self.local_bdry_conn.to_discr.copy(
+                    actx=self.array_context,
+                    mesh=remote_bdry_mesh,
+                    group_factory=self.bdry_grp_factory),
                 remote_group_infos=remote_group_infos)
 
         self.send_req.wait()
@@ -281,7 +282,6 @@ def get_connected_partitions(mesh):
     :returns: the set of partition numbers that are connected to `mesh`
     """
     connected_parts = set()
-    from meshmode.mesh import InterPartitionAdjacencyGroup
     for adj in mesh.facial_adjacency_groups:
         grp = adj.get(None, None)
         if isinstance(grp, InterPartitionAdjacencyGroup):

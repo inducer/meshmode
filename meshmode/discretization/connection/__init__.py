@@ -126,8 +126,8 @@ def check_connection(actx: ArrayContext, connection: DirectDiscretizationConnect
                     actx.thaw(batch.from_element_indices))
             to_element_indices = actx.to_numpy(actx.thaw(batch.to_element_indices))
 
-            assert (0 <= from_element_indices).all()
-            assert (0 <= to_element_indices).all()
+            assert (from_element_indices >= 0).all()
+            assert (to_element_indices >= 0).all()
             assert (from_element_indices < fgrp.nelements).all()
             assert (to_element_indices < tgrp.nelements).all()
             if batch.to_element_face is not None:
