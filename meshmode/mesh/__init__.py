@@ -662,7 +662,7 @@ class Mesh(Record):
 
     face_id_dtype = np.int8
 
-    def __init__(self, vertices, groups, skip_tests=False,
+    def __init__(self, vertices, groups, *, skip_tests=False,
             node_vertex_consistency_tolerance=None,
             skip_element_orientation_test=False,
             nodal_adjacency=None,
@@ -672,8 +672,6 @@ class Mesh(Record):
             element_id_dtype=np.int32,
             is_conforming=None):
         """
-        The following are keyword-only:
-
         :arg skip_tests: Skip mesh tests, in case you want to load a broken
             mesh anyhow and then fix it inside of this data structure.
         :arg node_vertex_consistency_tolerance: If *False*, do not check
