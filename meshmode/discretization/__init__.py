@@ -85,19 +85,6 @@ class ElementGroupBase:
     def dim(self):
         return self.mesh_el_group.dim
 
-    @property
-    def unit_nodes(self):
-        raise NotImplementedError
-
-    def basis(self):
-        raise NoninterpolatoryElementGroupError("'{}' "
-                "is not equipped with a unisolvent function space "
-                "and therefore cannot be used for interpolation"
-                .format(self.__class__.__name__))
-
-    grad_basis = basis
-    diff_matrices = basis
-
 
 class ModalElementGroupBase(ElementGroupBase):
     """Container for the :class:`ModalDiscretization` data corresponding to
@@ -139,6 +126,9 @@ class ModalElementGroupBase(ElementGroupBase):
     def mode_ids(self):
         return self._orthonormal_basis.mode_ids
 
+    basis = orthonormal_basis
+    grad_basis = grad_orthonormal_basis
+
 # }}}
 
 
@@ -175,6 +165,19 @@ class NodalElementGroupBase(ElementGroupBase):
         associated with the element group.
         """
         return self.nunit_dofs * self.nelements
+
+    @property
+    def unit_nodes(self):
+        raise NotImplementedError
+
+    def basis(self):
+        raise NoninterpolatoryElementGroupError("'{}' "
+                "is not equipped with a unisolvent function space "
+                "and therefore cannot be used for interpolation"
+                .format(self.__class__.__name__))
+
+    grad_basis = basis
+    diff_matrices = basis
 
 
 class InterpolatoryElementGroupBase(NodalElementGroupBase):
