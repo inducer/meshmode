@@ -41,12 +41,16 @@ __doc__ = """
 Group types
 ^^^^^^^^^^^
 
+.. autoclass:: ModalSimplexElementGroup
+
 .. autoclass:: InterpolatoryQuadratureSimplexElementGroup
 .. autoclass:: QuadratureSimplexElementGroup
 .. autoclass:: PolynomialWarpAndBlendElementGroup
 .. autoclass:: PolynomialRecursiveNodesElementGroup
 .. autoclass:: PolynomialEquidistantSimplexElementGroup
 .. autoclass:: PolynomialGivenNodesElementGroup
+
+.. autoclass:: ModalTensorProductElementGroup
 
 .. autoclass:: GaussLegendreTensorProductElementGroup
 .. autoclass:: LegendreGaussLobattoTensorProductElementGroup
@@ -58,12 +62,16 @@ Group factories
 .. autoclass:: ElementGroupFactory
 .. autoclass:: OrderAndTypeBasedGroupFactory
 
+.. autoclass:: ModalSimplexGroupFactory
+
 .. autoclass:: InterpolatoryQuadratureSimplexGroupFactory
 .. autoclass:: QuadratureSimplexGroupFactory
 .. autoclass:: PolynomialWarpAndBlendGroupFactory
 .. autoclass:: PolynomialRecursiveNodesGroupFactory
 .. autoclass:: PolynomialEquidistantSimplexGroupFactory
 .. autoclass:: PolynomialGivenNodesGroupFactory
+
+.. autoclass:: ModalTensorProductGroupFactory
 
 .. autoclass:: GaussLegendreTensorProductGroupFactory
 .. autoclass:: LegendreGaussLobattoTensorProductGroupFactory
