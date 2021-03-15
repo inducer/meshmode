@@ -27,7 +27,9 @@ from pytools import memoize_method
 from meshmode.mesh import (
         SimplexElementGroup as _MeshSimplexElementGroup,
         TensorProductElementGroup as _MeshTensorProductElementGroup)
-from meshmode.discretization import ElementGroupBase, InterpolatoryElementGroupBase
+from meshmode.discretization import (
+        NodalElementGroupBase, ModalElementGroupBase,
+        InterpolatoryElementGroupBase)
 
 import modepy as mp
 
@@ -65,7 +67,7 @@ Group factories
 """
 
 
-# {{{ base class for poynomial elements
+# {{{ base class for nodal poynomial elements
 
 class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
     def is_orthogonal_basis(self):
@@ -102,9 +104,22 @@ class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
 # }}}
 
 
-# {{{ concrete element groups for simplices
+# {{{ concrete element groups for modal simplices
 
-class SimplexElementGroupBase(ElementGroupBase):
+class ModalSimplexElementGroup(ModalElementGroupBase):
+    @property
+    @memoize_method
+    def _shape(self):
+        return mp.Simplex(self.dim)
+
+    @property
+    @memoize_method
+    def _space(self):
+        return mp.PN(self.dim, self.order)
+
+# {{{ concrete element groups for nodal simplices
+
+class SimplexElementGroupBase(NodalElementGroupBase):
     @property
     @memoize_method
     def _shape(self):
@@ -351,10 +366,24 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
 
 # }}}
 
+# {{{ concrete element groups for modal tensor product (hypercube) elements
 
-# {{{ concrete element groups for tensor product elements
+class ModalTensorProductElementGroup(ModalElementGroupBase):
+    @property
+    @memoize_method
+    def _shape(self):
+        return mp.Hypercube(self.dim)
 
-class HypercubeElementGroupBase(ElementGroupBase):
+    @property
+    @memoize_method
+    def _space(self):
+        return mp.QN(self.dim, self.order)
+
+# }}}
+
+# {{{ concrete element groups for nodal tensor product (hypercube) elements
+
+class HypercubeElementGroupBase(NodalElementGroupBase):
     @property
     @memoize_method
     def _shape(self):
@@ -545,6 +574,11 @@ class OrderAndTypeBasedGroupFactory(ElementGroupFactory):
 
 # {{{ group factories for simplices
 
+class ModalSimplexGroupFactory(HomogeneousOrderBasedGroupFactory):
+    mesh_group_class = _MeshSimplexElementGroup
+    group_class = ModalSimplexElementGroup
+
+
 class InterpolatoryQuadratureSimplexGroupFactory(HomogeneousOrderBasedGroupFactory):
     mesh_group_class = _MeshSimplexElementGroup
     group_class = InterpolatoryQuadratureSimplexElementGroup
@@ -600,6 +634,11 @@ class PolynomialGivenNodesGroupFactory(HomogeneousOrderBasedGroupFactory):
 
 
 # {{{ group factories for tensor products
+
+class ModalTensorProductGroupFactory(HomogeneousOrderBasedGroupFactory):
+    mesh_group_class = _MeshTensorProductElementGroup
+    group_class = ModalTensorProductElementGroup
+
 
 class GaussLegendreTensorProductGroupFactory(HomogeneousOrderBasedGroupFactory):
     mesh_group_class = _MeshTensorProductElementGroup
