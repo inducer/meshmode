@@ -1152,8 +1152,6 @@ def test_box_mesh(actx_factory, visualize=False):
 
     if visualize:
         from meshmode.discretization.nodal import NodalDiscretization
-        from meshmode.discretization.poly_element import \
-                PolynomialWarpAndBlendGroupFactory
 
         actx = actx_factory()
         discr = NodalDiscretization(actx, mesh,
@@ -1608,7 +1606,8 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
         plt.savefig("test_mesh_multiple_groups_2d_elements.png", dpi=300)
 
     from meshmode.discretization.nodal import NodalDiscretization
-    discr = NodalDiscretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+    discr = NodalDiscretization(actx, mesh,
+            PolynomialWarpAndBlendGroupFactory(order))
 
     if visualize:
         group_id = discr.empty(actx, dtype=np.int32)
