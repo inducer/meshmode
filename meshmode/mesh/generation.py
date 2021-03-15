@@ -949,27 +949,58 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 # {{{ generate_regular_rect_mesh
 
 @deprecate_keyword("group_factory", "group_cls")
-def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
+def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), nelements_per_axis=None,
+                               npoints_per_axis=None,
+                               order=1,
                                boundary_tag_to_face=None,
                                group_cls=None,
                                mesh_type=None,
+                               n=None,
                                ):
     """Create a semi-structured rectangular mesh with equispaced elements.
 
     :param a: the lower left hand point of the rectangle
     :param b: the upper right hand point of the rectangle
-    :param n: a tuple of integers indicating the total number of points
-      on [a,b].
+    :param nelements_per_axis: an optional tuple of integers indicating the
+        number of elements along each axis.
+    :param npoints_per_axis: an optional tuple of integers indicating the
+        number of points along each axis.
     :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
         See :func:`generate_box_mesh`.
     :param group_cls: see :func:`generate_box_mesh`.
     :param mesh_type: see :func:`generate_box_mesh`.
+
+    .. note::
+
+        Specify only one of *nelements_per_axis* and *npoints_per_axis*. If neither
+        is specified, defaults to nelements_per_axis=(4, 4).
     """
-    if min(n) < 2:
+    if n is not None:
+        from warnings import warn
+        warn("n parameter to generate_regular_rect_mesh is deprecated. Use "
+                "nelements_1d or npoints_1d instead. n will disappear in 2022.",
+                DeprecationWarning, stacklevel=2)
+        if nelements_per_axis is not None:
+            raise ValueError("cannot specify both nelements_per_axis and n")
+        if npoints_per_axis is not None:
+            raise ValueError("cannot specify both npoints_per_axis and n")
+        npoints_per_axis = n
+    else:
+        if npoints_per_axis is not None:
+            if nelements_per_axis is not None:
+                raise ValueError("cannot specify both nelements_per_axis and "
+                    "npoints_per_axis")
+        else:
+            if nelements_per_axis is not None:
+                npoints_per_axis = tuple(nel_i+1 for nel_i in nelements_per_axis)
+            else:
+                npoints_per_axis = (5, 5)
+
+    if min(npoints_per_axis) < 2:
         raise ValueError("need at least two points in each direction")
 
-    axis_coords = [np.linspace(a_i, b_i, n_i)
-            for a_i, b_i, n_i in zip(a, b, n)]
+    axis_coords = [np.linspace(a_i, b_i, npoints_i)
+            for a_i, b_i, npoints_i in zip(a, b, npoints_per_axis)]
 
     return generate_box_mesh(axis_coords, order=order,
                              boundary_tag_to_face=boundary_tag_to_face,
@@ -981,15 +1012,36 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
 
 # {{{ generate_warped_rect_mesh
 
-def generate_warped_rect_mesh(dim, order, n, *, group_cls=None):
+def generate_warped_rect_mesh(dim, order, *, nelements_side=None,
+        npoints_side=None, group_cls=None, n=None):
     """Generate a mesh of a warped line/square/cube. Mainly useful for testing
     functionality with curvilinear meshes.
     """
+    if n is not None:
+        from warnings import warn
+        warn("n parameter to generate_warped_rect_mesh is deprecated. Use "
+                "nelements_side or npoints_side instead. n will disappear "
+                "in 2022.", DeprecationWarning, stacklevel=2)
+        if nelements_side is not None:
+            raise ValueError("cannot specify both nelements_side and n")
+        if npoints_side is not None:
+            raise ValueError("cannot specify both npoints_side and n")
+        npoints_side = n
+    else:
+        if npoints_side is not None:
+            if nelements_side is not None:
+                raise ValueError("cannot specify both nelements_side and "
+                    "npoints_side")
+        elif nelements_side is not None:
+            npoints_side = nelements_side + 1
 
     assert dim in [1, 2, 3]
+
+    npoints_per_axis = (npoints_side,)*dim if npoints_side is not None else None
+
     mesh = generate_regular_rect_mesh(
             a=(-0.5,)*dim, b=(0.5,)*dim,
-            n=(n,)*dim, order=order, group_cls=group_cls)
+            npoints_per_axis=npoints_per_axis, order=order, group_cls=group_cls)
 
     def m(x):
         result = np.empty_like(x)
