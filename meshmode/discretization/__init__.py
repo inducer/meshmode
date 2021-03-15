@@ -220,17 +220,10 @@ class DiscretizationBase:
     """An unstructured composite discretization base class.
 
     .. attribute:: real_dtype
-
     .. attribute:: complex_dtype
-
     .. attribute:: mesh
-
     .. attribute:: dim
-
     .. attribute:: ambient_dim
-
-    .. attribute:: ndofs
-
     .. attribute :: groups
 
     .. automethod:: copy
@@ -238,10 +231,6 @@ class DiscretizationBase:
     .. automethod:: zeros
     .. automethod:: empty_like
     .. automethod:: zeros_like
-
-    .. automethod:: num_reference_derivative
-
-    .. automethod:: quad_weights
     """
 
     def __init__(self, actx: ArrayContext, mesh, group_factory,
@@ -297,10 +286,6 @@ class DiscretizationBase:
     def ambient_dim(self):
         return self.mesh.ambient_dim
 
-    @property
-    def ndofs(self):
-        return sum(grp.ndofs for grp in self.groups)
-
     def _new_array(self, actx, creation_func, dtype=None):
         if dtype is None:
             dtype = self.real_dtype
@@ -344,58 +329,6 @@ class DiscretizationBase:
 
     def zeros_like(self, array: _DOFArray):
         return self.zeros(array.array_context, dtype=array.entry_dtype)
-
-    def num_reference_derivative(self, ref_axes, vec):
-        actx = vec.array_context
-        ref_axes = list(ref_axes)
-
-        @memoize_in(actx, (Discretization, "reference_derivative_prg"))
-        def prg():
-            return make_loopy_program(
-                """{[iel,idof,j]:
-                    0<=iel<nelements and
-                    0<=idof,j<nunit_dofs}""",
-                "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
-                name="diff")
-
-        def get_mat(grp):
-            mat = None
-            for ref_axis in ref_axes:
-                next_mat = grp.diff_matrices()[ref_axis]
-                if mat is None:
-                    mat = next_mat
-                else:
-                    mat = np.dot(next_mat, mat)
-
-            return mat
-
-        return _DOFArray(actx, tuple(
-                actx.call_loopy(
-                    prg(), diff_mat=actx.from_numpy(get_mat(grp)), vec=vec[grp.index]
-                    )["result"]
-                for grp in self.groups))
-
-    @memoize_method
-    def quad_weights(self):
-        """:returns: A :class:`~meshmode.dof_array.DOFArray` with quadrature weights.
-        """
-        actx = self._setup_actx
-
-        @memoize_in(actx, (Discretization, "quad_weights_prg"))
-        def prg():
-            return make_loopy_program(
-                "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
-                "result[iel,idof] = weights[idof]",
-                name="quad_weights")
-
-        return _DOFArray(None, tuple(
-                actx.freeze(
-                    actx.call_loopy(
-                        prg(),
-                        weights=actx.from_numpy(grp.weights),
-                        nelements=grp.nelements,
-                        )["result"])
-                for grp in self.groups))
 
 
 # For backwards compatibility, we need to be sure we export the

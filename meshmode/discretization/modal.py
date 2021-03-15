@@ -23,10 +23,35 @@ THE SOFTWARE.
 """
 
 
+import numpy as np
+
+from meshmode.array_context import ArrayContext
 from meshmode.discretization import DiscretizationBase
+from meshmode.discretization.poly_element import (
+        ModalSimplexGroupFactory,
+        ModalTensorProductGroupFactory)
 
 
 class ModalDiscretization(DiscretizationBase):
     """An unstructured composite modal discretization."""
 
-    # Class methods TBD
+    def __init__(self, actx: ArrayContext, mesh, group_factory,
+            real_dtype=np.float64):
+        """
+        :param actx: A :class:`ArrayContext` used to perform computation needed
+            during initial set-up of the mesh.
+        :param mesh: A :class:`meshmode.mesh.Mesh` over which the discretization is
+            built.
+        :param group_factory: An :class:`ElementGroupFactory`. Note that the
+            element groups must be subclasses of :class:`ModalElementGroupBase`.
+        :param real_dtype: The :mod:`numpy` data type used for representing real
+            data, either :class:`numpy.float32` or :class:`numpy.float64`.
+        """
+
+        # Some sanity checking so we don't do something horrendous later on
+        if not isinstance(group_factory, (ModalSimplexGroupFactory,
+                                          ModalTensorProductGroupFactory)):
+            raise ValueError("You must use a modal group factory when using "
+                             "a ModalDiscretization.")
+
+        super().__init__(actx, mesh, group_factory, real_dtype)
