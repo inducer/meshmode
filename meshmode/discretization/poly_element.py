@@ -1,4 +1,7 @@
-__copyright__ = "Copyright (C) 2013 Andreas Kloeckner"
+__copyright__ = """
+Copyright (C) 2013-2021 Andreas Kloeckner
+Copyright (C) 2021 University of Illinois Board of Trustees
+"""
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -118,6 +121,7 @@ class ModalSimplexElementGroup(ModalElementGroupBase):
         return mp.PN(self.dim, self.order)
 
 # {{{ concrete element groups for nodal simplices
+
 
 class SimplexElementGroupBase(NodalElementGroupBase):
     @property
@@ -366,6 +370,7 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
 
 # }}}
 
+
 # {{{ concrete element groups for modal tensor product (hypercube) elements
 
 class ModalTensorProductElementGroup(ModalElementGroupBase):
@@ -380,6 +385,7 @@ class ModalTensorProductElementGroup(ModalElementGroupBase):
         return mp.QN(self.dim, self.order)
 
 # }}}
+
 
 # {{{ concrete element groups for nodal tensor product (hypercube) elements
 
