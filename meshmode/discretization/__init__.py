@@ -33,6 +33,8 @@ from meshmode.dof_array import DOFArray as _DOFArray
 
 __doc__ = """
 .. autoclass:: ElementGroupBase
+.. autoclass:: ModalElementGroupBase
+.. autoclass:: NodalElementGroupBase
 .. autoclass:: InterpolatoryElementGroupBase
 .. autoclass:: DiscretizationBase
 """
@@ -45,27 +47,15 @@ class NoninterpolatoryElementGroupError(TypeError):
 
 
 class ElementGroupBase:
-    """Container for the :class:`Discretization` data corresponding to
-    one :class:`meshmode.mesh.MeshElementGroup`.
+    """Container for data of any subclass of :class:`DiscretizationBase`
+    corresponding to one :class:`meshmode.mesh.MeshElementGroup`.
 
     .. attribute :: mesh_el_group
     .. attribute :: order
     .. attribute :: index
 
     .. autoattribute:: nelements
-    .. autoattribute:: nunit_dofs
-    .. autoattribute:: ndofs
     .. autoattribute:: dim
-
-    .. attribute:: unit_nodes
-
-        Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
-        of reference coordinates of interpolation nodes.
-
-    .. attribute:: weights
-
-        Returns an array of length :attr:`nunit_dofs` containing
-        quadrature weights.
 
     .. attribute:: is_affine
 
@@ -92,20 +82,6 @@ class ElementGroupBase:
         return self.mesh_el_group.nelements
 
     @property
-    def nunit_dofs(self):
-        """The number of (for now: nodal) degrees of freedom ("DOFs")
-        associated with a single element.
-        """
-        return self.unit_nodes.shape[-1]
-
-    @property
-    def ndofs(self):
-        """The total number of (for now: nodal) degrees of freedom ("DOFs")
-        associated with the element group.
-        """
-        return self.nunit_dofs * self.nelements
-
-    @property
     def dim(self):
         return self.mesh_el_group.dim
 
@@ -122,13 +98,87 @@ class ElementGroupBase:
     grad_basis = basis
     diff_matrices = basis
 
+
+class ModalElementGroupBase(ElementGroupBase):
+    """Container for the :class:`ModalDiscretization` data corresponding to
+    one :class:`meshmode.mesh.MeshElementGroup`.
+
+    .. method:: orthonormal_basis()
+
+        Returns a :class:`list` of orthonormal basis functions that take
+        arrays of shape ``(dim, n)`` and return an array of shape (n,)``
+        (which performs evaluation of the basis function).
+
+    .. method:: grad_orthonormal_basis()
+
+        Returns a :class:`list` of functions, each of which
+        accepts arrays of shape *(dims, npts)* and returns a
+        :class:`tuple` of length *dims* containing the
+        derivatives of the orthonormal basis along each axis as an
+        array of size *npts*.  'Scalar' evaluation, by passing just one
+        vector of length *dims*, is also supported.
+
+    .. method:: mode_ids()
+
+        Returns a tuple of mode (basis function) identifiers, one for
+        each basis function.
+    """
+
+    @property
+    @memoize_method
+    def _orthonormal_basis(self):
+        import modepy as mp
+        return mp.orthonormal_basis_for_space(self._space, self._shape)
+
+    def orthonormal_basis(self):
+        return self._orthonormal_basis.functions
+
+    def grad_orthonormal_basis(self):
+        return self._orthonormal_basis.gradients
+
+    def mode_ids(self):
+        return self._orthonormal_basis.mode_ids
+
 # }}}
 
 
 # {{{ interpolatory element group base
 
-class InterpolatoryElementGroupBase(ElementGroupBase):
-    """A subclass of :class:`ElementGroupBase` that is equipped with a
+class NodalElementGroupBase(ElementGroupBase):
+    """Container for the :class:`NodalDiscretization` data corresponding to
+    one :class:`meshmode.mesh.MeshElementGroup`.
+
+    .. autoattribute:: nunit_dofs
+    .. autoattribute:: ndofs
+
+    .. attribute:: unit_nodes
+
+        Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
+        of reference coordinates of interpolation nodes.
+
+    .. attribute:: weights
+
+        Returns an array of length :attr:`nunit_dofs` containing
+        quadrature weights.
+    """
+
+    @property
+    def nunit_dofs(self):
+        """The number of (nodal) degrees of freedom ("DOFs")
+        associated with a single element.
+        """
+        return self.unit_nodes.shape[-1]
+
+    @property
+    def ndofs(self):
+        """The total number of (nodal) degrees of freedom ("DOFs")
+        associated with the element group.
+        """
+        return self.nunit_dofs * self.nelements
+
+
+class InterpolatoryElementGroupBase(NodalElementGroupBase):
+    """A subclass of :class:`NodalElementGroupBase` that is equipped with a
     function space.
 
     .. method:: mode_ids()
