@@ -47,7 +47,7 @@ def test_nodal_dg_interop(actx_factory, dim):
 
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*dim, b=(0.5,)*dim, n=(8,)*dim, order=order)
+            a=(-0.5,)*dim, b=(0.5,)*dim, nelements_per_axis=(8,)*dim, order=order)
 
     from meshmode.interop.nodal_dg import NodalDGContext
     with NodalDGContext("./nodal-dg/Codes1.1") as ndgctx:

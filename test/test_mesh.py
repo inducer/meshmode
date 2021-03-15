@@ -40,7 +40,7 @@ def test_nonequal_rect_mesh_generation(actx_factory, visualize=False):
     actx = actx_factory()
 
     mesh = mgen.generate_regular_rect_mesh(
-            a=(0, 0)*2, b=(5, 3), n=(10, 6,), order=3)
+            a=(0, 0)*2, b=(5, 3), npoints_per_axis=(10, 6,), order=3)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \

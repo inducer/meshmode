@@ -108,7 +108,7 @@ def test_parallel_vtk_file(actx_factory, dim):
     elif dim == 2:
         mesh = mgen.generate_torus(5.0, 1.0, order=target_order)
     elif dim == 3:
-        mesh = mgen.generate_warped_rect_mesh(dim, target_order, 5)
+        mesh = mgen.generate_warped_rect_mesh(dim, target_order, nelements_side=4)
     else:
         raise ValueError("unknown dimensionality")
 
@@ -174,15 +174,16 @@ def test_visualizers(actx_factory, dim, group_cls):
             mesh = mgen.generate_torus(5.0, 1.0, order=target_order)
         else:
             mesh = mgen.generate_regular_rect_mesh(
-                    a=(0,)*dim, b=(1,)*dim, n=(5,)*dim,
+                    a=(0,)*dim, b=(1,)*dim, nelements_per_axis=(4,)*dim,
                     group_cls=group_cls,
                     order=target_order)
     elif dim == 3:
         if is_simplex:
-            mesh = mgen.generate_warped_rect_mesh(dim, target_order, 5)
+            mesh = mgen.generate_warped_rect_mesh(dim, target_order,
+                    nelements_side=4)
         else:
             mesh = mgen.generate_regular_rect_mesh(
-                    a=(0,)*dim, b=(1,)*dim, n=(5,)*dim,
+                    a=(0,)*dim, b=(1,)*dim, nelements_per_axis=(4,)*dim,
                     group_cls=group_cls,
                     order=target_order)
     else:
@@ -361,23 +362,23 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
     if dim == 1:
         a = (0,)
         b = (1,)
-        n = (nelem,)
+        nelements_per_axis = (nelem,)
         btag_to_face = {"btag_test_1": ["+x"],
                         "btag_test_2": ["-x"]}
     elif dim == 2:
         a = (0, -1)
         b = (1, 1)
-        n = (nelem, nelem)
+        nelements_per_axis = (nelem,)*2
         btag_to_face = {"btag_test_1": ["+x", "-y"],
                         "btag_test_2": ["+y", "-x"]}
     elif dim == 3:
         a = (0, -1, -1)
         b = (1, 1, 1)
-        n = (nelem, nelem, nelem)
+        nelements_per_axis = (nelem,)*3
         btag_to_face = {"btag_test_1": ["+x", "-y", "-z"],
                         "btag_test_2": ["+y", "-x", "+z"]}
     mesh = mgen.generate_regular_rect_mesh(a=a, b=b,
-                                      n=n, order=3,
+                                      nelements_per_axis=nelements_per_axis, order=3,
                                       boundary_tag_to_face=btag_to_face,
                                       group_cls=group_cls,
                                       mesh_type=mesh_type)
@@ -392,9 +393,9 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
     if dim == 1:
         num_on_bdy = 1
     elif group_cls is TensorProductElementGroup:
-        num_on_bdy = dim * (nelem-1)**(dim-1)
+        num_on_bdy = dim * nelem**(dim-1)
     elif group_cls is SimplexElementGroup:
-        num_on_bdy = dim * (dim-1) * (nelem-1)**(dim-1)
+        num_on_bdy = dim * (dim-1) * nelem**(dim-1)
     else:
         assert False
 
@@ -504,14 +505,15 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
                     "blob2d-order%d-h%s.msh" % (order, mesh_par),
                     force_ambient_dim=2)
         elif mesh_name == "warp":
-            mesh = mgen.generate_warped_rect_mesh(dim, order=order, n=mesh_par,
-                    group_cls=group_cls)
+            mesh = mgen.generate_warped_rect_mesh(dim, order=order,
+                    nelements_side=mesh_par, group_cls=group_cls)
 
             h = 1/mesh_par
 
         elif mesh_name == "rect":
             mesh = mgen.generate_regular_rect_mesh(a=(0,)*dim, b=(1,)*dim,
-                    order=order, n=(mesh_par,)*dim, group_cls=group_cls)
+                    order=order, nelements_per_axis=(mesh_par,)*dim,
+                    group_cls=group_cls)
 
             h = 1/mesh_par
         else:
@@ -616,8 +618,8 @@ def test_all_faces_interpolation(actx_factory, group_factory,
                     )
             print("END GEN")
         elif mesh_name == "warp":
-            mesh = mgen.generate_warped_rect_mesh(dim, order=4, n=mesh_par,
-                    group_cls=group_cls)
+            mesh = mgen.generate_warped_rect_mesh(dim, order=4,
+                    nelements_side=mesh_par, group_cls=group_cls)
 
             h = 1/mesh_par
         else:
@@ -747,8 +749,8 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
                     )
             print("END GEN")
         elif mesh_name == "warp":
-            mesh = mgen.generate_warped_rect_mesh(dim, order=order, n=mesh_par,
-                    group_cls=group_cls)
+            mesh = mgen.generate_warped_rect_mesh(dim, order=order,
+                    nelements_side=mesh_par, group_cls=group_cls)
 
             h = 1/mesh_par
         else:
@@ -900,8 +902,9 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
     else:
         ambient_dim = 3
         mesh = mgen.generate_regular_rect_mesh(
-                a=(0,)*ambient_dim, b=(1,)*ambient_dim, n=(4,)*ambient_dim,
-                order=mesh_order, group_cls=group_cls)
+                a=(0,)*ambient_dim, b=(1,)*ambient_dim,
+                nelements_per_axis=(4,)*ambient_dim, order=mesh_order,
+                group_cls=group_cls)
 
         discr_grp_factory = LegendreGaussLobattoTensorProductGroupFactory(order)
 
@@ -1563,10 +1566,10 @@ def test_open_curved_mesh(curve_name):
             closed=closed)
 
 
-def _generate_cross_warped_rect_mesh(dim, order, n):
+def _generate_cross_warped_rect_mesh(dim, order, nelements_side):
     mesh = mgen.generate_regular_rect_mesh(
             a=(0,)*dim, b=(1,)*dim,
-            n=(n,)*dim, order=order)
+            nelements_per_axis=(nelements_side,)*dim, order=order)
 
     def m(x):
         results = np.empty_like(x)
@@ -1593,11 +1596,11 @@ def test_is_affine_group_check(mesh_name):
         is_affine = True
         mesh = mgen.generate_regular_rect_mesh(
                 a=(-0.5,)*dim, b=(0.5,)*dim,
-                n=(nelements,)*dim, order=order)
+                nelements_per_axis=(nelements,)*dim, order=order)
     elif mesh_name.startswith("warped_box"):
         dim = int(mesh_name[-2])
         is_affine = False
-        mesh = mgen.generate_warped_rect_mesh(dim, order, nelements)
+        mesh = mgen.generate_warped_rect_mesh(dim, order, nelements_side=nelements)
     elif mesh_name == "cross_warped_box":
         dim = 2
         is_affine = False
@@ -1632,7 +1635,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
 
     mesh = mgen.generate_regular_rect_mesh(
             a=(-0.5,)*ambient_dim, b=(0.5,)*ambient_dim,
-            n=(8,)*ambient_dim, order=order)
+            nelements_per_axis=(8,)*ambient_dim, order=order)
     assert len(mesh.groups) == 1
 
     from meshmode.mesh.processing import split_mesh_groups

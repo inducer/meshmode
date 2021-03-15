@@ -42,7 +42,7 @@ def test_array_context_np_workalike(actx_factory):
 
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*2, b=(0.5,)*2, n=(8,)*2, order=3)
+            a=(-0.5,)*2, b=(0.5,)*2, nelements_per_axis=(8,)*2, order=3)
 
     discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
 
@@ -86,7 +86,7 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
 
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*2, b=(0.5,)*2, n=(3,)*2, order=1)
+            a=(-0.5,)*2, b=(0.5,)*2, nelements_per_axis=(2,)*2, order=1)
 
     discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
 
