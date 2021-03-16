@@ -85,10 +85,25 @@ class ElementGroupBase:
     def dim(self):
         return self.mesh_el_group.dim
 
+    def __hash__(self):
+        return hash((self.__class__,
+                     self.mesh_el_group,
+                     self.order,
+                     self.index))
+
+    def __eq__(self, other):
+        return (other.__class__ == self.__class__
+                and other.mesh_el_group == self.mesh_el_group
+                and other.order == self.order
+                and other.index == self.index)
+
 
 class ModalElementGroupBase(ElementGroupBase):
     """Container for the :class:`ModalDiscretization` data corresponding to
     one :class:`meshmode.mesh.MeshElementGroup`.
+
+    .. autoattribute:: nunit_dofs
+    .. autoattribute:: ndofs
 
     .. method:: orthonormal_basis()
 
