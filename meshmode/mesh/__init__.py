@@ -1473,10 +1473,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
 # {{{ is_region_tag_empty
 
 def is_region_tag_empty(mesh, region_tag):
-    """Return *True* if the corresponding region tag does not occur as part of
-    *mesh*.
-    """
-
+    """:returns: *True* if *region_tag* does not occur as part of *mesh*."""
     rtag_bit = mesh.region_tag_bit(region_tag)
     if not rtag_bit:
         return True
@@ -1493,10 +1490,7 @@ def is_region_tag_empty(mesh, region_tag):
 # {{{ is_boundary_tag_empty
 
 def is_boundary_tag_empty(mesh, boundary_tag):
-    """Return *True* if the corresponding boundary tag does not occur as part of
-    *mesh*.
-    """
-
+    """:returns: *True* if *boundary_tag* does not occur as part of *mesh*."""
     btag_bit = mesh.boundary_tag_bit(boundary_tag)
     if not btag_bit:
         return True
