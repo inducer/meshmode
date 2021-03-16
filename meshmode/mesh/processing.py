@@ -157,7 +157,10 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
             groups[i_old_grp].copy(
                 vertex_indices=new_vertex_indices[i_new_grp],
                 nodes=groups[i_old_grp].nodes[
-                    :, filtered_group_elements[i_new_grp], :].copy())
+                    :, filtered_group_elements[i_new_grp], :].copy(),
+                regions=groups[i_old_grp].regions[
+                    filtered_group_elements[i_new_grp]].copy()
+                    if groups[i_old_grp].regions is not None else None)
             for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
 
     return new_groups, group_to_new_group, required_vertex_indices
@@ -615,6 +618,7 @@ def partition_mesh(mesh, part_per_element, part_num):
             part_mesh_groups,
             facial_adjacency_groups=part_facial_adj_groups,
             boundary_tags=boundary_tags,
+            region_tags=mesh.region_tags.copy(),
             is_conforming=mesh.is_conforming)
 
     return part_mesh, queried_elems
