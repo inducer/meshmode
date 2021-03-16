@@ -131,10 +131,11 @@ class ModalDiscretizationConnection(DiscretizationConnection):
                     ],
                 name="vandermond_inv_eval_knl")
 
-        vdm = actx.from_numpy(mp.vandermonde(grp.basis(), grp.unit_nodes))
+        vdm = mp.vandermonde(grp.basis(), grp.unit_nodes)
+        vdm_inv = actx.from_numpy(la.inv(vdm))
         actx.call_loopy(vinv_keval(),
                         result=result[grp.index],
-                        vdm_inv=la.inv(vdm),
+                        vdm_inv=vdm_inv,
                         nodal_coeffs=ary[grp.index])
 
         return result
