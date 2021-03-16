@@ -55,22 +55,60 @@ class ModalDiscretizationConnection(DiscretizationConnection):
                 to_discr=to_discr,
                 is_surjective=True)
 
-    @obj_array_vectorized_n_args
-    def __call__(self, ary):
+    def _quadrature_projection(self, actx, ary, result, grp):
 
-        if not isinstance(ary, DOFArray):
-            raise TypeError("Non-array passed to discretization connection")
-
-        if ary.shape != (len(self.from_discr.groups),):
-            raise ValueError("Invalid shape of incoming nodal data")
-
-        actx = ary.array_context
-
-        # TODO: Handle the case with non-interpolatory element groups
+        # Handle the case with non-interpolatory element groups
         # I.e. use the quadrature rule and orthonormal basis to directly
         # compute the modal coefficients:
         # c_i = inner_product(v, phi_i), where phi_i is the ith orthonormal
         # basis vector
+        @memoize_in(actx, (ModalDiscretizationConnection,
+                           "quadrature_proj_eval_knl"))
+        def quad_proj_keval():
+            return make_loopy_program([
+                "{[iel]: 0 <= iel < nelements}",
+                "{[idof_quad]: 0 <= idof_quad < n_from_nodes}"
+                ],
+                """
+                for iel
+                    <>tmp = sum(idof_quad,
+                            ary[iel, idof_quad]
+                            * basis[idof_quad]
+                            * weights[idof_quad])
+
+                    result[iel, ibasis] = result[iel, ibasis] + tmp
+                end
+                """,
+                [
+                    lp.GlobalArg("ary", None,
+                        shape=("n_from_elements", "n_from_nodes")),
+                    lp.GlobalArg("result", None,
+                        shape=("n_to_elements", "n_to_nodes")),
+                    lp.GlobalArg("basis", None,
+                        shape="n_from_nodes"),
+                    lp.GlobalArg("weights", None,
+                        shape="n_from_nodes"),
+                    lp.ValueArg("n_from_elements", np.int32),
+                    lp.ValueArg("n_to_elements", np.int32),
+                    lp.ValueArg("n_to_nodes", np.int32),
+                    lp.ValueArg("ibasis", np.int32),
+                    "..."
+                    ],
+                name="quadrature_proj_eval_knl")
+
+        for ibasis, basis_fn in enumerate(grp.basis()):
+            basis = actx.from_numpy(basis_fn(grp.unit_nodes))
+
+            actx.call_loopy(quad_proj_keval(),
+                            ibasis=ibasis,
+                            ary=ary[grp.index],
+                            basis=basis,
+                            weights=grp.weights,
+                            result=result[grp.index])
+
+        return result
+
+    def _invert_vandermonde(self, actx, ary, result, grp):
 
         # Simple mat-mul kernel to apply the inverse of the
         # Vandermonde matrix
@@ -93,15 +131,30 @@ class ModalDiscretizationConnection(DiscretizationConnection):
                     ],
                 name="vandermond_inv_eval_knl")
 
+        vdm = actx.from_numpy(mp.vandermonde(grp.basis(), grp.unit_nodes))
+        actx.call_loopy(vinv_keval(),
+                        result=result[grp.index],
+                        vdm_inv=la.inv(vdm),
+                        nodal_coeffs=ary[grp.index])
+
+        return result
+
+    @obj_array_vectorized_n_args
+    def __call__(self, ary):
+
+        if not isinstance(ary, DOFArray):
+            raise TypeError("Non-array passed to discretization connection")
+
+        if ary.shape != (len(self.from_discr.groups),):
+            raise ValueError("Invalid shape of incoming nodal data")
+
+        actx = ary.array_context
+
         result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
 
-        for igrp, grp in enumerate(self.to_discr.groups):
-            vdm = actx.from_numpy(mp.vandermonde(grp.basis(), grp.unit_nodes))
-            actx.call_loopy(
-                    vinv_keval(),
-                    result=result[grp.index],
-                    vdm_inv=la.inv(vdm),
-                    nodal_coeffs=ary[grp.index])
+        for _, grp in enumerate(self.from_discr.groups):
+            # TODO: Put in if-statements to determine which routine to call
+            result = self._invert_vandermonde(actx, ary, result, grp)
 
         return result
 
