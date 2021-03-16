@@ -248,8 +248,8 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     # groups
     bdy_tags = _get_firedrake_boundary_tags(
         top, tag_induced_boundary=cells_to_use is not None)
-    from meshmode.mesh import index_tags, get_tag_bit
-    boundary_tag_to_index = index_tags(bdy_tags)
+    from meshmode.mesh import make_tag_to_index, get_tag_bit
+    boundary_tag_to_index = make_tag_to_index(bdy_tags)
     marker_to_neighbor_value = {}
     # for convenience,
     # None maps to the boundary tag for a boundary facet with no marker

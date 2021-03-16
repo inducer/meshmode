@@ -181,8 +181,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                               dim == mesh_bulk_dim-1] if self.tags else None
         boundary_tags = make_boundary_tags(user_tags=gmsh_boundary_tags)
 
-        from meshmode.mesh import index_tags, get_tag_bit
-        rtag_to_index = index_tags(region_tags)
+        from meshmode.mesh import make_tag_to_index, get_tag_bit
+        rtag_to_index = make_tag_to_index(region_tags)
 
         bulk_el_types = set()
 

@@ -40,7 +40,7 @@ __doc__ = """
 
 .. autofunction:: make_region_tags
 .. autofunction:: make_boundary_tags
-.. autofunction:: index_tags
+.. autofunction:: make_tag_to_index
 .. autofunction:: get_tag_bit
 
 .. autofunction:: as_python
@@ -756,7 +756,7 @@ class Mesh(Record):
             raise ValueError("too few bits in element_id_dtype to represent all "
                     "region tags")
 
-        rtag_to_index = index_tags(region_tags)
+        rtag_to_index = make_tag_to_index(region_tags)
 
         # }}}
 
@@ -770,7 +770,7 @@ class Mesh(Record):
             raise ValueError("too few bits in element_id_dtype to represent all "
                     "boundary tags")
 
-        btag_to_index = index_tags(boundary_tags)
+        btag_to_index = make_tag_to_index(boundary_tags)
 
         # }}}
 
@@ -1106,7 +1106,7 @@ def make_boundary_tags(user_tags=None):
     return boundary_tags
 
 
-def index_tags(tags):
+def make_tag_to_index(tags):
     """Create a dict that maps tags to their respective index in the tag list."""
     return {tag: i for i, tag in enumerate(tags)}
 
@@ -1172,7 +1172,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
                                      face_vertex_indices_to_tags=None):
     if not groups:
         return None
-    boundary_tag_to_index = index_tags(boundary_tags)
+    boundary_tag_to_index = make_tag_to_index(boundary_tags)
 
     def boundary_tag_bit(boundary_tag):
         return get_tag_bit(boundary_tag_to_index, boundary_tag)

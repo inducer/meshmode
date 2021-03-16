@@ -593,8 +593,8 @@ def partition_mesh(mesh, part_per_element, part_num):
         part_tag = BTAG_PARTITION(i_neighbor_part)
         boundary_tags.append(part_tag)
 
-    from meshmode.mesh import index_tags
-    btag_to_index = index_tags(boundary_tags)
+    from meshmode.mesh import make_tag_to_index
+    btag_to_index = make_tag_to_index(boundary_tags)
 
     def boundary_tag_bit(boundary_tag):
         from meshmode.mesh import get_tag_bit
