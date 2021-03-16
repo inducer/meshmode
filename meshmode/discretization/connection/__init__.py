@@ -46,6 +46,8 @@ from meshmode.discretization.connection.refinement import \
         make_refinement_connection
 from meshmode.discretization.connection.chained import \
         flatten_chained_connection
+from meshmode.discretization.connection.modal import \
+        ModalDiscretizationConnection, ModalInverseDiscretizationConnection
 
 import logging
 logger = logging.getLogger(__name__)
@@ -56,6 +58,8 @@ __all__ = [
         "DirectDiscretizationConnection",
         "ChainedDiscretizationConnection",
         "L2ProjectionInverseDiscretizationConnection",
+        "ModalDiscretizationConnection",
+        "ModalInverseDiscretizationConnection",
 
         "make_same_mesh_connection",
         "FACE_RESTR_INTERIOR", "FACE_RESTR_ALL",
