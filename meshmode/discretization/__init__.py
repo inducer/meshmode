@@ -126,6 +126,20 @@ class ModalElementGroupBase(ElementGroupBase):
     def mode_ids(self):
         return self._orthonormal_basis.mode_ids
 
+    @property
+    def nunit_dofs(self):
+        """The number of (modal) degrees of freedom ("DOFs")
+        associated with a single element.
+        """
+        return self._space.space_dim
+
+    @property
+    def ndofs(self):
+        """The total number of (modal) degrees of freedom ("DOFs")
+        associated with the element group.
+        """
+        return self.nunit_dofs * self.nelements
+
     basis = orthonormal_basis
     grad_basis = grad_orthonormal_basis
 
