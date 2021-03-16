@@ -547,7 +547,7 @@ class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
 
 class ElementGroupFactory:
     """
-    .. function:: __call__(mesh_ele_group, node_nr_base)
+    .. function:: __call__(mesh_ele_group, dof_nr_base)
     """
 
 
