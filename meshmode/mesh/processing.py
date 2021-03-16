@@ -153,15 +153,19 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
 
     # }}}
 
-    new_groups = [
-            groups[i_old_grp].copy(
-                vertex_indices=new_vertex_indices[i_new_grp],
-                nodes=groups[i_old_grp].nodes[
-                    :, filtered_group_elements[i_new_grp], :].copy(),
-                regions=groups[i_old_grp].regions[
-                    filtered_group_elements[i_new_grp]].copy()
-                    if groups[i_old_grp].regions is not None else None)
-            for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
+    new_groups = []
+    for i_new_grp, i_old_grp in enumerate(new_group_to_old_group):
+        old_grp = groups[i_old_grp]
+        filtered_elems = filtered_group_elements[i_new_grp]
+        new_grp_vertex_indices = new_vertex_indices[i_new_grp]
+        new_grp_nodes = old_grp.nodes[:, filtered_elems, :].copy()
+        new_grp_regions = (
+            old_grp.regions[filtered_elems].copy()
+            if old_grp.regions is not None else None)
+        new_groups.append(old_grp.copy(
+            vertex_indices=new_grp_vertex_indices,
+            nodes=new_grp_nodes,
+            regions=new_grp_regions))
 
     return new_groups, group_to_new_group, required_vertex_indices
 
