@@ -48,7 +48,9 @@ from meshmode.discretization.poly_element import (
     PolynomialEquidistantSimplexGroupFactory,
     # Tensor product group factories
     ModalTensorProductGroupFactory,
-    LegendreGaussLobattoTensorProductGroupFactory
+    LegendreGaussLobattoTensorProductGroupFactory,
+    # Quadrature-based (non-interpolatory) group factories
+    QuadratureSimplexGroupFactory
     )
 
 from meshmode.discretization.nodal import NodalDiscretization
@@ -66,11 +68,12 @@ import pytest
 
 
 @pytest.mark.parametrize("nodal_group_factory", [
-    # InterpolatoryQuadratureSimplexGroupFactory,
+    InterpolatoryQuadratureSimplexGroupFactory,
     PolynomialWarpAndBlendGroupFactory,
     partial(PolynomialRecursiveNodesGroupFactory, family="lgl"),
     PolynomialEquidistantSimplexGroupFactory,
     LegendreGaussLobattoTensorProductGroupFactory,
+    QuadratureSimplexGroupFactory
     ])
 def test_inverse_modal_connections(actx_factory, nodal_group_factory):
 
@@ -85,7 +88,7 @@ def test_inverse_modal_connections(actx_factory, nodal_group_factory):
     order = 4
 
     def f(x):
-        return actx.np.sin(x)
+        return 2*actx.np.sin(20*x) + 0.5*actx.np.cos(10*x)
 
     # Make a regular rectangle mesh
     mesh = mgen.generate_regular_rect_mesh(
@@ -112,7 +115,7 @@ def test_inverse_modal_connections(actx_factory, nodal_group_factory):
     # This error should be small since we composed a map with
     # its inverse
     err = actx.np.linalg.norm(nodal_f - nodal_f_2, np.inf)
-    assert err <= 1e-12
+    assert err <= 1e-13
 
 
 if __name__ == "__main__":
