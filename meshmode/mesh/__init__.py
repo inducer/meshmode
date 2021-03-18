@@ -282,6 +282,19 @@ class MeshElementGroup(Record):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    @memoize_method
+    def _hash(self):
+        return hash((self.__class__,
+                     self.order,
+                     str(self.vertex_indices),
+                     str(self.nodes),
+                     str(self.unit_nodes),
+                     self.element_nr_base,
+                     self.node_nr_base))
+
+    def __hash__(self):
+        return self._hash()
+
 # }}}
 
 
