@@ -127,6 +127,12 @@ class ModalElementGroupBase(ElementGroupBase):
     """
 
     @property
+    def is_orthonormal_basis(self):
+        # Modal element groups have orthornomal bases by
+        # definition
+        return True
+
+    @property
     @memoize_method
     def _orthonormal_basis(self):
         import modepy as mp
