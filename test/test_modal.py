@@ -73,7 +73,6 @@ import pytest
     partial(PolynomialRecursiveNodesGroupFactory, family="lgl"),
     PolynomialEquidistantSimplexGroupFactory,
     LegendreGaussLobattoTensorProductGroupFactory,
-    QuadratureSimplexGroupFactory
     ])
 def test_inverse_modal_connections(actx_factory, nodal_group_factory):
 
@@ -114,8 +113,51 @@ def test_inverse_modal_connections(actx_factory, nodal_group_factory):
 
     # This error should be small since we composed a map with
     # its inverse
-    err = actx.np.linalg.norm(nodal_f - nodal_f_2, np.inf)
-    assert err <= 1e-13
+    err = actx.np.linalg.norm(nodal_f - nodal_f_2)
+    assert err <= 1e-12
+
+
+@pytest.mark.parametrize("quad_group_factory", [
+    InterpolatoryQuadratureSimplexGroupFactory
+    #QuadratureSimplexGroupFactory
+    ])
+def test_quadrature_based_modal_connection(actx_factory, quad_group_factory):
+
+    group_cls = SimplexElementGroup
+    modal_group_factory = ModalSimplexGroupFactory
+    actx = actx_factory()
+    order = 4
+    m_order = 4
+
+    # Make a regular rectangle mesh
+    mesh = mgen.generate_regular_rect_mesh(
+        a=(0, 0)*2, b=(5, 3), n=(10, 6,), order=order, group_cls=group_cls)
+
+    # Make discretizations
+    nodal_disc = NodalDiscretization(actx, mesh, quad_group_factory(order))
+    modal_disc = ModalDiscretization(actx, mesh, modal_group_factory(m_order))
+
+    # Make connections one using quadrature projection and one using
+    # the Vandermonde inverse
+    nodal_to_modal_conn_quad = ModalDiscretizationConnection(
+        nodal_disc, modal_disc, allow_approximate_quad=True)
+    nodal_to_modal_conn_vinv = ModalDiscretizationConnection(
+        nodal_disc, modal_disc, allow_approximate_quad=False)
+
+    def f(x):
+        return 0.25*actx.np.cos(2*x)
+
+    x_nodal = thaw(actx, nodal_disc.nodes()[0])
+    nodal_f = f(x_nodal)
+
+    # Map nodal coefficients using the quadrature-based projection
+    modal_f_quad = nodal_to_modal_conn_quad(nodal_f)
+    modal_f_vinv = nodal_to_modal_conn_vinv(nodal_f)
+
+
+    err = actx.np.linalg.norm(modal_f_quad - modal_f_vinv)
+    assert err <= 1e-8
+
 
 
 if __name__ == "__main__":
