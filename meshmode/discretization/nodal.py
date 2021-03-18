@@ -161,9 +161,13 @@ class NodalDiscretization(DiscretizationBase):
                 for grp in self.groups))
 
 
-# Create a temporary alias for NodalDiscretization until completely
-# phased out in libraries using meshmode.
-def Discretization(*args, **kwargs):  # noqa: N802
-    from warnings import warn
-    warn("Discretization will be depreciated in favor of NodalDiscretization")
-    return NodalDiscretization(*args, **kwargs)
+class Discretization(NodalDiscretization):
+
+    def __init__(self, *args, **kwargs):
+
+        from warnings import warn
+        warn("`Discretization` will be dropped in favor of "
+             "`NodalDiscretization` in version 2022.x.",
+             DeprecationWarning, stacklevel=2)
+
+        super().__init__(*args, **kwargs)

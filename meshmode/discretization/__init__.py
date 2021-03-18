@@ -25,8 +25,8 @@ THE SOFTWARE.
 
 import numpy as np
 
-from pytools import memoize_in, memoize_method
-from meshmode.array_context import ArrayContext, make_loopy_program
+from pytools import memoize_method
+from meshmode.array_context import ArrayContext
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
@@ -362,6 +362,6 @@ class DiscretizationBase:
 
 # For backwards compatibility, we need to be sure we export the
 # alias for NodalDiscretization
-from meshmode.discretization.nodal import Discretization
+from meshmode.discretization.nodal import Discretization  # noqa: F401
 
 # vim: fdm=marker
