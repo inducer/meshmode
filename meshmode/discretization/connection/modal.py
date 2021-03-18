@@ -42,24 +42,28 @@ from pytools.obj_array import obj_array_vectorized_n_args
 
 class ModalDiscretizationConnection(DiscretizationConnection):
 
-    def __init__(self, from_discr, to_discr, approximate_quad=False):
+    def __init__(self, from_discr, to_discr, allow_approximate_quad=False):
 
         if not isinstance(from_discr, NodalDiscretization):
-            raise ValueError("from_discr must be a NodalDiscretization "
-                    "object to use this connection.")
+            raise TypeError("from_discr must be a NodalDiscretization "
+                            "object to use this connection.")
 
         if not isinstance(to_discr, ModalDiscretization):
-            raise ValueError("to_discr must be a ModalDiscretization "
-                    "object to use this connection.")
+            raise TypeError("to_discr must be a ModalDiscretization "
+                            "object to use this connection.")
+
+        if to_discr.mesh != from_discr.mesh:
+            raise ValueError("Both `from_discr` and `to_discr` must be on "
+                             "the same mesh.")
 
         super().__init__(
                 from_discr=from_discr,
                 to_discr=to_discr,
                 is_surjective=True)
 
-        self._approximate_quad = approximate_quad
+        self._allow_approximate_quad = allow_approximate_quad
 
-    def _quadrature_projection(self, actx, ary, result, grp, modal_basis_fns):
+    def _project_via_quadrature(self, actx, ary, result, grp, modal_basis_fns):
 
         # Handle the case with non-interpolatory element groups or
         # quadrature-based element groups for overintegration.
@@ -76,24 +80,15 @@ class ModalDiscretizationConnection(DiscretizationConnection):
                 "{[ibasis]: 0 <= ibasis < n_to_dofs}"
                 ],
                 """
-                    result[iel, ibasis] = result[iel, ibasis] + \
-                        sum(idof_quad, ary[iel, idof_quad]
-                                        * basis[idof_quad]
-                                        * weights[idof_quad])
+                    result[iel, ibasis] = sum(idof_quad,
+                                              ary[iel, idof_quad
+                                              * basis[idof_quad]
+                                              * weights[idof_quad])
                 """,
-                [
-                    lp.GlobalArg("ary", None,
-                        shape=("nelements", "n_from_nodes")),
-                    lp.GlobalArg("result", None,
-                        shape=("nelements", "n_to_dofs")),
-                    "..."
-                    ],
                 name="quadrature_proj_eval_knl")
 
         for ibasis, basis_fn in enumerate(modal_basis_fns):
 
-            # Move data to array context for use in
-            # generated loopy kernels
             basis = actx.from_numpy(basis_fn(grp.unit_nodes))
             weights = actx.from_numpy(grp.weights)
 
@@ -106,12 +101,12 @@ class ModalDiscretizationConnection(DiscretizationConnection):
 
         return result
 
-    def _invert_vandermonde(self, actx, ary, result, grp):
+    def _compute_coeffs_via_inv_vandermonde(self, actx, ary, result, grp):
 
         # Simple mat-mul kernel to apply the inverse of the
         # Vandermonde matrix
         @memoize_in(actx, (ModalDiscretizationConnection,
-                           "vandermond_inv_eval_knl"))
+                           "apply_inv_vandermonde_knl"))
         def vinv_keval():
             return make_loopy_program([
                 "{[iel]: 0 <= iel < nelements}",
@@ -119,26 +114,19 @@ class ModalDiscretizationConnection(DiscretizationConnection):
                 "{[jdof]: 0 <= jdof < n_from_dofs}"
                 ],
                 """
-                    result[iel, idof] = result[iel, idof] + \
-                        sum(jdof, vdm_inv[idof, jdof] * nodal_coeffs[iel, jdof])
+                    result[iel, idof] = sum(jdof,
+                                            vdm_inv[idof, jdof]
+                                            * nodal_coeffs[iel, jdof])
                 """,
-                [
-                    lp.GlobalArg("nodal_coeffs", None,
-                        shape=("nelements", "n_from_dofs")),
-                    "..."
-                    ],
-                name="vandermond_inv_eval_knl")
+                name="apply_inv_vandermonde_knl")
 
         # Extract Vandermonde and compute its inverse
         # TODO: need to figure out how to cache this inverse
         # Idea: Use element group as a key and create a lookup
         # dictionary that is memoized in the array context
         vdm = mp.vandermonde(grp.basis(), grp.unit_nodes)
-        Vinv = la.inv(vdm)
-
-        # Load inverse Vandermonde to array context for use
-        # in generated loopy kernels
-        vdm_inv = actx.from_numpy(Vinv)
+        vdm_inv = la.inv(vdm)
+        vdm_inv = actx.from_numpy(vdm_inv)
 
         actx.call_loopy(vinv_keval(),
                         result=result[grp.index],
@@ -166,7 +154,7 @@ class ModalDiscretizationConnection(DiscretizationConnection):
 
                 mgrp = self.to_discr.groups[igrp]
 
-                if not self._approximate_quad:
+                if not self._allow_approximate_quad:
                     assert grp._quadrature_rule().exact_to >= 2*mgrp.order, \
                     "If quadrature rule is not exact, set `approximate_quad=True`."
 
@@ -174,10 +162,10 @@ class ModalDiscretizationConnection(DiscretizationConnection):
                 # to evaluate the Vandermonde matrix for non-interpolatory
                 # element groups
                 basis = mgrp.orthonormal_basis()
-                result = self._quadrature_projection(
+                result = self._project_via_quadrature(
                     actx, ary, result, grp, basis)
             else:
-                result = self._invert_vandermonde(
+                result = self._compute_coeffs_via_inv_vandermonde(
                     actx, ary, result, grp)
 
         return result
@@ -188,12 +176,16 @@ class ModalInverseDiscretizationConnection(DiscretizationConnection):
     def __init__(self, from_discr, to_discr):
 
         if not isinstance(from_discr, ModalDiscretization):
-            raise ValueError("from_discr must be a ModalDiscretization "
-                    "object to use this connection.")
+            raise TypeError("from_discr must be a ModalDiscretization "
+                            "object to use this connection.")
 
         if not isinstance(to_discr, NodalDiscretization):
-            raise ValueError("to_discr must be a NodalDiscretization "
-                    "object to use this connection.")
+            raise TypeError("to_discr must be a NodalDiscretization "
+                            "object to use this connection.")
+
+        if to_discr.mesh != from_discr.mesh:
+            raise ValueError("Both `from_discr` and `to_discr` must be on "
+                             "the same mesh.")
 
         super().__init__(
                 from_discr=from_discr,
@@ -222,42 +214,22 @@ class ModalInverseDiscretizationConnection(DiscretizationConnection):
                 "{[ibasis]: 0 <= ibasis < n_from_dofs}"
                 ],
                 """
-                    result[iel, idof] = result[iel, idof] + \
-                        sum(ibasis, vdm[idof, ibasis] * coefficients[iel, ibasis])
+                    result[iel, idof] = sum(ibasis,
+                                            vdm[idof, ibasis]
+                                            * coefficients[iel, ibasis])
                 """,
-                [
-                    lp.GlobalArg("coefficients", None,
-                        shape=("nelements", "n_from_dofs")),
-                    lp.GlobalArg("result", None,
-                        shape=("nelements", "n_to_dofs")),
-                    "..."
-                    ],
                 name="modinv_evaluation_knl")
 
-        result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
-
+        result_data = ()
         for igrp, grp in enumerate(self.to_discr.groups):
 
-            if (isinstance(grp, QuadratureSimplexElementGroup) or
-                grp.order != self.from_discr.groups[igrp].order):
-                # Use the modal (orthonormal basis) from the `from_discr`
-                # to evaluate the (possibly non-square) Vandermonde matrix
-                # for non-interpolatory element groups
-                basis = self.from_discr.groups[igrp].orthonormal_basis()
-            else:
-                # Otherwise, we use the basis of the target space
-                # (in the `to_discr`)
-                basis = grp.basis()
+            basis_fns = self.from_discr.groups[igrp].orthonormal_basis()
+            vdm = mp.vandermonde(basis_fns, grp.unit_nodes)
+            vdm = actx.from_numpy(vdm)
 
-            V = mp.vandermonde(basis, grp.unit_nodes)
+            output = actx.call_loopy(keval(),
+                                     vdm=vdm,
+                                     coefficients=ary[grp.index])
+            result_data += (output['result'],)
 
-            # Load Vandermonde in the array context
-            vdm = actx.from_numpy(V)
-
-            actx.call_loopy(
-                    keval(),
-                    result=result[grp.index],
-                    vdm=vdm,
-                    coefficients=ary[grp.index])
-
-        return result
+        return DOFArray(actx, data=result_data)
