@@ -26,13 +26,11 @@ THE SOFTWARE.
 import numpy as np
 import numpy.linalg as la
 import modepy as mp
-import loopy as lp
 
 from meshmode.array_context import make_loopy_program
 from meshmode.dof_array import DOFArray
 from meshmode.discretization import InterpolatoryElementGroupBase
-from meshmode.discretization.poly_element import (
-    QuadratureSimplexElementGroup, InterpolatoryQuadratureSimplexElementGroup)
+from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
 from meshmode.discretization.modal import ModalDiscretization
 from meshmode.discretization.nodal import NodalDiscretization
@@ -41,9 +39,42 @@ from pytools import memoize_in
 from pytools.obj_array import obj_array_vectorized_n_args
 
 
-class ModalDiscretizationConnection(DiscretizationConnection):
+class NodalToModalDiscretizationConnection(DiscretizationConnection):
+    """A concrete subclass of :class:`DiscretizationConnection`, which
+    maps nodal data to its modal representation. This connection can
+    be used with both unisolvent and non-unisolvent element groups.
+
+    .. note::
+
+        This connection requires that both nodal and modal discretizations
+        are defined on the *same* mesh.
+
+    .. attribute:: from_discr
+
+    .. attribute:: to_discr
+
+    .. attribute:: groups
+
+        a list of :class:`DiscretizationConnectionElementGroup`
+        instances, with a one-to-one correspondence to the groups in
+        :attr:`to_discr`.
+
+    .. automethod:: __call__
+
+    """
 
     def __init__(self, from_discr, to_discr, allow_approximate_quad=False):
+        """
+        :arg from_discr: an instance of
+            :class:`meshmode.discretization.nodal.NodalDiscretization`
+        :arg to_discr: an instance of
+            :class:`meshmode.discretization.modal.ModalDiscretization`
+        :arg allow_approximate_quad: an optional :class:`bool` flag indicating
+            whether to proceed with numerically approximating (via quadrature)
+            modal coefficients, despite using an insufficient (not high enough
+            approximation order for exact integration) quadrature method.
+            The default value is *False*.
+        """
 
         if not isinstance(from_discr, NodalDiscretization):
             raise TypeError("from_discr must be a NodalDiscretization "
@@ -71,12 +102,8 @@ class ModalDiscretizationConnection(DiscretizationConnection):
                              "perform a quadrature-based projection.")
 
         # Handle the case with non-interpolatory element groups or
-        # quadrature-based element groups for overintegration.
-        # I.e. use the quadrature rule and orthonormal basis to directly
-        # compute the modal coefficients:
-        # c_i = inner_product(v, phi_i), where phi_i is the ith orthonormal
-        # basis vector
-        @memoize_in(actx, (ModalDiscretizationConnection,
+        # quadrature-based element groups
+        @memoize_in(actx, (NodalToModalDiscretizationConnection,
                            "apply_quadrature_proj_knl"))
         def quad_proj_keval():
             return make_loopy_program([
@@ -106,7 +133,7 @@ class ModalDiscretizationConnection(DiscretizationConnection):
 
         # Simple mat-mul kernel to apply the inverse of the
         # Vandermonde matrix
-        @memoize_in(actx, (ModalDiscretizationConnection,
+        @memoize_in(actx, (NodalToModalDiscretizationConnection,
                            "apply_inv_vandermonde_knl"))
         def vinv_keval():
             return make_loopy_program([
@@ -137,6 +164,38 @@ class ModalDiscretizationConnection(DiscretizationConnection):
 
     @obj_array_vectorized_n_args
     def __call__(self, ary):
+        r"""Computes modal coefficients data from a functions
+        nodal coefficients. For interpolatory (unisolvent) element
+        groups, this is performed via:
+
+        .. math::
+
+            y = V^{-1} [\text{nodal basis coefficients}]
+
+        where :math:`V_{i,j} = \phi_j(x_i)` is the generalized
+        Vandermonde matrix, :math:`\phi_j` is a nodal basis,
+        and :math:`x_i` are nodal points on the reference
+        element defining the nodal discretization.
+
+        For non-interpolatory element groups (for example,
+        :class:`meshmode.discretization.poly_element.QuadratureSimplexElementGroup`),
+        modal coefficients are computed using the underlying quadrature rule
+        :math:`(w_q, x_q)`, and an orthonormal basis :math:`\psi_i`
+        spanning the modal discretization space. The modal coefficients
+        are then obtained via:
+
+        .. math::
+
+            y = V^T W [\text{nodal basis coefficients}]
+
+        where :math:`V_{i, j} = \psi_j(x_i)` is the Vandermonde matrix
+        constructed from the orthonormal basis evaluated at the quadrature
+        nodes :math:`x_i`, and :math:`W = \text{Diag}(w_q)` is a diagonal
+        matrix containing the quadrature weights :math:`w_q`.
+
+        :arg ary: a :class:`meshmode.dof_array.DOFArray` containing
+            nodal coefficient data.
+        """
 
         if not isinstance(ary, DOFArray):
             raise TypeError("Non-array passed to discretization connection")
@@ -156,8 +215,10 @@ class ModalDiscretizationConnection(DiscretizationConnection):
             # to compute the modal coefficients.
             if isinstance(grp, QuadratureSimplexElementGroup):
 
-                if (grp._quadrature_rule().exact_to < 2*mgrp.order
-                    and not self._allow_approximate_quad):
+                if (
+                    grp._quadrature_rule().exact_to < 2*mgrp.order
+                    and not self._allow_approximate_quad
+                ):
                     raise ValueError("Quadrature rule is not exact, please "
                                      "set `allow_approximate_quad=True`")
 
@@ -177,14 +238,41 @@ class ModalDiscretizationConnection(DiscretizationConnection):
                                   mgrp.__class__.__name__)
                     )
 
-            result_data.append(output['result'])
+            result_data.append(output["result"])
 
         return DOFArray(actx, data=tuple(result_data))
 
 
-class ModalInverseDiscretizationConnection(DiscretizationConnection):
+class ModalToNodalDiscretizationConnection(DiscretizationConnection):
+    """A concrete subclass of :class:`DiscretizationConnection`, which
+    maps modal data back to its nodal representation.
+
+    .. note::
+
+        This connection requires that both nodal and modal discretizations
+        are defined on the *same* mesh.
+
+    .. attribute:: from_discr
+
+    .. attribute:: to_discr
+
+    .. attribute:: groups
+
+        a list of :class:`DiscretizationConnectionElementGroup`
+        instances, with a one-to-one correspondence to the groups in
+        :attr:`to_discr`.
+
+    .. automethod:: __call__
+
+    """
 
     def __init__(self, from_discr, to_discr):
+        """
+        :arg from_discr: an instance of
+            :class:`meshmode.discretization.modal.ModalDiscretization`
+        :arg to_discr: an instance of
+            :class:`meshmode.discretization.nodal.NodalDiscretization`
+        """
 
         if not isinstance(from_discr, ModalDiscretization):
             raise TypeError("from_discr must be a ModalDiscretization "
@@ -205,6 +293,20 @@ class ModalInverseDiscretizationConnection(DiscretizationConnection):
 
     @obj_array_vectorized_n_args
     def __call__(self, ary):
+        r"""Computes nodal coefficients from modal data via
+
+        .. math::
+
+            y = V [\text{modal basis coefficients}]
+
+        where :math:`V_{i,j} = \phi_j(x_i)` is the generalized
+        Vandermonde matrix, :math:`\phi_j` is an orthonormal (modal)
+        basis, and :math:`x_i` are nodal points on the reference
+        element defining the nodal discretization.
+
+        :arg ary: a :class:`meshmode.dof_array.DOFArray` containing
+            modal coefficient data.
+        """
 
         if not isinstance(ary, DOFArray):
             raise TypeError("Non-array passed to discretization connection")
@@ -216,7 +318,7 @@ class ModalInverseDiscretizationConnection(DiscretizationConnection):
 
         # Evaluates the action of the Vandermonde matrix on the
         # vector of modal coefficeints to obtain nodal values
-        @memoize_in(actx, (ModalInverseDiscretizationConnection,
+        @memoize_in(actx, (ModalToNodalDiscretizationConnection,
                            "modinv_evaluation_knl"))
         def keval():
             return make_loopy_program([
@@ -241,6 +343,6 @@ class ModalInverseDiscretizationConnection(DiscretizationConnection):
             output = actx.call_loopy(keval(),
                                      vdm=vdm,
                                      coefficients=ary[grp.index])
-            result_data.append(output['result'])
+            result_data.append(output["result"])
 
         return DOFArray(actx, data=tuple(result_data))
