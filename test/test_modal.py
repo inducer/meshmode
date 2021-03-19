@@ -52,8 +52,8 @@ from meshmode.discretization.poly_element import (
 from meshmode.discretization.nodal import NodalDiscretization
 from meshmode.discretization.modal import ModalDiscretization
 from meshmode.discretization.connection.modal import (
-    ModalDiscretizationConnection,
-    ModalInverseDiscretizationConnection
+    NodalToModalDiscretizationConnection,
+    ModalToNodalDiscretizationConnection
     )
 
 from meshmode.dof_array import thaw
@@ -93,10 +93,10 @@ def test_inverse_modal_connections(actx_factory, nodal_group_factory):
     modal_disc = ModalDiscretization(actx, mesh, modal_group_factory(order))
 
     # Make connections
-    nodal_to_modal_conn = ModalDiscretizationConnection(
+    nodal_to_modal_conn = NodalToModalDiscretizationConnection(
         nodal_disc, modal_disc
     )
-    modal_to_nodal_conn = ModalInverseDiscretizationConnection(
+    modal_to_nodal_conn = ModalToNodalDiscretizationConnection(
         modal_disc, nodal_disc
     )
 
@@ -134,7 +134,7 @@ def test_modal_coefficients_by_projection(actx_factory, quad_group_factory):
     modal_disc = ModalDiscretization(actx, mesh, modal_group_factory(m_order))
 
     # Make connections one using quadrature projection
-    nodal_to_modal_conn_quad = ModalDiscretizationConnection(
+    nodal_to_modal_conn_quad = NodalToModalDiscretizationConnection(
         nodal_disc, modal_disc, allow_approximate_quad=True
     )
 
@@ -194,12 +194,12 @@ def test_quadrature_based_modal_connection_reverse(actx_factory, quad_group_fact
     modal_disc = ModalDiscretization(actx, mesh, modal_group_factory(m_order))
 
     # Make connections one using quadrature projection
-    nodal_to_modal_conn_quad = ModalDiscretizationConnection(
+    nodal_to_modal_conn_quad = NodalToModalDiscretizationConnection(
         nodal_disc, modal_disc
     )
 
     # And the reverse connection
-    modal_to_nodal_conn = ModalInverseDiscretizationConnection(
+    modal_to_nodal_conn = ModalToNodalDiscretizationConnection(
         modal_disc, nodal_disc
     )
 
