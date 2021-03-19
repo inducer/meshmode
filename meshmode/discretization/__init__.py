@@ -366,16 +366,28 @@ class Discretization:
                     """,
                 name="nodes")
 
+        def resample_mesh_nodes(grp, iaxis):
+            # TODO: would be nice to have the mesh use an array context already
+            nodes = actx.from_numpy(grp.mesh_el_group.nodes[iaxis])
+
+            grp_unit_nodes = grp.unit_nodes.reshape(-1)
+            meg_unit_nodes = grp.mesh_el_group.unit_nodes.reshape(-1)
+
+            tol = 10 * np.finfo(grp_unit_nodes.dtype).eps
+            if (grp_unit_nodes.shape == meg_unit_nodes.shape
+                    and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
+                return nodes
+
+            return actx.call_loopy(
+                    prg(),
+                    resampling_mat=actx.from_numpy(grp.from_mesh_interp_matrix()),
+                    nodes=nodes,
+                    )["result"]
+
         return make_obj_array([
-            _DOFArray(None, tuple(
-                actx.freeze(
-                    actx.call_loopy(
-                        prg(),
-                        resampling_mat=actx.from_numpy(
-                            grp.from_mesh_interp_matrix()),
-                        nodes=actx.from_numpy(grp.mesh_el_group.nodes[iaxis])
-                        )["result"])
-                for grp in self.groups))
+            _DOFArray(None, tuple([
+                actx.freeze(resample_mesh_nodes(grp, iaxis)) for grp in self.groups
+                ]))
             for iaxis in range(self.ambient_dim)])
 
 # vim: fdm=marker
