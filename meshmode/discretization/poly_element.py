@@ -31,6 +31,7 @@ from meshmode.mesh import (
         SimplexElementGroup as _MeshSimplexElementGroup,
         TensorProductElementGroup as _MeshTensorProductElementGroup)
 from meshmode.discretization import (
+        NoninterpolatoryElementGroupError,
         NodalElementGroupBase, ModalElementGroupBase,
         InterpolatoryElementGroupBase)
 
@@ -95,7 +96,6 @@ class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
     @memoize_method
     def diff_matrices(self):
         if len(self.basis()) != self.unit_nodes.shape[1]:
-            from meshmode.discretization import NoninterpolatoryElementGroupError
             raise NoninterpolatoryElementGroupError(
                     "%s does not support interpolation because it is not "
                     "unisolvent (its unit node count does not match its "
@@ -250,6 +250,15 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
     @memoize_method
     def weights(self):
         return self._quadrature_rule().weights
+
+    def basis(self):
+        raise NoninterpolatoryElementGroupError("'{}' "
+                "is not equipped with a unisolvent function space "
+                "and therefore cannot be used for interpolation"
+                .format(self.__class__.__name__))
+
+    grad_basis = basis
+    diff_matrices = basis
 
 
 class _MassMatrixQuadratureElementGroup(PolynomialSimplexElementGroupBase):
