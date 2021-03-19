@@ -66,6 +66,10 @@ class ModalDiscretizationConnection(DiscretizationConnection):
 
     def _project_via_quadrature(self, actx, ary, grp, mgrp):
 
+        if not mgrp.is_orthonormal_basis:
+            raise ValueError("An orthonormal basis is required to "
+                             "perform a quadrature-based projection.")
+
         # Handle the case with non-interpolatory element groups or
         # quadrature-based element groups for overintegration.
         # I.e. use the quadrature rule and orthonormal basis to directly
@@ -83,7 +87,7 @@ class ModalDiscretizationConnection(DiscretizationConnection):
                 """
                     result[iel, idof] = sum(ibasis,
                                             vtw[idof, ibasis]
-                                            * ary[iel, ibasis])
+                                            * nodal_coeffs[iel, ibasis])
                 """,
                 name="apply_quadrature_proj_knl")
 
@@ -93,7 +97,7 @@ class ModalDiscretizationConnection(DiscretizationConnection):
         vtw = actx.from_numpy(vtw)
 
         output = actx.call_loopy(quad_proj_keval(),
-                                 ary=ary[grp.index],
+                                 nodal_coeffs=ary[grp.index],
                                  vtw=vtw)
 
         return output
@@ -141,20 +145,16 @@ class ModalDiscretizationConnection(DiscretizationConnection):
             raise ValueError("Invalid shape of incoming nodal data")
 
         actx = ary.array_context
-        result_data = ()
+        result_data = []
+
         for igrp, grp in enumerate(self.from_discr.groups):
 
             mgrp = self.to_discr.groups[igrp]
-            if self._allow_approximate_quad:
-                output = self._project_via_quadrature(
-                    actx, ary, grp, mgrp)
 
             # For element groups without an interpolatory nodal basis,
             # we use an orthonormal basis and a quadrature rule
-            # to compute the modal coefficients. This requires
-            # an orthonormal basis
-            elif (isinstance(grp, QuadratureSimplexElementGroup)
-                  and mgrp.is_orthonormal_basis):
+            # to compute the modal coefficients.
+            if isinstance(grp, QuadratureSimplexElementGroup):
 
                 if (grp._quadrature_rule().exact_to < 2*mgrp.order
                     and not self._allow_approximate_quad):
@@ -177,9 +177,9 @@ class ModalDiscretizationConnection(DiscretizationConnection):
                                   mgrp.__class__.__name__)
                     )
 
-            result_data += (output['result'],)
+            result_data.append(output['result'])
 
-        return DOFArray(actx, data=result_data)
+        return DOFArray(actx, data=tuple(result_data))
 
 
 class ModalInverseDiscretizationConnection(DiscretizationConnection):
@@ -231,7 +231,7 @@ class ModalInverseDiscretizationConnection(DiscretizationConnection):
                 """,
                 name="modinv_evaluation_knl")
 
-        result_data = ()
+        result_data = []
         for igrp, grp in enumerate(self.to_discr.groups):
 
             basis_fns = self.from_discr.groups[igrp].orthonormal_basis()
@@ -241,6 +241,6 @@ class ModalInverseDiscretizationConnection(DiscretizationConnection):
             output = actx.call_loopy(keval(),
                                      vdm=vdm,
                                      coefficients=ary[grp.index])
-            result_data += (output['result'],)
+            result_data.append(output['result'])
 
-        return DOFArray(actx, data=result_data)
+        return DOFArray(actx, data=tuple(result_data))
