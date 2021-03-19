@@ -25,6 +25,7 @@ THE SOFTWARE.
 
 import numpy as np
 
+from abc import ABCMeta, abstractproperty, abstractmethod
 from pytools import memoize_method
 from meshmode.array_context import ArrayContext
 
@@ -46,7 +47,7 @@ class NoninterpolatoryElementGroupError(TypeError):
     pass
 
 
-class ElementGroupBase:
+class ElementGroupBase(object, metaclass=ABCMeta):
     """Container for data of any subclass of :class:`DiscretizationBase`
     corresponding to one :class:`meshmode.mesh.MeshElementGroup`.
 
@@ -55,6 +56,8 @@ class ElementGroupBase:
     .. attribute :: index
 
     .. autoattribute:: nelements
+    .. autoattribute:: nunit_dofs
+    .. autoattribute:: ndofs
     .. autoattribute:: dim
 
     .. attribute:: is_affine
@@ -81,9 +84,40 @@ class ElementGroupBase:
     def nelements(self):
         return self.mesh_el_group.nelements
 
+    @abstractproperty
+    def nunit_dofs(self):
+        """The number of degrees of freedom ("DOFs")
+        associated with a single element.
+        """
+
+    @property
+    def ndofs(self):
+        """The total number of degrees of freedom ("DOFs")
+        associated with the element group.
+        """
+        return self.nunit_dofs * self.nelements
+
     @property
     def dim(self):
         return self.mesh_el_group.dim
+
+    @abstractproperty
+    def _shape(self):
+        """The reference element."""
+
+    @abstractproperty
+    def _space(self):
+        """The underlying polynomial space."""
+
+    @abstractmethod
+    def basis(self):
+        """The basis spanning the underlying polynomial space."""
+
+    @abstractmethod
+    def grad_basis(self):
+        """The gradients of the basis functions spanning the
+        underlying polynomial space.
+        """
 
     def __hash__(self):
         return hash((self.__class__,
@@ -99,11 +133,10 @@ class ElementGroupBase:
 
 
 class ModalElementGroupBase(ElementGroupBase):
-    """Container for the :class:`ModalDiscretization` data corresponding to
-    one :class:`meshmode.mesh.MeshElementGroup`.
+    """Container for :class:`meshmode.discretization.modal.ModalDiscretization`
+    data corresponding to one :class:`meshmode.mesh.MeshElementGroup`.
 
     .. autoattribute:: nunit_dofs
-    .. autoattribute:: ndofs
 
     .. method:: orthonormal_basis()
 
@@ -154,13 +187,6 @@ class ModalElementGroupBase(ElementGroupBase):
         """
         return self._space.space_dim
 
-    @property
-    def ndofs(self):
-        """The total number of (modal) degrees of freedom ("DOFs")
-        associated with the element group.
-        """
-        return self.nunit_dofs * self.nelements
-
     basis = orthonormal_basis
     grad_basis = grad_orthonormal_basis
 
@@ -170,8 +196,8 @@ class ModalElementGroupBase(ElementGroupBase):
 # {{{ interpolatory element group base
 
 class NodalElementGroupBase(ElementGroupBase):
-    """Container for the :class:`NodalDiscretization` data corresponding to
-    one :class:`meshmode.mesh.MeshElementGroup`.
+    """Container for :class:`meshmode.discretization.nodal.NodalDiscretization`
+    data corresponding to one :class:`meshmode.mesh.MeshElementGroup`.
 
     .. autoattribute:: nunit_dofs
     .. autoattribute:: ndofs
@@ -194,16 +220,9 @@ class NodalElementGroupBase(ElementGroupBase):
         """
         return self.unit_nodes.shape[-1]
 
-    @property
-    def ndofs(self):
-        """The total number of (nodal) degrees of freedom ("DOFs")
-        associated with the element group.
-        """
-        return self.nunit_dofs * self.nelements
-
-    @property
+    @abstractproperty
     def unit_nodes(self):
-        raise NotImplementedError
+        """The nodal locations defined on the reference element."""
 
     def basis(self):
         raise NoninterpolatoryElementGroupError("'{}' "
