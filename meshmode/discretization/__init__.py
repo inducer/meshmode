@@ -130,69 +130,10 @@ class ElementGroupBase(object, metaclass=ABCMeta):
                 and other.order == self.order
                 and other.index == self.index)
 
-
-class ModalElementGroupBase(ElementGroupBase):
-    """Container for :class:`meshmode.discretization.modal.ModalDiscretization`
-    data corresponding to one :class:`meshmode.mesh.MeshElementGroup`.
-
-    .. autoattribute:: nunit_dofs
-
-    .. method:: orthonormal_basis()
-
-        Returns a :class:`list` of orthonormal basis functions that take
-        arrays of shape ``(dim, n)`` and return an array of shape (n,)``
-        (which performs evaluation of the basis function).
-
-    .. method:: grad_orthonormal_basis()
-
-        Returns a :class:`list` of functions, each of which
-        accepts arrays of shape *(dims, npts)* and returns a
-        :class:`tuple` of length *dims* containing the
-        derivatives of the orthonormal basis along each axis as an
-        array of size *npts*.  'Scalar' evaluation, by passing just one
-        vector of length *dims*, is also supported.
-
-    .. method:: mode_ids()
-
-        Returns a tuple of mode (basis function) identifiers, one for
-        each basis function.
-    """
-
-    @property
-    def is_orthonormal_basis(self):
-        # Modal element groups have orthornomal bases by
-        # definition
-        return True
-
-    @property
-    @memoize_method
-    def _orthonormal_basis(self):
-        import modepy as mp
-        return mp.orthonormal_basis_for_space(self._space, self._shape)
-
-    def orthonormal_basis(self):
-        return self._orthonormal_basis.functions
-
-    def grad_orthonormal_basis(self):
-        return self._orthonormal_basis.gradients
-
-    def mode_ids(self):
-        return self._orthonormal_basis.mode_ids
-
-    @property
-    def nunit_dofs(self):
-        """The number of (modal) degrees of freedom ("DOFs")
-        associated with a single element.
-        """
-        return self._space.space_dim
-
-    basis = orthonormal_basis
-    grad_basis = grad_orthonormal_basis
-
 # }}}
 
 
-# {{{ interpolatory element group base
+# {{{ interpolatory (nodal) element group base
 
 class NodalElementGroupBase(ElementGroupBase):
     """Container for :class:`meshmode.discretization.nodal.NodalDiscretization`
@@ -268,6 +209,71 @@ class InterpolatoryElementGroupBase(NodalElementGroupBase):
 
 # }}}
 
+
+# {{{ modal element group base
+
+class ModalElementGroupBase(ElementGroupBase):
+    """Container for :class:`meshmode.discretization.modal.ModalDiscretization`
+    data corresponding to one :class:`meshmode.mesh.MeshElementGroup`.
+
+    .. autoattribute:: nunit_dofs
+
+    .. method:: orthonormal_basis()
+
+        Returns a :class:`list` of orthonormal basis functions that take
+        arrays of shape ``(dim, n)`` and return an array of shape (n,)``
+        (which performs evaluation of the basis function).
+
+    .. method:: grad_orthonormal_basis()
+
+        Returns a :class:`list` of functions, each of which
+        accepts arrays of shape *(dims, npts)* and returns a
+        :class:`tuple` of length *dims* containing the
+        derivatives of the orthonormal basis along each axis as an
+        array of size *npts*.  'Scalar' evaluation, by passing just one
+        vector of length *dims*, is also supported.
+
+    .. method:: mode_ids()
+
+        Returns a tuple of mode (basis function) identifiers, one for
+        each basis function.
+    """
+
+    @property
+    def is_orthonormal_basis(self):
+        # Modal element groups have orthornomal bases by
+        # definition
+        return True
+
+    @property
+    @memoize_method
+    def _orthonormal_basis(self):
+        import modepy as mp
+        return mp.orthonormal_basis_for_space(self._space, self._shape)
+
+    def orthonormal_basis(self):
+        return self._orthonormal_basis.functions
+
+    def grad_orthonormal_basis(self):
+        return self._orthonormal_basis.gradients
+
+    def mode_ids(self):
+        return self._orthonormal_basis.mode_ids
+
+    @property
+    def nunit_dofs(self):
+        """The number of (modal) degrees of freedom ("DOFs")
+        associated with a single element.
+        """
+        return self._space.space_dim
+
+    basis = orthonormal_basis
+    grad_basis = grad_orthonormal_basis
+
+# }}}
+
+
+# {{{ discretization base
 
 class DiscretizationBase:
     """An unstructured composite discretization base class.
@@ -382,6 +388,8 @@ class DiscretizationBase:
 
     def zeros_like(self, array: _DOFArray):
         return self.zeros(array.array_context, dtype=array.entry_dtype)
+
+# }}}
 
 
 # For backwards compatibility, we need to be sure we export the
