@@ -238,6 +238,52 @@ def test_visualizers(actx_factory, dim, group_cls):
     vis.write_vtk_file(f"{basename}_lagrange.vtu",
             names_and_fields, overwrite=True, use_high_order=True)
 
+
+@pytest.mark.parametrize("ambient_dim", [2, 3])
+def test_copy_visualizer(actx_factory, ambient_dim, visualize=True):
+    actx = actx_factory()
+    target_order = 4
+
+    if ambient_dim == 2:
+        nelements = 128
+        mesh = mgen.make_curve_mesh(
+                partial(mgen.ellipse, 1.0),
+                np.linspace(0.0, 1.0, nelements + 1),
+                target_order)
+    elif ambient_dim == 3:
+        mesh = mgen.generate_icosphere(1.0, target_order,
+                uniform_refinement_rounds=2)
+    else:
+        raise ValueError(f"unsupported dimension: {ambient_dim}")
+
+    from meshmode.mesh.processing import affine_map
+    translated_mesh = affine_map(mesh,
+            b=np.array([2.5, 0.0, 0.0][:ambient_dim])
+            )
+
+    from meshmode.discretization import Discretization
+    discr = Discretization(actx, mesh,
+            PolynomialWarpAndBlendGroupFactory(target_order))
+    translated_discr = Discretization(actx, translated_mesh,
+            PolynomialWarpAndBlendGroupFactory(target_order))
+
+    from meshmode.discretization.visualization import make_visualizer
+    vis = make_visualizer(actx, discr, target_order, force_equidistant=True)
+    assert vis._vtk_connectivity
+    assert vis._vtk_lagrange_connectivity
+
+    translated_vis = vis.copy_with_same_connectivity(actx, translated_discr)
+    assert translated_vis._cached_vtk_connectivity is not None
+    assert translated_vis._cached_vtk_lagrange_connectivity is not None
+
+    if not visualize:
+        return
+
+    vis.write_vtk_file(
+            f"visualizer_copy_{ambient_dim}d_orig.vtu", [])
+    translated_vis.write_vtk_file(
+            f"visualizer_copy_{ambient_dim}d_translated.vtu", [])
+
 # }}}
 
 
