@@ -121,7 +121,6 @@ class ElementGroupBase(object, metaclass=ABCMeta):
 
     def __hash__(self):
         return hash((self.__class__,
-                     self.mesh_el_group,
                      self.order,
                      self.index))
 
