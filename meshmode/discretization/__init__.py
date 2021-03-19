@@ -366,12 +366,14 @@ class Discretization:
                     """,
                 name="nodes")
 
-        def resample_mesh_nodes(grp, iaxis, tol=1.0e-15):
+        def resample_mesh_nodes(grp, iaxis):
             # TODO: would be nice to have the mesh use an array context already
             nodes = actx.from_numpy(grp.mesh_el_group.nodes[iaxis])
 
-            grp_unit_nodes = grp.unit_nodes
-            meg_unit_nodes = grp.mesh_el_group.unit_nodes
+            grp_unit_nodes = grp.unit_nodes.reshape(-1)
+            meg_unit_nodes = grp.mesh_el_group.unit_nodes.reshape(-1)
+
+            tol = 10 * np.finfo(grp_unit_nodes.dtype).eps
             if (grp_unit_nodes.shape == meg_unit_nodes.shape
                     and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
                 return nodes
