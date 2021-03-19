@@ -118,8 +118,8 @@ def make_refinement_connection(actx, refiner, coarse_discr, group_factory):
         :class:`meshmode.mesh.refinement.Refiner`
 
     :arg coarse_discr: An instance of
-        :class:`meshmode.discretization.Discretization` associated
-        with the mesh given to the refiner
+        :class:`meshmode.discretization.nodal.NodalDiscretization`
+        associated with the mesh given to the refiner
 
     :arg group_factory: An instance of
         :class:`meshmode.discretization.poly_element.ElementGroupFactory`. Used

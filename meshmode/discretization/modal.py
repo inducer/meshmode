@@ -31,6 +31,10 @@ from meshmode.discretization.poly_element import (
         ModalSimplexGroupFactory,
         ModalTensorProductGroupFactory)
 
+__doc__ = """
+.. autoclass:: ModalDiscretization
+"""
+
 
 class ModalDiscretization(DiscretizationBase):
     """An unstructured composite modal discretization."""
