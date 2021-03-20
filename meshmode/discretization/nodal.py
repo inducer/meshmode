@@ -74,10 +74,6 @@ class NodalDiscretization(DiscretizationBase):
 
         super().__init__(actx, mesh, group_factory, real_dtype)
 
-    @property
-    def ndofs(self):
-        return sum(grp.ndofs for grp in self.groups)
-
     def num_reference_derivative(self, ref_axes, vec):
         actx = vec.array_context
         ref_axes = list(ref_axes)

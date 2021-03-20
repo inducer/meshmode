@@ -279,11 +279,18 @@ class DiscretizationBase:
     """An unstructured composite discretization base class.
 
     .. attribute:: real_dtype
+
     .. attribute:: complex_dtype
+
     .. attribute:: mesh
+
     .. attribute:: dim
+
     .. attribute:: ambient_dim
-    .. attribute :: groups
+
+    .. attribute:: ndofs
+
+    .. attribute:: groups
 
     .. automethod:: copy
     .. automethod:: empty
@@ -344,6 +351,10 @@ class DiscretizationBase:
     @property
     def ambient_dim(self):
         return self.mesh.ambient_dim
+
+    @property
+    def ndofs(self):
+        return sum(grp.ndofs for grp in self.groups)
 
     def _new_array(self, actx, creation_func, dtype=None):
         if dtype is None:
