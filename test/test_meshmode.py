@@ -783,8 +783,8 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
 
     logger.info("%d elements", mesh.nelements)
 
-    from meshmode.discretization.nodal import NodalDiscretization
-    discr = NodalDiscretization(actx, mesh,
+    from meshmode.discretization import Discretization
+    discr = Discretization(actx, mesh,
             PolynomialWarpAndBlendGroupFactory(3))
 
     from pytential import bind, sym
@@ -910,8 +910,8 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     mg = group_cls(mesh_order, vertex_indices, nodes, dim=dim)
     mesh = Mesh(vertices, [mg], is_conforming=True)
 
-    from meshmode.discretization.nodal import NodalDiscretization
-    vol_discr = NodalDiscretization(actx, mesh, group_factory)
+    from meshmode.discretization import Discretization
+    vol_discr = Discretization(actx, mesh, group_factory)
 
     # {{{ volume calculation check
 
@@ -1050,8 +1050,8 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
 
         # {{{ discretizations and connections
 
-        from meshmode.discretization.nodal import NodalDiscretization
-        vol_discr = NodalDiscretization(actx, mesh,
+        from meshmode.discretization import Discretization
+        vol_discr = Discretization(actx, mesh,
                 InterpolatoryQuadratureSimplexGroupFactory(quad_order))
 
         from meshmode.discretization.connection import make_face_restriction
