@@ -462,6 +462,8 @@ class Visualizer:
     .. automethod:: write_vtk_file
     .. automethod:: write_parallel_vtk_file
     .. automethod:: write_xdmf_file
+
+    .. automethod:: copy_with_same_connectivity
     """
 
     def __init__(self, connection,
@@ -483,6 +485,20 @@ class Visualizer:
         self._cached_vtk_lagrange_connectivity = _vtk_lagrange_connectivity
 
     def copy_with_same_connectivity(self, actx, discr, skip_tests=False):
+        """Makes a copy of the visualizer for a
+        :class:`~meshmode.discretization.Discretization` with the same group
+        structure as the original discretization. This can be useful when the
+        geometry is mapped (e.g. using :func:`~meshmode.mesh.processing.affine_map`)
+        and the connectivity can be reused.
+
+        The *"same group structure"* here means that the two discretizations
+        should have the same group types, number of elements, degrees of
+        freedom, etc.
+
+        :param skip_tests: If *True*, no checks in the group structure of the
+            discretizations are performed.
+        """
+
         if not skip_tests:
             if not _check_discr_same_connectivity(discr, self.discr):
                 raise ValueError("'discr' does not have matching group structures")
