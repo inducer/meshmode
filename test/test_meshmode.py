@@ -276,6 +276,11 @@ def test_copy_visualizer(actx_factory, ambient_dim, visualize=True):
     assert translated_vis._cached_vtk_connectivity is not None
     assert translated_vis._cached_vtk_lagrange_connectivity is not None
 
+    assert translated_vis._vtk_connectivity \
+            is vis._vtk_connectivity
+    assert translated_vis._vtk_lagrange_connectivity \
+            is vis._vtk_lagrange_connectivity
+
     if not visualize:
         return
 
