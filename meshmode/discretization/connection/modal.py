@@ -148,14 +148,15 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
                 """,
                 name="apply_inv_vandermonde_knl")
 
-        # Extract Vandermonde and compute its inverse
-        # TODO: need to figure out how to cache this inverse
-        # Idea: Use element group as a key and create a lookup
-        # dictionary that is memoized in the array context
-        vdm = mp.vandermonde(grp.basis(), grp.unit_nodes)
-        vdm_inv = la.inv(vdm)
-        vdm_inv = actx.from_numpy(vdm_inv)
+        @memoize_in(actx, (NodalToModalDiscretizationConnection, grp))
+        def get_vandermonde_inverse():
+            # Extract Vandermonde and compute its inverse
+            vdm = mp.vandermonde(grp.basis(), grp.unit_nodes)
+            vdm_inv = la.inv(vdm)
+            vdm_inv = actx.from_numpy(vdm_inv)
+            return vdm_inv
 
+        vdm_inv = get_vandermonde_inverse()
         output = actx.call_loopy(vinv_keval(),
                                  vdm_inv=vdm_inv,
                                  nodal_coeffs=ary[grp.index])
