@@ -75,7 +75,7 @@ class _BaseFakeNumpyNamespace:
         self.linalg = self._get_fake_numpy_linalg_namespace()
 
     def _get_fake_numpy_linalg_namespace(self):
-        return _BaseFakeNumpyLinalgNamespace(self.array_context)
+        return _BaseFakeNumpyLinalgNamespace(self._array_context)
 
     _numpy_math_functions = frozenset({
         # https://numpy.org/doc/stable/reference/routines.math.html
