@@ -220,6 +220,92 @@ def test_quadrature_based_modal_connection_reverse(actx_factory, quad_group_fact
     assert err <= 1e-11
 
 
+@pytest.mark.parametrize("nodal_group_factory", [
+    InterpolatoryQuadratureSimplexGroupFactory,
+    PolynomialWarpAndBlendGroupFactory,
+    LegendreGaussLobattoTensorProductGroupFactory,
+    ])
+@pytest.mark.parametrize(("dim", "mesh_pars"), [
+    (2, [10, 20, 30]),
+    (3, [10, 20, 30]),
+    ])
+def test_modal_truncation(actx_factory, nodal_group_factory,
+                          dim, mesh_pars):
+
+    if nodal_group_factory is LegendreGaussLobattoTensorProductGroupFactory:
+        group_cls = TensorProductElementGroup
+        modal_group_factory = ModalTensorProductGroupFactory
+    else:
+        group_cls = SimplexElementGroup
+        modal_group_factory = ModalSimplexGroupFactory
+
+    actx = actx_factory()
+    order = 5
+    truncated_order = 3
+
+    from pytools.convergence import EOCRecorder
+    eoc_rec = EOCRecorder()
+
+    def f(x):
+        return actx.np.sin(2*x)
+
+    for mesh_par in mesh_pars:
+
+        # Make the mesh
+        mesh = mgen.generate_warped_rect_mesh(dim, order=order, n=mesh_par,
+                                              group_cls=group_cls)
+        h = 1/mesh_par
+
+        # Make discretizations
+        nodal_disc = NodalDiscretization(actx, mesh, nodal_group_factory(order))
+        modal_disc = ModalDiscretization(actx, mesh, modal_group_factory(order))
+
+        # Make connections (nodal -> modal)
+        nodal_to_modal_conn = NodalToModalDiscretizationConnection(
+            nodal_disc, modal_disc
+        )
+
+        # And the reverse connection (modal -> nodal)
+        modal_to_nodal_conn = ModalToNodalDiscretizationConnection(
+            modal_disc, nodal_disc
+        )
+
+        x_nodal = thaw(actx, nodal_disc.nodes()[0])
+        nodal_f = f(x_nodal)
+
+        # Map to modal
+        modal_f = nodal_to_modal_conn(nodal_f)
+
+        # Now we compute the basis function indices corresonding
+        # to modes > truncated_order
+        mgrp, = modal_disc.groups
+        truncation_matrix = np.identity(len(mgrp.mode_ids()))
+        for mode_idx, mode_id in enumerate(mgrp.mode_ids()):
+            if sum(mode_id) > truncated_order:
+                truncation_matrix[mode_idx, mode_idx] = 0
+
+        # Zero out the modal coefficients corresponding to
+        # the targeted modes.
+        modal_f_data = actx.to_numpy(modal_f[0])
+        num_elem, _ = modal_f_data.shape
+        for el_idx in range(num_elem):
+            modal_f_data[el_idx] = np.dot(truncation_matrix,
+                                          modal_f_data[el_idx])
+
+        modal_f_data = actx.from_numpy(modal_f_data)
+        modal_f_truncated = DOFArray(actx, data=(modal_f_data,))
+
+        # Now map truncated modal coefficients back to nodal
+        nodal_f_truncated = modal_to_nodal_conn(modal_f_truncated)
+
+        err = actx.np.linalg.norm(nodal_f - nodal_f_truncated)
+        eoc_rec.add_data_point(h, err)
+        threshold_lower = 0.8*truncated_order
+        threshold_upper = 1.2*truncated_order
+
+    assert threshold_upper >= eoc_rec.order_estimate() >= threshold_lower
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
