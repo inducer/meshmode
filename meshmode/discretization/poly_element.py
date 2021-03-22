@@ -128,8 +128,10 @@ class ModalSimplexElementGroup(ModalElementGroupBase):
     def _space(self):
         return mp.PN(self.dim, self.order)
 
-# {{{ concrete element groups for nodal simplices
+# }}}
 
+
+# {{{ concrete element groups for nodal simplices
 
 class SimplexElementGroupBase(NodalElementGroupBase):
     @property
@@ -676,6 +678,5 @@ class LegendreGaussLobattoTensorProductGroupFactory(
 # }}}
 
 # }}}
-
 
 # vim: fdm=marker
