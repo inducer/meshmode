@@ -118,16 +118,6 @@ class ElementGroupBase(object, metaclass=ABCMeta):
         """
         pass
 
-    def __hash__(self):
-        return hash((self.__class__,
-                     self.order,
-                     self.index))
-
-    def __eq__(self, other):
-        return (other.__class__ == self.__class__
-                and other.mesh_el_group == self.mesh_el_group
-                and other.order == self.order
-                and other.index == self.index)
 
 # }}}
 
