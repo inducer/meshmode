@@ -35,7 +35,7 @@ from meshmode.discretization.connection.direct import DiscretizationConnection
 from meshmode.discretization.modal import ModalDiscretization
 from meshmode.discretization.nodal import NodalDiscretization
 
-from pytools import memoize_in
+from pytools import memoize_in, keyed_memoize_in
 from pytools.obj_array import obj_array_vectorized_n_args
 
 
@@ -320,7 +320,7 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
         # Evaluates the action of the Vandermonde matrix on the
         # vector of modal coefficeints to obtain nodal values
         @memoize_in(actx, (ModalToNodalDiscretizationConnection,
-                           "modinv_evaluation_knl"))
+                           "evaluation_knl"))
         def keval():
             return make_loopy_program([
                 "{[iel]: 0 <= iel < nelements}",
@@ -334,15 +334,20 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
                 """,
                 name="modinv_evaluation_knl")
 
+        @keyed_memoize_in(actx, (ModalToNodalDiscretizationConnection, "matrix"),
+                           lambda to_grp, from_grp: (
+                               to_grp.discretization_key(),
+                               from_grp.discretization_key(),
+                               ))
+        def matrix(to_grp, from_grp):
+            basis_fns = from_grp.orthonormal_basis()
+            vdm = mp.vandermonde(basis_fns, to_grp.unit_nodes)
+            return actx.from_numpy(vdm)
+
         result_data = []
         for igrp, grp in enumerate(self.to_discr.groups):
-
-            basis_fns = self.from_discr.groups[igrp].orthonormal_basis()
-            vdm = mp.vandermonde(basis_fns, grp.unit_nodes)
-            vdm = actx.from_numpy(vdm)
-
             output = actx.call_loopy(keval(),
-                                     vdm=vdm,
+                                     vdm=matrix(grp, self.from_discr.groups[igrp]),
                                      coefficients=ary[grp.index])
             result_data.append(output["result"])
 
