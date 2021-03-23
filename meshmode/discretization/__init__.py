@@ -133,7 +133,7 @@ class ElementGroupBase(object, metaclass=ABCMeta):
 # }}}
 
 
-# {{{ interpolatory (nodal) element group base
+# {{{ Nodal element group base
 
 class NodalElementGroupBase(ElementGroupBase):
     """Container for :class:`meshmode.discretization.nodal.NodalDiscretization`
