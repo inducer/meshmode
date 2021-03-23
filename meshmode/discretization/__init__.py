@@ -65,6 +65,8 @@ class ElementGroupBase(object, metaclass=ABCMeta):
         A :class:`bool` flag that is *True* if the local-to-global
         parametrization of all the elements in the group is affine. Based on
         :attr:`meshmode.mesh.MeshElementGroup.is_affine`.
+
+    .. automethod:: discretization_key
     """
 
     def __init__(self, mesh_el_group, order, index):
@@ -119,6 +121,19 @@ class ElementGroupBase(object, metaclass=ABCMeta):
         underlying polynomial space.
         """
 
+    def discretization_key(self):
+        """Return a hashable, equality-comparable object that fully describes
+        the per-element discretization used by this element group. (This
+        should cover all parts of the
+        `Ciarlet Triple <https://finite-element.github.io/L2_fespaces.html>`__:
+        reference element, shape functions, and the linear functionals defining
+        the degrees of freedom.) The object should be independent, however, of
+        the (global) elements that make up the group.
+
+        The structure of the element is not specified, but it must be globally
+        unique to this element group.
+        """
+        return (type(self), self.order)
 
 # }}}
 

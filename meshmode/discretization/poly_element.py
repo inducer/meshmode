@@ -338,6 +338,9 @@ class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
         assert dim2 == dim
         return result
 
+    def discretization_key(self):
+        return (type(self), self.order, self.family)
+
 
 class PolynomialEquidistantSimplexElementGroup(_MassMatrixQuadratureElementGroup):
     """Elemental discretization with a number of nodes matching the number of
@@ -386,6 +389,13 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
                     "node count for provided order")
 
         return self._unit_nodes
+
+    def discretization_key(self):
+        # FIXME?
+        # The unit_nodes numpy array isn't hashable, and comparisons would
+        # be pretty expensive.
+        raise NotImplementedError("PolynomialGivenNodesElementGroup does not "
+                "implement discretization_key")
 
 # }}}
 
@@ -481,6 +491,13 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
                 self.mass_matrix(),
                 np.ones(len(self.basis())))
 
+    def discretization_key(self):
+        # FIXME?
+        # The unit_nodes numpy array isn't hashable, and comparisons would
+        # be pretty expensive.
+        raise NotImplementedError("TensorProductElementGroup does not "
+                "implement discretization_key")
+
 
 class LegendreTensorProductElementGroup(TensorProductElementGroupBase):
     def __init__(self, mesh_el_group, order, index, *, unit_nodes):
@@ -512,6 +529,9 @@ class GaussLegendreTensorProductElementGroup(LegendreTensorProductElementGroup):
     def weights(self):
         return self._quadrature_rule.weights
 
+    def discretization_key(self):
+        return (type(self), self.order)
+
 
 class LegendreGaussLobattoTensorProductElementGroup(
         LegendreTensorProductElementGroup):
@@ -532,6 +552,9 @@ class LegendreGaussLobattoTensorProductElementGroup(
                     [unit_nodes_1d] * mesh_el_group.dim)
                 )
 
+    def discretization_key(self):
+        return (type(self), self.order)
+
 
 class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
     """Elemental discretization supplying a high-order quadrature rule
@@ -550,6 +573,9 @@ class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
                 unit_nodes=mp.tensor_product_nodes(
                     [unit_nodes_1d] * mesh_el_group.dim)
                 )
+
+    def discretization_key(self):
+        return (type(self), self.order)
 
 # }}}
 
