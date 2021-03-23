@@ -25,7 +25,6 @@ THE SOFTWARE.
 
 
 import numpy as np
-#import numpy.linalg as la
 from pytools import memoize_method
 from meshmode.mesh import (
         SimplexElementGroup as _MeshSimplexElementGroup,
@@ -79,12 +78,9 @@ Group factories
 """
 
 
-# {{{ base class for nodal poynomial elements
+# {{{ base class for interpolatory poynomial elements
 
 class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
-    def is_orthogonal_basis(self):
-        raise NotImplementedError
-
     @memoize_method
     def mass_matrix(self):
         assert self.is_orthogonal_basis()
@@ -120,26 +116,28 @@ class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
 class ModalSimplexElementGroup(ModalElementGroupBase):
     @property
     @memoize_method
-    def _shape(self):
+    def shape(self):
         return mp.Simplex(self.dim)
 
     @property
     @memoize_method
-    def _space(self):
+    def space(self):
         return mp.PN(self.dim, self.order)
 
-# {{{ concrete element groups for nodal simplices
+# }}}
 
+
+# {{{ concrete element groups for nodal and interpolatory simplices
 
 class SimplexElementGroupBase(NodalElementGroupBase):
     @property
     @memoize_method
-    def _shape(self):
+    def shape(self):
         return mp.Simplex(self.dim)
 
     @property
     @memoize_method
-    def _space(self):
+    def space(self):
         return mp.PN(self.dim, self.order)
 
     @memoize_method
@@ -147,7 +145,7 @@ class SimplexElementGroupBase(NodalElementGroupBase):
         meg = self.mesh_el_group
         meg_space = mp.PN(meg.dim, meg.order)
         return mp.resampling_matrix(
-                mp.basis_for_space(meg_space, self._shape).functions,
+                mp.basis_for_space(meg_space, self.shape).functions,
                 self.unit_nodes,
                 meg.unit_nodes)
 
@@ -160,7 +158,7 @@ class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase,
     @property
     @memoize_method
     def _basis(self):
-        return mp.basis_for_space(self._space, self._shape)
+        return mp.basis_for_space(self.space, self.shape)
 
     def basis(self):
         return self._basis.functions
@@ -393,12 +391,12 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
 class ModalTensorProductElementGroup(ModalElementGroupBase):
     @property
     @memoize_method
-    def _shape(self):
+    def shape(self):
         return mp.Hypercube(self.dim)
 
     @property
     @memoize_method
-    def _space(self):
+    def space(self):
         return mp.QN(self.dim, self.order)
 
 # }}}
@@ -409,12 +407,12 @@ class ModalTensorProductElementGroup(ModalElementGroupBase):
 class HypercubeElementGroupBase(NodalElementGroupBase):
     @property
     @memoize_method
-    def _shape(self):
+    def shape(self):
         return mp.Hypercube(self.dim)
 
     @property
     @memoize_method
-    def _space(self):
+    def space(self):
         return mp.QN(self.dim, self.order)
 
     @memoize_method
@@ -422,7 +420,7 @@ class HypercubeElementGroupBase(NodalElementGroupBase):
         meg = self.mesh_el_group
         meg_space = mp.QN(meg.dim, meg.order)
         return mp.resampling_matrix(
-                mp.basis_for_space(meg_space, self._shape).functions,
+                mp.basis_for_space(meg_space, self.shape).functions,
                 self.unit_nodes,
                 meg.unit_nodes)
 

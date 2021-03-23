@@ -51,7 +51,13 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
     .. attribute:: from_discr
 
+        an instance of
+            :class:`meshmode.discretization.nodal.NodalDiscretization`
+
     .. attribute:: to_discr
+
+        an instance of
+            :class:`meshmode.discretization.modal.ModalDiscretization`
 
     .. attribute:: groups
 
@@ -97,9 +103,9 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
     def _project_via_quadrature(self, actx, ary, grp, mgrp):
 
-        if not mgrp.is_orthonormal_basis:
-            raise ValueError("An orthonormal basis is required to "
-                             "perform a quadrature-based projection.")
+        # Extract orthonormal basis to compute modal coefficients
+        # via quadrature
+        basis = mgrp.orthonormal_basis()
 
         # Handle the case with non-interpolatory element groups or
         # quadrature-based element groups
@@ -118,7 +124,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
                 """,
                 name="apply_quadrature_proj_knl")
 
-        vdm = mp.vandermonde(mgrp.basis(), grp.unit_nodes)
+        vdm = mp.vandermonde(basis, grp.unit_nodes)
         w_diag = np.diag(grp.weights)
         vtw = np.dot(vdm.T, w_diag)
         vtw = actx.from_numpy(vtw)
@@ -255,7 +261,13 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
 
     .. attribute:: from_discr
 
+        an instance of
+            :class:`meshmode.discretization.modal.ModalDiscretization`
+
     .. attribute:: to_discr
+
+        an instance of
+            :class:`meshmode.discretization.nodal.NodalDiscretization`
 
     .. attribute:: groups
 

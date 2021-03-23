@@ -59,12 +59,9 @@ class ElementGroupBase(object, metaclass=ABCMeta):
     .. autoattribute:: nunit_dofs
     .. autoattribute:: ndofs
     .. autoattribute:: dim
-
-    .. attribute:: is_affine
-
-        A :class:`bool` flag that is *True* if the local-to-global
-        parametrization of all the elements in the group is affine. Based on
-        :attr:`meshmode.mesh.MeshElementGroup.is_affine`.
+    .. autoattribute:: shape
+    .. autoattribute:: space
+    .. autoattribute:: is_affine
     """
 
     def __init__(self, mesh_el_group, order, index):
@@ -78,6 +75,10 @@ class ElementGroupBase(object, metaclass=ABCMeta):
 
     @property
     def is_affine(self):
+        """Returns a :class:`bool` flag that is *True* if the local-to-global
+        parametrization of all the elements in the group is affine. Based on
+        :attr:`meshmode.mesh.MeshElementGroup.is_affine`.
+        """
         return self.mesh_el_group.is_affine
 
     @property
@@ -89,6 +90,7 @@ class ElementGroupBase(object, metaclass=ABCMeta):
         """The number of degrees of freedom ("DOFs")
         associated with a single element.
         """
+        pass
 
     @property
     def ndofs(self):
@@ -102,22 +104,19 @@ class ElementGroupBase(object, metaclass=ABCMeta):
         return self.mesh_el_group.dim
 
     @abstractproperty
-    def _shape(self):
-        """The reference element."""
+    def shape(self):
+        """Returns a subclass of :class:`modepy.Shape` representing
+        the reference element defining the finite element group.
+        """
+        pass
 
     @abstractproperty
-    def _space(self):
-        """The underlying polynomial space."""
-
-    @abstractmethod
-    def basis(self):
-        """The basis spanning the underlying polynomial space."""
-
-    @abstractmethod
-    def grad_basis(self):
-        """The gradients of the basis functions spanning the
-        underlying polynomial space.
+    def space(self):
+        """Returns a :class:`modepy.FunctionSpace` representing
+        the underlying polynomial space defined on the element
+        group's reference element.
         """
+        pass
 
     def __hash__(self):
         return hash((self.__class__,
@@ -140,17 +139,8 @@ class NodalElementGroupBase(ElementGroupBase):
     data corresponding to one :class:`meshmode.mesh.MeshElementGroup`.
 
     .. autoattribute:: nunit_dofs
-    .. autoattribute:: ndofs
-
-    .. attribute:: unit_nodes
-
-        Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
-        of reference coordinates of interpolation nodes.
-
-    .. attribute:: weights
-
-        Returns an array of length :attr:`nunit_dofs` containing
-        quadrature weights.
+    .. autoattribute:: unit_nodes
+    .. autoattribute:: weights
     """
 
     @property
@@ -162,50 +152,73 @@ class NodalElementGroupBase(ElementGroupBase):
 
     @abstractproperty
     def unit_nodes(self):
-        """The nodal locations defined on the reference element."""
+        """Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
+        of reference coordinates of interpolation nodes.
+        """
+        pass
 
-    def basis(self):
-        raise NoninterpolatoryElementGroupError("'{}' "
-                "is not equipped with a unisolvent function space "
-                "and therefore cannot be used for interpolation"
-                .format(self.__class__.__name__))
-
-    grad_basis = basis
-    diff_matrices = basis
+    @abstractproperty
+    def weights(self):
+        """Returns a :class:`numpy.ndarray` of shape ``(nunit_dofs,)``
+        containing quadrature weights.
+        """
+        pass
 
 
 class InterpolatoryElementGroupBase(NodalElementGroupBase):
     """A subclass of :class:`NodalElementGroupBase` that is equipped with a
     function space.
 
-    .. method:: mode_ids()
+    .. automethod:: mode_ids
+    .. automethod:: basis
+    .. automethod:: is_orthogonal_basis
+    .. automethod:: grad_basis
+    .. automethod:: diff_matrices
+    """
 
-        Return an immutable sequence of opaque (hashable) mode identifiers,
+    @abstractmethod
+    def mode_ids(self):
+        """Return an immutable sequence of opaque (hashable) mode identifiers,
         one per element of the :meth:`basis`. The meaning of the mode
         identifiers is defined by the concrete element group.
+        """
+        pass
 
-    .. method:: basis()
-
-        Returns a :class:`list` of basis functions that take arrays
-        of shape ``(dim, n)`` and return an array of shape (n,)``
+    @abstractmethod
+    def basis(self):
+        """Returns a :class:`list` of basis functions that take arrays
+        of shape ``(dim, npts)`` and return an array of shape (npts,)``
         (which performs evaluation of the basis function).
+        """
+        pass
 
-    .. method:: grad_basis()
+    @abstractmethod
+    def is_orthogonal_basis(self):
+        """Returns a :class:`bool` flag that is *True* if the
+        basis corresponding to the element group is orthogonal
+        with respect to the :math:`L^2` inner-product.
+        """
+        pass
 
-        :returns: a :class:`tuple` of functions, each of which
-            accepts arrays of shape *(dims, npts)* and returns a
-            :class:`tuple` of length *dims* containing the
-            derivatives along each axis as an array of size
-            *npts*.  'Scalar' evaluation, by passing just one
-            vector of length *dims*, is also supported.
+    @abstractmethod
+    def grad_basis(self):
+        """Returns a :class:`tuple` of functions, each of which
+        accepts arrays of shape *(dims, npts)* and returns a
+        :class:`tuple` of length *dims* containing the
+        derivatives along each axis as an array of size
+        *npts*.  'Scalar' evaluation, by passing just one
+        vector of length *dims*, is also supported.
+        """
+        pass
 
-    .. method:: diff_matrices()
-
-        Return a :attr:`~ElementGroupBase.dim`-long :class:`tuple` of matrices of
-        shape ``(nunit_nodes, nunit_nodes)``, each of which,
+    @abstractmethod
+    def diff_matrices(self):
+        """Return a :attr:`~ElementGroupBase.dim`-long :class:`tuple` of
+        matrices of shape ``(nunit_nodes, nunit_nodes)``, each of which,
         when applied to an array of nodal values, take derivatives
         in the reference (r,s,t) directions.
-    """
+        """
+        pass
 
 # }}}
 
@@ -214,61 +227,56 @@ class InterpolatoryElementGroupBase(NodalElementGroupBase):
 
 class ModalElementGroupBase(ElementGroupBase):
     """Container for :class:`meshmode.discretization.modal.ModalDiscretization`
-    data corresponding to one :class:`meshmode.mesh.MeshElementGroup`.
+    data corresponding to one :class:`meshmode.mesh.MeshElementGroup`. This
+    is a subclass of :class:`ElementGroupBase`, equipped with a function space
+    and a hierarchical basis that is orthonormal with respect to the
+    :math:`L^2` inner product.
 
     .. autoattribute:: nunit_dofs
 
-    .. method:: orthonormal_basis()
-
-        Returns a :class:`list` of orthonormal basis functions that take
-        arrays of shape ``(dim, n)`` and return an array of shape (n,)``
-        (which performs evaluation of the basis function).
-
-    .. method:: grad_orthonormal_basis()
-
-        Returns a :class:`list` of functions, each of which
-        accepts arrays of shape *(dims, npts)* and returns a
-        :class:`tuple` of length *dims* containing the
-        derivatives of the orthonormal basis along each axis as an
-        array of size *npts*.  'Scalar' evaluation, by passing just one
-        vector of length *dims*, is also supported.
-
-    .. method:: mode_ids()
-
-        Returns a tuple of mode (basis function) identifiers, one for
-        each basis function.
+    .. automethod:: mode_ids
+    .. automethod:: orthonormal_basis
+    .. automethod:: grad_orthonormal_basis
     """
-
-    @property
-    def is_orthonormal_basis(self):
-        # Modal element groups have orthornomal bases by
-        # definition
-        return True
-
-    @property
-    @memoize_method
-    def _orthonormal_basis(self):
-        import modepy as mp
-        return mp.orthonormal_basis_for_space(self._space, self._shape)
-
-    def orthonormal_basis(self):
-        return self._orthonormal_basis.functions
-
-    def grad_orthonormal_basis(self):
-        return self._orthonormal_basis.gradients
-
-    def mode_ids(self):
-        return self._orthonormal_basis.mode_ids
 
     @property
     def nunit_dofs(self):
         """The number of (modal) degrees of freedom ("DOFs")
         associated with a single element.
         """
-        return self._space.space_dim
+        return self.space.space_dim
 
-    basis = orthonormal_basis
-    grad_basis = grad_orthonormal_basis
+    @property
+    @memoize_method
+    def _orthonormal_basis(self):
+        import modepy as mp
+        return mp.orthonormal_basis_for_space(self.space,
+                                              self.shape)
+
+    def mode_ids(self):
+        """Return an immutable sequence of opaque (hashable) mode identifiers,
+        one per element of the :meth:`orthonormal_basis`. The meaning of
+        the mode identifiers is defined by the concrete element group.
+        """
+        return self._orthonormal_basis.mode_ids
+
+    def orthonormal_basis(self):
+        """Returns a :class:`list` of orthonormal basis functions that
+        take arrays of shape ``(dim, npts)`` and return an array
+        of shape ``(npts,)`` (which performs evaluation of the basis function).
+        """
+        return self._orthonormal_basis.functions
+
+    def grad_orthonormal_basis(self):
+        """Returns a :class:`tuple` of functions, each of which
+        accepts arrays of shape *(dims, npts)* and returns a
+        :class:`tuple` of length *dims* containing the
+        derivatives along each axis as an array of size
+        *npts*.  'Scalar' evaluation, by passing just one
+        vector of length *dims*, is also supported.
+        """
+        return self._orthonormal_basis.gradients
+
 
 # }}}
 
@@ -279,17 +287,11 @@ class DiscretizationBase:
     """An unstructured composite discretization base class.
 
     .. attribute:: real_dtype
-
     .. attribute:: complex_dtype
-
     .. attribute:: mesh
-
     .. attribute:: dim
-
     .. attribute:: ambient_dim
-
     .. attribute:: ndofs
-
     .. attribute:: groups
 
     .. automethod:: copy
