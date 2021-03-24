@@ -23,7 +23,7 @@ THE SOFTWARE.
 
 import numpy as np
 #import numpy.linalg as la
-from pytools import memoize_method, memoize
+from pytools import memoize_method
 from meshmode.mesh import (
         SimplexElementGroup as _MeshSimplexElementGroup,
         TensorProductElementGroup as _MeshTensorProductElementGroup)
@@ -234,11 +234,6 @@ class _MassMatrixQuadratureElementGroup(PolynomialSimplexElementGroupBase):
                 np.ones(len(self.basis())))
 
 
-@memoize
-def _warp_and_blend_nodes(dim, order):
-    return mp.warp_and_blend_nodes(dim, order)
-
-
 class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
     """Elemental discretization with a number of nodes matching the number of
     polynomials in :math:`P^k`, hence usable for differentiation and
@@ -256,10 +251,10 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
     def unit_nodes(self):
         dim = self.mesh_el_group.dim
         if self.order == 0:
-            result = _warp_and_blend_nodes(dim, 1)
+            result = mp.warp_and_blend_nodes(dim, 1)
             result = np.mean(result, axis=1).reshape(-1, 1)
         else:
-            result = _warp_and_blend_nodes(dim, self.order)
+            result = mp.warp_and_blend_nodes(dim, self.order)
 
         dim2, _ = result.shape
         assert dim2 == dim
