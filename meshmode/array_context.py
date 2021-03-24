@@ -152,10 +152,6 @@ class _BaseFakeNumpyNamespace:
             result = actx.empty(args[0].shape, args[0].dtype)
             prg = actx._get_scalar_func_loopy_program(
                     c_name, nargs=len(args), naxes=len(args[0].shape))
-            # FIXME: Specifying shape breaks some tests
-            #prg = actx._get_scalar_func_loopy_program(
-            #        c_name, nargs=len(args), naxes=len(args[0].shape),
-            #        shape=args[0].shape)
             actx.call_loopy(prg, out=result,
                     **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result
@@ -272,7 +268,7 @@ class ArrayContext:
         raise NotImplementedError
 
     @memoize_method
-    def _get_scalar_func_loopy_program(self, c_name, nargs, naxes, shape=None):
+    def _get_scalar_func_loopy_program(self, c_name, nargs, naxes):
         from pymbolic import var
 
         var_names = ["i%d" % i for i in range(naxes)]
@@ -295,10 +291,6 @@ class ArrayContext:
                             var("inp%d" % i)[subscript] for i in range(nargs)]))
                     ],
                 name="actx_special_%s" % c_name)
-
-        if shape is not None:
-            prog = lp.fix_parameters(prog,
-                    **{"n%d" % i: val for i, val in enumerate(shape)})
 
         for arg in prog.args:
             if isinstance(arg, lp.ArrayArg):
