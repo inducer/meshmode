@@ -103,10 +103,6 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
     def _project_via_quadrature(self, actx, ary, grp, mgrp):
 
-        # Extract orthonormal basis to compute modal coefficients
-        # via quadrature
-        basis = mgrp.orthonormal_basis()
-
         # Handle the case with non-interpolatory element groups or
         # quadrature-based element groups
         @memoize_in(actx, (NodalToModalDiscretizationConnection,
@@ -124,14 +120,22 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
                 """,
                 name="apply_quadrature_proj_knl")
 
-        vdm = mp.vandermonde(basis, grp.unit_nodes)
-        w_diag = np.diag(grp.weights)
-        vtw = np.dot(vdm.T, w_diag)
-        vtw = actx.from_numpy(vtw)
+        @keyed_memoize_in(actx, (NodalToModalDiscretizationConnection,
+                                 "quadrature_matrix"),
+                                lambda grp, mgrp: (
+                                    grp.discretization_key(),
+                                    mgrp.discretization_key(),
+                                    ))
+        def quadrature_matrix(grp, mgrp):
+            vdm = mp.vandermonde(mgrp.orthonormal_basis(),
+                                 grp.unit_nodes)
+            w_diag = np.diag(grp.weights)
+            vtw = np.dot(vdm.T, w_diag)
+            return actx.from_numpy(vtw)
 
         output = actx.call_loopy(quad_proj_keval(),
                                  nodal_coeffs=ary[grp.index],
-                                 vtw=vtw)
+                                 vtw=quadrature_matrix(grp, mgrp))
 
         return output
 
@@ -154,17 +158,16 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
                 """,
                 name="apply_inv_vandermonde_knl")
 
-        @memoize_in(actx, (NodalToModalDiscretizationConnection, grp))
-        def get_vandermonde_inverse():
-            # Extract Vandermonde and compute its inverse
+        @keyed_memoize_in(actx, (NodalToModalDiscretizationConnection,
+                                 "vandermonde_inverse"),
+                          lambda grp: grp.discretization_key())
+        def vandermonde_inverse(grp):
             vdm = mp.vandermonde(grp.basis(), grp.unit_nodes)
             vdm_inv = la.inv(vdm)
-            vdm_inv = actx.from_numpy(vdm_inv)
-            return vdm_inv
+            return actx.from_numpy(vdm_inv)
 
-        vdm_inv = get_vandermonde_inverse()
         output = actx.call_loopy(vinv_keval(),
-                                 vdm_inv=vdm_inv,
+                                 vdm_inv=vandermonde_inverse(grp),
                                  nodal_coeffs=ary[grp.index])
 
         return output
@@ -344,7 +347,7 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
                                             vdm[idof, ibasis]
                                             * coefficients[iel, ibasis])
                 """,
-                name="modinv_evaluation_knl")
+                name="modal_to_nodal_evaluation_knl")
 
         @keyed_memoize_in(actx, (ModalToNodalDiscretizationConnection, "matrix"),
                            lambda to_grp, from_grp: (
