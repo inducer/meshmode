@@ -309,8 +309,8 @@ def vtk_visualize_mesh(actx, mesh, filename, vtk_high_order=True):
 
     from meshmode.discretization.poly_element import \
             PolynomialWarpAndBlendGroupFactory
-    from meshmode.discretization.nodal import NodalDiscretization as NDiscr
-    discr = NDiscr(actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+    from meshmode.discretization import Discretization
+    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, order, force_equidistant=vtk_high_order)

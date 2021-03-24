@@ -110,8 +110,8 @@ class DiscretizationConnectionElementGroup:
 # {{{ connection classes
 
 class DiscretizationConnection:
-    """Abstract interface for transporting a DOF vector from one subclass
-    of :class:`meshmode.discretization.DiscretizationBase` to another.
+    """Abstract interface for transporting a DOF vector from one
+    :class:`meshmode.discretization.Discretization` to another.
     Possible applications include:
 
     *   upsampling/downsampling on the same mesh

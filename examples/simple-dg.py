@@ -59,11 +59,11 @@ class DGDiscretization:
     def __init__(self, actx, mesh, order):
         self.order = order
 
-        from meshmode.discretization.nodal import NodalDiscretization
+        from meshmode.discretization import Discretization
         from meshmode.discretization.poly_element import \
                 PolynomialWarpAndBlendGroupFactory
         self.group_factory = PolynomialWarpAndBlendGroupFactory(order=order)
-        self.volume_discr = NodalDiscretization(actx, mesh, self.group_factory)
+        self.volume_discr = Discretization(actx, mesh, self.group_factory)
 
         assert self.volume_discr.dim == 2
 

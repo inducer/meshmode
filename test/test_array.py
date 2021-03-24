@@ -27,7 +27,7 @@ from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
-from meshmode.discretization.nodal import NodalDiscretization
+from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import PolynomialWarpAndBlendGroupFactory
 from meshmode.dof_array import flatten, unflatten, DOFArray
 
@@ -44,7 +44,7 @@ def test_array_context_np_workalike(actx_factory):
     mesh = generate_regular_rect_mesh(
             a=(-0.5,)*2, b=(0.5,)*2, n=(8,)*2, order=3)
 
-    discr = NodalDiscretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
+    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
 
     for sym_name, n_args in [
             ("sin", 1),
@@ -88,7 +88,7 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
     mesh = generate_regular_rect_mesh(
             a=(-0.5,)*2, b=(0.5,)*2, n=(3,)*2, order=1)
 
-    discr = NodalDiscretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
+    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
 
     def get_real(ary):
         return ary.real

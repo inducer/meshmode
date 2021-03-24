@@ -42,8 +42,8 @@ from meshmode.discretization.poly_element import (
     PolynomialWarpAndBlendGroupFactory,
     PolynomialRecursiveNodesGroupFactory,
     ElementGroupFactory)
-from meshmode.discretization import InterpolatoryElementGroupBase
-from meshmode.discretization.nodal import NodalDiscretization
+from meshmode.discretization import (
+    Discretization, InterpolatoryElementGroupBase)
 
 from pytools import memoize_method
 
@@ -96,7 +96,7 @@ class FiredrakeConnection:
 
     .. attribute:: discr
 
-        A :class:`meshmode.discretization.nodal.NodalDiscretization`.
+        A :class:`meshmode.discretization.Discretization`.
 
     .. attribute:: group_nr
 
@@ -135,7 +135,7 @@ class FiredrakeConnection:
     """
     def __init__(self, discr, fdrake_fspace, mm2fd_node_mapping, group_nr=None):
         """
-        :param discr: A :class:`meshmode.discretization.nodal.NodalDiscretization`
+        :param discr: A :class:`meshmode.discretization.Discretization`
         :param fdrake_fspace: A
             :class:`firedrake.functionspaceimpl.WithGeometry`.
             Must use ufl family ``"Discontinuous Lagrange"``.
@@ -157,9 +157,9 @@ class FiredrakeConnection:
             if *group_nr* is *None* when *discr* has more than one group.
         """
         # {{{ Validate input
-        if not isinstance(discr, NodalDiscretization):
+        if not isinstance(discr, Discretization):
             raise TypeError("'discr' must be of type "
-                            "meshmode.discretization.nodal.NodalDiscretization, "
+                            "meshmode.discretization.Discretization, "
                             "not '%s'`." % type(discr))
         from firedrake.functionspaceimpl import WithGeometry
         if not isinstance(fdrake_fspace, WithGeometry):
@@ -639,7 +639,7 @@ PolynomialWarpAndBlendGroupFactory` is used.
           to :class:`~meshmode.mesh.BTAG_ALL`).
 
         If not *None*, creates a
-        :class:`~meshmode.discretization.nodal.NodalDiscretization` on a submesh
+        :class:`~meshmode.discretization.Discretization` on a submesh
         of ``fdrake_fspace.mesh()`` created from the cells with at least
         one vertex on a facet marked with the marker
         *restrict_to_boundary*.
@@ -726,7 +726,7 @@ PolynomialWarpAndBlendGroupFactory` is used.
     # Create to_discr
     mm_mesh, orient = import_firedrake_mesh(fdrake_fspace.mesh(),
                                             cells_to_use=cells_to_use)
-    to_discr = NodalDiscretization(actx, mm_mesh, grp_factory)
+    to_discr = Discretization(actx, mm_mesh, grp_factory)
 
     # get firedrake unit nodes and map onto meshmode reference element
     group = to_discr.groups[0]
@@ -771,7 +771,7 @@ def build_connection_to_firedrake(discr, group_nr=None, comm=None):
     space and allow for conversion back and forth
     by resampling at the nodes.
 
-    :param discr: A :class:`~meshmode.discretization.nodal.NodalDiscretization`
+    :param discr: A :class:`~meshmode.discretization.Discretization`
         to intialize the connection with
     :param group_nr: The group number of the discretization to convert.
         If *None* there must be only one group. The selected group

@@ -202,7 +202,7 @@ def test_refinement_connection(
     # discretization order
     order = 5
 
-    from meshmode.discretization.nodal import NodalDiscretization
+    from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
             make_refinement_connection, check_connection)
 
@@ -249,7 +249,7 @@ def test_refinement_connection(
 
             return result
 
-        discr = NodalDiscretization(actx, mesh, group_factory(order))
+        discr = Discretization(actx, mesh, group_factory(order))
 
         refiner = refiner_cls(mesh)
         flags = refine_flags(mesh)

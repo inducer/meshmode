@@ -26,8 +26,9 @@ THE SOFTWARE.
 import numpy as np
 
 from abc import ABCMeta, abstractproperty, abstractmethod
-from pytools import memoize_method
-from meshmode.array_context import ArrayContext
+from pytools import memoize_in, memoize_method
+from pytools.obj_array import make_obj_array
+from meshmode.array_context import ArrayContext, make_loopy_program
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
@@ -37,7 +38,7 @@ __doc__ = """
 .. autoclass:: ModalElementGroupBase
 .. autoclass:: NodalElementGroupBase
 .. autoclass:: InterpolatoryElementGroupBase
-.. autoclass:: DiscretizationBase
+.. autoclass:: Discretization
 """
 
 
@@ -48,7 +49,7 @@ class NoninterpolatoryElementGroupError(TypeError):
 
 
 class ElementGroupBase(object, metaclass=ABCMeta):
-    """Container for data of any subclass of :class:`DiscretizationBase`
+    """Container for data of any :class:`Discretization`
     corresponding to one :class:`meshmode.mesh.MeshElementGroup`.
 
     .. attribute :: mesh_el_group
@@ -140,7 +141,7 @@ class ElementGroupBase(object, metaclass=ABCMeta):
 # {{{ Nodal element group base
 
 class NodalElementGroupBase(ElementGroupBase):
-    """Container for :class:`meshmode.discretization.nodal.NodalDiscretization`
+    """Container for :class:`meshmode.discretization.Discretization`
     data corresponding to one :class:`meshmode.mesh.MeshElementGroup`.
 
     .. autoattribute:: nunit_dofs
@@ -231,7 +232,7 @@ class InterpolatoryElementGroupBase(NodalElementGroupBase):
 # {{{ modal element group base
 
 class ModalElementGroupBase(ElementGroupBase):
-    """Container for :class:`meshmode.discretization.modal.ModalDiscretization`
+    """Container for :class:`meshmode.discretization.Discretization`
     data corresponding to one :class:`meshmode.mesh.MeshElementGroup`. This
     is a subclass of :class:`ElementGroupBase`, equipped with a function space
     and a hierarchical basis that is orthonormal with respect to the
@@ -286,10 +287,10 @@ class ModalElementGroupBase(ElementGroupBase):
 # }}}
 
 
-# {{{ discretization base
+# {{{ discretization
 
-class DiscretizationBase:
-    """An unstructured composite discretization base class.
+class Discretization:
+    """An unstructured composite discretization class.
 
     .. attribute:: real_dtype
     .. attribute:: complex_dtype
@@ -304,6 +305,9 @@ class DiscretizationBase:
     .. automethod:: zeros
     .. automethod:: empty_like
     .. automethod:: zeros_like
+    .. automethod:: num_reference_derivative
+    .. automethod:: quad_weights
+    .. automethod:: coordinates
     """
 
     def __init__(self, actx: ArrayContext, mesh, group_factory,
@@ -407,11 +411,122 @@ class DiscretizationBase:
     def zeros_like(self, array: _DOFArray):
         return self.zeros(array.array_context, dtype=array.entry_dtype)
 
+    def num_reference_derivative(self, ref_axes, vec):
+        actx = vec.array_context
+        ref_axes = list(ref_axes)
+
+        if any([isinstance(grp, ModalElementGroupBase) for grp in self.groups]):
+            raise NotImplementedError("Differentiation matrices not currently "
+                                      "implemented for modal element groups yet.")
+
+        @memoize_in(actx, (Discretization, "reference_derivative_prg"))
+        def prg():
+            return make_loopy_program(
+                """{[iel,idof,j]:
+                    0<=iel<nelements and
+                    0<=idof,j<nunit_dofs}""",
+                "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
+                name="diff")
+
+        def get_mat(grp):
+            mat = None
+            for ref_axis in ref_axes:
+                next_mat = grp.diff_matrices()[ref_axis]
+                if mat is None:
+                    mat = next_mat
+                else:
+                    mat = np.dot(next_mat, mat)
+
+            return mat
+
+        return _DOFArray(actx, tuple(
+                actx.call_loopy(
+                    prg(), diff_mat=actx.from_numpy(get_mat(grp)), vec=vec[grp.index]
+                    )["result"]
+                for grp in self.groups))
+
+    @memoize_method
+    def quad_weights(self):
+        """:returns: A :class:`~meshmode.dof_array.DOFArray` with quadrature weights.
+        """
+        actx = self._setup_actx
+
+        if any([isinstance(grp, ModalElementGroupBase) for grp in self.groups]):
+            raise TypeError("Cannot compute quadrature weights for "
+                            "modal element groups")
+
+        @memoize_in(actx, (Discretization, "quad_weights_prg"))
+        def prg():
+            return make_loopy_program(
+                "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
+                "result[iel,idof] = weights[idof]",
+                name="quad_weights")
+
+        return _DOFArray(None, tuple(
+                actx.freeze(
+                    actx.call_loopy(
+                        prg(),
+                        weights=actx.from_numpy(grp.weights),
+                        nelements=grp.nelements,
+                        )["result"])
+                for grp in self.groups))
+
+    @memoize_method
+    def coordinates(self):
+        r"""
+        :returns: object array of shape ``(ambient_dim,)`` containing
+            :class:`~meshmode.dof_array.DOFArray`\ s of global coordinates.
+        """
+
+        actx = self._setup_actx
+
+        if any([isinstance(grp, ModalElementGroupBase) for grp in self.groups]):
+            raise TypeError("Modal element groups do not have `unit_nodes`")
+
+        @memoize_in(actx, (Discretization, "coordinates_prg"))
+        def prg():
+            return make_loopy_program(
+                """{[iel,idof,j]:
+                    0<=iel<nelements and
+                    0<=idof<ndiscr_nodes and
+                    0<=j<nmesh_nodes}""",
+                """
+                    result[iel, idof] = \
+                        sum(j, resampling_mat[idof, j] * nodes[iel, j])
+                    """,
+                name="coordinates")
+
+        def resample_mesh_nodes(grp, iaxis):
+            # TODO: would be nice to have the mesh use an array context already
+            nodes = actx.from_numpy(grp.mesh_el_group.nodes[iaxis])
+
+            grp_unit_nodes = grp.unit_nodes.reshape(-1)
+            meg_unit_nodes = grp.mesh_el_group.unit_nodes.reshape(-1)
+
+            tol = 10 * np.finfo(grp_unit_nodes.dtype).eps
+            if (grp_unit_nodes.shape == meg_unit_nodes.shape
+                    and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
+                return nodes
+
+            return actx.call_loopy(
+                    prg(),
+                    resampling_mat=actx.from_numpy(grp.from_mesh_interp_matrix()),
+                    nodes=nodes,
+                    )["result"]
+
+        return make_obj_array([
+            _DOFArray(None, tuple([
+                actx.freeze(resample_mesh_nodes(grp, iaxis)) for grp in self.groups
+                ]))
+            for iaxis in range(self.ambient_dim)])
+
+    def nodes(self):
+        from warnings import warn
+        warn("`Discretization.nodes` will be dropped in version 2022.x. "
+             "use `Discretization.coordinates` instead.",
+             DeprecationWarning, stacklevel=2)
+        return self.coordinates()
+
 # }}}
-
-
-# For backwards compatibility, we need to be sure we export the
-# alias for NodalDiscretization
-from meshmode.discretization.nodal import Discretization  # noqa: F401
 
 # vim: fdm=marker

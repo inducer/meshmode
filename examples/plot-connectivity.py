@@ -18,11 +18,11 @@ def main():
     mesh = generate_icosahedron(1, order=order)
     #mesh = generate_torus(3, 1, order=order)
 
-    from meshmode.discretization.nodal import NodalDiscretization
+    from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
             PolynomialWarpAndBlendGroupFactory
 
-    discr = NodalDiscretization(
+    discr = Discretization(
             actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
 
     from meshmode.discretization.visualization import make_visualizer

@@ -57,8 +57,8 @@ __doc__ = """
 # {{{ DOFArray
 
 class DOFArray:
-    r"""This array type holds degree-of-freedom arrays for use with subclasses of
-    :class:`~meshmode.discretization.DiscretizationBase`,
+    r"""This array type holds degree-of-freedom arrays for use with
+    :class:`~meshmode.discretization.Discretization`,
     with one entry in the :class:`DOFArray` for each
     :class:`~meshmode.discretization.ElementGroupBase`.
     The arrays contained within a :class:`DOFArray`
@@ -67,7 +67,7 @@ class DOFArray:
     :attr:`~meshmode.discretization.ElementGroupBase.nelements`
     of the associated group.
     ``ndofs_per_element`` is typically, but not necessarily, the same as
-    :attr:`~meshmode.discretization.NodalElementGroupBase.nunit_dofs`
+    :attr:`~meshmode.discretization.ElementGroupBase.nunit_dofs`
     of the associated group. The entries in this array are further arrays managed by
     :attr:`array_context`.
 

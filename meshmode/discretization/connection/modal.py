@@ -29,11 +29,12 @@ import modepy as mp
 
 from meshmode.array_context import make_loopy_program
 from meshmode.dof_array import DOFArray
-from meshmode.discretization import InterpolatoryElementGroupBase
+from meshmode.discretization import (
+    NodalElementGroupBase,
+    ModalElementGroupBase,
+    InterpolatoryElementGroupBase)
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
-from meshmode.discretization.modal import ModalDiscretization
-from meshmode.discretization.nodal import NodalDiscretization
 
 from pytools import memoize_in, keyed_memoize_in
 from pytools.obj_array import obj_array_vectorized_n_args
@@ -51,13 +52,13 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
     .. attribute:: from_discr
 
-        an instance of
-            :class:`meshmode.discretization.nodal.NodalDiscretization`
+        an instance of :class:`meshmode.discretization.Discretization` containing
+        :class:`meshmode.discretization.NodalElementGroupBase` element groups
 
     .. attribute:: to_discr
 
-        an instance of
-            :class:`meshmode.discretization.modal.ModalDiscretization`
+        an instance of :class:`meshmode.discretization.Discretization` containing
+        :class:`meshmode.discretization.ModalElementGroupBase` element groups
 
     .. attribute:: groups
 
@@ -71,24 +72,23 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
     def __init__(self, from_discr, to_discr, allow_approximate_quad=False):
         """
-        :arg from_discr: an instance of
-            :class:`meshmode.discretization.nodal.NodalDiscretization`
-        :arg to_discr: an instance of
-            :class:`meshmode.discretization.modal.ModalDiscretization`
-        :arg allow_approximate_quad: an optional :class:`bool` flag indicating
-            whether to proceed with numerically approximating (via quadrature)
-            modal coefficients, despite using an insufficient (not high enough
-            approximation order for exact integration) quadrature method.
-            The default value is *False*.
+        :arg from_discr: a :class:`meshmode.discretization.Discretization`
+            containing :class:`meshmode.discretization.NodalElementGroupBase`
+            element groups.
+        :arg to_discr: a :class:`meshmode.discretization.Discretization`
+            containing :class:`meshmode.discretization.ModalElementGroupBase`
+            element groups.
         """
 
-        if not isinstance(from_discr, NodalDiscretization):
-            raise TypeError("from_discr must be a NodalDiscretization "
-                            "object to use this connection.")
+        if not all([isinstance(grp, NodalElementGroupBase)
+                    for grp in from_discr.groups]):
+            raise ValueError("`from_discr` must be defined on nodal "
+                             "element groups to use this connection.")
 
-        if not isinstance(to_discr, ModalDiscretization):
-            raise TypeError("to_discr must be a ModalDiscretization "
-                            "object to use this connection.")
+        if not all([isinstance(grp, ModalElementGroupBase)
+                    for grp in to_discr.groups]):
+            raise ValueError("`to_discr` must be defined on modal "
+                             "element groups to use this connection.")
 
         if to_discr.mesh != from_discr.mesh:
             raise ValueError("Both `from_discr` and `to_discr` must be on "
@@ -264,13 +264,13 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
 
     .. attribute:: from_discr
 
-        an instance of
-            :class:`meshmode.discretization.modal.ModalDiscretization`
+        an instance of :class:`meshmode.discretization.Discretization` containing
+        :class:`meshmode.discretization.ModalElementGroupBase` element groups
 
     .. attribute:: to_discr
 
-        an instance of
-            :class:`meshmode.discretization.nodal.NodalDiscretization`
+        an instance of :class:`meshmode.discretization.Discretization` containing
+        :class:`meshmode.discretization.NodalElementGroupBase` element groups
 
     .. attribute:: groups
 
@@ -284,19 +284,23 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
 
     def __init__(self, from_discr, to_discr):
         """
-        :arg from_discr: an instance of
-            :class:`meshmode.discretization.modal.ModalDiscretization`
-        :arg to_discr: an instance of
-            :class:`meshmode.discretization.nodal.NodalDiscretization`
+        :arg from_discr: a :class:`meshmode.discretization.Discretization`
+            containing :class:`meshmode.discretization.ModalElementGroupBase`
+            element groups.
+        :arg to_discr: a :class:`meshmode.discretization.Discretization`
+            containing :class:`meshmode.discretization.NodalElementGroupBase`
+            element groups.
         """
 
-        if not isinstance(from_discr, ModalDiscretization):
-            raise TypeError("from_discr must be a ModalDiscretization "
-                            "object to use this connection.")
+        if not all([isinstance(grp, ModalElementGroupBase)
+                    for grp in from_discr.groups]):
+            raise ValueError("`from_discr` must be defined on modal "
+                             "element groups to use this connection.")
 
-        if not isinstance(to_discr, NodalDiscretization):
-            raise TypeError("to_discr must be a NodalDiscretization "
-                            "object to use this connection.")
+        if not all([isinstance(grp, NodalElementGroupBase)
+                    for grp in to_discr.groups]):
+            raise ValueError("`to_discr` must be defined on nodal "
+                             "element groups to use this connection.")
 
         if to_discr.mesh != from_discr.mesh:
             raise ValueError("Both `from_discr` and `to_discr` must be on "

@@ -49,8 +49,7 @@ from meshmode.discretization.poly_element import (
     QuadratureSimplexGroupFactory
     )
 
-from meshmode.discretization.nodal import NodalDiscretization
-from meshmode.discretization.modal import ModalDiscretization
+from meshmode.discretization import Discretization
 from meshmode.discretization.connection.modal import (
     NodalToModalDiscretizationConnection,
     ModalToNodalDiscretizationConnection
@@ -89,8 +88,8 @@ def test_inverse_modal_connections(actx_factory, nodal_group_factory):
         a=(0, 0)*2, b=(5, 3), n=(10, 6,), order=order, group_cls=group_cls)
 
     # Make discretizations
-    nodal_disc = NodalDiscretization(actx, mesh, nodal_group_factory(order))
-    modal_disc = ModalDiscretization(actx, mesh, modal_group_factory(order))
+    nodal_disc = Discretization(actx, mesh, nodal_group_factory(order))
+    modal_disc = Discretization(actx, mesh, modal_group_factory(order))
 
     # Make connections
     nodal_to_modal_conn = NodalToModalDiscretizationConnection(
@@ -130,8 +129,8 @@ def test_modal_coefficients_by_projection(actx_factory, quad_group_factory):
         a=(0, 0)*2, b=(5, 3), n=(10, 6,), order=order, group_cls=group_cls)
 
     # Make discretizations
-    nodal_disc = NodalDiscretization(actx, mesh, quad_group_factory(order))
-    modal_disc = ModalDiscretization(actx, mesh, modal_group_factory(m_order))
+    nodal_disc = Discretization(actx, mesh, quad_group_factory(order))
+    modal_disc = Discretization(actx, mesh, modal_group_factory(m_order))
 
     # Make connections one using quadrature projection
     nodal_to_modal_conn_quad = NodalToModalDiscretizationConnection(
@@ -190,8 +189,8 @@ def test_quadrature_based_modal_connection_reverse(actx_factory, quad_group_fact
         a=(0, 0)*2, b=(5, 3), n=(10, 6,), order=order, group_cls=group_cls)
 
     # Make discretizations
-    nodal_disc = NodalDiscretization(actx, mesh, quad_group_factory(order))
-    modal_disc = ModalDiscretization(actx, mesh, modal_group_factory(m_order))
+    nodal_disc = Discretization(actx, mesh, quad_group_factory(order))
+    modal_disc = Discretization(actx, mesh, modal_group_factory(m_order))
 
     # Make connections one using quadrature projection
     nodal_to_modal_conn_quad = NodalToModalDiscretizationConnection(
@@ -257,8 +256,8 @@ def test_modal_truncation(actx_factory, nodal_group_factory,
         h = 1/mesh_par
 
         # Make discretizations
-        nodal_disc = NodalDiscretization(actx, mesh, nodal_group_factory(order))
-        modal_disc = ModalDiscretization(actx, mesh, modal_group_factory(order))
+        nodal_disc = Discretization(actx, mesh, nodal_group_factory(order))
+        modal_disc = Discretization(actx, mesh, modal_group_factory(order))
 
         # Make connections (nodal -> modal)
         nodal_to_modal_conn = NodalToModalDiscretizationConnection(

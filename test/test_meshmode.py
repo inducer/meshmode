@@ -112,8 +112,8 @@ def test_parallel_vtk_file(actx_factory, dim):
     else:
         raise ValueError("unknown dimensionality")
 
-    from meshmode.discretization.nodal import NodalDiscretization
-    discr = NodalDiscretization(actx, mesh,
+    from meshmode.discretization import Discretization
+    discr = Discretization(actx, mesh,
             InterpolatoryQuadratureSimplexGroupFactory(target_order))
 
     from meshmode.discretization.visualization import make_visualizer
@@ -193,8 +193,8 @@ def test_visualizers(actx_factory, dim, group_cls):
     else:
         group_factory = LegendreGaussLobattoTensorProductGroupFactory
 
-    from meshmode.discretization.nodal import NodalDiscretization
-    discr = NodalDiscretization(actx, mesh, group_factory(target_order))
+    from meshmode.discretization import Discretization
+    discr = Discretization(actx, mesh, group_factory(target_order))
 
     nodes = thaw(actx, discr.nodes())
     f = actx.np.sqrt(sum(nodes**2)) + 1j*nodes[0]
@@ -419,7 +419,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
     else:
         group_cls = SimplexElementGroup
 
-    from meshmode.discretization.nodal import NodalDiscretization
+    from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
             make_face_restriction, check_connection)
 
@@ -468,7 +468,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
 
         # }}}
 
-        vol_discr = NodalDiscretization(actx, mesh, group_factory(order))
+        vol_discr = Discretization(actx, mesh, group_factory(order))
         print("h=%s -> %d elements" % (
                 h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
@@ -533,7 +533,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
     else:
         group_cls = SimplexElementGroup
 
-    from meshmode.discretization.nodal import NodalDiscretization
+    from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
             make_face_restriction, make_face_to_all_faces_embedding,
             check_connection)
@@ -574,7 +574,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
 
         # }}}
 
-        vol_discr = NodalDiscretization(actx, mesh, group_factory(order))
+        vol_discr = Discretization(actx, mesh, group_factory(order))
         print("h=%s -> %d elements" % (
                 h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
@@ -656,7 +656,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
     else:
         group_cls = SimplexElementGroup
 
-    from meshmode.discretization.nodal import NodalDiscretization
+    from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
             make_face_restriction, make_opposite_face_connection,
             check_connection)
@@ -705,7 +705,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
 
         # }}}
 
-        vol_discr = NodalDiscretization(actx, mesh, group_factory(order))
+        vol_discr = Discretization(actx, mesh, group_factory(order))
         print("h=%s -> %d elements" % (
                 h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
@@ -865,9 +865,9 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
     mesh4 = mesh3.copy()
 
     if visualize:
-        from meshmode.discretization.nodal import NodalDiscretization
+        from meshmode.discretization import Discretization
         actx = actx_factory()
-        discr = NodalDiscretization(actx, mesh4, discr_grp_factory)
+        discr = Discretization(actx, mesh4, discr_grp_factory)
 
         from meshmode.discretization.visualization import make_visualizer
         vis = make_visualizer(actx, discr, 3, element_shrink_factor=0.8)
@@ -985,10 +985,10 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
     mesh = from_vertices_and_simplices(dtri.points.T, dtri.simplices,
             fix_orientation=True)
 
-    from meshmode.discretization.nodal import NodalDiscretization
-    low_discr = NodalDiscretization(actx, mesh,
+    from meshmode.discretization import Discretization
+    low_discr = Discretization(actx, mesh,
             PolynomialEquidistantSimplexGroupFactory(order))
-    high_discr = NodalDiscretization(actx, mesh,
+    high_discr = Discretization(actx, mesh,
             PolynomialEquidistantSimplexGroupFactory(order+1))
 
     from meshmode.discretization.connection import make_same_mesh_connection
@@ -1151,10 +1151,10 @@ def test_box_mesh(actx_factory, visualize=False):
     mesh = mgen.generate_box_mesh(3*(np.linspace(0, 1, 5),))
 
     if visualize:
-        from meshmode.discretization.nodal import NodalDiscretization
+        from meshmode.discretization import Discretization
 
         actx = actx_factory()
-        discr = NodalDiscretization(actx, mesh,
+        discr = Discretization(actx, mesh,
                 PolynomialWarpAndBlendGroupFactory(7))
 
         from meshmode.discretization.visualization import make_visualizer
@@ -1404,8 +1404,8 @@ def test_vtk_overwrite(actx_factory):
 
     mesh = mgen.generate_torus(10.0, 2.0, order=target_order)
 
-    from meshmode.discretization.nodal import NodalDiscretization
-    discr = NodalDiscretization(
+    from meshmode.discretization import Discretization
+    discr = Discretization(
             actx, mesh,
             InterpolatoryQuadratureSimplexGroupFactory(target_order))
 
@@ -1478,8 +1478,8 @@ def test_mesh_without_vertices(actx_factory):
     mesh = refine_uniformly(mesh, 1)
 
     # make sure the world doesn't end
-    from meshmode.discretization.nodal import NodalDiscretization
-    discr = NodalDiscretization(actx, mesh,
+    from meshmode.discretization import Discretization
+    discr = Discretization(actx, mesh,
             InterpolatoryQuadratureSimplexGroupFactory(4))
     thaw(actx, discr.nodes())
 
@@ -1605,9 +1605,8 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
         import matplotlib.pyplot as plt
         plt.savefig("test_mesh_multiple_groups_2d_elements.png", dpi=300)
 
-    from meshmode.discretization.nodal import NodalDiscretization
-    discr = NodalDiscretization(actx, mesh,
-            PolynomialWarpAndBlendGroupFactory(order))
+    from meshmode.discretization import Discretization
+    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
 
     if visualize:
         group_id = discr.empty(actx, dtype=np.int32)
@@ -1697,9 +1696,9 @@ def test_mesh_with_interior_unit_nodes(actx_factory, ambient_dim):
     assert mesh.facial_adjacency_groups
     assert mesh.nodal_adjacency
 
-    from meshmode.discretization.nodal import NodalDiscretization
+    from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import QuadratureSimplexGroupFactory
-    discr = NodalDiscretization(actx, mesh,
+    discr = Discretization(actx, mesh,
             QuadratureSimplexGroupFactory(order))
 
     from meshmode.discretization.connection import make_face_restriction

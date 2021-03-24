@@ -176,8 +176,8 @@ class _BaseFakeNumpyLinalgNamespace:
 
 
 class ArrayContext:
-    """An interface that allows a subclass of
-    :class:`meshmode.discretization.DiscretizationBase` to create and interact
+    """An interface that allows a
+    :class:`~meshmode.discretization.Discretization` to create and interact
     with arrays of degrees of freedom without fully specifying their types.
 
     .. automethod:: empty
