@@ -78,7 +78,7 @@ Group factories
 """
 
 
-# {{{ base class for interpolatory poynomial elements
+# {{{ base class for interpolatory polynomial elements
 
 class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
     @memoize_method
@@ -111,9 +111,29 @@ class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
 # }}}
 
 
+# {{{ base class for polynomial modal element groups
+
+class PolynomialModalElementGroupBase(ModalElementGroupBase):
+    @property
+    @memoize_method
+    def _basis(self):
+        return mp.orthonormal_basis_for_space(self.space, self.shape)
+
+    def mode_ids(self):
+        return self._basis.mode_ids
+
+    def basis(self):
+        return self._basis.functions
+
+    def grad_basis(self):
+        return self._basis.gradients
+
+# }}}
+
+
 # {{{ concrete element groups for modal simplices
 
-class ModalSimplexElementGroup(ModalElementGroupBase):
+class ModalSimplexElementGroup(PolynomialModalElementGroupBase):
     @property
     @memoize_method
     def shape(self):
@@ -177,7 +197,7 @@ class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBa
 
     No interpolation nodes are present on the boundary of the simplex.
 
-    The :meth:`~meshmode.discretization.InterpolatoryElementGroupBase.mode_ids`
+    The :meth:`~meshmode.discretization.ElementGroupWithBasis.mode_ids`
     are a tuple (one entry per dimension) of directional polynomial degrees
     on the reference element.
     """
@@ -217,7 +237,7 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
 
     No interpolation nodes are present on the boundary of the simplex.
 
-    The :meth:`~meshmode.discretization.InterpolatoryElementGroupBase.mode_ids`
+    The :meth:`~meshmode.discretization.ElementGroupWithBasis.mode_ids`
     are a tuple (one entry per dimension) of directional polynomial degrees
     on the reference element.
     """
@@ -276,7 +296,7 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
 
     Uses :func:`modepy.warp_and_blend_nodes`.
 
-    The :meth:`~meshmode.discretization.InterpolatoryElementGroupBase.mode_ids`
+    The :meth:`~meshmode.discretization.ElementGroupWithBasis.mode_ids`
     are a tuple (one entry per dimension) of directional polynomial degrees
     on the reference element.
     """
@@ -307,7 +327,7 @@ class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
 
     Requires :mod:`recursivenodes` to be installed.
 
-    The :meth:`~meshmode.discretization.InterpolatoryElementGroupBase.mode_ids`
+    The :meth:`~meshmode.discretization.ElementGroupWithBasis.mode_ids`
     are a tuple (one entry per dimension) of directional polynomial degrees
     on the reference element.
 
@@ -344,7 +364,7 @@ class PolynomialEquidistantSimplexElementGroup(_MassMatrixQuadratureElementGroup
     interpolation. Interpolation nodes are present on the boundary of the
     simplex.
 
-    The :meth:`~meshmode.discretization.InterpolatoryElementGroupBase.mode_ids`
+    The :meth:`~meshmode.discretization.ElementGroupWithBasis.mode_ids`
     are a tuple (one entry per dimension) of directional polynomial degrees
     on the reference element.
 
@@ -398,7 +418,7 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
 
 # {{{ concrete element groups for modal tensor product (hypercube) elements
 
-class ModalTensorProductElementGroup(ModalElementGroupBase):
+class ModalTensorProductElementGroup(PolynomialModalElementGroupBase):
     @property
     @memoize_method
     def shape(self):
