@@ -331,6 +331,9 @@ class Discretization:
     .. attribute:: ndofs
     .. attribute:: groups
 
+    .. autoattribute:: is_nodal
+    .. autoattribute:: is_modal
+
     .. automethod:: copy
     .. automethod:: empty
     .. automethod:: zeros
@@ -397,6 +400,24 @@ class Discretization:
     @property
     def ndofs(self):
         return sum(grp.ndofs for grp in self.groups)
+
+    @property
+    @memoize_method
+    def is_nodal(self):
+        """A :class:`bool` indicating whether the :class:`Discretization`
+        is defined over element groups subclasses of :class:`NodalElementGroupBase`.
+        """
+        return all([isinstance(grp, NodalElementGroupBase)
+                    for grp in self.groups])
+
+    @property
+    @memoize_method
+    def is_modal(self):
+        """A :class:`bool` indicating whether the :class:`Discretization`
+        is defined over element groups subclasses of :class:`ModalElementGroupBase`.
+        """
+        return all([isinstance(grp, ModalElementGroupBase)
+                    for grp in self.groups])
 
     def _new_array(self, actx, creation_func, dtype=None):
         if dtype is None:
@@ -484,8 +505,8 @@ class Discretization:
         """
         actx = self._setup_actx
 
-        if not all([isinstance(grp, NodalElementGroupBase) for grp in self.groups]):
-            raise ElementGroupError("Element groups must have a quadrature rule.")
+        if not self.is_nodal:
+            raise ElementGroupError("Element groups must be nodal.")
 
         @memoize_in(actx, (Discretization, "quad_weights_prg"))
         def prg():
@@ -513,8 +534,8 @@ class Discretization:
 
         actx = self._setup_actx
 
-        if not all([isinstance(grp, NodalElementGroupBase) for grp in self.groups]):
-            raise ElementGroupError("Element groups must have nodes.")
+        if not self.is_nodal:
+            raise ElementGroupError("Element groups must be nodal.")
 
         @memoize_in(actx, (Discretization, "nodes_prg"))
         def prg():

@@ -29,10 +29,7 @@ import modepy as mp
 
 from meshmode.array_context import make_loopy_program
 from meshmode.dof_array import DOFArray
-from meshmode.discretization import (
-    NodalElementGroupBase,
-    ModalElementGroupBase,
-    InterpolatoryElementGroupBase)
+from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
 
@@ -81,13 +78,11 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             element groups.
         """
 
-        if not all([isinstance(grp, NodalElementGroupBase)
-                    for grp in from_discr.groups]):
+        if not from_discr.is_nodal:
             raise ValueError("`from_discr` must be defined on nodal "
                              "element groups to use this connection.")
 
-        if not all([isinstance(grp, ModalElementGroupBase)
-                    for grp in to_discr.groups]):
+        if not to_discr.is_modal:
             raise ValueError("`to_discr` must be defined on modal "
                              "element groups to use this connection.")
 
@@ -294,13 +289,11 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
             element groups.
         """
 
-        if not all([isinstance(grp, ModalElementGroupBase)
-                    for grp in from_discr.groups]):
+        if not from_discr.is_modal:
             raise ValueError("`from_discr` must be defined on modal "
                              "element groups to use this connection.")
 
-        if not all([isinstance(grp, NodalElementGroupBase)
-                    for grp in to_discr.groups]):
+        if not to_discr.is_nodal:
             raise ValueError("`to_discr` must be defined on nodal "
                              "element groups to use this connection.")
 
