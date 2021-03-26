@@ -52,20 +52,21 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
     .. attribute:: from_discr
 
-        an instance of :class:`meshmode.discretization.Discretization` containing
-        :class:`meshmode.discretization.NodalElementGroupBase` element groups
+        An instance of :class:`meshmode.discretization.Discretization` containing
+        :class:`~meshmode.discretization.NodalElementGroupBase` element groups
 
     .. attribute:: to_discr
 
-        an instance of :class:`meshmode.discretization.Discretization` containing
-        :class:`meshmode.discretization.ModalElementGroupBase` element groups
+        An instance of :class:`meshmode.discretization.Discretization` containing
+        :class:`~meshmode.discretization.ModalElementGroupBase` element groups
 
     .. attribute:: groups
 
-        a list of :class:`DiscretizationConnectionElementGroup`
+        A list of :class:`DiscretizationConnectionElementGroup`
         instances, with a one-to-one correspondence to the groups in
         :attr:`to_discr`.
 
+    .. automethod:: __init__
     .. automethod:: __call__
 
     """
@@ -73,10 +74,10 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
     def __init__(self, from_discr, to_discr, allow_approximate_quad=False):
         """
         :arg from_discr: a :class:`meshmode.discretization.Discretization`
-            containing :class:`meshmode.discretization.NodalElementGroupBase`
+            containing :class:`~meshmode.discretization.NodalElementGroupBase`
             element groups.
         :arg to_discr: a :class:`meshmode.discretization.Discretization`
-            containing :class:`meshmode.discretization.ModalElementGroupBase`
+            containing :class:`~meshmode.discretization.ModalElementGroupBase`
             element groups.
         """
 
@@ -90,7 +91,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             raise ValueError("`to_discr` must be defined on modal "
                              "element groups to use this connection.")
 
-        if to_discr.mesh != from_discr.mesh:
+        if to_discr.mesh is not from_discr.mesh:
             raise ValueError("Both `from_discr` and `to_discr` must be on "
                              "the same mesh.")
 
@@ -188,7 +189,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
         element defining the nodal discretization.
 
         For non-interpolatory element groups (for example,
-        :class:`meshmode.discretization.poly_element.QuadratureSimplexElementGroup`),
+        :class:`~meshmode.discretization.poly_element.QuadratureSimplexElementGroup`),
         modal coefficients are computed using the underlying quadrature rule
         :math:`(w_q, x_q)`, and an orthonormal basis :math:`\psi_i`
         spanning the modal discretization space. The modal coefficients
@@ -264,20 +265,21 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
 
     .. attribute:: from_discr
 
-        an instance of :class:`meshmode.discretization.Discretization` containing
-        :class:`meshmode.discretization.ModalElementGroupBase` element groups
+        An instance of :class:`meshmode.discretization.Discretization` containing
+        :class:`~meshmode.discretization.ModalElementGroupBase` element groups
 
     .. attribute:: to_discr
 
-        an instance of :class:`meshmode.discretization.Discretization` containing
-        :class:`meshmode.discretization.NodalElementGroupBase` element groups
+        An instance of :class:`meshmode.discretization.Discretization` containing
+        :class:`~meshmode.discretization.NodalElementGroupBase` element groups
 
     .. attribute:: groups
 
-        a list of :class:`DiscretizationConnectionElementGroup`
+        A list of :class:`DiscretizationConnectionElementGroup`
         instances, with a one-to-one correspondence to the groups in
         :attr:`to_discr`.
 
+    .. automethod:: __init__
     .. automethod:: __call__
 
     """
@@ -285,10 +287,10 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
     def __init__(self, from_discr, to_discr):
         """
         :arg from_discr: a :class:`meshmode.discretization.Discretization`
-            containing :class:`meshmode.discretization.ModalElementGroupBase`
+            containing :class:`~meshmode.discretization.ModalElementGroupBase`
             element groups.
         :arg to_discr: a :class:`meshmode.discretization.Discretization`
-            containing :class:`meshmode.discretization.NodalElementGroupBase`
+            containing :class:`~meshmode.discretization.NodalElementGroupBase`
             element groups.
         """
 
@@ -302,7 +304,7 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
             raise ValueError("`to_discr` must be defined on nodal "
                              "element groups to use this connection.")
 
-        if to_discr.mesh != from_discr.mesh:
+        if to_discr.mesh is not from_discr.mesh:
             raise ValueError("Both `from_discr` and `to_discr` must be on "
                              "the same mesh.")
 

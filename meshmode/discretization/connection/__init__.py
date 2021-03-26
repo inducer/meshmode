@@ -81,9 +81,12 @@ Base classes
 .. autoclass:: ChainedDiscretizationConnection
 .. autoclass:: L2ProjectionInverseDiscretizationConnection
 .. autoclass:: DirectDiscretizationConnection
+
+Mapping between modal and nodal representations
+-----------------------------------------------
+
 .. autoclass:: NodalToModalDiscretizationConnection
 .. autoclass:: ModalToNodalDiscretizationConnection
-
 
 Same-mesh connections
 ---------------------

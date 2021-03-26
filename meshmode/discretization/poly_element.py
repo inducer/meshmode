@@ -37,9 +37,11 @@ from meshmode.discretization import (
 import modepy as mp
 
 __doc__ = """
-
 Group types
 ^^^^^^^^^^^
+
+Simplicial group types
+----------------------
 
 .. autoclass:: ModalSimplexElementGroup
 
@@ -49,6 +51,9 @@ Group types
 .. autoclass:: PolynomialRecursiveNodesElementGroup
 .. autoclass:: PolynomialEquidistantSimplexElementGroup
 .. autoclass:: PolynomialGivenNodesElementGroup
+
+Tensor product group types
+--------------------------
 
 .. autoclass:: ModalTensorProductElementGroup
 
@@ -62,6 +67,9 @@ Group factories
 .. autoclass:: ElementGroupFactory
 .. autoclass:: OrderAndTypeBasedGroupFactory
 
+Simplicial group factories
+--------------------------
+
 .. autoclass:: ModalSimplexGroupFactory
 
 .. autoclass:: InterpolatoryQuadratureSimplexGroupFactory
@@ -70,6 +78,9 @@ Group factories
 .. autoclass:: PolynomialRecursiveNodesGroupFactory
 .. autoclass:: PolynomialEquidistantSimplexGroupFactory
 .. autoclass:: PolynomialGivenNodesGroupFactory
+
+Tensor product group factories
+------------------------------
 
 .. autoclass:: ModalTensorProductGroupFactory
 
@@ -268,15 +279,6 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
     @memoize_method
     def weights(self):
         return self._quadrature_rule().weights
-
-    def basis(self):
-        raise NoninterpolatoryElementGroupError("'{}' "
-                "is not equipped with a unisolvent function space "
-                "and therefore cannot be used for interpolation"
-                .format(self.__class__.__name__))
-
-    grad_basis = basis
-    diff_matrices = basis
 
 
 class _MassMatrixQuadratureElementGroup(PolynomialSimplexElementGroupBase):

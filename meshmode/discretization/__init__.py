@@ -34,26 +34,43 @@ from meshmode.array_context import ArrayContext, make_loopy_program
 from meshmode.dof_array import DOFArray as _DOFArray
 
 __doc__ = """
+Error handling
+--------------
+.. autoclass:: ElementGroupError
+.. autoclass:: NoninterpolatoryElementGroupError
+
+Base classes
+------------
 .. autoclass:: ElementGroupBase
 .. autoclass:: NodalElementGroupBase
 .. autoclass:: ElementGroupWithBasis
 .. autoclass:: InterpolatoryElementGroupBase
 .. autoclass:: ModalElementGroupBase
+
+Discretization class
+--------------------
 .. autoclass:: Discretization
 """
 
 
 class ElementGroupError(TypeError):
-    pass
+    """A :class:`TypeError` specific for handling element
+    groups. This exception may be raised to indicate
+    whenever an improper operation or function is applied
+    to a particular subclass of :class:`~ElementGroupBase`.
+    """
 
 
 class NoninterpolatoryElementGroupError(ElementGroupError):
-    pass
+    """A specialized :class:`~ElementGroupError` that may
+    be raised whenever non-interpolatory element groups
+    are being used for interpolation.
+    """
 
 
 # {{{ element group base
 
-class ElementGroupBase(object, metaclass=ABCMeta):
+class ElementGroupBase(metaclass=ABCMeta):
     """Base class for any container for data of any :class:`Discretization`.
     These correspond to one :class:`meshmode.mesh.MeshElementGroup`.
 
@@ -83,7 +100,7 @@ class ElementGroupBase(object, metaclass=ABCMeta):
 
     @property
     def is_affine(self):
-        """Returns a :class:`bool` flag that is *True* if the local-to-global
+        """A :class:`bool` flag that is *True* if the local-to-global
         parametrization of all the elements in the group is affine. Based on
         :attr:`meshmode.mesh.MeshElementGroup.is_affine`.
         """
@@ -91,28 +108,29 @@ class ElementGroupBase(object, metaclass=ABCMeta):
 
     @property
     def nelements(self):
-        """Returns the total number of polygonal elements
-        in the :class:`meshmode.mesh.MeshElementGroup`.
+        """The total number of polygonal elements in the
+        :class:`meshmode.mesh.MeshElementGroup`.
         """
         return self.mesh_el_group.nelements
 
     @abstractproperty
     def nunit_dofs(self):
-        """Returns the number of degrees of freedom ("DOFs")
+        """The number of degrees of freedom ("DOFs")
         associated with a single element.
         """
-        pass
 
     @property
     def ndofs(self):
-        """Returns the total number of degrees of freedom ("DOFs")
+        """The total number of degrees of freedom ("DOFs")
         associated with the entire element group.
         """
         return self.nunit_dofs * self.nelements
 
     @property
     def dim(self):
-        """Returns the geometric dimension of the element group."""
+        """The number of spatial dimensions in which the functions
+        in :attr:`~space` operate.
+        """
         return self.mesh_el_group.dim
 
     @abstractproperty
@@ -120,7 +138,6 @@ class ElementGroupBase(object, metaclass=ABCMeta):
         """Returns a subclass of :class:`modepy.Shape` representing
         the reference element defining the element group.
         """
-        pass
 
     @abstractproperty
     def space(self):
@@ -128,7 +145,6 @@ class ElementGroupBase(object, metaclass=ABCMeta):
         the underlying polynomial space defined on the element
         group's reference element.
         """
-        pass
 
     def discretization_key(self):
         """Return a hashable, equality-comparable object that fully describes
@@ -150,12 +166,13 @@ class ElementGroupBase(object, metaclass=ABCMeta):
 # {{{ Nodal element group base
 
 class NodalElementGroupBase(ElementGroupBase):
-    """Base class for nodal element groups, defined as
-    finite elements equipped with a quadrature rule. Nodal
-    element groups may not necessarily have the same number
-    of quadrature nodes as the dimension of
-    :attr:`~ElementGroupBase.space`, and hence is not generally
-    usable for interpolation.
+    """Base class for nodal element groups, defined as finite elements
+    equipped with nodes. Nodes are specific locations defined on the
+    reference element (:attr:`~ElementGroupBase.shape`)
+    for which a degree of freedom is defined. Such element groups
+    can have an associated quadrature rule to perform
+    numerical integration, but are not necessarily usable
+    for interpolation.
 
     .. autoattribute:: nunit_dofs
     .. autoattribute:: unit_nodes
@@ -174,14 +191,12 @@ class NodalElementGroupBase(ElementGroupBase):
         """Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
         of reference coordinates of interpolation nodes.
         """
-        pass
 
     @abstractproperty
     def weights(self):
         """Returns a :class:`numpy.ndarray` of shape ``(nunit_dofs,)``
         containing quadrature weights.
         """
-        pass
 
 # }}}
 
@@ -205,15 +220,13 @@ class ElementGroupWithBasis(ElementGroupBase):
         one per element of the :meth:`basis`. The meaning of the mode
         identifiers is defined by the concrete element group.
         """
-        pass
 
     @abstractmethod
     def basis(self):
         """Returns a :class:`list` of basis functions that take arrays
-        of shape ``(dim, npts)`` and return an array of shape (npts,)``
+        of shape ``(dim, npts)`` and return an array of shape ``(npts,)``
         (which performs evaluation of the basis function).
         """
-        pass
 
     @abstractmethod
     def is_orthogonal_basis(self):
@@ -221,18 +234,16 @@ class ElementGroupWithBasis(ElementGroupBase):
         basis corresponding to the element group is orthogonal
         with respect to the :math:`L^2` inner-product.
         """
-        pass
 
     @abstractmethod
     def grad_basis(self):
         """Returns a :class:`tuple` of functions, each of which
-        accepts arrays of shape *(dims, npts)* and returns a
-        :class:`tuple` of length *dims* containing the
+        accepts arrays of shape ``(dims, npts)`` and returns a
+        :class:`tuple` of length ``dims`` containing the
         derivatives along each axis as an array of size
-        *npts*.  'Scalar' evaluation, by passing just one
-        vector of length *dims*, is also supported.
+        ``npts``.  'Scalar' evaluation, by passing just one
+        vector of length ``dims``, is also supported.
         """
-        pass
 
 # }}}
 
@@ -241,10 +252,13 @@ class ElementGroupWithBasis(ElementGroupBase):
 
 class InterpolatoryElementGroupBase(NodalElementGroupBase,
                                     ElementGroupWithBasis):
-    """An element group equipped with both an explicit basis and
-    quadrature rule. These element groups have the same number of
-    interpolation nodes and basis function, making them suitable for
-    interpolation and differentiation.
+    """An element group equipped with both an explicit basis for the
+    underlying :attr:`~ElementGroupBase.space`, and a set of nodal
+    locations on the :attr:`~ElementGroupBase.shape`. These element
+    groups are unisolvent in the Ciarlet sense, meaning the dimension
+    of :attr:`~ElementGroupBase.space` matches the number of
+    interpolatory nodal locations. These element groups are therefore
+    suitable for interpolation and differentiation.
 
     .. automethod:: mass_matrix
     .. automethod:: diff_matrices
@@ -263,16 +277,14 @@ class InterpolatoryElementGroupBase(NodalElementGroupBase,
         where :math:`K` denotes a cell and :math:`\phi_i` is the
         basis spanning the underlying :attr:`~ElementGroupBase.space`.
         """
-        pass
 
     @abstractmethod
     def diff_matrices(self):
         """Return a :attr:`~ElementGroupBase.dim`-long :class:`tuple` of
         :class:`numpy.ndarray` of shape ``(nunit_nodes, nunit_nodes)``,
         each of which, when applied to an array of nodal values, take
-        derivatives in the reference (r,s,t) directions.
+        derivatives in the reference :math:`(r, s, t)` directions.
         """
-        pass
 
 # }}}
 
@@ -504,7 +516,7 @@ class Discretization:
         if not all([isinstance(grp, NodalElementGroupBase) for grp in self.groups]):
             raise ElementGroupError("Element groups must have nodes.")
 
-        @memoize_in(actx, (Discretization, "coordinates_prg"))
+        @memoize_in(actx, (Discretization, "nodes_prg"))
         def prg():
             return make_loopy_program(
                 """{[iel,idof,j]:
@@ -515,7 +527,7 @@ class Discretization:
                     result[iel, idof] = \
                         sum(j, resampling_mat[idof, j] * nodes[iel, j])
                     """,
-                name="coordinates")
+                name="nodes")
 
         def resample_mesh_nodes(grp, iaxis):
             # TODO: would be nice to have the mesh use an array context already
