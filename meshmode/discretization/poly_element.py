@@ -357,7 +357,7 @@ class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
         return result
 
     def discretization_key(self):
-        return (type(self), self.order, self.family)
+        return (type(self), self. dim, self.order, self.family)
 
 
 class PolynomialEquidistantSimplexElementGroup(_MassMatrixQuadratureElementGroup):
@@ -548,7 +548,7 @@ class GaussLegendreTensorProductElementGroup(LegendreTensorProductElementGroup):
         return self._quadrature_rule.weights
 
     def discretization_key(self):
-        return (type(self), self.order)
+        return (type(self), self.dim, self.order)
 
 
 class LegendreGaussLobattoTensorProductElementGroup(
@@ -571,7 +571,7 @@ class LegendreGaussLobattoTensorProductElementGroup(
                 )
 
     def discretization_key(self):
-        return (type(self), self.order)
+        return (type(self), self.dim, self.order)
 
 
 class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
@@ -593,7 +593,7 @@ class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
                 )
 
     def discretization_key(self):
-        return (type(self), self.order)
+        return (type(self), self.dim, self.order)
 
 # }}}
 

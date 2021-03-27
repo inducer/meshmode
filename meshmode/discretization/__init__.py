@@ -158,7 +158,7 @@ class ElementGroupBase(metaclass=ABCMeta):
         The structure of the element is not specified, but it must be globally
         unique to this element group.
         """
-        return (type(self), self.order)
+        return (type(self), self.dim, self.order)
 
 # }}}
 
