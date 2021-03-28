@@ -64,8 +64,9 @@ class NodalDGContext:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Work around https://github.com/pexpect/pexpect/issues/462
-        # 2s delay still seemed to run into
+        # 2s delay still seems to run into
         # "ExceptionPexpect: Could not terminate the child"
+        # -AK, 2021-03-28
         self.octave._engine.repl.delayafterterminate = 15
 
         self.octave.exit()
