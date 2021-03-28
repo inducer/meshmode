@@ -36,7 +36,7 @@ from meshmode.dof_array import DOFArray as _DOFArray
 __doc__ = """
 Error handling
 --------------
-.. autoclass:: ElementGroupError
+.. autoclass:: ElementGroupTypeError
 .. autoclass:: NoninterpolatoryElementGroupError
 
 Base classes
@@ -53,7 +53,7 @@ Discretization class
 """
 
 
-class ElementGroupError(TypeError):
+class ElementGroupTypeError(TypeError):
     """A :class:`TypeError` specific for handling element
     groups. This exception may be raised to indicate
     whenever an improper operation or function is applied
@@ -61,8 +61,8 @@ class ElementGroupError(TypeError):
     """
 
 
-class NoninterpolatoryElementGroupError(ElementGroupError):
-    """A specialized :class:`~ElementGroupError` that may
+class NoninterpolatoryElementGroupError(ElementGroupTypeError):
+    """A specialized :class:`~ElementGroupTypeError` that may
     be raised whenever non-interpolatory element groups
     are being used for interpolation.
     """
@@ -71,8 +71,10 @@ class NoninterpolatoryElementGroupError(ElementGroupError):
 # {{{ element group base
 
 class ElementGroupBase(metaclass=ABCMeta):
-    """Base class for any container for data of any :class:`Discretization`.
-    These correspond to one :class:`meshmode.mesh.MeshElementGroup`.
+    """Defines a discrete function space on a homogeneous
+    (in terms of element type and order) subset of a :class:`Discretization`.
+    These correspond one-to-one with :class:`meshmode.mesh.MeshElementGroup`.
+    Responsible for all bulk data handling in :class:`Discretization`.
 
     .. attribute :: mesh_el_group
     .. attribute :: order
@@ -169,12 +171,13 @@ class NodalElementGroupBase(ElementGroupBase):
     """Base class for nodal element groups, defined as finite elements
     equipped with nodes. Nodes are specific locations defined on the
     reference element (:attr:`~ElementGroupBase.shape`)
-    for which a degree of freedom is defined. Such element groups
-    can have an associated quadrature rule to perform
-    numerical integration, but are not necessarily usable
+    defining a degree of freedom by point evaluation at that location.
+    Such element groups can have an associated quadrature rule to perform
+    numerical integration, but are not necessarily usable (unisolvent)
     for interpolation.
 
-    .. autoattribute:: nunit_dofs
+    Inherits from :class:`ElementGroupBase`.
+
     .. autoattribute:: unit_nodes
     .. autoattribute:: weights
     """
@@ -195,7 +198,8 @@ class NodalElementGroupBase(ElementGroupBase):
     @abstractproperty
     def weights(self):
         """Returns a :class:`numpy.ndarray` of shape ``(nunit_dofs,)``
-        containing quadrature weights.
+        containing quadrature weights applicable on the reference
+        element.
         """
 
 # }}}
@@ -207,6 +211,8 @@ class ElementGroupWithBasis(ElementGroupBase):
     """Base class for element groups which possess an
     explicit basis for the underlying function space
     :attr:`~ElementGroupBase.space`.
+
+    Inherits from :class:`ElementGroupBase`.
 
     .. automethod:: mode_ids
     .. automethod:: basis
@@ -260,6 +266,9 @@ class InterpolatoryElementGroupBase(NodalElementGroupBase,
     interpolatory nodal locations. These element groups are therefore
     suitable for interpolation and differentiation.
 
+    Inherits from :class:`NodalElementGroupBase` and
+    :class:`ElementGroupWithBasis`.
+
     .. automethod:: mass_matrix
     .. automethod:: diff_matrices
     """
@@ -296,8 +305,7 @@ class ModalElementGroupBase(ElementGroupWithBasis):
     and a hierarchical basis that is orthonormal with
     respect to the :math:`L^2` inner product.
 
-    .. autoattribute:: nunit_dofs
-    .. autoattribute:: is_orthogonal_basis
+    Inherits from :class:`ElementGroupWithBasis`.
     """
 
     @property
@@ -321,7 +329,7 @@ class ModalElementGroupBase(ElementGroupWithBasis):
 # {{{ discretization
 
 class Discretization:
-    """An unstructured composite discretization class.
+    """An unstructured composite discretization.
 
     .. attribute:: real_dtype
     .. attribute:: complex_dtype
@@ -407,8 +415,8 @@ class Discretization:
         """A :class:`bool` indicating whether the :class:`Discretization`
         is defined over element groups subclasses of :class:`NodalElementGroupBase`.
         """
-        return all([isinstance(grp, NodalElementGroupBase)
-                    for grp in self.groups])
+        return all(isinstance(grp, NodalElementGroupBase)
+                   for grp in self.groups)
 
     @property
     @memoize_method
@@ -416,8 +424,8 @@ class Discretization:
         """A :class:`bool` indicating whether the :class:`Discretization`
         is defined over element groups subclasses of :class:`ModalElementGroupBase`.
         """
-        return all([isinstance(grp, ModalElementGroupBase)
-                    for grp in self.groups])
+        return all(isinstance(grp, ModalElementGroupBase)
+                   for grp in self.groups)
 
     def _new_array(self, actx, creation_func, dtype=None):
         if dtype is None:
@@ -506,7 +514,7 @@ class Discretization:
         actx = self._setup_actx
 
         if not self.is_nodal:
-            raise ElementGroupError("Element groups must be nodal.")
+            raise ElementGroupTypeError("Element groups must be nodal.")
 
         @memoize_in(actx, (Discretization, "quad_weights_prg"))
         def prg():
@@ -535,7 +543,7 @@ class Discretization:
         actx = self._setup_actx
 
         if not self.is_nodal:
-            raise ElementGroupError("Element groups must be nodal.")
+            raise ElementGroupTypeError("Element groups must be nodal.")
 
         @memoize_in(actx, (Discretization, "nodes_prg"))
         def prg():

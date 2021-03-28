@@ -38,9 +38,35 @@ from pytools.obj_array import obj_array_vectorized_n_args
 
 
 class NodalToModalDiscretizationConnection(DiscretizationConnection):
-    """A concrete subclass of :class:`DiscretizationConnection`, which
-    maps nodal data to its modal representation. This connection can
-    be used with both unisolvent and non-unisolvent element groups.
+    r"""A concrete subclass of :class:`DiscretizationConnection`, which
+    maps nodal data to its modal representation. For interpolatory
+    (unisolvent) element groups, the mapping from nodal to modal
+    representations is performed via:
+
+    .. math::
+
+        y = V^{-1} [\text{nodal basis coefficients}]
+
+    where :math:`V_{i,j} = \phi_j(x_i)` is the generalized
+    Vandermonde matrix, :math:`\phi_j` is a nodal basis,
+    and :math:`x_i` are nodal points on the reference
+    element defining the nodal discretization.
+
+    For non-interpolatory element groups (for example,
+    :class:`~meshmode.discretization.poly_element.QuadratureSimplexElementGroup`),
+    modal coefficients are computed using the underlying quadrature rule
+    :math:`(w_q, x_q)`, and an orthonormal basis :math:`\psi_i`
+    spanning the modal discretization space. The modal coefficients
+    are then obtained via:
+
+    .. math::
+
+        y = V^T W [\text{nodal basis coefficients}]
+
+    where :math:`V_{i, j} = \psi_j(x_i)` is the Vandermonde matrix
+    constructed from the orthonormal basis evaluated at the quadrature
+    nodes :math:`x_i`, and :math:`W = \text{Diag}(w_q)` is a diagonal
+    matrix containing the quadrature weights :math:`w_q`.
 
     .. note::
 
@@ -76,6 +102,10 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
         :arg to_discr: a :class:`meshmode.discretization.Discretization`
             containing :class:`~meshmode.discretization.ModalElementGroupBase`
             element groups.
+        :arg allow_approximate_quad: an optional :class:`bool` flag indicating
+            whether to proceed with numerically approximating (via quadrature)
+            modal coefficients, even when the underlying quadrature method
+            is not exact. The default value is *False*.
         """
 
         if not from_discr.is_nodal:
@@ -98,7 +128,6 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
         self._allow_approximate_quad = allow_approximate_quad
 
     def _project_via_quadrature(self, actx, ary, grp, mgrp):
-
         # Handle the case with non-interpolatory element groups or
         # quadrature-based element groups
         @memoize_in(actx, (NodalToModalDiscretizationConnection,
@@ -170,34 +199,8 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
     @obj_array_vectorized_n_args
     def __call__(self, ary):
-        r"""Computes modal coefficients data from a functions
-        nodal coefficients. For interpolatory (unisolvent) element
-        groups, this is performed via:
-
-        .. math::
-
-            y = V^{-1} [\text{nodal basis coefficients}]
-
-        where :math:`V_{i,j} = \phi_j(x_i)` is the generalized
-        Vandermonde matrix, :math:`\phi_j` is a nodal basis,
-        and :math:`x_i` are nodal points on the reference
-        element defining the nodal discretization.
-
-        For non-interpolatory element groups (for example,
-        :class:`~meshmode.discretization.poly_element.QuadratureSimplexElementGroup`),
-        modal coefficients are computed using the underlying quadrature rule
-        :math:`(w_q, x_q)`, and an orthonormal basis :math:`\psi_i`
-        spanning the modal discretization space. The modal coefficients
-        are then obtained via:
-
-        .. math::
-
-            y = V^T W [\text{nodal basis coefficients}]
-
-        where :math:`V_{i, j} = \psi_j(x_i)` is the Vandermonde matrix
-        constructed from the orthonormal basis evaluated at the quadrature
-        nodes :math:`x_i`, and :math:`W = \text{Diag}(w_q)` is a diagonal
-        matrix containing the quadrature weights :math:`w_q`.
+        """Computes modal coefficients data from a functions
+        nodal coefficients.
 
         :arg ary: a :class:`meshmode.dof_array.DOFArray` containing
             nodal coefficient data.
@@ -250,8 +253,18 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
 
 class ModalToNodalDiscretizationConnection(DiscretizationConnection):
-    """A concrete subclass of :class:`DiscretizationConnection`, which
-    maps modal data back to its nodal representation.
+    r"""A concrete subclass of :class:`DiscretizationConnection`, which
+    maps modal data back to its nodal representation. This is computed
+    via:
+
+    .. math::
+
+        y = V [\text{modal basis coefficients}]
+
+    where :math:`V_{i,j} = \phi_j(x_i)` is the generalized
+    Vandermonde matrix, :math:`\phi_j` is an orthonormal (modal)
+    basis, and :math:`x_i` are nodal points on the reference
+    element defining the nodal discretization.
 
     .. note::
 
@@ -308,16 +321,7 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
 
     @obj_array_vectorized_n_args
     def __call__(self, ary):
-        r"""Computes nodal coefficients from modal data via
-
-        .. math::
-
-            y = V [\text{modal basis coefficients}]
-
-        where :math:`V_{i,j} = \phi_j(x_i)` is the generalized
-        Vandermonde matrix, :math:`\phi_j` is an orthonormal (modal)
-        basis, and :math:`x_i` are nodal points on the reference
-        element defining the nodal discretization.
+        """Computes nodal coefficients from modal data.
 
         :arg ary: a :class:`meshmode.dof_array.DOFArray` containing
             modal coefficient data.
@@ -358,11 +362,10 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
                                  to_grp.unit_nodes)
             return actx.from_numpy(vdm)
 
-        result_data = []
-        for igrp, grp in enumerate(self.to_discr.groups):
-            output = actx.call_loopy(keval(),
-                                     vdm=matrix(grp, self.from_discr.groups[igrp]),
-                                     coefficients=ary[grp.index])
-            result_data.append(output["result"])
-
-        return DOFArray(actx, data=tuple(result_data))
+        result_data = tuple(
+            actx.call_loopy(keval(),
+                            vdm=matrix(grp, self.from_discr.groups[igrp]),
+                            coefficients=ary[grp.index])["result"]
+            for igrp, grp in enumerate(self.to_discr.groups)
+        )
+        return DOFArray(actx, data=result_data)
