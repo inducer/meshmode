@@ -97,13 +97,13 @@ class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
         assert self.is_orthonormal_basis()
 
         return mp.mass_matrix(
-                self.get_basis().functions,
+                self.basis_obj().functions,
                 self.unit_nodes)
 
     @memoize_method
     def diff_matrices(self):
-        basis_fcts = self.get_basis().functions
-        grad_basis_fcts = self.get_basis().gradients
+        basis_fcts = self.basis_obj().functions
+        grad_basis_fcts = self.basis_obj().gradients
         if len(basis_fcts) != self.unit_nodes.shape[1]:
             raise NoninterpolatoryElementGroupError(
                     "%s does not support interpolation because it is not "
@@ -128,7 +128,7 @@ class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
 
 class PolynomialModalElementGroupBase(ModalElementGroupBase):
     @memoize_method
-    def get_basis(self):
+    def basis_obj(self):
         return mp.orthonormal_basis_for_space(self.space, self.shape)
 
 # }}}
@@ -176,7 +176,7 @@ class SimplexElementGroupBase(NodalElementGroupBase):
 class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase,
         SimplexElementGroupBase):
     @memoize_method
-    def get_basis(self):
+    def basis_obj(self):
         return mp.basis_for_space(self.space, self.shape)
 
 
@@ -258,7 +258,7 @@ class _MassMatrixQuadratureElementGroup(PolynomialSimplexElementGroupBase):
     def weights(self):
         return np.dot(
                 self.mass_matrix(),
-                np.ones(len(self.get_basis().functions)))
+                np.ones(len(self.basis_obj().functions)))
 
 
 class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
@@ -438,7 +438,7 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
         self._unit_nodes = unit_nodes
 
     @memoize_method
-    def get_basis(self):
+    def basis_obj(self):
         return self._basis
 
     @property
@@ -450,7 +450,7 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
     def weights(self):
         return np.dot(
                 self.mass_matrix(),
-                np.ones(len(self.get_basis().functions)))
+                np.ones(len(self.basis_obj().functions)))
 
     def discretization_key(self):
         # FIXME?

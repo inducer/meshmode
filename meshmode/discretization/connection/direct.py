@@ -194,7 +194,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             result = np.eye(nfrom_unit_nodes)
 
         else:
-            from_grp_basis_fcts = from_grp.get_basis().functions
+            from_grp_basis_fcts = from_grp.basis_obj().functions
             if len(from_grp_basis_fcts) != nfrom_unit_nodes:
                 from meshmode.discretization import NoninterpolatoryElementGroupError
                 raise NoninterpolatoryElementGroupError(

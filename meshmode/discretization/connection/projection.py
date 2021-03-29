@@ -189,7 +189,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
             for ibatch, batch in enumerate(cgrp.batches):
                 sgrp = self.from_discr.groups[batch.from_group_index]
 
-                for ibasis, basis_fn in enumerate(sgrp.get_basis().functions):
+                for ibasis, basis_fn in enumerate(sgrp.basis_obj().functions):
                     basis = actx.from_numpy(
                             basis_fn(batch.result_unit_nodes).flatten())
 
@@ -210,7 +210,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
         for igrp, grp in enumerate(self.to_discr.groups):
             from modepy import vandermonde
-            vdm = actx.from_numpy(vandermonde(grp.get_basis().functions,
+            vdm = actx.from_numpy(vandermonde(grp.basis_obj().functions,
                                               grp.unit_nodes))
             actx.call_loopy(
                     keval(),

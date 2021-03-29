@@ -79,7 +79,7 @@ def _make_cross_face_batches(actx,
     src_unit_nodes[:] = initial_guess.reshape(-1, 1, 1)
 
     import modepy as mp
-    src_grp_basis_fcts = src_grp.get_basis().functions
+    src_grp_basis_fcts = src_grp.basis_obj().functions
     vdm = mp.vandermonde(src_grp_basis_fcts, src_grp.unit_nodes)
     inv_t_vdm = la.inv(vdm.T)
     nsrc_funcs = len(src_grp_basis_fcts)
@@ -110,7 +110,7 @@ def _make_cross_face_batches(actx,
         dbasis_at_unit_nodes = np.empty(
                 (dim, nsrc_funcs, nelements, ntgt_unit_nodes))
 
-        for i, df in enumerate(src_grp.get_basis().gradients):
+        for i, df in enumerate(src_grp.basis_obj().gradients):
             df_result = df(unit_nodes.reshape(dim, -1))
 
             for rst_axis, df_r in enumerate(df_result):

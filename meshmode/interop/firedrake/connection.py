@@ -219,7 +219,7 @@ class FiredrakeConnection:
         fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
 
         # compute and store resampling matrices
-        element_grp_basis_fcts = element_grp.get_basis().functions
+        element_grp_basis_fcts = element_grp.basis_obj().functions
         self._resampling_mat_fd2mm = resampling_matrix(element_grp_basis_fcts,
                                                        new_nodes=mm_unit_nodes,
                                                        old_nodes=fd_unit_nodes)

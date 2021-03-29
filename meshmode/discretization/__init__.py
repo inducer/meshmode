@@ -216,12 +216,12 @@ class ElementGroupWithBasis(ElementGroupBase):
 
     Inherits from :class:`ElementGroupBase`.
 
-    .. automethod:: get_basis
+    .. automethod:: basis_obj
     .. automethod:: is_orthonormal_basis
     """
 
     @abstractmethod
-    def get_basis(self):
+    def basis_obj(self):
         """Returns the `modepy.Basis` which spans the underlying
         :attr:`~ElementGroupBase.space`.
         """
@@ -230,25 +230,25 @@ class ElementGroupWithBasis(ElementGroupBase):
     def mode_ids(self):
         warn("`grp.mode_ids()` will be dropped in version 2022.x "
              "To access the basis function mode ids, use "
-             "`grp.get_basis().mode_ids` instead.",
+             "`grp.basis_obj().mode_ids` instead.",
              DeprecationWarning, stacklevel=2)
-        return self.get_basis().mode_ids
+        return self.basis_obj().mode_ids
 
     @memoize_method
     def basis(self):
         warn("`grp.basis()` will be dropped in version 2022.x "
              "To access the basis functions, use "
-             "`grp.get_basis().functions` instead.",
+             "`grp.basis_obj().functions` instead.",
              DeprecationWarning, stacklevel=2)
-        return self.get_basis().functions
+        return self.basis_obj().functions
 
     @memoize_method
     def grad_basis(self):
         warn("`grp.grad_basis()` will be dropped in version 2022.x "
              "To access the basis function gradients, use "
-             "`grp.get_basis().gradients` instead.",
+             "`grp.basis_obj().gradients` instead.",
              DeprecationWarning, stacklevel=2)
-        return self.get_basis().gradients
+        return self.basis_obj().gradients
 
     @memoize_method
     def is_orthonormal_basis(self):
@@ -259,7 +259,7 @@ class ElementGroupWithBasis(ElementGroupBase):
         import modepy as mp
         try:
             # Check orthonormality weight
-            return self.get_basis().orthonormality_weight() == 1
+            return self.basis_obj().orthonormality_weight() == 1
         except mp.BasisNotOrthonormal:
             return False
 
