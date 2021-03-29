@@ -69,8 +69,8 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         if conn.from_discr.dim != conn.to_discr.dim:
             raise RuntimeError("cannot transport from face to element")
 
-        if not all(g.is_orthogonal_basis() for g in conn.to_discr.groups):
-            raise RuntimeError("`to_discr` must have an orthogonal basis")
+        if not all(g.is_orthonormal_basis() for g in conn.to_discr.groups):
+            raise RuntimeError("`to_discr` must have an orthonormal basis")
 
         self.conn = conn
         super().__init__(

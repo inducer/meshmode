@@ -30,6 +30,8 @@ from pytools import memoize_in, memoize_method
 from pytools.obj_array import make_obj_array
 from meshmode.array_context import ArrayContext, make_loopy_program
 
+from warnings import warn
+
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
 
@@ -216,8 +218,8 @@ class ElementGroupWithBasis(ElementGroupBase):
 
     .. automethod:: mode_ids
     .. automethod:: basis
-    .. automethod:: is_orthogonal_basis
     .. automethod:: grad_basis
+    .. automethod:: is_orthonormal_basis
     """
 
     @abstractmethod
@@ -235,13 +237,6 @@ class ElementGroupWithBasis(ElementGroupBase):
         """
 
     @abstractmethod
-    def is_orthogonal_basis(self):
-        """Returns a :class:`bool` flag that is *True* if the
-        basis corresponding to the element group is orthogonal
-        with respect to the :math:`L^2` inner-product.
-        """
-
-    @abstractmethod
     def grad_basis(self):
         """Returns a :class:`tuple` of functions, each of which
         accepts arrays of shape ``(dims, npts)`` and returns a
@@ -250,6 +245,20 @@ class ElementGroupWithBasis(ElementGroupBase):
         ``npts``.  'Scalar' evaluation, by passing just one
         vector of length ``dims``, is also supported.
         """
+
+    @abstractmethod
+    def is_orthonormal_basis(self):
+        """Returns a :class:`bool` flag that is *True* if the
+        basis corresponding to the element group is orthonormal
+        with respect to the :math:`L^2` inner-product.
+        """
+
+    def is_orthogonal_basis(self):
+        warn("`is_orthogonal_basis` will be dropped in version 2022.x "
+             "since orthonormality is the more operationally important case. "
+             "Use `is_orthonormal_basis` instead.",
+             DeprecationWarning, stacklevel=2)
+        return self.is_orthonormal_basis()
 
 # }}}
 
@@ -316,9 +325,9 @@ class ModalElementGroupBase(ElementGroupWithBasis):
         return self.space.space_dim
 
     @property
-    def is_orthogonal_basis(self):
+    def is_orthonormal_basis(self):
         """Returns a :class:`bool` flag that is *True* if the
-        basis corresponding to the element group is orthogonal
+        basis corresponding to the element group is orthonormal
         with respect to the :math:`L^2` inner-product.
         """
         return True

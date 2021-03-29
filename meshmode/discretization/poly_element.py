@@ -94,7 +94,7 @@ Tensor product group factories
 class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
     @memoize_method
     def mass_matrix(self):
-        assert self.is_orthogonal_basis()
+        assert self.is_orthonormal_basis()
 
         return mp.mass_matrix(
                 self.basis(),
@@ -183,7 +183,7 @@ class SimplexElementGroupBase(NodalElementGroupBase):
 
 class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase,
         SimplexElementGroupBase):
-    def is_orthogonal_basis(self):
+    def is_orthonormal_basis(self):
         return self.dim <= 3
 
     @property
@@ -478,7 +478,7 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
         self._basis = basis
         self._unit_nodes = unit_nodes
 
-    def is_orthogonal_basis(self):
+    def is_orthonormal_basis(self):
         try:
             # NOTE: meshmode kind of assumes that the basis is orthonormal
             # with weight 1, which is why this check is stricter than expected.
