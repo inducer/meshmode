@@ -79,9 +79,10 @@ def _make_cross_face_batches(actx,
     src_unit_nodes[:] = initial_guess.reshape(-1, 1, 1)
 
     import modepy as mp
-    vdm = mp.vandermonde(src_grp.basis(), src_grp.unit_nodes)
+    src_grp_basis_fcts = src_grp.get_basis().functions
+    vdm = mp.vandermonde(src_grp_basis_fcts, src_grp.unit_nodes)
     inv_t_vdm = la.inv(vdm.T)
-    nsrc_funcs = len(src_grp.basis())
+    nsrc_funcs = len(src_grp_basis_fcts)
 
     def apply_map(unit_nodes):
         # unit_nodes: (dim, nelements, ntgt_unit_nodes)
@@ -89,7 +90,7 @@ def _make_cross_face_batches(actx,
         # basis_at_unit_nodes
         basis_at_unit_nodes = np.empty((nsrc_funcs, nelements, ntgt_unit_nodes))
 
-        for i, f in enumerate(src_grp.basis()):
+        for i, f in enumerate(src_grp_basis_fcts):
             basis_at_unit_nodes[i] = (
                     f(unit_nodes.reshape(dim, -1))
                     .reshape(nelements, ntgt_unit_nodes))
@@ -109,7 +110,7 @@ def _make_cross_face_batches(actx,
         dbasis_at_unit_nodes = np.empty(
                 (dim, nsrc_funcs, nelements, ntgt_unit_nodes))
 
-        for i, df in enumerate(src_grp.grad_basis()):
+        for i, df in enumerate(src_grp.get_basis().gradients):
             df_result = df(unit_nodes.reshape(dim, -1))
 
             for rst_axis, df_r in enumerate(df_result):

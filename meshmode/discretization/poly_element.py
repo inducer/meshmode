@@ -97,12 +97,14 @@ class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
         assert self.is_orthonormal_basis()
 
         return mp.mass_matrix(
-                self.basis(),
+                self.get_basis().functions,
                 self.unit_nodes)
 
     @memoize_method
     def diff_matrices(self):
-        if len(self.basis()) != self.unit_nodes.shape[1]:
+        basis_fcts = self.get_basis().functions
+        grad_basis_fcts = self.get_basis().gradients
+        if len(basis_fcts) != self.unit_nodes.shape[1]:
             raise NoninterpolatoryElementGroupError(
                     "%s does not support interpolation because it is not "
                     "unisolvent (its unit node count does not match its "
@@ -110,8 +112,8 @@ class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
                     "the ability to interpolate." % type(self).__name__)
 
         result = mp.differentiation_matrices(
-                self.basis(),
-                self.grad_basis(),
+                basis_fcts,
+                grad_basis_fcts,
                 self.unit_nodes)
 
         if not isinstance(result, tuple):
@@ -125,19 +127,9 @@ class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
 # {{{ base class for polynomial modal element groups
 
 class PolynomialModalElementGroupBase(ModalElementGroupBase):
-    @property
     @memoize_method
-    def _basis(self):
+    def get_basis(self):
         return mp.orthonormal_basis_for_space(self.space, self.shape)
-
-    def mode_ids(self):
-        return self._basis.mode_ids
-
-    def basis(self):
-        return self._basis.functions
-
-    def grad_basis(self):
-        return self._basis.gradients
 
 # }}}
 
@@ -183,22 +175,9 @@ class SimplexElementGroupBase(NodalElementGroupBase):
 
 class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase,
         SimplexElementGroupBase):
-    def is_orthonormal_basis(self):
-        return self.dim <= 3
-
-    @property
     @memoize_method
-    def _basis(self):
+    def get_basis(self):
         return mp.basis_for_space(self.space, self.shape)
-
-    def basis(self):
-        return self._basis.functions
-
-    def mode_ids(self):
-        return self._basis.mode_ids
-
-    def grad_basis(self):
-        return self._basis.gradients
 
 
 class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBase):
@@ -207,10 +186,6 @@ class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBa
     hence usable for differentiation and interpolation.
 
     No interpolation nodes are present on the boundary of the simplex.
-
-    The :meth:`~meshmode.discretization.ElementGroupWithBasis.mode_ids`
-    are a tuple (one entry per dimension) of directional polynomial degrees
-    on the reference element.
     """
 
     @memoize_method
@@ -247,10 +222,6 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
     quadarature, but is not necessarily usable for interpolation.
 
     No interpolation nodes are present on the boundary of the simplex.
-
-    The :meth:`~meshmode.discretization.ElementGroupWithBasis.mode_ids`
-    are a tuple (one entry per dimension) of directional polynomial degrees
-    on the reference element.
     """
 
     @memoize_method
@@ -287,7 +258,7 @@ class _MassMatrixQuadratureElementGroup(PolynomialSimplexElementGroupBase):
     def weights(self):
         return np.dot(
                 self.mass_matrix(),
-                np.ones(len(self.basis())))
+                np.ones(len(self.get_basis().functions)))
 
 
 class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
@@ -297,10 +268,6 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
     phenomena. Nodes are present on the boundary of the simplex.
 
     Uses :func:`modepy.warp_and_blend_nodes`.
-
-    The :meth:`~meshmode.discretization.ElementGroupWithBasis.mode_ids`
-    are a tuple (one entry per dimension) of directional polynomial degrees
-    on the reference element.
     """
     @property
     @memoize_method
@@ -329,10 +296,6 @@ class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
 
     Requires :mod:`recursivenodes` to be installed.
 
-    The :meth:`~meshmode.discretization.ElementGroupWithBasis.mode_ids`
-    are a tuple (one entry per dimension) of directional polynomial degrees
-    on the reference element.
-
     .. [Isaac20] Tobin Isaac. Recursive, parameter-free, explicitly defined
         interpolation nodes for simplices.
         `Arxiv preprint <https://arxiv.org/abs/2002.09421>`__.
@@ -357,7 +320,7 @@ class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
         return result
 
     def discretization_key(self):
-        return (type(self), self. dim, self.order, self.family)
+        return (type(self), self.dim, self.order, self.family)
 
 
 class PolynomialEquidistantSimplexElementGroup(_MassMatrixQuadratureElementGroup):
@@ -365,10 +328,6 @@ class PolynomialEquidistantSimplexElementGroup(_MassMatrixQuadratureElementGroup
     polynomials in :math:`P^k`, hence usable for differentiation and
     interpolation. Interpolation nodes are present on the boundary of the
     simplex.
-
-    The :meth:`~meshmode.discretization.ElementGroupWithBasis.mode_ids`
-    are a tuple (one entry per dimension) of directional polynomial degrees
-    on the reference element.
 
     .. versionadded:: 2016.1
     """
@@ -478,25 +437,9 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
         self._basis = basis
         self._unit_nodes = unit_nodes
 
-    def is_orthonormal_basis(self):
-        try:
-            # NOTE: meshmode kind of assumes that the basis is orthonormal
-            # with weight 1, which is why this check is stricter than expected.
-            return self._basis.orthonormality_weight() == 1
-        except mp.BasisNotOrthonormal:
-            return False
-
     @memoize_method
-    def mode_ids(self):
-        return self._basis.mode_ids
-
-    @memoize_method
-    def basis(self):
-        return self._basis.functions
-
-    @memoize_method
-    def grad_basis(self):
-        return self._basis.gradients
+    def get_basis(self):
+        return self._basis
 
     @property
     def unit_nodes(self):
@@ -507,7 +450,7 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
     def weights(self):
         return np.dot(
                 self.mass_matrix(),
-                np.ones(len(self.basis())))
+                np.ones(len(self.get_basis().functions)))
 
     def discretization_key(self):
         # FIXME?

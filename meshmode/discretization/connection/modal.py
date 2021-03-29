@@ -152,7 +152,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
                                     mgrp.discretization_key(),
                                     ))
         def quadrature_matrix(grp, mgrp):
-            vdm = mp.vandermonde(mgrp.basis(),
+            vdm = mp.vandermonde(mgrp.get_basis().functions,
                                  grp.unit_nodes)
             w_diag = np.diag(grp.weights)
             vtw = np.dot(vdm.T, w_diag)
@@ -187,7 +187,8 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
                                  "vandermonde_inverse"),
                           lambda grp: grp.discretization_key())
         def vandermonde_inverse(grp):
-            vdm = mp.vandermonde(grp.basis(), grp.unit_nodes)
+            vdm = mp.vandermonde(grp.get_basis().functions,
+                                 grp.unit_nodes)
             vdm_inv = la.inv(vdm)
             return actx.from_numpy(vdm_inv)
 
@@ -358,7 +359,7 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
                                from_grp.discretization_key(),
                                ))
         def matrix(to_grp, from_grp):
-            vdm = mp.vandermonde(from_grp.basis(),
+            vdm = mp.vandermonde(from_grp.get_basis().functions,
                                  to_grp.unit_nodes)
             return actx.from_numpy(vdm)
 

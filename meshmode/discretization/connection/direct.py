@@ -194,7 +194,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             result = np.eye(nfrom_unit_nodes)
 
         else:
-            if len(from_grp.basis()) != nfrom_unit_nodes:
+            from_grp_basis_fcts = from_grp.get_basis().functions
+            if len(from_grp_basis_fcts) != nfrom_unit_nodes:
                 from meshmode.discretization import NoninterpolatoryElementGroupError
                 raise NoninterpolatoryElementGroupError(
                         "%s does not support interpolation because it is not "
@@ -203,7 +204,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         "the ability to interpolate." % type(from_grp).__name__)
 
             result = mp.resampling_matrix(
-                    from_grp.basis(),
+                    from_grp_basis_fcts,
                     ibatch.result_unit_nodes, from_grp.unit_nodes)
 
         return actx.freeze(actx.from_numpy(result))

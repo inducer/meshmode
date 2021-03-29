@@ -216,42 +216,52 @@ class ElementGroupWithBasis(ElementGroupBase):
 
     Inherits from :class:`ElementGroupBase`.
 
-    .. automethod:: mode_ids
-    .. automethod:: basis
-    .. automethod:: grad_basis
+    .. automethod:: get_basis
     .. automethod:: is_orthonormal_basis
     """
 
     @abstractmethod
+    def get_basis(self):
+        """Returns the `modepy.Basis` which spans the underlying
+        :attr:`~ElementGroupBase.space`.
+        """
+
+    @memoize_method
     def mode_ids(self):
-        """Return an immutable sequence of opaque (hashable) mode identifiers,
-        one per element of the :meth:`basis`. The meaning of the mode
-        identifiers is defined by the concrete element group.
-        """
+        warn("`grp.mode_ids()` will be dropped in version 2022.x "
+             "To access the basis function mode ids, use "
+             "`grp.get_basis().mode_ids` instead.",
+             DeprecationWarning, stacklevel=2)
+        return self.get_basis().mode_ids
 
-    @abstractmethod
+    @memoize_method
     def basis(self):
-        """Returns a :class:`list` of basis functions that take arrays
-        of shape ``(dim, npts)`` and return an array of shape ``(npts,)``
-        (which performs evaluation of the basis function).
-        """
+        warn("`grp.basis()` will be dropped in version 2022.x "
+             "To access the basis functions, use "
+             "`grp.get_basis().functions` instead.",
+             DeprecationWarning, stacklevel=2)
+        return self.get_basis().functions
 
-    @abstractmethod
+    @memoize_method
     def grad_basis(self):
-        """Returns a :class:`tuple` of functions, each of which
-        accepts arrays of shape ``(dims, npts)`` and returns a
-        :class:`tuple` of length ``dims`` containing the
-        derivatives along each axis as an array of size
-        ``npts``.  'Scalar' evaluation, by passing just one
-        vector of length ``dims``, is also supported.
-        """
+        warn("`grp.grad_basis()` will be dropped in version 2022.x "
+             "To access the basis function gradients, use "
+             "`grp.get_basis().gradients` instead.",
+             DeprecationWarning, stacklevel=2)
+        return self.get_basis().gradients
 
-    @abstractmethod
+    @memoize_method
     def is_orthonormal_basis(self):
         """Returns a :class:`bool` flag that is *True* if the
         basis corresponding to the element group is orthonormal
         with respect to the :math:`L^2` inner-product.
         """
+        import modepy as mp
+        try:
+            # Check orthonormality weight
+            return self.get_basis().orthonormality_weight() == 1
+        except mp.BasisNotOrthonormal:
+            return False
 
     def is_orthogonal_basis(self):
         warn("`is_orthogonal_basis` will be dropped in version 2022.x "
@@ -323,14 +333,6 @@ class ModalElementGroupBase(ElementGroupWithBasis):
         associated with a single element.
         """
         return self.space.space_dim
-
-    @property
-    def is_orthonormal_basis(self):
-        """Returns a :class:`bool` flag that is *True* if the
-        basis corresponding to the element group is orthonormal
-        with respect to the :math:`L^2` inner-product.
-        """
-        return True
 
 # }}}
 

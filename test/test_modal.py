@@ -278,8 +278,9 @@ def test_modal_truncation(actx_factory, nodal_group_factory,
         # Now we compute the basis function indices corresonding
         # to modes > truncated_order
         mgrp, = modal_disc.groups
-        truncation_matrix = np.identity(len(mgrp.mode_ids()))
-        for mode_idx, mode_id in enumerate(mgrp.mode_ids()):
+        mgrp_mode_ids = mgrp.get_basis().mode_ids
+        truncation_matrix = np.identity(len(mgrp_mode_ids))
+        for mode_idx, mode_id in enumerate(mgrp_mode_ids):
             if sum(mode_id) > truncated_order:
                 truncation_matrix[mode_idx, mode_idx] = 0
 

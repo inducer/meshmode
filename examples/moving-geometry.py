@@ -70,7 +70,7 @@ def reconstruct_discr_from_nodes(actx, discr, x):
 
         import modepy as mp
         resampling_mat = mp.resampling_matrix(
-                grp.basis(),
+                grp.get_basis().functions,
                 meg.unit_nodes,
                 grp.unit_nodes)
 
