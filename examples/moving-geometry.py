@@ -63,20 +63,7 @@ def reconstruct_discr_from_nodes(actx, discr, x):
             """,
             name="resample_by_mat_prg")
 
-    @memoize_in(actx, (reconstruct_discr_from_nodes, "to_mesh_interp_matrix"))
-    def to_mesh_interp_matrix(igrp):
-        grp = discr.groups[igrp]
-        meg = grp.mesh_el_group
-
-        import modepy as mp
-        resampling_mat = mp.resampling_matrix(
-                grp.basis_obj().functions,
-                meg.unit_nodes,
-                grp.unit_nodes)
-
-        return actx.freeze(actx.from_numpy(resampling_mat))
-
-    def resample_nodes(grp, igrp, iaxis):
+    def resample_nodes_to_mesh(grp, igrp, iaxis):
         discr_nodes = x[iaxis][igrp]
 
         grp_unit_nodes = grp.unit_nodes.reshape(-1)
@@ -87,17 +74,17 @@ def reconstruct_discr_from_nodes(actx, discr, x):
                 and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
             return discr_nodes
 
+        from meshmode.discretization.poly_element import to_mesh_interp_matrix
         return actx.call_loopy(
                 resample_by_mat_prg(),
                 nodes=discr_nodes,
-                result=grp.mesh_el_group.nodes[iaxis],
-                resampling_mat=to_mesh_interp_matrix(igrp),
-                )
+                resampling_mat=actx.from_numpy(to_mesh_interp_matrix(grp)),
+                )["result"]
 
     megs = []
     for igrp, grp in enumerate(discr.groups):
         nodes = np.stack([
-            actx.to_numpy(resample_nodes(grp, igrp, iaxis))
+            actx.to_numpy(resample_nodes_to_mesh(grp, igrp, iaxis))
             for iaxis in range(discr.ambient_dim)
             ])
 
@@ -205,6 +192,8 @@ def run(actx, *,
         discr = reconstruct_discr_from_nodes(actx, discr0, x)
         u = velocity_field(thaw(actx, discr.nodes()))
 
+        # {{{
+
         # NOTE: these are just here because this was at some point used to
         # profile some more operators (turned out well!)
 
@@ -217,6 +206,8 @@ def run(actx, *,
 
         assert gradx is not None
         assert intx is not None
+
+        # }}}
 
         return u
 

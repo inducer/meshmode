@@ -46,10 +46,11 @@ from meshmode.array_context import PyOpenCLArrayContext, make_loopy_program
 def parametrization_derivative(actx, discr):
     thawed_nodes = thaw(actx, discr.nodes())
 
+    from meshmode.discretization import num_reference_derivative
     result = np.zeros((discr.ambient_dim, discr.dim), dtype=object)
     for iambient in range(discr.ambient_dim):
         for idim in range(discr.dim):
-            result[iambient, idim] = discr.num_reference_derivative(
+            result[iambient, idim] = num_reference_derivative(discr,
                     (idim,), thawed_nodes[iambient])
 
     return result
@@ -191,8 +192,9 @@ class DGDiscretization:
     def grad(self, vec):
         ipder = self.inverse_parametrization_derivative()
 
+        from meshmode.discretization import num_reference_derivative
         dref = [
-                self.volume_discr.num_reference_derivative((idim,), vec)
+                num_reference_derivative(self.volume_discr, (idim,), vec)
                 for idim in range(self.volume_discr.dim)]
 
         return make_obj_array([

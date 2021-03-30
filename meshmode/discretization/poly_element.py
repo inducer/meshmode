@@ -141,11 +141,7 @@ def diff_matrices(grp: InterpolatoryElementGroupBase) -> Tuple[np.ndarray, ...]:
 
 
 @memoize_on_first_arg
-def from_mesh_interp_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
-    if not isinstance(grp, InterpolatoryElementGroupBase):
-        raise TypeError(
-                f"cannot construct resampling matrix on '{type(grp).__name__}'")
-
+def from_mesh_interp_matrix(grp: NodalElementGroupBase) -> np.ndarray:
     meg = grp.mesh_el_group
     meg_space = type(grp.space)(meg.dim, meg.order)
 
@@ -156,11 +152,7 @@ def from_mesh_interp_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
 
 
 @memoize_on_first_arg
-def to_mesh_interp_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
-    if not isinstance(grp, InterpolatoryElementGroupBase):
-        raise TypeError(
-                f"cannot construct resampling matrix on '{type(grp).__name__}'")
-
+def to_mesh_interp_matrix(grp: NodalElementGroupBase) -> np.ndarray:
     return mp.resampling_matrix(
             grp.basis_obj().functions,
             grp.mesh_el_group.unit_nodes,

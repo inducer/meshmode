@@ -1705,8 +1705,9 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
     import pytools
     ref_axes = pytools.flatten([[i] for i in range(ambient_dim)])
 
+    from meshmode.discretization import num_reference_derivative
     x = thaw(actx, discr.nodes())
-    discr.num_reference_derivative(ref_axes, x[0])
+    num_reference_derivative(discr, ref_axes, x[0])
 
 
 @pytest.mark.parametrize("ambient_dim", [2, 3])

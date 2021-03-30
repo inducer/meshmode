@@ -604,13 +604,16 @@ def num_reference_derivative(
             name="diff")
 
     def get_mat(grp):
+        from meshmode.discretization.poly_element import diff_matrices
+        matrices = diff_matrices(grp)
+
         mat = None
         for ref_axis in ref_axes:
-            next_mat = grp.diff_matrices()[ref_axis]
+            next_mat = matrices[ref_axis]
             if mat is None:
                 mat = next_mat
             else:
-                mat = np.dot(next_mat, mat)
+                mat = next_mat @ mat
 
         return actx.from_numpy(mat)
 
