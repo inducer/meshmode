@@ -121,7 +121,7 @@ def advance(actx, dt, t, x, fn):
 def run(actx, *,
         ambient_dim: int = 3,
         resolution: int = None,
-        target_order: int = 4,
+        target_order: int = 8,
         tmax: float = 1.0,
         timestep: float = 1.0e-2,
         group_factory_name: str = "warp_and_blend",
@@ -170,7 +170,7 @@ def run(actx, *,
                 order=mesh_order,
                 unit_nodes=unit_nodes)
     else:
-        nrounds = 3 if resolution is None else resolution
+        nrounds = 4 if resolution is None else resolution
         mesh = gen.generate_icosphere(radius,
                 uniform_refinement_rounds=nrounds,
                 order=mesh_order,
@@ -204,6 +204,20 @@ def run(actx, *,
     def source(t, x):
         discr = reconstruct_discr_from_nodes(actx, discr0, x)
         u = velocity_field(thaw(actx, discr.nodes()))
+
+        # NOTE: these are just here because this was at some point used to
+        # profile some more operators (turned out well!)
+
+        from meshmode.discretization import num_reference_derivative
+        x = thaw(actx, discr.nodes()[0])
+        gradx = sum(
+                num_reference_derivative(discr, (i,), x)
+                for i in range(discr.dim))
+        intx = sum(actx.np.sum(xi * wi) for xi, wi in zip(x, discr.quad_weights()))
+
+        assert gradx is not None
+        assert intx is not None
+
         return u
 
     # }}}
@@ -245,7 +259,7 @@ if __name__ == "__main__":
 
     run(actx,
             ambient_dim=3,
-            group_factory_name="warp_and_blend",
+            group_factory_name="quadrature",
             tmax=1.0,
             timestep=1.0e-2,
             visualize=False)

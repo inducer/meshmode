@@ -229,14 +229,8 @@ class SimplexElementGroupBase(NodalElementGroupBase):
     def space(self):
         return mp.PN(self.dim, self.order)
 
-    @memoize_method
     def from_mesh_interp_matrix(self):
-        meg = self.mesh_el_group
-        meg_space = mp.PN(meg.dim, meg.order)
-        return mp.resampling_matrix(
-                mp.basis_for_space(meg_space, self.shape).functions,
-                self.unit_nodes,
-                meg.unit_nodes)
+        return from_mesh_interp_matrix(self)
 
 
 class PolynomialSimplexElementGroupBase(PolynomialElementGroupBase,
@@ -254,7 +248,7 @@ class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBa
     No interpolation nodes are present on the boundary of the simplex.
     """
 
-    @memoize_method
+    @memoize(key=lambda self: self.discretization_key())
     def _quadrature_rule(self):
         dims = self.mesh_el_group.dim
         if dims == 0:
@@ -290,7 +284,7 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
     No interpolation nodes are present on the boundary of the simplex.
     """
 
-    @memoize_method
+    @memoize(key=lambda self: self.discretization_key())
     def _quadrature_rule(self):
         dims = self.mesh_el_group.dim
         if dims == 0:
@@ -336,7 +330,7 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
     Uses :func:`modepy.warp_and_blend_nodes`.
     """
     @property
-    @memoize_method
+    @memoize(key=lambda self: self.discretization_key())
     def unit_nodes(self):
         dim = self.mesh_el_group.dim
         if self.order == 0:
@@ -373,7 +367,7 @@ class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
         self.family = family
 
     @property
-    @memoize_method
+    @memoize(key=lambda self: self.discretization_key())
     def unit_nodes(self):
         dim = self.mesh_el_group.dim
 
@@ -398,7 +392,7 @@ class PolynomialEquidistantSimplexElementGroup(_MassMatrixQuadratureElementGroup
     .. versionadded:: 2016.1
     """
     @property
-    @memoize_method
+    @memoize(key=lambda self: self.discretization_key())
     def unit_nodes(self):
         dim = self.mesh_el_group.dim
         result = mp.equidistant_nodes(dim, self.order)
@@ -461,6 +455,27 @@ class ModalTensorProductElementGroup(PolynomialModalElementGroupBase):
 
 # {{{ concrete element groups for nodal tensor product (hypercube) elements
 
+@memoize
+def _tensor_legendre_gauss_quadrature(order, dim):
+    return mp.LegendreGaussTensorProductQuadrature(order, dim)
+
+
+@memoize
+def _tensor_legendre_gauss_lobatto_nodes(order, dim):
+    from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
+    unit_nodes_1d = legendre_gauss_lobatto_nodes(order)
+
+    return mp.tensor_product_nodes([unit_nodes_1d] * dim)
+
+
+@memoize
+def _tensor_equidistant_nodes(order, dim):
+    from modepy.nodes import equidistant_nodes
+    unit_nodes_1d = equidistant_nodes(1, order)[0]
+
+    return mp.tensor_product_nodes([unit_nodes_1d] * dim)
+
+
 class HypercubeElementGroupBase(NodalElementGroupBase):
     @property
     @memoize_method
@@ -472,14 +487,8 @@ class HypercubeElementGroupBase(NodalElementGroupBase):
     def space(self):
         return mp.QN(self.dim, self.order)
 
-    @memoize_method
     def from_mesh_interp_matrix(self):
-        meg = self.mesh_el_group
-        meg_space = mp.QN(meg.dim, meg.order)
-        return mp.resampling_matrix(
-                mp.basis_for_space(meg_space, self.shape).functions,
-                self.unit_nodes,
-                meg.unit_nodes)
+        return from_mesh_interp_matrix(self)
 
 
 class TensorProductElementGroupBase(PolynomialElementGroupBase,
@@ -546,7 +555,7 @@ class GaussLegendreTensorProductElementGroup(LegendreTensorProductElementGroup):
     """
 
     def __init__(self, mesh_el_group, order, index):
-        self._quadrature_rule = mp.LegendreGaussTensorProductQuadrature(
+        self._quadrature_rule = _tensor_legendre_gauss_quadrature(
                 order, mesh_el_group.dim)
 
         super().__init__(mesh_el_group, order, index,
@@ -571,12 +580,9 @@ class LegendreGaussLobattoTensorProductElementGroup(
     """
 
     def __init__(self, mesh_el_group, order, index):
-        from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
-        unit_nodes_1d = legendre_gauss_lobatto_nodes(order)
-
         super().__init__(mesh_el_group, order, index,
-                unit_nodes=mp.tensor_product_nodes(
-                    [unit_nodes_1d] * mesh_el_group.dim)
+                unit_nodes=_tensor_legendre_gauss_lobatto_nodes(
+                    order, mesh_el_group.dim)
                 )
 
     def discretization_key(self):
@@ -593,12 +599,9 @@ class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
     """
 
     def __init__(self, mesh_el_group, order, index):
-        from modepy.nodes import equidistant_nodes
-        unit_nodes_1d = equidistant_nodes(1, order)[0]
-
         super().__init__(mesh_el_group, order, index,
-                unit_nodes=mp.tensor_product_nodes(
-                    [unit_nodes_1d] * mesh_el_group.dim)
+                unit_nodes=_tensor_equidistant_nodes(
+                    order, mesh_el_group.dim)
                 )
 
     def discretization_key(self):
