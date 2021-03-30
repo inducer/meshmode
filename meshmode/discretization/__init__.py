@@ -23,6 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from typing import Iterable
 import numpy as np
 
 from abc import ABCMeta, abstractproperty, abstractmethod
@@ -51,6 +52,8 @@ Base classes
 
 Discretization class
 --------------------
+
+.. autofunction:: num_reference_derivative
 .. autoclass:: Discretization
 """
 
@@ -483,40 +486,12 @@ class Discretization:
         return self.zeros(array.array_context, dtype=array.entry_dtype)
 
     def num_reference_derivative(self, ref_axes, vec):
-        actx = vec.array_context
-        ref_axes = list(ref_axes)
+        warn(
+                "This method is deprecated and will go away in 2022.x. "
+                "Use 'meshmode.discretization.num_reference_derivative' instead.",
+                DeprecationWarning, stacklevel=2)
 
-        if not all([isinstance(grp, InterpolatoryElementGroupBase)
-                    for grp in self.groups]):
-            raise NoninterpolatoryElementGroupError(
-                "Element groups must be usuable for "
-                "differentiation and interpolation.")
-
-        @memoize_in(actx, (Discretization, "reference_derivative_prg"))
-        def prg():
-            return make_loopy_program(
-                """{[iel,idof,j]:
-                    0<=iel<nelements and
-                    0<=idof,j<nunit_dofs}""",
-                "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
-                name="diff")
-
-        def get_mat(grp):
-            mat = None
-            for ref_axis in ref_axes:
-                next_mat = grp.diff_matrices()[ref_axis]
-                if mat is None:
-                    mat = next_mat
-                else:
-                    mat = np.dot(next_mat, mat)
-
-            return mat
-
-        return _DOFArray(actx, tuple(
-                actx.call_loopy(
-                    prg(), diff_mat=actx.from_numpy(get_mat(grp)), vec=vec[grp.index]
-                    )["result"]
-                for grp in self.groups))
+        return num_reference_derivative(self, ref_axes, vec)
 
     @memoize_method
     def quad_weights(self):
@@ -592,6 +567,58 @@ class Discretization:
                 actx.freeze(resample_mesh_nodes(grp, iaxis)) for grp in self.groups
                 ]))
             for iaxis in range(self.ambient_dim)])
+
+
+def num_reference_derivative(
+        discr: Discretization,
+        ref_axes: Iterable[int],
+        vec: _DOFArray) -> _DOFArray:
+    """
+    :param ref_axes: an :class:`~collections.abc.Iterable` of indices
+        that define the sequence of derivatives to *vec*. For example,
+        ``(0, 1, 1)`` would take a third partial derivative, one in the first
+        axis and two in the second axis.
+    """
+
+    if not all([
+        isinstance(grp, InterpolatoryElementGroupBase) for grp in discr.groups
+        ]):
+        raise NoninterpolatoryElementGroupError(
+            "Element groups must be usuable for differentiation and interpolation.")
+
+    if not ref_axes:
+        return vec
+
+    actx = vec.array_context
+    ref_axes = tuple(ref_axes)
+
+    if not all(0 <= ref_axis < discr.dim for ref_axis in ref_axes):
+        raise ValueError("'ref_axes' exceeds discretization dimensions: "
+                f"got {ref_axes} for dimension {discr.dim}")
+
+    @memoize_in(actx, (Discretization, "reference_derivative_prg"))
+    def prg():
+        return make_loopy_program(
+            "{[iel,idof,j]: 0 <= iel < nelements and 0 <= idof, j < nunit_dofs}",
+            "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
+            name="diff")
+
+    def get_mat(grp):
+        mat = None
+        for ref_axis in ref_axes:
+            next_mat = grp.diff_matrices()[ref_axis]
+            if mat is None:
+                mat = next_mat
+            else:
+                mat = np.dot(next_mat, mat)
+
+        return actx.from_numpy(mat)
+
+    return _DOFArray(actx, tuple(
+            actx.call_loopy(
+                prg(), diff_mat=get_mat(grp), vec=vec[grp.index]
+                )["result"]
+            for grp in discr.groups))
 
 # }}}
 
