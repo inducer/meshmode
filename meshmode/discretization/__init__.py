@@ -581,8 +581,8 @@ def num_reference_derivative(
     """
 
     if not all([
-        isinstance(grp, InterpolatoryElementGroupBase) for grp in discr.groups
-        ]):
+            isinstance(grp, InterpolatoryElementGroupBase) for grp in discr.groups
+            ]):
         raise NoninterpolatoryElementGroupError(
             "Element groups must be usuable for differentiation and interpolation.")
 

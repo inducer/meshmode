@@ -23,9 +23,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from typing import Tuple
+from warnings import warn
 
 import numpy as np
-from pytools import memoize_method
+from pytools import memoize, memoize_method, memoize_on_first_arg
 from meshmode.mesh import (
         SimplexElementGroup as _MeshSimplexElementGroup,
         TensorProductElementGroup as _MeshTensorProductElementGroup)
@@ -39,6 +41,9 @@ import modepy as mp
 __doc__ = """
 Group types
 ^^^^^^^^^^^
+
+.. autofunction:: mass_matrix
+.. autofunction:: diff_matrices
 
 Simplicial group types
 ----------------------
@@ -89,38 +94,99 @@ Tensor product group factories
 """
 
 
+# {{{ matrices
+
+@memoize(key=lambda grp: grp.discretization_key())
+def mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
+    if not isinstance(grp, InterpolatoryElementGroupBase):
+        raise TypeError(f"cannot construct mass matrix on '{type(grp).__name__}'")
+
+    assert grp.is_orthonormal_basis()
+    return mp.mass_matrix(
+            grp.basis_obj().functions,
+            grp.unit_nodes)
+
+
+@memoize(key=lambda grp: grp.discretization_key())
+def inverse_mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
+    if not isinstance(grp, InterpolatoryElementGroupBase):
+        raise TypeError(f"cannot construct mass matrix on '{type(grp).__name__}'")
+
+    return mp.inverse_mass_matrix(
+            grp.basis_obj().functions,
+            grp.unit_nodes)
+
+
+@memoize(key=lambda grp: grp.discretization_key())
+def diff_matrices(grp: InterpolatoryElementGroupBase) -> Tuple[np.ndarray, ...]:
+    if not isinstance(grp, InterpolatoryElementGroupBase):
+        raise TypeError(f"cannot construct diff matrices on '{type(grp).__name__}'")
+
+    basis_fcts = grp.basis_obj().functions
+    grad_basis_fcts = grp.basis_obj().gradients
+
+    if len(basis_fcts) != grp.unit_nodes.shape[1]:
+        raise NoninterpolatoryElementGroupError(
+                f"{type(grp).__name__} does not support interpolation because "
+                "it is not unisolvent (its unit node count does not match its "
+                "number of basis functions). Differentiation requires "
+                "the ability to interpolate.")
+
+    result = mp.differentiation_matrices(
+            basis_fcts,
+            grad_basis_fcts,
+            grp.unit_nodes)
+
+    return result if isinstance(result, tuple) else (result,)
+
+
+@memoize_on_first_arg
+def from_mesh_interp_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
+    if not isinstance(grp, InterpolatoryElementGroupBase):
+        raise TypeError(
+                f"cannot construct resampling matrix on '{type(grp).__name__}'")
+
+    meg = grp.mesh_el_group
+    meg_space = type(grp.space)(meg.dim, meg.order)
+
+    return mp.resampling_matrix(
+            mp.basis_for_space(meg_space, grp.shape).functions,
+            grp.unit_nodes,
+            meg.unit_nodes)
+
+
+@memoize_on_first_arg
+def to_mesh_interp_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
+    if not isinstance(grp, InterpolatoryElementGroupBase):
+        raise TypeError(
+                f"cannot construct resampling matrix on '{type(grp).__name__}'")
+
+    return mp.resampling_matrix(
+            grp.basis_obj().functions,
+            grp.mesh_el_group.unit_nodes,
+            grp.unit_nodes)
+
+# }}}
+
+
 # {{{ base class for interpolatory polynomial elements
 
 class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
-    @memoize_method
     def mass_matrix(self):
-        assert self.is_orthonormal_basis()
+        warn(
+                "This method is deprecated and will go away in 2022.x. "
+                "Use 'meshmode.discretization.poly_element.mass_matrix' instead.",
+                DeprecationWarning, stacklevel=2)
 
-        return mp.mass_matrix(
-                self.basis_obj().functions,
-                self.unit_nodes)
+        return mass_matrix(self)
 
-    @memoize_method
     def diff_matrices(self):
-        basis_fcts = self.basis_obj().functions
-        grad_basis_fcts = self.basis_obj().gradients
-        if len(basis_fcts) != self.unit_nodes.shape[1]:
-            raise NoninterpolatoryElementGroupError(
-                    "%s does not support interpolation because it is not "
-                    "unisolvent (its unit node count does not match its "
-                    "number of basis functions). Differentiation requires "
-                    "the ability to interpolate." % type(self).__name__)
+        warn(
+                "This method is deprecated and will go away in 2022.x. "
+                "Use 'meshmode.discretization.poly_element.diff_matrices' instead.",
+                DeprecationWarning, stacklevel=2)
 
-        result = mp.differentiation_matrices(
-                basis_fcts,
-                grad_basis_fcts,
-                self.unit_nodes)
-
-        if not isinstance(result, tuple):
-            return (result,)
-        else:
-            return result
-
+        return diff_matrices(self)
 # }}}
 
 
@@ -257,7 +323,7 @@ class _MassMatrixQuadratureElementGroup(PolynomialSimplexElementGroupBase):
     @memoize_method
     def weights(self):
         return np.dot(
-                self.mass_matrix(),
+                mass_matrix(self),
                 np.ones(len(self.basis_obj().functions)))
 
 
@@ -449,7 +515,7 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
     @memoize_method
     def weights(self):
         return np.dot(
-                self.mass_matrix(),
+                mass_matrix(self),
                 np.ones(len(self.basis_obj().functions)))
 
     def discretization_key(self):
