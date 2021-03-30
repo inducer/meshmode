@@ -782,7 +782,8 @@ class PytatoCompiledOperator:
                 raise NotImplementedError("PytatoCompiledOperator cannot handle"
                                           f" '{type(arg)}'s")
 
-        evt, out_dict = self.pytato_program(allocator=self.actx.allocator,
+        evt, out_dict = self.pytato_program(queue=self.actx.queue,
+                                            allocator=self.actx.allocator,
                                             **updated_kwargs)
         evt.wait()
 
@@ -862,8 +863,8 @@ class PytatoArrayContext(ArrayContext):
         if not isinstance(array, pt.Array):
             raise TypeError("PytatoArrayContext.freeze invoked with non-pt arrays")
 
-        prg = pt.generate_loopy(array, target=pt.LoopyPyOpenCLTarget(self.queue))
-        evt, (cl_array,) = prg()
+        prg = pt.generate_loopy(array, cl_device=self.queue.device)
+        evt, (cl_array,) = prg(self.queue)
         evt.wait()
 
         return cl_array.with_queue(None)
@@ -924,8 +925,8 @@ class PytatoArrayContext(ArrayContext):
         output_dict_of_named_arrays, output_spec = as_dict_of_named_arrays(outputs)
 
         pytato_program = pt.generate_loopy(output_dict_of_named_arrays,
-                          options={"return_dict": True},
-                          target=pt.LoopyPyOpenCLTarget(self.queue))
+                                           options={"return_dict": True},
+                                           cl_device=self.queue.device)
 
         if False:
             from time import time
