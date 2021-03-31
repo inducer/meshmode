@@ -188,7 +188,9 @@ def _check_discr_same_connectivity(discr, other):
     if len(discr.groups) != len(other.groups):
         return False
 
-    if not all(sg.discretization_key() == og.discretization_key()
+    if not all(
+            sg.discretization_key() == og.discretization_key()
+            and sg.nelements == og.nelements
             for sg, og in zip(discr.groups, other.groups)):
         return False
 
