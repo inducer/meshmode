@@ -38,8 +38,8 @@ from meshmode.dof_array import DOFArray as _DOFArray
 __doc__ = """
 Error handling
 --------------
-.. autoclass:: ElementGroupTypeError
-.. autoclass:: NoninterpolatoryElementGroupError
+.. autoexception:: ElementGroupTypeError
+.. autoexception:: NoninterpolatoryElementGroupError
 
 Base classes
 ------------
