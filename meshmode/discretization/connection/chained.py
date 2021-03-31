@@ -116,14 +116,14 @@ def _build_new_group_table(from_conn, to_conn):
             # compute result_unit_nodes
             ffgrp = from_conn.from_discr.groups[fbatch.from_group_index]
             from_matrix = mp.resampling_matrix(
-                    ffgrp.basis(),
+                    ffgrp.basis_obj().functions,
                     fbatch.result_unit_nodes,
                     ffgrp.unit_nodes)
             result_unit_nodes = from_matrix.dot(ffgrp.unit_nodes.T)
 
             tfgrp = to_conn.from_discr.groups[tbatch.from_group_index]
             to_matrix = mp.resampling_matrix(
-                    tfgrp.basis(),
+                    tfgrp.basis_obj().functions,
                     tbatch.result_unit_nodes,
                     tfgrp.unit_nodes)
             result_unit_nodes = to_matrix.dot(result_unit_nodes).T

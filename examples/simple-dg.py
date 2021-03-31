@@ -224,7 +224,7 @@ class DGDiscretization:
     def get_inverse_mass_matrix(self, grp, dtype):
         import modepy as mp
         matrix = mp.inverse_mass_matrix(
-                grp.basis(),
+                grp.basis_obj().functions,
                 grp.unit_nodes)
 
         actx = self._setup_actx
@@ -275,7 +275,8 @@ class DGDiscretization:
         for face in mp.faces_for_shape(shape):
             face_vertices = unit_vertices[np.array(face.volume_vertex_indices)].T
             matrix[:, face.face_index, :] = mp.nodal_face_mass_matrix(
-                    volgrp.basis(), volgrp.unit_nodes, afgrp.unit_nodes,
+                    volgrp.basis_obj().functions,
+                    volgrp.unit_nodes, afgrp.unit_nodes,
                     volgrp.order,
                     face_vertices)
 
