@@ -69,8 +69,8 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         if conn.from_discr.dim != conn.to_discr.dim:
             raise RuntimeError("cannot transport from face to element")
 
-        if not all(g.is_orthogonal_basis() for g in conn.to_discr.groups):
-            raise RuntimeError("`to_discr` must have an orthogonal basis")
+        if not all(g.is_orthonormal_basis() for g in conn.to_discr.groups):
+            raise RuntimeError("`to_discr` must have an orthonormal basis")
 
         self.conn = conn
         super().__init__(
@@ -189,7 +189,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
             for ibatch, batch in enumerate(cgrp.batches):
                 sgrp = self.from_discr.groups[batch.from_group_index]
 
-                for ibasis, basis_fn in enumerate(sgrp.basis()):
+                for ibasis, basis_fn in enumerate(sgrp.basis_obj().functions):
                     basis = actx.from_numpy(
                             basis_fn(batch.result_unit_nodes).flatten())
 
@@ -210,7 +210,8 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
         for igrp, grp in enumerate(self.to_discr.groups):
             from modepy import vandermonde
-            vdm = actx.from_numpy(vandermonde(grp.basis(), grp.unit_nodes))
+            vdm = actx.from_numpy(vandermonde(grp.basis_obj().functions,
+                                              grp.unit_nodes))
             actx.call_loopy(
                     keval(),
                     result=result[grp.index],
