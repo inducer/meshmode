@@ -185,20 +185,11 @@ class _VisConnectivityGroup(Record):
 
 
 def _check_discr_same_connectivity(discr, other):
-    def _cmp(grp, ogrp):
-        # NOTE: include more things here if they become necessary
-        return (
-                type(grp) == type(ogrp)
-                and grp.order == ogrp.order
-                and grp.nelements == ogrp.nelements
-                and grp.nunit_dofs == ogrp.nunit_dofs
-                and np.array_equal(grp.unit_nodes, ogrp.unit_nodes)
-                )
-
     if len(discr.groups) != len(other.groups):
         return False
 
-    if not all(_cmp(sg, og) for sg, og in zip(discr.groups, other.groups)):
+    if not all(sg.discretization_key() == og.discretization_key()
+            for sg, og in zip(discr.groups, other.groups)):
         return False
 
     return True
