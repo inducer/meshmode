@@ -118,7 +118,7 @@ def inverse_mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
 
 
 @memoize(key=lambda grp: grp.discretization_key())
-def diff_matrices(grp: InterpolatoryElementGroupBase) -> Tuple[np.ndarray, ...]:
+def diff_matrices(grp: InterpolatoryElementGroupBase) -> Tuple[np.ndarray]:
     if not isinstance(grp, InterpolatoryElementGroupBase):
         raise TypeError(f"cannot construct diff matrices on '{type(grp).__name__}'")
 
