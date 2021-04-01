@@ -447,27 +447,6 @@ class ModalTensorProductElementGroup(PolynomialModalElementGroupBase):
 
 # {{{ concrete element groups for nodal tensor product (hypercube) elements
 
-@memoize
-def _tensor_legendre_gauss_quadrature(order, dim):
-    return mp.LegendreGaussTensorProductQuadrature(order, dim)
-
-
-@memoize
-def _tensor_legendre_gauss_lobatto_nodes(order, dim):
-    from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
-    unit_nodes_1d = legendre_gauss_lobatto_nodes(order)
-
-    return mp.tensor_product_nodes([unit_nodes_1d] * dim)
-
-
-@memoize
-def _tensor_equidistant_nodes(order, dim):
-    from modepy.nodes import equidistant_nodes
-    unit_nodes_1d = equidistant_nodes(1, order)[0]
-
-    return mp.tensor_product_nodes([unit_nodes_1d] * dim)
-
-
 class HypercubeElementGroupBase(NodalElementGroupBase):
     @property
     @memoize_method
@@ -547,11 +526,15 @@ class GaussLegendreTensorProductElementGroup(LegendreTensorProductElementGroup):
     """
 
     def __init__(self, mesh_el_group, order, index):
-        self._quadrature_rule = _tensor_legendre_gauss_quadrature(
-                order, mesh_el_group.dim)
+        self._quadrature_rule = self._leggauss_quadrature(order, mesh_el_group.dim)
 
         super().__init__(mesh_el_group, order, index,
                 unit_nodes=self._quadrature_rule.nodes)
+
+    @classmethod
+    @memoize
+    def _leggauss_quadrature(cls, order, dim):
+        return mp.LegendreGaussTensorProductQuadrature(order, dim)
 
     @property
     def weights(self):
@@ -573,9 +556,15 @@ class LegendreGaussLobattoTensorProductElementGroup(
 
     def __init__(self, mesh_el_group, order, index):
         super().__init__(mesh_el_group, order, index,
-                unit_nodes=_tensor_legendre_gauss_lobatto_nodes(
-                    order, mesh_el_group.dim)
-                )
+                unit_nodes=self._lgl_nodes(order, mesh_el_group.dim))
+
+    @classmethod
+    @memoize
+    def _lgl_nodes(cls, order, dim):
+        from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
+        unit_nodes_1d = legendre_gauss_lobatto_nodes(order)
+
+        return mp.tensor_product_nodes([unit_nodes_1d] * dim)
 
     def discretization_key(self):
         return (type(self), self.dim, self.order)
@@ -592,9 +581,15 @@ class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
 
     def __init__(self, mesh_el_group, order, index):
         super().__init__(mesh_el_group, order, index,
-                unit_nodes=_tensor_equidistant_nodes(
-                    order, mesh_el_group.dim)
-                )
+                unit_nodes=self._equidistant_nodes(order, mesh_el_group.dim))
+
+    @classmethod
+    @memoize
+    def _equidistant_nodes(cls, order, dim):
+        from modepy.nodes import equidistant_nodes
+        unit_nodes_1d = equidistant_nodes(1, order)[0]
+
+        return mp.tensor_product_nodes([unit_nodes_1d] * dim)
 
     def discretization_key(self):
         return (type(self), self.dim, self.order)

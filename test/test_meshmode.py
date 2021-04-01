@@ -285,9 +285,9 @@ def test_copy_visualizer(actx_factory, ambient_dim, visualize=True):
         return
 
     vis.write_vtk_file(
-            f"visualizer_copy_{ambient_dim}d_orig.vtu", [])
+            f"visualizer_copy_{ambient_dim}d_orig.vtu", [], overwrite=True)
     translated_vis.write_vtk_file(
-            f"visualizer_copy_{ambient_dim}d_translated.vtu", [])
+            f"visualizer_copy_{ambient_dim}d_translated.vtu", [], overwrite=True)
 
 # }}}
 
