@@ -183,6 +183,19 @@ class _VisConnectivityGroup(Record):
     def primitive_element_size(self):
         return self.vis_connectivity.shape[2]
 
+
+def _check_discr_same_connectivity(discr, other):
+    if len(discr.groups) != len(other.groups):
+        return False
+
+    if not all(
+            sg.discretization_key() == og.discretization_key()
+            and sg.nelements == og.nelements
+            for sg, og in zip(discr.groups, other.groups)):
+        return False
+
+    return True
+
 # }}}
 
 
@@ -442,10 +455,16 @@ class Visualizer:
     .. automethod:: write_vtk_file
     .. automethod:: write_parallel_vtk_file
     .. automethod:: write_xdmf_file
+
+    .. automethod:: copy_with_same_connectivity
     """
 
     def __init__(self, connection,
-            element_shrink_factor=None, is_equidistant=False):
+            element_shrink_factor=None,
+            is_equidistant=False,
+            _vtk_connectivity=None,
+            _vtk_lagrange_connectivity=None):
+
         self.connection = connection
         self.discr = connection.from_discr
         self.vis_discr = connection.to_discr
@@ -454,6 +473,42 @@ class Visualizer:
             element_shrink_factor = 1.0
         self.element_shrink_factor = element_shrink_factor
         self.is_equidistant = is_equidistant
+
+        self._cached_vtk_connectivity = _vtk_connectivity
+        self._cached_vtk_lagrange_connectivity = _vtk_lagrange_connectivity
+
+    def copy_with_same_connectivity(self, actx, discr, skip_tests=False):
+        """Makes a copy of the visualizer for a
+        :class:`~meshmode.discretization.Discretization` with the same group
+        structure as the original discretization. This can be useful when the
+        geometry is mapped (e.g. using :func:`~meshmode.mesh.processing.affine_map`)
+        and the connectivity can be reused.
+
+        The *"same group structure"* here means that the two discretizations
+        should have the same group types, number of elements, degrees of
+        freedom, etc.
+
+        :param skip_tests: If *True*, no checks in the group structure of the
+            discretizations are performed.
+        """
+
+        if not skip_tests:
+            if not _check_discr_same_connectivity(discr, self.discr):
+                raise ValueError("'discr' does not have matching group structures")
+
+        vis_discr = self.vis_discr.copy(actx=actx, mesh=discr.mesh)
+        conn = type(self.connection)(
+                discr, vis_discr,
+                groups=self.connection.groups,
+                is_surjective=self.connection.is_surjective)
+
+        return type(self)(
+                conn,
+                element_shrink_factor=self.element_shrink_factor,
+                is_equidistant=self.is_equidistant,
+                _vtk_connectivity=self._cached_vtk_connectivity,
+                _vtk_lagrange_connectivity=self._cached_vtk_lagrange_connectivity,
+                )
 
     @memoize_method
     def _vis_nodes_numpy(self):
@@ -516,15 +571,21 @@ class Visualizer:
     # {{{ vtk
 
     @property
-    @memoize_method
     def _vtk_connectivity(self):
-        return VTKConnectivity(self.connection)
+        if self._cached_vtk_connectivity is None:
+            self._cached_vtk_connectivity = VTKConnectivity(self.connection)
+
+        return self._cached_vtk_connectivity
 
     @property
-    @memoize_method
     def _vtk_lagrange_connectivity(self):
         assert self.is_equidistant
-        return VTKLagrangeConnectivity(self.connection)
+
+        if self._cached_vtk_lagrange_connectivity is None:
+            self._cached_vtk_lagrange_connectivity = \
+                    VTKLagrangeConnectivity(self.connection)
+
+        return self._cached_vtk_lagrange_connectivity
 
     def write_parallel_vtk_file(self, mpi_comm, file_name_pattern, names_and_fields,
                 compressor=None, real_only=False,
@@ -1023,9 +1084,7 @@ def make_visualizer(actx, discr, vis_order,
                 tensor_product_group_class=TensorElementGroup),
             )
 
-    from meshmode.discretization.connection import \
-            make_same_mesh_connection
-
+    from meshmode.discretization.connection import make_same_mesh_connection
     return Visualizer(
             make_same_mesh_connection(actx, vis_discr, discr),
             element_shrink_factor=element_shrink_factor,
