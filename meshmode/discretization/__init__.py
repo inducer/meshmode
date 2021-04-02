@@ -27,7 +27,7 @@ from typing import Iterable
 import numpy as np
 
 from abc import ABCMeta, abstractproperty, abstractmethod
-from pytools import memoize_in, memoize_method
+from pytools import memoize_in, memoize_method, keyed_memoize_in
 from pytools.obj_array import make_obj_array
 from meshmode.array_context import ArrayContext, make_loopy_program
 
@@ -590,7 +590,7 @@ def num_reference_derivative(
         return vec
 
     actx = vec.array_context
-    ref_axes = tuple(ref_axes)
+    ref_axes = tuple(sorted(ref_axes))
 
     if not all(0 <= ref_axis < discr.dim for ref_axis in ref_axes):
         raise ValueError("'ref_axes' exceeds discretization dimensions: "
@@ -603,6 +603,9 @@ def num_reference_derivative(
             "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
             name="diff")
 
+    @keyed_memoize_in(actx,
+            (num_reference_derivative, "num_reference_derivative_matrix"),
+            lambda grp: grp.discretization_key() + ref_axes)
     def get_mat(grp):
         from meshmode.discretization.poly_element import diff_matrices
         matrices = diff_matrices(grp)
