@@ -99,7 +99,8 @@ Tensor product group factories
 @memoize_on_first_arg
 def mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
     if not isinstance(grp, InterpolatoryElementGroupBase):
-        raise TypeError(f"cannot construct mass matrix on '{type(grp).__name__}'")
+        raise NoninterpolatoryElementGroupError(
+                f"cannot construct mass matrix on '{type(grp).__name__}'")
 
     assert grp.is_orthonormal_basis()
     return mp.mass_matrix(
@@ -110,7 +111,8 @@ def mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
 @memoize_on_first_arg
 def inverse_mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
     if not isinstance(grp, InterpolatoryElementGroupBase):
-        raise TypeError(f"cannot construct mass matrix on '{type(grp).__name__}'")
+        raise NoninterpolatoryElementGroupError(
+                f"cannot construct mass matrix on '{type(grp).__name__}'")
 
     return mp.inverse_mass_matrix(
             grp.basis_obj().functions,
@@ -120,7 +122,8 @@ def inverse_mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
 @memoize_on_first_arg
 def diff_matrices(grp: InterpolatoryElementGroupBase) -> Tuple[np.ndarray]:
     if not isinstance(grp, InterpolatoryElementGroupBase):
-        raise TypeError(f"cannot construct diff matrices on '{type(grp).__name__}'")
+        raise NoninterpolatoryElementGroupError(
+                f"cannot construct diff matrices on '{type(grp).__name__}'")
 
     basis_fcts = grp.basis_obj().functions
     grad_basis_fcts = grp.basis_obj().gradients
