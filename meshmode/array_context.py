@@ -231,11 +231,11 @@ class ArrayContext(ABC):
 
     @abstractmethod
     def empty(self, shape, dtype):
-        raise NotImplementedError
+        pass
 
     @abstractmethod
     def zeros(self, shape, dtype):
-        raise NotImplementedError
+        pass
 
     def empty_like(self, ary):
         return self.empty(shape=ary.shape, dtype=ary.dtype)
@@ -250,7 +250,7 @@ class ArrayContext(ABC):
             array context's array type. The returned array will be
             :meth:`thaw`\ ed.
         """
-        raise NotImplementedError
+        pass
 
     @abstractmethod
     def to_numpy(self, array):
@@ -259,7 +259,7 @@ class ArrayContext(ABC):
             to a :class:`numpy.ndarray`. *array* must be
             :meth:`thaw`\ ed.
         """
-        raise NotImplementedError
+        pass
 
     def call_loopy(self, program, **kwargs):
         """Execute the :mod:`loopy` program *program* on the arguments
@@ -272,7 +272,6 @@ class ArrayContext(ABC):
         :return: a :class:`dict` of outputs from the program, each an
             array understood by the context.
         """
-        raise NotImplementedError
 
     @memoize_method
     def _get_scalar_func_loopy_program(self, c_name, nargs, naxes):
@@ -312,7 +311,6 @@ class ArrayContext(ABC):
         it is permitted to :meth:`thaw` it in a different one, as long as that
         context understands the array format.
         """
-        raise NotImplementedError
 
     @abstractmethod
     def thaw(self, array):
@@ -326,7 +324,6 @@ class ArrayContext(ABC):
 
         The returned array may not be used with other contexts while thawed.
         """
-        raise NotImplementedError
 
     @abstractmethod
     def tag(self, tags: Union[Sequence[Tag], Tag], array):
@@ -336,7 +333,6 @@ class ArrayContext(ABC):
 
         .. versionadded:: 2021.2
         """
-        raise NotImplementedError
 
     @abstractmethod
     def tag_axis(self, iaxis, tags: Union[Sequence[Tag], Tag], array):
@@ -346,7 +342,6 @@ class ArrayContext(ABC):
 
         .. versionadded:: 2021.2
         """
-        raise NotImplementedError
 
 # }}}
 
