@@ -32,7 +32,7 @@ from abc import ABC, abstractmethod
 
 __doc__ = """
 .. autofunction:: make_loopy_program
-.. autoclass:: CommonSubexpression
+.. autoclass:: CommonSubexpressionTag
 .. autoclass:: ArrayContext
 .. autoclass:: PyOpenCLArrayContext
 .. autofunction:: pytest_generate_tests_for_pyopencl_array_context
@@ -180,7 +180,7 @@ class _BaseFakeNumpyLinalgNamespace:
         self._array_context = array_context
 
 
-class CommonSubexpression(Tag):
+class CommonSubexpressionTag(Tag):
     """A tag that is applicable to arrays indicating that this same array
     may be evaluated multiple times, and that the implementation should
     eliminate those redundant evaluations if possible.
