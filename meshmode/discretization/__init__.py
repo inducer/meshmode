@@ -596,7 +596,7 @@ def num_reference_derivative(
         raise ValueError("'ref_axes' exceeds discretization dimensions: "
                 f"got {ref_axes} for dimension {discr.dim}")
 
-    @memoize_in(actx, (Discretization, "reference_derivative_prg"))
+    @memoize_in(actx, (num_reference_derivative, "reference_derivative_prg"))
     def prg():
         return make_loopy_program(
             "{[iel,idof,j]: 0 <= iel < nelements and 0 <= idof, j < nunit_dofs}",
