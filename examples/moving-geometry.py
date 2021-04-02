@@ -26,7 +26,7 @@ import pyopencl as cl
 from meshmode.dof_array import thaw
 from meshmode.array_context import PyOpenCLArrayContext
 
-from pytools import memoize_in
+from pytools import memoize_in, memoize_on_first_arg
 from pytools.obj_array import make_obj_array
 
 import logging
@@ -63,6 +63,14 @@ def reconstruct_discr_from_nodes(actx, discr, x):
             """,
             name="resample_by_mat_prg")
 
+    @memoize_on_first_arg
+    def to_mesh_interp_matrix(grp) -> np.ndarray:
+        import modepy as mp
+        return mp.resampling_matrix(
+                grp.basis_obj().functions,
+                grp.mesh_el_group.unit_nodes,
+                grp.unit_nodes)
+
     def resample_nodes_to_mesh(grp, igrp, iaxis):
         discr_nodes = x[iaxis][igrp]
 
@@ -74,7 +82,6 @@ def reconstruct_discr_from_nodes(actx, discr, x):
                 and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
             return discr_nodes
 
-        from meshmode.discretization.poly_element import to_mesh_interp_matrix
         return actx.call_loopy(
                 resample_by_mat_prg(),
                 nodes=discr_nodes,
@@ -150,9 +157,9 @@ def run(actx, *,
 
     import meshmode.mesh.generation as gen
     if ambient_dim == 2:
-        nelements = 64 if resolution is None else resolution
+        nelements = 8192 if resolution is None else resolution
         mesh = gen.make_curve_mesh(
-                lambda t: gen.ellipse(radius, t),
+                lambda t: radius * gen.ellipse(1.0, t),
                 np.linspace(0.0, 1.0, nelements + 1),
                 order=mesh_order,
                 unit_nodes=unit_nodes)
@@ -186,7 +193,7 @@ def run(actx, *,
     def velocity_field(nodes, alpha=1.0):
         return make_obj_array([
             alpha * nodes[0], -alpha * nodes[1], 0.0 * nodes[0]
-            ])
+            ][:ambient_dim])
 
     def source(t, x):
         discr = reconstruct_discr_from_nodes(actx, discr0, x)
@@ -248,9 +255,15 @@ if __name__ == "__main__":
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(queue)
 
-    run(actx,
-            ambient_dim=3,
-            group_factory_name="quadrature",
-            tmax=1.0,
-            timestep=1.0e-2,
-            visualize=False)
+    from pytools import ProcessTimer
+    for _ in range(3):
+        with ProcessTimer() as p:
+            run(actx,
+                    ambient_dim=3,
+                    group_factory_name="quadrature",
+                    tmax=1.0,
+                    timestep=1.0e-2,
+                    visualize=False)
+
+        logger.info("elapsed: %.3fs wall %.2fx cpu",
+                p.wall_elapsed, p.process_elapsed / p.wall_elapsed)

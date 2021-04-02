@@ -27,7 +27,7 @@ from typing import Tuple
 from warnings import warn
 
 import numpy as np
-from pytools import memoize, memoize_method, memoize_on_first_arg
+from pytools import memoize_method, memoize_on_first_arg
 from meshmode.mesh import (
         SimplexElementGroup as _MeshSimplexElementGroup,
         TensorProductElementGroup as _MeshTensorProductElementGroup)
@@ -96,7 +96,7 @@ Tensor product group factories
 
 # {{{ matrices
 
-@memoize(key=lambda grp: grp.discretization_key())
+@memoize_on_first_arg
 def mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
     if not isinstance(grp, InterpolatoryElementGroupBase):
         raise TypeError(f"cannot construct mass matrix on '{type(grp).__name__}'")
@@ -107,7 +107,7 @@ def mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
             grp.unit_nodes)
 
 
-@memoize(key=lambda grp: grp.discretization_key())
+@memoize_on_first_arg
 def inverse_mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
     if not isinstance(grp, InterpolatoryElementGroupBase):
         raise TypeError(f"cannot construct mass matrix on '{type(grp).__name__}'")
@@ -117,7 +117,7 @@ def inverse_mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
             grp.unit_nodes)
 
 
-@memoize(key=lambda grp: grp.discretization_key())
+@memoize_on_first_arg
 def diff_matrices(grp: InterpolatoryElementGroupBase) -> Tuple[np.ndarray]:
     if not isinstance(grp, InterpolatoryElementGroupBase):
         raise TypeError(f"cannot construct diff matrices on '{type(grp).__name__}'")
@@ -240,7 +240,7 @@ class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBa
     No interpolation nodes are present on the boundary of the simplex.
     """
 
-    @memoize(key=lambda self: self.discretization_key())
+    @memoize_method
     def _quadrature_rule(self):
         dims = self.mesh_el_group.dim
         if dims == 0:
@@ -276,7 +276,7 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
     No interpolation nodes are present on the boundary of the simplex.
     """
 
-    @memoize(key=lambda self: self.discretization_key())
+    @memoize_method
     def _quadrature_rule(self):
         dims = self.mesh_el_group.dim
         if dims == 0:
@@ -322,7 +322,7 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
     Uses :func:`modepy.warp_and_blend_nodes`.
     """
     @property
-    @memoize(key=lambda self: self.discretization_key())
+    @memoize_method
     def unit_nodes(self):
         dim = self.mesh_el_group.dim
         if self.order == 0:
@@ -359,7 +359,7 @@ class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
         self.family = family
 
     @property
-    @memoize(key=lambda self: self.discretization_key())
+    @memoize_method
     def unit_nodes(self):
         dim = self.mesh_el_group.dim
 
@@ -384,7 +384,7 @@ class PolynomialEquidistantSimplexElementGroup(_MassMatrixQuadratureElementGroup
     .. versionadded:: 2016.1
     """
     @property
-    @memoize(key=lambda self: self.discretization_key())
+    @memoize_method
     def unit_nodes(self):
         dim = self.mesh_el_group.dim
         result = mp.equidistant_nodes(dim, self.order)
@@ -483,7 +483,6 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
         self._basis = basis
         self._unit_nodes = unit_nodes
 
-    @memoize_method
     def basis_obj(self):
         return self._basis
 
@@ -526,15 +525,11 @@ class GaussLegendreTensorProductElementGroup(LegendreTensorProductElementGroup):
     """
 
     def __init__(self, mesh_el_group, order, index):
-        self._quadrature_rule = self._leggauss_quadrature(order, mesh_el_group.dim)
+        self._quadrature_rule = mp.LegendreGaussTensorProductQuadrature(
+                order, mesh_el_group.dim)
 
         super().__init__(mesh_el_group, order, index,
                 unit_nodes=self._quadrature_rule.nodes)
-
-    @classmethod
-    @memoize
-    def _leggauss_quadrature(cls, order, dim):
-        return mp.LegendreGaussTensorProductQuadrature(order, dim)
 
     @property
     def weights(self):
@@ -555,16 +550,11 @@ class LegendreGaussLobattoTensorProductElementGroup(
     """
 
     def __init__(self, mesh_el_group, order, index):
-        super().__init__(mesh_el_group, order, index,
-                unit_nodes=self._lgl_nodes(order, mesh_el_group.dim))
-
-    @classmethod
-    @memoize
-    def _lgl_nodes(cls, order, dim):
         from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
         unit_nodes_1d = legendre_gauss_lobatto_nodes(order)
+        unit_nodes = mp.tensor_product_nodes([unit_nodes_1d] * mesh_el_group.dim)
 
-        return mp.tensor_product_nodes([unit_nodes_1d] * dim)
+        super().__init__(mesh_el_group, order, index, unit_nodes=unit_nodes)
 
     def discretization_key(self):
         return (type(self), self.dim, self.order)
@@ -580,16 +570,11 @@ class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
     """
 
     def __init__(self, mesh_el_group, order, index):
-        super().__init__(mesh_el_group, order, index,
-                unit_nodes=self._equidistant_nodes(order, mesh_el_group.dim))
-
-    @classmethod
-    @memoize
-    def _equidistant_nodes(cls, order, dim):
         from modepy.nodes import equidistant_nodes
         unit_nodes_1d = equidistant_nodes(1, order)[0]
+        unit_nodes = mp.tensor_product_nodes([unit_nodes_1d] * mesh_el_group.dim)
 
-        return mp.tensor_product_nodes([unit_nodes_1d] * dim)
+        super().__init__(mesh_el_group, order, index, unit_nodes=unit_nodes)
 
     def discretization_key(self):
         return (type(self), self.dim, self.order)
