@@ -591,11 +591,10 @@ def array_context_for_pickling(actx: ArrayContext):
 
 
 def flat_norm(ary: DOFArray, ord=None):
-    from warnings import warn
-    warn("flat_norm is deprecated. Use array_context.np.linalg.norm instead. "
-            "flat_norm will disappear in 2022.",
-            DeprecationWarning, stacklevel=2)
-    return ary.array_context.np.linalg.norm(ary, ord=ord)
+    actx = ary.array_context
+    return np.linalg.norm([actx.to_numpy(subary)
+                           for subary in ary.array_context.np.linalg.norm(ary,
+                                                                          ord=ord)])
 
 
 # vim: foldmethod=marker

@@ -378,15 +378,24 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
 
     def sum(self, a, dtype=None):
         import pyopencl.array as cl_array
-        return cl_array.sum(a, dtype=dtype, queue=self._array_context.queue)
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(
+                partial(cl_array.sum, dtype=dtype, queue=self._array_context.queue),
+                a)
 
     def min(self, a):
         import pyopencl.array as cl_array
-        return cl_array.min(a, queue=self._array_context.queue)
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(
+                partial(cl_array.min, queue=self._array_context.queue),
+                a)
 
     def max(self, a):
         import pyopencl.array as cl_array
-        return cl_array.max(a, queue=self._array_context.queue)
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(
+                partial(cl_array.max, queue=self._array_context.queue),
+                a)
 
 
 def _flatten_grp_array(grp_ary):
@@ -408,26 +417,18 @@ class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
         if len(array.shape) != 1:
             raise NotImplementedError("only vector norms are implemented")
 
-        if ord is None:
-            ord = 2
-
-        # Handling DOFArrays here is not beautiful, but it sure does avoid
-        # downstream headaches.
-        from meshmode.dof_array import DOFArray
-        if isinstance(array, DOFArray):
-            import numpy.linalg as la
-            return la.norm(np.array([
-                self.norm(_flatten_grp_array(grp_ary), ord)
-                for grp_ary in array]), ord)
-
         if array.size == 0:
             return 0
 
+        if ord is None:
+            ord = 2
+
         from numbers import Number
         if ord == np.inf:
-            return self._array_context.np.max(abs(array))
+            return self._array_context.np.max(self._array_context.np.abs(array))
         elif isinstance(ord, Number) and ord > 0:
-            return self._array_context.np.sum(abs(array)**ord)**(1/ord)
+            return self._array_context.np.sum(
+                self._array_context.np.abs(array)**ord)**(1/ord)
         else:
             raise NotImplementedError(f"unsupported value of 'ord': {ord}")
 
