@@ -23,9 +23,8 @@ THE SOFTWARE.
 import operator as op
 import numpy as np
 from typing import Optional, Iterable, Any, Tuple, Union
-from functools import partial
+from functools import partial, update_wrapper
 from numbers import Number
-import decorator
 import threading
 from contextlib import contextmanager
 
@@ -374,7 +373,10 @@ def obj_or_dof_array_vectorize(f, ary):
         return f(ary)
 
 
-obj_or_dof_array_vectorized = decorator.decorator(obj_or_dof_array_vectorize)
+def obj_or_dof_array_vectorized(f):
+    wrapper = partial(obj_or_dof_array_vectorize, f)
+    update_wrapper(wrapper, f)
+    return wrapper
 
 
 def obj_or_dof_array_vectorize_n_args(f, *args):
@@ -416,8 +418,10 @@ def obj_or_dof_array_vectorize_n_args(f, *args):
     return DOFArray(template_ary.array_context, tuple(result))
 
 
-obj_or_dof_array_vectorized_n_args = decorator.decorator(
-        obj_or_dof_array_vectorize_n_args)
+def obj_or_dof_array_vectorized_n_args(f):
+    wrapper = partial(obj_or_dof_array_vectorize_n_args, f)
+    update_wrapper(wrapper, f)
+    return wrapper
 
 # }}}
 

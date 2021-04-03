@@ -20,14 +20,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from typing import Union, Sequence
 from functools import partial
 import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method
+from pytools.tag import Tag
+from abc import ABC, abstractmethod
+
 
 __doc__ = """
 .. autofunction:: make_loopy_program
+.. autoclass:: CommonSubexpressionTag
 .. autoclass:: ArrayContext
 .. autoclass:: PyOpenCLArrayContext
 .. autofunction:: pytest_generate_tests_for_pyopencl_array_context
@@ -175,10 +180,21 @@ class _BaseFakeNumpyLinalgNamespace:
         self._array_context = array_context
 
 
-class ArrayContext:
+class CommonSubexpressionTag(Tag):
+    """A tag that is applicable to arrays indicating that this same array
+    may be evaluated multiple times, and that the implementation should
+    eliminate those redundant evaluations if possible.
+
+    .. versionadded:: 2021.2
+    """
+
+
+class ArrayContext(ABC):
     """An interface that allows a
     :class:`~meshmode.discretization.Discretization` to create and interact
     with arrays of degrees of freedom without fully specifying their types.
+
+    .. versionadded:: 2020.2
 
     .. automethod:: empty
     .. automethod:: zeros
@@ -203,8 +219,8 @@ class ArrayContext:
 
     .. automethod:: freeze
     .. automethod:: thaw
-
-    .. versionadded:: 2020.2
+    .. automethod:: tag
+    .. automethod:: tag_axis
     """
 
     def __init__(self):
@@ -213,11 +229,13 @@ class ArrayContext:
     def _get_fake_numpy_namespace(self):
         return _BaseFakeNumpyNamespace(self)
 
+    @abstractmethod
     def empty(self, shape, dtype):
-        raise NotImplementedError
+        pass
 
+    @abstractmethod
     def zeros(self, shape, dtype):
-        raise NotImplementedError
+        pass
 
     def empty_like(self, ary):
         return self.empty(shape=ary.shape, dtype=ary.dtype)
@@ -225,21 +243,23 @@ class ArrayContext:
     def zeros_like(self, ary):
         return self.zeros(shape=ary.shape, dtype=ary.dtype)
 
+    @abstractmethod
     def from_numpy(self, array: np.ndarray):
         r"""
         :returns: the :class:`numpy.ndarray` *array* converted to the
             array context's array type. The returned array will be
             :meth:`thaw`\ ed.
         """
-        raise NotImplementedError
+        pass
 
+    @abstractmethod
     def to_numpy(self, array):
         r"""
         :returns: *array*, an array recognized by the context, converted
             to a :class:`numpy.ndarray`. *array* must be
             :meth:`thaw`\ ed.
         """
-        raise NotImplementedError
+        pass
 
     def call_loopy(self, program, **kwargs):
         """Execute the :mod:`loopy` program *program* on the arguments
@@ -252,7 +272,6 @@ class ArrayContext:
         :return: a :class:`dict` of outputs from the program, each an
             array understood by the context.
         """
-        raise NotImplementedError
 
     @memoize_method
     def _get_scalar_func_loopy_program(self, c_name, nargs, naxes):
@@ -279,6 +298,7 @@ class ArrayContext:
                     ],
                 name="actx_special_%s" % c_name)
 
+    @abstractmethod
     def freeze(self, array):
         """Return a version of the context-defined array *array* that is
         'frozen', i.e. suitable for long-term storage and reuse. Frozen arrays
@@ -291,8 +311,8 @@ class ArrayContext:
         it is permitted to :meth:`thaw` it in a different one, as long as that
         context understands the array format.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     def thaw(self, array):
         """Take a 'frozen' array and return a new array representing the data in
         *array* that is able to perform arithmetic and other operations, using
@@ -304,7 +324,24 @@ class ArrayContext:
 
         The returned array may not be used with other contexts while thawed.
         """
-        raise NotImplementedError
+
+    @abstractmethod
+    def tag(self, tags: Union[Sequence[Tag], Tag], array):
+        """If the array type used by the array context is capable of capturing
+        metadata, return a version of *array* with the *tags* applied. *array*
+        itself is not modified.
+
+        .. versionadded:: 2021.2
+        """
+
+    @abstractmethod
+    def tag_axis(self, iaxis, tags: Union[Sequence[Tag], Tag], array):
+        """If the array type used by the array context is capable of capturing
+        metadata, return a version of *array* in which axis number *iaxis* has
+        the *tags* applied. *array* itself is not modified.
+
+        .. versionadded:: 2021.2
+        """
 
 # }}}
 
@@ -556,6 +593,14 @@ class PyOpenCLArrayContext(ArrayContext):
         if inner_iname is not None:
             program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
         return lp.tag_inames(program, {outer_iname: "g.0"})
+
+    def tag(self, tags: Union[Sequence[Tag], Tag], array):
+        # Sorry, not capable.
+        return array
+
+    def tag_axis(self, iaxis, tags: Union[Sequence[Tag], Tag], array):
+        # Sorry, not capable.
+        return array
 
 # }}}
 
