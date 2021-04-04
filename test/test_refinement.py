@@ -31,7 +31,7 @@ from meshmode.array_context import (    # noqa: F401
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
-from meshmode.dof_array import thaw
+from meshmode.dof_array import thaw, flat_norm
 from meshmode.mesh.generation import (  # noqa: F401
         generate_icosahedron, generate_box_mesh, make_curve_mesh, ellipse)
 from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
@@ -292,7 +292,7 @@ def test_refinement_connection(
                         ("f_true", f_true),
                         ])
 
-        err = actx.np.linalg.norm(f_interp - f_true, np.inf)
+        err = flat_norm(f_interp - f_true, np.inf)
         eoc_rec.add_data_point(h, err)
 
     order_slack = 0.5

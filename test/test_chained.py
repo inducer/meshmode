@@ -27,7 +27,7 @@ from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
-from meshmode.dof_array import thaw, flatten
+from meshmode.dof_array import thaw, flatten, flat_norm
 
 import logging
 logger = logging.getLogger(__name__)
@@ -212,7 +212,7 @@ def test_chained_connection(actx_factory, ndim, visualize=False):
     f1 = chained(fx)
     f2 = connections[1](connections[0](fx))
 
-    assert actx.np.linalg.norm(f1-f2, np.inf) / actx.np.linalg.norm(f2) < 1e-11
+    assert (flat_norm(f1-f2, np.inf) / flat_norm(f2)) < 1e-11
 
 
 @pytest.mark.parametrize("ndim", [2, 3])
@@ -379,8 +379,8 @@ def test_reversed_chained_connection(actx_factory, ndim, mesh_name):
         from_interp = reverse(to_x)
 
         return (1.0 / nelements,
-                actx.np.linalg.norm(from_interp - from_x, np.inf)
-                / actx.np.linalg.norm(from_x, np.inf))
+                flat_norm(from_interp - from_x, np.inf)
+                / flat_norm(from_x, np.inf))
 
     from pytools.convergence import EOCRecorder
     eoc = EOCRecorder()
