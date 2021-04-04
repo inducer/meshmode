@@ -398,20 +398,6 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
                 a)
 
 
-def _flatten_grp_array(grp_ary):
-    if grp_ary.size == 0:
-        # Work around https://github.com/inducer/pyopencl/pull/402
-        return grp_ary._new_with_changes(
-                data=None, offset=0, shape=(0,), strides=(grp_ary.dtype.itemsize,))
-    if grp_ary.flags.f_contiguous:
-        return grp_ary.reshape(-1, order="F")
-    elif grp_ary.flags.c_contiguous:
-        return grp_ary.reshape(-1, order="C")
-    else:
-        raise ValueError("cannot flatten group array of DOFArray for norm, "
-                f"with strides {grp_ary.strides} of {grp_ary.dtype}")
-
-
 class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
     def norm(self, array, ord=None):
         if len(array.shape) != 1:

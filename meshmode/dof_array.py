@@ -590,11 +590,28 @@ def array_context_for_pickling(actx: ArrayContext):
 # }}}
 
 
+def _flatten_grp_array(grp_ary):
+    if grp_ary.size == 0:
+        # Work around https://github.com/inducer/pyopencl/pull/402
+        return grp_ary._new_with_changes(
+                data=None, offset=0, shape=(0,), strides=(grp_ary.dtype.itemsize,))
+    if grp_ary.flags.f_contiguous:
+        return grp_ary.reshape(-1, order="F")
+    elif grp_ary.flags.c_contiguous:
+        return grp_ary.reshape(-1, order="C")
+    else:
+        raise ValueError("cannot flatten group array of DOFArray for norm, "
+                f"with strides {grp_ary.strides} of {grp_ary.dtype}")
+
+
 def flat_norm(ary: DOFArray, ord=None):
+    from numbers import Number
     actx = ary.array_context
-    return np.linalg.norm([actx.to_numpy(subary)
-                           for subary in ary.array_context.np.linalg.norm(ary,
-                                                                          ord=ord)])
+    import numpy.linalg as la
+    grp_norms = [actx.np.linalg.norm(_flatten_grp_array(grp), ord) for grp in ary]
+    return la.norm(np.array([
+        grp_norm if isinstance(grp_norm, Number) else actx.to_numpy(grp_norm)[()]
+        for grp_norm in grp_norms]), ord)
 
 
 # vim: foldmethod=marker
