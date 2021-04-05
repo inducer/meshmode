@@ -26,7 +26,7 @@ import pyopencl as cl
 from meshmode.dof_array import thaw
 from meshmode.array_context import PyOpenCLArrayContext
 
-from pytools import memoize_in, memoize_on_first_arg
+from pytools import memoize_in, keyed_memoize_in
 from pytools.obj_array import make_obj_array
 
 import logging
@@ -63,13 +63,17 @@ def reconstruct_discr_from_nodes(actx, discr, x):
             """,
             name="resample_by_mat_prg")
 
-    @memoize_on_first_arg
+    @keyed_memoize_in(actx,
+            (reconstruct_discr_from_nodes, "to_mesh_interp_matrix"),
+            lambda grp: grp.discretization_key())
     def to_mesh_interp_matrix(grp) -> np.ndarray:
         import modepy as mp
-        return mp.resampling_matrix(
+        mat = mp.resampling_matrix(
                 grp.basis_obj().functions,
                 grp.mesh_el_group.unit_nodes,
                 grp.unit_nodes)
+
+        return actx.freeze(actx.from_numpy(mat))
 
     def resample_nodes_to_mesh(grp, igrp, iaxis):
         discr_nodes = x[iaxis][igrp]
@@ -85,7 +89,7 @@ def reconstruct_discr_from_nodes(actx, discr, x):
         return actx.call_loopy(
                 resample_by_mat_prg(),
                 nodes=discr_nodes,
-                resampling_mat=actx.from_numpy(to_mesh_interp_matrix(grp)),
+                resampling_mat=to_mesh_interp_matrix(grp),
                 )["result"]
 
     megs = []
@@ -115,7 +119,7 @@ def advance(actx, dt, t, x, fn):
 def run(actx, *,
         ambient_dim: int = 3,
         resolution: int = None,
-        target_order: int = 8,
+        target_order: int = 4,
         tmax: float = 1.0,
         timestep: float = 1.0e-2,
         group_factory_name: str = "warp_and_blend",
@@ -256,11 +260,11 @@ if __name__ == "__main__":
     actx = PyOpenCLArrayContext(queue)
 
     from pytools import ProcessTimer
-    for _ in range(3):
+    for _ in range(1):
         with ProcessTimer() as p:
             run(actx,
                     ambient_dim=3,
-                    group_factory_name="quadrature",
+                    group_factory_name="warp_and_blend",
                     tmax=1.0,
                     timestep=1.0e-2,
                     visualize=False)
