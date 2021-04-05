@@ -109,17 +109,6 @@ def mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
 
 
 @memoize_on_first_arg
-def inverse_mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
-    if not isinstance(grp, InterpolatoryElementGroupBase):
-        raise NoninterpolatoryElementGroupError(
-                f"cannot construct mass matrix on '{type(grp).__name__}'")
-
-    return mp.inverse_mass_matrix(
-            grp.basis_obj().functions,
-            grp.unit_nodes)
-
-
-@memoize_on_first_arg
 def diff_matrices(grp: InterpolatoryElementGroupBase) -> Tuple[np.ndarray]:
     if not isinstance(grp, InterpolatoryElementGroupBase):
         raise NoninterpolatoryElementGroupError(
