@@ -22,6 +22,7 @@ THE SOFTWARE.
 
 from typing import Union, Sequence
 from functools import partial
+import operator
 import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
@@ -352,6 +353,17 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def _get_fake_numpy_linalg_namespace(self):
         return _PyOpenCLFakeNumpyLinalgNamespace(self._array_context)
 
+    def _bop(self, op, x, y):
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(op, x, y)
+
+    def equal(self, x, y): return self._bop(operator.eq, x, y)  # noqa: E704
+    def not_equal(self, x, y): return self._bop(operator.ne, x, y)  # noqa: E704
+    def greater(self, x, y): return self._bop(operator.gt, x, y)  # noqa: E704
+    def greater_equal(self, x, y): return self._bop(operator.ge, x, y)  # noqa: E704
+    def less(self, x, y): return self._bop(operator.lt, x, y)  # noqa: E704
+    def less_equal(self, x, y): return self._bop(operator.le, x, y)  # noqa: E704
+
     def maximum(self, x, y):
         import pyopencl.array as cl_array
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
@@ -371,6 +383,8 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
 
         def where_inner(inner_crit, inner_then, inner_else):
+            if isinstance(inner_crit, bool):
+                return inner_then if inner_crit else inner_else
             return cl_array.if_positive(inner_crit != 0, inner_then, inner_else,
                     queue=self._array_context.queue)
 
