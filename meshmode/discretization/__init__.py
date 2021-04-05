@@ -605,13 +605,13 @@ def num_reference_derivative(
 
     @keyed_memoize_in(actx,
             (num_reference_derivative, "num_reference_derivative_matrix"),
-            lambda grp: grp.discretization_key() + ref_axes)
-    def get_mat(grp):
+            lambda grp, gref_axes: grp.discretization_key() + gref_axes)
+    def get_mat(grp, gref_axes):
         from meshmode.discretization.poly_element import diff_matrices
         matrices = diff_matrices(grp)
 
         mat = None
-        for ref_axis in ref_axes:
+        for ref_axis in gref_axes:
             next_mat = matrices[ref_axis]
             if mat is None:
                 mat = next_mat
@@ -622,7 +622,7 @@ def num_reference_derivative(
 
     return _DOFArray(actx, tuple(
             actx.call_loopy(
-                prg(), diff_mat=get_mat(grp), vec=vec[grp.index]
+                prg(), diff_mat=get_mat(grp, ref_axes), vec=vec[grp.index]
                 )["result"]
             for grp in discr.groups))
 
