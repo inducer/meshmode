@@ -294,12 +294,12 @@ class DOFArray:
 
     # {{{ comparison
 
-    def __eq__(self, arg): return self._bop(op.eq, self, arg)  # noqa: E704
-    def __ne__(self, arg): return self._bop(op.ne, self, arg)  # noqa: E704
-    def __lt__(self, arg): return self._bop(op.lt, self, arg)  # noqa: E704
-    def __gt__(self, arg): return self._bop(op.gt, self, arg)  # noqa: E704
-    def __le__(self, arg): return self._bop(op.le, self, arg)  # noqa: E704
-    def __ge__(self, arg): return self._bop(op.ge, self, arg)  # noqa: E704
+    def __eq__(self, arg): return self._bop(self.array_context.np.equal, self, arg)  # noqa: E704,E501
+    def __ne__(self, arg): return self._bop(self.array_context.np.not_equal, self, arg)  # noqa: E704,E501
+    def __lt__(self, arg): return self._bop(self.array_context.np.less, self, arg)  # noqa: E704,E501
+    def __gt__(self, arg): return self._bop(self.array_context.np.greater, self, arg)  # noqa: E704,E501
+    def __le__(self, arg): return self._bop(self.array_context.np.less_equal, self, arg)  # noqa: E704,E501
+    def __ge__(self, arg): return self._bop(self.array_context.np.greater_equal, self, arg)  # noqa: E704,E501
 
     # }}}
 
