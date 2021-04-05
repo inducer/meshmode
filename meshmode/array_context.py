@@ -403,6 +403,14 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         import pyopencl.array as cl_array
         return cl_array.max(a, queue=self._array_context.queue).get()[()]
 
+    def stack(self, arrays, axis=0):
+        import pyopencl.array as cla
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(
+            lambda *args: cla.stack(arrays=args, axis=axis,
+                                    queue=self._array_context.queue),
+            *arrays)
+
 
 def _flatten_grp_array(grp_ary):
     if grp_ary.size == 0:
