@@ -182,17 +182,17 @@ class MPIBoundaryCommSetupHelper:
                 dest=self.i_remote_part,
                 tag=TAG_SEND_BOUNDARY)
 
-    def post_sends(self):
+    def post_send(self):
         logger.info("bdry comm rank %d send begin", self.i_local_part)
         self.send_req = self._post_send_boundary_data()
 
-    def is_setup_ready(self):
+    def is_recv_ready(self):
         """
         Returns True if the rank boundary data is ready to be received.
         """
         return self.mpi_comm.Iprobe(source=self.i_remote_part, tag=TAG_SEND_BOUNDARY)
 
-    def complete_setup(self):
+    def recv(self):
         """
         Returns the tuple ``remote_to_local_bdry_conn``
         where `remote_to_local_bdry_conn` is a
@@ -219,8 +219,10 @@ class MPIBoundaryCommSetupHelper:
                     group_factory=self.bdry_grp_factory),
                 remote_group_infos=remote_group_infos)
 
-        self.send_req.wait()
         return remote_to_local_bdry_conn
+
+    def complete_send(self):
+        self.send_req.wait()
 
 # }}}
 

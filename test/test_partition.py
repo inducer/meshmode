@@ -353,7 +353,10 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
 
     from meshmode.distributed import get_connected_partitions
     connected_parts = get_connected_partitions(local_mesh)
-    assert i_local_part not in connected_parts
+
+    # Check that the connectivity makes sense before doing any communication
+    _test_connected_parts(mpi_comm, connected_parts)
+
     bdry_setup_helpers = {}
     local_bdry_conns = {}
 
@@ -368,18 +371,23 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
                         mpi_comm, actx, local_bdry_conns[i_remote_part],
                         i_remote_part, bdry_grp_factory=group_factory)
 
-        setup_helper.post_sends()
+        setup_helper.post_send()
 
     remote_to_local_bdry_conns = {}
     from meshmode.discretization.connection import check_connection
-    while bdry_setup_helpers:
-        for i_remote_part, setup_helper in bdry_setup_helpers.items():
-            if setup_helper.is_setup_ready():
-                assert bdry_setup_helpers.pop(i_remote_part) is setup_helper
-                conn = setup_helper.complete_setup()
+    pending_recvs = connected_parts.copy()
+    while pending_recvs:
+        for i_remote_part in pending_recvs:
+            setup_helper = bdry_setup_helpers[i_remote_part]
+            if setup_helper.is_recv_ready():
+                conn = setup_helper.recv()
                 check_connection(actx, conn)
                 remote_to_local_bdry_conns[i_remote_part] = conn
+                pending_recvs.remove(i_remote_part)
                 break
+
+    for setup_helper in bdry_setup_helpers.values():
+        setup_helper.complete_send()
 
         # FIXME: Not ideal, busy-waits
 
@@ -390,6 +398,28 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
                         connected_parts)
 
     logger.debug("Rank %d exiting", i_local_part)
+
+
+def _test_connected_parts(mpi_comm, connected_parts):
+    num_parts = mpi_comm.Get_size()
+    i_local_part = mpi_comm.Get_rank()
+
+    assert i_local_part not in connected_parts
+
+    # Get the full adjacency
+    connected_mask = np.empty(num_parts, dtype=bool)
+    connected_mask[:] = False
+    for i_remote_part in connected_parts:
+        connected_mask[i_remote_part] = True
+    all_connected_masks = mpi_comm.allgather(connected_mask)
+
+    # Construct a list of parts that have the local part in their adjacency and
+    # make sure it agrees with connected_parts
+    parts_connected_to_me = set()
+    for i_remote_part in range(num_parts):
+        if all_connected_masks[i_remote_part][i_local_part]:
+            parts_connected_to_me.add(i_remote_part)
+    assert parts_connected_to_me == connected_parts
 
 
 # TODO
