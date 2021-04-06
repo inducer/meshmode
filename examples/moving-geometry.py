@@ -26,7 +26,7 @@ import pyopencl as cl
 from meshmode.dof_array import thaw
 from meshmode.array_context import PyOpenCLArrayContext
 
-from pytools import memoize_in
+from pytools import memoize_in, keyed_memoize_in
 from pytools.obj_array import make_obj_array
 
 import logging
@@ -63,20 +63,19 @@ def reconstruct_discr_from_nodes(actx, discr, x):
             """,
             name="resample_by_mat_prg")
 
-    @memoize_in(actx, (reconstruct_discr_from_nodes, "to_mesh_interp_matrix"))
-    def to_mesh_interp_matrix(igrp):
-        grp = discr.groups[igrp]
-        meg = grp.mesh_el_group
-
+    @keyed_memoize_in(actx,
+            (reconstruct_discr_from_nodes, "to_mesh_interp_matrix"),
+            lambda grp: grp.discretization_key())
+    def to_mesh_interp_matrix(grp) -> np.ndarray:
         import modepy as mp
-        resampling_mat = mp.resampling_matrix(
+        mat = mp.resampling_matrix(
                 grp.basis_obj().functions,
-                meg.unit_nodes,
+                grp.mesh_el_group.unit_nodes,
                 grp.unit_nodes)
 
-        return actx.freeze(actx.from_numpy(resampling_mat))
+        return actx.freeze(actx.from_numpy(mat))
 
-    def resample_nodes(grp, igrp, iaxis):
+    def resample_nodes_to_mesh(grp, igrp, iaxis):
         discr_nodes = x[iaxis][igrp]
 
         grp_unit_nodes = grp.unit_nodes.reshape(-1)
@@ -90,14 +89,13 @@ def reconstruct_discr_from_nodes(actx, discr, x):
         return actx.call_loopy(
                 resample_by_mat_prg(),
                 nodes=discr_nodes,
-                result=grp.mesh_el_group.nodes[iaxis],
-                resampling_mat=to_mesh_interp_matrix(igrp),
-                )
+                resampling_mat=to_mesh_interp_matrix(grp),
+                )["result"]
 
     megs = []
     for igrp, grp in enumerate(discr.groups):
         nodes = np.stack([
-            actx.to_numpy(resample_nodes(grp, igrp, iaxis))
+            actx.to_numpy(resample_nodes_to_mesh(grp, igrp, iaxis))
             for iaxis in range(discr.ambient_dim)
             ])
 
@@ -163,14 +161,14 @@ def run(actx, *,
 
     import meshmode.mesh.generation as gen
     if ambient_dim == 2:
-        nelements = 64 if resolution is None else resolution
+        nelements = 8192 if resolution is None else resolution
         mesh = gen.make_curve_mesh(
-                lambda t: gen.ellipse(radius, t),
+                lambda t: radius * gen.ellipse(1.0, t),
                 np.linspace(0.0, 1.0, nelements + 1),
                 order=mesh_order,
                 unit_nodes=unit_nodes)
     else:
-        nrounds = 3 if resolution is None else resolution
+        nrounds = 4 if resolution is None else resolution
         mesh = gen.generate_icosphere(radius,
                 uniform_refinement_rounds=nrounds,
                 order=mesh_order,
@@ -199,11 +197,29 @@ def run(actx, *,
     def velocity_field(nodes, alpha=1.0):
         return make_obj_array([
             alpha * nodes[0], -alpha * nodes[1], 0.0 * nodes[0]
-            ])
+            ][:ambient_dim])
 
     def source(t, x):
         discr = reconstruct_discr_from_nodes(actx, discr0, x)
         u = velocity_field(thaw(actx, discr.nodes()))
+
+        # {{{
+
+        # NOTE: these are just here because this was at some point used to
+        # profile some more operators (turned out well!)
+
+        from meshmode.discretization import num_reference_derivative
+        x = thaw(actx, discr.nodes()[0])
+        gradx = sum(
+                num_reference_derivative(discr, (i,), x)
+                for i in range(discr.dim))
+        intx = sum(actx.np.sum(xi * wi) for xi, wi in zip(x, discr.quad_weights()))
+
+        assert gradx is not None
+        assert intx is not None
+
+        # }}}
+
         return u
 
     # }}}
@@ -243,9 +259,15 @@ if __name__ == "__main__":
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(queue)
 
-    run(actx,
-            ambient_dim=3,
-            group_factory_name="warp_and_blend",
-            tmax=1.0,
-            timestep=1.0e-2,
-            visualize=False)
+    from pytools import ProcessTimer
+    for _ in range(1):
+        with ProcessTimer() as p:
+            run(actx,
+                    ambient_dim=3,
+                    group_factory_name="warp_and_blend",
+                    tmax=1.0,
+                    timestep=1.0e-2,
+                    visualize=False)
+
+        logger.info("elapsed: %.3fs wall %.2fx cpu",
+                p.wall_elapsed, p.process_elapsed / p.wall_elapsed)

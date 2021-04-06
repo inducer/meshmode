@@ -105,11 +105,13 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         weights = {}
         jac = np.empty(self.to_discr.dim, dtype=object)
 
+        from meshmode.discretization.poly_element import diff_matrices
         for igrp, grp in enumerate(self.to_discr.groups):
+            matrices = diff_matrices(grp)
+
             for ibatch, batch in enumerate(self.conn.groups[igrp].batches):
                 for iaxis in range(grp.dim):
-                    mat = grp.diff_matrices()[iaxis]
-                    jac[iaxis] = mat.dot(batch.result_unit_nodes.T)
+                    jac[iaxis] = matrices[iaxis] @ batch.result_unit_nodes.T
 
                 weights[igrp, ibatch] = actx.freeze(actx.from_numpy(
                     det(jac) * grp.weights))
