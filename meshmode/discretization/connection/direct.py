@@ -26,8 +26,7 @@ import numpy as np
 import loopy as lp
 from pytools import memoize_in, keyed_memoize_method
 from pytools.obj_array import obj_array_vectorized_n_args
-from meshmode.array_context import ArrayContext, make_loopy_program
-from meshmode.dof_array import IsDOFArray
+from meshmode.array_context import ArrayContext, make_loopy_program, IsDOFArray, ParameterValue
 
 
 # {{{ interpolation batch
@@ -263,7 +262,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         actx = ary.array_context
 
         @memoize_in(actx, (DirectDiscretizationConnection, "resample_by_mat_knl"))
-        def mat_knl():
+        def mat_knl(n_to_nodes, n_from_nodes):
             knl = make_loopy_program(
                 """{[iel, idof, j]:
                     0<=iel<nelements and
@@ -279,6 +278,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.GlobalArg("ary", None,
                         shape="nelements_vec, n_from_nodes",
                         offset=lp.auto, tags=IsDOFArray()),
+                    lp.ValueArg("n_to_nodes", tags=ParameterValue(n_to_nodes)),
+                    lp.ValueArg("n_from_nodes", tags=ParameterValue(n_from_nodes)),
                     lp.ValueArg("nelements_result", np.int32),
                     lp.ValueArg("nelements_vec", np.int32),
                     "...",
@@ -327,9 +328,11 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         actx, i_tgrp, i_batch)
 
                 if point_pick_indices is None:
-                    actx.call_loopy(mat_knl(),
-                            resample_mat=self._resample_matrix(
-                                actx, i_tgrp, i_batch),
+                    resample_mat = self._resample_matrix(actx, i_tgrp, i_batch)
+                    n_to_nodes, n_from_nodes = resample_mat.shape
+
+                    actx.call_loopy(mat_knl(n_to_nodes, n_from_nodes),
+                            resample_mat=resample_mat,
                             result=result[i_tgrp],
                             ary=ary[batch.from_group_index],
                             from_element_indices=batch.from_element_indices,

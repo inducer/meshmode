@@ -26,7 +26,7 @@ import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method
-from pytools.tag import Tag
+from pytools.tag import Tag, UniqueTag
 
 __doc__ = """
 .. autofunction:: make_loopy_program
@@ -55,7 +55,7 @@ def make_loopy_program(domains, statements, kernel_data=["..."],
             lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
 
-# {{{ IsDOFArray
+# {{{ Tags
 
 class IsDOFArray(Tag):
     """A tag to mark arrays of DOFs in :mod:`loopy` kernels. Applications
@@ -63,6 +63,11 @@ class IsDOFArray(Tag):
     these arrays.
     """
     pass
+
+class ParameterValue(UniqueTag):
+
+    def __init__(self, value):
+        self.value = value
 
     # }}}
 
