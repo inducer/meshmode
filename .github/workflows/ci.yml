@@ -164,7 +164,6 @@ jobs:
                 sed -i "/egg=meshmode/ c git+file://$(readlink -f ..)#egg=meshmode" requirements.txt
 
                 export CONDA_ENVIRONMENT=.test-conda-env-py3.yml
-                export CISUPPORT_PARALLEL_PYTEST=no
 
                 # Avoid slow or complicated tests in downstream projects
                 export PYTEST_ADDOPTS="-k 'not (slowtest or octave or mpi)'"
@@ -174,6 +173,7 @@ jobs:
                     sudo apt-get update
                     sudo apt-get install openmpi-bin libopenmpi-dev
                     export CONDA_ENVIRONMENT=conda-env.yml
+                    export CISUPPORT_PARALLEL_PYTEST=no
                 else
                     sed -i "/mpi4py/ d" requirements.txt
                 fi
