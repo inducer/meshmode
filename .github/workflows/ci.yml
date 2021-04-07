@@ -143,10 +143,7 @@ jobs:
     downstream_tests:
         strategy:
             matrix:
-                # FIXME Reinstate when
-                # https://github.com/illinois-ceesd/mirgecom/issues/212
-                # is fixed:
-                downstream_project: [grudge, pytential]
+                downstream_project: [grudge, pytential, mirgecom]
         name: Tests for downstream project ${{ matrix.downstream_project }}
         runs-on: ubuntu-latest
         steps:
