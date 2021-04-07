@@ -36,11 +36,10 @@ logger = logging.getLogger(__name__)
 
 TAG_BASE = 83411
 TAG_DISTRIBUTE_MESHES = TAG_BASE + 1
-TAG_SEND_BOUNDARY = TAG_BASE + 2
 
 __doc__ = """
 .. autoclass:: MPIMeshDistributor
-.. autoclass:: MPIBoundaryTransceiver
+.. autoclass:: MPIBoundaryCommSetupHelper
 
 .. autofunction:: get_partition_by_pymetis
 .. autofunction:: get_connected_partitions
@@ -155,74 +154,104 @@ def make_remote_group_infos(actx, bdry_conn):
 
 class MPIBoundaryCommSetupHelper:
     """
-    .. automethod:: __call__
-    .. automethod:: is_setup_ready
+    Helper for setting up inter-partition facial data exchange.
+
+    .. automethod:: __init__
+    .. automethod:: __enter__
+    .. automethod:: __exit__
+    .. automethod:: complete_some
     """
-    def __init__(self, mpi_comm, actx, local_bdry_conn, i_remote_part,
+    def __init__(self, mpi_comm, actx, connected_parts, local_bdry_conns,
             bdry_grp_factory):
         """
         :arg mpi_comm: A :class:`MPI.Intracomm`
-        :arg i_remote_part: The part number of the remote partition
+        :arg actx: An array context
+        :arg connected_parts: A `set` of remote partitions that are connected to the
+            local partition
+        :arg local_bdry_conns: A `dict` mapping remote partition to
+            `local_bdry_conn`, where `local_bdry_conn` is a
+            :class:`DirectDiscretizationConnection` that performs data exchange from
+            the volume to the faces adjacent to partition `i_remote_part`.
+        :arg bdry_grp_factory: Group factory to use when creating the remote-to-local
+            boundary connections
         """
         self.mpi_comm = mpi_comm
         self.array_context = actx
         self.i_local_part = mpi_comm.Get_rank()
-        self.i_remote_part = i_remote_part
-        self.local_bdry_conn = local_bdry_conn
+        self.connected_parts = list(connected_parts)
+        self.local_bdry_conns = local_bdry_conns
         self.bdry_grp_factory = bdry_grp_factory
+        self._internal_mpi_comm = None
+        self.send_reqs = None
+        self.recv_reqs = None
 
-        self.send_req = None
+    def __enter__(self):
+        self._internal_mpi_comm = self.mpi_comm.Dup()
 
-    def _post_send_boundary_data(self):
+        logger.info("bdry comm rank %d recv begin", self.i_local_part)
+        self.recv_reqs = []
+        for i_remote_part in self.connected_parts:
+            self.recv_reqs.append(
+                self._internal_mpi_comm.irecv(source=i_remote_part))
 
-        return self.mpi_comm.isend(
-                (self.local_bdry_conn.to_discr.mesh,
-                    make_remote_group_infos(
-                        self.array_context, self.local_bdry_conn)),
-                dest=self.i_remote_part,
-                tag=TAG_SEND_BOUNDARY)
-
-    def post_send(self):
         logger.info("bdry comm rank %d send begin", self.i_local_part)
-        self.send_req = self._post_send_boundary_data()
+        self.send_reqs = []
+        for i_remote_part in self.connected_parts:
+            self.send_reqs.append(
+                self._internal_mpi_comm.isend((
+                    self.local_bdry_conns[i_remote_part].to_discr.mesh,
+                    make_remote_group_infos(
+                        self.array_context, self.local_bdry_conns[i_remote_part])),
+                    dest=i_remote_part))
 
-    def is_recv_ready(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self._internal_mpi_comm.Free()
+
+    def complete_some(self):
         """
-        Returns True if the rank boundary data is ready to be received.
+        Returns a `dict` mapping a subset of remote partitions to remote-to-local
+        boundary connections, where a remote-to-local boundary connection is a
+        :class:`DirectDiscretizationConnection` that performs data exchange across
+        faces from partition `i_remote_part` to the local mesh.
         """
-        return self.mpi_comm.Iprobe(source=self.i_remote_part, tag=TAG_SEND_BOUNDARY)
+        from mpi4py import MPI
 
-    def recv(self):
-        """
-        Returns the tuple ``remote_to_local_bdry_conn``
-        where `remote_to_local_bdry_conn` is a
-        :class:`DirectDiscretizationConnection` that gives the connection that
-        performs data exchange across faces from partition `i_remote_part` to the
-        local mesh.
-        """
-        remote_bdry_mesh, remote_group_infos = self.mpi_comm.recv(
-                source=self.i_remote_part,
-                tag=TAG_SEND_BOUNDARY)
+        remote_to_local_bdry_conns = {}
 
-        logger.debug("rank %d: Received rank %d data",
-                     self.i_local_part, self.i_remote_part)
+        # FIXME: when waitsome makes it into an mpi4py release
+        # indices, data = MPI.Request.waitsome(self.recv_reqs)
+        index, msg = MPI.Request.waitany(self.recv_reqs)
+        if index != MPI.UNDEFINED:
+            indices = [index]
+            data = [msg]
+        else:
+            indices = []
+            data = []
 
-        # Connect local_mesh to remote_mesh
-        from meshmode.discretization.connection import make_partition_connection
-        remote_to_local_bdry_conn = make_partition_connection(
-                self.array_context,
-                local_bdry_conn=self.local_bdry_conn,
-                i_local_part=self.i_local_part,
-                remote_bdry_discr=self.local_bdry_conn.to_discr.copy(
-                    actx=self.array_context,
-                    mesh=remote_bdry_mesh,
-                    group_factory=self.bdry_grp_factory),
-                remote_group_infos=remote_group_infos)
+        for irecv, (remote_bdry_mesh, remote_group_infos) in zip(indices, data):
+            i_remote_part = self.connected_parts[irecv]
+            logger.debug("rank %d: Received rank %d data",
+                         self.i_local_part, i_remote_part)
 
-        return remote_to_local_bdry_conn
+            # Connect local_mesh to remote_mesh
+            from meshmode.discretization.connection import make_partition_connection
+            local_bdry_conn = self.local_bdry_conns[i_remote_part]
+            remote_to_local_bdry_conns[i_remote_part] = make_partition_connection(
+                    self.array_context,
+                    local_bdry_conn=local_bdry_conn,
+                    i_local_part=self.i_local_part,
+                    remote_bdry_discr=local_bdry_conn.to_discr.copy(
+                        actx=self.array_context,
+                        mesh=remote_bdry_mesh,
+                        group_factory=self.bdry_grp_factory),
+                    remote_group_infos=remote_group_infos)
 
-    def complete_send(self):
-        self.send_req.wait()
+        if not remote_to_local_bdry_conns:
+            MPI.Request.waitall(self.send_reqs)
+
+        return remote_to_local_bdry_conns
 
 # }}}
 

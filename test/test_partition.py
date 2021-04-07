@@ -43,7 +43,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Is there a smart way of choosing this number?
-# Currenly it is the same as the base from MPIBoundaryTransceiver
+# Currenly it is the same as the base from MPIBoundaryCommSetupHelper
 TAG_BASE = 83411
 TAG_SEND_REMOTE_NODES = TAG_BASE + 3
 TAG_SEND_LOCAL_NODES = TAG_BASE + 4
@@ -357,39 +357,21 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     # Check that the connectivity makes sense before doing any communication
     _test_connected_parts(mpi_comm, connected_parts)
 
-    bdry_setup_helpers = {}
-    local_bdry_conns = {}
-
     from meshmode.discretization.connection import make_face_restriction
     from meshmode.mesh import BTAG_PARTITION
+    local_bdry_conns = {}
     for i_remote_part in connected_parts:
         local_bdry_conns[i_remote_part] = make_face_restriction(
                 actx, vol_discr, group_factory, BTAG_PARTITION(i_remote_part))
 
-        setup_helper = bdry_setup_helpers[i_remote_part] = \
-                MPIBoundaryCommSetupHelper(
-                        mpi_comm, actx, local_bdry_conns[i_remote_part],
-                        i_remote_part, bdry_grp_factory=group_factory)
-
-        setup_helper.post_send()
-
     remote_to_local_bdry_conns = {}
-    from meshmode.discretization.connection import check_connection
-    pending_recvs = connected_parts.copy()
-    while pending_recvs:
-        for i_remote_part in pending_recvs:
-            setup_helper = bdry_setup_helpers[i_remote_part]
-            if setup_helper.is_recv_ready():
-                conn = setup_helper.recv()
+    with MPIBoundaryCommSetupHelper(mpi_comm, actx, connected_parts,
+            local_bdry_conns, bdry_grp_factory=group_factory) as bdry_setup_helper:
+        from meshmode.discretization.connection import check_connection
+        while conns := bdry_setup_helper.complete_some():
+            for i_remote_part, conn in conns.items():
                 check_connection(actx, conn)
                 remote_to_local_bdry_conns[i_remote_part] = conn
-                pending_recvs.remove(i_remote_part)
-                break
-
-    for setup_helper in bdry_setup_helpers.values():
-        setup_helper.complete_send()
-
-        # FIXME: Not ideal, busy-waits
 
     _test_data_transfer(mpi_comm,
                         actx,
