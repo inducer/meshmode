@@ -757,9 +757,14 @@ def get_simplex_element_flip_matrix(order, unit_nodes, permutation=None):
     flipped_unit_nodes = barycentric_to_unit(flipped_bary_unit_nodes)
 
     dim = unit_nodes.shape[0]
+    shape = mp.Simplex(dim)
+    space = mp.PN(dim, order)
+    basis = mp.basis_for_space(space, shape)
     flip_matrix = mp.resampling_matrix(
-            mp.simplex_best_available_basis(dim, order),
-            flipped_unit_nodes, unit_nodes)
+        basis.functions,
+        flipped_unit_nodes,
+        unit_nodes
+    )
 
     flip_matrix[np.abs(flip_matrix) < 1e-15] = 0
 
