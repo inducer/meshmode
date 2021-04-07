@@ -164,6 +164,7 @@ jobs:
                 sed -i "/egg=meshmode/ c git+file://$(readlink -f ..)#egg=meshmode" requirements.txt
 
                 export CONDA_ENVIRONMENT=.test-conda-env-py3.yml
+                export CISUPPORT_PARALLEL_PYTEST=no
 
                 # Avoid slow or complicated tests in downstream projects
                 export PYTEST_ADDOPTS="-k 'not (slowtest or octave or mpi)'"
