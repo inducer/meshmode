@@ -172,6 +172,7 @@ jobs:
                     # can't turn off MPI in mirgecom
                     sudo apt-get update
                     sudo apt-get install openmpi-bin libopenmpi-dev
+                    export CONDA_ENVIRONMENT=conda-env.yml
                 else
                     sed -i "/mpi4py/ d" requirements.txt
                 fi
