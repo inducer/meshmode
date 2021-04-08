@@ -212,7 +212,8 @@ class MPIBoundaryCommSetupHelper:
         Returns a :class:`dict` mapping a subset of remote partitions to
         remote-to-local boundary connections, where a remote-to-local boundary
         connection is a :class:`DirectDiscretizationConnection` that performs data
-        exchange across faces from partition `i_remote_part` to the local mesh.
+        exchange across faces from partition `i_remote_part` to the local mesh. When
+        an empty dictionary is returned, setup is complete.
         """
         from mpi4py import MPI
 
