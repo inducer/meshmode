@@ -166,9 +166,9 @@ class MPIBoundaryCommSetupHelper:
         """
         :arg mpi_comm: A :class:`MPI.Intracomm`
         :arg actx: An array context
-        :arg connected_parts: A `set` of remote partitions that are connected to the
-            local partition
-        :arg local_bdry_conns: A `dict` mapping remote partition to
+        :arg connected_parts: A :class:`set` of remote partitions that are connected
+            to the local partition
+        :arg local_bdry_conns: A :class:`dict` mapping remote partition to
             `local_bdry_conn`, where `local_bdry_conn` is a
             :class:`DirectDiscretizationConnection` that performs data exchange from
             the volume to the faces adjacent to partition `i_remote_part`.
@@ -211,10 +211,10 @@ class MPIBoundaryCommSetupHelper:
 
     def complete_some(self):
         """
-        Returns a `dict` mapping a subset of remote partitions to remote-to-local
-        boundary connections, where a remote-to-local boundary connection is a
-        :class:`DirectDiscretizationConnection` that performs data exchange across
-        faces from partition `i_remote_part` to the local mesh.
+        Returns a :class:`dict` mapping a subset of remote partitions to
+        remote-to-local boundary connections, where a remote-to-local boundary
+        connection is a :class:`DirectDiscretizationConnection` that performs data
+        exchange across faces from partition `i_remote_part` to the local mesh.
         """
         from mpi4py import MPI
 
