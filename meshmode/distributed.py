@@ -214,17 +214,18 @@ class MPIBoundaryCommSetupHelper:
         """
         from mpi4py import MPI
 
-        remote_to_local_bdry_conns = {}
-
         # FIXME: when waitsome makes it into an mpi4py release
         # indices, data = MPI.Request.waitsome(self.recv_reqs)
         index, msg = MPI.Request.waitany(self.recv_reqs)
-        if index != MPI.UNDEFINED:
-            indices = [index]
-            data = [msg]
-        else:
-            indices = []
-            data = []
+
+        if index == MPI.UNDEFINED:
+            # Already completed, nothing more to do
+            return {}
+
+        indices = [index]
+        data = [msg]
+
+        remote_to_local_bdry_conns = {}
 
         for irecv, (remote_bdry_mesh, remote_group_infos) in zip(indices, data):
             i_remote_part = self.connected_parts[irecv]
@@ -244,7 +245,7 @@ class MPIBoundaryCommSetupHelper:
                         group_factory=self.bdry_grp_factory),
                     remote_group_infos=remote_group_infos)
 
-        all_recvs_completed = not remote_to_local_bdry_conns
+        all_recvs_completed = not any([bool(req) for req in self.recv_reqs])
         if all_recvs_completed:
             MPI.Request.waitall(self.send_reqs)
             logger.info("bdry comm rank %d comm end", self.i_local_part)
