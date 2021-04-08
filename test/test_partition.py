@@ -368,7 +368,10 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     with MPIBoundaryCommSetupHelper(mpi_comm, actx, connected_parts,
             local_bdry_conns, bdry_grp_factory=group_factory) as bdry_setup_helper:
         from meshmode.discretization.connection import check_connection
-        while conns := bdry_setup_helper.complete_some():
+        while True:
+            conns = bdry_setup_helper.complete_some()
+            if not conns:
+                break
             for i_remote_part, conn in conns.items():
                 check_connection(actx, conn)
                 remote_to_local_bdry_conns[i_remote_part] = conn
