@@ -161,13 +161,10 @@ class MPIBoundaryCommSetupHelper:
     .. automethod:: __exit__
     .. automethod:: complete_some
     """
-    def __init__(self, mpi_comm, actx, connected_parts, local_bdry_conns,
-            bdry_grp_factory):
+    def __init__(self, mpi_comm, actx, local_bdry_conns, bdry_grp_factory):
         """
         :arg mpi_comm: A :class:`MPI.Intracomm`
         :arg actx: An array context
-        :arg connected_parts: A :class:`set` of remote partitions that are connected
-            to the local partition
         :arg local_bdry_conns: A :class:`dict` mapping remote partition to
             `local_bdry_conn`, where `local_bdry_conn` is a
             :class:`DirectDiscretizationConnection` that performs data exchange from
@@ -178,7 +175,7 @@ class MPIBoundaryCommSetupHelper:
         self.mpi_comm = mpi_comm
         self.array_context = actx
         self.i_local_part = mpi_comm.Get_rank()
-        self.connected_parts = list(connected_parts)
+        self.connected_parts = list(local_bdry_conns.keys())
         self.local_bdry_conns = local_bdry_conns
         self.bdry_grp_factory = bdry_grp_factory
         self._internal_mpi_comm = None
