@@ -496,6 +496,11 @@ def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
     if isinstance(ary, np.ndarray):
         return obj_array_vectorize(flatten, ary)
 
+    # NOTE: arrays with one group are common enough and don't require any
+    # concatenation to "flatten", but can just be reshaped
+    if len(ary) == 1:
+        return list(ary)[0].reshape(-1)
+
     group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in ary]
     group_starts = np.cumsum([0] + group_sizes)
 
@@ -526,6 +531,11 @@ def _unflatten(
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
             "result[iel, idof] = ary[grp_start + iel*ndofs_per_element + idof]",
             name="unflatten")
+
+    # NOTE: mirroring the behavior in `flatten`, where arrays with a single
+    # group are just reshaped
+    if len(group_shapes) == 1:
+        return DOFArray(actx, (ary.reshape(*group_shapes[0]),))
 
     group_sizes = [nel * ndof for nel, ndof in group_shapes]
 
