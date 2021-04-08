@@ -189,19 +189,18 @@ class MPIBoundaryCommSetupHelper:
         self._internal_mpi_comm = self.mpi_comm.Dup()
 
         logger.info("bdry comm rank %d comm begin", self.i_local_part)
-        self.recv_reqs = []
-        for i_remote_part in self.connected_parts:
-            self.recv_reqs.append(
-                self._internal_mpi_comm.irecv(source=i_remote_part))
 
-        self.send_reqs = []
-        for i_remote_part in self.connected_parts:
-            self.send_reqs.append(
-                self._internal_mpi_comm.isend((
-                    self.local_bdry_conns[i_remote_part].to_discr.mesh,
-                    make_remote_group_infos(
-                        self.array_context, self.local_bdry_conns[i_remote_part])),
-                    dest=i_remote_part))
+        self.recv_reqs = [
+            self._internal_mpi_comm.irecv(source=i_remote_part)
+            for i_remote_part in self.connected_parts]
+
+        self.send_reqs = [
+            self._internal_mpi_comm.isend((
+                self.local_bdry_conns[i_remote_part].to_discr.mesh,
+                make_remote_group_infos(
+                    self.array_context, self.local_bdry_conns[i_remote_part])),
+                dest=i_remote_part)
+            for i_remote_part in self.connected_parts]
 
         return self
 
