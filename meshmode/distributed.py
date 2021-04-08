@@ -248,7 +248,8 @@ class MPIBoundaryCommSetupHelper:
                         group_factory=self.bdry_grp_factory),
                     remote_group_infos=remote_group_infos)
 
-        if not remote_to_local_bdry_conns:
+        all_recvs_completed = not remote_to_local_bdry_conns
+        if all_recvs_completed:
             MPI.Request.waitall(self.send_reqs)
 
         return remote_to_local_bdry_conns
