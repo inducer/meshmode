@@ -188,13 +188,12 @@ class MPIBoundaryCommSetupHelper:
     def __enter__(self):
         self._internal_mpi_comm = self.mpi_comm.Dup()
 
-        logger.info("bdry comm rank %d recv begin", self.i_local_part)
+        logger.info("bdry comm rank %d comm begin", self.i_local_part)
         self.recv_reqs = []
         for i_remote_part in self.connected_parts:
             self.recv_reqs.append(
                 self._internal_mpi_comm.irecv(source=i_remote_part))
 
-        logger.info("bdry comm rank %d send begin", self.i_local_part)
         self.send_reqs = []
         for i_remote_part in self.connected_parts:
             self.send_reqs.append(
@@ -251,6 +250,7 @@ class MPIBoundaryCommSetupHelper:
         all_recvs_completed = not remote_to_local_bdry_conns
         if all_recvs_completed:
             MPI.Request.waitall(self.send_reqs)
+            logger.info("bdry comm rank %d comm end", self.i_local_part)
 
         return remote_to_local_bdry_conns
 
