@@ -499,7 +499,14 @@ def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
     # NOTE: arrays with one group are common enough and don't require any
     # concatenation to "flatten", but can just be reshaped
     if len(ary) == 1:
-        return list(ary)[0].reshape(-1)
+        ary0 = list(ary)[0]
+        if ary0.flags.c_contiguous:
+            return ary0.reshape(-1, order="C")
+        elif ary0.flags.f_contiguous:
+            return ary0.reshape(-1, order="F")
+        else:
+            # NOTE: array has unsupported strides, so we need to do a copy
+            pass
 
     group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in ary]
     group_starts = np.cumsum([0] + group_sizes)
