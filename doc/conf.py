@@ -78,6 +78,7 @@ intersphinx_mapping = {
     "https://documen.tician.de/modepy": None,
     "https://documen.tician.de/loopy": None,
     "https://documen.tician.de/gmsh_interop": None,
+    "https://documen.tician.de/pymetis": None,
     "https://firedrakeproject.org/": None,
     "https://tisaac.gitlab.io/recursivenodes/": None,
     "https://fenics.readthedocs.io/projects/fiat/en/latest/": None,

@@ -10,6 +10,7 @@ Contents:
    array
    discretization
    connection
+   distributed
    interop
    misc
    🚀 Github <https://github.com/inducer/meshmode>
