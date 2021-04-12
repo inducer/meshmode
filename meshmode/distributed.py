@@ -52,11 +52,11 @@ class MPIMeshDistributor:
     """
     .. automethod:: is_mananger_rank
     .. automethod:: send_mesh_parts
-    .. automethod:: recv_mesh_part
+    .. automethod:: receive_mesh_part
     """
     def __init__(self, mpi_comm, manager_rank=0):
         """
-        :arg mpi_comm: A :class:`MPI.Intracomm`
+        :arg mpi_comm: An ``MPI.Intracomm``
         """
         self.mpi_comm = mpi_comm
         self.manager_rank = manager_rank
@@ -66,7 +66,7 @@ class MPIMeshDistributor:
 
     def send_mesh_parts(self, mesh, part_per_element, num_parts):
         """
-        :arg mesh: A :class:`Mesh` to distribute to other ranks.
+        :arg mesh: A :class:`~meshmode.mesh.Mesh` to distribute to other ranks.
         :arg part_per_element: A :class:`numpy.ndarray` containing one
             integer per element of *mesh* indicating which part of the
             partitioned mesh the element is to become a part of.
@@ -163,11 +163,12 @@ class MPIBoundaryCommSetupHelper:
     """
     def __init__(self, mpi_comm, actx, local_bdry_conns, bdry_grp_factory):
         """
-        :arg mpi_comm: A :class:`MPI.Intracomm`
+        :arg mpi_comm: An ``MPI.Intracomm``
         :arg actx: An array context
         :arg local_bdry_conns: A :class:`dict` mapping remote partition to
             `local_bdry_conn`, where `local_bdry_conn` is a
-            :class:`DirectDiscretizationConnection` that performs data exchange from
+            :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`
+            that performs data exchange from
             the volume to the faces adjacent to partition `i_remote_part`.
         :arg bdry_grp_factory: Group factory to use when creating the remote-to-local
             boundary connections
@@ -208,9 +209,11 @@ class MPIBoundaryCommSetupHelper:
         """
         Returns a :class:`dict` mapping a subset of remote partitions to
         remote-to-local boundary connections, where a remote-to-local boundary
-        connection is a :class:`DirectDiscretizationConnection` that performs data
-        exchange across faces from partition `i_remote_part` to the local mesh. When
-        an empty dictionary is returned, setup is complete.
+        connection is a
+        :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`
+        that performs data exchange across faces from partition `i_remote_part`
+        to the local mesh. When an empty dictionary is returned, setup is
+        complete.
         """
         from mpi4py import MPI
 
