@@ -274,7 +274,7 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
         if dims == 0:
             return mp.Quadrature(np.empty((0, 1)), np.empty((0, 1)))
         elif dims == 1:
-            return mp.LegendreGaussQuadrature(self.order)
+            return mp.LegendreGaussQuadrature(self.order, force_dim_axis=True)
         else:
             return mp.XiaoGimbutasSimplexQuadrature(self.order, dims)
 
