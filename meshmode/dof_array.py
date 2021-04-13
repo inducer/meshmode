@@ -499,7 +499,7 @@ def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
     # NOTE: arrays with one group are common enough and don't require any
     # concatenation to "flatten", but can just be reshaped
     if len(ary) == 1:
-        ary0 = list(ary)[0]
+        ary0, = ary
         if ary0.flags.c_contiguous:
             return ary0.reshape(-1, order="C")
         elif ary0.flags.f_contiguous:
