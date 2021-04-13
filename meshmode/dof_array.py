@@ -55,6 +55,16 @@ __doc__ = """
 
 # {{{ DOFArray
 
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, repr=True)
+class MyFrameSummary:
+    filename: str
+    lineno: int
+    func_name: str
+
+
 class DOFArray:
     r"""This array type holds degree-of-freedom arrays for use with
     :class:`~meshmode.discretization.Discretization`,
@@ -130,6 +140,9 @@ class DOFArray:
         to :func:`array_context_for_pickling`.
     """
 
+    total_alloc = 0
+    alloc_frames = {}
+
     def __init__(self, actx: Optional[ArrayContext], data: Tuple[Any]):
         if not (actx is None or isinstance(actx, ArrayContext)):
             raise TypeError("actx must be of type ArrayContext")
@@ -137,8 +150,45 @@ class DOFArray:
         if not isinstance(data, tuple):
             raise TypeError("'data' argument must be a tuple")
 
+        alloc_size = sum(d.size for d in data)
+
         self.array_context = actx
         self._data = data
+
+        DOFArray.total_alloc += alloc_size
+        from traceback import extract_stack
+        s = tuple(MyFrameSummary(filename=fs.filename, lineno=fs.lineno,
+            func_name=fs.name)
+            for fs in extract_stack())
+        DOFArray.alloc_frames[s] = DOFArray.alloc_frames.get(s, 0) + 1
+        self._alloc_frame = s
+        nallocs = sum(DOFArray.alloc_frames.values())
+        if 0:
+            print(f"ALLOC {alloc_size} -> {DOFArray.total_alloc} ({nallocs})")
+
+        #if nallocs >= 62:
+        #    self.print_allocation_summary()
+        #    1/0
+
+    @classmethod
+    def print_allocation_summary(cls):
+        nallocs = sum(DOFArray.alloc_frames.values())
+        print(f"{nallocs} allocations total")
+        for stack, count in cls.alloc_frames.items():
+            if count:
+                print(78*"-")
+                print(f"{count} allocations for stack:")
+                for f in stack:
+                    print(f)
+
+    def __del__(self):
+        alloc_size = sum(d.size for d in self._data)
+        DOFArray.total_alloc -= alloc_size
+        s = self._alloc_frame
+        DOFArray.alloc_frames[s] = DOFArray.alloc_frames.get(s, 0) - 1
+        if 0:
+            print(f"FREE {alloc_size} -> {DOFArray.total_alloc} "
+                    f"({sum(DOFArray.alloc_frames.values())})")
 
     # Tell numpy that we would like to do our own array math, thank you very much.
     # (numpy arrays have priority 0.)
