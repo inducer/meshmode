@@ -183,5 +183,9 @@ jobs:
                 . ./ci-support.sh
                 build_py_project_in_conda_env
                 test_py_project
+                
+                if [[ "$DOWNSTREAM_PROJECT" = "mirgecom" ]]; then
+                    examples/run_examples.sh ./examples
+                fi
 
 # vim: sw=4
