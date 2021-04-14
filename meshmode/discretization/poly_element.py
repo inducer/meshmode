@@ -236,7 +236,7 @@ class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBa
     def _quadrature_rule(self):
         dims = self.mesh_el_group.dim
         if dims == 0:
-            return mp.Quadrature(np.empty((0, 1)), np.empty((0, 1)))
+            return mp.Quadrature(np.empty((0, 1)), np.ones((1,)))
         elif dims == 1:
             return mp.LegendreGaussQuadrature(self.order)
         else:
@@ -272,7 +272,7 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
     def _quadrature_rule(self):
         dims = self.mesh_el_group.dim
         if dims == 0:
-            return mp.Quadrature(np.empty((0, 1)), np.empty((0, 1)))
+            return mp.Quadrature(np.empty((0, 1)), np.ones((1,)))
         elif dims == 1:
             return mp.LegendreGaussQuadrature(self.order, force_dim_axis=True)
         else:
