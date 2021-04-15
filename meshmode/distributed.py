@@ -176,21 +176,22 @@ class MPIBoundaryCommSetupHelper:
         self.mpi_comm = mpi_comm
         self.array_context = actx
         self.i_local_part = mpi_comm.Get_rank()
-        self.connected_parts = list(local_bdry_conns.keys())
         self.local_bdry_conns = local_bdry_conns
         self.bdry_grp_factory = bdry_grp_factory
         self._internal_mpi_comm = None
         self.send_reqs = None
-        self.recv_reqs = None
+        self.pending_recvs = None
 
     def __enter__(self):
         self._internal_mpi_comm = self.mpi_comm.Dup()
 
         logger.info("bdry comm rank %d comm begin", self.i_local_part)
 
-        self.recv_reqs = [
-            self._internal_mpi_comm.irecv(source=i_remote_part)
-            for i_remote_part in self.connected_parts]
+        # Not using irecv because mpi4py only allocates 32KB per receive buffer
+        # when receiving pickled objects. We could pass buffers to irecv explicitly,
+        # but in order to know the required buffer sizes we would have to do all of
+        # the pickling ourselves.
+        self.pending_recvs = set(self.local_bdry_conns.keys())
 
         self.send_reqs = [
             self._internal_mpi_comm.isend((
@@ -198,7 +199,7 @@ class MPIBoundaryCommSetupHelper:
                 make_remote_group_infos(
                     self.array_context, self.local_bdry_conns[i_remote_part])),
                 dest=i_remote_part)
-            for i_remote_part in self.connected_parts]
+            for i_remote_part in self.local_bdry_conns.keys()]
 
         return self
 
@@ -217,21 +218,25 @@ class MPIBoundaryCommSetupHelper:
         """
         from mpi4py import MPI
 
-        # FIXME: when waitsome makes it into an mpi4py release
-        # indices, data = MPI.Request.waitsome(self.recv_reqs)
-        index, msg = MPI.Request.waitany(self.recv_reqs)
-
-        if index == MPI.UNDEFINED:
+        if not self.pending_recvs:
             # Already completed, nothing more to do
             return {}
 
-        indices = [index]
-        data = [msg]
+        status = MPI.Status()
+
+        # Wait for any receive
+        data = [self._internal_mpi_comm.recv(status=status)]
+        parts = [status.source]
+
+        # Complete any other available receives while we're at it
+        while self._internal_mpi_comm.iprobe():
+            data.append(self._internal_mpi_comm.recv(status=status))
+            parts.append(status.source)
 
         remote_to_local_bdry_conns = {}
 
-        for irecv, (remote_bdry_mesh, remote_group_infos) in zip(indices, data):
-            i_remote_part = self.connected_parts[irecv]
+        for i_remote_part, (remote_bdry_mesh, remote_group_infos) in zip(parts,
+                data):
             logger.debug("rank %d: Received rank %d data",
                          self.i_local_part, i_remote_part)
 
@@ -248,8 +253,9 @@ class MPIBoundaryCommSetupHelper:
                         group_factory=self.bdry_grp_factory),
                     remote_group_infos=remote_group_infos)
 
-        all_recvs_completed = not any([bool(req) for req in self.recv_reqs])
-        if all_recvs_completed:
+            self.pending_recvs.remove(i_remote_part)
+
+        if not self.pending_recvs:
             MPI.Request.waitall(self.send_reqs)
             logger.info("bdry comm rank %d comm end", self.i_local_part)
 
