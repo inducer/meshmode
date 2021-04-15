@@ -150,7 +150,7 @@ def test_modal_coefficients_by_projection(actx_factory, quad_group_factory):
     shape = mp.Simplex(grp.dim)
     space = mp.space_for_shape(shape, order=m_order)
     basis = mp.orthonormal_basis_for_space(space, shape)
-    quad = grp._quadrature_rule()
+    quad = grp.quadrature_rule()
 
     nodal_f_data = actx.to_numpy(nodal_f[0])
     vdm = mp.vandermonde(basis.functions, quad.nodes)
