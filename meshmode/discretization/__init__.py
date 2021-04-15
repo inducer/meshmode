@@ -194,11 +194,23 @@ class NodalElementGroupBase(ElementGroupBase):
         """
         return self.unit_nodes.shape[-1]
 
-    @abstractproperty
+    @property
+    @memoize_method
     def unit_nodes(self):
         """Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
         of reference coordinates of interpolation nodes.
+
+        Note: this method dispatches to the nodes of the underlying
+        quadrature rule. This means, for interpolatory element groups,
+        interpolation nodes are collocated with quadrature nodes.
         """
+        result = self.quadrature_rule().nodes
+        if len(result.shape) == 1:
+            result = np.array([result])
+
+        dim2, _ = result.shape
+        assert dim2 == self.mesh_el_group.dim
+        return result
 
     @abstractmethod
     def quadrature_rule(self):
