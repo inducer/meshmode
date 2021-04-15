@@ -177,14 +177,14 @@ class NodalElementGroupBase(ElementGroupBase):
     equipped with nodes. Nodes are specific locations defined on the
     reference element (:attr:`~ElementGroupBase.shape`)
     defining a degree of freedom by point evaluation at that location.
-    Such element groups can have an associated quadrature rule to perform
+    Such element groups have an associated quadrature rule to perform
     numerical integration, but are not necessarily usable (unisolvent)
     for interpolation.
 
     Inherits from :class:`ElementGroupBase`.
 
     .. autoattribute:: unit_nodes
-    .. autoattribute:: weights
+    .. automethod:: quadrature_rule
     """
 
     @property
@@ -200,12 +200,23 @@ class NodalElementGroupBase(ElementGroupBase):
         of reference coordinates of interpolation nodes.
         """
 
-    @abstractproperty
+    @abstractmethod
+    def quadrature_rule(self):
+        """Returns a :class:`modepy.Quadrature` object for the
+        element group.
+        """
+
+    @property
     def weights(self):
         """Returns a :class:`numpy.ndarray` of shape ``(nunit_dofs,)``
         containing quadrature weights applicable on the reference
         element.
         """
+        warn("`grp.weights` will be dropped in version 2022.x "
+             "To access the quadrature weights, use "
+             "`grp.quadrature_rule().weights` instead.",
+             DeprecationWarning, stacklevel=2)
+        return self.quadrature_rule().weights
 
 # }}}
 
