@@ -224,8 +224,8 @@ class NodalElementGroupBase(ElementGroupBase):
         containing quadrature weights applicable on the reference
         element.
         """
-        warn("`grp.weights` will be dropped in version 2022.x "
-             "To access the quadrature weights, use "
+        warn("`grp.weights` is deprecated and will be dropped "
+             "in version 2022.x. To access the quadrature weights, use "
              "`grp.quadrature_rule().weights` instead.",
              DeprecationWarning, stacklevel=2)
         return self.quadrature_rule().weights
@@ -254,24 +254,24 @@ class ElementGroupWithBasis(ElementGroupBase):
 
     @memoize_method
     def mode_ids(self):
-        warn("`grp.mode_ids()` will be dropped in version 2022.x "
-             "To access the basis function mode ids, use "
+        warn("`grp.mode_ids()` is deprecated and will be dropped "
+             "in version 2022.x. To access the basis function mode ids, use "
              "`grp.basis_obj().mode_ids` instead.",
              DeprecationWarning, stacklevel=2)
         return self.basis_obj().mode_ids
 
     @memoize_method
     def basis(self):
-        warn("`grp.basis()` will be dropped in version 2022.x "
-             "To access the basis functions, use "
+        warn("`grp.basis()` is deprecated and will be dropped "
+             "in version 2022.x. To access the basis functions, use "
              "`grp.basis_obj().functions` instead.",
              DeprecationWarning, stacklevel=2)
         return self.basis_obj().functions
 
     @memoize_method
     def grad_basis(self):
-        warn("`grp.grad_basis()` will be dropped in version 2022.x "
-             "To access the basis function gradients, use "
+        warn("`grp.grad_basis()` is deprecated and will be dropped "
+             "in version 2022.x. To access the basis function gradients, use "
              "`grp.basis_obj().gradients` instead.",
              DeprecationWarning, stacklevel=2)
         return self.basis_obj().gradients
@@ -290,8 +290,9 @@ class ElementGroupWithBasis(ElementGroupBase):
             return False
 
     def is_orthogonal_basis(self):
-        warn("`is_orthogonal_basis` will be dropped in version 2022.x "
-             "since orthonormality is the more operationally important case. "
+        warn("`is_orthogonal_basis` is deprecated and will be dropped "
+             "in version 2022.x since orthonormality is the more "
+             "operationally important case. "
              "Use `is_orthonormal_basis` instead.",
              DeprecationWarning, stacklevel=2)
         return self.is_orthonormal_basis()
