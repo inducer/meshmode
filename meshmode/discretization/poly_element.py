@@ -23,6 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from abc import abstractproperty
 from typing import Tuple
 from warnings import warn
 
@@ -267,18 +268,17 @@ class _MassMatrixQuadratureElementGroup(PolynomialSimplexElementGroupBase):
     @memoize_method
     def quadrature_rule(self):
         basis_fcts = self.basis_obj().functions
-        nodes = self.interp_nodes
+        nodes = self._interp_nodes
         mass_matrix = mp.mass_matrix(basis_fcts, nodes)
         weights = np.dot(mass_matrix,
                          np.ones(len(basis_fcts)))
         return mp.Quadrature(nodes, weights, exact_to=self.order)
 
-    @property
-    def interp_nodes(self):
-        raise NotImplementedError(
-            "Subclasses of `_MassMatrixQuadratureElementGroup` must "
-            "provide interpolation nodes to be used for quadrature."
-        )
+    @abstractproperty
+    def _interp_nodes(self):
+        """Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
+        of interpolation nodes on the reference cell.
+        """
 
 
 class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
@@ -291,7 +291,7 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
     """
     @property
     @memoize_method
-    def interp_nodes(self):
+    def _interp_nodes(self):
         dim = self.mesh_el_group.dim
         if self.order == 0:
             result = mp.warp_and_blend_nodes(dim, 1)
@@ -328,7 +328,7 @@ class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
 
     @property
     @memoize_method
-    def interp_nodes(self):
+    def _interp_nodes(self):
         dim = self.mesh_el_group.dim
 
         from recursivenodes import recursive_nodes
@@ -353,7 +353,7 @@ class PolynomialEquidistantSimplexElementGroup(_MassMatrixQuadratureElementGroup
     """
     @property
     @memoize_method
-    def interp_nodes(self):
+    def _interp_nodes(self):
         dim = self.mesh_el_group.dim
         result = mp.equidistant_nodes(dim, self.order)
 
@@ -372,7 +372,7 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
         self._unit_nodes = unit_nodes
 
     @property
-    def interp_nodes(self):
+    def _interp_nodes(self):
         dim2, nunit_nodes = self._unit_nodes.shape
 
         if dim2 != self.mesh_el_group.dim:
