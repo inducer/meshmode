@@ -982,14 +982,14 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), nelements_per_axis=None,
                 "n will disappear in 2022.",
                 DeprecationWarning, stacklevel=2)
         if nelements_per_axis is not None:
-            raise ValueError("cannot specify both nelements_per_axis and n")
+            raise TypeError("cannot specify both nelements_per_axis and n")
         if npoints_per_axis is not None:
-            raise ValueError("cannot specify both npoints_per_axis and n")
+            raise TypeError("cannot specify both npoints_per_axis and n")
         npoints_per_axis = n
     else:
         if npoints_per_axis is not None:
             if nelements_per_axis is not None:
-                raise ValueError("cannot specify both nelements_per_axis and "
+                raise TypeError("cannot specify both nelements_per_axis and "
                     "npoints_per_axis")
         else:
             if nelements_per_axis is not None:
@@ -1024,14 +1024,14 @@ def generate_warped_rect_mesh(dim, order, *, nelements_side=None,
                 "nelements_side or npoints_side instead. n will disappear "
                 "in 2022.", DeprecationWarning, stacklevel=2)
         if nelements_side is not None:
-            raise ValueError("cannot specify both nelements_side and n")
+            raise TypeError("cannot specify both nelements_side and n")
         if npoints_side is not None:
-            raise ValueError("cannot specify both npoints_side and n")
+            raise TypeError("cannot specify both npoints_side and n")
         npoints_side = n
     else:
         if npoints_side is not None:
             if nelements_side is not None:
-                raise ValueError("cannot specify both nelements_side and "
+                raise TypeError("cannot specify both nelements_side and "
                     "npoints_side")
         elif nelements_side is not None:
             npoints_side = nelements_side + 1
