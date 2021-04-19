@@ -991,11 +991,11 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
             if nelements_per_axis is not None:
                 raise TypeError("cannot specify both nelements_per_axis and "
                     "npoints_per_axis")
+        elif nelements_per_axis is not None:
+            npoints_per_axis = tuple(nel_i+1 for nel_i in nelements_per_axis)
         else:
-            if nelements_per_axis is not None:
-                npoints_per_axis = tuple(nel_i+1 for nel_i in nelements_per_axis)
-            else:
-                npoints_per_axis = (5, 5)
+            raise TypeError("Must specify nelements_per_axis or "
+                "npoints_per_axis")
 
     if min(npoints_per_axis) < 2:
         raise ValueError("need at least two points in each direction")

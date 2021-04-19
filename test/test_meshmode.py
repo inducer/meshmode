@@ -1192,7 +1192,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
 # {{{ rect/box mesh generation
 
 def test_rect_mesh(visualize=False):
-    mesh = mgen.generate_regular_rect_mesh()
+    mesh = mgen.generate_regular_rect_mesh(nelements_per_axis=(4, 4))
 
     if visualize:
         from meshmode.mesh.visualization import draw_2d_mesh
