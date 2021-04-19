@@ -543,19 +543,12 @@ class PyOpenCLArrayContext(ArrayContext):
 
     def call_loopy(self, program, **kwargs):
         program = self.transform_loopy_program(program)
-        try:
-            prg_name = program.name
-        except AttributeError:
-            try:
-                prg_name = program.root_kernel.name
-            except AttributeError:
-                prg_name, = program.entrypoints
 
         evt, result = program(self.queue, **kwargs, allocator=self.allocator)
 
         if self._wait_event_queue_length is not False:
             wait_event_queue = self._kernel_name_to_wait_event_queue.setdefault(
-                    prg_name, [])
+                    program.default_entrypoint.name, [])
 
             wait_event_queue.append(evt)
             if len(wait_event_queue) > self._wait_event_queue_length:
@@ -574,15 +567,7 @@ class PyOpenCLArrayContext(ArrayContext):
 
     @memoize_method
     def transform_loopy_program(self, program):
-        # accommodate loopy with and without kernel callables
-        try:
-            options = program.options
-        except AttributeError:
-            try:
-                options = program.root_kernel.options
-            except AttributeError:
-                entrypoint, = program.entrypoints
-                options = program[entrypoint].options
+        options = program.default_entrypoint.options
         if not (options.return_dict and options.no_numpy):
             raise ValueError("Loopy program passed to call_loopy must "
                     "have return_dict and no_numpy options set. "
@@ -590,15 +575,7 @@ class PyOpenCLArrayContext(ArrayContext):
                     "to create this program?")
 
         # FIXME: This could be much smarter.
-        # accommodate loopy with and without kernel callables
-        try:
-            all_inames = program.all_inames()
-        except AttributeError:
-            try:
-                all_inames = program.root_kernel.all_inames()
-            except AttributeError:
-                entrypoint, = program.entrypoints
-                all_inames = program[entrypoint].all_inames()
+        all_inames = program.default_entrypoint.all_inames()
 
         inner_iname = None
         if "iel" not in all_inames and "i0" in all_inames:
