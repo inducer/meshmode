@@ -978,7 +978,8 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), nelements_per_axis=None,
     if n is not None:
         from warnings import warn
         warn("n parameter to generate_regular_rect_mesh is deprecated. Use "
-                "nelements_1d or npoints_1d instead. n will disappear in 2022.",
+                "nelements_per_axis or npoints_per_axis instead. "
+                "n will disappear in 2022.",
                 DeprecationWarning, stacklevel=2)
         if nelements_per_axis is not None:
             raise ValueError("cannot specify both nelements_per_axis and n")
