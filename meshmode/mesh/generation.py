@@ -949,7 +949,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 # {{{ generate_regular_rect_mesh
 
 @deprecate_keyword("group_factory", "group_cls")
-def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), nelements_per_axis=None,
+def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
                                npoints_per_axis=None,
                                order=1,
                                boundary_tag_to_face=None,
