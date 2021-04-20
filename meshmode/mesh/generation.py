@@ -972,8 +972,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
 
     .. note::
 
-        Specify only one of *nelements_per_axis* and *npoints_per_axis*. If neither
-        is specified, defaults to nelements_per_axis=(4, 4).
+        Specify only one of *nelements_per_axis* and *npoints_per_axis*.
     """
     if n is not None:
         from warnings import warn
