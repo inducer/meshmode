@@ -1015,7 +1015,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
 
 def generate_warped_rect_mesh(dim, order, *, nelements_side=None,
         npoints_side=None, group_cls=None, n=None):
-    """Generate a mesh of a warped line/square/cube. Mainly useful for testing
+    """Generate a mesh of a warped square/cube. Mainly useful for testing
     functionality with curvilinear meshes.
     """
     if n is not None:
@@ -1036,7 +1036,7 @@ def generate_warped_rect_mesh(dim, order, *, nelements_side=None,
         elif nelements_side is not None:
             npoints_side = nelements_side + 1
 
-    assert dim in [1, 2, 3]
+    assert dim in [2, 3]
 
     npoints_per_axis = (npoints_side,)*dim if npoints_side is not None else None
 
