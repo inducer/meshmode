@@ -959,12 +959,13 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
                                ):
     """Create a semi-structured rectangular mesh with equispaced elements.
 
-    :param a: the lower left hand point of the rectangle
-    :param b: the upper right hand point of the rectangle
+    :param a: the lower left hand point of the rectangle.
+    :param b: the upper right hand point of the rectangle.
     :param nelements_per_axis: an optional tuple of integers indicating the
         number of elements along each axis.
     :param npoints_per_axis: an optional tuple of integers indicating the
         number of points along each axis.
+    :param order: the mesh element order.
     :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
         See :func:`generate_box_mesh`.
     :param group_cls: see :func:`generate_box_mesh`.
