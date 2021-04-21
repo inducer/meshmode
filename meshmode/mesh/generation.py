@@ -865,13 +865,13 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
             midpoints = np.empty((dim,)+shape_m1, dtype=coord_dtype)
             for idim in range(dim):
-                vshape = (shape_m1[idim],) + (1,)*idim
+                vshape = (shape_m1[idim],) + (1,)*(1-idim)
                 left_axis_coords = axis_coords[idim][:-1]
                 right_axis_coords = axis_coords[idim][1:]
                 midpoints[idim] = (
                         0.5*(left_axis_coords+right_axis_coords)).reshape(*vshape)
 
-            midpoints = midpoints.reshape(dim, -1)
+            midpoints = midpoints.reshape(dim, -1, order="F")
             vertices = np.concatenate((vertices, midpoints), axis=1)
 
         elif mesh_type is None:
