@@ -72,7 +72,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
 
     for n in mesh_pars:
         from meshmode.mesh.generation import generate_warped_rect_mesh
-        base_mesh = generate_warped_rect_mesh(dim, order=order, n=n)
+        base_mesh = generate_warped_rect_mesh(dim, order=order, nelements_side=n)
 
         if num_groups > 1:
             from meshmode.mesh.processing import split_mesh_groups
@@ -173,22 +173,22 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
 
 @pytest.mark.parametrize(("dim", "mesh_size", "num_parts", "scramble_partitions"),
         [
-            (2, 5, 4, False),
-            (2, 5, 4, True),
-            (2, 5, 5, False),
-            (2, 5, 5, True),
-            (2, 5, 7, False),
-            (2, 5, 7, True),
-            (2, 10, 32, False),
-            (3, 8, 32, False),
+            (2, 4, 4, False),
+            (2, 4, 4, True),
+            (2, 4, 5, False),
+            (2, 4, 5, True),
+            (2, 4, 7, False),
+            (2, 4, 7, True),
+            (2, 9, 32, False),
+            (3, 7, 32, False),
         ])
 @pytest.mark.parametrize("num_groups", [1, 2, 7])
 def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitions):
     np.random.seed(42)
-    n = (mesh_size,) * dim
+    nelements_per_axis = (mesh_size,) * dim
     from meshmode.mesh.generation import generate_regular_rect_mesh
-    meshes = [generate_regular_rect_mesh(a=(0 + i,) * dim, b=(1 + i,) * dim, n=n)
-                        for i in range(num_groups)]
+    meshes = [generate_regular_rect_mesh(a=(0 + i,) * dim, b=(1 + i,) * dim,
+              nelements_per_axis=nelements_per_axis) for i in range(num_groups)]
 
     from meshmode.mesh.processing import merge_disjoint_meshes
     mesh = merge_disjoint_meshes(meshes)
@@ -326,7 +326,7 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     if mesh_dist.is_mananger_rank():
         np.random.seed(42)
         from meshmode.mesh.generation import generate_warped_rect_mesh
-        meshes = [generate_warped_rect_mesh(dim, order=order, n=4)
+        meshes = [generate_warped_rect_mesh(dim, order=order, nelements_side=4)
                         for _ in range(num_groups)]
 
         if num_groups > 1:

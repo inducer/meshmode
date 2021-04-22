@@ -85,7 +85,8 @@ def test_inverse_modal_connections(actx_factory, nodal_group_factory):
 
     # Make a regular rectangle mesh
     mesh = mgen.generate_regular_rect_mesh(
-        a=(0, 0)*2, b=(5, 3), n=(10, 6,), order=order, group_cls=group_cls)
+        a=(0, 0), b=(5, 3), npoints_per_axis=(10, 6), order=order,
+        group_cls=group_cls)
 
     # Make discretizations
     nodal_disc = Discretization(actx, mesh, nodal_group_factory(order))
@@ -126,7 +127,8 @@ def test_modal_coefficients_by_projection(actx_factory, quad_group_factory):
 
     # Make a regular rectangle mesh
     mesh = mgen.generate_regular_rect_mesh(
-        a=(0, 0)*2, b=(5, 3), n=(10, 6,), order=order, group_cls=group_cls)
+        a=(0, 0), b=(5, 3), npoints_per_axis=(10, 6), order=order,
+        group_cls=group_cls)
 
     # Make discretizations
     nodal_disc = Discretization(actx, mesh, quad_group_factory(order))
@@ -186,7 +188,8 @@ def test_quadrature_based_modal_connection_reverse(actx_factory, quad_group_fact
 
     # Make a regular rectangle mesh
     mesh = mgen.generate_regular_rect_mesh(
-        a=(0, 0)*2, b=(5, 3), n=(10, 6,), order=order, group_cls=group_cls)
+        a=(0, 0), b=(5, 3), npoints_per_axis=(10, 6), order=order,
+        group_cls=group_cls)
 
     # Make discretizations
     nodal_disc = Discretization(actx, mesh, quad_group_factory(order))
@@ -251,7 +254,8 @@ def test_modal_truncation(actx_factory, nodal_group_factory,
     for mesh_par in mesh_pars:
 
         # Make the mesh
-        mesh = mgen.generate_warped_rect_mesh(dim, order=order, n=mesh_par,
+        mesh = mgen.generate_warped_rect_mesh(dim, order=order,
+                                              nelements_side=mesh_par,
                                               group_cls=group_cls)
         h = 1/mesh_par
 
