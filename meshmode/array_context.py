@@ -407,9 +407,9 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         import pyopencl.array as cla
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
         return obj_or_dof_array_vectorize_n_args(
-            lambda *args: cla.stack(arrays=args, axis=axis,
-                                    queue=self._array_context.queue),
-            *arrays)
+                lambda *args: cla.stack(arrays=args, axis=axis,  # pylint: disable=no-member  # noqa: E501
+                    queue=self._array_context.queue),
+                *arrays)
 
 
 def _flatten_grp_array(grp_ary):
