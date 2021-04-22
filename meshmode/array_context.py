@@ -355,6 +355,25 @@ class ArrayContext(ABC):
         .. versionadded:: 2021.2
         """
 
+    @memoize_method
+    def _get_einsum_prg(self, spec, arg_names, tagged):
+        return lp.make_einsum(
+                spec,
+                arg_names,
+                knl_creation_kwargs=dict(
+                    options=_DEFAULT_LOOPY_OPTIONS,
+                    tags=tagged,
+                    ),
+                )
+
+    def einsum(self, spec, *args, arg_names=None, tagged=()):
+        if arg_names is None:
+            arg_names = ["arg%d" % i for i in range(len(args))]
+
+        prg = self._get_einsum_prg(spec, arg_names, tagged)
+        return self.call_loopy(prg,
+                **{arg_names[i]: arg for i, arg in enumerate(args)})["out"]
+
 # }}}
 
 
@@ -612,16 +631,28 @@ class PyOpenCLArrayContext(ArrayContext):
                 all_inames = program[entrypoint].all_inames()
 
         inner_iname = None
-        if "iel" not in all_inames and "i0" in all_inames:
-            outer_iname = "i0"
+        if (len(program.instructions) == 1
+                and isinstance(program.instructions[0], lp.Assignment)
+                and any(isinstance(tag, FirstAxisIsElementsTag)
+                    for tag in program.tags)):
+            stmt, = program.instructions
 
-            if "i1" in all_inames:
-                inner_iname = "i1"
-        else:
+            out_inames = [v.name for v in stmt.assignee.index_tuple]
+            assert out_inames
+            outer_iname = out_inames[0]
+            if len(out_inames) >= 2:
+                inner_iname = out_inames[1]
+
+        elif "iel" in all_inames:
             outer_iname = "iel"
 
             if "idof" in all_inames:
                 inner_iname = "idof"
+        elif "i0" in all_inames:
+            outer_iname = "i0"
+
+            if "i1" in all_inames:
+                inner_iname = "i1"
 
         if inner_iname is not None:
             program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
