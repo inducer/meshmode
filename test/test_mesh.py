@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import pytest
 import meshmode         # noqa: F401
 from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
@@ -33,14 +34,22 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def test_nonequal_rect_mesh_generation(actx_factory, visualize=False):
+@pytest.mark.parametrize(("dim", "mesh_type"), [
+    (1, None),
+    (2, None),
+    (2, "X"),
+    (3, None),
+    ])
+def test_nonequal_rect_mesh_generation(actx_factory, dim, mesh_type,
+        visualize=False):
     """Test that ``generate_regular_rect_mesh`` works with non-equal arguments
     across axes.
     """
     actx = actx_factory()
 
     mesh = mgen.generate_regular_rect_mesh(
-            a=(0, 0)*2, b=(5, 3), npoints_per_axis=(10, 6,), order=3)
+            a=(0,)*dim, b=(5, 3, 4)[:dim], npoints_per_axis=(10, 6, 7)[:dim],
+            order=3, mesh_type=mesh_type)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
