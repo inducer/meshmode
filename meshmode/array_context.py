@@ -40,6 +40,11 @@ __doc__ = """
 """
 
 
+_DEFAULT_LOOPY_OPTIONS = lp.Options(
+        no_numpy=True,
+        return_dict=True)
+
+
 def make_loopy_program(domains, statements, kernel_data=None,
         name="mm_actx_kernel"):
     """Return a :class:`loopy.LoopKernel` suitable for use with
@@ -52,9 +57,7 @@ def make_loopy_program(domains, statements, kernel_data=None,
             domains,
             statements,
             kernel_data=kernel_data,
-            options=lp.Options(
-                no_numpy=True,
-                return_dict=True),
+            options=_DEFAULT_LOOPY_OPTIONS,
             default_offset=lp.auto,
             name=name,
             lang_version=MOST_RECENT_LANGUAGE_VERSION)
@@ -174,6 +177,23 @@ class _BaseFakeNumpyNamespace:
         return obj_or_dof_array_vectorize(lambda obj: obj.conj(), x)
 
     conj = conjugate
+
+    @memoize_method
+    def _get_einsum_prg(self, spec):
+        prg = lp.set_options(
+                lp.make_einsum(spec, options=)
+        prg
+            options=lp.Options(
+                no_numpy=True,
+                return_dict=True),
+            default_offset=lp.auto,
+            name=name,
+            lang_version=MOST_RECENT_LANGUAGE_VERSION)
+
+    def einsum(self, spec, *args):
+        return self._array_context.call_loopy(
+                ,
+                **{"arg%d" % i: arg for i, arg in enumerate(args)})
 
 
 class _BaseFakeNumpyLinalgNamespace:
