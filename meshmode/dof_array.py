@@ -32,7 +32,7 @@ from contextlib import contextmanager
 from pytools import single_valued, memoize_in
 from pytools.obj_array import obj_array_vectorize
 
-from meshmode.array_context import ArrayContext, make_loopy_program
+from meshmode.array_context import ArrayContext, ArrayContainer, make_loopy_program
 
 
 __doc__ = """
@@ -55,7 +55,7 @@ __doc__ = """
 
 # {{{ DOFArray
 
-class DOFArray:
+class DOFArray(ArrayContainer):
     r"""This array type holds degree-of-freedom arrays for use with
     :class:`~meshmode.discretization.Discretization`,
     with one entry in the :class:`DOFArray` for each
@@ -85,7 +85,6 @@ class DOFArray:
         contained in this instance.
 
     .. automethod:: __len__
-    .. automethod:: __getitem__
 
     The following methods and attributes are implemented to mimic the
     functionality of :class:`~numpy.ndarray`\ s. They require the
@@ -169,6 +168,24 @@ class DOFArray:
 
     def __repr__(self):
         return f"DOFArray({repr(self._data)})"
+
+    # {{{ array container protocol
+
+    def as_iterable(self):
+        return ((i, subary) for i, subary in enumerate(self._data))
+
+    @classmethod
+    def from_iterable(cls, actx, iterable):
+        iterable = list(iterable)
+
+        result = [None] * len(iterable)
+        for i, subary in iterable:
+            result[i] = subary
+
+        assert all(subary is not None for subary in result)
+        return DOFArray(actx, tuple(result))
+
+    # }}}
 
     # {{{ sequence protocol
 

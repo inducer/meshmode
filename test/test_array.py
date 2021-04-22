@@ -303,6 +303,62 @@ def test_array_context_einsum_array_tripleprod(actx_factory, spec):
 # }}}
 
 
+# {{{ test array container
+
+def test_recursive_freeze_thaw(actx_factory):
+    actx = actx_factory()
+    ambient_dim = 2
+
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh = generate_regular_rect_mesh(
+            a=(-0.5,)*ambient_dim,
+            b=(+0.5,)*ambient_dim,
+            n=(3,)*ambient_dim, order=1)
+    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
+
+    from dataclasses import dataclass, field, fields
+    from meshmode.array_context import ArrayContainer
+
+    @dataclass
+    class DataclassArrayContainer(ArrayContainer):
+        mass: DOFArray
+        momentum: np.ndarray
+        enthalpy: DOFArray
+        array_context: object = field(init=False)
+
+        def __post_init__(self):
+            self.array_context = self.mass.array_context
+
+        def __len__(self):
+            return 3
+
+        def as_iterable(self):
+            return ((var.name, getattr(self, var.name))
+                    for var in fields(self) if var.init)
+
+        @classmethod
+        def from_iterable(cls, actx, iterable):
+            return cls(**dict(iterable))
+
+    from meshmode.array_context import thaw, freeze
+    x = thaw(actx, discr.nodes()[0])
+
+    # pylint: disable=unexpected-keyword-arg, no-value-for-parameter
+    ary_dataclass = DataclassArrayContainer(
+            mass=x,
+            momentum=make_obj_array([x, x]),
+            enthalpy=x)
+    ary_of_dofs = make_obj_array([x, x, x])
+    ary_dof = x
+
+    for ary in [ary_dof, ary_of_dofs, ary_dataclass]:
+        frozen_ary = freeze(ary)
+        thawed_ary = thaw(actx, frozen_ary)
+        frozen_ary = freeze(thawed_ary)
+
+# }}}
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
