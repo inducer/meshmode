@@ -178,28 +178,13 @@ class _BaseFakeNumpyNamespace:
 
     conj = conjugate
 
-    @memoize_method
-    def _get_einsum_prg(self, spec):
-        prg = lp.set_options(
-                lp.make_einsum(spec, options=)
-        prg
-            options=lp.Options(
-                no_numpy=True,
-                return_dict=True),
-            default_offset=lp.auto,
-            name=name,
-            lang_version=MOST_RECENT_LANGUAGE_VERSION)
-
-    def einsum(self, spec, *args):
-        return self._array_context.call_loopy(
-                ,
-                **{"arg%d" % i: arg for i, arg in enumerate(args)})
-
 
 class _BaseFakeNumpyLinalgNamespace:
     def __init__(self, array_context):
         self._array_context = array_context
 
+
+# {{{ program metadata
 
 class CommonSubexpressionTag(Tag):
     """A tag that is applicable to arrays indicating that this same array
@@ -208,6 +193,12 @@ class CommonSubexpressionTag(Tag):
 
     .. versionadded:: 2021.2
     """
+
+
+class FirstAxisIsElementsTag(Tag):
+    pass
+
+# }}}
 
 
 class ArrayContext(ABC):
