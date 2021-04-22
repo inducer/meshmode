@@ -20,15 +20,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from typing import Union, Sequence
-from functools import partial
 import operator
+from functools import partial
+from abc import ABC, abstractmethod
+from typing import Any, Callable, Iterable, Sequence, Tuple, Union
+
 import numpy as np
+
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
+
 from pytools import memoize_method
 from pytools.tag import Tag
-from abc import ABC, abstractmethod
 
 
 __doc__ = """
@@ -58,6 +61,114 @@ def make_loopy_program(domains, statements, kernel_data=None,
             default_offset=lp.auto,
             name=name,
             lang_version=MOST_RECENT_LANGUAGE_VERSION)
+
+
+# {{{ ArrayContainer
+
+class ArrayContainer(ABC):
+    """A generic container for the array type supported by the
+    :attr:`array_context`.
+
+    .. attribute:: array_context
+
+        An :class:`meshmode.array_context.ArrayContext`.
+
+    .. automethod:: as_iterable
+    .. automethod:: from_iterable
+    """
+
+    def __init__(self, actx):
+        self.array_context = actx
+
+    @abstractmethod
+    def as_iterable(self) -> Iterable[Tuple[Any, Any]]:
+        """Serialize the array container into an iterable over its components.
+
+        :returns: an :class:`Iterable` of 2-tuples where the first
+            entry is an identifier for the component and the second entry
+            is an array-like component of the :class:`ArrayContainer`.
+        """
+
+    @classmethod
+    @abstractmethod
+    def from_iterable(cls,
+            actx: "ArrayContext",
+            iterable: Iterable[Tuple[Any, Any]]):
+        """Convert an iterable into an array container.
+
+        :param iterable: an iterable that mirrors the output of
+            :meth:`as_iterable`.
+        """
+
+
+def array_container_vectorize(f: Callable[[Any], Any], ary):
+    r"""Applies *f* recursively over all :class:`ArrayContainer`\ s and object
+    arrays.
+
+    Works similarly to :func:`~pytools.obj_array.obj_array_vectorize`, but
+    recurses into all :class:`ArrayContainer` classes and applies *f* to their
+    components as well.
+
+    :param ary: a tree-like structures of :meth:`~ArrayContext.thaw`\ ed
+        :class:`ArrayContainers`.
+    """
+    if isinstance(ary, ArrayContainer):
+        return ary.from_iterable(ary.array_context, (
+            (key, array_container_vectorize(f, subary))
+            for key, subary in ary.as_iterable()
+            ))
+    elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
+        from pytools.obj_array import obj_array_vectorize
+        return obj_array_vectorize(partial(array_container_vectorize, f), ary)
+    else:
+        return f(ary)
+
+
+def freeze(ary, actx=None):
+    r"""Freezes recursively by going through all components of
+    :class:`ArrayContainer`\ s and object arrays.
+
+    :param ary: a tree-like structures of :meth:`~ArrayContext.thaw`\ ed
+        :class:`ArrayContainers`.
+    """
+
+    if isinstance(ary, ArrayContainer):
+        if ary.array_context is None:
+            raise ValueError("ArrayContainer passed to 'freeze' is already frozen")
+
+        return ary.from_iterable(None, (
+            (key, freeze(subary, actx=ary.array_context))
+            for key, subary in ary.as_iterable()
+            ))
+    elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
+        from pytools.obj_array import obj_array_vectorize
+        return obj_array_vectorize(partial(freeze, actx=actx), ary)
+    else:
+        return actx.freeze(ary)
+
+
+def thaw(actx, ary):
+    r"""Thaws recursively by going through all components of
+    :class:`ArrayContainer`\ s and object arrays.
+
+    :param ary: a tree-like structures of :meth:`~ArrayContext.freeze`\ ed
+        :class:`ArrayContainers`.
+    """
+
+    if isinstance(ary, ArrayContainer):
+        if ary.array_context is not None:
+            raise ValueError("ArrayContainer passed to 'thaw' is not frozen")
+
+        return ary.from_iterable(actx, (
+            (key, thaw(actx, subary)) for key, subary in ary.as_iterable()
+            ))
+    elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
+        from pytools.obj_array import obj_array_vectorize
+        return obj_array_vectorize(partial(thaw, actx), ary)
+    else:
+        return actx.thaw(ary)
+
+# }}}
 
 
 # {{{ ArrayContext
