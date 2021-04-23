@@ -166,6 +166,30 @@ class _BaseFakeNumpyNamespace:
         else:
             raise AttributeError(name)
 
+    def _new_like(self, ary, alloc_like):
+        # FIXME: DOFArray should not be here (circular dependencies)
+        from meshmode.dof_array import DOFArray
+        from numbers import Number
+
+        if isinstance(ary, DOFArray):
+            return DOFArray(self._array_context, tuple([
+                alloc_like(subary) for subary in ary
+                ]))
+        elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
+            raise NotImplementedError("operation not implemented for object arrays")
+        elif isinstance(ary, Number):
+            # NOTE: `np.zeros_like(x)` returns `array(x, shape=())`, which
+            # is best implemented by concrete array contexts, if at all
+            raise NotImplementedError("operation not implemented for scalars")
+        else:
+            return alloc_like(ary)
+
+    def empty_like(self, ary):
+        return self._new_like(ary, self._array_context.empty_like)
+
+    def zeros_like(self, ary):
+        return self._new_like(ary, self._array_context.zeros_like)
+
     def conjugate(self, x):
         # NOTE: conjugate distributes over object arrays, but it looks for a
         # `conjugate` ufunc, while some implementations only have the shorter
@@ -364,6 +388,14 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def less(self, x, y): return self._bop(operator.lt, x, y)  # noqa: E704
     def less_equal(self, x, y): return self._bop(operator.le, x, y)  # noqa: E704
 
+    def ones_like(self, ary):
+        def _ones_like(subary):
+            ones = self._array_context.empty_like(subary)
+            ones.fill(1)
+            return ones
+
+        return self._new_like(ary, _ones_like)
+
     def maximum(self, x, y):
         import pyopencl.array as cl_array
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
@@ -434,7 +466,7 @@ class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
         if ord is None:
             ord = 2
 
-        # Handling DOFArrays here is not beautiful, but it sure does avoid
+        # FIXME: Handling DOFArrays here is not beautiful, but it sure does avoid
         # downstream headaches.
         from meshmode.dof_array import DOFArray
         if isinstance(array, DOFArray):
