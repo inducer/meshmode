@@ -390,7 +390,7 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
 
     def ones_like(self, ary):
         def _ones_like(subary):
-            ones = self._array_context.zeros_like(subary)
+            ones = self._array_context.empty_like(subary)
             ones.fill(1)
             return ones
 
