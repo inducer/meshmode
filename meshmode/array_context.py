@@ -215,6 +215,7 @@ class ArrayContext(ABC):
     .. automethod:: from_numpy
     .. automethod:: to_numpy
     .. automethod:: call_loopy
+    .. automethod:: einsum
     .. attribute:: np
 
          Provides access to a namespace that serves as a work-alike to
@@ -358,21 +359,39 @@ class ArrayContext(ABC):
     @memoize_method
     def _get_einsum_prg(self, spec, arg_names, tagged):
         return lp.make_einsum(
-                spec,
-                arg_names,
-                knl_creation_kwargs=dict(
-                    options=_DEFAULT_LOOPY_OPTIONS,
-                    tags=tagged,
-                    ),
-                )
+            spec,
+            arg_names,
+            knl_creation_kwargs=dict(
+                options=_DEFAULT_LOOPY_OPTIONS,
+                tags=tagged
+            )
+        )
 
     def einsum(self, spec, *args, arg_names=None, tagged=()):
+        """Executes a :mod:`loopy` einsum program on the arguments *args*.
+
+        :arg spec: a string denoting the subscripts for
+            summation as a comma-separated list of subscript labels.
+            This follows the usual :func:`numpy.einsum` convention.
+            Note that the explicit indicator `->` for the precise output
+            form is required.
+        :arg args: a sequence of array-like operands, whose order matches
+            the subscript labels provided by *spec*.
+        :arg arg_names: an optional iterable of string types denoting
+            the names of the *args*. If *None*, default names will be
+            generated.
+        :arg tagged: an optional iterable of :class:`pytools.tag.Tag`
+            objects for specifying kernel transformations.
+
+        :return: the output of the einsum :mod:`loopy` program
+        """
         if arg_names is None:
             arg_names = ["arg%d" % i for i in range(len(args))]
 
         prg = self._get_einsum_prg(spec, arg_names, tagged)
-        return self.call_loopy(prg,
-                **{arg_names[i]: arg for i, arg in enumerate(args)})["out"]
+        return self.call_loopy(
+            prg, **{arg_names[i]: arg for i, arg in enumerate(args)}
+        )["out"]
 
 # }}}
 
