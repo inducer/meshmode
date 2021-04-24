@@ -54,13 +54,25 @@ def test_array_context_np_workalike(actx_factory):
             ("maximum", 2),
             ("where", 3),
             ("conj", 1),
+            # ("empty_like", 1),    # NOTE: fails np.allclose, obviously
+            ("zeros_like", 1),
+            ("ones_like", 1),
             ]:
         args = [np.random.randn(discr.ndofs) for i in range(n_args)]
         ref_result = getattr(np, sym_name)(*args)
 
+        # {{{ test cl.Arrays
+
+        actx_args = [actx.from_numpy(arg) for arg in args]
+        actx_result = actx.to_numpy(getattr(actx.np, sym_name)(*actx_args))
+
+        assert np.allclose(actx_result, ref_result)
+
+        # }}}
+
         # {{{ test DOFArrays
 
-        actx_args = [unflatten(actx, discr, actx.from_numpy(arg)) for arg in args]
+        actx_args = [unflatten(actx, discr, arg) for arg in actx_args]
 
         actx_result = actx.to_numpy(
                 flatten(getattr(actx.np, sym_name)(*actx_args)))
@@ -71,8 +83,10 @@ def test_array_context_np_workalike(actx_factory):
 
         # {{{ test object arrays of DOFArrays
 
-        obj_array_args = [make_obj_array([arg]) for arg in actx_args]
+        if sym_name in ("empty_like", "zeros_like", "ones_like"):
+            continue
 
+        obj_array_args = [make_obj_array([arg]) for arg in actx_args]
         obj_array_result = actx.to_numpy(
                 flatten(getattr(actx.np, sym_name)(*obj_array_args)[0]))
 
