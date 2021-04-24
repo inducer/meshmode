@@ -392,10 +392,8 @@ class ArrayContext(ABC):
         return lp.make_einsum(
             spec,
             arg_names,
-            knl_creation_kwargs=dict(
-                options=_DEFAULT_LOOPY_OPTIONS,
-                tags=tagged
-            )
+            options=_DEFAULT_LOOPY_OPTIONS,
+            tags=tagged,
         )
 
     def einsum(self, spec, *args, arg_names=None, tagged=()):
@@ -417,7 +415,7 @@ class ArrayContext(ABC):
         :return: the output of the einsum :mod:`loopy` program
         """
         if arg_names is None:
-            arg_names = ["arg%d" % i for i in range(len(args))]
+            arg_names = tuple("arg%d" % i for i in range(len(args)))
 
         prg = self._get_einsum_prg(spec, arg_names, tagged)
         return self.call_loopy(
@@ -711,6 +709,11 @@ class PyOpenCLArrayContext(ArrayContext):
 
             if "i1" in all_inames:
                 inner_iname = "i1"
+        else:
+            raise RuntimeError(
+                "Unable to reason what outer_iname and inner_iname "
+                f"needs to be; all_inames is given as: {all_inames}"
+            )
 
         if inner_iname is not None:
             program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
