@@ -34,6 +34,7 @@ from abc import ABC, abstractmethod
 __doc__ = """
 .. autofunction:: make_loopy_program
 .. autoclass:: CommonSubexpressionTag
+.. autoclass:: FirstAxisIsElementsTag
 .. autoclass:: ArrayContext
 .. autoclass:: PyOpenCLArrayContext
 .. autofunction:: pytest_generate_tests_for_pyopencl_array_context
@@ -196,7 +197,13 @@ class CommonSubexpressionTag(Tag):
 
 
 class FirstAxisIsElementsTag(Tag):
-    pass
+    """A tag that is applicable to array outputs indicating that the
+    first index corresponds to element indices. This suggests that
+    the implementation should set element indices as the outermost
+    loop extent.
+
+    .. versionadded:: 2021.2
+    """
 
 # }}}
 
