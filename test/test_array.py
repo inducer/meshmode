@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import pytest
 import numpy as np
 
 import meshmode         # noqa: F401
@@ -244,6 +245,62 @@ def test_dof_array_reductions_same_as_numpy(actx_factory):
 
         assert isinstance(actx_red, Number)
         assert np.allclose(np_red, actx_red)
+
+
+# {{{ test array context einsum
+
+@pytest.mark.parametrize("spec", [
+    "ij->ij",
+    "ij->ji",
+    "ii->i",
+])
+def test_array_context_einsum_array_manipulation(actx_factory, spec):
+    from meshmode.array_context import FirstAxisIsElementsTag
+    actx = actx_factory()
+
+    mat = actx.from_numpy(np.random.randn(10, 10))
+    res = actx.to_numpy(actx.einsum(spec, mat,
+                                    tagged=(FirstAxisIsElementsTag())))
+    ans = np.einsum(spec, actx.to_numpy(mat))
+    assert np.allclose(res, ans)
+
+
+@pytest.mark.parametrize("spec", [
+    "ij,ij->ij",
+    "ij,ji->ij",
+    "ij,kj->ik",
+])
+def test_array_context_einsum_array_matmatprods(actx_factory, spec):
+    from meshmode.array_context import FirstAxisIsElementsTag
+    actx = actx_factory()
+
+    mat_a = actx.from_numpy(np.random.randn(5, 5))
+    mat_b = actx.from_numpy(np.random.randn(5, 5))
+    res = actx.to_numpy(actx.einsum(spec, mat_a, mat_b,
+                                    tagged=(FirstAxisIsElementsTag())))
+    ans = np.einsum(spec, actx.to_numpy(mat_a), actx.to_numpy(mat_b))
+    assert np.allclose(res, ans)
+
+
+@pytest.mark.parametrize("spec", [
+    "im,mj,k->ijk"
+])
+def test_array_context_einsum_array_tripleprod(actx_factory, spec):
+    from meshmode.array_context import FirstAxisIsElementsTag
+    actx = actx_factory()
+
+    mat_a = actx.from_numpy(np.random.randn(7, 5))
+    mat_b = actx.from_numpy(np.random.randn(5, 7))
+    vec = actx.from_numpy(np.random.randn(7))
+    res = actx.to_numpy(actx.einsum(spec, mat_a, mat_b, vec,
+                                    tagged=(FirstAxisIsElementsTag())))
+    ans = np.einsum(spec,
+                    actx.to_numpy(mat_a),
+                    actx.to_numpy(mat_b),
+                    actx.to_numpy(vec))
+    assert np.allclose(res, ans)
+
+# }}}
 
 
 if __name__ == "__main__":
