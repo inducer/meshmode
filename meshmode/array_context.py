@@ -34,10 +34,16 @@ from abc import ABC, abstractmethod
 __doc__ = """
 .. autofunction:: make_loopy_program
 .. autoclass:: CommonSubexpressionTag
+.. autoclass:: FirstAxisIsElementsTag
 .. autoclass:: ArrayContext
 .. autoclass:: PyOpenCLArrayContext
 .. autofunction:: pytest_generate_tests_for_pyopencl_array_context
 """
+
+
+_DEFAULT_LOOPY_OPTIONS = lp.Options(
+        no_numpy=True,
+        return_dict=True)
 
 
 def make_loopy_program(domains, statements, kernel_data=None,
@@ -52,12 +58,22 @@ def make_loopy_program(domains, statements, kernel_data=None,
             domains,
             statements,
             kernel_data=kernel_data,
-            options=lp.Options(
-                no_numpy=True,
-                return_dict=True),
+            options=_DEFAULT_LOOPY_OPTIONS,
             default_offset=lp.auto,
             name=name,
             lang_version=MOST_RECENT_LANGUAGE_VERSION)
+
+
+def _loopy_get_default_entrypoint(t_unit):
+    try:
+        # main and "kernel callables" branch
+        return t_unit.default_entrypoint
+    except AttributeError:
+        try:
+            return t_unit.root_kernel
+        except AttributeError:
+            raise TypeError("unable to find default entry point for loopy "
+                    "translation unit")
 
 
 # {{{ ArrayContext
@@ -205,6 +221,8 @@ class _BaseFakeNumpyLinalgNamespace:
         self._array_context = array_context
 
 
+# {{{ program metadata
+
 class CommonSubexpressionTag(Tag):
     """A tag that is applicable to arrays indicating that this same array
     may be evaluated multiple times, and that the implementation should
@@ -212,6 +230,18 @@ class CommonSubexpressionTag(Tag):
 
     .. versionadded:: 2021.2
     """
+
+
+class FirstAxisIsElementsTag(Tag):
+    """A tag that is applicable to array outputs indicating that the
+    first index corresponds to element indices. This suggests that
+    the implementation should set element indices as the outermost
+    loop extent.
+
+    .. versionadded:: 2021.2
+    """
+
+# }}}
 
 
 class ArrayContext(ABC):
@@ -228,6 +258,7 @@ class ArrayContext(ABC):
     .. automethod:: from_numpy
     .. automethod:: to_numpy
     .. automethod:: call_loopy
+    .. automethod:: einsum
     .. attribute:: np
 
          Provides access to a namespace that serves as a work-alike to
@@ -367,6 +398,42 @@ class ArrayContext(ABC):
 
         .. versionadded:: 2021.2
         """
+
+    @memoize_method
+    def _get_einsum_prg(self, spec, arg_names, tagged):
+        return lp.make_einsum(
+            spec,
+            arg_names,
+            options=_DEFAULT_LOOPY_OPTIONS,
+            tags=tagged,
+        )
+
+    def einsum(self, spec, *args, arg_names=None, tagged=()):
+        """Computes the result of Einstein summation following the
+        convention in :func:`numpy.einsum`.
+
+        :arg spec: a string denoting the subscripts for
+            summation as a comma-separated list of subscript labels.
+            This follows the usual :func:`numpy.einsum` convention.
+            Note that the explicit indicator `->` for the precise output
+            form is required.
+        :arg args: a sequence of array-like operands, whose order matches
+            the subscript labels provided by *spec*.
+        :arg arg_names: an optional iterable of string types denoting
+            the names of the *args*. If *None*, default names will be
+            generated.
+        :arg tagged: an optional sequence of :class:`pytools.tag.Tag`
+            objects specifying the tags to be applied to the operation.
+
+        :return: the output of the einsum :mod:`loopy` program
+        """
+        if arg_names is None:
+            arg_names = tuple("arg%d" % i for i in range(len(args)))
+
+        prg = self._get_einsum_prg(spec, arg_names, tagged)
+        return self.call_loopy(
+            prg, **{arg_names[i]: arg for i, arg in enumerate(args)}
+        )["out"]
 
 # }}}
 
@@ -573,17 +640,12 @@ class PyOpenCLArrayContext(ArrayContext):
     def to_numpy(self, array):
         return array.get(queue=self.queue)
 
-    def call_loopy(self, program, **kwargs):
-        program = self.transform_loopy_program(program)
-        try:
-            prg_name = program.name
-        except AttributeError:
-            try:
-                prg_name = program.root_kernel.name
-            except AttributeError:
-                prg_name, = program.entrypoints
+    def call_loopy(self, t_unit, **kwargs):
+        t_unit = self.transform_loopy_program(t_unit)
+        default_entrypoint = _loopy_get_default_entrypoint(t_unit)
+        prg_name = default_entrypoint.name
 
-        evt, result = program(self.queue, **kwargs, allocator=self.allocator)
+        evt, result = t_unit(self.queue, **kwargs, allocator=self.allocator)
 
         if self._wait_event_queue_length is not False:
             wait_event_queue = self._kernel_name_to_wait_event_queue.setdefault(
@@ -605,48 +667,52 @@ class PyOpenCLArrayContext(ArrayContext):
     # }}}
 
     @memoize_method
-    def transform_loopy_program(self, program):
+    def transform_loopy_program(self, t_unit):
         # accommodate loopy with and without kernel callables
-        try:
-            options = program.options
-        except AttributeError:
-            try:
-                options = program.root_kernel.options
-            except AttributeError:
-                entrypoint, = program.entrypoints
-                options = program[entrypoint].options
+
+        default_entrypoint = _loopy_get_default_entrypoint(t_unit)
+        options = default_entrypoint.options
         if not (options.return_dict and options.no_numpy):
-            raise ValueError("Loopy program passed to call_loopy must "
+            raise ValueError("Loopy kernel passed to call_loopy must "
                     "have return_dict and no_numpy options set. "
                     "Did you use meshmode.array_context.make_loopy_program "
-                    "to create this program?")
+                    "to create this kernel?")
 
+        all_inames = default_entrypoint.all_inames()
         # FIXME: This could be much smarter.
-        # accommodate loopy with and without kernel callables
-        try:
-            all_inames = program.all_inames()
-        except AttributeError:
-            try:
-                all_inames = program.root_kernel.all_inames()
-            except AttributeError:
-                entrypoint, = program.entrypoints
-                all_inames = program[entrypoint].all_inames()
-
         inner_iname = None
-        if "iel" not in all_inames and "i0" in all_inames:
+        if (len(default_entrypoint.instructions) == 1
+                and isinstance(default_entrypoint.instructions[0], lp.Assignment)
+                and any(isinstance(tag, FirstAxisIsElementsTag)
+                    # FIXME: Firedrake branch lacks kernel tags
+                    for tag in getattr(default_entrypoint, "tags", ()))):
+            stmt, = default_entrypoint.instructions
+
+            out_inames = [v.name for v in stmt.assignee.index_tuple]
+            assert out_inames
+            outer_iname = out_inames[0]
+            if len(out_inames) >= 2:
+                inner_iname = out_inames[1]
+
+        elif "iel" in all_inames:
+            outer_iname = "iel"
+
+            if "idof" in all_inames:
+                inner_iname = "idof"
+        elif "i0" in all_inames:
             outer_iname = "i0"
 
             if "i1" in all_inames:
                 inner_iname = "i1"
         else:
-            outer_iname = "iel"
-
-            if "idof" in all_inames:
-                inner_iname = "idof"
+            raise RuntimeError(
+                "Unable to reason what outer_iname and inner_iname "
+                f"needs to be; all_inames is given as: {all_inames}"
+            )
 
         if inner_iname is not None:
-            program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
-        return lp.tag_inames(program, {outer_iname: "g.0"})
+            t_unit = lp.split_iname(t_unit, inner_iname, 16, inner_tag="l.0")
+        return lp.tag_inames(t_unit, {outer_iname: "g.0"})
 
     def tag(self, tags: Union[Sequence[Tag], Tag], array):
         # Sorry, not capable.
