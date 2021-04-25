@@ -64,6 +64,18 @@ def make_loopy_program(domains, statements, kernel_data=None,
             lang_version=MOST_RECENT_LANGUAGE_VERSION)
 
 
+def _loopy_get_default_entrypoint(t_unit):
+    try:
+        # main and "kernel callables" branch
+        return t_unit.default_entrypoint
+    except AttributeError:
+        try:
+            return t_unit.root_kernel
+        except AttributeError:
+            raise TypeError("unable to find default entry point for loopy "
+                    "translation unit")
+
+
 # {{{ ArrayContext
 
 class _BaseFakeNumpyNamespace:
@@ -628,17 +640,12 @@ class PyOpenCLArrayContext(ArrayContext):
     def to_numpy(self, array):
         return array.get(queue=self.queue)
 
-    def call_loopy(self, program, **kwargs):
-        program = self.transform_loopy_program(program)
-        try:
-            prg_name = program.name
-        except AttributeError:
-            try:
-                prg_name = program.root_kernel.name
-            except AttributeError:
-                prg_name, = program.entrypoints
+    def call_loopy(self, t_unit, **kwargs):
+        t_unit = self.transform_loopy_program(t_unit)
+        default_entrypoint = _loopy_get_default_entrypoint(t_unit)
+        prg_name = default_entrypoint.name
 
-        evt, result = program(self.queue, **kwargs, allocator=self.allocator)
+        evt, result = t_unit(self.queue, **kwargs, allocator=self.allocator)
 
         if self._wait_event_queue_length is not False:
             wait_event_queue = self._kernel_name_to_wait_event_queue.setdefault(
@@ -660,39 +667,25 @@ class PyOpenCLArrayContext(ArrayContext):
     # }}}
 
     @memoize_method
-    def transform_loopy_program(self, program):
+    def transform_loopy_program(self, t_unit):
         # accommodate loopy with and without kernel callables
-        try:
-            options = program.options
-        except AttributeError:
-            try:
-                options = program.root_kernel.options
-            except AttributeError:
-                entrypoint, = program.entrypoints
-                options = program[entrypoint].options
+
+        default_entrypoint = _loopy_get_default_entrypoint(t_unit)
+        options = default_entrypoint.options
         if not (options.return_dict and options.no_numpy):
-            raise ValueError("Loopy program passed to call_loopy must "
+            raise ValueError("Loopy kernel passed to call_loopy must "
                     "have return_dict and no_numpy options set. "
                     "Did you use meshmode.array_context.make_loopy_program "
-                    "to create this program?")
+                    "to create this kernel?")
 
+        all_inames = default_entrypoint.all_inames()
         # FIXME: This could be much smarter.
-        # accommodate loopy with and without kernel callables
-        try:
-            all_inames = program.all_inames()
-        except AttributeError:
-            try:
-                all_inames = program.root_kernel.all_inames()
-            except AttributeError:
-                entrypoint, = program.entrypoints
-                all_inames = program[entrypoint].all_inames()
-
         inner_iname = None
-        if (len(program.instructions) == 1
-                and isinstance(program.instructions[0], lp.Assignment)
+        if (len(default_entrypoint.instructions) == 1
+                and isinstance(default_entrypoint.instructions[0], lp.Assignment)
                 and any(isinstance(tag, FirstAxisIsElementsTag)
-                    for tag in program.tags)):
-            stmt, = program.instructions
+                    for tag in default_entrypoint.tags)):
+            stmt, = default_entrypoint.instructions
 
             out_inames = [v.name for v in stmt.assignee.index_tuple]
             assert out_inames
@@ -717,8 +710,8 @@ class PyOpenCLArrayContext(ArrayContext):
             )
 
         if inner_iname is not None:
-            program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
-        return lp.tag_inames(program, {outer_iname: "g.0"})
+            t_unit = lp.split_iname(t_unit, inner_iname, 16, inner_tag="l.0")
+        return lp.tag_inames(t_unit, {outer_iname: "g.0"})
 
     def tag(self, tags: Union[Sequence[Tag], Tag], array):
         # Sorry, not capable.
