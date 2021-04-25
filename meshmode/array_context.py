@@ -397,7 +397,8 @@ class ArrayContext(ABC):
         )
 
     def einsum(self, spec, *args, arg_names=None, tagged=()):
-        """Executes a :mod:`loopy` einsum program on the arguments *args*.
+        """Computes the result of Einstein summation following the
+        convention in :func:`numpy.einsum`.
 
         :arg spec: a string denoting the subscripts for
             summation as a comma-separated list of subscript labels.
@@ -409,8 +410,8 @@ class ArrayContext(ABC):
         :arg arg_names: an optional iterable of string types denoting
             the names of the *args*. If *None*, default names will be
             generated.
-        :arg tagged: an optional iterable of :class:`pytools.tag.Tag`
-            objects for specifying kernel transformations.
+        :arg tagged: an optional sequence of :class:`pytools.tag.Tag`
+            objects specifying the tags to be applied to the operation.
 
         :return: the output of the einsum :mod:`loopy` program
         """
