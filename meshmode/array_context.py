@@ -684,7 +684,8 @@ class PyOpenCLArrayContext(ArrayContext):
         if (len(default_entrypoint.instructions) == 1
                 and isinstance(default_entrypoint.instructions[0], lp.Assignment)
                 and any(isinstance(tag, FirstAxisIsElementsTag)
-                    for tag in default_entrypoint.tags)):
+                    # FIXME: Firedrake branch lacks kernel tags
+                    for tag in getattr(default_entrypoint, "tags", ()))):
             stmt, = default_entrypoint.instructions
 
             out_inames = [v.name for v in stmt.assignee.index_tuple]
