@@ -249,6 +249,19 @@ def test_dof_array_reductions_same_as_numpy(actx_factory):
 
 # {{{ test array context einsum
 
+
+def test_array_context_einsum_error_handling(actx_factory):
+    actx = actx_factory()
+    mat = actx.from_numpy(np.random.randn(10, 10))
+    with pytest.raises(ValueError):
+        actx.einsum("ij->ij", mat,
+                    tagged_array_axes={"arg0": 0})
+
+    with pytest.raises(ValueError):
+        actx.einsum("ij->ij", mat,
+                    tagged_array_axes={"a": "stride:auto,stride:auto"})
+
+
 @pytest.mark.parametrize("spec", [
     "ij->ij",
     "ij->ji",
@@ -298,6 +311,31 @@ def test_array_context_einsum_array_tripleprod(actx_factory, spec):
                     actx.to_numpy(mat_a),
                     actx.to_numpy(mat_b),
                     actx.to_numpy(vec))
+    assert np.allclose(res, ans)
+
+
+def test_array_context_einsum_tagged_tripleprod(actx_factory):
+    from meshmode.array_context import FirstAxisIsElementsTag
+    actx = actx_factory()
+    nel = 16
+    ni = 5
+    nj = 9
+
+    mat_a = actx.from_numpy(np.random.randn(ni, nj))
+    mat_b = actx.from_numpy(np.random.randn(nel, nj))
+    mat_c = actx.from_numpy(np.random.randn(nel, nj))
+    arg_names = ("mat_a", "mat_b", "mat_c")
+    res = actx.to_numpy(actx.einsum("ij,ej,ej->ei",
+                                    mat_a, mat_b, mat_c,
+                                    arg_names=arg_names,
+                                    tagged=(FirstAxisIsElementsTag(),),
+                                    tagged_array_axes={
+                                        "mat_a": "c,c"
+                                    }))
+    ans = np.einsum("ij,ej,ej->ei",
+                    actx.to_numpy(mat_a),
+                    actx.to_numpy(mat_b),
+                    actx.to_numpy(mat_c))
     assert np.allclose(res, ans)
 
 # }}}
