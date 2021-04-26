@@ -451,9 +451,7 @@ class ArrayContext(ABC):
             if any(not isinstance(tag, str) for tag in dim_tags):
                 raise ValueError("Dimension tags must be strings")
 
-            prg = lp.tag_array_axes(
-                prg, tagged_array_axes.keys(), ",".join(dim_tags)
-            )
+            prg = lp.tag_array_axes(prg, ary_names, ",".join(dim_tags))
 
         return self.call_loopy(
             prg, **{arg_names[i]: arg for i, arg in enumerate(args)}
