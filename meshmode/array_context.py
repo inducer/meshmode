@@ -408,7 +408,8 @@ class ArrayContext(ABC):
             tags=tagged,
         )
 
-    def einsum(self, spec, *args, arg_names=None, tagged=()):
+    def einsum(self, spec, *args, arg_names=None, tagged=(),
+               tagged_array_axes={}):
         """Computes the result of Einstein summation following the
         convention in :func:`numpy.einsum`.
 
@@ -424,6 +425,12 @@ class ArrayContext(ABC):
             generated.
         :arg tagged: an optional sequence of :class:`pytools.tag.Tag`
             objects specifying the tags to be applied to the operation.
+        :arg tagged_array_axes: an optional :class:`Dict` whose keys
+            correspond to specific *arg_names* with values consisting
+            of strings that parse to a
+            :class:`~loopy.kernel.array.ArrayDimImplementationTag`.
+            See :func:`~loopy.kernel.array.parse_array_dim_tags` for a
+            description of the allowed string format.
 
         :return: the output of the einsum :mod:`loopy` program
         """
@@ -431,6 +438,23 @@ class ArrayContext(ABC):
             arg_names = tuple("arg%d" % i for i in range(len(args)))
 
         prg = self._get_einsum_prg(spec, arg_names, tagged)
+
+        if tagged_array_axes:
+            ary_names = tagged_array_axes.keys()
+            if any(name not in arg_names + ("out",) for name in ary_names):
+                raise ValueError(
+                    "Tagged array names must be one of the "
+                    f"following: {arg_names + ('out',)}"
+                )
+
+            dim_tags = tagged_array_axes.values()
+            if any(not isinstance(tag, str) for tag in dim_tags):
+                raise ValueError("Dimension tags must be strings")
+
+            prg = lp.tag_array_axes(
+                prg, tagged_array_axes.keys(), ",".join(dim_tags)
+            )
+
         return self.call_loopy(
             prg, **{arg_names[i]: arg for i, arg in enumerate(args)}
         )["out"]
