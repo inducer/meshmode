@@ -466,7 +466,7 @@ def main():
     order = 3
 
     # no deep meaning here, just a fudge factor
-    dt = 0.75/(nel_1d*order**2)
+    dt = 0.7/(nel_1d*order**2)
 
     print("%d elements" % mesh.nelements)
 
