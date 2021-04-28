@@ -478,7 +478,7 @@ def main():
             )
 
     from meshmode.discretization.visualization import make_visualizer
-    vis = make_visualizer(actx, discr.volume_discr, discr.order+3)
+    vis = make_visualizer(actx, discr.volume_discr)
 
     def rhs(t, w):
         return wave_operator(actx, discr, c=1, w=w)
