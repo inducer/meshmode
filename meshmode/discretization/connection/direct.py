@@ -154,6 +154,17 @@ class DiscretizationConnection:
         raise NotImplementedError()
 
 
+class IdentityDiscretizationConnection(DiscretizationConnection):
+    """A no-op connection from a :class:`~meshmode.discretization.Discretization`
+    to the same discretization that returns the same data unmodified.
+    """
+    def __init__(self, discr):
+        super().__init__(discr, discr, True)
+
+    def __call__(self, ary):
+        return ary
+
+
 class DirectDiscretizationConnection(DiscretizationConnection):
     """A concrete :class:`DiscretizationConnection` supported by interpolation
     data.
