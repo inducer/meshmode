@@ -380,9 +380,9 @@ def wave_flux(actx, discr, c, w_tpair):
             normal[1] * u.avg)
 
     # upwind
-    v_jump = np.dot(normal, v.int-v.ext)
-    flux_weak -= flat_obj_array(
-            0.5*(u.int-u.ext),
+    v_jump = np.dot(normal, v.ext-v.int)
+    flux_weak += flat_obj_array(
+            0.5*(u.ext-u.int),
             0.5*normal[0]*v_jump,
             0.5*normal[1]*v_jump,
             )
@@ -466,7 +466,7 @@ def main():
     order = 3
 
     # no deep meaning here, just a fudge factor
-    dt = 0.75/(nel_1d*order**2)
+    dt = 0.7/(nel_1d*order**2)
 
     print("%d elements" % mesh.nelements)
 
@@ -478,7 +478,7 @@ def main():
             )
 
     from meshmode.discretization.visualization import make_visualizer
-    vis = make_visualizer(actx, discr.volume_discr, discr.order+3)
+    vis = make_visualizer(actx, discr.volume_discr)
 
     def rhs(t, w):
         return wave_operator(actx, discr, c=1, w=w)
@@ -493,7 +493,7 @@ def main():
             # FIXME: Maybe an integral function to go with the
             # DOFArray would be nice?
             assert len(fields[0]) == 1
-            print(istep, t, la.norm(actx.to_numpy(fields[0][0])))
+            print(istep, t, actx.np.linalg.norm(fields[0], 2))
             vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep,
                     [
                         ("u", fields[0]),
@@ -502,6 +502,8 @@ def main():
 
         t += dt
         istep += 1
+
+    assert actx.np.linalg.norm(fields[0], 2) < 100
 
 
 if __name__ == "__main__":

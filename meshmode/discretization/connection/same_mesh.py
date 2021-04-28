@@ -29,11 +29,15 @@ def make_same_mesh_connection(actx, to_discr, from_discr):
     from meshmode.discretization.connection.direct import (
             InterpolationBatch,
             DiscretizationConnectionElementGroup,
+            IdentityDiscretizationConnection,
             DirectDiscretizationConnection)
 
     if from_discr.mesh is not to_discr.mesh:
         raise ValueError("from_discr and to_discr must be based on "
                 "the same mesh")
+
+    if from_discr is to_discr:
+        return IdentityDiscretizationConnection(from_discr)
 
     groups = []
     for igrp, (fgrp, tgrp) in enumerate(zip(from_discr.groups, to_discr.groups)):
