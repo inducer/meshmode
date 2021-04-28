@@ -1068,18 +1068,11 @@ def make_visualizer(actx, discr, vis_order=None,
     from meshmode.discretization.poly_element import OrderAndTypeBasedGroupFactory
 
     vis_discr = None
-    if element_shrink_factor is None and not force_equidistant:
-        if vis_order is None:
-            vis_discr = discr
-        else:
-            if all(grp.order == vis_order for grp in discr.groups):
-                from warnings import warn
-                warn("Specified vis_order to be same as the order of the existing "
-                        "discretization. To avoid the creation of a separate "
-                        "discretization for visualization, avoid passing vis_order "
-                        "unless needed.", stacklevel=2)
-
-    if vis_discr is None:
+    if (element_shrink_factor is None
+            and not force_equidistant
+            and vis_order is None):
+        vis_discr = discr
+    else:
         if force_equidistant:
             from meshmode.discretization.poly_element import (
                 PolynomialEquidistantSimplexElementGroup as SimplexElementGroup,
@@ -1096,6 +1089,16 @@ def make_visualizer(actx, discr, vis_order=None,
                     simplex_group_class=SimplexElementGroup,
                     tensor_product_group_class=TensorElementGroup),
                 )
+
+        if all(grp.discretization_key() == vgrp.discretization_key()
+                for grp, vgrp in zip(discr.groups, vis_discr.groups)):
+            from warnings import warn
+            warn("Visualization discretization is identical to base discretization. "
+                    "To avoid the creation of a separate discretization for "
+                    "visualization, avoid passing vis_order unless needed.",
+                    stacklevel=2)
+
+            vis_discr = discr
 
     from meshmode.discretization.connection import make_same_mesh_connection
     return Visualizer(
