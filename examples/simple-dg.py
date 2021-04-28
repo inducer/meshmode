@@ -493,7 +493,7 @@ def main():
             # FIXME: Maybe an integral function to go with the
             # DOFArray would be nice?
             assert len(fields[0]) == 1
-            print(istep, t, la.norm(actx.to_numpy(fields[0][0])))
+            print(istep, t, actx.np.linalg.norm(fields[0], 2))
             vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep,
                     [
                         ("u", fields[0]),
@@ -502,6 +502,8 @@ def main():
 
         t += dt
         istep += 1
+
+    assert actx.np.linalg.norm(fields[0], 2) < 100
 
 
 if __name__ == "__main__":
