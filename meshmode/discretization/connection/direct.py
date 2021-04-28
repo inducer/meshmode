@@ -147,6 +147,10 @@ class DiscretizationConnection:
         self.is_surjective = is_surjective
 
     def __call__(self, ary):
+        """Apply the connection. If applicable, may return a view of the data
+        instead of a copy, i.e. changes to *ary* may or may not appear
+        in the result returned by this method, and vice versa.
+        """
         raise NotImplementedError()
 
 
