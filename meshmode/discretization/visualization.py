@@ -1056,7 +1056,7 @@ class Visualizer:
     # }}}
 
 
-def make_visualizer(actx, discr, vis_order,
+def make_visualizer(actx, discr, vis_order=None,
         element_shrink_factor=None, force_equidistant=False):
     """
     :arg vis_order: order of the visualization DOFs.
@@ -1067,22 +1067,35 @@ def make_visualizer(actx, discr, vis_order,
     """
     from meshmode.discretization.poly_element import OrderAndTypeBasedGroupFactory
 
-    if force_equidistant:
-        from meshmode.discretization.poly_element import (
+    vis_discr = None
+    if element_shrink_factor is None and not force_equidistant:
+        if vis_order is None:
+            vis_discr = discr
+        else:
+            if all(grp.order == vis_order for grp in discr.groups):
+                from warnings import warn
+                warn("Specified vis_order to be same as the order of the existing "
+                        "discretization. To avoid the creation of a separate "
+                        "discretization for visualization, avoid passing vis_order "
+                        "unless needed.", stacklevel=2)
+
+    if vis_discr is None:
+        if force_equidistant:
+            from meshmode.discretization.poly_element import (
                 PolynomialEquidistantSimplexElementGroup as SimplexElementGroup,
                 EquidistantTensorProductElementGroup as TensorElementGroup)
-    else:
-        from meshmode.discretization.poly_element import (
+        else:
+            from meshmode.discretization.poly_element import (
                 PolynomialWarpAndBlendElementGroup as SimplexElementGroup,
                 LegendreGaussLobattoTensorProductElementGroup as TensorElementGroup)
 
-    vis_discr = discr.copy(
-            actx=actx,
-            group_factory=OrderAndTypeBasedGroupFactory(
-                vis_order,
-                simplex_group_class=SimplexElementGroup,
-                tensor_product_group_class=TensorElementGroup),
-            )
+        vis_discr = discr.copy(
+                actx=actx,
+                group_factory=OrderAndTypeBasedGroupFactory(
+                    vis_order,
+                    simplex_group_class=SimplexElementGroup,
+                    tensor_product_group_class=TensorElementGroup),
+                )
 
     from meshmode.discretization.connection import make_same_mesh_connection
     return Visualizer(
