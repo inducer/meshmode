@@ -380,9 +380,9 @@ def wave_flux(actx, discr, c, w_tpair):
             normal[1] * u.avg)
 
     # upwind
-    v_jump = np.dot(normal, v.int-v.ext)
-    flux_weak -= flat_obj_array(
-            0.5*(u.int-u.ext),
+    v_jump = np.dot(normal, v.ext-v.int)
+    flux_weak += flat_obj_array(
+            0.5*(u.ext-u.int),
             0.5*normal[0]*v_jump,
             0.5*normal[1]*v_jump,
             )
