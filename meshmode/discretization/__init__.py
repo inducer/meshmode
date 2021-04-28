@@ -421,6 +421,7 @@ class Discretization:
 
         self._setup_actx = actx
         self._group_factory = group_factory
+        self._cached_nodes = None
 
     def copy(self, actx=None, mesh=None, group_factory=None, real_dtype=None):
         """Creates a new object of the same type with all arguments that are not
@@ -542,13 +543,22 @@ class Discretization:
                         )["result"])
                 for grp in self.groups))
 
-    @memoize_method
-    def nodes(self):
+    def nodes(self, cached=True):
         r"""
+        :arg cached: A :class:`bool` indicating whether the computed
+            nodes should be stored for future use.
         :returns: object array of shape ``(ambient_dim,)`` containing
             :class:`~meshmode.dof_array.DOFArray`\ s of (global) nodal
             locations on the :attr:`~mesh`.
         """
+
+        if self._cached_nodes is not None:
+            if not cached:
+                from warnings import warn
+                warn("It was requested that the computed nodes not be cached, "
+                        "but a cached copy of the nodes was already present.",
+                        stacklevel=2)
+            return self._cached_nodes
 
         actx = self._setup_actx
 
@@ -586,11 +596,14 @@ class Discretization:
                     nodes=nodes,
                     )["result"]
 
-        return make_obj_array([
+        result = make_obj_array([
             _DOFArray(None, tuple([
                 actx.freeze(resample_mesh_nodes(grp, iaxis)) for grp in self.groups
                 ]))
             for iaxis in range(self.ambient_dim)])
+        if cached:
+            self._cached_nodes = result
+        return result
 
 
 def num_reference_derivative(
