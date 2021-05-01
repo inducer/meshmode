@@ -415,11 +415,12 @@ class ArrayContext(ABC):
     # metadata describing what's happening, transform_loopy_program
     # has a very difficult (hopeless?) job to do.
     #
-    # Unfortunately, the existing metadata support (cf .tag()) cannot
-    # help with eager mode execution, because, by definition, when the
+    # Unfortunately, the existing metadata support (cf. .tag()) cannot
+    # help with eager mode execution [1], because, by definition, when the
     # result is passed to .tag(), it is already computed.
     # That's why einsum's interface here needs to be cluttered with
     # metadata, and that's why it can't live under .np.
+    # [1] https://github.com/inducer/meshmode/issues/177
     def einsum(self, spec, *args, arg_names=None, tagged=()):
         """Computes the result of Einstein summation following the
         convention in :func:`numpy.einsum`.
