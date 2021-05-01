@@ -356,6 +356,9 @@ def test_recursive_freeze_thaw(actx_factory):
         thawed_ary = thaw(actx, frozen_ary)
         frozen_ary = freeze(thawed_ary)
 
+    from meshmode.array_context import get_array_container_context
+    assert actx is get_array_container_context(ary_of_dofs)
+
 # }}}
 
 

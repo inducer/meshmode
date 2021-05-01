@@ -117,6 +117,18 @@ class ArrayContainer(ABC):
         """
 
 
+def get_array_container_context(ary):
+    if isinstance(ary, ArrayContainer):
+        return ary.array_context
+    elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
+        from pytools import single_valued
+        return single_valued([
+            get_array_container_context(subary) for subary in ary
+            ], equality_pred=operator.is_)
+    else:
+        raise TypeError(f"unsupported type: {type(ary).__name__}")
+
+
 def array_container_vectorize(f: Callable[[Any], Any], ary):
     r"""Applies *f* recursively over all :class:`ArrayContainer`\ s and object
     arrays.
