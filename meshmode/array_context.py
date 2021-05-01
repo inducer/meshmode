@@ -408,6 +408,19 @@ class ArrayContext(ABC):
             tags=tagged,
         )
 
+    # This lives here rather than in .np because the interface does not
+    # agree with numpy's all that well. Why can't it, you ask?
+    # Well, optimizing generic einsum for OpenCL/GPU execution
+    # is actually difficult, even in eager mode, and so without added
+    # metadata describing what's happening, transform_loopy_program
+    # has a very difficult (hopeless?) job to do.
+    #
+    # Unfortunately, the existing metadata support (cf. .tag()) cannot
+    # help with eager mode execution [1], because, by definition, when the
+    # result is passed to .tag(), it is already computed.
+    # That's why einsum's interface here needs to be cluttered with
+    # metadata, and that's why it can't live under .np.
+    # [1] https://github.com/inducer/meshmode/issues/177
     def einsum(self, spec, *args, arg_names=None, tagged=()):
         """Computes the result of Einstein summation following the
         convention in :func:`numpy.einsum`.
