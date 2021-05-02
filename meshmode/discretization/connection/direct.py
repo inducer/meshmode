@@ -462,10 +462,15 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 kernels.append(knl)
 
             fused_knl = lp.fuse_kernels(kernels)
+            fused_knl = fused_knl.copy(name="fused_resampling_program")
+
             # order of operations doesn't matter
             fused_knl = lp.add_nosync(
-                fused_knl, "global", "writes:result",
-                "writes:result", bidirectional=True,
+                fused_knl,
+                "global",
+                "writes:result",
+                "writes:result",
+                bidirectional=True,
                 force=True
             )
 
@@ -560,8 +565,6 @@ def make_direct_full_resample_matrix(actx, conn):
             grp.nelements*grp.nunit_dofs
             for grp in conn.from_discr.groups]
     from_group_starts = np.cumsum([0] + from_group_sizes)
-
-    group_idx_to_result = []
 
     tgt_node_nr_base = 0
 
@@ -664,6 +667,7 @@ def make_direct_full_resample_matrix(actx, conn):
         tgt_node_nr_base += tgrp.nelements*tgrp.nunit_dofs
 
     fused_knl = lp.fuse_kernels(kernels, data_flow=data_flow)
+    fused_knl = fused_knl.copy(name="fused_oversample_mat_assembly_program")
     fused_knl = lp.add_nosync(
         fused_knl,
         "global",
