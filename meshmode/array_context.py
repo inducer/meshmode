@@ -528,6 +528,20 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
                     queue=self._array_context.queue),
                 *arrays)
 
+    @obj_array_vectorized_n_args
+    def reshape(self, a, newshape):
+        import pyopencl.array as cl_array
+        return cl_array.reshape(a, newshape)
+
+    @obj_array_vectorized_n_args
+    def concatenate(self, arrays, axis=0):
+        import pyopencl.array as cl_array
+        return cl_array.concatenate(
+            arrays, axis,
+            self._array_context.queue,
+            self._array_context.allocator
+        )
+
 
 def _flatten_grp_array(grp_ary):
     if grp_ary.size == 0:
@@ -570,17 +584,6 @@ class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
             return self._array_context.np.sum(abs(array)**ord)**(1/ord)
         else:
             raise NotImplementedError(f"unsupported value of 'ord': {ord}")
-
-    @obj_array_vectorized_n_args
-    def reshape(self, a, newshape):
-        import pyopencl.array as cl_array
-        return cl_array.reshape(a, newshape)
-
-    @obj_array_vectorized_n_args
-    def concatenate(self, arrays, axis=0):
-        import pyopencl.array as cl_array
-        return cl_array.concatenate(arrays, axis,
-                self._array_context.queue, self._array_context.allocator)
 
 
 class PyOpenCLArrayContext(ArrayContext):
