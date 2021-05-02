@@ -279,98 +279,98 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         actx = ary.array_context
 
-        @memoize_in(actx,
-                (DirectDiscretizationConnection, "resample_by_mat_knl",
-                    self.is_surjective,))
+        @memoize_in(
+            actx,
+            (DirectDiscretizationConnection, "resample_by_mat_knl",
+             self.is_surjective)
+        )
         def mat_knl():
             if self.is_surjective:
                 domains = [
-                        """
-                        {[iel, idof, j]:
-                        0<=iel<nelements and
-                        0<=idof<n_to_nodes and
-                        0<=j<n_from_nodes}
-                        """,
-                        ]
+                    "{[iel]: 0 <= iel < nelements}",
+                    "{[idof]: 0 <= idof < n_to_nodes}",
+                    "{[jdof]: 0 <= jdof < n_from_nodes}"
+                ]
 
-                instructions = """
-                result[to_element_indices[iel], idof] \
-                        = sum(j, resample_mat[idof, j] \
-                        * ary[from_element_indices[iel], j])
-                        """
+                instructions = \
+                    """
+                    result[to_element_indices[iel], idof] =     \
+                        sum(jdof, resample_mat[idof, jdof]      \
+                                * ary[from_element_indices[iel], jdof])
+                    """
             else:
                 domains = [
-                        """
-                        {[iel_init, idof_init]:
-                        0<=iel_init<nelements_result and
-                        0<=idof_init<n_to_nodes}
-                        """,
-                        """
-                        {[iel, idof, j]:
-                        0<=iel<nelements and
-                        0<=idof<n_to_nodes and
-                        0<=j<n_from_nodes}
-                        """,
-                        ]
+                    "{[iel_init]: 0 <= iel_init < nelements_result}",
+                    "{[idof_init]: 0 <= idof_init < n_to_nodes}",
+                    "{[iel]: 0 <= iel < nelements}",
+                    "{[idof]: 0 <= idof < n_to_nodes}",
+                    "{[jdof]: 0 <= jdof < n_from_nodes}"
+                ]
 
-                instructions = """
-                result[iel_init, idof_init] = 0 {id=init}
-                ... gbarrier {id=barrier, dep=init}
-                result[to_element_indices[iel], idof] \
-                        = sum(j, resample_mat[idof, j] \
-                        * ary[from_element_indices[iel], j]) {dep=barrier}
-                        """
-            knl = make_loopy_program(
-                    domains,
-                    instructions,
-                    [
-                        lp.GlobalArg("result", None,
-                            shape="nelements_result, n_to_nodes",
-                            offset=lp.auto),
-                        lp.GlobalArg("ary", None,
-                            shape="nelements_vec, n_from_nodes",
-                            offset=lp.auto),
-                        lp.ValueArg("nelements_result", np.int32),
-                        lp.ValueArg("nelements_vec", np.int32),
-                        lp.ValueArg("n_from_nodes", np.int32),
-                        "...",
-                    ],
-                    name="resample_by_mat")
+                instructions = \
+                    """
+                    result[iel_init, idof_init] = 0 {id=init}
+                    ... gbarrier {id=barrier, dep=init}
 
-            return knl
+                    result[to_element_indices[iel], idof] =  \
+                        sum(jdof, resample_mat[idof, jdof]   \
+                            * ary[from_element_indices[iel], jdof]) {dep=barrier}
+                    """
 
-        @memoize_in(actx,
-                (DirectDiscretizationConnection, "resample_by_picking_knl",
-                    self.is_surjective))
+            return make_loopy_program(
+                domains,
+                instructions,
+                [
+                    lp.GlobalArg("result", None,
+                        shape="nelements_result, n_to_nodes",
+                        offset=lp.auto),
+                    lp.GlobalArg("ary", None,
+                        shape="nelements_vec, n_from_nodes",
+                        offset=lp.auto),
+                    lp.ValueArg("nelements_result", np.int32),
+                    lp.ValueArg("nelements_vec", np.int32),
+                    lp.ValueArg("n_from_nodes", np.int32),
+                    "...",
+                ],
+                name="resample_by_mat"
+            )
+
+        @memoize_in(
+            actx,
+            (DirectDiscretizationConnection, "resample_by_picking_knl",
+             self.is_surjective)
+        )
         def pick_knl():
             if self.is_surjective:
                 domains = [
-                        """{[iel, idof]:
-                        0<=iel<nelements and
-                        0<=idof<n_to_nodes}"""]
-                instructions = """
-                result[to_element_indices[iel], idof] \
-                    = ary[from_element_indices[iel], pick_list[idof]]
-                """
+                    "{[iel]: 0 <= iel < nelements}",
+                    "{[idof]: 0 <= idof < n_to_nodes}"
+                ]
+
+                instructions = \
+                    """
+                    result[to_element_indices[iel], idof] = \
+                        ary[from_element_indices[iel], pick_list[idof]]
+                    """
             else:
                 domains = [
-                        """
-                        {[iel_init, idof_init]:
-                        0<=iel_init<nelements_result and
-                        0<=idof_init<n_to_nodes}
-                        """,
-                        """
-                        {[iel, idof]:
-                        0<=iel<nelements and
-                        0<=idof<n_to_nodes}
-                        """]
-                instructions = """
-                result[iel_init, idof_init] = 0 {id=init}
-                ... gbarrier {id=barrier, dep=init}
-                result[to_element_indices[iel], idof] \
-                    = ary[from_element_indices[iel], pick_list[idof]] {dep=barrier}
-                """
-            knl = make_loopy_program(
+                    "{[iel_init]: 0 <= iel_init < nelements_result}",
+                    "{[idof_init]: 0 <= idof_init < n_to_nodes}",
+                    "{[iel]: 0 <= iel < nelements}",
+                    "{[idof]: 0 <= idof < n_to_nodes}"
+                ]
+
+                instructions = \
+                    """
+                    result[iel_init, idof_init] = 0 {id=init}
+                    ... gbarrier {id=barrier, dep=init}
+
+                    result[to_element_indices[iel], idof] =              \
+                        ary[from_element_indices[iel], pick_list[idof]]  \
+                            {dep=barrier}
+                    """
+
+            return make_loopy_program(
                 domains,
                 instructions,
                 [
@@ -385,9 +385,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("n_from_nodes", np.int32),
                     "...",
                     ],
-                name="resample_by_picking")
-
-            return knl
+                name="resample_by_picking"
+            )
 
         if ary.shape != (len(self.from_discr.groups),):
             raise ValueError("invalid shape of incoming resampling data")
@@ -398,7 +397,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 zip(self.to_discr.groups, self.groups)):
 
             kernels = []   # get kernels for each batch; to be fused eventually
-            kwargs = {}  # kwargs to the fused kernel
+            kwargs = {}    # kwargs to the fused kernel
             for i_batch, batch in enumerate(cgrp.batches):
                 if batch.from_element_indices.size == 0:
                     continue
@@ -407,55 +406,78 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         actx, i_tgrp, i_batch)
 
                 if point_pick_indices is None:
-                    knl = mat_knl()
-                    knl = lp.rename_argument(knl, "resample_mat",
-                        f"resample_mat_{i_batch}")
-                    kwargs[f"resample_mat_{i_batch}"] = (
-                            self._resample_matrix(actx, i_tgrp, i_batch))
+                    knl = lp.rename_argument(
+                        mat_knl(),
+                        "resample_mat",
+                        f"resample_mat_{i_batch}"
+                    )
+                    kwargs[f"resample_mat_{i_batch}"] = \
+                        self._resample_matrix(actx, i_tgrp, i_batch)
                 else:
-                    knl = pick_knl()
-                    knl = lp.rename_argument(knl, "pick_list",
-                        f"pick_list_{i_batch}")
+                    knl = lp.rename_argument(
+                        pick_knl(),
+                        "pick_list",
+                        f"pick_list_{i_batch}"
+                    )
                     kwargs[f"pick_list_{i_batch}"] = point_pick_indices
 
                 # {{{ enforce different namespaces for the kernels
 
+                # FIXME: Figure out how to utilize tagging to get this job
+                # done more generally in ArrayContext.transform_loopy_program
                 for iname in knl.all_inames():
                     knl = lp.rename_iname(knl, iname, f"{iname}_{i_batch}")
 
-                knl = lp.rename_argument(knl, "ary", f"ary_{i_batch}")
-                knl = lp.rename_argument(knl, "from_element_indices",
-                    f"from_element_indices_{i_batch}")
-                knl = lp.rename_argument(knl, "to_element_indices",
-                    f"to_element_indices_{i_batch}")
-                knl = lp.rename_argument(knl, "nelements",
-                    f"nelements_{i_batch}")
+                knl = lp.rename_argument(
+                    knl,
+                    "ary",
+                    f"ary_{i_batch}"
+                )
+                knl = lp.rename_argument(
+                    knl,
+                    "from_element_indices",
+                    f"from_element_indices_{i_batch}"
+                )
+                knl = lp.rename_argument(
+                    knl,
+                    "to_element_indices",
+                    f"to_element_indices_{i_batch}"
+                )
+                knl = lp.rename_argument(
+                    knl,
+                    "nelements",
+                    f"nelements_{i_batch}"
+                )
 
                 # }}}
 
                 kwargs[f"ary_{i_batch}"] = ary[batch.from_group_index]
-                kwargs[f"from_element_indices_{i_batch}"] = (
-                    batch.from_element_indices)
-                kwargs[f"to_element_indices_{i_batch}"] = (
-                    batch.to_element_indices)
+
+                kwargs[f"from_element_indices_{i_batch}"] = \
+                    batch.from_element_indices
+                kwargs[f"to_element_indices_{i_batch}"] = \
+                    batch.to_element_indices
 
                 kernels.append(knl)
 
             fused_knl = lp.fuse_kernels(kernels)
             # order of operations doesn't matter
-            fused_knl = lp.add_nosync(fused_knl, "global", "writes:result",
-                                      "writes:result", bidirectional=True,
-                                      force=True)
+            fused_knl = lp.add_nosync(
+                fused_knl, "global", "writes:result",
+                "writes:result", bidirectional=True,
+                force=True
+            )
 
-            result_dict = actx.call_loopy(fused_knl,
-                    nelements_result=tgrp.nelements,
-                    n_to_nodes=tgrp.nunit_dofs,
-                    **kwargs)
+            result_dict = actx.call_loopy(
+                fused_knl,
+                nelements_result=tgrp.nelements,
+                n_to_nodes=tgrp.nunit_dofs,
+                **kwargs
+            )
 
             group_idx_to_result.append(result_dict["result"])
 
-        from meshmode.dof_array import DOFArray
-        return DOFArray.from_list(actx, group_idx_to_result)
+        return DOFArray(actx, data=tuple(group_idx_to_result))
 
 # }}}
 
