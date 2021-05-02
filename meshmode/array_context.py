@@ -697,6 +697,7 @@ class PyOpenCLArrayContext(ArrayContext):
 
     @memoize_method
     def transform_loopy_program(self, t_unit):
+        return t_unit
         # accommodate loopy with and without kernel callables
 
         default_entrypoint = _loopy_get_default_entrypoint(t_unit)

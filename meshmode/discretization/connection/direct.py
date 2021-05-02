@@ -22,11 +22,13 @@ THE SOFTWARE.
 
 
 import numpy as np
-
 import loopy as lp
+
 from pytools import memoize_in, keyed_memoize_method
 from pytools.obj_array import obj_array_vectorized_n_args
+
 from meshmode.array_context import ArrayContext, make_loopy_program
+from meshmode.dof_array import DOFArray
 
 
 # {{{ interpolation batch
@@ -270,7 +272,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
     @obj_array_vectorized_n_args
     def __call__(self, ary):
-        from meshmode.dof_array import DOFArray
         if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")
 
@@ -384,7 +385,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("nelements_vec", np.int32),
                     lp.ValueArg("n_from_nodes", np.int32),
                     "...",
-                    ],
+                ],
                 name="resample_by_picking"
             )
 
@@ -502,64 +503,180 @@ def make_direct_full_resample_matrix(actx, conn):
     :arg actx: an :class:`~meshmode.array_context.ArrayContext`.
     :arg conn: a :class:`DirectDiscretizationConnection`.
     """
-    raise NotImplementedError("Stateful access, must rewrite this section.")
 
     if not isinstance(conn, DirectDiscretizationConnection):
         raise TypeError("can only construct a full resampling matrix "
                 "for a DirectDiscretizationConnection.")
 
     @memoize_in(actx, (make_direct_full_resample_matrix, "oversample_mat_knl"))
-    def knl():
+    def oversample_mat_prg():
         return make_loopy_program(
-            """{[iel, idof, j]:
-                0<=iel<nelements and
-                0<=idof<n_to_nodes and
-                0<=j<n_from_nodes}""",
-            "result[itgt_base + to_element_indices[iel]*n_to_nodes + idof, \
-                    isrc_base + from_element_indices[iel]*n_from_nodes + j] \
-                = resample_mat[idof, j]",
+            [
+                "{[iel]: 0 <= iel < nelements}",
+                "{[idof]: 0 <= idof < n_to_nodes}",
+                "{[jdof]: 0 <= jdof < n_from_nodes}"
+            ],
+            """
+            result[itgt_base + to_element_indices[iel]*n_to_nodes + idof,      \
+                   isrc_base + from_element_indices[iel]*n_from_nodes + jdof]  \
+                       = resample_mat[idof, jdof]
+            """,
             [
                 lp.GlobalArg("result", None,
                     shape="nnodes_tgt, nnodes_src",
                     offset=lp.auto),
-                lp.ValueArg("itgt_base,isrc_base", np.int32),
-                lp.ValueArg("nnodes_tgt,nnodes_src", np.int32),
+                lp.ValueArg("itgt_base, isrc_base", np.int32),
+                lp.ValueArg("nnodes_tgt, nnodes_src", np.int32),
                 "...",
-                ],
-            name="oversample_mat")
+            ],
+            name="oversample_mat"
+        )
 
     to_discr_ndofs = sum(grp.nelements*grp.nunit_dofs
             for grp in conn.to_discr.groups)
     from_discr_ndofs = sum(grp.nelements*grp.nunit_dofs
             for grp in conn.from_discr.groups)
 
-    result = actx.zeros(
-            (to_discr_ndofs, from_discr_ndofs),
-            dtype=conn.to_discr.real_dtype)
+    init_knl = make_loopy_program(
+        [
+            "{[iel]: 0 <= iel < nelements}",
+            "{[idof]: 0 <= idof < nnodes_tgt}",
+            "{[jdof]: 0 <= jdof < nnodes_src}"
+        ],
+        """
+        result[idof, jdof] = 0 {id=init}
+        """,
+        [
+            lp.GlobalArg("result", None,
+                shape="nnodes_tgt, nnodes_src",
+                offset=lp.auto),
+            lp.ValueArg("nnodes_tgt, nnodes_src", np.int32),
+            "...",
+        ],
+        name="init_oversample_mat"
+    )
 
     from_group_sizes = [
             grp.nelements*grp.nunit_dofs
             for grp in conn.from_discr.groups]
     from_group_starts = np.cumsum([0] + from_group_sizes)
 
+    group_idx_to_result = []
+
     tgt_node_nr_base = 0
+
+    # get kernels for each (group,batch) pair
+    kernels = [init_knl]
+
+    # kwargs to the fused kernel
+    kwargs = {"nnodes_tgt": to_discr_ndofs,
+              "nnodes_src": from_discr_ndofs,
+              "nelements": conn.from_discr.mesh.nelements}
+
+    # data flow for kernel fusion
+    # FIXME: Technically, only the initialization needs to come first.
+    # Everthing after can happen in whatever order. Is the no other way
+    # to tell loopy to ensure the first kernel has highest priority?
+    data_flow = [("result", 0, 1)]
+
     for i_tgrp, (tgrp, cgrp) in enumerate(
             zip(conn.to_discr.groups, conn.groups)):
         for i_batch, batch in enumerate(cgrp.batches):
             if not len(batch.from_element_indices):
                 continue
 
-            actx.call_loopy(knl(),
-                    resample_mat=conn._resample_matrix(actx, i_tgrp, i_batch),
-                    result=result,
-                    itgt_base=tgt_node_nr_base,
-                    isrc_base=from_group_starts[batch.from_group_index],
-                    from_element_indices=batch.from_element_indices,
-                    to_element_indices=batch.to_element_indices)
+            knl_idx = i_tgrp + i_batch
+            data_flow.append(("result", knl_idx, knl_idx + 1))
 
+            knl = lp.rename_argument(
+                oversample_mat_prg(),
+                "resample_mat",
+                f"resample_mat_tgrp{i_tgrp}_batch{i_batch}"
+            )
+
+            resample_mat = conn._resample_matrix(actx, i_tgrp, i_batch)
+            kwargs[f"resample_mat_tgrp{i_tgrp}_batch{i_batch}"] = resample_mat
+
+            # {{{ enforce different namespaces for the kernels
+
+            # FIXME: Figure out how to utilize tagging to get this job
+            # done more generally in ArrayContext.transform_loopy_program
+            for iname in knl.all_inames():
+                knl = lp.rename_iname(
+                    knl,
+                    iname,
+                    f"{iname}_tgrp{i_tgrp}_batch{i_batch}"
+                )
+
+            knl = lp.rename_argument(
+                knl,
+                "from_element_indices",
+                f"from_element_indices_tgrp{i_tgrp}_batch{i_batch}"
+            )
+            knl = lp.rename_argument(
+                knl,
+                "to_element_indices",
+                f"to_element_indices_tgrp{i_tgrp}_batch{i_batch}"
+            )
+            knl = lp.rename_argument(
+                knl,
+                "nelements",
+                f"nelements_tgrp{i_tgrp}_batch{i_batch}"
+            )
+            knl = lp.rename_argument(
+                knl,
+                "n_to_nodes",
+                f"n_to_nodes_tgrp{i_tgrp}_batch{i_batch}"
+            )
+            knl = lp.rename_argument(
+                knl,
+                "n_from_nodes",
+                f"n_from_nodes_tgrp{i_tgrp}_batch{i_batch}"
+            )
+            knl = lp.rename_argument(
+                knl,
+                "isrc_base",
+                f"isrc_base_tgrp{i_tgrp}_batch{i_batch}"
+            )
+
+            # Doesn't depend on batch index
+            knl = lp.rename_argument(
+                knl,
+                "itgt_base",
+                f"itgt_base_tgrp{i_tgrp}"
+            )
+
+            # }}}
+
+            kwargs[f"from_element_indices_tgrp{i_tgrp}_batch{i_batch}"] = \
+                batch.from_element_indices
+            kwargs[f"to_element_indices_tgrp{i_tgrp}_batch{i_batch}"] = \
+                batch.to_element_indices
+            kwargs[f"nelements_tgrp{i_tgrp}_batch{i_batch}"] = \
+                batch.nelements
+            kwargs[f"isrc_base_tgrp{i_tgrp}_batch{i_batch}"] = \
+                from_group_starts[batch.from_group_index]
+
+            kernels.append(knl)
+
+        # Doesn't depend on batch index
+        kwargs[f"itgt_base_tgrp{i_tgrp}"] = tgt_node_nr_base
         tgt_node_nr_base += tgrp.nelements*tgrp.nunit_dofs
 
-    return result
+    fused_knl = lp.fuse_kernels(kernels, data_flow=data_flow)
+    fused_knl = lp.add_nosync(
+        fused_knl,
+        "global",
+        "writes:result",
+        "writes:result",
+        bidirectional=True,
+        force=True
+    )
+
+    from meshmode.array_context import _DontTransformMeBro
+    fused_knl = fused_knl.tagged(frozenset((_DontTransformMeBro(),)))
+
+    return actx.call_loopy(fused_knl, **kwargs)["result"]
 
 # }}}
 

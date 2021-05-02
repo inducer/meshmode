@@ -482,24 +482,57 @@ def freeze(ary: Union[DOFArray, np.ndarray]) -> np.ndarray:
 
 # {{{ flatten / unflatten
 
+# def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
+#     r"""Convert a :class:`DOFArray` into a "flat" array of degrees of freedom,
+#     where the resulting type of the array is given by the
+#     :attr:`DOFArray.array_context`.
+
+#     Array elements are laid out contiguously, with the element group
+#     index varying slowest, element index next, and intra-element DOF
+#     index fastest.
+
+#     Vectorizes over object arrays of :class:`DOFArray`\ s.
+#     """
+#     if isinstance(ary, np.ndarray):
+#         return obj_array_vectorize(flatten, ary)
+
+#     actx = ary.array_context
+
+#     return actx.np.concatenate(actx.np.reshape(grp_ary, (-1,))
+#                                for grp_ary in ary)
+
+
 def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
     r"""Convert a :class:`DOFArray` into a "flat" array of degrees of freedom,
     where the resulting type of the array is given by the
     :attr:`DOFArray.array_context`.
-
     Array elements are laid out contiguously, with the element group
     index varying slowest, element index next, and intra-element DOF
     index fastest.
-
     Vectorizes over object arrays of :class:`DOFArray`\ s.
     """
     if isinstance(ary, np.ndarray):
         return obj_array_vectorize(flatten, ary)
 
+    group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in ary]
+    group_starts = np.cumsum([0] + group_sizes)
+
     actx = ary.array_context
 
-    return actx.np.concatenate(actx.np.reshape(grp_ary, (-1,))
-                               for grp_ary in ary)
+    @memoize_in(actx, (flatten, "flatten_prg"))
+    def prg():
+        return make_loopy_program(
+            "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
+            """result[grp_start + iel*ndofs_per_element + idof] \
+                = grp_ary[iel, idof]""",
+            name="flatten")
+
+    result = actx.empty(group_starts[-1], dtype=ary.entry_dtype)
+
+    for grp_start, grp_ary in zip(group_starts, ary):
+        actx.call_loopy(prg(), grp_ary=grp_ary, result=result, grp_start=grp_start)
+
+    return result
 
 
 def _unflatten(
