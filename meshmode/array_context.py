@@ -22,12 +22,17 @@ THE SOFTWARE.
 
 from typing import Union, Sequence
 from functools import partial
+
 import operator
 import numpy as np
 import loopy as lp
+
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
+
 from pytools import memoize_method
 from pytools.tag import Tag
+from pytools.obj_array import obj_array_vectorized_n_args
+
 from abc import ABC, abstractmethod
 
 
@@ -729,10 +734,13 @@ class PyOpenCLArrayContext(ArrayContext):
             if "i1" in all_inames:
                 inner_iname = "i1"
         else:
-            raise RuntimeError(
-                "Unable to reason what outer_iname and inner_iname "
-                f"needs to be; all_inames is given as: {all_inames}"
-            )
+            # raise RuntimeError(
+            #     "Unable to reason what outer_iname and inner_iname "
+            #     f"needs to be; all_inames is given as: {all_inames}"
+            # )
+            # FIXME: Need to figure out how to fit in these fused kernels
+            # into the optimization strategy
+            return t_unit
 
         if inner_iname is not None:
             t_unit = lp.split_iname(t_unit, inner_iname, 16, inner_tag="l.0")
