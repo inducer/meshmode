@@ -38,8 +38,15 @@ __doc__ = """
 .. autofunction:: make_loopy_program
 .. autoclass:: CommonSubexpressionTag
 .. autoclass:: FirstAxisIsElementsTag
+
+.. autoclass:: ArrayContainer
+.. autofunction:: map_array_container
+.. autofunction:: freeze
+.. autofunction:: thaw
+
 .. autoclass:: ArrayContext
 .. autoclass:: PyOpenCLArrayContext
+
 .. autofunction:: pytest_generate_tests_for_pyopencl_array_context
 """
 
@@ -129,7 +136,7 @@ def get_array_container_context(ary):
         raise TypeError(f"unsupported type: {type(ary).__name__}")
 
 
-def array_container_vectorize(f: Callable[[Any], Any], ary):
+def map_array_container(f: Callable[[Any], Any], ary):
     r"""Applies *f* recursively over all :class:`ArrayContainer`\ s and object
     arrays.
 
@@ -137,17 +144,16 @@ def array_container_vectorize(f: Callable[[Any], Any], ary):
     recurses into all :class:`ArrayContainer` classes and applies *f* to their
     components as well.
 
-    :param ary: a tree-like structures of :meth:`~ArrayContext.thaw`\ ed
-        :class:`ArrayContainers`.
+    :param ary: a tree-like (nested) structures of :class:`ArrayContainer`\ s.
     """
     if isinstance(ary, ArrayContainer):
         return ary.from_iterable(ary.array_context, (
-            (key, array_container_vectorize(f, subary))
+            (key, map_array_container(f, subary))
             for key, subary in ary.as_iterable()
             ))
     elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
         from pytools.obj_array import obj_array_vectorize
-        return obj_array_vectorize(partial(array_container_vectorize, f), ary)
+        return obj_array_vectorize(partial(map_array_container, f), ary)
     else:
         return f(ary)
 
