@@ -246,6 +246,11 @@ class FirstAxisIsElementsTag(Tag):
     .. versionadded:: 2021.2
     """
 
+
+class _DontTransformMeBro(Tag):
+    # NOTE: This is just a temporary hack
+    pass
+
 # }}}
 
 
@@ -700,7 +705,11 @@ class PyOpenCLArrayContext(ArrayContext):
 
     @memoize_method
     def transform_loopy_program(self, t_unit):
-        return t_unit
+
+        if any(isinstance(tag, _DontTransformMeBro)
+               for tag in t_unit.tags):
+            return t_unit
+
         # accommodate loopy with and without kernel callables
 
         default_entrypoint = _loopy_get_default_entrypoint(t_unit)
