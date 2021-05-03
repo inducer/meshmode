@@ -136,12 +136,16 @@ class DOFArray(ArrayContainer):
         if not isinstance(data, tuple):
             raise TypeError("'data' argument must be a tuple")
 
-        self.array_context = actx
+        self._array_context = actx
         self._data = data
 
     # Tell numpy that we would like to do our own array math, thank you very much.
     # (numpy arrays have priority 0.)
     __array_priority__ = 10
+
+    @property
+    def array_context(self):
+        return self._array_context
 
     @property
     def entry_dtype(self):

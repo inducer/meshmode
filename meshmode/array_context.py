@@ -106,6 +106,9 @@ class ArrayContainer(ABC):
     def as_iterable(self) -> Iterable[Tuple[Any, Any]]:
         r"""Serialize the array container into an iterable over its components.
 
+        The order of the components and their identifiers are entirely under
+        the control of the subclass.
+
         :returns: an :class:`Iterable` of 2-tuples where the first
             entry is an identifier for the component and the second entry
             is an array-like component of the :class:`ArrayContainer`.
