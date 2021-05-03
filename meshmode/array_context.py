@@ -300,6 +300,10 @@ class ArrayContext:
         for arg in prog.args:
             if isinstance(arg, lp.ArrayArg):
                 arg.tags = IsDOFArray()
+            if arg.name == "out":
+                arg.is_output_only = True
+
+
 
         return prog
 

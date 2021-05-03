@@ -24,9 +24,8 @@ import numpy as np
 
 from pytools import memoize_in, memoize_method
 from pytools.obj_array import make_obj_array
-from meshmode.array_context import ArrayContext, make_loopy_program
-from meshmode.dof_array import IsDOFArray
-from loopy import GlobalArg, auto
+from meshmode.array_context import ArrayContext, make_loopy_program, IsDOFArray, ParameterValue
+from loopy import GlobalArg, ValueArg, auto
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
@@ -345,7 +344,7 @@ class Discretization:
         actx = self._setup_actx
 
         @memoize_in(actx, (Discretization, "nodes_prg"))
-        def prg():
+        def prg(nelements, ndiscr_nodes, nmesh_nodes, fp_format):
             return make_loopy_program(
                 """{[iel,idof,j]:
                     0<=iel<nelements and
@@ -356,21 +355,44 @@ class Discretization:
                         sum(j, resampling_mat[idof, j] * nodes[iel, j])
                     """,
                 kernel_data=[
-                    GlobalArg("result", None, shape=auto, tags=IsDOFArray()),
+                    GlobalArg("result", fp_format, shape=auto, tags=IsDOFArray()),
+                    GlobalArg("nodes", fp_format, shape=auto, tags=IsDOFArray()),
+                    GlobalArg("resampling_mat", fp_format, shape=auto),
+                    ValueArg("nelements", tags=ParameterValue(nelements)),
+                    ValueArg("ndiscr_nodes", tags=ParameterValue(ndiscr_nodes)),
+                    ValueArg("nmesh_nodes", tags=ParameterValue(nmesh_nodes)),
                     ...
                 ],
                 name="nodes")
 
+        dof_arrays = []
+        for iaxis in range(self.ambient_dim):
+            results = []
+            for grp in self.groups:
+                resampling_mat = actx.from_numpy(grp.from_mesh_interp_matrix())
+                nodes = actx.from_numpy(grp.mesh_el_group.nodes[iaxis])
+
+                ndiscr_nodes, nmesh_nodes = resampling_mat.shape
+                nelements, ndiscr_nodes = nodes.shape
+
+                program = prg(nelements, ndiscr_nodes, nmesh_nodes, nodes.dtype)
+                result = actx.call_loopy(program, resampling_mat=resampling_mat, nodes=nodes)
+                results.append(actx.freeze(result[1]["result"]))
+
+            dof_arrays.append(_DOFArray(None, tuple(results)))
+        return make_obj_array(dof_arrays)
+                               
+        """
         return make_obj_array([
             _DOFArray(None, tuple(
                 actx.freeze(
                     actx.call_loopy(
-                        prg(),
+                        program,
                         resampling_mat=actx.from_numpy(
                             grp.from_mesh_interp_matrix()),
                         nodes=actx.from_numpy(grp.mesh_el_group.nodes[iaxis])
                         )[1]["result"])
                 for grp in self.groups))
             for iaxis in range(self.ambient_dim)])
-
+        """
 # vim: fdm=marker
