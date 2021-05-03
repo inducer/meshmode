@@ -148,7 +148,7 @@ def map_array_container(f: Callable[[Any], Any], ary):
     recurses into all :class:`ArrayContainer` classes and applies *f* to their
     components as well.
 
-    :param ary: a tree-like (nested) structures of :class:`ArrayContainer`\ s.
+    :param ary: a tree-like (nested) structure of :class:`ArrayContainer`\ s.
     """
     if isinstance(ary, ArrayContainer):
         return ary.from_iterable(ary.array_context, (
@@ -166,7 +166,7 @@ def freeze(ary, actx=None):
     r"""Freezes recursively by going through all components of
     :class:`ArrayContainer`\ s and object arrays.
 
-    :param ary: a tree-like structures of :meth:`~ArrayContext.thaw`\ ed
+    :param ary: a tree-like (nested) structure of :meth:`~ArrayContext.thaw`\ ed
         :class:`ArrayContainer`\ s.
     """
 
@@ -189,8 +189,8 @@ def thaw(actx, ary):
     r"""Thaws recursively by going through all components of
     :class:`ArrayContainer`\ s and object arrays.
 
-    :param ary: a tree-like structures of :meth:`~ArrayContext.freeze`\ ed
-        :class:`ArrayContainers`.
+    :param ary: a tree-like (nested) structure of :meth:`~ArrayContext.freeze`\ ed
+        :class:`ArrayContainer`\ s.
     """
 
     if isinstance(ary, ArrayContainer):
