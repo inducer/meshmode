@@ -92,24 +92,25 @@ class ArrayContainer(ABC):
     """A generic container for the array type supported by the
     :attr:`array_context`.
 
-    .. attribute:: array_context
-
-        An :class:`meshmode.array_context.ArrayContext`.
-
+    .. autoattribute:: array_context
     .. automethod:: as_iterable
     .. automethod:: from_iterable
     """
 
-    def __init__(self, actx):
-        self.array_context = actx
+    @property
+    @abstractmethod
+    def array_context(self):
+        """An :class:`meshmode.array_context.ArrayContext`."""
 
     @abstractmethod
     def as_iterable(self) -> Iterable[Tuple[Any, Any]]:
-        """Serialize the array container into an iterable over its components.
+        r"""Serialize the array container into an iterable over its components.
 
         :returns: an :class:`Iterable` of 2-tuples where the first
             entry is an identifier for the component and the second entry
             is an array-like component of the :class:`ArrayContainer`.
+            Components can themselves be :class:`ArrayContainer`\ s, allowing
+            for arbitrary nested structures.
         """
 
     @classmethod
@@ -163,7 +164,7 @@ def freeze(ary, actx=None):
     :class:`ArrayContainer`\ s and object arrays.
 
     :param ary: a tree-like structures of :meth:`~ArrayContext.thaw`\ ed
-        :class:`ArrayContainers`.
+        :class:`ArrayContainer`\ s.
     """
 
     if isinstance(ary, ArrayContainer):

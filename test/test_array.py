@@ -316,7 +316,7 @@ def test_recursive_freeze_thaw(actx_factory):
             n=(3,)*ambient_dim, order=1)
     discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
 
-    from dataclasses import dataclass, field, fields
+    from dataclasses import dataclass, fields
     from meshmode.array_context import ArrayContainer
 
     @dataclass
@@ -324,10 +324,10 @@ def test_recursive_freeze_thaw(actx_factory):
         mass: DOFArray
         momentum: np.ndarray
         enthalpy: DOFArray
-        array_context: object = field(init=False)
 
-        def __post_init__(self):
-            self.array_context = self.mass.array_context
+        @property
+        def array_context(self):
+            return self.mass.array_context
 
         def __len__(self):
             return 3
