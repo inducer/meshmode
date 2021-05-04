@@ -155,14 +155,14 @@ class ArrayContainerWithArithmetic(ArrayContainer):
             return map_array_container(lambda subary: op(subary, arg2), arg1)
         elif isinstance(arg1, Number) and isinstance(arg2, ArrayContainer):
             return map_array_container(lambda subary: op(arg1, subary), arg2)
-        elif (isinstance(arg1, ArrayContainer)
-                and (isinstance(arg2, np.ndarray) and arg2.dtype.char == "O")):
+        elif isinstance(arg1, ArrayContainer) and isinstance(arg2, np.ndarray):
             return obj_array_vectorize(
-                lambda subary: cls.binary_op(op, arg1, subary), arg2)
-        elif (isinstance(arg2, ArrayContainer)
-                and (isinstance(arg1, np.ndarray) and arg1.dtype.char == "O")):
+                lambda subary: cls.binary_op(op, arg1, subary),
+                arg2.astype(object, copy=False))
+        elif isinstance(arg2, ArrayContainer) and isinstance(arg1, np.ndarray):
             return obj_array_vectorize(
-                lambda subary: cls.binary_op(op, subary, arg2), arg1)
+                lambda subary: cls.binary_op(op, subary, arg2),
+                arg1.astype(object, copy=False))
         else:
             NotImplementedError(
                 f"operation '{op.__name__}' for arrays of type "
