@@ -123,8 +123,6 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")
 
-        #raise NotImplementedError("Stateful access, must rewrite.")
-
         actx = ary.array_context
 
         @memoize_in(
@@ -132,63 +130,101 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                    "conn_projection_knl")
         )
         def kproj():
-            return make_loopy_program([
-                "{[iel]: 0 <= iel < nelements}",
-                "{[idof_quad]: 0 <= idof_quad < n_from_nodes}"
+            return make_loopy_program(
+                [
+                    "{[iel]: 0 <= iel < nelements}",
+                    "{[i_quad]: 0 <= i_quad < n_to_nodes}",
+                    "{[ibasis]: 0 <= ibasis < n_to_nodes}"
                 ],
                 """
-                for iel
-                    <> element_dot = sum(idof_quad,
-                                ary[from_element_indices[iel], idof_quad]
-                                * basis[idof_quad] * weights[idof_quad])
-
-                    result[to_element_indices[iel], ibasis] = \
-                            result[to_element_indices[iel], ibasis] + element_dot
-                end
+                    result[to_element_indices[iel], ibasis] =               \
+                        result[to_element_indices[iel], ibasis] +           \
+                        sum(i_quad, ary[from_element_indices[iel], i_quad]  \
+                                    * basis_tabulation[ibasis, i_quad]      \
+                                    * weights[i_quad])
                 """,
                 [
                     lp.GlobalArg("ary", None,
-                        shape=("n_from_elements", "n_from_nodes")),
+                                 shape=("n_from_elements", "n_from_nodes")),
                     lp.GlobalArg("result", None,
-                        shape=("n_to_elements", "n_to_nodes")),
-                    lp.GlobalArg("basis", None,
-                        shape="n_from_nodes"),
+                                 shape=("n_to_elements", "n_to_nodes")),
+                    lp.GlobalArg("basis_tabulation", None,
+                                 shape=("n_to_nodes", "n_to_nodes")),
                     lp.GlobalArg("weights", None,
-                        shape="n_from_nodes"),
+                                 shape="n_from_nodes"),
                     lp.ValueArg("n_from_elements", np.int32),
+                    lp.ValueArg("n_from_nodes", np.int32),
                     lp.ValueArg("n_to_elements", np.int32),
                     lp.ValueArg("n_to_nodes", np.int32),
-                    lp.ValueArg("ibasis", np.int32),
                     "..."
-                    ],
-                name="conn_projection_knl")
+                ],
+                name="conn_projection_knl"
+            )
 
         # compute weights on each refinement of the reference element
         weights = self._batch_weights(actx)
 
         # perform dot product (on reference element) to get basis coefficients
-        c = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
-
+        group_idx_to_c = []
         for igrp, cgrp in enumerate(self.conn.groups):
+            kernels = []   # get kernels for each batch; to be fused eventually
+            kwargs = {}    # kwargs to the fused kernel
             for ibatch, batch in enumerate(cgrp.batches):
                 sgrp = self.from_discr.groups[batch.from_group_index]
 
-                for ibasis, basis_fn in enumerate(sgrp.basis_obj().functions):
-                    basis = actx.from_numpy(
-                            basis_fn(batch.result_unit_nodes).flatten())
+                knl = lp.rename_argument(
+                    kproj(), "basis_tabulation",
+                    f"basis_tabulation_batch{ibatch}"
+                )
+                knl = lp.rename_argument(knl, "ary", f"ary_batch{ibatch}")
+                knl = lp.rename_argument(knl, "weights", f"weights_batch{ibatch}")
+                knl = lp.rename_argument(knl, "from_element_indices",
+                                         f"from_element_indices_{ibatch}")
+                knl = lp.rename_argument(knl, "to_element_indices",
+                                         f"to_element_indices_{ibatch}")
+                knl = lp.rename_argument(knl, "nelements",
+                                         f"nelements_{ibatch}")
 
-                    # NOTE: batch.*_element_indices are reversed here because
-                    # they are from the original forward connection, but
-                    # we are going in reverse here. a bit confusing, but
-                    # saves on recreating the connection groups and batches.
-                    actx.call_loopy(kproj(),
-                            ibasis=ibasis,
-                            ary=ary[sgrp.index],
-                            basis=basis,
-                            weights=weights[igrp, ibatch],
-                            result=c[igrp],
-                            from_element_indices=batch.to_element_indices,
-                            to_element_indices=batch.from_element_indices)
+                for iname in knl.all_inames():
+                    knl = lp.rename_iname(knl, iname, f"{iname}_batch{ibatch}")
+
+                # Generate the basis tabulation matrix
+                tabulations = []
+                for ibasis, basis_fn in enumerate(sgrp.basis_obj().functions):
+                    tabulations.append(basis_fn(batch.result_unit_nodes).flatten())
+                tabulations = actx.from_numpy(np.asarray(tabulations))
+
+                kwargs[f"basis_tabulation_batch{ibatch}"] = tabulations
+                kwargs[f"ary_batch{ibatch}"] = ary[sgrp.index]
+                kwargs[f"weights_batch{ibatch}"] = weights[igrp, ibatch]
+                kwargs[f"from_element_indices_{ibatch}"] = \
+                    batch.from_element_indices
+                kwargs[f"to_element_indices_{ibatch}"] = \
+                    batch.to_element_indices
+
+                kernels.append(knl)
+
+            fused_knl = lp.fuse_kernels(kernels)
+            fused_knl = fused_knl.copy(name="fused_kproj_program")
+            fused_knl = lp.add_nosync(fused_knl,
+                                      "global",
+                                      "writes:result",
+                                      "writes:result",
+                                      bidirectional=True,
+                                      force=True)
+
+            from meshmode.array_context import _DontTransformMeBro
+            fused_knl = fused_knl.tagged(frozenset((_DontTransformMeBro(),)))
+
+            result_dict = actx.call_loopy(
+                fused_knl,
+                n_to_elements=self.to_discr.groups[igrp].nelements,
+                n_to_nodes=self.to_discr.groups[igrp].nunit_dofs,
+                **kwargs
+            )
+            group_idx_to_c.append(result_dict["result"])
+
+        c = DOFArray(actx, data=tuple(group_idx_to_c))
 
         @memoize_in(
             actx, (L2ProjectionInverseDiscretizationConnection,
