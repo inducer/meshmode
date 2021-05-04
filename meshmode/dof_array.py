@@ -85,7 +85,7 @@ class DOFArray(ArrayContainerWithArithmetic):
 
     The following methods and attributes are implemented to mimic the
     functionality of :class:`~numpy.ndarray`\ s. They require the
-    :class:`DOFArray` to be :func:`thaw`\ ed.
+    :class:`DOFArray` to be :func:`~meshmode.array_context.thaw`\ ed.
 
     .. attribute:: shape
     .. attribute:: size
@@ -117,8 +117,8 @@ class DOFArray(ArrayContainerWithArithmetic):
         to be pickled, the :class:`~meshmode.array_context.ArrayContext` given to
         :func:`array_context_for_pickling` does not agree with :attr:`array_context`,
         the array is frozen and rethawed. If :attr:`array_context` is *None*,
-        the :class:`DOFArray` is :func:`thaw`\ ed into the array context given
-        to :func:`array_context_for_pickling`.
+        the :class:`DOFArray` is :func:`~meshmode.array_context.thaw`\ ed into
+        the array context given to :func:`array_context_for_pickling`.
     """
 
     def __init__(self, actx: Optional[ArrayContext], data: Tuple[Any]):
@@ -277,7 +277,7 @@ class DOFArray(ArrayContainerWithArithmetic):
         ary = self
 
         if self.array_context is not actx:
-            ary = thaw(actx, freeze(self))
+            ary = _thaw(actx, _freeze(self))
 
         return [actx.to_numpy(ary_i) for ary_i in ary._data]
 
