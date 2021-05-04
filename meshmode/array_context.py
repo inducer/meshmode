@@ -543,8 +543,12 @@ class PyOpenCLArrayContext(ArrayContext):
                     "Did you use meshmode.array_context.make_loopy_program "
                     "to create this program?")
 
-        # FIXME: This could be much smarter.
         import loopy as lp
+        for arg in program.args:
+            if isinstance(arg.tags, ParameterValue):
+                program = lp.fix_parameters(program, **{arg.name: arg.tags.value})
+
+        # FIXME: This could be much smarter.
         # accommodate loopy with and without kernel callables
         try:
             all_inames = program.all_inames()
