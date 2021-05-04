@@ -20,13 +20,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import operator as op
-import numpy as np
-from typing import Optional, Iterable, Any, Tuple, Union
-from functools import partial, update_wrapper
-from numbers import Number
 import threading
+import operator as op
+from numbers import Number
 from contextlib import contextmanager
+from typing import Optional, Iterable, Any, Tuple, Union
+
+import numpy as np
 
 from pytools import MovedFunctionDeprecationWrapper
 from pytools import single_valued, memoize_in
@@ -37,18 +37,11 @@ from meshmode.array_context import (
         ArrayContainerWithArithmetic)
 from meshmode.array_context import (
         thaw as _thaw, freeze as _freeze,
-        map_array_container, multimap_array_container)
+        map_array_container, multimap_array_container,
+        mapped_array_container, multimapped_array_container)
 
 __doc__ = """
 .. autoclass:: DOFArray
-
-.. autofunction:: obj_or_dof_array_vectorize
-.. autofunction:: obj_or_dof_array_vectorized
-.. autofunction:: obj_or_dof_array_vectorize_n_args
-.. autofunction:: obj_or_dof_array_vectorized_n_args
-
-.. autofunction:: thaw
-.. autofunction:: freeze
 
 .. autofunction:: flatten
 .. autofunction:: unflatten
@@ -308,40 +301,14 @@ class DOFArray(ArrayContainerWithArithmetic):
 
 # {{{ deprecated
 
-def obj_or_dof_array_vectorized(f):
-    wrapper = partial(map_array_container, f)
-    update_wrapper(wrapper, f)
-    return wrapper
-
-
-def obj_or_dof_array_vectorized_n_args(f):
-    # See also obj_array_vectorized_n_args fixes in
-    # https://github.com/inducer/pytools/pull/76
-    #
-    # Unfortunately, this can't use partial(), as the callable returned by it
-    # will not be turned into a bound method upon attribute access.
-    # This may happen here, because the decorator *could* be used
-    # on methods, since it can "look past" the leading `self` argument.
-    # Only exactly function objects receive this treatment.
-    #
-    # Spec link:
-    # https://docs.python.org/3/reference/datamodel.html#the-standard-type-hierarchy
-    # (under "Instance Methods", quote as of Py3.9.4)
-    # > Also notice that this transformation only happens for user-defined functions;
-    # > other callable objects (and all non-callable objects) are retrieved
-    # > without transformation.
-
-    def wrapper(*args):
-        return multimap_array_container(f, *args)
-
-    update_wrapper(wrapper, f)
-    return wrapper
-
-
 obj_or_dof_array_vectorize = \
         MovedFunctionDeprecationWrapper(map_array_container, deadline="2022")
+obj_or_dof_array_vectorized = \
+        MovedFunctionDeprecationWrapper(mapped_array_container, deadline="2022")
 obj_or_dof_array_vectorize_n_args = \
         MovedFunctionDeprecationWrapper(multimap_array_container, deadline="2022")
+obj_or_dof_array_vectorized_n_args = \
+        MovedFunctionDeprecationWrapper(multimapped_array_container, deadline="2022")
 
 thaw = MovedFunctionDeprecationWrapper(_thaw, deadline="2022")
 freeze = MovedFunctionDeprecationWrapper(_freeze, deadline="2022")

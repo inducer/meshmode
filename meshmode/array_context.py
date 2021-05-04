@@ -303,6 +303,14 @@ def map_array_container(f: Callable[[Any], Any], ary):
         return f(ary)
 
 
+def mapped_array_container(f: Callable[[Any], Any]):
+    """Decorator for :func:`map_array_container`."""
+    from functools import update_wrapper
+    wrapper = partial(map_array_container, f)
+    update_wrapper(wrapper, f)
+    return wrapper
+
+
 def multimap_array_container(f: Callable[[Any], Any], *args):
     r"""Applies *f* recursively to multiple :class:`ArrayContainer`\ s.
 
@@ -357,6 +365,32 @@ def multimap_array_container(f: Callable[[Any], Any], *args):
                 )
 
     return template_ary.from_iterable(template_ary.array_context, tuple(result))
+
+
+def multimapped_array_container(f: Callable[[Any], Any]):
+    """Decorator for :func:`multimap_array_container`."""
+    # See also obj_array_vectorized_n_args fixes in
+    # https://github.com/inducer/pytools/pull/76
+    #
+    # Unfortunately, this can't use partial(), as the callable returned by it
+    # will not be turned into a bound method upon attribute access.
+    # This may happen here, because the decorator *could* be used
+    # on methods, since it can "look past" the leading `self` argument.
+    # Only exactly function objects receive this treatment.
+    #
+    # Spec link:
+    # https://docs.python.org/3/reference/datamodel.html#the-standard-type-hierarchy
+    # (under "Instance Methods", quote as of Py3.9.4)
+    # > Also notice that this transformation only happens for user-defined functions;
+    # > other callable objects (and all non-callable objects) are retrieved
+    # > without transformation.
+
+    def wrapper(*args):
+        return multimap_array_container(f, *args)
+
+    from functools import update_wrapper
+    update_wrapper(wrapper, f)
+    return wrapper
 
 
 def freeze(ary, actx=None):
@@ -507,20 +541,14 @@ class _BaseFakeNumpyNamespace:
 
         # limit which functions we try to hand off to loopy
         if name in self._numpy_math_functions:
-            from meshmode.dof_array import obj_or_dof_array_vectorized_n_args
-            return obj_or_dof_array_vectorized_n_args(loopy_implemented_elwise_func)
+            return multimapped_array_container(loopy_implemented_elwise_func)
         else:
             raise AttributeError(name)
 
     def _new_like(self, ary, alloc_like):
-        # FIXME: DOFArray should not be here (circular dependencies)
-        from meshmode.dof_array import DOFArray
         from numbers import Number
-
-        if isinstance(ary, DOFArray):
-            return DOFArray(self._array_context, tuple([
-                alloc_like(subary) for subary in ary
-                ]))
+        if isinstance(ary, ArrayContainer):
+            return map_array_container(alloc_like, ary)
         elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
             raise NotImplementedError("operation not implemented for object arrays")
         elif isinstance(ary, Number):
@@ -540,8 +568,7 @@ class _BaseFakeNumpyNamespace:
         # NOTE: conjugate distributes over object arrays, but it looks for a
         # `conjugate` ufunc, while some implementations only have the shorter
         # `conj` (e.g. cl.array.Array), so this should work for everybody.
-        from meshmode.dof_array import obj_or_dof_array_vectorize
-        return obj_or_dof_array_vectorize(lambda obj: obj.conj(), x)
+        return map_array_container(lambda obj: obj.conj(), x)
 
     conj = conjugate
 
@@ -575,7 +602,7 @@ class FirstAxisIsElementsTag(Tag):
 
 
 class ArrayContext(ABC):
-    """An interface that allows a
+    r"""An interface that allows a
     :class:`~meshmode.discretization.Discretization` to create and interact
     with arrays of degrees of freedom without fully specifying their types.
 
@@ -601,7 +628,7 @@ class ArrayContext(ABC):
          (e.g. ``sin``, ``exp``) are accessible through this interface.
 
          Callables accessible through this namespace vectorize over object
-         arrays, including :class:`meshmode.dof_array.DOFArray`.
+         arrays, including :class:`meshmode.array_context.ArrayContainer`\ s.
 
     .. automethod:: freeze
     .. automethod:: thaw
@@ -787,16 +814,23 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def _get_fake_numpy_linalg_namespace(self):
         return _PyOpenCLFakeNumpyLinalgNamespace(self._array_context)
 
-    def _bop(self, op, x, y):
-        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
-        return obj_or_dof_array_vectorize_n_args(op, x, y)
+    def equal(self, x, y):
+        return multimap_array_container(operator.eq, x, y)
 
-    def equal(self, x, y): return self._bop(operator.eq, x, y)  # noqa: E704
-    def not_equal(self, x, y): return self._bop(operator.ne, x, y)  # noqa: E704
-    def greater(self, x, y): return self._bop(operator.gt, x, y)  # noqa: E704
-    def greater_equal(self, x, y): return self._bop(operator.ge, x, y)  # noqa: E704
-    def less(self, x, y): return self._bop(operator.lt, x, y)  # noqa: E704
-    def less_equal(self, x, y): return self._bop(operator.le, x, y)  # noqa: E704
+    def not_equal(self, x, y):
+        return multimap_array_container(operator.ne, x, y)
+
+    def greater(self, x, y):
+        return multimap_array_container(operator.gt, x, y)
+
+    def greater_equal(self, x, y):
+        return multimap_array_container(operator.ge, x, y)
+
+    def less(self, x, y):
+        return multimap_array_container(operator.lt, x, y)
+
+    def less_equal(self, x, y):
+        return multimap_array_container(operator.le, x, y)
 
     def ones_like(self, ary):
         def _ones_like(subary):
@@ -808,21 +842,18 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
 
     def maximum(self, x, y):
         import pyopencl.array as cl_array
-        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
-        return obj_or_dof_array_vectorize_n_args(
+        return multimap_array_container(
                 partial(cl_array.maximum, queue=self._array_context.queue),
                 x, y)
 
     def minimum(self, x, y):
         import pyopencl.array as cl_array
-        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
-        return obj_or_dof_array_vectorize_n_args(
+        return multimap_array_container(
                 partial(cl_array.minimum, queue=self._array_context.queue),
                 x, y)
 
     def where(self, criterion, then, else_):
         import pyopencl.array as cl_array
-        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
 
         def where_inner(inner_crit, inner_then, inner_else):
             if isinstance(inner_crit, bool):
@@ -830,7 +861,7 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
             return cl_array.if_positive(inner_crit != 0, inner_then, inner_else,
                     queue=self._array_context.queue)
 
-        return obj_or_dof_array_vectorize_n_args(where_inner, criterion, then, else_)
+        return multimap_array_container(where_inner, criterion, then, else_)
 
     def sum(self, a, dtype=None):
         import pyopencl.array as cl_array
@@ -847,9 +878,8 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
 
     def stack(self, arrays, axis=0):
         import pyopencl.array as cla
-        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
-        return obj_or_dof_array_vectorize_n_args(
-                lambda *args: cla.stack(arrays=args, axis=axis,  # pylint: disable=no-member  # noqa: E501
+        return multimap_array_container(
+                lambda *args: cla.stack(arrays=args, axis=axis,
                     queue=self._array_context.queue),
                 *arrays)
 
@@ -878,6 +908,7 @@ class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
 
         # FIXME: Handling DOFArrays here is not beautiful, but it sure does avoid
         # downstream headaches.
+        # FIXME: Extend this to ArrayContainers somehow?
         from meshmode.dof_array import DOFArray
         if isinstance(array, DOFArray):
             import numpy.linalg as la
