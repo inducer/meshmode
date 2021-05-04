@@ -23,7 +23,7 @@ THE SOFTWARE.
 import operator
 from functools import partial, singledispatch
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Iterable, Sequence, Tuple, Union
+from typing import Any, Callable, Iterable, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -125,14 +125,21 @@ def serialize_container(ary: ArrayContainer) -> Iterable[Tuple[Any, Any]]:
 
 @singledispatch
 def deserialize_container_class(
-        actx: "ArrayContext",
+        actx: Optional["ArrayContext"],
         iterable: Iterable[Tuple[Any, Any]]):
     raise NotImplementedError
 
 
 def deserialize_container(cls,
-        actx: "ArrayContext",
+        actx: Optional["ArrayContext"],
         iterable: Iterable[Tuple[Any, Any]]):
+    """Deserialize an iterable into an array container.
+
+    :param actx: can be *None* for frozen arrays or if the array does not use
+        an :class:`ArrayContext`.
+    :param iterable: an iterable that mirrors the output of
+        :meth:`serialize_container`.
+    """
     return deserialize_container_class.dispatch(cls)(actx, iterable)
 
 
