@@ -99,7 +99,7 @@ def _loopy_get_default_entrypoint(t_unit):
 
 class ArrayContainer(ABC):
     """A generic container for the array type supported by the
-    :attr:`array_context`.
+    :class:`ArrayContext`.
 
     Serialization functionality is implemented in :func:`serialize_container`
     and :func:`deserialize_container` using the :func:`functools.singledispatch`
@@ -149,19 +149,25 @@ def get_container_context(ary: ArrayContainer):
     if not isinstance(ary, ArrayContainer):
         return None
 
-    contexts = [
-            get_container_context(subary) for _, subary in serialize_container(ary)
-            if isinstance(subary, ArrayContainer)
-            ]
-
-    if contexts:
-        return single_valued(contexts, equality_pred=operator.is_)
-    return None
+    return _get_container_context_from_iterable(
+            subary for _, subary in serialize_container(ary))
 
 
 # {{{ object arrays
 
 ArrayContainer.register(np.ndarray)
+
+
+def _get_container_context_from_iterable(ary):
+    contexts = [
+            get_container_context(subary) for subary in ary
+            if isinstance(subary, ArrayContainer)
+            ]
+
+    contexts = [c for c in contexts if c is not None]
+    if contexts:
+        return single_valued(contexts, equality_pred=operator.is_)
+    return None
 
 
 @serialize_container.register(np.ndarray)
@@ -187,15 +193,8 @@ def _(actx: "ArrayContext", iterable):
 @get_container_context.register(tuple)
 def _(ary: tuple):
     # NOTE: this is only implemented for `multimap_array_container` so that it
-    # can directly pass in *args directly
-    contexts = [
-            get_container_context(subary) for subary in ary
-            if isinstance(subary, ArrayContainer)
-            ]
-
-    if contexts:
-        return single_valued(contexts, equality_pred=operator.is_)
-    return None
+    # can directly pass in *args
+    return _get_container_context_from_iterable(ary)
 
 # }}}
 
@@ -213,7 +212,7 @@ class ArrayContainerWithArithmetic(ArrayContainer):
         ``<``, ``>``, ``<=``, ``>=``. (:mod:`numpy` object arrays containing
         arrays do not)
 
-    .. attribute:: array_context
+    .. autoattribute:: array_context
     """
 
     @property
