@@ -316,11 +316,15 @@ def test_recursive_freeze_thaw(actx_factory):
             n=(3,)*ambient_dim, order=1)
     discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
 
+    # {{{ ArrayContainer
+
     from dataclasses import dataclass, fields
-    from meshmode.array_context import ArrayContainer
+    from meshmode.array_context import (
+            ArrayContainerWithArithmetic,
+            serialize_container, deserialize_container_class)
 
     @dataclass
-    class DataclassArrayContainer(ArrayContainer):
+    class DataclassArrayContainer(ArrayContainerWithArithmetic):
         mass: DOFArray
         momentum: np.ndarray
         enthalpy: DOFArray
@@ -329,16 +333,15 @@ def test_recursive_freeze_thaw(actx_factory):
         def array_context(self):
             return self.mass.array_context
 
-        def __len__(self):
-            return 3
+    @serialize_container.register(DataclassArrayContainer)
+    def _(ary: DataclassArrayContainer):
+        return ((var.name, getattr(ary, var.name)) for var in fields(ary))
 
-        def as_iterable(self):
-            return ((var.name, getattr(self, var.name))
-                    for var in fields(self) if var.init)
+    @deserialize_container_class.register(DataclassArrayContainer)
+    def _(actx, iterable):
+        return DataclassArrayContainer(**dict(iterable))
 
-        @classmethod
-        def from_iterable(cls, actx, iterable):
-            return cls(**dict(iterable))
+    # }}}
 
     from meshmode.array_context import thaw, freeze
     x = thaw(actx, discr.nodes()[0])
@@ -348,6 +351,8 @@ def test_recursive_freeze_thaw(actx_factory):
             mass=x,
             momentum=make_obj_array([x, x]),
             enthalpy=x)
+    ary_dataclass = actx.np.sin(ary_dataclass + 3 * ary_dataclass)
+
     ary_of_dofs = make_obj_array([x, x, x])
     ary_dof = x
 
@@ -356,8 +361,8 @@ def test_recursive_freeze_thaw(actx_factory):
         thawed_ary = thaw(actx, frozen_ary)
         frozen_ary = freeze(thawed_ary)
 
-    from meshmode.array_context import get_array_container_context
-    assert actx is get_array_container_context(ary_of_dofs)
+    from meshmode.array_context import get_container_context
+    assert actx is get_container_context(ary_of_dofs)
 
 # }}}
 

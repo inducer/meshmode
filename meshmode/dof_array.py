@@ -24,7 +24,7 @@ import threading
 import operator as op
 from numbers import Number
 from contextlib import contextmanager
-from typing import Optional, Iterable, Any, Tuple, Union
+from typing import Any, Callable, Iterable, Optional, Tuple, Union
 
 import numpy as np
 
@@ -34,7 +34,8 @@ from pytools.obj_array import obj_array_vectorize
 
 from meshmode.array_context import (
         ArrayContext, make_loopy_program,
-        ArrayContainerWithArithmetic)
+        ArrayContainerWithArithmetic,
+        serialize_container, deserialize_container_class)
 from meshmode.array_context import (
         thaw as _thaw, freeze as _freeze,
         map_array_container, multimap_array_container,
@@ -165,24 +166,6 @@ class DOFArray(ArrayContainerWithArithmetic):
     def __repr__(self):
         return f"DOFArray({repr(self._data)})"
 
-    # {{{ array container protocol
-
-    def as_iterable(self):
-        return ((i, subary) for i, subary in enumerate(self._data))
-
-    @classmethod
-    def from_iterable(cls, actx, iterable):
-        iterable = list(iterable)
-
-        result = [None] * len(iterable)
-        for i, subary in iterable:
-            result[i] = subary
-
-        assert all(subary is not None for subary in result)
-        return DOFArray(actx, tuple(result))
-
-    # }}}
-
     # {{{ sequence protocol
 
     def __len__(self):
@@ -299,19 +282,51 @@ class DOFArray(ArrayContainerWithArithmetic):
 # }}}
 
 
-# {{{ deprecated
+# {{{ ArrayContainer implementation
 
-obj_or_dof_array_vectorize = \
-        MovedFunctionDeprecationWrapper(map_array_container, deadline="2022")
-obj_or_dof_array_vectorized = \
-        MovedFunctionDeprecationWrapper(mapped_array_container, deadline="2022")
-obj_or_dof_array_vectorize_n_args = \
-        MovedFunctionDeprecationWrapper(multimap_array_container, deadline="2022")
-obj_or_dof_array_vectorized_n_args = \
-        MovedFunctionDeprecationWrapper(multimapped_array_container, deadline="2022")
+@serialize_container.register(DOFArray)
+def _(ary: DOFArray):
+    return enumerate(ary._data)
 
-thaw = MovedFunctionDeprecationWrapper(_thaw, deadline="2022")
-freeze = MovedFunctionDeprecationWrapper(_freeze, deadline="2022")
+
+@deserialize_container_class.register(DOFArray)
+def _(actx: ArrayContext, iterable):
+    iterable = list(iterable)
+    result = [None] * len(iterable)
+
+    for i, subary in iterable:
+        result[i] = subary
+
+    if any(subary is None for subary in result):
+        raise ValueError("'iterable' does not contain all indices")
+
+    return DOFArray(actx, data=tuple(result))
+
+
+def map_dof_array_container(f: Callable[[Any], Any], ary):
+    r"""Applies *f* recursively to an :class:`~meshmode.array_context.ArrayContainer`.
+
+    Similar to :func:`~meshmode.array_context.map_array_container`, but
+    does not further recurse on :class:`DOFArray`\ s.
+    """
+    from meshmode.array_context import get_container_context
+    actx = get_container_context(ary)
+
+    from meshmode.array_context import _map_array_container_with_leaf_class
+    return _map_array_container_with_leaf_class(
+            actx, f, ary, leaf_class=DOFArray)
+
+
+def multimap_dof_array_container(f: Callable[[Any], Any], *args):
+    r"""Applies *f* recursively to multiple
+    :class:`~meshmode.array_context.ArrayContainer`\ s.
+
+    Similar to :func:`~meshmode.array_context.multimap_array_container`, but
+    does not further recurse on :class:`DOFArray`\ s.
+    """
+    from meshmode.array_context import _multimap_array_container_with_leaf_class
+    return _multimap_array_container_with_leaf_class(
+            None, f, *args, leaf_class=DOFArray)
 
 # }}}
 
@@ -444,6 +459,8 @@ def array_context_for_pickling(actx: ArrayContext):
 # }}}
 
 
+# {{{ deprecated
+
 def flat_norm(ary: DOFArray, ord=None):
     from warnings import warn
     warn("flat_norm is deprecated. Use array_context.np.linalg.norm instead. "
@@ -451,5 +468,19 @@ def flat_norm(ary: DOFArray, ord=None):
             DeprecationWarning, stacklevel=2)
     return ary.array_context.np.linalg.norm(ary, ord=ord)
 
+
+obj_or_dof_array_vectorize = \
+        MovedFunctionDeprecationWrapper(map_array_container, deadline="2022")
+obj_or_dof_array_vectorized = \
+        MovedFunctionDeprecationWrapper(mapped_array_container, deadline="2022")
+obj_or_dof_array_vectorize_n_args = \
+        MovedFunctionDeprecationWrapper(multimap_array_container, deadline="2022")
+obj_or_dof_array_vectorized_n_args = \
+        MovedFunctionDeprecationWrapper(multimapped_array_container, deadline="2022")
+
+thaw = MovedFunctionDeprecationWrapper(_thaw, deadline="2022")
+freeze = MovedFunctionDeprecationWrapper(_freeze, deadline="2022")
+
+# }}}
 
 # vim: foldmethod=marker

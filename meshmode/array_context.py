@@ -21,7 +21,7 @@ THE SOFTWARE.
 """
 
 import operator
-from functools import partial
+from functools import partial, singledispatch
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Iterable, Sequence, Tuple, Union
 
@@ -30,7 +30,7 @@ import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 
-from pytools import memoize_method
+from pytools import memoize_method, single_valued
 from pytools.tag import Tag
 
 
@@ -40,6 +40,10 @@ __doc__ = """
 .. autoclass:: FirstAxisIsElementsTag
 
 .. autoclass:: ArrayContainer
+.. autofunction:: serialize_container
+.. autofunction:: deserialize_container
+.. autofunction:: get_container_context
+
 .. autoclass:: ArrayContainerWithArithmetic
 .. autofunction:: map_array_container
 .. autofunction:: multimap_array_container
@@ -90,45 +94,108 @@ def _loopy_get_default_entrypoint(t_unit):
 
 # {{{ ArrayContainer
 
+# NOTE: this is an ABC so that we can easily register new types as
+# 'ArrayContainers' instead of overwriting some `__instancecheck__`.
+
 class ArrayContainer(ABC):
     """A generic container for the array type supported by the
     :attr:`array_context`.
 
-    .. autoattribute:: array_context
-    .. automethod:: as_iterable
-    .. automethod:: from_iterable
+    Serialization functionality is implemented in :func:`serialize_container`
+    and :func:`deserialize_container` using the :func:`functools.singledispatch`
+    mechanism.
     """
 
-    @property
-    @abstractmethod
-    def array_context(self):
-        """An :class:`meshmode.array_context.ArrayContext`."""
 
-    @abstractmethod
-    def as_iterable(self) -> Iterable[Tuple[Any, Any]]:
-        r"""Serialize the array container into an iterable over its components.
+@singledispatch
+def serialize_container(ary: ArrayContainer) -> Iterable[Tuple[Any, Any]]:
+    r"""Serialize the array container into an iterable over its components.
 
-        The order of the components and their identifiers are entirely under
-        the control of the subclass.
+    The order of the components and their identifiers are entirely under
+    the control of the container class.
 
-        :returns: an :class:`Iterable` of 2-tuples where the first
-            entry is an identifier for the component and the second entry
-            is an array-like component of the :class:`ArrayContainer`.
-            Components can themselves be :class:`ArrayContainer`\ s, allowing
-            for arbitrary nested structures.
-        """
+    :returns: an :class:`Iterable` of 2-tuples where the first
+        entry is an identifier for the component and the second entry
+        is an array-like component of the :class:`ArrayContainer`.
+        Components can themselves be :class:`ArrayContainer`\ s, allowing
+        for arbitrarily nested structures.
+    """
+    raise NotImplementedError(type(ary).__name__)
 
-    @classmethod
-    @abstractmethod
-    def from_iterable(cls,
-            actx: "ArrayContext",
-            iterable: Iterable[Tuple[Any, Any]]):
-        """Convert an iterable into an array container.
 
-        :param iterable: an iterable that mirrors the output of
-            :meth:`as_iterable`.
-        """
+@singledispatch
+def deserialize_container_class(
+        actx: "ArrayContext",
+        iterable: Iterable[Tuple[Any, Any]]):
+    raise NotImplementedError
 
+
+def deserialize_container(cls,
+        actx: "ArrayContext",
+        iterable: Iterable[Tuple[Any, Any]]):
+    return deserialize_container_class.dispatch(cls)(actx, iterable)
+
+
+@singledispatch
+def get_container_context(ary: ArrayContainer):
+    # FIXME: is singledispatch confused by the empty ABC?
+    if not isinstance(ary, ArrayContainer):
+        return None
+
+    contexts = [
+            get_container_context(subary) for _, subary in serialize_container(ary)
+            if isinstance(subary, ArrayContainer)
+            ]
+
+    if contexts:
+        return single_valued(contexts, equality_pred=operator.is_)
+    return None
+
+
+# {{{ object arrays
+
+ArrayContainer.register(np.ndarray)
+
+
+@serialize_container.register(np.ndarray)
+def _(ary: np.ndarray):
+    if ary.dtype.char != "O":
+        raise NotImplementedError(
+                f"serialization for 'numpy.ndarray' of dtype '{ary.dtype}'")
+
+    return ((i, subary) for i, subary in enumerate(ary))
+
+
+@deserialize_container_class.register(np.ndarray)
+def _(actx: "ArrayContext", iterable):
+    iterable = list(iterable)
+
+    ary = np.empty(len(iterable), dtype=object)
+    for i, subary in iterable:
+        ary[i] = subary
+
+    return ary
+
+
+@get_container_context.register(tuple)
+def _(ary: tuple):
+    # NOTE: this is only implemented for `multimap_array_container` so that it
+    # can directly pass in *args directly
+    contexts = [
+            get_container_context(subary) for subary in ary
+            if isinstance(subary, ArrayContainer)
+            ]
+
+    if contexts:
+        return single_valued(contexts, equality_pred=operator.is_)
+    return None
+
+# }}}
+
+# }}}
+
+
+# {{{ ArrayContainerWithArithmetic
 
 class ArrayContainerWithArithmetic(ArrayContainer):
     """Array container with basic arithmetic, comparisons and logic operators.
@@ -137,8 +204,15 @@ class ArrayContainerWithArithmetic(ArrayContainer):
 
         :class:`ArrayContainerWithArithmetic` instances support elementwise
         ``<``, ``>``, ``<=``, ``>=``. (:mod:`numpy` object arrays containing
-        arrays do not.)
+        arrays do not)
+
+    .. attribute:: array_context
     """
+
+    @property
+    @abstractmethod
+    def array_context(self):
+        """An :class:`~meshmode.array_context.ArrayContext`."""
 
     @classmethod
     def unary_op(cls, op, arg):
@@ -149,20 +223,22 @@ class ArrayContainerWithArithmetic(ArrayContainer):
         from numbers import Number
         from pytools.obj_array import obj_array_vectorize
 
-        if isinstance(arg1, ArrayContainer) and isinstance(arg2, ArrayContainer):
+        if isinstance(arg1, np.ndarray) or isinstance(arg2, np.ndarray):
+            # do a bit of broadcasting
+            if isinstance(arg1, np.ndarray):
+                return obj_array_vectorize(
+                        lambda subary: cls.binary_op(op, subary, arg2),
+                        arg1.astype(object, copy=False))
+            else:
+                return obj_array_vectorize(
+                        lambda subary: cls.binary_op(op, arg1, subary),
+                        arg2.astype(object, copy=False))
+        elif isinstance(arg1, ArrayContainer) and isinstance(arg2, ArrayContainer):
             return multimap_array_container(op, arg1, arg2)
         elif isinstance(arg1, ArrayContainer) and isinstance(arg2, Number):
             return map_array_container(lambda subary: op(subary, arg2), arg1)
         elif isinstance(arg1, Number) and isinstance(arg2, ArrayContainer):
             return map_array_container(lambda subary: op(arg1, subary), arg2)
-        elif isinstance(arg1, ArrayContainer) and isinstance(arg2, np.ndarray):
-            return obj_array_vectorize(
-                lambda subary: cls.binary_op(op, arg1, subary),
-                arg2.astype(object, copy=False))
-        elif isinstance(arg2, ArrayContainer) and isinstance(arg1, np.ndarray):
-            return obj_array_vectorize(
-                lambda subary: cls.binary_op(op, subary, arg2),
-                arg1.astype(object, copy=False))
         else:
             NotImplementedError(
                 f"operation '{op.__name__}' for arrays of type "
@@ -270,70 +346,40 @@ class ArrayContainerWithArithmetic(ArrayContainer):
     # }}}
 
 
-def get_array_container_context(ary):
+@get_container_context.register(ArrayContainerWithArithmetic)
+def _(ary: ArrayContainerWithArithmetic):
+    return ary.array_context
+
+# }}}
+
+
+# {{{ ArrayContainer traversal
+
+def _map_array_container_with_leaf_class(actx, f, ary, leaf_class=None):
+    if leaf_class is not None and isinstance(ary, leaf_class):
+        return f(ary)
+
     if isinstance(ary, ArrayContainer):
-        return ary.array_context
-    elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
-        from pytools import single_valued
-        return single_valued([
-            get_array_container_context(subary) for subary in ary
-            ], equality_pred=operator.is_)
-    else:
-        raise TypeError(f"unsupported type: {type(ary).__name__}")
-
-
-def map_array_container(f: Callable[[Any], Any], ary):
-    r"""Applies *f* recursively to an :class:`ArrayContainer`.
-
-    Works similarly to :func:`~pytools.obj_array.obj_array_vectorize`, but
-    recurses into all :class:`ArrayContainer` classes and applies *f* only
-    at the leaf level.
-
-    :param ary: a tree-like (nested) structure of :class:`ArrayContainer`\ s.
-    """
-    if isinstance(ary, ArrayContainer):
-        return ary.from_iterable(ary.array_context, (
-            (key, map_array_container(f, subary))
-            for key, subary in ary.as_iterable()
+        return deserialize_container(type(ary), actx, (
+            (key, _map_array_container_with_leaf_class(
+                actx, f, subary, leaf_class=leaf_class))
+            for key, subary in serialize_container(ary)
             ))
-    elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
-        from pytools.obj_array import obj_array_vectorize
-        return obj_array_vectorize(partial(map_array_container, f), ary)
     else:
         return f(ary)
 
 
-def mapped_array_container(f: Callable[[Any], Any]):
-    """Decorator for :func:`map_array_container`."""
-    from functools import update_wrapper
-    wrapper = partial(map_array_container, f)
-    update_wrapper(wrapper, f)
-    return wrapper
+def _multimap_array_container_with_leaf_class(actx, f, *args, leaf_class=None):
+    if leaf_class is None:
+        leaf_class = type(None)
 
-
-def multimap_array_container(f: Callable[[Any], Any], *args):
-    r"""Applies *f* recursively to multiple :class:`ArrayContainer`\ s.
-
-    Works similarly to :func:`~pytools.obj_array.obj_array_vectorize_n_args`,
-    but recurses into all the :class:`ArrayContainer` arguments and applies
-    *f* only at the leaf level.
-
-    :param args: a :class:`list` of :class:`ArrayContainer`\ s of the same
-        type and with the same structure (same number of components, etc.).
-        All non-:class:`ArrayContainer` arguments are considered as *scalars*.
-    """
     container_indices = [
-            i for i, arg in enumerate(args) if isinstance(arg, ArrayContainer)
+            i for i, arg in enumerate(args)
+            if isinstance(arg, ArrayContainer) and not isinstance(arg, leaf_class)
             ]
 
     if not container_indices:
-        if any(isinstance(arg, np.ndarray) and arg.dtype.char == "O"
-                for i, arg in enumerate(args)):
-            from pytools.obj_array import obj_array_vectorize_n_args
-            return obj_array_vectorize_n_args(
-                    partial(multimap_array_container, f), *args)
-        else:
-            return f(*args)
+        return f(*args)
 
     template_ary = args[container_indices[0]]
     if not all(isinstance(args[i], type(template_ary)) for i in container_indices):
@@ -342,8 +388,10 @@ def multimap_array_container(f: Callable[[Any], Any], *args):
                 f"{type(template_ary).__name__}")
 
     def zip_containers(arys):
-        keys = (key for key, _ in arys[0].as_iterable())
-        subarys = [[subary for _, subary in ary.as_iterable()] for ary in arys]
+        keys = (key for key, _ in serialize_container(arys[0]))
+        subarys = [
+                [subary for _, subary in serialize_container(ary)] for ary in arys
+                ]
 
         from pytools import is_single_valued
         if not is_single_valued([len(ary) for ary in subarys]):
@@ -361,14 +409,51 @@ def multimap_array_container(f: Callable[[Any], Any], *args):
             new_args[i] = subarys[i]
 
         result.append(
-                (key, multimap_array_container(f, *new_args))
+                (key, _multimap_array_container_with_leaf_class(
+                    actx, f, *new_args, leaf_class=leaf_class))
                 )
 
-    return template_ary.from_iterable(template_ary.array_context, tuple(result))
+    return deserialize_container(type(template_ary), actx, tuple(result))
+
+
+def map_array_container(f: Callable[[Any], Any], ary):
+    r"""Applies *f* recursively to an :class:`ArrayContainer`.
+
+    Works similarly to :func:`~pytools.obj_array.obj_array_vectorize`, but
+    recurses into all :class:`ArrayContainer` classes and applies *f* only
+    at the leaf level.
+
+    :param ary: a tree-like (nested) structure of :class:`ArrayContainer`\ s.
+    """
+    actx = get_container_context(ary)
+    return _map_array_container_with_leaf_class(actx, f, ary)
+
+
+def mapped_array_container(f: Callable[[Any], Any]):
+    """Decorator around :func:`map_array_container`."""
+    from functools import update_wrapper
+    wrapper = partial(map_array_container, f)
+    update_wrapper(wrapper, f)
+    return wrapper
+
+
+def multimap_array_container(f: Callable[[Any], Any], *args):
+    r"""Applies *f* recursively to multiple :class:`ArrayContainer`\ s.
+
+    Works similarly to :func:`~pytools.obj_array.obj_array_vectorize_n_args`,
+    but recurses into all the :class:`ArrayContainer` arguments and applies
+    *f* only at the leaf level.
+
+    :param args: a :class:`list` of :class:`ArrayContainer`\ s of the same
+        type and with the same structure (same number of components, etc.).
+        All non-:class:`ArrayContainer` arguments are considered as *scalars*.
+    """
+    actx = get_container_context(args)
+    return _multimap_array_container_with_leaf_class(actx, f, *args)
 
 
 def multimapped_array_container(f: Callable[[Any], Any]):
-    """Decorator for :func:`multimap_array_container`."""
+    """Decorator around :func:`multimap_array_container`."""
     # See also obj_array_vectorized_n_args fixes in
     # https://github.com/inducer/pytools/pull/76
     #
@@ -393,27 +478,18 @@ def multimapped_array_container(f: Callable[[Any], Any]):
     return wrapper
 
 
-def freeze(ary, actx=None):
+def freeze(ary):
     r"""Freezes recursively by going through all components of
     :class:`ArrayContainer`\ s and object arrays.
 
     :param ary: a tree-like (nested) structure of :meth:`~ArrayContext.thaw`\ ed
         :class:`ArrayContainer`\ s.
     """
+    actx = get_container_context(ary)
+    if actx is None:
+        raise ValueError("ArrayContainer passed to 'freeze' is already frozen")
 
-    if isinstance(ary, ArrayContainer):
-        if ary.array_context is None:
-            raise ValueError("ArrayContainer passed to 'freeze' is already frozen")
-
-        return ary.from_iterable(None, (
-            (key, freeze(subary, actx=ary.array_context))
-            for key, subary in ary.as_iterable()
-            ))
-    elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
-        from pytools.obj_array import obj_array_vectorize
-        return obj_array_vectorize(partial(freeze, actx=actx), ary)
-    else:
-        return actx.freeze(ary)
+    return _map_array_container_with_leaf_class(None, actx.freeze, ary)
 
 
 def thaw(actx, ary):
@@ -423,19 +499,11 @@ def thaw(actx, ary):
     :param ary: a tree-like (nested) structure of :meth:`~ArrayContext.freeze`\ ed
         :class:`ArrayContainer`\ s.
     """
+    array_context = get_container_context(ary)
+    if array_context is not None:
+        raise ValueError("ArrayContainer passed to 'thaw' is not frozen")
 
-    if isinstance(ary, ArrayContainer):
-        if ary.array_context is not None:
-            raise ValueError("ArrayContainer passed to 'thaw' is not frozen")
-
-        return ary.from_iterable(actx, (
-            (key, thaw(actx, subary)) for key, subary in ary.as_iterable()
-            ))
-    elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
-        from pytools.obj_array import obj_array_vectorize
-        return obj_array_vectorize(partial(thaw, actx), ary)
-    else:
-        return actx.thaw(ary)
+    return _map_array_container_with_leaf_class(actx, actx.thaw, ary)
 
 # }}}
 
