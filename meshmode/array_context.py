@@ -40,7 +40,9 @@ __doc__ = """
 .. autoclass:: FirstAxisIsElementsTag
 
 .. autoclass:: ArrayContainer
+.. autoclass:: ArrayContainerWithArithmetic
 .. autofunction:: map_array_container
+.. autofunction:: multimap_array_container
 .. autofunction:: freeze
 .. autofunction:: thaw
 
@@ -133,8 +135,9 @@ class ArrayContainerWithArithmetic(ArrayContainer):
 
     .. note::
 
-        :class:`DOFArray` instances support elementwise ``<``, ``>``,
-        ``<=``, ``>=``. (:mod:`numpy` object arrays containing arrays do not.)
+        :class:`ArrayContainerWithArithmetic` instances support elementwise
+        ``<``, ``>``, ``<=``, ``>=``. (:mod:`numpy` object arrays containing
+        arrays do not.)
     """
 
     @classmethod
@@ -280,11 +283,11 @@ def get_array_container_context(ary):
 
 
 def map_array_container(f: Callable[[Any], Any], ary):
-    r"""Applies *f* recursively over all :class:`ArrayContainer`\ s.
+    r"""Applies *f* recursively to an :class:`ArrayContainer`.
 
     Works similarly to :func:`~pytools.obj_array.obj_array_vectorize`, but
-    recurses into all :class:`ArrayContainer` classes and applies *f* to their
-    components as well.
+    recurses into all :class:`ArrayContainer` classes and applies *f* only
+    at the leaf level.
 
     :param ary: a tree-like (nested) structure of :class:`ArrayContainer`\ s.
     """
@@ -301,11 +304,11 @@ def map_array_container(f: Callable[[Any], Any], ary):
 
 
 def multimap_array_container(f: Callable[[Any], Any], *args):
-    r"""Applies *f* recursively over all :class:`ArrayCOntainer`\ s.
+    r"""Applies *f* recursively to multiple :class:`ArrayContainer`\ s.
 
-    Works similarly to :func:`~pytools.obj_array.obj_array_vectorized_n_args`,
-    but recurses into all the arguments and applies *f* to the components
-    of each :class:`ArrayContainer`.
+    Works similarly to :func:`~pytools.obj_array.obj_array_vectorize_n_args`,
+    but recurses into all the :class:`ArrayContainer` arguments and applies
+    *f* only at the leaf level.
 
     :param args: a :class:`list` of :class:`ArrayContainer`\ s of the same
         type and with the same structure (same number of components, etc.).
