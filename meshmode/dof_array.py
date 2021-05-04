@@ -32,7 +32,9 @@ from contextlib import contextmanager
 from pytools import single_valued, memoize_in
 from pytools.obj_array import obj_array_vectorize
 
-from meshmode.array_context import ArrayContext, ArrayContainer, make_loopy_program
+from meshmode.array_context import (
+        ArrayContext, make_loopy_program,
+        ArrayContainerWithArithmetic)
 
 
 __doc__ = """
@@ -55,7 +57,7 @@ __doc__ = """
 
 # {{{ DOFArray
 
-class DOFArray(ArrayContainer):
+class DOFArray(ArrayContainerWithArithmetic):
     r"""This array type holds degree-of-freedom arrays for use with
     :class:`~meshmode.discretization.Discretization`,
     with one entry in the :class:`DOFArray` for each
@@ -98,12 +100,7 @@ class DOFArray(ArrayContainer):
     .. attribute:: real
     .. attribute:: imag
 
-    This object supports arithmetic, comparisons, and logic operators.
-
-    .. note::
-
-        :class:`DOFArray` instances support elementwise ``<``, ``>``,
-        ``<=``, ``>=``. (:mod:`numpy` object arrays containing arrays do not.)
+    Inherits from :class:`~meshmode.array_context.ArrayContainerWithArithmetic`.
 
     Basic in-place operations are also supported. Note that not all array types
     provided by :class:`meshmode.array_context.ArrayContext` implementations
@@ -239,7 +236,7 @@ class DOFArray(ArrayContainer):
 
     # }}}
 
-    # {{{ arithmetic
+    # {{{ in-place arithmetic
 
     def _ibop(self, f, arg):
         """Generic in-place binary operator without any broadcast support."""
@@ -258,88 +255,17 @@ class DOFArray(ArrayContainer):
 
         return self
 
-    def _bop(self, f, op1, op2):
-        """Broadcasting logic for a generic binary operator."""
-        if isinstance(op1, np.ndarray):
-            return obj_array_vectorize(lambda op: self._bop(f, op, op2),
-                op1.astype(object, copy=False))
-        if isinstance(op2, np.ndarray):
-            return obj_array_vectorize(lambda op: self._bop(f, op1, op),
-                op2.astype(object, copy=False))
-        if isinstance(op1, DOFArray) and isinstance(op2, DOFArray):
-            if len(op1) != len(op2):
-                raise ValueError("DOFArray objects in binary operator must have "
-                        f"same length, got {len(op1)} and {len(op2)}")
-            return self._like_me([
-                f(op1_i, op2_i)
-                for op1_i, op2_i in zip(op1._data, op2._data)])
-        elif isinstance(op1, DOFArray) and isinstance(op2, Number):
-            return self._like_me([f(op1_i, op2) for op1_i in op1._data])
-        elif isinstance(op1, Number) and isinstance(op2, DOFArray):
-            return self._like_me([f(op1, op2_i) for op2_i in op2._data])
-        else:
-            raise NotImplementedError("operation for types "
-                f"{type(op1).__name__} and {type(op2).__name__}")
-
-    def __add__(self, arg): return self._bop(op.add, self, arg)  # noqa: E704
-    def __radd__(self, arg): return self._bop(op.add, arg, self)  # noqa: E704
-    def __sub__(self, arg): return self._bop(op.sub, self, arg)  # noqa: E704
-    def __rsub__(self, arg): return self._bop(op.sub, arg, self)  # noqa: E704
-    def __mul__(self, arg): return self._bop(op.mul, self, arg)  # noqa: E704
-    def __rmul__(self, arg): return self._bop(op.mul, arg, self)  # noqa: E704
-    def __truediv__(self, arg): return self._bop(op.truediv, self, arg)  # noqa: E704
-    def __rtruediv__(self, arg): return self._bop(op.truediv, arg, self)  # noqa: E704, E501
-    def __pow__(self, arg): return self._bop(op.pow, self, arg)  # noqa: E704
-    def __rpow__(self, arg): return self._bop(op.pow, arg, self)  # noqa: E704
-    def __mod__(self, arg): return self._bop(op.mod, self, arg)  # noqa: E704
-    def __rmod__(self, arg): return self._bop(op.mod, arg, self)  # noqa: E704
-    def __divmod__(self, arg): return self._bop(divmod, self, arg)  # noqa: E704
-    def __rdivmod__(self, arg): return self._bop(divmod, arg, self)  # noqa: E704
-
-    def __pos__(self): return self  # noqa: E704
-    def __neg__(self): return self._like_me([-self_i for self_i in self._data])  # noqa: E704, E501
-    def __abs__(self): return self._like_me([abs(self_i) for self_i in self._data])  # noqa: E704, E501
-
-    def __iadd__(self, arg):
-        """
-        :param arg: can be a :class:`~numbers.Number` or another :class:`DOFArray`.
-        """
-        return self._ibop(op.iadd, arg)
-
+    def __iadd__(self, arg):return self._ibop(op.iadd, arg)             # noqa: E704
     def __isub__(self, arg): return self._ibop(op.isub, arg)            # noqa: E704
     def __imul__(self, arg): return self._ibop(op.imul, arg)            # noqa: E704
     def __itruediv__(self, arg): return self._ibop(op.itruediv, arg)    # noqa: E704
     def __imod__(self, arg): return self._ibop(op.imod, arg)            # noqa: E704
 
-    # }}}
-
-    # {{{ comparison
-
-    def __eq__(self, arg): return self._bop(self.array_context.np.equal, self, arg)  # noqa: E704,E501
-    def __ne__(self, arg): return self._bop(self.array_context.np.not_equal, self, arg)  # noqa: E704,E501
-    def __lt__(self, arg): return self._bop(self.array_context.np.less, self, arg)  # noqa: E704,E501
-    def __gt__(self, arg): return self._bop(self.array_context.np.greater, self, arg)  # noqa: E704,E501
-    def __le__(self, arg): return self._bop(self.array_context.np.less_equal, self, arg)  # noqa: E704,E501
-    def __ge__(self, arg): return self._bop(self.array_context.np.greater_equal, self, arg)  # noqa: E704,E501
+    def __iand__(self, arg): return self._ibop(op.iand, arg)            # noqa: E704
+    def __ixor__(self, arg): return self._ibop(op.ixor, arg)            # noqa: E704
+    def __ior__(self, arg): return self._ibop(op.ior, arg)              # noqa: E704
 
     # }}}
-
-    # {{{ logical
-
-    def __and__(self, arg): return self._bop(op.and_, self, arg)  # noqa: E704
-    def __xor__(self, arg): return self._bop(op.xor, self, arg)  # noqa: E704
-    def __or__(self, arg): return self._bop(op.or_, self, arg)  # noqa: E704
-    def __rand__(self, arg): return self._bop(op.and_, arg, self)  # noqa: E704
-    def __rxor__(self, arg): return self._bop(op.xor, arg, self)  # noqa: E704
-    def __ror__(self, arg): return self._bop(op.or_, arg, self)  # noqa: E704
-
-    def __iand__(self, arg): return self._ibop(op.iand, arg)        # noqa: E704
-    def __ixor__(self, arg): return self._ibop(op.ixor, arg)        # noqa: E704
-    def __ior__(self, arg): return self._ibop(op.ior, arg)          # noqa: E704
-
-    # }}}
-
-    # bit shifts unimplemented for now
 
     # {{{ pickling
 

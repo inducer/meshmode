@@ -128,6 +128,145 @@ class ArrayContainer(ABC):
         """
 
 
+class ArrayContainerWithArithmetic(ArrayContainer):
+    """Array container with basic arithmetic, comparisons and logic operators.
+
+    .. note::
+
+        :class:`DOFArray` instances support elementwise ``<``, ``>``,
+        ``<=``, ``>=``. (:mod:`numpy` object arrays containing arrays do not.)
+    """
+
+    @classmethod
+    def unary_op(cls, op, arg):
+        return map_array_container(op, arg)
+
+    @classmethod
+    def binary_op(cls, op, arg1, arg2):
+        from numbers import Number
+        from pytools.obj_array import obj_array_vectorize
+
+        if isinstance(arg1, ArrayContainer) and isinstance(arg2, ArrayContainer):
+            return multimap_array_container(op, arg1, arg2)
+        elif isinstance(arg1, ArrayContainer) and isinstance(arg2, Number):
+            return map_array_container(lambda subary: op(subary, arg2), arg1)
+        elif isinstance(arg1, Number) and isinstance(arg2, ArrayContainer):
+            return map_array_container(lambda subary: op(arg1, subary), arg2)
+        elif (isinstance(arg1, ArrayContainer)
+                and (isinstance(arg2, np.ndarray) and arg2.dtype.char == "O")):
+            return obj_array_vectorize(
+                lambda subary: cls.binary_op(op, arg1, subary), arg2)
+        elif (isinstance(arg2, ArrayContainer)
+                and (isinstance(arg1, np.ndarray) and arg1.dtype.char == "O")):
+            return obj_array_vectorize(
+                lambda subary: cls.binary_op(op, subary, arg2), arg1)
+        else:
+            NotImplementedError(
+                f"operation '{op.__name__}' for arrays of type "
+                f"'{type(arg1).__name__}' and '{type(arg2).__name__}'")
+
+    # bit shifts unimplemented for now
+
+    # {{{ arithmetic
+
+    def __add__(self, arg):
+        return self.binary_op(operator.add, self, arg)
+
+    def __sub__(self, arg):
+        return self.binary_op(operator.sub, self, arg)
+
+    def __mul__(self, arg):
+        return self.binary_op(operator.mul, self, arg)
+
+    def __truediv__(self, arg):
+        return self.binary_op(operator.truediv, self, arg)
+
+    def __pow__(self, arg):
+        return self.binary_op(operator.pow, self, arg)
+
+    def __mod__(self, arg):
+        return self.binary_op(operator.mod, self, arg)
+
+    def __divmod__(self, arg):
+        return self.binary_op(divmod, self, arg)
+
+    def __radd__(self, arg):
+        return self.binary_op(operator.add, arg, self)
+
+    def __rsub__(self, arg):
+        return self.binary_op(operator.sub, arg, self)
+
+    def __rmul__(self, arg):
+        return self.binary_op(operator.mul, arg, self)
+
+    def __rtruediv__(self, arg):
+        return self.binary_op(operator.truediv, arg, self)
+
+    def __rpow__(self, arg):
+        return self.binary_op(operator.pow, arg, self)
+
+    def __rmod__(self, arg):
+        return self.binary_op(operator.mod, arg, self)
+
+    def __rdivmod__(self, arg):
+        return self.binary_op(divmod, arg, self)
+
+    def __pos__(self):
+        return self
+
+    def __neg__(self):
+        return self.unary_op(operator.neg, self)
+
+    def __abs__(self):
+        return self.unary_op(operator.abs, self)
+
+    # }}}
+
+    # {{{ comparison
+
+    def __eq__(self, arg):
+        return self.binary_op(self.array_context.np.equal, self, arg)
+
+    def __ne__(self, arg):
+        return self.binary_op(self.array_context.np.not_equal, self, arg)
+
+    def __lt__(self, arg):
+        return self.binary_op(self.array_context.np.less, self, arg)
+
+    def __gt__(self, arg):
+        return self.binary_op(self.array_context.np.greater, self, arg)
+
+    def __le__(self, arg):
+        return self.binary_op(self.array_context.np.less_equal, self, arg)
+
+    def __ge__(self, arg):
+        return self.binary_op(self.array_context.np.greater_equal, self, arg)
+
+    # }}}
+
+    # {{{ logical
+
+    def __and__(self, arg):
+        return self.binary_op(operator.and_, self, arg)
+
+    def __xor__(self, arg):
+        return self.binary_op(operator.xor, self, arg)
+
+    def __or__(self, arg):
+        return self.binary_op(operator.or_, self, arg)
+
+    def __rand__(self, arg):
+        return self.binary_op(operator.and_, arg, self)
+
+    def __rxor__(self, arg):
+        return self.binary_op(operator.xor, arg, self)
+
+    def __ror__(self, arg):
+        return self.binary_op(operator.or_, arg, self)
+
+    # }}}
+
+
 def get_array_container_context(ary):
     if isinstance(ary, ArrayContainer):
         return ary.array_context
@@ -141,8 +280,7 @@ def get_array_container_context(ary):
 
 
 def map_array_container(f: Callable[[Any], Any], ary):
-    r"""Applies *f* recursively over all :class:`ArrayContainer`\ s and object
-    arrays.
+    r"""Applies *f* recursively over all :class:`ArrayContainer`\ s.
 
     Works similarly to :func:`~pytools.obj_array.obj_array_vectorize`, but
     recurses into all :class:`ArrayContainer` classes and applies *f* to their
@@ -160,6 +298,62 @@ def map_array_container(f: Callable[[Any], Any], ary):
         return obj_array_vectorize(partial(map_array_container, f), ary)
     else:
         return f(ary)
+
+
+def multimap_array_container(f: Callable[[Any], Any], *args):
+    r"""Applies *f* recursively over all :class:`ArrayCOntainer`\ s.
+
+    Works similarly to :func:`~pytools.obj_array.obj_array_vectorized_n_args`,
+    but recurses into all the arguments and applies *f* to the components
+    of each :class:`ArrayContainer`.
+
+    :param args: a :class:`list` of :class:`ArrayContainer`\ s of the same
+        type and with the same structure (same number of components, etc.).
+        All non-:class:`ArrayContainer` arguments are considered as *scalars*.
+    """
+    container_indices = [
+            i for i, arg in enumerate(args) if isinstance(arg, ArrayContainer)
+            ]
+
+    if not container_indices:
+        if any(isinstance(arg, np.ndarray) and arg.dtype.char == "O"
+                for i, arg in enumerate(args)):
+            from pytools.obj_array import obj_array_vectorize_n_args
+            return obj_array_vectorize_n_args(
+                    partial(multimap_array_container, f), *args)
+        else:
+            return f(*args)
+
+    template_ary = args[container_indices[0]]
+    if not all(isinstance(args[i], type(template_ary)) for i in container_indices):
+        raise TypeError(
+                "'ArrayContainer' arguments must be of the same type: "
+                f"{type(template_ary).__name__}")
+
+    def zip_containers(arys):
+        keys = (key for key, _ in arys[0].as_iterable())
+        subarys = [[subary for _, subary in ary.as_iterable()] for ary in arys]
+
+        from pytools import is_single_valued
+        if not is_single_valued([len(ary) for ary in subarys]):
+            raise ValueError(
+                "all ArrayContainers must have the same number of components")
+
+        for key, value in zip(keys, zip(*subarys)):
+            yield key, value
+
+    result = []
+    new_args = list(args)
+
+    for key, subarys in zip_containers([args[i] for i in container_indices]):
+        for i in container_indices:
+            new_args[i] = subarys[i]
+
+        result.append(
+                (key, multimap_array_container(f, *new_args))
+                )
+
+    return template_ary.from_iterable(template_ary.array_context, tuple(result))
 
 
 def freeze(ary, actx=None):
