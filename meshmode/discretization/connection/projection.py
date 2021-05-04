@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 import numpy as np
 
-from pytools import keyed_memoize_method, memoize_in
+from pytools import keyed_memoize_method, keyed_memoize_in, memoize_in
 from pytools.obj_array import obj_array_vectorized_n_args
 
 import loopy as lp
@@ -123,12 +123,14 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")
 
-        raise NotImplementedError("Stateful access, must rewrite.")
+        #raise NotImplementedError("Stateful access, must rewrite.")
 
-        actx = vec.array_context
+        actx = ary.array_context
 
-        @memoize_in(actx, (L2ProjectionInverseDiscretizationConnection,
-            "conn_projection_knl"))
+        @memoize_in(
+            actx, (L2ProjectionInverseDiscretizationConnection,
+                   "conn_projection_knl")
+        )
         def kproj():
             return make_loopy_program([
                 "{[iel]: 0 <= iel < nelements}",
@@ -161,25 +163,6 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     ],
                 name="conn_projection_knl")
 
-        @memoize_in(actx, (L2ProjectionInverseDiscretizationConnection,
-            "conn_evaluation_knl"))
-        def keval():
-            return make_loopy_program([
-                "{[iel]: 0 <= iel < nelements}",
-                "{[idof]: 0 <= idof < n_to_nodes}",
-                "{[ibasis]: 0 <= ibasis < n_to_nodes}"
-                ],
-                """
-                    result[iel, idof] = result[iel, idof] + \
-                        sum(ibasis, vdm[idof, ibasis] * coefficients[iel, ibasis])
-                """,
-                [
-                    lp.GlobalArg("coefficients", None,
-                        shape=("nelements", "n_to_nodes")),
-                    "..."
-                    ],
-                name="conn_evaluate_knl")
-
         # compute weights on each refinement of the reference element
         weights = self._batch_weights(actx)
 
@@ -207,19 +190,53 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                             from_element_indices=batch.to_element_indices,
                             to_element_indices=batch.from_element_indices)
 
-        # evaluate at unit_nodes to get the vector on to_discr
-        result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
-        for grp in self.to_discr.groups:
-            from modepy import vandermonde
-            vdm = actx.from_numpy(vandermonde(grp.basis_obj().functions,
-                                              grp.unit_nodes))
-            actx.call_loopy(
-                    keval(),
-                    result=result[grp.index],
-                    vdm=vdm,
-                    coefficients=c[grp.index])
+        @memoize_in(
+            actx, (L2ProjectionInverseDiscretizationConnection,
+                   "conn_evaluation_knl")
+        )
+        def keval():
+            return make_loopy_program(
+                [
+                    "{[iel]: 0 <= iel < nelements}",
+                    "{[idof]: 0 <= idof < n_to_nodes}",
+                    "{[ibasis]: 0 <= ibasis < n_to_nodes}"
+                ],
+                """
+                    result[iel, idof] =                \
+                        sum(ibasis, vdm[idof, ibasis]  \
+                                    * coefficients[iel, ibasis])
+                """,
+                [
+                    lp.GlobalArg("coefficients", None,
+                                 shape=("nelements", "n_to_nodes")),
+                    "..."
+                ],
+                name="conn_evaluate_knl"
+            )
 
-        return result
+        @keyed_memoize_in(
+            actx, (L2ProjectionInverseDiscretizationConnection,
+                   "vandermonde_matrix"),
+            lambda grp: grp.discretization_key()
+        )
+        def vandermonde_matrix(grp):
+            from modepy import vandermonde
+            vdm = vandermonde(grp.basis_obj().functions,
+                              grp.unit_nodes)
+            return actx.from_numpy(vdm)
+
+        # evaluate at unit_nodes to get the vector on to_discr
+        return DOFArray(
+            actx,
+            data=tuple(
+                actx.call_loopy(
+                    keval(),
+                    vdm=vandermonde_matrix(grp),
+                    coefficients=c[grp.index]
+                )["result"]
+                for grp in self.to_discr.groups
+            )
+        )
 
 
 # vim: foldmethod=marker
