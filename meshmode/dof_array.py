@@ -28,14 +28,16 @@ from numbers import Number
 import threading
 from contextlib import contextmanager
 
-
+from pytools import MovedFunctionDeprecationWrapper
 from pytools import single_valued, memoize_in
 from pytools.obj_array import obj_array_vectorize
 
 from meshmode.array_context import (
         ArrayContext, make_loopy_program,
         ArrayContainerWithArithmetic)
-
+from meshmode.array_context import (
+        thaw as _thaw, freeze as _freeze,
+        map_array_container, multimap_array_container)
 
 __doc__ = """
 .. autoclass:: DOFArray
@@ -255,7 +257,7 @@ class DOFArray(ArrayContainerWithArithmetic):
 
         return self
 
-    def __iadd__(self, arg):return self._ibop(op.iadd, arg)             # noqa: E704
+    def __iadd__(self, arg): return self._ibop(op.iadd, arg)             # noqa: E704
     def __isub__(self, arg): return self._ibop(op.isub, arg)            # noqa: E704
     def __imul__(self, arg): return self._ibop(op.imul, arg)            # noqa: E704
     def __itruediv__(self, arg): return self._ibop(op.itruediv, arg)    # noqa: E704
@@ -304,65 +306,12 @@ class DOFArray(ArrayContainerWithArithmetic):
 # }}}
 
 
-# {{{ obj_or_dof vectorization
-
-def obj_or_dof_array_vectorize(f, ary):
-    r"""
-    Works like :func:`~pytools.obj_array.obj_array_vectorize`, but recurses
-    on object arrays and also tolerates one final 'layer' of :class:`DOFArray`\ s.
-    """
-
-    if isinstance(ary, DOFArray):
-        return ary._like_me([f(ary_i) for ary_i in ary._data])
-    elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
-        return obj_array_vectorize(partial(obj_or_dof_array_vectorize, f), ary)
-    else:
-        return f(ary)
-
+# {{{ deprecated
 
 def obj_or_dof_array_vectorized(f):
-    wrapper = partial(obj_or_dof_array_vectorize, f)
+    wrapper = partial(map_array_container, f)
     update_wrapper(wrapper, f)
     return wrapper
-
-
-def obj_or_dof_array_vectorize_n_args(f, *args):
-    r"""Apply the function *f* elementwise to all entries of any
-    object arrays or :class:`DOFArray`\ s in *args*. All such arrays are expected
-    to have the same shape (but this is not checked).
-    Equivalent to an appropriately-looped execution of::
-
-        result[idx] = f(obj_array_arg1[idx], arg2, obj_array_arg3[idx])
-
-    Return an array of the same shape as the arguments consisting of the
-    return values of *f*.  If the elements of arrays found in *args* are
-    further object arrays, recurse.  If a :class:`DOFArray` is found,  apply
-    *f* to its entries. If non-object-arrays are found, apply *f* to those.
-    """
-    dofarray_arg_indices = [
-            i for i, arg in enumerate(args)
-            if isinstance(arg, DOFArray)]
-
-    if not dofarray_arg_indices:
-        if any(isinstance(arg, np.ndarray) and arg.dtype.char == "O"
-                for i, arg in enumerate(args)):
-            from pytools.obj_array import obj_array_vectorize_n_args
-            return obj_array_vectorize_n_args(
-                    partial(obj_or_dof_array_vectorize_n_args, f), *args)
-        else:
-            return f(*args)
-
-    leading_da_index = dofarray_arg_indices[0]
-
-    template_ary = args[leading_da_index]
-    result = []
-    new_args = list(args)
-    for igrp in range(len(template_ary)):
-        for arg_i in dofarray_arg_indices:
-            new_args[arg_i] = args[arg_i][igrp]
-        result.append(f(*new_args))
-
-    return DOFArray(template_ary.array_context, tuple(result))
 
 
 def obj_or_dof_array_vectorized_n_args(f):
@@ -383,46 +332,19 @@ def obj_or_dof_array_vectorized_n_args(f):
     # > without transformation.
 
     def wrapper(*args):
-        return obj_or_dof_array_vectorize_n_args(f, *args)
+        return multimap_array_container(f, *args)
 
     update_wrapper(wrapper, f)
     return wrapper
 
-# }}}
 
+obj_or_dof_array_vectorize = \
+        MovedFunctionDeprecationWrapper(map_array_container, deadline="2022")
+obj_or_dof_array_vectorize_n_args = \
+        MovedFunctionDeprecationWrapper(multimap_array_container, deadline="2022")
 
-# {{{ thaw / freeze
-
-def thaw(actx: ArrayContext, ary: Union[DOFArray, np.ndarray]) -> np.ndarray:
-    r"""Call :meth:`~meshmode.array_context.ArrayContext.thaw` on the element
-    group arrays making up the :class:`DOFArray`, using *actx*.
-
-    Vectorizes over object arrays of :class:`DOFArray`\ s.
-    """
-    if isinstance(ary, np.ndarray):
-        return obj_array_vectorize(partial(thaw, actx), ary)
-
-    if ary.array_context is not None:
-        raise ValueError("DOFArray passed to thaw is not frozen")
-
-    return DOFArray(actx, tuple(actx.thaw(subary) for subary in ary))
-
-
-def freeze(ary: Union[DOFArray, np.ndarray]) -> np.ndarray:
-    r"""Call :meth:`~meshmode.array_context.ArrayContext.freeze` on the element
-    group arrays making up the :class:`DOFArray`, using the
-    :class:`~meshmode.array_context.ArrayContext` in *ary*.
-
-    Vectorizes over object arrays of :class:`DOFArray`\ s.
-    """
-    if isinstance(ary, np.ndarray):
-        return obj_array_vectorize(freeze, ary)
-
-    if ary.array_context is None:
-        raise ValueError("DOFArray passed to freeze is already frozen")
-
-    return DOFArray(None, tuple(
-        ary.array_context.freeze(subary) for subary in ary))
+thaw = MovedFunctionDeprecationWrapper(_thaw, deadline="2022")
+freeze = MovedFunctionDeprecationWrapper(_freeze, deadline="2022")
 
 # }}}
 
