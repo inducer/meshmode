@@ -338,7 +338,7 @@ def test_recursive_freeze_thaw(actx_factory):
         return ((var.name, getattr(ary, var.name)) for var in fields(ary))
 
     @deserialize_container_class.register(DataclassArrayContainer)
-    def _(actx, iterable):
+    def _(cls, actx, iterable):
         return DataclassArrayContainer(**dict(iterable))
 
     # }}}

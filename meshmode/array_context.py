@@ -124,10 +124,10 @@ def serialize_container(ary: ArrayContainer) -> Iterable[Tuple[Any, Any]]:
 
 
 @singledispatch
-def deserialize_container_class(
+def deserialize_container_class(cls,
         actx: Optional["ArrayContext"],
         iterable: Iterable[Tuple[Any, Any]]):
-    raise NotImplementedError
+    raise NotImplementedError(cls.__name__)
 
 
 def deserialize_container(cls,
@@ -140,7 +140,7 @@ def deserialize_container(cls,
     :param iterable: an iterable that mirrors the output of
         :meth:`serialize_container`.
     """
-    return deserialize_container_class.dispatch(cls)(actx, iterable)
+    return deserialize_container_class.dispatch(cls)(cls, actx, iterable)
 
 
 @singledispatch
@@ -180,7 +180,8 @@ def _(ary: np.ndarray):
 
 
 @deserialize_container_class.register(np.ndarray)
-def _(actx: "ArrayContext", iterable):
+def _(cls: type, actx: "ArrayContext", iterable):
+    assert cls is np.ndarray
     iterable = list(iterable)
 
     ary = np.empty(len(iterable), dtype=object)

@@ -290,7 +290,9 @@ def _(ary: DOFArray):
 
 
 @deserialize_container_class.register(DOFArray)
-def _(actx: ArrayContext, iterable):
+def _(cls, actx: ArrayContext, iterable):
+    assert cls is DOFArray
+
     iterable = list(iterable)
     result = [None] * len(iterable)
 
