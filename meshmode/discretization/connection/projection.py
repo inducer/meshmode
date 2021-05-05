@@ -210,7 +210,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
 
         # evaluate at unit_nodes to get the vector on to_discr
         result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
-        for igrp, grp in enumerate(self.to_discr.groups):
+        for grp in self.to_discr.groups:
             from modepy import vandermonde
             vdm = actx.from_numpy(vandermonde(grp.basis_obj().functions,
                                               grp.unit_nodes))

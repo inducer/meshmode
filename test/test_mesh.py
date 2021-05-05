@@ -561,7 +561,7 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
     elif group_cls is SimplexElementGroup:
         num_on_bdy = dim * (dim-1) * nelem**(dim-1)
     else:
-        assert False
+        raise AssertionError()
 
     assert not is_boundary_tag_empty(mesh, "btag_test_1")
     assert not is_boundary_tag_empty(mesh, "btag_test_2")

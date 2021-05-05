@@ -122,8 +122,8 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
                         color="green", head_width=1e-2, lw=1e-2)
 
     if draw_face_numbers:
-        for igrp, grp in enumerate(mesh.groups):
-            for iel, el in enumerate(grp.vertex_indices):
+        for grp in mesh.groups:
+            for el in grp.vertex_indices:
                 elverts = mesh.vertices[:, el]
                 el_center = np.mean(elverts, axis=-1)
 

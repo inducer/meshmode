@@ -89,7 +89,7 @@ class RefinerWithoutAdjacency:
                 get_group_midpoints,
                 get_group_tesselated_nodes)
 
-        for igrp, group in enumerate(mesh.groups):
+        for group in mesh.groups:
             el_tess_info = get_group_tesselation_info(group)
 
             # {{{ compute counts and index arrays
