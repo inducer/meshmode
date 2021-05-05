@@ -358,7 +358,7 @@ def flatten(ary: ArrayContainer) -> Any:
     index fastest.
 
     Recurses into the :class:`~meshmode.array_context.ArrayContainer` for all
-    :class:`DOFArrays`\ s.
+    :class:`DOFArray`\ s.
     """
 
     actx = get_container_context(ary)
@@ -374,12 +374,12 @@ def flatten(ary: ArrayContainer) -> Any:
             name="flatten")
 
     def _flatten_dof_array(subary):
-        group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in ary]
+        group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in subary]
         group_starts = np.cumsum([0] + group_sizes)
 
-        result = actx.empty(group_starts[-1], dtype=ary.entry_dtype)
+        result = actx.empty(group_starts[-1], dtype=subary.entry_dtype)
 
-        for grp_start, grp_ary in zip(group_starts, ary):
+        for grp_start, grp_ary in zip(group_starts, subary):
             actx.call_loopy(prg(),
                     grp_ary=grp_ary,
                     result=result,
@@ -431,7 +431,7 @@ def unflatten(actx: ArrayContext, discr,
         representing some per-element quantity.
 
     Recurses into the :class:`~meshmode.array_context.ArrayContainer` for all
-    :class:`DOFArrays`\ s.
+    :class:`DOFArray`\ s.
     """
     if ndofs_per_element_per_group is None:
         ndofs_per_element_per_group = [
