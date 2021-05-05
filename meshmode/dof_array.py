@@ -25,18 +25,17 @@ import operator as op
 from numbers import Number
 from contextlib import contextmanager
 from functools import partial, update_wrapper
-from typing import Any, Callable, Iterable, Optional, Tuple, Union
+from typing import Any, Callable, Iterable, Optional, Tuple
 
 import numpy as np
 
 from pytools import MovedFunctionDeprecationWrapper
 from pytools import single_valued, memoize_in
-from pytools.obj_array import obj_array_vectorize
 
 from meshmode.array_context import (
         ArrayContext, make_loopy_program,
-        ArrayContainerWithArithmetic,
-        serialize_container, deserialize_container_class)
+        ArrayContainer, ArrayContainerWithArithmetic,
+        serialize_container, deserialize_container_class, get_container_context)
 from meshmode.array_context import (
         thaw as _thaw, freeze as _freeze,
         map_array_container, multimap_array_container,
@@ -310,7 +309,6 @@ def map_dof_array_container(f: Callable[[Any], Any], ary):
     Similar to :func:`~meshmode.array_context.map_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    from meshmode.array_context import get_container_context
     actx = get_container_context(ary)
 
     from meshmode.array_context import _map_array_container_with_leaf_class
@@ -331,7 +329,6 @@ def multimap_dof_array_container(f: Callable[[Any], Any], *args):
     Similar to :func:`~meshmode.array_context.multimap_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    from meshmode.array_context import get_container_context
     actx = get_container_context(args)
 
     from meshmode.array_context import _multimap_array_container_with_leaf_class
@@ -351,24 +348,22 @@ def multimapped_dof_array_container(f):
 
 # {{{ flatten / unflatten
 
-def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
-    r"""Convert a :class:`DOFArray` into a "flat" array of degrees of freedom,
-    where the resulting type of the array is given by the
+def flatten(ary: ArrayContainer) -> Any:
+    r"""Convert all :class:`DOFArray`\ s into a "flat" array of degrees of
+    freedom, where the resulting type of the array is given by the
     :attr:`DOFArray.array_context`.
 
     Array elements are laid out contiguously, with the element group
     index varying slowest, element index next, and intra-element DOF
     index fastest.
 
-    Vectorizes over object arrays of :class:`DOFArray`\ s.
+    Recurses into the :class:`~meshmode.array_context.ArrayContainer` for all
+    :class:`DOFArrays`\ s.
     """
-    if isinstance(ary, np.ndarray):
-        return obj_array_vectorize(flatten, ary)
 
-    group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in ary]
-    group_starts = np.cumsum([0] + group_sizes)
-
-    actx = ary.array_context
+    actx = get_container_context(ary)
+    if actx is None:
+        raise ValueError("cannot flatten frozen ArrayContainers")
 
     @memoize_in(actx, (flatten, "flatten_prg"))
     def prg():
@@ -378,12 +373,21 @@ def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
                 = grp_ary[iel, idof]""",
             name="flatten")
 
-    result = actx.empty(group_starts[-1], dtype=ary.entry_dtype)
+    def _flatten_dof_array(subary):
+        group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in ary]
+        group_starts = np.cumsum([0] + group_sizes)
 
-    for grp_start, grp_ary in zip(group_starts, ary):
-        actx.call_loopy(prg(), grp_ary=grp_ary, result=result, grp_start=grp_start)
+        result = actx.empty(group_starts[-1], dtype=ary.entry_dtype)
 
-    return result
+        for grp_start, grp_ary in zip(group_starts, ary):
+            actx.call_loopy(prg(),
+                    grp_ary=grp_ary,
+                    result=result,
+                    grp_start=grp_start)
+
+        return result
+
+    return map_dof_array_container(_flatten_dof_array, ary)
 
 
 def _unflatten(
@@ -414,25 +418,21 @@ def _unflatten(
         for grp_start, (nel, ndof) in zip(group_starts, group_shapes)))
 
 
-def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
-        ndofs_per_element_per_group: Optional[Iterable[int]] = None) -> DOFArray:
-    r"""Convert a 'flat' array returned by :func:`flatten` back to a
-    :class:`DOFArray`.
+def unflatten(actx: ArrayContext, discr,
+        ary: ArrayContainer,
+        ndofs_per_element_per_group: Optional[Iterable[int]] = None):
+    r"""Convert all 'flat' arrays returned by :func:`flatten` back to
+    :class:`DOFArray`\ s.
 
-    :arg ndofs_per_element: Optional. If given, an iterable of numbers representing
+    :arg ndofs_per_element: if given, an iterable of numbers representing
         the number of degrees of freedom per element, overriding the numbers
         provided by the element groups in *discr*. May be used (for example)
         to handle :class:`DOFArray`\ s that have only one DOF per element,
         representing some per-element quantity.
 
-    Vectorizes over object arrays.
+    Recurses into the :class:`~meshmode.array_context.ArrayContainer` for all
+    :class:`DOFArrays`\ s.
     """
-    if isinstance(ary, np.ndarray):
-        return obj_array_vectorize(
-                lambda subary: unflatten(
-                    actx, discr, subary, ndofs_per_element_per_group),
-                ary)
-
     if ndofs_per_element_per_group is None:
         ndofs_per_element_per_group = [
                 grp.nunit_dofs for grp in discr.groups]
@@ -442,7 +442,10 @@ def unflatten(actx: ArrayContext, discr, ary: Union[Any, np.ndarray],
             for grp, ndofs_per_element
             in zip(discr.groups, ndofs_per_element_per_group)]
 
-    return _unflatten(actx, nel_ndof_per_element_per_group, ary)
+    def _unflatten_dof_array(subary):
+        return _unflatten(actx, nel_ndof_per_element_per_group, subary)
+
+    return map_dof_array_container(_unflatten_dof_array, ary)
 
 # }}}
 
