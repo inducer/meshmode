@@ -24,6 +24,7 @@ import threading
 import operator as op
 from numbers import Number
 from contextlib import contextmanager
+from functools import partial, update_wrapper
 from typing import Any, Callable, Iterable, Optional, Tuple, Union
 
 import numpy as np
@@ -291,8 +292,6 @@ def _(ary: DOFArray):
 
 @deserialize_container_class.register(DOFArray)
 def _(cls, actx: ArrayContext, iterable):
-    assert cls is DOFArray
-
     iterable = list(iterable)
     result = [None] * len(iterable)
 
@@ -302,7 +301,7 @@ def _(cls, actx: ArrayContext, iterable):
     if any(subary is None for subary in result):
         raise ValueError("'iterable' does not contain all indices")
 
-    return DOFArray(actx, data=tuple(result))
+    return cls(actx, data=tuple(result))
 
 
 def map_dof_array_container(f: Callable[[Any], Any], ary):
@@ -319,6 +318,12 @@ def map_dof_array_container(f: Callable[[Any], Any], ary):
             actx, f, ary, leaf_class=DOFArray)
 
 
+def mapped_dof_array_container(f):
+    wrapper = partial(map_dof_array_container, f)
+    update_wrapper(wrapper, f)
+    return wrapper
+
+
 def multimap_dof_array_container(f: Callable[[Any], Any], *args):
     r"""Applies *f* recursively to multiple
     :class:`~meshmode.array_context.ArrayContainer`\ s.
@@ -326,9 +331,20 @@ def multimap_dof_array_container(f: Callable[[Any], Any], *args):
     Similar to :func:`~meshmode.array_context.multimap_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
+    from meshmode.array_context import get_container_context
+    actx = get_container_context(args)
+
     from meshmode.array_context import _multimap_array_container_with_leaf_class
     return _multimap_array_container_with_leaf_class(
-            None, f, *args, leaf_class=DOFArray)
+            actx, f, *args, leaf_class=DOFArray)
+
+
+def multimapped_dof_array_container(f):
+    def wrapper(*args):
+        return multimap_dof_array_container(f, *args)
+
+    update_wrapper(wrapper, f)
+    return wrapper
 
 # }}}
 

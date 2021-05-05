@@ -21,7 +21,7 @@ THE SOFTWARE.
 """
 
 import operator
-from functools import partial, singledispatch
+from functools import partial, singledispatch, update_wrapper
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Iterable, Optional, Sequence, Tuple, Union
 
@@ -124,13 +124,13 @@ def serialize_container(ary: ArrayContainer) -> Iterable[Tuple[Any, Any]]:
 
 
 @singledispatch
-def deserialize_container_class(cls,
+def deserialize_container_class(cls: type,
         actx: Optional["ArrayContext"],
         iterable: Iterable[Tuple[Any, Any]]):
     raise NotImplementedError(cls.__name__)
 
 
-def deserialize_container(cls,
+def deserialize_container(cls: type,
         actx: Optional["ArrayContext"],
         iterable: Iterable[Tuple[Any, Any]]):
     """Deserialize an iterable into an array container.
@@ -176,7 +176,7 @@ def _(ary: np.ndarray):
         raise NotImplementedError(
                 f"serialization for 'numpy.ndarray' of dtype '{ary.dtype}'")
 
-    return ((i, subary) for i, subary in enumerate(ary))
+    return enumerate(ary)
 
 
 @deserialize_container_class.register(np.ndarray)
@@ -184,11 +184,11 @@ def _(cls: type, actx: "ArrayContext", iterable):
     assert cls is np.ndarray
     iterable = list(iterable)
 
-    ary = np.empty(len(iterable), dtype=object)
+    result = cls(len(iterable), dtype=object)
     for i, subary in iterable:
-        ary[i] = subary
+        result[i] = subary
 
-    return ary
+    return result
 
 
 @get_container_context.register(tuple)
@@ -363,6 +363,12 @@ def _(ary: ArrayContainerWithArithmetic):
 # {{{ ArrayContainer traversal
 
 def _map_array_container_with_leaf_class(actx, f, ary, leaf_class=None):
+    """Helper for :func:`map_array_container` that defines the leaf types
+    in a tree of containers.
+
+    This can be used to stop the recursion on certain subclass of
+    :class:`ArrayContainer`.
+    """
     if leaf_class is not None and isinstance(ary, leaf_class):
         return f(ary)
 
@@ -438,7 +444,6 @@ def map_array_container(f: Callable[[Any], Any], ary):
 
 def mapped_array_container(f: Callable[[Any], Any]):
     """Decorator around :func:`map_array_container`."""
-    from functools import update_wrapper
     wrapper = partial(map_array_container, f)
     update_wrapper(wrapper, f)
     return wrapper
@@ -480,7 +485,6 @@ def multimapped_array_container(f: Callable[[Any], Any]):
     def wrapper(*args):
         return multimap_array_container(f, *args)
 
-    from functools import update_wrapper
     update_wrapper(wrapper, f)
     return wrapper
 
@@ -622,10 +626,14 @@ class _BaseFakeNumpyNamespace:
 
     def _new_like(self, ary, alloc_like):
         from numbers import Number
-        if isinstance(ary, ArrayContainer):
-            return map_array_container(alloc_like, ary)
-        elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
+
+        if isinstance(ary, np.ndarray) and ary.dtype.char == "O":
+            # NOTE: we don't want to match numpy semantics on object arrays,
+            # e.g. `np.zeros_like(x)` returns `array([0, 0, ...], dtype=object)`
+            # FIXME: what about object arrays nested in an ArrayContainer?
             raise NotImplementedError("operation not implemented for object arrays")
+        elif isinstance(ary, ArrayContainer):
+            return map_array_container(alloc_like, ary)
         elif isinstance(ary, Number):
             # NOTE: `np.zeros_like(x)` returns `array(x, shape=())`, which
             # is best implemented by concrete array contexts, if at all
