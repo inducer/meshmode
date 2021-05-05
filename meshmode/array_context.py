@@ -118,7 +118,8 @@ def serialize_container(ary: ArrayContainer) -> Iterable[Tuple[Any, Any]]:
         entry is an identifier for the component and the second entry
         is an array-like component of the :class:`ArrayContainer`.
         Components can themselves be :class:`ArrayContainer`\ s, allowing
-        for arbitrarily nested structures.
+        for arbitrarily nested structures. The identifiers need to be hashable
+        but are otherwise treated as opaque.
     """
     raise NotImplementedError(type(ary).__name__)
 
@@ -436,7 +437,8 @@ def map_array_container(f: Callable[[Any], Any], ary):
     recurses into all :class:`ArrayContainer` classes and applies *f* only
     at the leaf level.
 
-    :param ary: a tree-like (nested) structure of :class:`ArrayContainer`\ s.
+    :param ary: a (potentially nested) structure of :class:`ArrayContainer`\ s, or
+        an instance of a base array type.
     """
     actx = get_container_context(ary)
     return _map_array_container_with_leaf_class(actx, f, ary)
