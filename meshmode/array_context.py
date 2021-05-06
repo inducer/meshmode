@@ -43,6 +43,7 @@ __doc__ = """
 .. autofunction:: serialize_container
 .. autofunction:: deserialize_container
 .. autofunction:: get_container_context
+.. autofunction:: get_container_context_recursively
 
 .. autoclass:: ArrayContainerWithArithmetic
 .. autofunction:: map_array_container
@@ -149,12 +150,13 @@ def deserialize_container(cls: type,
 
 @singledispatch
 def get_container_context(ary: ArrayContainer):
-    # FIXME: is singledispatch confused by the empty ABC?
-    if not isinstance(ary, ArrayContainer):
-        return None
+    """Retrieves the :class:`ArrayContext` from the container, if any.
 
-    return _get_container_context_from_iterable(
-            subary for _, subary in serialize_container(ary))
+    This function is not recursive, so it will only search at the root level
+    of the container. For the recursive version, see
+    :func:`get_container_context_recursively`
+    """
+    return None
 
 
 # {{{ object arrays
@@ -162,21 +164,11 @@ def get_container_context(ary: ArrayContainer):
 ArrayContainer.register(np.ndarray)
 
 
-def _get_container_context_from_iterable(ary):
-    contexts = [
-            get_container_context(subary) for subary in ary
-            if isinstance(subary, ArrayContainer)
-            ]
-
-    contexts = [c for c in contexts if c is not None]
-    if contexts:
-        return single_valued(contexts, equality_pred=operator.is_)
-    return None
-
-
+@serialize_container.register(list)
+@serialize_container.register(tuple)
 @serialize_container.register(np.ndarray)
-def _(ary: np.ndarray):
-    if ary.dtype.char != "O":
+def _(ary: Union[list, tuple, np.ndarray]):
+    if isinstance(ary, np.ndarray) and ary.dtype.char != "O":
         raise NotImplementedError(
                 f"serialization for 'numpy.ndarray' of dtype '{ary.dtype}'")
 
@@ -195,11 +187,36 @@ def _(cls: type, actx: "ArrayContext", iterable):
     return result
 
 
-@get_container_context.register(tuple)
-def _(ary: tuple):
-    # NOTE: this is only implemented for `multimap_array_container` so that it
-    # can directly pass in *args
-    return _get_container_context_from_iterable(ary)
+def get_container_context_recursively(ary: Any):
+    """Walks the :class:`ArrayContainer` hierarchy to find an :class:`ArrayContext`
+    associated with it.
+
+    If different components that have different array contexts are found,
+    an assertion error is raised.
+    """
+    actx = None
+
+    # try getting the array context directly
+    if isinstance(ary, ArrayContainer):
+        actx = get_container_context(ary)
+
+    # try getting it recursively
+    if actx is not None:
+        return actx
+
+    contexts = [
+            get_container_context_recursively(subary)
+            for _, subary in serialize_container(ary)
+            ]
+
+    contexts = [c for c in contexts if c is not None]
+    if contexts:
+        # FIXME: is `is` a bit strict here? maybe `type(a) is type(b)`?
+        # this would allow, e.g. different components to have different
+        # queues in an PyOpenCLArrayContext
+        actx = single_valued(contexts, equality_pred=operator.is_)
+
+    return actx
 
 # }}}
 
@@ -366,7 +383,28 @@ def _(ary: ArrayContainerWithArithmetic):
 
 # {{{ ArrayContainer traversal
 
-def _map_array_container_with_leaf_class(actx, f, ary, leaf_class=None):
+class _ArrayContextNotProvided:
+    pass
+
+
+def _update_container_context(ary, actx):
+    """
+    :returns: a tuple ``(actx, ary_actx)``. If the input *actx* is *None* or
+        an :class:`ArrayContext`, it is returned unchanged for both the outputs.
+        Otherwise, ``ary_actx`` is the context of the given ``ary``, if any.
+        If ``ary_actx`` is *None*, ``actx`` is returned unchanged, otherwise
+        it is set to ``ary_actx`` as well.
+    """
+    if actx is not _ArrayContextNotProvided:
+        return actx, actx
+
+    ary_actx = get_container_context(ary)
+    actx = actx if ary_actx is None else ary_actx
+    return actx, ary_actx
+
+
+def _map_array_container_with_leaf_class(f, ary,
+        actx=_ArrayContextNotProvided, leaf_class=None):
     """Helper for :func:`map_array_container` that defines the leaf types
     in a tree of containers.
 
@@ -377,16 +415,19 @@ def _map_array_container_with_leaf_class(actx, f, ary, leaf_class=None):
         return f(ary)
 
     if isinstance(ary, ArrayContainer):
-        return deserialize_container(type(ary), actx, (
+        actx, ary_actx = _update_container_context(ary, actx)
+
+        return deserialize_container(type(ary), ary_actx, (
             (key, _map_array_container_with_leaf_class(
-                actx, f, subary, leaf_class=leaf_class))
+                f, subary, actx=actx, leaf_class=leaf_class))
             for key, subary in serialize_container(ary)
             ))
     else:
         return f(ary)
 
 
-def _multimap_array_container_with_leaf_class(actx, f, *args, leaf_class=None):
+def _multimap_array_container_with_leaf_class(f, *args,
+        actx=_ArrayContextNotProvided, leaf_class=None):
     if leaf_class is None:
         leaf_class = type(None)
 
@@ -403,6 +444,10 @@ def _multimap_array_container_with_leaf_class(actx, f, *args, leaf_class=None):
         raise TypeError(
                 "'ArrayContainer' arguments must be of the same type: "
                 f"{type(template_ary).__name__}")
+
+    # if no array context is provided, try to get an array context at
+    # the current level and use it on all children
+    actx, ary_actx = _update_container_context(template_ary, actx)
 
     def zip_containers(arys):
         keys = (key for key, _ in serialize_container(arys[0]))
@@ -427,10 +472,10 @@ def _multimap_array_container_with_leaf_class(actx, f, *args, leaf_class=None):
 
         result.append(
                 (key, _multimap_array_container_with_leaf_class(
-                    actx, f, *new_args, leaf_class=leaf_class))
+                    f, *new_args, actx=actx, leaf_class=leaf_class))
                 )
 
-    return deserialize_container(type(template_ary), actx, tuple(result))
+    return deserialize_container(type(template_ary), ary_actx, tuple(result))
 
 
 def map_array_container(f: Callable[[Any], Any], ary):
@@ -443,8 +488,7 @@ def map_array_container(f: Callable[[Any], Any], ary):
     :param ary: a (potentially nested) structure of :class:`ArrayContainer`\ s, or
         an instance of a base array type.
     """
-    actx = get_container_context(ary)
-    return _map_array_container_with_leaf_class(actx, f, ary)
+    return _map_array_container_with_leaf_class(f, ary)
 
 
 def mapped_array_container(f: Callable[[Any], Any]):
@@ -465,8 +509,7 @@ def multimap_array_container(f: Callable[[Any], Any], *args):
         type and with the same structure (same number of components, etc.).
         All non-:class:`ArrayContainer` arguments are considered as *scalars*.
     """
-    actx = get_container_context(args)
-    return _multimap_array_container_with_leaf_class(actx, f, *args)
+    return _multimap_array_container_with_leaf_class(f, *args)
 
 
 def multimapped_array_container(f: Callable[[Any], Any]):
@@ -501,11 +544,11 @@ def freeze(ary):
     :param ary: a tree-like (nested) structure of :meth:`~ArrayContext.thaw`\ ed
         :class:`ArrayContainer`\ s.
     """
-    actx = get_container_context(ary)
+    actx = get_container_context_recursively(ary)
     if actx is None:
         raise ValueError("ArrayContainer passed to 'freeze' is already frozen")
 
-    return _map_array_container_with_leaf_class(None, actx.freeze, ary)
+    return _map_array_container_with_leaf_class(actx.freeze, ary, actx=None)
 
 
 def thaw(actx, ary):
@@ -515,11 +558,7 @@ def thaw(actx, ary):
     :param ary: a tree-like (nested) structure of :meth:`~ArrayContext.freeze`\ ed
         :class:`ArrayContainer`\ s.
     """
-    array_context = get_container_context(ary)
-    if array_context is not None:
-        raise ValueError("ArrayContainer passed to 'thaw' is not frozen")
-
-    return _map_array_container_with_leaf_class(actx, actx.thaw, ary)
+    return _map_array_container_with_leaf_class(actx.thaw, ary, actx=actx)
 
 # }}}
 

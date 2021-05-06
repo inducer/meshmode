@@ -35,7 +35,7 @@ from pytools import single_valued, memoize_in
 from meshmode.array_context import (
         ArrayContext, make_loopy_program,
         ArrayContainer, ArrayContainerWithArithmetic,
-        serialize_container, deserialize_container_class, get_container_context)
+        serialize_container, deserialize_container_class)
 from meshmode.array_context import (
         thaw as _thaw, freeze as _freeze,
         map_array_container, multimap_array_container,
@@ -309,11 +309,8 @@ def map_dof_array_container(f: Callable[[Any], Any], ary):
     Similar to :func:`~meshmode.array_context.map_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    actx = get_container_context(ary)
-
     from meshmode.array_context import _map_array_container_with_leaf_class
-    return _map_array_container_with_leaf_class(
-            actx, f, ary, leaf_class=DOFArray)
+    return _map_array_container_with_leaf_class(f, ary, leaf_class=DOFArray)
 
 
 def mapped_dof_array_container(f):
@@ -329,11 +326,8 @@ def multimap_dof_array_container(f: Callable[[Any], Any], *args):
     Similar to :func:`~meshmode.array_context.multimap_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    actx = get_container_context(args)
-
     from meshmode.array_context import _multimap_array_container_with_leaf_class
-    return _multimap_array_container_with_leaf_class(
-            actx, f, *args, leaf_class=DOFArray)
+    return _multimap_array_container_with_leaf_class(f, *args, leaf_class=DOFArray)
 
 
 def multimapped_dof_array_container(f):
@@ -361,19 +355,19 @@ def flatten(ary: ArrayContainer) -> Any:
     :class:`DOFArray`\ s.
     """
 
-    actx = get_container_context(ary)
-    if actx is None:
-        raise ValueError("cannot flatten frozen ArrayContainers")
-
-    @memoize_in(actx, (flatten, "flatten_prg"))
-    def prg():
-        return make_loopy_program(
-            "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
-            """result[grp_start + iel*ndofs_per_element + idof] \
-                = grp_ary[iel, idof]""",
-            name="flatten")
-
     def _flatten_dof_array(subary):
+        actx = subary.array_context
+        if actx is None:
+            raise ValueError("cannot flatten frozen ArrayContainers")
+
+        @memoize_in(actx, (flatten, "flatten_prg"))
+        def prg():
+            return make_loopy_program(
+                "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
+                """result[grp_start + iel*ndofs_per_element + idof] \
+                    = grp_ary[iel, idof]""",
+                name="flatten")
+
         group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in subary]
         group_starts = np.cumsum([0] + group_sizes)
 
