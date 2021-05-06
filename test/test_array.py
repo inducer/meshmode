@@ -318,13 +318,11 @@ def test_recursive_freeze_thaw(actx_factory):
 
     # {{{ ArrayContainer
 
-    from dataclasses import dataclass, fields
-    from meshmode.array_context import (
-            ArrayContainerWithArithmetic,
-            serialize_container, deserialize_container_class)
+    from dataclasses import dataclass
+    from meshmode.array_context import DataclassContainerWithArithmetic
 
     @dataclass
-    class DataclassArrayContainer(ArrayContainerWithArithmetic):
+    class MyContainer(DataclassContainerWithArithmetic):
         mass: DOFArray
         momentum: np.ndarray
         enthalpy: DOFArray
@@ -333,21 +331,13 @@ def test_recursive_freeze_thaw(actx_factory):
         def array_context(self):
             return self.mass.array_context
 
-    @serialize_container.register(DataclassArrayContainer)
-    def _(ary: DataclassArrayContainer):
-        return ((var.name, getattr(ary, var.name)) for var in fields(ary))
-
-    @deserialize_container_class.register(DataclassArrayContainer)
-    def _(cls, actx, iterable):
-        return DataclassArrayContainer(**dict(iterable))
-
     # }}}
 
     from meshmode.array_context import thaw, freeze
     x = thaw(actx, discr.nodes()[0])
 
     # pylint: disable=unexpected-keyword-arg, no-value-for-parameter
-    ary_dataclass = DataclassArrayContainer(
+    ary_dataclass = MyContainer(
             mass=x,
             momentum=make_obj_array([x, x]),
             enthalpy=x)

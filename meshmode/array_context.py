@@ -21,6 +21,7 @@ THE SOFTWARE.
 """
 
 import operator
+from dataclasses import fields
 from functools import partial, singledispatch, update_wrapper
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Iterable, Optional, Sequence, Tuple, Union
@@ -46,6 +47,8 @@ __doc__ = """
 .. autofunction:: get_container_context_recursively
 
 .. autoclass:: ArrayContainerWithArithmetic
+.. autoclass:: DataclassContainer
+.. autoclass:: DataclassContainerWithArithmetic
 .. autofunction:: map_array_container
 .. autofunction:: multimap_array_container
 .. autofunction:: freeze
@@ -377,6 +380,34 @@ class ArrayContainerWithArithmetic(ArrayContainer):
 @get_container_context.register(ArrayContainerWithArithmetic)
 def _(ary: ArrayContainerWithArithmetic):
     return ary.array_context
+
+# }}}
+
+
+# {{{ dataclass containers
+
+class DataclassContainer(ArrayContainer):
+    """An :class:`ArrayContainer` that implements serialization and
+    deserialization of :class:`~dataclasses.dataclass` fields.
+    """
+
+
+class DataclassContainerWithArithmetic(
+        ArrayContainerWithArithmetic,
+        DataclassContainer):
+    """An :class:`DataclassContainer` where each field is assumed to
+    support arithmetic, e.g. thought :class:`ArrayContainerWithArithmetic`.
+    """
+
+
+@serialize_container.register(DataclassContainer)
+def _(ary: DataclassContainer):
+    return ((var.name, getattr(ary, var.name)) for var in fields(ary))
+
+
+@deserialize_container_class.register(DataclassContainer)
+def _(cls, actx, iterable):
+    return cls(**dict(iterable))
 
 # }}}
 
