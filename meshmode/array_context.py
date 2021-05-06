@@ -388,7 +388,7 @@ def _(ary: ArrayContainerWithArithmetic):
 
 class DataclassContainer(ArrayContainer):
     """An :class:`ArrayContainer` that implements serialization and
-    deserialization of :class:`~dataclasses.dataclass` fields.
+    deserialization of :func:`~dataclasses.dataclass` fields.
     """
 
 
@@ -396,7 +396,7 @@ class DataclassContainerWithArithmetic(
         ArrayContainerWithArithmetic,
         DataclassContainer):
     """An :class:`DataclassContainer` where each field is assumed to
-    support arithmetic, e.g. thought :class:`ArrayContainerWithArithmetic`.
+    support arithmetic, e.g. through :class:`ArrayContainerWithArithmetic`.
     """
 
 

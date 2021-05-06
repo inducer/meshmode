@@ -358,7 +358,7 @@ def flatten(ary: ArrayContainer) -> Any:
     def _flatten_dof_array(subary):
         actx = subary.array_context
         if actx is None:
-            raise ValueError("cannot flatten frozen ArrayContainers")
+            raise ValueError("cannot flatten frozen DOFArrays")
 
         @memoize_in(actx, (flatten, "flatten_prg"))
         def prg():
