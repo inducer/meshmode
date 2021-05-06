@@ -1106,7 +1106,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
     face_nr_bases = np.empty((len(groups), max_faces), dtype=element_id_dtype)
     face_nr_bases[:] = -1
     for igrp, grp in enumerate(groups):
-        for fid, ref_fvi in enumerate(grp.face_vertex_indices()):
+        for fid in range(len(grp.face_vertex_indices())):
             face_nr_bases[igrp, fid] = n_total_faces
             n_total_faces += grp.nelements
 

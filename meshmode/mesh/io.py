@@ -135,8 +135,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         # map set of face vertex indices to list of tags associated to face
         face_vertex_indices_to_tags = {}
         vertex_gmsh_index_to_mine = {}
-        for element, (el_vertices, el_type) in enumerate(zip(
-                self.element_vertices, self.element_types)):
+        for element, el_vertices in enumerate(self.element_vertices):
             for gmsh_vertex_nr in el_vertices:
                 if gmsh_vertex_nr not in vertex_gmsh_index_to_mine:
                     vertex_gmsh_index_to_mine[gmsh_vertex_nr] = \
@@ -186,8 +185,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     np.int32)
             i = 0
 
-            for element, (el_vertices, el_nodes, el_type) in enumerate(zip(
-                    self.element_vertices, self.element_nodes, self.element_types)):
+            for el_vertices, el_nodes, el_type in zip(
+                    self.element_vertices, self.element_nodes, self.element_types):
                 if el_type is not group_el_type:
                     continue
 
@@ -235,7 +234,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     )
             else:
                 # NOTE: already checked above
-                assert False
+                raise AssertionError()
 
             groups.append(group)
 
