@@ -474,6 +474,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 force=True
             )
 
+            from meshmode.array_context import _DontTransformMeBro
+            fused_knl = fused_knl.tagged(frozenset((_DontTransformMeBro(),)))
+
             result_dict = actx.call_loopy(
                 fused_knl,
                 nelements_result=tgrp.nelements,

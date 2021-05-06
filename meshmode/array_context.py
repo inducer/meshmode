@@ -747,13 +747,11 @@ class PyOpenCLArrayContext(ArrayContext):
             if "i1" in all_inames:
                 inner_iname = "i1"
         else:
-            # raise RuntimeError(
-            #     "Unable to reason what outer_iname and inner_iname "
-            #     f"needs to be; all_inames is given as: {all_inames}"
-            # )
-            # FIXME: Need to figure out how to fit in these fused kernels
-            # into the optimization strategy
-            return t_unit
+            raise RuntimeError(
+                "Unable to reason what outer_iname and inner_iname "
+                f"needs to be; all_inames is given as: {all_inames}"
+            )
+
 
         if inner_iname is not None:
             t_unit = lp.split_iname(t_unit, inner_iname, 16, inner_tag="l.0")
