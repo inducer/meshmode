@@ -41,6 +41,7 @@ __doc__ = """
 .. autoclass:: FirstAxisIsElementsTag
 
 .. autoclass:: ArrayContainer
+.. autofunction:: is_array_container
 .. autofunction:: serialize_container
 .. autofunction:: deserialize_container
 .. autofunction:: get_container_context
@@ -110,12 +111,20 @@ class ArrayContainerMeta(type):
 
 
 class ArrayContainer(metaclass=ArrayContainerMeta):
-    """A generic container for the array type supported by the
+    r"""A generic container for the array type supported by the
     :class:`ArrayContext`.
 
-    Serialization functionality is implemented in :func:`serialize_container`
-    and :func:`deserialize_container` using the :func:`functools.singledispatch`
-    mechanism.
+    The functionality for the container is implement through
+    :func:`functools.singledispatch`. The following methods are required
+
+    * :func:`is_array_container` allows registering foreign types as containers.
+      For example, object :class:`~numpy.ndarray`\ s are considered containers
+      and ``isinstance(ary, ArrayContainer)`` will be *True*.
+    * Serialization functionality is implemented in :func:`serialize_container`
+      and :func:`deserialize_container`. This allows accessing the components
+      of the container.
+    * :func:`get_container_context` retrieves the :class:`ArrayContext` from
+      a container, if it has one.
 
     The container is meant to work in a similar way to JAX's
     `PyTrees <https://jax.readthedocs.io/en/latest/pytrees.html>`__.
