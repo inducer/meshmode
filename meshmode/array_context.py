@@ -104,6 +104,9 @@ class ArrayContainer(ABC):
     Serialization functionality is implemented in :func:`serialize_container`
     and :func:`deserialize_container` using the :func:`functools.singledispatch`
     mechanism.
+
+    The container is meant to work in a similar way to JAX's
+    `PyTrees <https://jax.readthedocs.io/en/latest/pytrees.html>`__.
     """
 
 
