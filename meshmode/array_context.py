@@ -98,10 +98,18 @@ def _loopy_get_default_entrypoint(t_unit):
 
 # {{{ ArrayContainer
 
-# NOTE: this is an ABC so that we can easily register new types as
-# 'ArrayContainers' instead of overwriting some `__instancecheck__`.
+class ArrayContainerMeta(type):
+    def __instancecheck__(cls, instance):
+        if issubclass(type(instance), cls):
+            return True
 
-class ArrayContainer(ABC):
+        if cls is ArrayContainer:
+            return is_array_container(instance)
+
+        return False
+
+
+class ArrayContainer(metaclass=ArrayContainerMeta):
     """A generic container for the array type supported by the
     :class:`ArrayContext`.
 
@@ -112,6 +120,11 @@ class ArrayContainer(ABC):
     The container is meant to work in a similar way to JAX's
     `PyTrees <https://jax.readthedocs.io/en/latest/pytrees.html>`__.
     """
+
+
+@singledispatch
+def is_array_container(ary: object):
+    return False
 
 
 @singledispatch
@@ -164,7 +177,9 @@ def get_container_context(ary: ArrayContainer):
 
 # {{{ object arrays
 
-ArrayContainer.register(np.ndarray)
+@is_array_container.register(np.ndarray)
+def _(ary: np.ndarray):
+    return ary.dtype.char == "O"
 
 
 @serialize_container.register(list)
