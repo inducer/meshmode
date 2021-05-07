@@ -39,15 +39,15 @@ from meshmode.array_context import (
 from meshmode.array_context import (
         thaw as _thaw, freeze as _freeze,
         map_array_container, multimap_array_container,
-        mapped_array_container, multimapped_array_container)
+        mapped_over_array_containers, multimapped_over_array_containers)
 
 __doc__ = """
 .. autoclass:: DOFArray
 
 .. autofunction:: map_dof_array_container
-.. autofunction:: mapped_dof_array_container
-.. autofunction:: multimap_array_container
-.. autofunction:: multimapped_dof_array_container
+.. autofunction:: mapped_over_dof_arrays
+.. autofunction:: multimap_dof_array_container
+.. autofunction:: multimapped_over_dof_arrays
 
 .. autofunction:: flatten
 .. autofunction:: unflatten
@@ -238,7 +238,7 @@ class DOFArray(ArrayContainerWithArithmetic):
 
         return self
 
-    def __iadd__(self, arg): return self._ibop(op.iadd, arg)             # noqa: E704
+    def __iadd__(self, arg): return self._ibop(op.iadd, arg)            # noqa: E704
     def __isub__(self, arg): return self._ibop(op.isub, arg)            # noqa: E704
     def __imul__(self, arg): return self._ibop(op.imul, arg)            # noqa: E704
     def __itruediv__(self, arg): return self._ibop(op.itruediv, arg)    # noqa: E704
@@ -319,7 +319,7 @@ def map_dof_array_container(f: Callable[[Any], Any], ary):
     return _map_array_container_with_context(f, ary, scalar_cls=DOFArray)
 
 
-def mapped_dof_array_container(f):
+def mapped_over_dof_arrays(f):
     wrapper = partial(map_dof_array_container, f)
     update_wrapper(wrapper, f)
     return wrapper
@@ -336,7 +336,7 @@ def multimap_dof_array_container(f: Callable[[Any], Any], *args):
     return _multimap_array_container_with_context(f, *args, scalar_cls=DOFArray)
 
 
-def multimapped_dof_array_container(f):
+def multimapped_over_dof_arrays(f):
     def wrapper(*args):
         return multimap_dof_array_container(f, *args)
 
@@ -490,14 +490,14 @@ def flat_norm(ary: DOFArray, ord=None):
     return ary.array_context.np.linalg.norm(ary, ord=ord)
 
 
-obj_or_dof_array_vectorize = \
-        MovedFunctionDeprecationWrapper(map_array_container, deadline="2022")
-obj_or_dof_array_vectorized = \
-        MovedFunctionDeprecationWrapper(mapped_array_container, deadline="2022")
-obj_or_dof_array_vectorize_n_args = \
-        MovedFunctionDeprecationWrapper(multimap_array_container, deadline="2022")
-obj_or_dof_array_vectorized_n_args = \
-        MovedFunctionDeprecationWrapper(multimapped_array_container, deadline="2022")
+obj_or_dof_array_vectorize = MovedFunctionDeprecationWrapper(
+        map_array_container, deadline="2022")
+obj_or_dof_array_vectorized = MovedFunctionDeprecationWrapper(
+        mapped_over_array_containers, deadline="2022")
+obj_or_dof_array_vectorize_n_args = MovedFunctionDeprecationWrapper(
+        multimap_array_container, deadline="2022")
+obj_or_dof_array_vectorized_n_args = MovedFunctionDeprecationWrapper(
+        multimapped_over_array_containers, deadline="2022")
 
 thaw = MovedFunctionDeprecationWrapper(_thaw, deadline="2022")
 freeze = MovedFunctionDeprecationWrapper(_freeze, deadline="2022")

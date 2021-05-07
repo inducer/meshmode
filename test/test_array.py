@@ -319,10 +319,10 @@ def test_recursive_freeze_thaw(actx_factory):
     # {{{ ArrayContainer
 
     from dataclasses import dataclass
-    from meshmode.array_context import DataclassContainerWithArithmetic
+    from meshmode.array_context import DataclassArrayContainerWithArithmetic
 
     @dataclass
-    class MyContainer(DataclassContainerWithArithmetic):
+    class MyContainer(DataclassArrayContainerWithArithmetic):
         mass: DOFArray
         momentum: np.ndarray
         enthalpy: DOFArray

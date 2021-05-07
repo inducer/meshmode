@@ -48,8 +48,8 @@ __doc__ = """
 .. autofunction:: get_container_context_recursively
 
 .. autoclass:: ArrayContainerWithArithmetic
-.. autoclass:: DataclassContainer
-.. autoclass:: DataclassContainerWithArithmetic
+.. autoclass:: DataclassArrayContainer
+.. autoclass:: DataclassArrayContainerWithArithmetic
 .. autofunction:: array_container_vectorize
 .. autofunction:: array_container_vectorize_n_args
 .. autofunction:: map_array_container
@@ -412,26 +412,26 @@ def _(ary: ArrayContainerWithArithmetic):
 
 # {{{ dataclass containers
 
-class DataclassContainer(ArrayContainer):
+class DataclassArrayContainer(ArrayContainer):
     """An :class:`ArrayContainer` that implements serialization and
     deserialization of :func:`~dataclasses.dataclass` fields.
     """
 
 
-class DataclassContainerWithArithmetic(
+class DataclassArrayContainerWithArithmetic(
         ArrayContainerWithArithmetic,
-        DataclassContainer):
-    """An :class:`DataclassContainer` where each field is assumed to
+        DataclassArrayContainer):
+    """An :class:`DataclassArrayContainer` where each field is assumed to
     support arithmetic, e.g. through :class:`ArrayContainerWithArithmetic`.
     """
 
 
-@serialize_container.register(DataclassContainer)
-def _(ary: DataclassContainer):
+@serialize_container.register(DataclassArrayContainer)
+def _(ary: DataclassArrayContainer):
     return ((var.name, getattr(ary, var.name)) for var in fields(ary))
 
 
-@deserialize_container_class.register(DataclassContainer)
+@deserialize_container_class.register(DataclassArrayContainer)
 def _(cls, actx, iterable):
     return cls(**dict(iterable))
 
@@ -567,7 +567,7 @@ def map_array_container(f: Callable[[Any], Any], ary):
     return _map_array_container_with_context(f, ary)
 
 
-def mapped_array_container(f: Callable[[Any], Any]):
+def mapped_over_array_containers(f: Callable[[Any], Any]):
     """Decorator around :func:`map_array_container`."""
     wrapper = partial(map_array_container, f)
     update_wrapper(wrapper, f)
@@ -585,7 +585,7 @@ def multimap_array_container(f: Callable[[Any], Any], *args):
     return _multimap_array_container_with_context(f, *args)
 
 
-def multimapped_array_container(f: Callable[[Any], Any]):
+def multimapped_over_array_containers(f: Callable[[Any], Any]):
     """Decorator around :func:`multimap_array_container`."""
     def wrapper(*args):
         return multimap_array_container(f, *args)
@@ -733,7 +733,7 @@ class _BaseFakeNumpyNamespace:
 
         # limit which functions we try to hand off to loopy
         if name in self._numpy_math_functions:
-            return multimapped_array_container(loopy_implemented_elwise_func)
+            return multimapped_over_array_containers(loopy_implemented_elwise_func)
         else:
             raise AttributeError(name)
 
