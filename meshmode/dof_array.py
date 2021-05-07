@@ -44,6 +44,11 @@ from meshmode.array_context import (
 __doc__ = """
 .. autoclass:: DOFArray
 
+.. autofunction:: map_dof_array_container
+.. autofunction:: mapped_dof_array_container
+.. autofunction:: multimap_array_container
+.. autofunction:: multimapped_dof_array_container
+
 .. autofunction:: flatten
 .. autofunction:: unflatten
 
@@ -304,7 +309,8 @@ def _(cls, actx: ArrayContext, iterable):
 
 
 def map_dof_array_container(f: Callable[[Any], Any], ary):
-    r"""Applies *f* recursively to an :class:`~meshmode.array_context.ArrayContainer`.
+    r"""Applies *f* recursively to an
+    :class:`~meshmode.array_context.ArrayContainer`.
 
     Similar to :func:`~meshmode.array_context.map_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.

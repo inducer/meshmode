@@ -461,14 +461,14 @@ def _update_container_context(ary, actx):
 def _map_array_container_with_context(f, ary,
         actx=_ArrayContextNotProvided,
         scalar_cls=None,
-        recursive=False):
+        recursive=True):
     if scalar_cls is not None and type(ary) is scalar_cls:
         return f(ary)
     elif isinstance(ary, ArrayContainer):
         actx, ary_actx = _update_container_context(ary, actx)
         if recursive:
             f = partial(_map_array_container_with_context,
-                    f, actx=actx, scalar_cls=scalar_cls, recursive=True)
+                    f, actx=actx, scalar_cls=scalar_cls)
 
         return deserialize_container(type(ary), ary_actx, (
                 (key, f(subary)) for key, subary in serialize_container(ary)
@@ -480,7 +480,7 @@ def _map_array_container_with_context(f, ary,
 def _multimap_array_container_with_context(f, *args,
         actx=_ArrayContextNotProvided,
         scalar_cls=None,
-        recursive=False):
+        recursive=True):
     container_indices = [
             i for i, arg in enumerate(args)
             if isinstance(arg, ArrayContainer)
@@ -513,7 +513,7 @@ def _multimap_array_container_with_context(f, *args,
     actx, ary_actx = _update_container_context(template_ary, actx)
     if recursive:
         f = partial(_multimap_array_container_with_context,
-                f, actx=actx, scalar_cls=scalar_cls, recursive=True)
+                f, actx=actx, scalar_cls=scalar_cls)
 
     result = []
     new_args = list(args)
@@ -528,13 +528,30 @@ def _multimap_array_container_with_context(f, *args,
 
 
 def array_container_vectorize(f: Callable[[Any], Any], ary):
-    """
+    r"""Applies *f* to all components of an :class:`ArrayContainer`.
+
+    Works similarly to :func:`~pytools.obj_array.obj_array_vectorize`, but
+    on arbitrary containers.
+
+    For a recursive version, see :func:`map_array_container`.
+
+    :param ary: a (potentially nested) structure of :class:`ArrayContainer`\ s,
+        or an instance of a base array type.
     """
     return _map_array_container_with_context(f, ary, recursive=False)
 
 
 def array_container_vectorize_n_args(f: Callable[[Any], Any], *args):
-    """
+    r"""Applies *f* to the components of multiple :class:`ArrayContainer`\ s.
+
+    Works similarly to :func:`~pytools.obj_array.obj_array_vectorize_n_args`,
+    but on arbitrar containers. The containers must all have the same type,
+    so that the function has a well-defined return type as well.
+
+    For a recursive version, see :func:`multimap_array_container`.
+
+    :param args: a :class:`tuple` of :class:`ArrayContainer`\ s of the same
+        type and with the same structure (same number of components, etc.).
     """
     return _multimap_array_container_with_context(f, *args, recursive=False)
 
@@ -542,14 +559,12 @@ def array_container_vectorize_n_args(f: Callable[[Any], Any], *args):
 def map_array_container(f: Callable[[Any], Any], ary):
     r"""Applies *f* recursively to an :class:`ArrayContainer`.
 
-    Works similarly to :func:`~pytools.obj_array.obj_array_vectorize`, but
-    recurses into all :class:`ArrayContainer` classes and applies *f* only
-    at the leaf level.
+    For a non-recursive version see :func:`array_container_vectorize`.
 
-    :param ary: a (potentially nested) structure of :class:`ArrayContainer`\ s, or
-        an instance of a base array type.
+    :param ary: a (potentially nested) structure of :class:`ArrayContainer`\ s,
+        or an instance of a base array type.
     """
-    return _map_array_container_with_context(f, ary, recursive=True)
+    return _map_array_container_with_context(f, ary)
 
 
 def mapped_array_container(f: Callable[[Any], Any]):
@@ -562,22 +577,16 @@ def mapped_array_container(f: Callable[[Any], Any]):
 def multimap_array_container(f: Callable[[Any], Any], *args):
     r"""Applies *f* recursively to multiple :class:`ArrayContainer`\ s.
 
-    Works similarly to :func:`~pytools.obj_array.obj_array_vectorize_n_args`,
-    but recurses into all the :class:`ArrayContainer` arguments and applies
-    *f* only at the leaf level.
+    For a non-recursive version see :func:`array_container_vectorize_n_args`.
 
-    :param args: a :class:`list` of :class:`ArrayContainer`\ s of the same
+    :param args: a :class:`tuple` of :class:`ArrayContainer`\ s of the same
         type and with the same structure (same number of components, etc.).
-        All non-:class:`ArrayContainer` arguments are considered as *scalars*.
     """
-    return _multimap_array_container_with_context(f, *args, recursive=True)
+    return _multimap_array_container_with_context(f, *args)
 
 
 def multimapped_array_container(f: Callable[[Any], Any]):
     """Decorator around :func:`multimap_array_container`."""
-    # See also obj_array_vectorized_n_args fixes in
-    # https://github.com/inducer/pytools/pull/76
-
     def wrapper(*args):
         return multimap_array_container(f, *args)
 
@@ -618,8 +627,7 @@ def thaw(actx, ary):
     :param ary: a tree-like (nested) structure of :meth:`~ArrayContext.freeze`\ ed
         :class:`ArrayContainer`\ s.
     """
-    return _map_array_container_with_context(
-            actx.thaw, ary, actx=actx, recursive=True)
+    return _map_array_container_with_context(actx.thaw, ary, actx=actx)
 
 # }}}
 
