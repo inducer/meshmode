@@ -50,6 +50,8 @@ __doc__ = """
 .. autoclass:: ArrayContainerWithArithmetic
 .. autoclass:: DataclassContainer
 .. autoclass:: DataclassContainerWithArithmetic
+.. autofunction:: array_container_vectorize
+.. autofunction:: array_container_vectorize_n_args
 .. autofunction:: map_array_container
 .. autofunction:: multimap_array_container
 .. autofunction:: freeze
@@ -227,10 +229,10 @@ def get_container_context_recursively(ary: Any):
     if isinstance(ary, ArrayContainer):
         actx = get_container_context(ary)
 
-    # try getting it recursively
     if actx is not None:
         return actx
 
+    # try getting it recursively
     contexts = [
             get_container_context_recursively(subary)
             for _, subary in serialize_container(ary)
@@ -444,11 +446,9 @@ class _ArrayContextNotProvided:
 
 def _update_container_context(ary, actx):
     """
-    :returns: a tuple ``(actx, ary_actx)``. If the input *actx* is *None* or
-        an :class:`ArrayContext`, it is returned unchanged for both the outputs.
-        Otherwise, ``ary_actx`` is the context of the given ``ary``, if any.
-        If ``ary_actx`` is *None*, ``actx`` is returned unchanged, otherwise
-        it is set to ``ary_actx`` as well.
+    :returns: a tuple ``(actx, ary_actx)``, where the first array context
+        is meant to be passed down the container hierarchy and the second one
+        is meant to be used to deserialize the array container.
     """
     if actx is not _ArrayContextNotProvided:
         return actx, actx
@@ -458,37 +458,33 @@ def _update_container_context(ary, actx):
     return actx, ary_actx
 
 
-def _map_array_container_with_leaf_class(f, ary,
-        actx=_ArrayContextNotProvided, leaf_class=None):
-    """Helper for :func:`map_array_container` that defines the leaf types
-    in a tree of containers.
-
-    This can be used to stop the recursion on certain subclass of
-    :class:`ArrayContainer`.
-    """
-    if leaf_class is not None and isinstance(ary, leaf_class):
+def _map_array_container_with_context(f, ary,
+        actx=_ArrayContextNotProvided,
+        scalar_cls=None,
+        recursive=False):
+    if scalar_cls is not None and type(ary) is scalar_cls:
         return f(ary)
-
-    if isinstance(ary, ArrayContainer):
+    elif isinstance(ary, ArrayContainer):
         actx, ary_actx = _update_container_context(ary, actx)
+        if recursive:
+            f = partial(_map_array_container_with_context,
+                    f, actx=actx, scalar_cls=scalar_cls, recursive=True)
 
         return deserialize_container(type(ary), ary_actx, (
-            (key, _map_array_container_with_leaf_class(
-                f, subary, actx=actx, leaf_class=leaf_class))
-            for key, subary in serialize_container(ary)
-            ))
+                (key, f(subary)) for key, subary in serialize_container(ary)
+                ))
     else:
         return f(ary)
 
 
-def _multimap_array_container_with_leaf_class(f, *args,
-        actx=_ArrayContextNotProvided, leaf_class=None):
-    if leaf_class is None:
-        leaf_class = type(None)
-
+def _multimap_array_container_with_context(f, *args,
+        actx=_ArrayContextNotProvided,
+        scalar_cls=None,
+        recursive=False):
     container_indices = [
             i for i, arg in enumerate(args)
-            if isinstance(arg, ArrayContainer) and not isinstance(arg, leaf_class)
+            if isinstance(arg, ArrayContainer)
+            or (scalar_cls is not None and type(arg) is not scalar_cls)
             ]
 
     if not container_indices:
@@ -499,10 +495,6 @@ def _multimap_array_container_with_leaf_class(f, *args,
         raise TypeError(
                 "'ArrayContainer' arguments must be of the same type: "
                 f"{type(template_ary).__name__}")
-
-    # if no array context is provided, try to get an array context at
-    # the current level and use it on all children
-    actx, ary_actx = _update_container_context(template_ary, actx)
 
     def zip_containers(arys):
         keys = (key for key, _ in serialize_container(arys[0]))
@@ -518,6 +510,11 @@ def _multimap_array_container_with_leaf_class(f, *args,
         for key, value in zip(keys, zip(*subarys)):
             yield key, value
 
+    actx, ary_actx = _update_container_context(template_ary, actx)
+    if recursive:
+        f = partial(_multimap_array_container_with_context,
+                f, actx=actx, scalar_cls=scalar_cls, recursive=True)
+
     result = []
     new_args = list(args)
 
@@ -525,12 +522,21 @@ def _multimap_array_container_with_leaf_class(f, *args,
         for i in container_indices:
             new_args[i] = subarys[i]
 
-        result.append(
-                (key, _multimap_array_container_with_leaf_class(
-                    f, *new_args, actx=actx, leaf_class=leaf_class))
-                )
+        result.append((key, f(*new_args)))
 
     return deserialize_container(type(template_ary), ary_actx, tuple(result))
+
+
+def array_container_vectorize(f: Callable[[Any], Any], ary):
+    """
+    """
+    return _map_array_container_with_context(f, ary, recursive=False)
+
+
+def array_container_vectorize_n_args(f: Callable[[Any], Any], *args):
+    """
+    """
+    return _multimap_array_container_with_context(f, *args, recursive=False)
 
 
 def map_array_container(f: Callable[[Any], Any], ary):
@@ -543,7 +549,7 @@ def map_array_container(f: Callable[[Any], Any], ary):
     :param ary: a (potentially nested) structure of :class:`ArrayContainer`\ s, or
         an instance of a base array type.
     """
-    return _map_array_container_with_leaf_class(f, ary)
+    return _map_array_container_with_context(f, ary, recursive=True)
 
 
 def mapped_array_container(f: Callable[[Any], Any]):
@@ -564,26 +570,13 @@ def multimap_array_container(f: Callable[[Any], Any], *args):
         type and with the same structure (same number of components, etc.).
         All non-:class:`ArrayContainer` arguments are considered as *scalars*.
     """
-    return _multimap_array_container_with_leaf_class(f, *args)
+    return _multimap_array_container_with_context(f, *args, recursive=True)
 
 
 def multimapped_array_container(f: Callable[[Any], Any]):
     """Decorator around :func:`multimap_array_container`."""
     # See also obj_array_vectorized_n_args fixes in
     # https://github.com/inducer/pytools/pull/76
-    #
-    # Unfortunately, this can't use partial(), as the callable returned by it
-    # will not be turned into a bound method upon attribute access.
-    # This may happen here, because the decorator *could* be used
-    # on methods, since it can "look past" the leading `self` argument.
-    # Only exactly function objects receive this treatment.
-    #
-    # Spec link:
-    # https://docs.python.org/3/reference/datamodel.html#the-standard-type-hierarchy
-    # (under "Instance Methods", quote as of Py3.9.4)
-    # > Also notice that this transformation only happens for user-defined functions;
-    # > other callable objects (and all non-callable objects) are retrieved
-    # > without transformation.
 
     def wrapper(*args):
         return multimap_array_container(f, *args)
@@ -599,11 +592,23 @@ def freeze(ary):
     :param ary: a tree-like (nested) structure of :meth:`~ArrayContext.thaw`\ ed
         :class:`ArrayContainer`\ s.
     """
-    actx = get_container_context_recursively(ary)
-    if actx is None:
-        raise ValueError("ArrayContainer passed to 'freeze' is already frozen")
+    def _freeze(subary, actx=None):
+        if isinstance(subary, ArrayContainer):
+            if actx is None:
+                actx = get_container_context(subary)
 
-    return _map_array_container_with_leaf_class(actx.freeze, ary, actx=None)
+            return _map_array_container_with_context(
+                    partial(_freeze, actx=actx),
+                    subary, recursive=False)
+        else:
+            return actx.freeze(subary)
+
+    if not isinstance(ary, ArrayContainer):
+        raise TypeError(
+                f"cannot freeze arrays of type {type(ary).__name__}; "
+                "try calling 'ArrayContext.freeze' directly")
+
+    return _freeze(ary)
 
 
 def thaw(actx, ary):
@@ -613,7 +618,8 @@ def thaw(actx, ary):
     :param ary: a tree-like (nested) structure of :meth:`~ArrayContext.freeze`\ ed
         :class:`ArrayContainer`\ s.
     """
-    return _map_array_container_with_leaf_class(actx.thaw, ary, actx=actx)
+    return _map_array_container_with_context(
+            actx.thaw, ary, actx=actx, recursive=True)
 
 # }}}
 

@@ -309,8 +309,8 @@ def map_dof_array_container(f: Callable[[Any], Any], ary):
     Similar to :func:`~meshmode.array_context.map_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    from meshmode.array_context import _map_array_container_with_leaf_class
-    return _map_array_container_with_leaf_class(f, ary, leaf_class=DOFArray)
+    from meshmode.array_context import _map_array_container_with_context
+    return _map_array_container_with_context(f, ary, scalar_cls=DOFArray)
 
 
 def mapped_dof_array_container(f):
@@ -326,8 +326,8 @@ def multimap_dof_array_container(f: Callable[[Any], Any], *args):
     Similar to :func:`~meshmode.array_context.multimap_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    from meshmode.array_context import _multimap_array_container_with_leaf_class
-    return _multimap_array_container_with_leaf_class(f, *args, leaf_class=DOFArray)
+    from meshmode.array_context import _multimap_array_container_with_context
+    return _multimap_array_container_with_context(f, *args, scalar_cls=DOFArray)
 
 
 def multimapped_dof_array_container(f):
