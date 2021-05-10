@@ -193,15 +193,13 @@ def _(ary: np.ndarray):
     return ary.dtype.char == "O"
 
 
-@serialize_container.register(list)
-@serialize_container.register(tuple)
 @serialize_container.register(np.ndarray)
 def _(ary: Union[list, tuple, np.ndarray]):
-    if isinstance(ary, np.ndarray) and ary.dtype.char != "O":
+    if ary.dtype.char != "O":
         raise NotImplementedError(
                 f"serialization for 'numpy.ndarray' of dtype '{ary.dtype}'")
 
-    return enumerate(ary)
+    return np.ndenumerate(ary)
 
 
 @deserialize_container_class.register(np.ndarray)
@@ -210,10 +208,21 @@ def _(cls: type, actx: "ArrayContext", iterable):
     iterable = list(iterable)
 
     result = cls(len(iterable), dtype=object)
-    for i, subary in iterable:
+    shape = np.full(len(iterable[0][0]), -1)
+
+    for i, (index, subary) in enumerate(iterable):
+        shape = np.maximum(shape, index)
         result[i] = subary
 
-    return result
+    return result.reshape(tuple(shape + 1))
+
+
+@serialize_container.register(list)
+@serialize_container.register(tuple)
+def _(ary: Union[list, tuple]):
+    # NOTE: this is only here so that `multimap_array_container` can call
+    # `get_container_context_recursively(args)` directly
+    return enumerate(ary)
 
 
 def get_container_context_recursively(ary: Any):

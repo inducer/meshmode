@@ -343,21 +343,26 @@ def test_recursive_freeze_thaw(actx_factory):
             enthalpy=x)
     ary_dataclass = actx.np.sin(ary_dataclass + 3 * ary_dataclass)
 
-    ary_of_dofs = make_obj_array([x, x, x])
     ary_dof = x
+    ary_of_dofs = make_obj_array([x, x, x])
+    mat_of_dofs = np.empty((2, 2), dtype=object)
+    for i in np.ndindex(mat_of_dofs.shape):
+        mat_of_dofs[i] = x
 
-    for ary in [ary_dof, ary_of_dofs, ary_dataclass]:
+    for ary in [ary_dof, ary_of_dofs, mat_of_dofs, ary_dataclass]:
         frozen_ary = freeze(ary)
         thawed_ary = thaw(actx, frozen_ary)
         frozen_ary = freeze(thawed_ary)
 
     from meshmode.array_context import get_container_context
     assert get_container_context(ary_of_dofs) is None
+    assert get_container_context(mat_of_dofs) is None
     assert get_container_context(ary_dof) is actx
     assert get_container_context(ary_dataclass) is actx
 
     from meshmode.array_context import get_container_context_recursively
     assert get_container_context_recursively(ary_of_dofs) is actx
+    assert get_container_context_recursively(mat_of_dofs) is actx
 
 # }}}
 
