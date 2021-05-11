@@ -478,35 +478,24 @@ class _ArrayContextNotProvided:
     pass
 
 
-def _update_container_context(ary, actx):
-    """
-    :returns: a tuple ``(actx, ary_actx)``, where the first array context
-        is meant to be passed down the container hierarchy and the second one
-        is meant to be used to deserialize the array container.
-    """
-    if actx is not _ArrayContextNotProvided:
-        return actx, actx
-
-    ary_actx = get_container_context(ary)
-    actx = actx if ary_actx is None else ary_actx
-    return actx, ary_actx
-
-
 def _map_array_container_with_context(f, ary, *,
         actx=_ArrayContextNotProvided,
         scalar_cls=None,
-        recursive=True):
+        recursive=False):
     if scalar_cls is not None and type(ary) is scalar_cls:
         return f(ary)
     elif isinstance(ary, ArrayContainer):
-        actx, ary_actx = _update_container_context(ary, actx)
+        array_context = actx
+        if array_context is _ArrayContextNotProvided:
+            array_context = get_container_context(ary)
+
         if recursive:
             f = partial(_map_array_container_with_context,
-                    f, actx=actx, scalar_cls=scalar_cls)
+                    f, actx=actx, scalar_cls=scalar_cls, recursive=True)
 
         return deserialize_container(type(ary), (
                 (key, f(subary)) for key, subary in serialize_container(ary)
-                ), actx=actx, template=ary)
+                ), actx=array_context, template=ary)
     else:
         return f(ary)
 
@@ -514,7 +503,7 @@ def _map_array_container_with_context(f, ary, *,
 def _multimap_array_container_with_context(f, *args,
         actx=_ArrayContextNotProvided,
         scalar_cls=None,
-        recursive=True):
+        recursive=False):
     container_indices = [
             i for i, arg in enumerate(args)
             if isinstance(arg, ArrayContainer)
@@ -544,10 +533,13 @@ def _multimap_array_container_with_context(f, *args,
         for key, value in zip(keys, zip(*subarys)):
             yield key, value
 
-    actx, ary_actx = _update_container_context(template_ary, actx)
+    array_context = actx
+    if array_context is _ArrayContextNotProvided:
+        array_context = get_container_context(template_ary)
+
     if recursive:
         f = partial(_multimap_array_container_with_context,
-                f, actx=actx, scalar_cls=scalar_cls)
+                f, actx=actx, scalar_cls=scalar_cls, recursive=True)
 
     result = []
     new_args = list(args)
@@ -560,7 +552,7 @@ def _multimap_array_container_with_context(f, *args,
 
     return deserialize_container(
             type(template_ary), tuple(result),
-            actx=ary_actx, template=template_ary)
+            actx=array_context, template=template_ary)
 
 
 def array_container_vectorize(f: Callable[[Any], Any], ary):
@@ -600,7 +592,7 @@ def map_array_container(f: Callable[[Any], Any], ary):
     :param ary: a (potentially nested) structure of :class:`ArrayContainer`\ s,
         or an instance of a base array type.
     """
-    return _map_array_container_with_context(f, ary)
+    return _map_array_container_with_context(f, ary, recursive=True)
 
 
 def mapped_over_array_containers(f: Callable[[Any], Any]):
@@ -618,7 +610,7 @@ def multimap_array_container(f: Callable[[Any], Any], *args):
     :param args: a :class:`tuple` of :class:`ArrayContainer`\ s of the same
         type and with the same structure (same number of components, etc.).
     """
-    return _multimap_array_container_with_context(f, *args)
+    return _multimap_array_container_with_context(f, *args, recursive=True)
 
 
 def multimapped_over_array_containers(f: Callable[[Any], Any]):
@@ -644,7 +636,7 @@ def freeze(ary):
 
             return _map_array_container_with_context(
                     partial(_freeze, actx=actx),
-                    subary, recursive=False)
+                    subary, actx=None, recursive=False)
         else:
             return actx.freeze(subary)
 
@@ -663,7 +655,13 @@ def thaw(actx, ary):
     :param ary: a tree-like (nested) structure of :meth:`~ArrayContext.freeze`\ ed
         :class:`ArrayContainer`\ s.
     """
-    return _map_array_container_with_context(actx.thaw, ary, actx=actx)
+    if not isinstance(ary, ArrayContainer):
+        raise TypeError(
+                f"cannot thaw arrays of type {type(ary).__name__}; "
+                "try calling 'ArrayContext.thaw' directly")
+
+    return _map_array_container_with_context(
+            actx.thaw, ary, actx=actx, recursive=True)
 
 # }}}
 
