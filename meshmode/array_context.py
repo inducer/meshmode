@@ -143,6 +143,11 @@ def is_array_container(ary: object):
     return False
 
 
+@is_array_container.register(ArrayContainer)
+def _(ary: ArrayContainer):
+    return True
+
+
 @singledispatch
 def serialize_container(ary: ArrayContainer) -> Iterable[Tuple[Any, Any]]:
     r"""Serialize the array container into an iterable over its components.
@@ -150,16 +155,16 @@ def serialize_container(ary: ArrayContainer) -> Iterable[Tuple[Any, Any]]:
     The order of the components and their identifiers are entirely under
     the control of the container class.
 
+    If *ary* is mutable, the serialization function is not required to ensure
+    that the serialization result reflects the array state at the time of the
+    call to :func:`serialize_container`.
+
     :returns: an :class:`Iterable` of 2-tuples where the first
         entry is an identifier for the component and the second entry
         is an array-like component of the :class:`ArrayContainer`.
         Components can themselves be :class:`ArrayContainer`\ s, allowing
         for arbitrarily nested structures. The identifiers need to be hashable
         but are otherwise treated as opaque.
-
-    If *ary* is mutable, the serialization function is not required to ensure
-    that the serialization result reflects the array state at the time of the
-    call to :func:`serialize_container`.
     """
     raise NotImplementedError(type(ary).__name__)
 
@@ -227,8 +232,15 @@ def _(cls: type, iterable: Iterable[Tuple[Any, Any]], *,
         template: Optional[Any] = None):
     # disallow subclasses
     assert cls is np.ndarray
-    iterable = list(iterable)
 
+    if template is not None:
+        result = cls(template.shape, dtype=object)
+        for i, subary in iterable:
+            result[i] = subary
+
+        return result
+
+    iterable = list(iterable)
     result = cls(len(iterable), dtype=object)
     shape = np.full(len(iterable[0][0]), -1)
 
