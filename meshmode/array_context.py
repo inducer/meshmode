@@ -218,11 +218,8 @@ def _(ary: np.ndarray):
 
 
 @serialize_container.register(np.ndarray)
-def _(ary: Union[list, tuple, np.ndarray]):
-    if ary.dtype.char != "O":
-        raise NotImplementedError(
-                f"serialization for 'numpy.ndarray' of dtype '{ary.dtype}'")
-
+def _(ary: np.ndarray):
+    assert ary.dtype.char == "O"
     return np.ndenumerate(ary)
 
 
