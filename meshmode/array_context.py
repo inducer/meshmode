@@ -332,7 +332,7 @@ class ArrayContainerWithArithmetic(ArrayContainer):
                         arg2.astype(object, copy=False))
         elif (isinstance(arg1, ArrayContainer) and isinstance(arg2, ArrayContainer)
                 and type(arg1) is type(arg2)):
-            return multimap_array_container(op, arg1, arg2)
+            return _multimap_array_container_only_unchecked(op, arg1, arg2)
         elif isinstance(arg1, ArrayContainer) and isinstance(arg2, Number):
             return map_array_container(lambda subary: op(subary, arg2), arg1)
         elif isinstance(arg1, Number) and isinstance(arg2, ArrayContainer):
@@ -487,10 +487,39 @@ class _ArrayContextNotProvided:
     pass
 
 
+def _zip_containers(arys):
+    r"""
+    :param arys: an iterable of :class:`ArrayContainer`\ s of the same type
+        and with the same number of components.
+    :returns: an iterable of tuples ``(key, subarys)``, where *key* is the
+        common key and *subarys* are all the components of containers in *arys*
+        corresponding to that key.
+    """
+    keys = (key for key, _ in serialize_container(arys[0]))
+    subarys = [[subary for _, subary in serialize_container(ary)] for ary in arys]
+
+    from pytools import is_single_valued
+    if not is_single_valued([len(ary) for ary in subarys]):
+        raise ValueError(
+                "all ArrayContainers must have the same number of components")
+
+    for key, value in zip(keys, zip(*subarys)):
+        yield key, value
+
+
 def _map_array_container_with_context(f, ary, *,
         actx=_ArrayContextNotProvided,
         scalar_cls=None,
         recursive=False):
+    """Helper for :func:`map_array_container`.
+
+    :param actx: :class:`ArrayContext` passed in to :func:`deserialize_container`.
+        If not provided, the context of the serialized container is used, if any.
+    :param scalar_cls: class on which we call *f* directly. This is mostly
+        useful in the recursive setting, where it can stop the recursion on
+        specific container classes. By default, the recursion is stopped when
+        a non-:class:`ArrayContainer` class is encountered.
+    """
     if scalar_cls is not None and type(ary) is scalar_cls:
         return f(ary)
     elif isinstance(ary, ArrayContainer):
@@ -509,10 +538,46 @@ def _map_array_container_with_context(f, ary, *,
         return f(ary)
 
 
+def _multimap_array_container_only_unchecked(f, *args,
+        actx=_ArrayContextNotProvided,
+        scalar_cls=None,
+        recursive=False):
+    r"""Version of :func:`_multimap_array_container_with_context` that assumes
+    all *args* are :class:`ArrayContainer`\ s of the same type.
+
+    No checks are performed.
+    """
+    template_ary = args[0]
+    if ((scalar_cls is not None and type(template_ary) is scalar_cls)
+            or not isinstance(template_ary, ArrayContainer)):
+        return f(*args)
+
+    array_context = actx
+    if array_context is _ArrayContextNotProvided:
+        array_context = get_container_context(template_ary)
+
+    if recursive:
+        f = partial(_multimap_array_container_only_unchecked,
+                f, actx=actx, scalar_cls=scalar_cls, recursive=True)
+
+    return deserialize_container(type(template_ary), (
+        (key, f(*subarys)) for key, subarys in _zip_containers(args)
+        ), actx=array_context, template=template_ary)
+
+
 def _multimap_array_container_with_context(f, *args,
         actx=_ArrayContextNotProvided,
         scalar_cls=None,
         recursive=False):
+    """Helper for :func:`multimap_array_container`.
+
+    :param actx: :class:`ArrayContext` passed in to :func:`deserialize_container`.
+        If not provided, the context of the serialized container is used, if any.
+    :param scalar_cls: class on which we call *f* directly. This is mostly
+        useful in the recursive setting, where it can stop the recursion on
+        specific container classes. By default, the recursion is stopped when
+        a non-:class:`ArrayContainer` class is encountered.
+    """
     container_indices = [
             i for i, arg in enumerate(args)
             if isinstance(arg, ArrayContainer)
@@ -528,23 +593,13 @@ def _multimap_array_container_with_context(f, *args,
                 "'ArrayContainer' arguments must be of the same type: "
                 f"{type(template_ary).__name__}")
 
-    def zip_containers(arys):
-        keys = (key for key, _ in serialize_container(arys[0]))
-        subarys = [
-                [subary for _, subary in serialize_container(ary)] for ary in arys
-                ]
-
-        from pytools import is_single_valued
-        if not is_single_valued([len(ary) for ary in subarys]):
-            raise ValueError(
-                "all ArrayContainers must have the same number of components")
-
-        for key, value in zip(keys, zip(*subarys)):
-            yield key, value
-
     array_context = actx
     if array_context is _ArrayContextNotProvided:
         array_context = get_container_context(template_ary)
+
+    if len(container_indices) == len(args):
+        return _multimap_array_container_only_unchecked(f, *args,
+                actx=actx, scalar_cls=scalar_cls, recursive=recursive)
 
     if recursive:
         f = partial(_multimap_array_container_with_context,
@@ -553,7 +608,7 @@ def _multimap_array_container_with_context(f, *args,
     result = []
     new_args = list(args)
 
-    for key, subarys in zip_containers([args[i] for i in container_indices]):
+    for key, subarys in _zip_containers([args[i] for i in container_indices]):
         for i in container_indices:
             new_args[i] = subarys[i]
 
