@@ -271,9 +271,6 @@ def get_container_context_recursively(ary: Any):
 
     contexts = [c for c in contexts if c is not None]
     if contexts:
-        # FIXME: is `is` a bit strict here? maybe `type(a) is type(b)`?
-        # this would allow, e.g. different components to have different
-        # queues in an PyOpenCLArrayContext
         actx = single_valued(contexts, equality_pred=operator.is_)
 
     return actx
