@@ -295,7 +295,9 @@ def _(ary: DOFArray):
 
 
 @deserialize_container_class.register(DOFArray)
-def _(cls, actx: ArrayContext, iterable):
+def _(cls, iterable: Iterable[Tuple[Any, Any]], *,
+        actx: Optional[ArrayContext] = None,
+        template: Optional[Any] = None):
     iterable = list(iterable)
     result = [None] * len(iterable)
 

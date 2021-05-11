@@ -166,25 +166,32 @@ def serialize_container(ary: ArrayContainer) -> Iterable[Tuple[Any, Any]]:
 
 @singledispatch
 def deserialize_container_class(cls: type,
-        actx: Optional["ArrayContext"],
-        iterable: Iterable[Tuple[Any, Any]]):
+        iterable: Iterable[Tuple[Any, Any]], *,
+        actx: Optional["ArrayContext"] = None,
+        template: Optional[Any] = None):
     """Serves as the :func:`functools.singledispatch` registration target for
-    container serialization.
+    container deserialization through :func:`deserialize_container`.
     """
+
     raise NotImplementedError(cls.__name__)
 
 
 def deserialize_container(cls: type,
-        actx: Optional["ArrayContext"],
-        iterable: Iterable[Tuple[Any, Any]]):
+        iterable: Iterable[Tuple[Any, Any]], *,
+        actx: Optional["ArrayContext"] = None,
+        template: Optional[Any] = None):
     """Deserialize an iterable into an array container.
 
-    :param actx: can be *None* for frozen arrays or if the array does not use
-        an :class:`ArrayContext`.
     :param iterable: an iterable that mirrors the output of
         :meth:`serialize_container`.
+    :param actx: can be *None* for frozen arrays or if the array does not use
+        an :class:`ArrayContext`.
+    :param template: an instance of an existing object of class *cls* that
+        can be used to aid in the deserialization. For a similar choice
+        see :meth:`numpy.ndarray.__array_finalize__`.
     """
-    return deserialize_container_class.dispatch(cls)(cls, actx, iterable)
+    return deserialize_container_class.dispatch(cls)(
+            cls, iterable, actx=actx, template=template)
 
 
 @singledispatch
@@ -215,7 +222,9 @@ def _(ary: Union[list, tuple, np.ndarray]):
 
 
 @deserialize_container_class.register(np.ndarray)
-def _(cls: type, actx: "ArrayContext", iterable):
+def _(cls: type, iterable: Iterable[Tuple[Any, Any]], *,
+        actx: Optional["ArrayContext"] = None,
+        template: Optional[Any] = None):
     # disallow subclasses
     assert cls is np.ndarray
     iterable = list(iterable)
@@ -454,7 +463,9 @@ def _(ary: DataclassArrayContainer):
 
 
 @deserialize_container_class.register(DataclassArrayContainer)
-def _(cls, actx, iterable):
+def _(cls, iterable: Iterable[Tuple[Any, Any]], *,
+        actx: Optional["ArrayContext"] = None,
+        template: Optional[Any] = None):
     return cls(**dict(iterable))
 
 # }}}
@@ -492,9 +503,9 @@ def _map_array_container_with_context(f, ary, *,
             f = partial(_map_array_container_with_context,
                     f, actx=actx, scalar_cls=scalar_cls)
 
-        return deserialize_container(type(ary), ary_actx, (
+        return deserialize_container(type(ary), (
                 (key, f(subary)) for key, subary in serialize_container(ary)
-                ))
+                ), actx=actx, template=ary)
     else:
         return f(ary)
 
@@ -546,7 +557,9 @@ def _multimap_array_container_with_context(f, *args,
 
         result.append((key, f(*new_args)))
 
-    return deserialize_container(type(template_ary), ary_actx, tuple(result))
+    return deserialize_container(
+            type(template_ary), tuple(result),
+            actx=ary_actx, template=template_ary)
 
 
 def array_container_vectorize(f: Callable[[Any], Any], ary):
