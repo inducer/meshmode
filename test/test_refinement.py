@@ -225,8 +225,11 @@ def test_refinement_connection(
             mesh = get_blob_mesh(mesh_par, mesh_order)
             h = float(mesh_par)
         elif mesh_name == "warp":
-            mesh = mgen.generate_warped_rect_mesh(dim, order=mesh_order, n=mesh_par,
-                    group_cls=group_cls)
+            # FIXME: Leftover from n -> nelements_per_axis/npoints_per_axis change;
+            # should be nelements_per_axis, but if changed EOC order dips below
+            # threshold and test fails. Likely just need to tweak mesh sizes.
+            mesh = mgen.generate_warped_rect_mesh(dim, order=mesh_order,
+                    npoints_side=mesh_par, group_cls=group_cls)
             h = 1/mesh_par
         else:
             raise ValueError("mesh_name not recognized")

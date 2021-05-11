@@ -196,6 +196,7 @@ def flatten_chained_connection(actx, connection):
         :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`.
     """
     from meshmode.discretization.connection import (
+            IdentityDiscretizationConnection,
             DirectDiscretizationConnection,
             DiscretizationConnectionElementGroup,
             make_same_mesh_connection)
@@ -204,6 +205,7 @@ def flatten_chained_connection(actx, connection):
         return connection
 
     if not connection.connections:
+        assert connection.to_discr is connection.from_discr
         return make_same_mesh_connection(actx, connection.to_discr,
                                          connection.from_discr)
 
@@ -212,6 +214,9 @@ def flatten_chained_connection(actx, connection):
     direct_connections = []
     for conn in connections:
         direct_connections.append(flatten_chained_connection(actx, conn))
+
+    direct_connections = [conn for conn in direct_connections
+            if not isinstance(conn, IdentityDiscretizationConnection)]
 
     # merge all the direct connections
     from_conn = direct_connections[0]

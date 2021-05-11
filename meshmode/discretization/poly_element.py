@@ -23,6 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from abc import abstractproperty
 from typing import Tuple
 from warnings import warn
 
@@ -233,7 +234,7 @@ class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBa
     """
 
     @memoize_method
-    def _quadrature_rule(self):
+    def quadrature_rule(self):
         dims = self.mesh_el_group.dim
         if dims == 0:
             return mp.ZeroDimensionalQuadrature()
@@ -241,22 +242,6 @@ class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBa
             return mp.LegendreGaussQuadrature(self.order)
         else:
             return mp.VioreanuRokhlinSimplexQuadrature(self.order, dims)
-
-    @property
-    @memoize_method
-    def unit_nodes(self):
-        result = self._quadrature_rule().nodes
-        if len(result.shape) == 1:
-            result = np.array([result])
-
-        dim2, _ = result.shape
-        assert dim2 == self.mesh_el_group.dim
-        return result
-
-    @property
-    @memoize_method
-    def weights(self):
-        return self._quadrature_rule().weights
 
 
 class QuadratureSimplexElementGroup(SimplexElementGroupBase):
@@ -269,7 +254,7 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
     """
 
     @memoize_method
-    def _quadrature_rule(self):
+    def quadrature_rule(self):
         dims = self.mesh_el_group.dim
         if dims == 0:
             return mp.ZeroDimensionalQuadrature()
@@ -278,31 +263,22 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
         else:
             return mp.XiaoGimbutasSimplexQuadrature(self.order, dims)
 
-    @property
-    @memoize_method
-    def unit_nodes(self):
-        result = self._quadrature_rule().nodes
-        if len(result.shape) == 1:
-            result = np.array([result])
-
-        dim2, _ = result.shape
-        assert dim2 == self.mesh_el_group.dim
-
-        return result
-
-    @property
-    @memoize_method
-    def weights(self):
-        return self._quadrature_rule().weights
-
 
 class _MassMatrixQuadratureElementGroup(PolynomialSimplexElementGroupBase):
-    @property
     @memoize_method
-    def weights(self):
-        return np.dot(
-                mass_matrix(self),
-                np.ones(len(self.basis_obj().functions)))
+    def quadrature_rule(self):
+        basis_fcts = self.basis_obj().functions
+        nodes = self._interp_nodes
+        mass_matrix = mp.mass_matrix(basis_fcts, nodes)
+        weights = np.dot(mass_matrix,
+                         np.ones(len(basis_fcts)))
+        return mp.Quadrature(nodes, weights, exact_to=self.order)
+
+    @abstractproperty
+    def _interp_nodes(self):
+        """Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
+        of interpolation nodes on the reference cell.
+        """
 
 
 class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
@@ -315,7 +291,7 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
     """
     @property
     @memoize_method
-    def unit_nodes(self):
+    def _interp_nodes(self):
         dim = self.mesh_el_group.dim
         if self.order == 0:
             result = mp.warp_and_blend_nodes(dim, 1)
@@ -352,7 +328,7 @@ class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
 
     @property
     @memoize_method
-    def unit_nodes(self):
+    def _interp_nodes(self):
         dim = self.mesh_el_group.dim
 
         from recursivenodes import recursive_nodes
@@ -377,7 +353,7 @@ class PolynomialEquidistantSimplexElementGroup(_MassMatrixQuadratureElementGroup
     """
     @property
     @memoize_method
-    def unit_nodes(self):
+    def _interp_nodes(self):
         dim = self.mesh_el_group.dim
         result = mp.equidistant_nodes(dim, self.order)
 
@@ -396,7 +372,7 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
         self._unit_nodes = unit_nodes
 
     @property
-    def unit_nodes(self):
+    def _interp_nodes(self):
         dim2, nunit_nodes = self._unit_nodes.shape
 
         if dim2 != self.mesh_el_group.dim:
@@ -473,21 +449,19 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
                     f"expected {mesh_el_group.dim}, got {unit_nodes.shape[0]}.")
 
         self._basis = basis
-        self._unit_nodes = unit_nodes
+        self._nodes = unit_nodes
 
     def basis_obj(self):
         return self._basis
 
-    @property
-    def unit_nodes(self):
-        return self._unit_nodes
-
-    @property
     @memoize_method
-    def weights(self):
-        return np.dot(
-                mass_matrix(self),
-                np.ones(len(self.basis_obj().functions)))
+    def quadrature_rule(self):
+        basis_fcts = self._basis.functions
+        nodes = self._nodes
+        mass_matrix = mp.mass_matrix(basis_fcts, nodes)
+        weights = np.dot(mass_matrix,
+                         np.ones(len(basis_fcts)))
+        return mp.Quadrature(nodes, weights, exact_to=self.order)
 
     def discretization_key(self):
         # FIXME?
@@ -523,9 +497,9 @@ class GaussLegendreTensorProductElementGroup(LegendreTensorProductElementGroup):
         super().__init__(mesh_el_group, order, index,
                 unit_nodes=self._quadrature_rule.nodes)
 
-    @property
-    def weights(self):
-        return self._quadrature_rule.weights
+    @memoize_method
+    def quadrature_rule(self):
+        return self._quadrature_rule
 
     def discretization_key(self):
         return (type(self), self.dim, self.order)

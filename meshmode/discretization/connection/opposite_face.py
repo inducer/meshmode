@@ -55,12 +55,12 @@ def _make_cross_face_batches(actx,
 
     tgt_bdry_nodes = np.array([
         thaw_to_numpy(actx, ary[i_tgt_grp])[tgt_bdry_element_indices]
-        for ary in tgt_bdry_discr.nodes()
+        for ary in tgt_bdry_discr.nodes(cached=False)
         ])
 
     src_bdry_nodes = np.array([
         thaw_to_numpy(actx, ary[i_src_grp])[src_bdry_element_indices]
-        for ary in src_bdry_discr.nodes()
+        for ary in src_bdry_discr.nodes(cached=False)
         ])
 
     tol = 1e4 * np.finfo(tgt_bdry_nodes.dtype).eps
@@ -233,7 +233,7 @@ def _make_cross_face_batches(actx,
 
     # }}}
 
-    # {{{ find groups of src_unit_nodes
+    # {{{ find batches of src_unit_nodes
 
     done_elements = np.zeros(nelements, dtype=bool)
     while True:
@@ -372,14 +372,14 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
 
                 assert np.array_equal(vbc_els[vbc_used_els], adj_els)
 
-                # find to_element_indices
+                # find tgt_bdry_element_indices
 
                 tgt_bdry_element_indices = thaw_to_numpy(
                         actx,
                         vbc_tgt_grp_face_batch.to_element_indices
                         )[vbc_used_els]
 
-                # find from_element_indices
+                # find src_bdry_element_indices
 
                 src_vol_element_indices = adj.neighbors[adj_tgt_flags]
                 src_element_faces = adj.neighbor_faces[adj_tgt_flags]

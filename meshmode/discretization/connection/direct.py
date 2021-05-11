@@ -147,7 +147,22 @@ class DiscretizationConnection:
         self.is_surjective = is_surjective
 
     def __call__(self, ary):
+        """Apply the connection. If applicable, may return a view of the data
+        instead of a copy, i.e. changes to *ary* may or may not appear
+        in the result returned by this method, and vice versa.
+        """
         raise NotImplementedError()
+
+
+class IdentityDiscretizationConnection(DiscretizationConnection):
+    """A no-op connection from a :class:`~meshmode.discretization.Discretization`
+    to the same discretization that returns the same data unmodified.
+    """
+    def __init__(self, discr):
+        super().__init__(discr, discr, True)
+
+    def __call__(self, ary):
+        return ary
 
 
 class DirectDiscretizationConnection(DiscretizationConnection):

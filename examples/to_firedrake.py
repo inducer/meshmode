@@ -57,7 +57,7 @@ def main():
     mesh = generate_regular_rect_mesh(
             a=(-0.5, -0.5),
             b=(0.5, 0.5),
-            n=(nel_1d, nel_1d))
+            nelements_per_axis=(nel_1d, nel_1d))
 
     order = 3
 

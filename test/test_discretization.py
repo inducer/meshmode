@@ -1,4 +1,4 @@
-__copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
+__copyright__ = "Copyright (C) 2021 Andreas Kloeckner"
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,50 +22,34 @@ THE SOFTWARE.
 
 
 import numpy as np
-import pytest
+# import numpy.linalg as la
+import meshmode.mesh.generation as mgen
+from meshmode.discretization import Discretization
 
-import meshmode         # noqa: F401
 from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests,
-        PyOpenCLArrayContext)
-from meshmode.dof_array import thaw
+        as pytest_generate_tests)
 
-import logging
-logger = logging.getLogger(__name__)
+from meshmode.discretization.poly_element import (
+        InterpolatoryQuadratureSimplexGroupFactory,
+        )
 
 
-@pytest.mark.parametrize("dim", [1, 2, 3])
-@pytest.mark.octave
-def test_nodal_dg_interop(actx_factory, dim):
-    pytest.importorskip("oct2py")
+def test_discr_nodes_caching(actx_factory):
     actx = actx_factory()
+    nelements = 30
+    target_order = 5
+    mesh = mgen.make_curve_mesh(
+            mgen.NArmedStarfish(5, 0.25),
+            np.linspace(0.0, 1.0, nelements + 1),
+            target_order)
+    discr = Discretization(actx, mesh,
+            InterpolatoryQuadratureSimplexGroupFactory(target_order))
 
-    from meshmode.interop.nodal_dg import download_nodal_dg_if_not_present
-    download_nodal_dg_if_not_present()
-    order = 4
-
-    from meshmode.mesh.generation import generate_regular_rect_mesh
-    mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*dim, b=(0.5,)*dim, nelements_per_axis=(8,)*dim, order=order)
-
-    from meshmode.interop.nodal_dg import NodalDGContext
-    with NodalDGContext("./nodal-dg/Codes1.1") as ndgctx:
-        ndgctx.set_mesh(mesh, order=order)
-
-        discr = ndgctx.get_discr(actx)
-
-        for ax in range(dim):
-            x_ax = ndgctx.pull_dof_array(actx, ndgctx.AXES[ax])
-            err = actx.np.linalg.norm(x_ax-discr.nodes()[ax], np.inf)
-            assert err < 1e-15
-
-        n0 = thaw(actx, discr.nodes()[0])
-
-        ndgctx.push_dof_array("n0", n0)
-        n0_2 = ndgctx.pull_dof_array(actx, "n0")
-
-        assert actx.np.linalg.norm(n0 - n0_2, np.inf) < 1e-15
+    discr.nodes(cached=False)
+    assert discr._cached_nodes is None
+    discr.nodes()
+    assert discr._cached_nodes is not None
 
 
 if __name__ == "__main__":
