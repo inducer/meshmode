@@ -509,18 +509,18 @@ def _zip_containers(arys):
 
 def _map_array_container_with_context(f, ary, *,
         actx=_ArrayContextNotProvided,
-        scalar_cls=None,
+        leaf_cls=None,
         recursive=False):
     """Helper for :func:`map_array_container`.
 
     :param actx: :class:`ArrayContext` passed in to :func:`deserialize_container`.
         If not provided, the context of the serialized container is used, if any.
-    :param scalar_cls: class on which we call *f* directly. This is mostly
+    :param leaf_cls: class on which we call *f* directly. This is mostly
         useful in the recursive setting, where it can stop the recursion on
         specific container classes. By default, the recursion is stopped when
         a non-:class:`ArrayContainer` class is encountered.
     """
-    if scalar_cls is not None and type(ary) is scalar_cls:
+    if leaf_cls is not None and type(ary) is leaf_cls:
         return f(ary)
     elif isinstance(ary, ArrayContainer):
         array_context = actx
@@ -529,7 +529,7 @@ def _map_array_container_with_context(f, ary, *,
 
         if recursive:
             f = partial(_map_array_container_with_context,
-                    f, actx=actx, scalar_cls=scalar_cls, recursive=True)
+                    f, actx=actx, leaf_cls=leaf_cls, recursive=True)
 
         return deserialize_container(type(ary), (
                 (key, f(subary)) for key, subary in serialize_container(ary)
@@ -540,7 +540,7 @@ def _map_array_container_with_context(f, ary, *,
 
 def _multimap_array_container_only_unchecked(f, *args,
         actx=_ArrayContextNotProvided,
-        scalar_cls=None,
+        leaf_cls=None,
         recursive=False):
     r"""Version of :func:`_multimap_array_container_with_context` that assumes
     all *args* are :class:`ArrayContainer`\ s of the same type.
@@ -548,7 +548,7 @@ def _multimap_array_container_only_unchecked(f, *args,
     No checks are performed.
     """
     template_ary = args[0]
-    if ((scalar_cls is not None and type(template_ary) is scalar_cls)
+    if ((leaf_cls is not None and type(template_ary) is leaf_cls)
             or not isinstance(template_ary, ArrayContainer)):
         return f(*args)
 
@@ -558,7 +558,7 @@ def _multimap_array_container_only_unchecked(f, *args,
 
     if recursive:
         f = partial(_multimap_array_container_only_unchecked,
-                f, actx=actx, scalar_cls=scalar_cls, recursive=True)
+                f, actx=actx, leaf_cls=leaf_cls, recursive=True)
 
     return deserialize_container(type(template_ary), (
         (key, f(*subarys)) for key, subarys in _zip_containers(args)
@@ -567,13 +567,13 @@ def _multimap_array_container_only_unchecked(f, *args,
 
 def _multimap_array_container_with_context(f, *args,
         actx=_ArrayContextNotProvided,
-        scalar_cls=None,
+        leaf_cls=None,
         recursive=False):
     """Helper for :func:`multimap_array_container`.
 
     :param actx: :class:`ArrayContext` passed in to :func:`deserialize_container`.
         If not provided, the context of the serialized container is used, if any.
-    :param scalar_cls: class on which we call *f* directly. This is mostly
+    :param leaf_cls: class on which we call *f* directly. This is mostly
         useful in the recursive setting, where it can stop the recursion on
         specific container classes. By default, the recursion is stopped when
         a non-:class:`ArrayContainer` class is encountered.
@@ -581,7 +581,7 @@ def _multimap_array_container_with_context(f, *args,
     container_indices = [
             i for i, arg in enumerate(args)
             if isinstance(arg, ArrayContainer)
-            or (scalar_cls is not None and type(arg) is not scalar_cls)
+            or (leaf_cls is not None and type(arg) is not leaf_cls)
             ]
 
     if not container_indices:
@@ -599,11 +599,11 @@ def _multimap_array_container_with_context(f, *args,
 
     if len(container_indices) == len(args):
         return _multimap_array_container_only_unchecked(f, *args,
-                actx=actx, scalar_cls=scalar_cls, recursive=recursive)
+                actx=actx, leaf_cls=leaf_cls, recursive=recursive)
 
     if recursive:
         f = partial(_multimap_array_container_with_context,
-                f, actx=actx, scalar_cls=scalar_cls, recursive=True)
+                f, actx=actx, leaf_cls=leaf_cls, recursive=True)
 
     result = []
     new_args = list(args)

@@ -319,7 +319,7 @@ def map_dof_array_container(f: Callable[[Any], Any], ary):
     """
     from meshmode.array_context import _map_array_container_with_context
     return _map_array_container_with_context(
-            f, ary, scalar_cls=DOFArray, recursive=True)
+            f, ary, leaf_cls=DOFArray, recursive=True)
 
 
 def mapped_over_dof_arrays(f):
@@ -337,7 +337,7 @@ def multimap_dof_array_container(f: Callable[[Any], Any], *args):
     """
     from meshmode.array_context import _multimap_array_container_with_context
     return _multimap_array_container_with_context(
-            f, *args, scalar_cls=DOFArray, recursive=True)
+            f, *args, leaf_cls=DOFArray, recursive=True)
 
 
 def multimapped_over_dof_arrays(f):
