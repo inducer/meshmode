@@ -1116,46 +1116,50 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
                 *arrays)
 
 
-def _flatten_grp_array(grp_ary):
-    if grp_ary.size == 0:
+def _flatten_array(ary):
+    import pyopencl.array as cl
+    if not isinstance(ary, cl.Array):
+        return ary
+
+    if ary.size == 0:
         # Work around https://github.com/inducer/pyopencl/pull/402
-        return grp_ary._new_with_changes(
-                data=None, offset=0, shape=(0,), strides=(grp_ary.dtype.itemsize,))
-    if grp_ary.flags.f_contiguous:
-        return grp_ary.reshape(-1, order="F")
-    elif grp_ary.flags.c_contiguous:
-        return grp_ary.reshape(-1, order="C")
+        return ary._new_with_changes(
+                data=None, offset=0, shape=(0,), strides=(ary.dtype.itemsize,))
+    if ary.flags.f_contiguous:
+        return ary.reshape(-1, order="F")
+    elif ary.flags.c_contiguous:
+        return ary.reshape(-1, order="C")
     else:
         raise ValueError("cannot flatten group array of DOFArray for norm, "
-                f"with strides {grp_ary.strides} of {grp_ary.dtype}")
+                f"with strides {ary.strides} of {ary.dtype}")
 
 
 class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
-    def norm(self, array, ord=None):
-        if len(array.shape) != 1:
-            raise NotImplementedError("only vector norms are implemented")
+    def norm(self, ary, ord=None):
+        from numbers import Number
+        if isinstance(ary, Number):
+            return abs(ary)
 
         if ord is None:
             ord = 2
 
-        # FIXME: Handling DOFArrays here is not beautiful, but it sure does avoid
-        # downstream headaches.
-        # FIXME: Extend this to ArrayContainers somehow?
-        from meshmode.dof_array import DOFArray
-        if isinstance(array, DOFArray):
+        if isinstance(ary, ArrayContainer):
             import numpy.linalg as la
-            return la.norm(np.array([
-                self.norm(_flatten_grp_array(grp_ary), ord)
-                for grp_ary in array]), ord)
+            return la.norm([
+                self.norm(_flatten_array(subary), ord=ord)
+                for _, subary in serialize_container(ary)
+                ], ord=ord)
 
-        if array.size == 0:
+        if len(ary.shape) != 1:
+            raise NotImplementedError("only vector norms are implemented")
+
+        if ary.size == 0:
             return 0
 
-        from numbers import Number
         if ord == np.inf:
-            return self._array_context.np.max(abs(array))
+            return self._array_context.np.max(abs(ary))
         elif isinstance(ord, Number) and ord > 0:
-            return self._array_context.np.sum(abs(array)**ord)**(1/ord)
+            return self._array_context.np.sum(abs(ary)**ord)**(1/ord)
         else:
             raise NotImplementedError(f"unsupported value of 'ord': {ord}")
 
