@@ -43,6 +43,7 @@ __doc__ = """
 .. autoclass:: ArrayContainer
 .. autofunction:: is_array_container
 .. autofunction:: serialize_container
+.. autofunction:: deserialize_container_class
 .. autofunction:: deserialize_container
 .. autofunction:: get_container_context
 .. autofunction:: get_container_context_recursively
@@ -116,20 +117,24 @@ class ArrayContainer(metaclass=ArrayContainerMeta):
     r"""A generic container for the array type supported by the
     :class:`ArrayContext`.
 
-    The functionality for the container is implement through
+    The functionality for the container is implemented through
     :func:`functools.singledispatch`. The following methods are required
 
     * :func:`is_array_container` allows registering foreign types as containers.
       For example, object :class:`~numpy.ndarray`\ s are considered containers
       and ``isinstance(ary, ArrayContainer)`` will be *True*.
     * Serialization functionality is implemented in :func:`serialize_container`
-      and :func:`deserialize_container`. This allows accessing the components
-      of the container.
+      and :func:`deserialize_container`. This allows enumeration of the
+      component arrays in a container and the construction of modified
+      containers from an iterable of those component arrays. Deserialization
+      may be registered using :func:`deserialize_container_class`.
     * :func:`get_container_context` retrieves the :class:`ArrayContext` from
       a container, if it has one.
 
-    The container is meant to work in a similar way to JAX's
-    `PyTrees <https://jax.readthedocs.io/en/latest/pytrees.html>`__.
+    The container and its serialization interface has goals and uses
+    approaches similar to JAX's
+    `PyTrees <https://jax.readthedocs.io/en/latest/pytrees.html>`__,
+    however its implementation differs a bit.
     """
 
 
@@ -151,6 +156,10 @@ def serialize_container(ary: ArrayContainer) -> Iterable[Tuple[Any, Any]]:
         Components can themselves be :class:`ArrayContainer`\ s, allowing
         for arbitrarily nested structures. The identifiers need to be hashable
         but are otherwise treated as opaque.
+
+    If *ary* is mutable, the serialization function is not required to ensure
+    that the serialization result reflects the array state at the time of the
+    call to :func:`serialize_container`.
     """
     raise NotImplementedError(type(ary).__name__)
 
@@ -159,6 +168,9 @@ def serialize_container(ary: ArrayContainer) -> Iterable[Tuple[Any, Any]]:
 def deserialize_container_class(cls: type,
         actx: Optional["ArrayContext"],
         iterable: Iterable[Tuple[Any, Any]]):
+    """Serves as the :func:`functools.singledispatch` registration target for
+    container serialization.
+    """
     raise NotImplementedError(cls.__name__)
 
 
@@ -181,7 +193,7 @@ def get_container_context(ary: ArrayContainer):
 
     This function is not recursive, so it will only search at the root level
     of the container. For the recursive version, see
-    :func:`get_container_context_recursively`
+    :func:`get_container_context_recursively`.
     """
     return None
 
@@ -204,6 +216,7 @@ def _(ary: Union[list, tuple, np.ndarray]):
 
 @deserialize_container_class.register(np.ndarray)
 def _(cls: type, actx: "ArrayContext", iterable):
+    # disallow subclasses
     assert cls is np.ndarray
     iterable = list(iterable)
 
@@ -467,7 +480,7 @@ def _update_container_context(ary, actx):
     return actx, ary_actx
 
 
-def _map_array_container_with_context(f, ary,
+def _map_array_container_with_context(f, ary, *,
         actx=_ArrayContextNotProvided,
         scalar_cls=None,
         recursive=True):
@@ -554,7 +567,7 @@ def array_container_vectorize_n_args(f: Callable[[Any], Any], *args):
     r"""Applies *f* to the components of multiple :class:`ArrayContainer`\ s.
 
     Works similarly to :func:`~pytools.obj_array.obj_array_vectorize_n_args`,
-    but on arbitrar containers. The containers must all have the same type,
+    but on arbitrary containers. The containers must all have the same type,
     so that the function has a well-defined return type as well.
 
     For a recursive version, see :func:`multimap_array_container`.
