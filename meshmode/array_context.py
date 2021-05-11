@@ -188,7 +188,7 @@ def deserialize_container(cls: type,
         an :class:`ArrayContext`.
     :param template: an instance of an existing object of class *cls* that
         can be used to aid in the deserialization. For a similar choice
-        see :meth:`numpy.ndarray.__array_finalize__`.
+        see :attr:`~numpy.class.__array_finalize__`.
     """
     return deserialize_container_class.dispatch(cls)(
             cls, iterable, actx=actx, template=template)
