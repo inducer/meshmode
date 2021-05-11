@@ -144,7 +144,7 @@ jobs:
     downstream_tests:
         strategy:
             matrix:
-                downstream_project: [grudge, pytential, mirgecom]
+                downstream_project: [grudge, pytential]
         name: Tests for downstream project ${{ matrix.downstream_project }}
         runs-on: ubuntu-latest
         steps:
@@ -183,10 +183,41 @@ jobs:
                 . ./ci-support.sh
                 build_py_project_in_conda_env
                 test_py_project
-                
+
                 if [[ "$DOWNSTREAM_PROJECT" = "mirgecom" ]]; then
                     cd ..
                     examples/run_examples.sh ./examples
                 fi
+
+    mirgecom_tests:
+        name: Tests for downstream project mirgecom
+        runs-on: ubuntu-latest
+        steps:
+        -   uses: actions/checkout@v2
+        -   name: "Main Script"
+            run: |
+                git clone "https://github.com/illinois-ceesd/mirgecom.git"
+
+                cd mirgecom
+                echo "*** mirgecom version: $(git rev-parse --short HEAD)"
+
+                sed -i "/egg=meshmode/ c git+file://$(readlink -f ..)#egg=meshmode" requirements.txt
+
+                # Avoid slow or complicated tests in downstream projects
+                export PYTEST_ADDOPTS="-k 'not (slowtest or octave or mpi)'"
+
+                # can't turn off MPI in mirgecom
+                sudo apt-get update
+                sudo apt-get install openmpi-bin libopenmpi-dev
+                export CONDA_ENVIRONMENT=conda-env.yml
+                export CISUPPORT_PARALLEL_PYTEST=no
+
+                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/ci-support.sh
+                . ./ci-support.sh
+                build_py_project_in_conda_env
+                test_py_project
+
+                cd ..
+                examples/run_examples.sh ./examples
 
 # vim: sw=4
