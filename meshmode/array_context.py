@@ -263,17 +263,20 @@ def get_container_context_recursively(ary: Any):
     if actx is not None:
         return actx
 
-    # try getting it recursively
-    contexts = [
-            get_container_context_recursively(subary)
-            for _, subary in serialize_container(ary)
-            ]
+    first_context = None
+    for _, subary in serialize_container(ary):
+        context = get_container_context_recursively(subary)
+        if context is None:
+            continue
 
-    contexts = [c for c in contexts if c is not None]
-    if contexts:
-        actx = single_valued(contexts, equality_pred=operator.is_)
+        if not __debug__:
+            return context
+        elif first_context is None:
+            first_context = context
+        else:
+            assert first_context is context
 
-    return actx
+    return first_context
 
 # }}}
 
