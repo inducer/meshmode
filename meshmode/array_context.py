@@ -31,7 +31,7 @@ import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 
-from pytools import memoize_method, single_valued
+from pytools import memoize_method
 from pytools.tag import Tag
 
 
@@ -263,7 +263,6 @@ def get_container_context_recursively(ary: Any):
     if actx is not None:
         return actx
 
-    first_context = None
     for _, subary in serialize_container(ary):
         context = get_container_context_recursively(subary)
         if context is None:
@@ -271,12 +270,12 @@ def get_container_context_recursively(ary: Any):
 
         if not __debug__:
             return context
-        elif first_context is None:
-            first_context = context
+        elif actx is None:
+            actx = context
         else:
-            assert first_context is context
+            assert actx is context
 
-    return first_context
+    return actx
 
 # }}}
 
@@ -311,9 +310,10 @@ class ArrayContainerWithArithmetic(ArrayContainer):
         from numbers import Number
         from pytools.obj_array import obj_array_vectorize
 
-        if isinstance(arg1, np.ndarray) or isinstance(arg2, np.ndarray):
+        is_arg1_ndarray = isinstance(arg1, np.ndarray)
+        if is_arg1_ndarray or isinstance(arg2, np.ndarray):
             # do a bit of broadcasting
-            if isinstance(arg1, np.ndarray):
+            if is_arg1_ndarray:
                 return obj_array_vectorize(
                         lambda subary: cls.binary_op(op, subary, arg2),
                         arg1.astype(object, copy=False))
@@ -321,7 +321,8 @@ class ArrayContainerWithArithmetic(ArrayContainer):
                 return obj_array_vectorize(
                         lambda subary: cls.binary_op(op, arg1, subary),
                         arg2.astype(object, copy=False))
-        elif isinstance(arg1, ArrayContainer) and isinstance(arg2, ArrayContainer):
+        elif (isinstance(arg1, ArrayContainer) and isinstance(arg2, ArrayContainer)
+                and type(arg1) is type(arg2)):
             return multimap_array_container(op, arg1, arg2)
         elif isinstance(arg1, ArrayContainer) and isinstance(arg2, Number):
             return map_array_container(lambda subary: op(subary, arg2), arg1)
@@ -524,7 +525,7 @@ def _multimap_array_container_with_context(f, *args,
         return f(*args)
 
     template_ary = args[container_indices[0]]
-    if not all(isinstance(args[i], type(template_ary)) for i in container_indices):
+    if not all((type(args[i]) is type(template_ary)) for i in container_indices):
         raise TypeError(
                 "'ArrayContainer' arguments must be of the same type: "
                 f"{type(template_ary).__name__}")
