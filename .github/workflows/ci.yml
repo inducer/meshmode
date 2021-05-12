@@ -153,7 +153,7 @@ jobs:
             env:
                 DOWNSTREAM_PROJECT: ${{ matrix.downstream_project }}
             run: |
-                .ci/install-downstream.sh
+                source .ci/install-downstream.sh
 
                 cd "$DOWNSTREAM_PROJECT"
 
@@ -170,7 +170,7 @@ jobs:
             env:
                 DOWNSTREAM_PROJECT: mirgecom
             run: |
-                .ci/install-downstream.sh
+                source .ci/install-downstream.sh
 
                 cd "$DOWNSTREAM_PROJECT"
 
