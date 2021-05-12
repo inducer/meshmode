@@ -64,6 +64,7 @@ __doc__ = """
 .. autofunction:: pytest_generate_tests_for_pyopencl_array_context
 """
 
+# {{{ loopy
 
 _DEFAULT_LOOPY_OPTIONS = lp.Options(
         no_numpy=True,
@@ -98,6 +99,8 @@ def _loopy_get_default_entrypoint(t_unit):
         except AttributeError:
             raise TypeError("unable to find default entry point for loopy "
                     "translation unit")
+
+# }}}
 
 
 # {{{ ArrayContainer
@@ -177,7 +180,6 @@ def deserialize_container_class(cls: type,
     """Serves as the :func:`functools.singledispatch` registration target for
     container deserialization through :func:`deserialize_container`.
     """
-
     raise NotImplementedError(cls.__name__)
 
 
@@ -230,30 +232,15 @@ def _(cls: type, iterable: Iterable[Tuple[Any, Any]], *,
     # disallow subclasses
     assert cls is np.ndarray
 
-    if template is not None:
-        result = cls(template.shape, dtype=object)
-        for i, subary in iterable:
-            result[i] = subary
-
-        return result
-
     iterable = list(iterable)
     result = cls(len(iterable), dtype=object)
-    shape = np.full(len(iterable[0][0]), -1)
-
-    for i, (index, subary) in enumerate(iterable):
-        shape = np.maximum(shape, index)
+    for i, (_, subary) in enumerate(iterable):
         result[i] = subary
 
-    return result.reshape(tuple(shape + 1))
+    if template is not None:
+        result = result.reshape(template.shape)
 
-
-@serialize_container.register(list)
-@serialize_container.register(tuple)
-def _(ary: Union[list, tuple]):
-    # NOTE: this is only here so that `multimap_array_container` can call
-    # `get_container_context_recursively(args)` directly
-    return enumerate(ary)
+    return result
 
 
 def get_container_context_recursively(ary: Any):
@@ -593,13 +580,13 @@ def _multimap_array_container_with_context(f, *args,
                 "'ArrayContainer' arguments must be of the same type: "
                 f"{type(template_ary).__name__}")
 
-    array_context = actx
-    if array_context is _ArrayContextNotProvided:
-        array_context = get_container_context(template_ary)
-
     if len(container_indices) == len(args):
         return _multimap_array_container_only_unchecked(f, *args,
                 actx=actx, leaf_cls=leaf_cls, recursive=recursive)
+
+    array_context = actx
+    if array_context is _ArrayContextNotProvided:
+        array_context = get_container_context(template_ary)
 
     if recursive:
         f = partial(_multimap_array_container_with_context,
@@ -638,11 +625,11 @@ def array_container_vectorize_n_args(f: Callable[[Any], Any], *args):
 
     Works similarly to :func:`~pytools.obj_array.obj_array_vectorize_n_args`,
     but on arbitrary containers. The containers must all have the same type,
-    so that the function has a well-defined return type as well.
+    which will also be the return type.
 
     For a recursive version, see :func:`multimap_array_container`.
 
-    :param args: a :class:`tuple` of :class:`ArrayContainer`\ s of the same
+    :param args: all :class:`ArrayContainer` arguments must be of the same
         type and with the same structure (same number of components, etc.).
     """
     return _multimap_array_container_with_context(f, *args, recursive=False)
@@ -671,7 +658,7 @@ def multimap_array_container(f: Callable[[Any], Any], *args):
 
     For a non-recursive version see :func:`array_container_vectorize_n_args`.
 
-    :param args: a :class:`tuple` of :class:`ArrayContainer`\ s of the same
+    :param args: all :class:`ArrayContainer` arguments must be of the same
         type and with the same structure (same number of components, etc.).
     """
     return _multimap_array_container_with_context(f, *args, recursive=True)
@@ -687,11 +674,10 @@ def multimapped_over_array_containers(f: Callable[[Any], Any]):
 
 
 def freeze(ary):
-    r"""Freezes recursively by going through all components of
-    :class:`ArrayContainer`\ s and object arrays.
+    r"""Freezes recursively by going through all components of the
+    :class:`ArrayContainer` *ary*.
 
-    :param ary: a tree-like (nested) structure of :meth:`~ArrayContext.thaw`\ ed
-        :class:`ArrayContainer`\ s.
+    :param ary: a :meth:`~ArrayContext.thaw`\ ed :class:`ArrayContainer`.
     """
     def _freeze(subary, actx=None):
         if isinstance(subary, ArrayContainer):
@@ -713,11 +699,10 @@ def freeze(ary):
 
 
 def thaw(actx, ary):
-    r"""Thaws recursively by going through all components of
-    :class:`ArrayContainer`\ s and object arrays.
+    r"""Thaws recursively by going through all components of the
+    :class:`ArrayContainer` *ary*.
 
-    :param ary: a tree-like (nested) structure of :meth:`~ArrayContext.freeze`\ ed
-        :class:`ArrayContainer`\ s.
+    :param ary: a :meth:`~ArrayContext.freeze`\ ed :class:`ArrayContainer`.
     """
     if not isinstance(ary, ArrayContainer):
         raise TypeError(
