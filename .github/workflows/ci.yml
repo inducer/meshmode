@@ -170,6 +170,10 @@ jobs:
             run: |
                 source .ci/install-downstream.sh
 
+                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/ci-support.sh
+                source ./ci-support.sh
+                build_py_project_in_conda_env
+
                 examples/run_examples.sh ./examples
 
 
