@@ -593,8 +593,8 @@ def _multimap_array_container_with_context(f, *args,
     new_args = list(args)
 
     for key, subarys in _zip_containers([args[i] for i in container_indices]):
-        for i in container_indices:
-            new_args[i] = subarys[i]
+        for i, subary in zip(container_indices, subarys):
+            new_args[i] = subary
 
         result.append((key, f(*new_args)))
 
