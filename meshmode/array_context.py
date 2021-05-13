@@ -252,6 +252,8 @@ def get_container_context_recursively(ary: Any):
     an assertion error is raised.
     """
     actx = None
+    if not isinstance(ary, ArrayContainer):
+        return actx
 
     # try getting the array context directly
     if isinstance(ary, ArrayContainer):

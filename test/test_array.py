@@ -20,6 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from dataclasses import dataclass
+
 import pytest
 import numpy as np
 
@@ -27,6 +29,7 @@ import meshmode         # noqa: F401
 from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
+from meshmode.array_context import DataclassArrayContainerWithArithmetic
 
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import PolynomialWarpAndBlendGroupFactory
@@ -305,10 +308,18 @@ def test_array_context_einsum_array_tripleprod(actx_factory, spec):
 
 # {{{ test array container
 
-def test_recursive_freeze_thaw(actx_factory):
-    actx = actx_factory()
-    ambient_dim = 2
+@dataclass
+class MyContainer(DataclassArrayContainerWithArithmetic):
+    mass: DOFArray
+    momentum: np.ndarray
+    enthalpy: DOFArray
 
+    @property
+    def array_context(self):
+        return self.mass.array_context
+
+
+def _get_test_containers(actx, ambient_dim=2):
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(
             a=(-0.5,)*ambient_dim,
@@ -316,32 +327,14 @@ def test_recursive_freeze_thaw(actx_factory):
             n=(3,)*ambient_dim, order=1)
     discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
 
-    # {{{ ArrayContainer
-
-    from dataclasses import dataclass
-    from meshmode.array_context import DataclassArrayContainerWithArithmetic
-
-    @dataclass
-    class MyContainer(DataclassArrayContainerWithArithmetic):
-        mass: DOFArray
-        momentum: np.ndarray
-        enthalpy: DOFArray
-
-        @property
-        def array_context(self):
-            return self.mass.array_context
-
-    # }}}
-
-    from meshmode.array_context import thaw, freeze
+    from meshmode.array_context import thaw
     x = thaw(actx, discr.nodes()[0])
 
     # pylint: disable=unexpected-keyword-arg, no-value-for-parameter
-    ary_dataclass = MyContainer(
+    dataclass_of_dofs = MyContainer(
             mass=x,
             momentum=make_obj_array([x, x]),
             enthalpy=x)
-    ary_dataclass = actx.np.sin(ary_dataclass + 3 * ary_dataclass)
 
     ary_dof = x
     ary_of_dofs = make_obj_array([x, x, x])
@@ -349,20 +342,98 @@ def test_recursive_freeze_thaw(actx_factory):
     for i in np.ndindex(mat_of_dofs.shape):
         mat_of_dofs[i] = x
 
-    for ary in [ary_dof, ary_of_dofs, mat_of_dofs, ary_dataclass]:
+    return ary_dof, ary_of_dofs, mat_of_dofs, dataclass_of_dofs
+
+
+def test_container_multimap(actx_factory):
+    actx = actx_factory()
+    ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs = _get_test_containers(actx)
+
+    # {{{ check
+
+    def _check_allclose(f, arg1, arg2, atol=1.0e-14):
+        assert np.linalg.norm((f(arg1) - arg2).get()) < atol
+
+    def func_all_scalar(x, y):
+        return x + y
+
+    def func_first_scalar(x, subary):
+        return x + subary
+
+    def func_multiple_scalar(a, subary1, b, subary2):
+        return a * subary1 + b * subary2
+
+    from meshmode.array_context import multimap_array_container
+    result = multimap_array_container(func_all_scalar, 1, 2)
+    assert result == 3
+
+    from functools import partial
+    for ary in [ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs]:
+        result = multimap_array_container(func_first_scalar, 1, ary)
+        multimap_array_container(
+                partial(_check_allclose, lambda x: 1 + x),
+                ary, result)
+
+        result = multimap_array_container(func_multiple_scalar, 2, ary, 2, ary)
+        multimap_array_container(
+                partial(_check_allclose, lambda x: 4 * x),
+                ary, result)
+
+    with pytest.raises(TypeError):
+        multimap_array_container(func_multiple_scalar, 2, ary_dof, 2, dc_of_dofs)
+
+    # }}}
+
+
+def test_container_arithmetic(actx_factory):
+    actx = actx_factory()
+    ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs = _get_test_containers(actx)
+
+    # {{{ check
+
+    def _check_allclose(f, arg1, arg2, atol=1.0e-14):
+        assert np.linalg.norm((f(arg1) - arg2).get()) < atol
+
+    from functools import partial
+    from meshmode.array_context import multimap_array_container
+    for ary in [ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs]:
+        multimap_array_container(
+                partial(_check_allclose, lambda x: 3 * x),
+                ary, 2 * ary + ary)
+        multimap_array_container(
+                partial(_check_allclose, lambda x: actx.np.sin(x)),
+                ary, actx.np.sin(ary))
+
+    # }}}
+
+
+def test_container_freeze_thaw(actx_factory):
+    actx = actx_factory()
+    ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs = _get_test_containers(actx)
+
+    # {{{ check
+
+    from meshmode.array_context import get_container_context
+    from meshmode.array_context import get_container_context_recursively
+
+    assert get_container_context(ary_of_dofs) is None
+    assert get_container_context(mat_of_dofs) is None
+    assert get_container_context(ary_dof) is actx
+    assert get_container_context(dc_of_dofs) is actx
+
+    assert get_container_context_recursively(ary_of_dofs) is actx
+    assert get_container_context_recursively(mat_of_dofs) is actx
+
+    from meshmode.array_context import thaw, freeze
+    for ary in [ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs]:
         frozen_ary = freeze(ary)
         thawed_ary = thaw(actx, frozen_ary)
         frozen_ary = freeze(thawed_ary)
 
-    from meshmode.array_context import get_container_context
-    assert get_container_context(ary_of_dofs) is None
-    assert get_container_context(mat_of_dofs) is None
-    assert get_container_context(ary_dof) is actx
-    assert get_container_context(ary_dataclass) is actx
+        assert get_container_context_recursively(frozen_ary) is None
+        assert get_container_context_recursively(thawed_ary) is actx
 
-    from meshmode.array_context import get_container_context_recursively
-    assert get_container_context_recursively(ary_of_dofs) is actx
-    assert get_container_context_recursively(mat_of_dofs) is actx
+    # }}}
 
 # }}}
 

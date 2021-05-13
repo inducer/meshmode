@@ -289,6 +289,10 @@ class DOFArray(ArrayContainerWithArithmetic):
 
 # {{{ ArrayContainer implementation
 
+class _EntryNotProvided:
+    pass
+
+
 @serialize_container.register(DOFArray)
 def _(ary: DOFArray):
     return enumerate(ary._data)
@@ -298,12 +302,12 @@ def _(ary: DOFArray):
 def _(cls, template: Any, iterable: Iterable[Tuple[Any, Any]], *,
         actx: Optional[ArrayContext] = None):
     iterable = list(iterable)
-    result = [None] * len(iterable)
+    result = [_EntryNotProvided] * len(iterable)
 
     for i, subary in iterable:
         result[i] = subary
 
-    if any(subary is None for subary in result):
+    if any(subary is _EntryNotProvided for subary in result):
         raise ValueError("'iterable' does not contain all indices")
 
     return cls(actx, data=tuple(result))
