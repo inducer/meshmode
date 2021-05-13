@@ -34,7 +34,7 @@ from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
 
 from pytools import memoize_in, keyed_memoize_in
-from pytools.obj_array import obj_array_vectorized_n_args
+from meshmode.dof_array import multimapped_over_dof_arrays
 
 
 class NodalToModalDiscretizationConnection(DiscretizationConnection):
@@ -198,7 +198,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
         return output
 
-    @obj_array_vectorized_n_args
+    @multimapped_over_dof_arrays
     def __call__(self, ary):
         """Computes modal coefficients data from a functions
         nodal coefficients.
@@ -318,7 +318,7 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
                 to_discr=to_discr,
                 is_surjective=True)
 
-    @obj_array_vectorized_n_args
+    @multimapped_over_dof_arrays
     def __call__(self, ary):
         """Computes nodal coefficients from modal data.
 

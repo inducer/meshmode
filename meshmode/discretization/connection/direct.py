@@ -25,8 +25,8 @@ import numpy as np
 
 import loopy as lp
 from pytools import memoize_in, keyed_memoize_method
-from pytools.obj_array import obj_array_vectorized_n_args
 from meshmode.array_context import ArrayContext, make_loopy_program
+from meshmode.dof_array import multimapped_over_dof_arrays
 
 
 # {{{ interpolation batch
@@ -268,7 +268,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         return make_direct_full_resample_matrix(actx, self)
 
-    @obj_array_vectorized_n_args
+    @multimapped_over_dof_arrays
     def __call__(self, ary):
         from meshmode.dof_array import DOFArray
         if not isinstance(ary, DOFArray):

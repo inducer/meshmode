@@ -565,7 +565,7 @@ def _multimap_array_container_with_context(f, *args,
     container_indices = [
             i for i, arg in enumerate(args)
             if isinstance(arg, ArrayContainer)
-            or (leaf_cls is not None and type(arg) is not leaf_cls)
+            and (leaf_cls is None or type(arg) is not leaf_cls)
             ]
 
     if not container_indices:
