@@ -105,6 +105,10 @@ def _loopy_get_default_entrypoint(t_unit):
 
 # {{{ ArrayContainer
 
+class _ArrayContextNotProvided:
+    pass
+
+
 class ArrayContainerMeta(type):
     def __instancecheck__(cls, instance):
         if issubclass(type(instance), cls):
@@ -173,32 +177,34 @@ def serialize_container(ary: ArrayContainer) -> Iterable[Tuple[Any, Any]]:
 
 
 @singledispatch
-def deserialize_container_class(cls: type,
+def deserialize_container_class(cls: type, template: Any,
         iterable: Iterable[Tuple[Any, Any]], *,
-        actx: Optional["ArrayContext"] = None,
-        template: Optional[Any] = None):
+        actx: Optional["ArrayContext"] = None):
     """Serves as the :func:`functools.singledispatch` registration target for
     container deserialization through :func:`deserialize_container`.
     """
     raise NotImplementedError(cls.__name__)
 
 
-def deserialize_container(cls: type,
+def deserialize_container(cls: type, template: Any,
         iterable: Iterable[Tuple[Any, Any]], *,
-        actx: Optional["ArrayContext"] = None,
-        template: Optional[Any] = None):
+        actx: Optional["ArrayContext"] = _ArrayContextNotProvided):
     """Deserialize an iterable into an array container.
 
-    :param iterable: an iterable that mirrors the output of
-        :meth:`serialize_container`.
-    :param actx: can be *None* for frozen arrays or if the array does not use
-        an :class:`ArrayContext`.
-    :param template: an instance of an existing object of class *cls* that
+    :param template: an instance of an existing object that
         can be used to aid in the deserialization. For a similar choice
         see :attr:`~numpy.class.__array_finalize__`.
+    :param iterable: an iterable that mirrors the output of
+        :meth:`serialize_container`.
+    :param actx: :class:`ArrayContext` to use when constructing the new
+        container, if it requires one at all. If not provided, attempt to get
+        a context from the *template*.
     """
+    if actx is _ArrayContextNotProvided:
+        actx = get_container_context(template)
+
     return deserialize_container_class.dispatch(cls)(
-            cls, iterable, actx=actx, template=template)
+            cls, template, iterable, actx=actx)
 
 
 @singledispatch
@@ -226,19 +232,14 @@ def _(ary: np.ndarray):
 
 
 @deserialize_container_class.register(np.ndarray)
-def _(cls: type, iterable: Iterable[Tuple[Any, Any]], *,
-        actx: Optional["ArrayContext"] = None,
-        template: Optional[Any] = None):
+def _(cls: type, template: Any, iterable: Iterable[Tuple[Any, Any]], *,
+        actx: Optional["ArrayContext"] = None):
     # disallow subclasses
     assert cls is np.ndarray
 
-    iterable = list(iterable)
-    result = cls(len(iterable), dtype=object)
-    for i, (_, subary) in enumerate(iterable):
+    result = cls(template.shape, dtype=object)
+    for i, subary in iterable:
         result[i] = subary
-
-    if template is not None:
-        result = result.reshape(template.shape)
 
     return result
 
@@ -460,18 +461,14 @@ def _(ary: DataclassArrayContainer):
 
 
 @deserialize_container_class.register(DataclassArrayContainer)
-def _(cls, iterable: Iterable[Tuple[Any, Any]], *,
-        actx: Optional["ArrayContext"] = None,
-        template: Optional[Any] = None):
+def _(cls, template: Any, iterable: Iterable[Tuple[Any, Any]], *,
+        actx: Optional["ArrayContext"] = None):
     return cls(**dict(iterable))
 
 # }}}
 
 
 # {{{ ArrayContainer traversal
-
-class _ArrayContextNotProvided:
-    pass
 
 
 def _zip_containers(arys):
@@ -518,9 +515,9 @@ def _map_array_container_with_context(f, ary, *,
             f = partial(_map_array_container_with_context,
                     f, actx=actx, leaf_cls=leaf_cls, recursive=True)
 
-        return deserialize_container(type(ary), (
+        return deserialize_container(type(ary), ary, (
                 (key, f(subary)) for key, subary in serialize_container(ary)
-                ), actx=array_context, template=ary)
+                ), actx=array_context)
     else:
         return f(ary)
 
@@ -547,9 +544,9 @@ def _multimap_array_container_only_unchecked(f, *args,
         f = partial(_multimap_array_container_only_unchecked,
                 f, actx=actx, leaf_cls=leaf_cls, recursive=True)
 
-    return deserialize_container(type(template_ary), (
+    return deserialize_container(type(template_ary), template_ary, (
         (key, f(*subarys)) for key, subarys in _zip_containers(args)
-        ), actx=array_context, template=template_ary)
+        ), actx=array_context)
 
 
 def _multimap_array_container_with_context(f, *args,
@@ -602,8 +599,8 @@ def _multimap_array_container_with_context(f, *args,
         result.append((key, f(*new_args)))
 
     return deserialize_container(
-            type(template_ary), tuple(result),
-            actx=array_context, template=template_ary)
+            type(template_ary), template_ary, tuple(result),
+            actx=array_context)
 
 
 def array_container_vectorize(f: Callable[[Any], Any], ary):
