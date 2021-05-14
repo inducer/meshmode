@@ -109,18 +109,7 @@ class _ArrayContextNotProvided:
     pass
 
 
-class ArrayContainerMeta(type):
-    def __instancecheck__(cls, instance):
-        if issubclass(type(instance), cls):
-            return True
-
-        if cls is ArrayContainer:
-            return is_array_container(instance)
-
-        return False
-
-
-class ArrayContainer(metaclass=ArrayContainerMeta):
+class ArrayContainer:
     r"""A generic container for the array type supported by the
     :class:`ArrayContext`.
 
@@ -258,11 +247,11 @@ def get_container_context_recursively(ary: Any):
     an assertion error is raised.
     """
     actx = None
-    if not isinstance(ary, ArrayContainer):
+    if not is_array_container(ary):
         return actx
 
     # try getting the array context directly
-    if isinstance(ary, ArrayContainer):
+    if is_array_container(ary):
         actx = get_container_context(ary)
 
     if actx is not None:
@@ -324,12 +313,18 @@ class ArrayContainerWithArithmetic(ArrayContainer):
                 return obj_array_vectorize(
                         lambda subary: cls._binary_op(op, arg1, subary),
                         arg2.astype(object, copy=False))
-        elif (isinstance(arg1, ArrayContainer) and isinstance(arg2, ArrayContainer)
+
+            raise AssertionError()  # should not get here
+
+        arg1_is_array_container = is_array_container(arg1)
+        arg2_is_array_container = is_array_container(arg2)
+
+        if (arg1_is_array_container and arg2_is_array_container
                 and type(arg1) is type(arg2)):
             return _multimap_array_container_only_unchecked(op, arg1, arg2)
-        elif isinstance(arg1, ArrayContainer) and isinstance(arg2, Number):
+        elif arg1_is_array_container and isinstance(arg2, Number):
             return map_array_container(lambda subary: op(subary, arg2), arg1)
-        elif isinstance(arg1, Number) and isinstance(arg2, ArrayContainer):
+        elif isinstance(arg1, Number) and arg2_is_array_container:
             return map_array_container(lambda subary: op(arg1, subary), arg2)
         else:
             raise NotImplementedError(
@@ -512,7 +507,7 @@ def _map_array_container_with_context(f, ary, *,
     """
     if leaf_cls is not None and type(ary) is leaf_cls:
         return f(ary)
-    elif isinstance(ary, ArrayContainer):
+    elif is_array_container(ary):
         array_context = actx
         if array_context is _ArrayContextNotProvided:
             array_context = get_container_context(ary)
@@ -539,7 +534,7 @@ def _multimap_array_container_only_unchecked(f, *args,
     """
     template_ary = args[0]
     if ((leaf_cls is not None and type(template_ary) is leaf_cls)
-            or not isinstance(template_ary, ArrayContainer)):
+            or not is_array_container(template_ary)):
         return f(*args)
 
     array_context = actx
@@ -570,7 +565,7 @@ def _multimap_array_container_with_context(f, *args,
     """
     container_indices = [
             i for i, arg in enumerate(args)
-            if isinstance(arg, ArrayContainer)
+            if is_array_container(arg)
             and (leaf_cls is None or type(arg) is not leaf_cls)
             ]
 
@@ -683,7 +678,7 @@ def freeze(ary):
     :param ary: a :meth:`~ArrayContext.thaw`\ ed :class:`ArrayContainer`.
     """
     def _freeze(subary, actx=None):
-        if isinstance(subary, ArrayContainer):
+        if is_array_container(subary):
             if actx is None:
                 actx = get_container_context(subary)
 
@@ -693,7 +688,7 @@ def freeze(ary):
         else:
             return actx.freeze(subary)
 
-    if not isinstance(ary, ArrayContainer):
+    if not is_array_container(ary):
         raise TypeError(
                 f"cannot freeze arrays of type {type(ary).__name__}; "
                 "try calling 'ArrayContext.freeze' directly")
@@ -707,7 +702,7 @@ def thaw(actx, ary):
 
     :param ary: a :meth:`~ArrayContext.freeze`\ ed :class:`ArrayContainer`.
     """
-    if not isinstance(ary, ArrayContainer):
+    if not is_array_container(ary):
         raise TypeError(
                 f"cannot thaw arrays of type {type(ary).__name__}; "
                 "try calling 'ArrayContext.thaw' directly")
@@ -831,7 +826,7 @@ class _BaseFakeNumpyNamespace:
             # e.g. `np.zeros_like(x)` returns `array([0, 0, ...], dtype=object)`
             # FIXME: what about object arrays nested in an ArrayContainer?
             raise NotImplementedError("operation not implemented for object arrays")
-        elif isinstance(ary, ArrayContainer):
+        elif is_array_container(ary):
             return map_array_container(alloc_like, ary)
         elif isinstance(ary, Number):
             # NOTE: `np.zeros_like(x)` returns `array(x, shape=())`, which
@@ -1193,7 +1188,7 @@ class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
         if ord is None:
             ord = 2
 
-        if isinstance(ary, ArrayContainer):
+        if is_array_container(ary):
             import numpy.linalg as la
             return la.norm([
                 self.norm(_flatten_array(subary), ord=ord)
