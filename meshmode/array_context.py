@@ -217,8 +217,10 @@ def get_container_context(ary: ArrayContainer):
     """
     return None
 
+# }}}
 
-# {{{ object arrays
+
+# {{{ object arrays as array containers
 
 @is_array_container.register(np.ndarray)
 def _(ary: np.ndarray):
@@ -243,6 +245,10 @@ def _(cls: type, template: Any, iterable: Iterable[Tuple[Any, Any]], *,
 
     return result
 
+# }}}
+
+
+# {{{ get_container_context_recursively
 
 def get_container_context_recursively(ary: Any):
     """Walks the :class:`ArrayContainer` hierarchy to find an :class:`ArrayContext`
@@ -275,8 +281,6 @@ def get_container_context_recursively(ary: Any):
             assert actx is context
 
     return actx
-
-# }}}
 
 # }}}
 
