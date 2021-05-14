@@ -332,7 +332,7 @@ class ArrayContainerWithArithmetic(ArrayContainer):
         elif isinstance(arg1, Number) and isinstance(arg2, ArrayContainer):
             return map_array_container(lambda subary: op(arg1, subary), arg2)
         else:
-            NotImplementedError(
+            raise NotImplementedError(
                 f"operation '{op.__name__}' for arrays of type "
                 f"'{type(arg1).__name__}' and '{type(arg2).__name__}'")
 
