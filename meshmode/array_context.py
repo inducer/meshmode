@@ -305,11 +305,11 @@ class ArrayContainerWithArithmetic(ArrayContainer):
         """An :class:`~meshmode.array_context.ArrayContext`."""
 
     @classmethod
-    def unary_op(cls, op, arg):
+    def _unary_op(cls, op, arg):
         return map_array_container(op, arg)
 
     @classmethod
-    def binary_op(cls, op, arg1, arg2):
+    def _binary_op(cls, op, arg1, arg2):
         from numbers import Number
         from pytools.obj_array import obj_array_vectorize
 
@@ -318,11 +318,11 @@ class ArrayContainerWithArithmetic(ArrayContainer):
             # do a bit of broadcasting
             if is_arg1_ndarray:
                 return obj_array_vectorize(
-                        lambda subary: cls.binary_op(op, subary, arg2),
+                        lambda subary: cls._binary_op(op, subary, arg2),
                         arg1.astype(object, copy=False))
             else:
                 return obj_array_vectorize(
-                        lambda subary: cls.binary_op(op, arg1, subary),
+                        lambda subary: cls._binary_op(op, arg1, subary),
                         arg2.astype(object, copy=False))
         elif (isinstance(arg1, ArrayContainer) and isinstance(arg2, ArrayContainer)
                 and type(arg1) is type(arg2)):
@@ -341,99 +341,99 @@ class ArrayContainerWithArithmetic(ArrayContainer):
     # {{{ arithmetic
 
     def __add__(self, arg):
-        return self.binary_op(operator.add, self, arg)
+        return self._binary_op(operator.add, self, arg)
 
     def __sub__(self, arg):
-        return self.binary_op(operator.sub, self, arg)
+        return self._binary_op(operator.sub, self, arg)
 
     def __mul__(self, arg):
-        return self.binary_op(operator.mul, self, arg)
+        return self._binary_op(operator.mul, self, arg)
 
     def __truediv__(self, arg):
-        return self.binary_op(operator.truediv, self, arg)
+        return self._binary_op(operator.truediv, self, arg)
 
     def __pow__(self, arg):
-        return self.binary_op(operator.pow, self, arg)
+        return self._binary_op(operator.pow, self, arg)
 
     def __mod__(self, arg):
-        return self.binary_op(operator.mod, self, arg)
+        return self._binary_op(operator.mod, self, arg)
 
     def __divmod__(self, arg):
-        return self.binary_op(divmod, self, arg)
+        return self._binary_op(divmod, self, arg)
 
     def __radd__(self, arg):
-        return self.binary_op(operator.add, arg, self)
+        return self._binary_op(operator.add, arg, self)
 
     def __rsub__(self, arg):
-        return self.binary_op(operator.sub, arg, self)
+        return self._binary_op(operator.sub, arg, self)
 
     def __rmul__(self, arg):
-        return self.binary_op(operator.mul, arg, self)
+        return self._binary_op(operator.mul, arg, self)
 
     def __rtruediv__(self, arg):
-        return self.binary_op(operator.truediv, arg, self)
+        return self._binary_op(operator.truediv, arg, self)
 
     def __rpow__(self, arg):
-        return self.binary_op(operator.pow, arg, self)
+        return self._binary_op(operator.pow, arg, self)
 
     def __rmod__(self, arg):
-        return self.binary_op(operator.mod, arg, self)
+        return self._binary_op(operator.mod, arg, self)
 
     def __rdivmod__(self, arg):
-        return self.binary_op(divmod, arg, self)
+        return self._binary_op(divmod, arg, self)
 
     def __pos__(self):
         return self
 
     def __neg__(self):
-        return self.unary_op(operator.neg, self)
+        return self._unary_op(operator.neg, self)
 
     def __abs__(self):
-        return self.unary_op(operator.abs, self)
+        return self._unary_op(operator.abs, self)
 
     # }}}
 
     # {{{ comparison
 
     def __eq__(self, arg):
-        return self.binary_op(self.array_context.np.equal, self, arg)
+        return self._binary_op(self.array_context.np.equal, self, arg)
 
     def __ne__(self, arg):
-        return self.binary_op(self.array_context.np.not_equal, self, arg)
+        return self._binary_op(self.array_context.np.not_equal, self, arg)
 
     def __lt__(self, arg):
-        return self.binary_op(self.array_context.np.less, self, arg)
+        return self._binary_op(self.array_context.np.less, self, arg)
 
     def __gt__(self, arg):
-        return self.binary_op(self.array_context.np.greater, self, arg)
+        return self._binary_op(self.array_context.np.greater, self, arg)
 
     def __le__(self, arg):
-        return self.binary_op(self.array_context.np.less_equal, self, arg)
+        return self._binary_op(self.array_context.np.less_equal, self, arg)
 
     def __ge__(self, arg):
-        return self.binary_op(self.array_context.np.greater_equal, self, arg)
+        return self._binary_op(self.array_context.np.greater_equal, self, arg)
 
     # }}}
 
     # {{{ logical
 
     def __and__(self, arg):
-        return self.binary_op(operator.and_, self, arg)
+        return self._binary_op(operator.and_, self, arg)
 
     def __xor__(self, arg):
-        return self.binary_op(operator.xor, self, arg)
+        return self._binary_op(operator.xor, self, arg)
 
     def __or__(self, arg):
-        return self.binary_op(operator.or_, self, arg)
+        return self._binary_op(operator.or_, self, arg)
 
     def __rand__(self, arg):
-        return self.binary_op(operator.and_, arg, self)
+        return self._binary_op(operator.and_, arg, self)
 
     def __rxor__(self, arg):
-        return self.binary_op(operator.xor, arg, self)
+        return self._binary_op(operator.xor, arg, self)
 
     def __ror__(self, arg):
-        return self.binary_op(operator.or_, arg, self)
+        return self._binary_op(operator.or_, arg, self)
 
     # }}}
 
