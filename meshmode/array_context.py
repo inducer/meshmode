@@ -505,7 +505,7 @@ def _map_array_container_with_context(f, ary, *,
         specific container classes. By default, the recursion is stopped when
         a non-:class:`ArrayContainer` class is encountered.
     """
-    if leaf_cls is not None and type(ary) is leaf_cls:
+    if type(ary) is leaf_cls:  # type(ary) is never None
         return f(ary)
     elif is_array_container(ary):
         array_context = actx
