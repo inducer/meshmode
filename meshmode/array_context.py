@@ -451,14 +451,14 @@ def _(ary: DataclassArrayContainer):
     return z
 
 
-@deserialize_container_class.register(DataclassArrayContainer)
+@deserialize_container.register(DataclassArrayContainer)
 def _(template: DataclassArrayContainer, iterable: Iterable[Tuple[Any, Any]]):
     kwargs = dict(iterable)
     # FIXME: These field lists could be generated statically.
-    for fld in fields(cls):
+    for fld in fields(template):
         if not issubclass(fld.type, (ArrayContainer, NumpyObjectArray)):
             kwargs[fld.name] = getattr(template, fld.name)
-    return cls(**kwargs)
+    return type(template)(**kwargs)
 
 # }}}
 
