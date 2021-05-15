@@ -35,9 +35,9 @@ from pytools import single_valued, memoize_in
 from meshmode.array_context import (
         ArrayContext, make_loopy_program,
         ArrayContainer, ArrayContainerWithArithmetic,
-        serialize_container, deserialize_container_class)
+        serialize_container, deserialize_container)
 from meshmode.array_context import (
-        thaw as _thaw, freeze as _freeze,
+        thaw as _thaw, thaw_impl, freeze as _freeze,
         map_array_container, multimap_array_container,
         mapped_over_array_containers, multimapped_over_array_containers)
 
@@ -294,23 +294,44 @@ class _EntryNotProvided:
 
 
 @serialize_container.register(DOFArray)
-def _(ary: DOFArray):
+def _serialize_container_dofarray(ary: DOFArray):
     return enumerate(ary._data)
 
 
-@deserialize_container_class.register(DOFArray)
-def _(cls, template: Any, iterable: Iterable[Tuple[Any, Any]], *,
-        actx: Optional[ArrayContext] = None):
-    iterable = list(iterable)
-    result = [_EntryNotProvided] * len(iterable)
+@deserialize_container.register(DOFArray)
+def _deserialize_container_dofarray(
+        template: Any, iterable: Iterable[Tuple[Any, Any]]):
+    def _raise_index_inconsistency(i, stream_i):
+        raise ValueError(
+                "out-of-sequence indices supplied in DOFArray deserialization "
+                f"(expected {i}, received {stream_i})")
 
-    for i, subary in iterable:
-        result[i] = subary
+    return type(template)(
+            template.array_context,
+            data=tuple(
+                v if i == stream_i else _raise_index_inconsistency(i, stream_i)
+                for i, (stream_i, v) in enumerate(iterable)))
 
-    if any(subary is _EntryNotProvided for subary in result):
-        raise ValueError("'iterable' does not contain all indices")
 
-    return cls(actx, data=tuple(result))
+@_freeze.register(DOFArray)
+def _freeze_dofarray(ary, actx=None):
+    if actx is not None:
+        if actx is not ary.array_context:
+            raise ValueError("supplied array context does not agree with the one "
+                    "in the DOFArray in freeze(DOFArray)")
+    return type(ary)(
+        None,
+        tuple(ary.array_context.freeze(subary) for subary in ary._data))
+
+
+@thaw_impl.register(DOFArray)
+def _thaw_dofarray(ary, actx):
+    if ary.array_context is not None:
+        raise ValueError("cannot thaw DOFArray that already has an array context")
+
+    return type(ary)(
+        actx,
+        tuple(actx.thaw(subary) for subary in ary._data))
 
 
 def map_dof_array_container(f: Callable[[Any], Any], ary):
@@ -320,9 +341,8 @@ def map_dof_array_container(f: Callable[[Any], Any], ary):
     Similar to :func:`~meshmode.array_context.map_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    from meshmode.array_context import _map_array_container_with_context
-    return _map_array_container_with_context(
-            f, ary, leaf_cls=DOFArray, recursive=True)
+    from meshmode.array_context import _map_array_container
+    return _map_array_container(f, ary, leaf_cls=DOFArray, recursive=True)
 
 
 def mapped_over_dof_arrays(f):
@@ -338,8 +358,8 @@ def multimap_dof_array_container(f: Callable[[Any], Any], *args):
     Similar to :func:`~meshmode.array_context.multimap_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    from meshmode.array_context import _multimap_array_container_with_context
-    return _multimap_array_container_with_context(
+    from meshmode.array_context import _multimap_array_container
+    return _multimap_array_container(
             f, *args, leaf_cls=DOFArray, recursive=True)
 
 
