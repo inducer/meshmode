@@ -50,10 +50,10 @@ __doc__ = """
 .. autoclass:: ArrayContainerWithArithmetic
 .. autoclass:: DataclassArrayContainer
 .. autoclass:: DataclassArrayContainerWithArithmetic
-.. autofunction:: array_container_vectorize
-.. autofunction:: array_container_vectorize_n_args
 .. autofunction:: map_array_container
 .. autofunction:: multimap_array_container
+.. autofunction:: rec_map_array_container
+.. autofunction:: rec_multimap_array_container
 .. autofunction:: freeze
 .. autofunction:: thaw_impl
 .. autofunction:: thaw
@@ -290,7 +290,7 @@ class ArrayContainerWithArithmetic(ArrayContainer):
 
     @classmethod
     def _unary_op(cls, op, arg):
-        return map_array_container(op, arg)
+        return rec_map_array_container(op, arg)
 
     @classmethod
     def _binary_op(cls, op, arg1, arg2):
@@ -318,9 +318,9 @@ class ArrayContainerWithArithmetic(ArrayContainer):
                 and type(arg1) is type(arg2)):
             return _map_binary_op_array_container(op, arg1, arg2)
         elif arg1_is_array_container and isinstance(arg2, Number):
-            return map_array_container(lambda subary: op(subary, arg2), arg1)
+            return rec_map_array_container(lambda subary: op(subary, arg2), arg1)
         elif isinstance(arg1, Number) and arg2_is_array_container:
-            return map_array_container(lambda subary: op(arg1, subary), arg2)
+            return rec_map_array_container(lambda subary: op(arg1, subary), arg2)
         else:
             raise NotImplementedError(
                 f"operation '{op.__name__}' for arrays of type "
@@ -499,8 +499,8 @@ def _zip_containers(arys):
         yield key, value
 
 
-def _map_array_container(f, ary, *, leaf_cls=None, recursive=False):
-    """Helper for :func:`map_array_container`.
+def _map_array_container_impl(f, ary, *, leaf_cls=None, recursive=False):
+    """Helper for :func:`rec_map_array_container`.
 
     :param leaf_cls: class on which we call *f* directly. This is mostly
         useful in the recursive setting, where it can stop the recursion on
@@ -521,8 +521,8 @@ def _map_array_container(f, ary, *, leaf_cls=None, recursive=False):
     return rec(ary)
 
 
-def _multimap_array_container(f, *args, leaf_cls=None, recursive=False):
-    """Helper for :func:`multimap_array_container`.
+def _multimap_array_container_impl(f, *args, leaf_cls=None, recursive=False):
+    """Helper for :func:`rec_multimap_array_container`.
 
     :param leaf_cls: class on which we call *f* directly. This is mostly
         useful in the recursive setting, where it can stop the recursion on
@@ -569,14 +569,14 @@ def _multimap_array_container(f, *args, leaf_cls=None, recursive=False):
 
     if len(container_indices) == 1:
         # NOTE: if we just have one ArrayContainer in args, passing it through
-        # _map_array_container should be faster
+        # _map_array_container_impl should be faster
         def wrapper(ary):
             new_args = list(args)
             new_args[container_indices[0]] = ary
             return f(*new_args)
 
         update_wrapper(wrapper, f)
-        return _map_array_container(
+        return _map_array_container_impl(
                 wrapper, args[container_indices[0]],
                 leaf_cls=leaf_cls, recursive=recursive)
 
@@ -584,68 +584,68 @@ def _multimap_array_container(f, *args, leaf_cls=None, recursive=False):
     return rec(*args)
 
 
-def array_container_vectorize(f: Callable[[Any], Any], ary):
+def map_array_container(f: Callable[[Any], Any], ary):
     r"""Applies *f* to all components of an :class:`ArrayContainer`.
 
     Works similarly to :func:`~pytools.obj_array.obj_array_vectorize`, but
     on arbitrary containers.
 
-    For a recursive version, see :func:`map_array_container`.
+    For a recursive version, see :func:`rec_map_array_container`.
 
     :param ary: a (potentially nested) structure of :class:`ArrayContainer`\ s,
         or an instance of a base array type.
     """
-    return _map_array_container(f, ary, recursive=False)
+    return _map_array_container_impl(f, ary, recursive=False)
 
 
-def array_container_vectorize_n_args(f: Callable[[Any], Any], *args):
+def multimap_array_container(f: Callable[[Any], Any], *args):
     r"""Applies *f* to the components of multiple :class:`ArrayContainer`\ s.
 
     Works similarly to :func:`~pytools.obj_array.obj_array_vectorize_n_args`,
     but on arbitrary containers. The containers must all have the same type,
     which will also be the return type.
 
-    For a recursive version, see :func:`multimap_array_container`.
+    For a recursive version, see :func:`rec_multimap_array_container`.
 
     :param args: all :class:`ArrayContainer` arguments must be of the same
         type and with the same structure (same number of components, etc.).
     """
-    return _multimap_array_container(f, *args, recursive=False)
+    return _multimap_array_container_impl(f, *args, recursive=False)
 
 
-def map_array_container(f: Callable[[Any], Any], ary):
+def rec_map_array_container(f: Callable[[Any], Any], ary):
     r"""Applies *f* recursively to an :class:`ArrayContainer`.
 
-    For a non-recursive version see :func:`array_container_vectorize`.
+    For a non-recursive version see :func:`map_array_container`.
 
     :param ary: a (potentially nested) structure of :class:`ArrayContainer`\ s,
         or an instance of a base array type.
     """
-    return _map_array_container(f, ary, recursive=True)
+    return _map_array_container_impl(f, ary, recursive=True)
 
 
 def mapped_over_array_containers(f: Callable[[Any], Any]):
-    """Decorator around :func:`map_array_container`."""
-    wrapper = partial(map_array_container, f)
+    """Decorator around :func:`rec_map_array_container`."""
+    wrapper = partial(rec_map_array_container, f)
     update_wrapper(wrapper, f)
     return wrapper
 
 
-def multimap_array_container(f: Callable[[Any], Any], *args):
+def rec_multimap_array_container(f: Callable[[Any], Any], *args):
     r"""Applies *f* recursively to multiple :class:`ArrayContainer`\ s.
 
-    For a non-recursive version see :func:`array_container_vectorize_n_args`.
+    For a non-recursive version see :func:`multimap_array_container`.
 
     :param args: all :class:`ArrayContainer` arguments must be of the same
         type and with the same structure (same number of components, etc.).
     """
-    return _multimap_array_container(f, *args, recursive=True)
+    return _multimap_array_container_impl(f, *args, recursive=True)
 
 
 def multimapped_over_array_containers(f: Callable[[Any], Any]):
-    """Decorator around :func:`multimap_array_container`."""
+    """Decorator around :func:`rec_multimap_array_container`."""
     def wrapper(*args):
-        return multimap_array_container(f, *args)
+        return rec_multimap_array_container(f, *args)
 
     update_wrapper(wrapper, f)
     return wrapper
@@ -664,7 +664,7 @@ def freeze(ary, actx=None):
     See :meth:`ArrayContext.thaw`.
     """
     if is_array_container(ary):
-        return _map_array_container(
+        return _map_array_container_impl(
                 partial(freeze, actx=actx), ary,
                 recursive=False)
     else:
@@ -826,7 +826,7 @@ class _BaseFakeNumpyNamespace:
             # FIXME: what about object arrays nested in an ArrayContainer?
             raise NotImplementedError("operation not implemented for object arrays")
         elif is_array_container(ary):
-            return map_array_container(alloc_like, ary)
+            return rec_map_array_container(alloc_like, ary)
         elif isinstance(ary, Number):
             # NOTE: `np.zeros_like(x)` returns `array(x, shape=())`, which
             # is best implemented by concrete array contexts, if at all
@@ -844,7 +844,7 @@ class _BaseFakeNumpyNamespace:
         # NOTE: conjugate distributes over object arrays, but it looks for a
         # `conjugate` ufunc, while some implementations only have the shorter
         # `conj` (e.g. cl.array.Array), so this should work for everybody.
-        return map_array_container(lambda obj: obj.conj(), x)
+        return rec_map_array_container(lambda obj: obj.conj(), x)
 
     conj = conjugate
 
@@ -1091,22 +1091,22 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         return _PyOpenCLFakeNumpyLinalgNamespace(self._array_context)
 
     def equal(self, x, y):
-        return multimap_array_container(operator.eq, x, y)
+        return rec_multimap_array_container(operator.eq, x, y)
 
     def not_equal(self, x, y):
-        return multimap_array_container(operator.ne, x, y)
+        return rec_multimap_array_container(operator.ne, x, y)
 
     def greater(self, x, y):
-        return multimap_array_container(operator.gt, x, y)
+        return rec_multimap_array_container(operator.gt, x, y)
 
     def greater_equal(self, x, y):
-        return multimap_array_container(operator.ge, x, y)
+        return rec_multimap_array_container(operator.ge, x, y)
 
     def less(self, x, y):
-        return multimap_array_container(operator.lt, x, y)
+        return rec_multimap_array_container(operator.lt, x, y)
 
     def less_equal(self, x, y):
-        return multimap_array_container(operator.le, x, y)
+        return rec_multimap_array_container(operator.le, x, y)
 
     def ones_like(self, ary):
         def _ones_like(subary):
@@ -1118,13 +1118,13 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
 
     def maximum(self, x, y):
         import pyopencl.array as cl_array
-        return multimap_array_container(
+        return rec_multimap_array_container(
                 partial(cl_array.maximum, queue=self._array_context.queue),
                 x, y)
 
     def minimum(self, x, y):
         import pyopencl.array as cl_array
-        return multimap_array_container(
+        return rec_multimap_array_container(
                 partial(cl_array.minimum, queue=self._array_context.queue),
                 x, y)
 
@@ -1137,7 +1137,7 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
             return cl_array.if_positive(inner_crit != 0, inner_then, inner_else,
                     queue=self._array_context.queue)
 
-        return multimap_array_container(where_inner, criterion, then, else_)
+        return rec_multimap_array_container(where_inner, criterion, then, else_)
 
     def sum(self, a, dtype=None):
         import pyopencl.array as cl_array
@@ -1154,7 +1154,7 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
 
     def stack(self, arrays, axis=0):
         import pyopencl.array as cla
-        return multimap_array_container(
+        return rec_multimap_array_container(
                 lambda *args: cla.stack(arrays=args, axis=axis,
                     queue=self._array_context.queue),
                 *arrays)

@@ -38,7 +38,7 @@ from meshmode.array_context import (
         serialize_container, deserialize_container)
 from meshmode.array_context import (
         thaw as _thaw, thaw_impl, freeze as _freeze,
-        map_array_container, multimap_array_container,
+        rec_map_array_container, rec_multimap_array_container,
         mapped_over_array_containers, multimapped_over_array_containers)
 
 __doc__ = """
@@ -334,38 +334,38 @@ def _thaw_dofarray(ary, actx):
         tuple(actx.thaw(subary) for subary in ary._data))
 
 
-def map_dof_array_container(f: Callable[[Any], Any], ary):
+def rec_map_dof_array_container(f: Callable[[Any], Any], ary):
     r"""Applies *f* recursively to an
     :class:`~meshmode.array_context.ArrayContainer`.
 
     Similar to :func:`~meshmode.array_context.map_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    from meshmode.array_context import _map_array_container
-    return _map_array_container(f, ary, leaf_cls=DOFArray, recursive=True)
+    from meshmode.array_context import _map_array_container_impl
+    return _map_array_container_impl(f, ary, leaf_cls=DOFArray, recursive=True)
 
 
 def mapped_over_dof_arrays(f):
-    wrapper = partial(map_dof_array_container, f)
+    wrapper = partial(rec_map_dof_array_container, f)
     update_wrapper(wrapper, f)
     return wrapper
 
 
-def multimap_dof_array_container(f: Callable[[Any], Any], *args):
+def rec_multimap_dof_array_container(f: Callable[[Any], Any], *args):
     r"""Applies *f* recursively to multiple
     :class:`~meshmode.array_context.ArrayContainer`\ s.
 
     Similar to :func:`~meshmode.array_context.multimap_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    from meshmode.array_context import _multimap_array_container
-    return _multimap_array_container(
+    from meshmode.array_context import _multimap_array_container_impl
+    return _multimap_array_container_impl(
             f, *args, leaf_cls=DOFArray, recursive=True)
 
 
 def multimapped_over_dof_arrays(f):
     def wrapper(*args):
-        return multimap_dof_array_container(f, *args)
+        return rec_multimap_dof_array_container(f, *args)
 
     update_wrapper(wrapper, f)
     return wrapper
@@ -414,7 +414,7 @@ def flatten(ary: ArrayContainer) -> Any:
 
         return result
 
-    return map_dof_array_container(_flatten_dof_array, ary)
+    return rec_map_dof_array_container(_flatten_dof_array, ary)
 
 
 def _unflatten(
@@ -472,7 +472,7 @@ def unflatten(actx: ArrayContext, discr,
     def _unflatten_dof_array(subary):
         return _unflatten(actx, nel_ndof_per_element_per_group, subary)
 
-    return map_dof_array_container(_unflatten_dof_array, ary)
+    return rec_map_dof_array_container(_unflatten_dof_array, ary)
 
 # }}}
 
@@ -518,11 +518,11 @@ def flat_norm(ary: DOFArray, ord=None):
 
 
 obj_or_dof_array_vectorize = MovedFunctionDeprecationWrapper(
-        map_array_container, deadline="2022")
+        rec_map_array_container, deadline="2022")
 obj_or_dof_array_vectorized = MovedFunctionDeprecationWrapper(
         mapped_over_array_containers, deadline="2022")
 obj_or_dof_array_vectorize_n_args = MovedFunctionDeprecationWrapper(
-        multimap_array_container, deadline="2022")
+        rec_multimap_array_container, deadline="2022")
 obj_or_dof_array_vectorized_n_args = MovedFunctionDeprecationWrapper(
         multimapped_over_array_containers, deadline="2022")
 

@@ -28,7 +28,7 @@ import numpy.linalg as la
 import modepy as mp
 
 from meshmode.array_context import (
-        make_loopy_program, is_array_container, array_container_vectorize)
+        make_loopy_program, is_array_container, map_array_container)
 from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
@@ -206,7 +206,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
         """
         from meshmode.dof_array import DOFArray
         if is_array_container(ary) and not isinstance(ary, DOFArray):
-            return array_container_vectorize(self, ary)
+            return map_array_container(self, ary)
 
         if not isinstance(ary, DOFArray):
             raise TypeError("Non-array passed to discretization connection")
@@ -327,7 +327,7 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
         """
         from meshmode.dof_array import DOFArray
         if is_array_container(ary) and not isinstance(ary, DOFArray):
-            return array_container_vectorize(self, ary)
+            return map_array_container(self, ary)
 
         if not isinstance(ary, DOFArray):
             raise TypeError("Non-array passed to discretization connection")

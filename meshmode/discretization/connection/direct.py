@@ -27,7 +27,7 @@ import loopy as lp
 from pytools import memoize_in, keyed_memoize_method
 from meshmode.array_context import (
         ArrayContext, make_loopy_program,
-        is_array_container, array_container_vectorize)
+        is_array_container, map_array_container)
 
 
 # {{{ interpolation batch
@@ -272,7 +272,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
     def __call__(self, ary):
         from meshmode.dof_array import DOFArray
         if is_array_container(ary) and not isinstance(ary, DOFArray):
-            return array_container_vectorize(self, ary)
+            return map_array_container(self, ary)
 
         if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")

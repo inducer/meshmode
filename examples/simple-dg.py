@@ -30,16 +30,12 @@ from pytools import memoize_method, memoize_in
 from pytools.obj_array import (
         flat_obj_array, make_obj_array)
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
-from meshmode.dof_array import (
-        DOFArray,
-        # deserialize_container_class, serialize_container,
-        map_dof_array_container
-        )
+from meshmode.dof_array import DOFArray, rec_map_dof_array_container
 from meshmode.array_context import (
         freeze, thaw,
         PyOpenCLArrayContext, make_loopy_program,
         ArrayContainer, NumpyObjectArray,
-        array_container_vectorize,
+        map_array_container,
         DataclassArrayContainerWithArithmetic,
         )
 
@@ -240,7 +236,7 @@ class DGDiscretization:
 
     def inverse_mass(self, vec):
         if not isinstance(vec, DOFArray):
-            return map_dof_array_container(self.inverse_mass, vec)
+            return rec_map_dof_array_container(self.inverse_mass, vec)
 
         @memoize_in(self, "elwise_linear_knl")
         def knl():
@@ -293,7 +289,7 @@ class DGDiscretization:
 
     def face_mass(self, vec):
         if not isinstance(vec, DOFArray):
-            return map_dof_array_container(self.face_mass, vec)
+            return rec_map_dof_array_container(self.face_mass, vec)
 
         @memoize_in(self, "face_mass_knl")
         def knl():
@@ -342,7 +338,7 @@ class TracePair(DataclassArrayContainerWithArithmetic):
     exterior: ArrayContainer
 
     def __getattr__(self, name):
-        return array_container_vectorize(
+        return map_array_container(
                 lambda ary: getattr(ary, name),
                 self)
 

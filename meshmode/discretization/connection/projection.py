@@ -27,7 +27,7 @@ from pytools import keyed_memoize_method, memoize_in
 import loopy as lp
 
 from meshmode.array_context import (
-        make_loopy_program, is_array_container, array_container_vectorize)
+        make_loopy_program, is_array_container, map_array_container)
 from meshmode.discretization.connection.direct import (
         DiscretizationConnection,
         DirectDiscretizationConnection)
@@ -120,7 +120,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
     def __call__(self, ary):
         from meshmode.dof_array import DOFArray
         if is_array_container(ary) and not isinstance(ary, DOFArray):
-            return array_container_vectorize(self, ary)
+            return map_array_container(self, ary)
 
         if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")

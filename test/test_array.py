@@ -363,24 +363,24 @@ def test_container_multimap(actx_factory):
     def func_multiple_scalar(a, subary1, b, subary2):
         return a * subary1 + b * subary2
 
-    from meshmode.array_context import multimap_array_container
-    result = multimap_array_container(func_all_scalar, 1, 2)
+    from meshmode.array_context import rec_multimap_array_container
+    result = rec_multimap_array_container(func_all_scalar, 1, 2)
     assert result == 3
 
     from functools import partial
     for ary in [ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs]:
-        result = multimap_array_container(func_first_scalar, 1, ary)
-        multimap_array_container(
+        result = rec_multimap_array_container(func_first_scalar, 1, ary)
+        rec_multimap_array_container(
                 partial(_check_allclose, lambda x: 1 + x),
                 ary, result)
 
-        result = multimap_array_container(func_multiple_scalar, 2, ary, 2, ary)
-        multimap_array_container(
+        result = rec_multimap_array_container(func_multiple_scalar, 2, ary, 2, ary)
+        rec_multimap_array_container(
                 partial(_check_allclose, lambda x: 4 * x),
                 ary, result)
 
     with pytest.raises(AssertionError):
-        multimap_array_container(func_multiple_scalar, 2, ary_dof, 2, dc_of_dofs)
+        rec_multimap_array_container(func_multiple_scalar, 2, ary_dof, 2, dc_of_dofs)
 
     # }}}
 
@@ -395,12 +395,12 @@ def test_container_arithmetic(actx_factory):
         assert np.linalg.norm((f(arg1) - arg2).get()) < atol
 
     from functools import partial
-    from meshmode.array_context import multimap_array_container
+    from meshmode.array_context import rec_multimap_array_container
     for ary in [ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs]:
-        multimap_array_container(
+        rec_multimap_array_container(
                 partial(_check_allclose, lambda x: 3 * x),
                 ary, 2 * ary + ary)
-        multimap_array_container(
+        rec_multimap_array_container(
                 partial(_check_allclose, lambda x: actx.np.sin(x)),
                 ary, actx.np.sin(ary))
 
