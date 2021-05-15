@@ -423,6 +423,11 @@ def _get_array_container_ac_arith(ary: ArrayContainerWithArithmetic):
 
 # {{{ dataclass containers
 
+# FIXME: Document what this is good for
+class NumpyObjectArray(np.ndarray):
+    pass
+
+
 class DataclassArrayContainer(ArrayContainer):
     """An :class:`ArrayContainer` that implements serialization and
     deserialization of :func:`~dataclasses.dataclass` fields.
@@ -438,19 +443,27 @@ class DataclassArrayContainerWithArithmetic(
 
 
 @serialize_container.register(DataclassArrayContainer)
-def _serialize_dataclass_ac(ary: DataclassArrayContainer):
-    return ((var.name, getattr(ary, var.name)) for var in fields(ary))
+def _(ary: DataclassArrayContainer):
+    # FIXME: These field lists could be generated statically.
+    z = [(fld.name, getattr(ary, fld.name))
+            for fld in fields(ary)
+            if issubclass(fld.type, (ArrayContainer, NumpyObjectArray))]
+    return z
 
 
-@deserialize_container.register(DataclassArrayContainer)
-def _deserialize_dataclass_ac(template: Any, iterable: Iterable[Tuple[Any, Any]]):
-    return type(template)(**dict(iterable))
+@deserialize_container_class.register(DataclassArrayContainer)
+def _(template: DataclassArrayContainer, iterable: Iterable[Tuple[Any, Any]]):
+    kwargs = dict(iterable)
+    # FIXME: These field lists could be generated statically.
+    for fld in fields(cls):
+        if not issubclass(fld.type, (ArrayContainer, NumpyObjectArray)):
+            kwargs[fld.name] = getattr(template, fld.name)
+    return cls(**kwargs)
 
 # }}}
 
 
 # {{{ ArrayContainer traversal
-
 
 def _zip_containers(arys):
     r"""
