@@ -257,6 +257,20 @@ def get_container_context_recursively(ary: Any):
 
 # {{{ ArrayContainerWithArithmetic
 
+def _map_binary_op_array_container(op, arg1, arg2):
+    assert type(arg1) == type(arg2)
+
+    if is_array_container(arg1):
+        return deserialize_container(arg1, (
+            (key, _map_binary_op_array_container(op, subarg1, subarg2))
+            for (key, subarg1), (_, subarg2) in zip(
+                serialize_container(arg1), serialize_container(arg2)
+                )
+            ))
+    else:
+        return op(arg1, arg2)
+
+
 class ArrayContainerWithArithmetic(ArrayContainer):
     """Array container with basic arithmetic, comparisons and logic operators.
 
@@ -302,7 +316,7 @@ class ArrayContainerWithArithmetic(ArrayContainer):
 
         if (arg1_is_array_container and arg2_is_array_container
                 and type(arg1) is type(arg2)):
-            return _multimap_array_container_only_unchecked(op, arg1, arg2)
+            return _map_binary_op_array_container(op, arg1, arg2)
         elif arg1_is_array_container and isinstance(arg2, Number):
             return map_array_container(lambda subary: op(subary, arg2), arg1)
         elif isinstance(arg1, Number) and arg2_is_array_container:
@@ -485,99 +499,89 @@ def _zip_containers(arys):
         yield key, value
 
 
-def _map_array_container(f, ary, *,
-        leaf_cls=None,
-        recursive=False):
+def _map_array_container(f, ary, *, leaf_cls=None, recursive=False):
     """Helper for :func:`map_array_container`.
 
-    :param actx: :class:`ArrayContext` passed in to :func:`deserialize_container`.
-        If not provided, the context of the serialized container is used, if any.
     :param leaf_cls: class on which we call *f* directly. This is mostly
         useful in the recursive setting, where it can stop the recursion on
         specific container classes. By default, the recursion is stopped when
         a non-:class:`ArrayContainer` class is encountered.
     """
-    if type(ary) is leaf_cls:  # type(ary) is never None
-        return f(ary)
-    elif is_array_container(ary):
-        if recursive:
-            f = partial(_map_array_container,
-                    f, leaf_cls=leaf_cls, recursive=True)
+    def rec(_ary):
+        if type(_ary) is leaf_cls:  # type(ary) is never None
+            return f(_ary)
+        elif is_array_container(_ary):
+            return deserialize_container(_ary, (
+                    (key, frec(subary)) for key, subary in serialize_container(_ary)
+                    ))
+        else:
+            return f(_ary)
 
-        return deserialize_container(ary, (
-                (key, f(subary)) for key, subary in serialize_container(ary)
-                ))
-    else:
-        return f(ary)
-
-
-def _multimap_array_container_only_unchecked(f, *args,
-        leaf_cls=None,
-        recursive=False):
-    r"""Version of :func:`_multimap_array_container` that assumes
-    all *args* are :class:`ArrayContainer`\ s of the same type.
-
-    No checks are performed.
-    """
-    template_ary = args[0]
-    if ((leaf_cls is not None and type(template_ary) is leaf_cls)
-            or not is_array_container(template_ary)):
-        return f(*args)
-
-    if recursive:
-        f = partial(_multimap_array_container_only_unchecked,
-                f, leaf_cls=leaf_cls, recursive=True)
-
-    return deserialize_container(template_ary, (
-        (key, f(*subarys)) for key, subarys in _zip_containers(args)
-        ))
+    frec = rec if recursive else f
+    return rec(ary)
 
 
-def _multimap_array_container(f, *args,
-        leaf_cls=None,
-        recursive=False):
+def _multimap_array_container(f, *args, leaf_cls=None, recursive=False):
     """Helper for :func:`multimap_array_container`.
 
-    :param actx: :class:`ArrayContext` passed in to :func:`deserialize_container`.
-        If not provided, the context of the serialized container is used, if any.
     :param leaf_cls: class on which we call *f* directly. This is mostly
         useful in the recursive setting, where it can stop the recursion on
         specific container classes. By default, the recursion is stopped when
         a non-:class:`ArrayContainer` class is encountered.
     """
+    def is_same_type(arys, template_ary):
+        return all(type(arys[i]) is type(template_ary) for i in container_indices)
+
+    def rec(*_args):
+        template_ary = _args[container_indices[0]]
+        assert is_same_type(_args, template_ary), \
+                "expected type '{type(template_ary).__name__}'"
+
+        if type(template_ary) is leaf_cls or not is_array_container(template_ary):
+            return f(*_args)
+
+        result = []
+        new_args = list(_args)
+
+        for subarys in zip(*[
+                serialize_container(_args[i]) for i in container_indices
+                ]):
+            key = None
+            for i, subary in zip(container_indices, subarys):
+                if key is None:
+                    key = subary[0]
+                else:
+                    assert key == subary[0]
+
+                new_args[i] = subary[1]
+
+            result.append((key, frec(*new_args)))
+
+        return deserialize_container(template_ary, result)
+
     container_indices = [
             i for i, arg in enumerate(args)
-            if is_array_container(arg)
-            and (leaf_cls is None or type(arg) is not leaf_cls)
+            if is_array_container(arg) and type(arg) is not leaf_cls
             ]
 
     if not container_indices:
         return f(*args)
 
-    template_ary = args[container_indices[0]]
-    if not all((type(args[i]) is type(template_ary)) for i in container_indices):
-        raise TypeError(
-                "'ArrayContainer' arguments must be of the same type: "
-                f"{type(template_ary).__name__}")
+    if len(container_indices) == 1:
+        # NOTE: if we just have one ArrayContainer in args, passing it through
+        # _map_array_container should be faster
+        def wrapper(ary):
+            new_args = list(args)
+            new_args[container_indices[0]] = ary
+            return f(*new_args)
 
-    if len(container_indices) == len(args):
-        return _multimap_array_container_only_unchecked(f, *args,
+        update_wrapper(wrapper, f)
+        return _map_array_container(
+                wrapper, args[container_indices[0]],
                 leaf_cls=leaf_cls, recursive=recursive)
 
-    if recursive:
-        f = partial(_multimap_array_container,
-                f, leaf_cls=leaf_cls, recursive=True)
-
-    result = []
-    new_args = list(args)
-
-    for key, subarys in _zip_containers([args[i] for i in container_indices]):
-        for i, subary in zip(container_indices, subarys):
-            new_args[i] = subary
-
-        result.append((key, f(*new_args)))
-
-    return deserialize_container(template_ary, tuple(result))
+    frec = rec if recursive else f
+    return rec(*args)
 
 
 def array_container_vectorize(f: Callable[[Any], Any], ary):
@@ -685,9 +689,9 @@ def thaw_impl(ary, actx):
         to come first.
     """
     if is_array_container(ary):
-        return deserialize_container(ary,
-                ((key, thaw_impl(subary, actx))
-                    for key, subary in serialize_container(ary)))
+        return deserialize_container(ary, (
+            (key, thaw_impl(subary, actx))
+            for key, subary in serialize_container(ary)))
     else:
         return actx.thaw(ary)
 

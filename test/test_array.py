@@ -379,7 +379,7 @@ def test_container_multimap(actx_factory):
                 partial(_check_allclose, lambda x: 4 * x),
                 ary, result)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(AssertionError):
         multimap_array_container(func_multiple_scalar, 2, ary_dof, 2, dc_of_dofs)
 
     # }}}
