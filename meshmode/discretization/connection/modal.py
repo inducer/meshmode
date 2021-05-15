@@ -27,14 +27,13 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
-from meshmode.array_context import make_loopy_program
-from meshmode.dof_array import DOFArray
+from meshmode.array_context import (
+        make_loopy_program, is_array_container, array_container_vectorize)
 from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
 
 from pytools import memoize_in, keyed_memoize_in
-from meshmode.dof_array import multimapped_over_dof_arrays
 
 
 class NodalToModalDiscretizationConnection(DiscretizationConnection):
@@ -198,7 +197,6 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
         return output
 
-    @multimapped_over_dof_arrays
     def __call__(self, ary):
         """Computes modal coefficients data from a functions
         nodal coefficients.
@@ -206,6 +204,9 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
         :arg ary: a :class:`meshmode.dof_array.DOFArray` containing
             nodal coefficient data.
         """
+        from meshmode.dof_array import DOFArray
+        if is_array_container(ary) and not isinstance(ary, DOFArray):
+            return array_container_vectorize(self, ary)
 
         if not isinstance(ary, DOFArray):
             raise TypeError("Non-array passed to discretization connection")
@@ -318,13 +319,15 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
                 to_discr=to_discr,
                 is_surjective=True)
 
-    @multimapped_over_dof_arrays
     def __call__(self, ary):
         """Computes nodal coefficients from modal data.
 
         :arg ary: a :class:`meshmode.dof_array.DOFArray` containing
             modal coefficient data.
         """
+        from meshmode.dof_array import DOFArray
+        if is_array_container(ary) and not isinstance(ary, DOFArray):
+            return array_container_vectorize(self, ary)
 
         if not isinstance(ary, DOFArray):
             raise TypeError("Non-array passed to discretization connection")
