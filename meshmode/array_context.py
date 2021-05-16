@@ -481,26 +481,6 @@ def _deserialize_dataclass_container(
 
 # {{{ ArrayContainer traversal
 
-def _zip_containers(arys):
-    r"""
-    :param arys: an iterable of :class:`ArrayContainer`\ s of the same type
-        and with the same number of components.
-    :returns: an iterable of tuples ``(key, subarys)``, where *key* is the
-        common key and *subarys* are all the components of containers in *arys*
-        corresponding to that key.
-    """
-    keys = (key for key, _ in serialize_container(arys[0]))
-    subarys = [[subary for _, subary in serialize_container(ary)] for ary in arys]
-
-    from pytools import is_single_valued
-    if not is_single_valued([len(ary) for ary in subarys]):
-        raise ValueError(
-                "all ArrayContainers must have the same number of components")
-
-    for key, value in zip(keys, zip(*subarys)):
-        yield key, value
-
-
 def _map_array_container_impl(f, ary, *, leaf_cls=None, recursive=False):
     """Helper for :func:`rec_map_array_container`.
 
