@@ -310,6 +310,7 @@ def test_array_context_einsum_array_tripleprod(actx_factory, spec):
 
 @dataclass
 class MyContainer(DataclassArrayContainerWithArithmetic):
+    name: str
     mass: DOFArray
     momentum: np.ndarray
     enthalpy: DOFArray
@@ -332,6 +333,7 @@ def _get_test_containers(actx, ambient_dim=2):
 
     # pylint: disable=unexpected-keyword-arg, no-value-for-parameter
     dataclass_of_dofs = MyContainer(
+            name="container",
             mass=x,
             momentum=make_obj_array([x, x]),
             enthalpy=x)

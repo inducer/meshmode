@@ -220,7 +220,7 @@ def _deserialize_ndarray_container(
 
 # {{{ get_container_context_recursively
 
-def get_container_context_recursively(ary: Any):
+def get_container_context_recursively(ary):
     """Walks the :class:`ArrayContainer` hierarchy to find an :class:`ArrayContext`
     associated with it.
 
@@ -228,13 +228,11 @@ def get_container_context_recursively(ary: Any):
     an assertion error is raised.
     """
     actx = None
-    if not is_array_container(ary):
+    if not (isinstance(ary, ArrayContainer) or is_array_container(ary)):
         return actx
 
     # try getting the array context directly
-    if is_array_container(ary):
-        actx = get_container_context(ary)
-
+    actx = get_container_context(ary)
     if actx is not None:
         return actx
 
@@ -260,7 +258,7 @@ def get_container_context_recursively(ary: Any):
 def _map_binary_op_array_container(op, arg1, arg2):
     assert type(arg1) == type(arg2)
 
-    if is_array_container(arg1):
+    if isinstance(arg1, ArrayContainer) or is_array_container(arg1):
         return deserialize_container(arg1, (
             (key, _map_binary_op_array_container(op, subarg1, subarg2))
             for (key, subarg1), (_, subarg2) in zip(
@@ -311,8 +309,10 @@ class ArrayContainerWithArithmetic(ArrayContainer):
 
             raise AssertionError()  # should not get here
 
-        arg1_is_array_container = is_array_container(arg1)
-        arg2_is_array_container = is_array_container(arg2)
+        arg1_is_array_container = \
+                isinstance(arg1, ArrayContainer) or is_array_container(arg1)
+        arg2_is_array_container = \
+                isinstance(arg1, ArrayContainer) or is_array_container(arg2)
 
         if (arg1_is_array_container and arg2_is_array_container
                 and type(arg1) is type(arg2)):
@@ -512,7 +512,7 @@ def _map_array_container_impl(f, ary, *, leaf_cls=None, recursive=False):
     def rec(_ary):
         if type(_ary) is leaf_cls:  # type(ary) is never None
             return f(_ary)
-        elif is_array_container(_ary):
+        elif isinstance(_ary, ArrayContainer) or is_array_container(_ary):
             return deserialize_container(_ary, (
                     (key, frec(subary)) for key, subary in serialize_container(_ary)
                     ))
@@ -539,7 +539,9 @@ def _multimap_array_container_impl(f, *args, leaf_cls=None, recursive=False):
         assert is_same_type(_args, template_ary), \
                 "expected type '{type(template_ary).__name__}'"
 
-        if type(template_ary) is leaf_cls or not is_array_container(template_ary):
+        if (type(template_ary) is leaf_cls
+                or not (isinstance(template_ary, ArrayContainer)
+                    or is_array_container(template_ary))):
             return f(*_args)
 
         result = []
@@ -563,7 +565,8 @@ def _multimap_array_container_impl(f, *args, leaf_cls=None, recursive=False):
 
     container_indices = [
             i for i, arg in enumerate(args)
-            if is_array_container(arg) and type(arg) is not leaf_cls
+            if (isinstance(arg, ArrayContainer) or is_array_container(arg))
+            and type(arg) is not leaf_cls
             ]
 
     if not container_indices:
@@ -665,7 +668,7 @@ def freeze(ary, actx=None):
 
     See :meth:`ArrayContext.thaw`.
     """
-    if is_array_container(ary):
+    if isinstance(ary, ArrayContainer) or is_array_container(ary):
         return _map_array_container_impl(
                 partial(freeze, actx=actx), ary,
                 recursive=False)
@@ -690,7 +693,7 @@ def thaw_impl(ary, actx):
         :func:`functools.singledispatch` requires the 'dispatching' argument
         to come first.
     """
-    if is_array_container(ary):
+    if isinstance(ary, ArrayContainer) or is_array_container(ary):
         return deserialize_container(ary, (
             (key, thaw_impl(subary, actx))
             for key, subary in serialize_container(ary)))
@@ -827,7 +830,7 @@ class _BaseFakeNumpyNamespace:
             # e.g. `np.zeros_like(x)` returns `array([0, 0, ...], dtype=object)`
             # FIXME: what about object arrays nested in an ArrayContainer?
             raise NotImplementedError("operation not implemented for object arrays")
-        elif is_array_container(ary):
+        elif isinstance(ary, ArrayContainer) or is_array_container(ary):
             return rec_map_array_container(alloc_like, ary)
         elif isinstance(ary, Number):
             # NOTE: `np.zeros_like(x)` returns `array(x, shape=())`, which
@@ -1189,7 +1192,7 @@ class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
         if ord is None:
             ord = 2
 
-        if is_array_container(ary):
+        if isinstance(ary, ArrayContainer) or is_array_container(ary):
             import numpy.linalg as la
             return la.norm([
                 self.norm(_flatten_array(subary), ord=ord)
