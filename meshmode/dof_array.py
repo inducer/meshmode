@@ -44,9 +44,9 @@ from meshmode.array_context import (
 __doc__ = """
 .. autoclass:: DOFArray
 
-.. autofunction:: map_dof_array_container
+.. autofunction:: rec_map_dof_array_container
 .. autofunction:: mapped_over_dof_arrays
-.. autofunction:: multimap_dof_array_container
+.. autofunction:: rec_multimap_dof_array_container
 .. autofunction:: multimapped_over_dof_arrays
 
 .. autofunction:: flatten
