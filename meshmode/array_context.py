@@ -31,7 +31,7 @@ import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 
-from pytools import memoize_method
+from pytools import memoize_method, memoize
 from pytools.tag import Tag
 
 
@@ -259,12 +259,12 @@ def _map_binary_op_array_container(op, arg1, arg2):
     assert type(arg1) == type(arg2)
 
     if isinstance(arg1, ArrayContainer) or is_array_container(arg1):
-        return deserialize_container(arg1, (
+        return deserialize_container(arg1, [
             (key, _map_binary_op_array_container(op, subarg1, subarg2))
             for (key, subarg1), (_, subarg2) in zip(
                 serialize_container(arg1), serialize_container(arg2)
                 )
-            ))
+            ])
     else:
         return op(arg1, arg2)
 
@@ -456,25 +456,58 @@ class DataclassArrayContainerWithArithmetic(
     """
 
 
+@memoize(key=lambda ary: (type(ary), _serialize_dataclass_container))
+def _generate_dataclass_serialization_func(ary):
+    from pytools.codegen import remove_common_indentation
+    code = remove_common_indentation("""
+    def _generated_serialize_dataclass(_ary):
+        return [{}]
+    """.format(", ".join(
+        f"('{f.name}', _ary.{f.name})" for f in fields(ary)
+        if issubclass(f.type, (ArrayContainer, NumpyObjectArray))
+        ))
+    )
+
+    exec_dict = {}
+    exec(compile(code, "<generated code>", "exec"), exec_dict)
+    exec_dict["_MODULE_SOURCE_CODE"] = code
+
+    return exec_dict["_generated_serialize_dataclass"]
+
+
+@memoize(key=lambda ary: (type(ary), _deserialize_dataclass_container))
+def _generate_dataclass_deserialization_func(template):
+    from pytools.codegen import remove_common_indentation
+    code = remove_common_indentation("""
+    def _generated_deserialize_dataclass(_template, _iterable):
+        kwargs = dict(_iterable)
+        return type(_template)({})
+    """.format(
+        ", ".join(
+            f"{f.name}=kwargs['{f.name}']"
+            if issubclass(f.type, (ArrayContainer, NumpyObjectArray))
+            else f"{f.name}=_template.{f.name}"
+            for f in fields(template))
+        )
+    )
+
+    exec_dict = {}
+    exec(compile(code, "<generated code>", "exec"), exec_dict)
+    exec_dict["_MODULE_SOURCE_CODE"] = code
+
+    return exec_dict["_generated_deserialize_dataclass"]
+
+
 @serialize_container.register(DataclassArrayContainer)
 def _serialize_dataclass_container(ary: DataclassArrayContainer):
-    # FIXME: These field lists could be generated statically.
-    z = [(fld.name, getattr(ary, fld.name))
-            for fld in fields(ary)
-            if issubclass(fld.type, (ArrayContainer, NumpyObjectArray))]
-    return z
+    return _generate_dataclass_serialization_func(ary)(ary)
 
 
 @deserialize_container.register(DataclassArrayContainer)
 def _deserialize_dataclass_container(
         template: DataclassArrayContainer,
         iterable: Iterable[Tuple[Any, Any]]):
-    kwargs = dict(iterable)
-    # FIXME: These field lists could be generated statically.
-    for fld in fields(template):
-        if not issubclass(fld.type, (ArrayContainer, NumpyObjectArray)):
-            kwargs[fld.name] = getattr(template, fld.name)
-    return type(template)(**kwargs)
+    return _generate_dataclass_deserialization_func(template)(template, iterable)
 
 # }}}
 
@@ -493,9 +526,9 @@ def _map_array_container_impl(f, ary, *, leaf_cls=None, recursive=False):
         if type(_ary) is leaf_cls:  # type(ary) is never None
             return f(_ary)
         elif isinstance(_ary, ArrayContainer) or is_array_container(_ary):
-            return deserialize_container(_ary, (
+            return deserialize_container(_ary, [
                     (key, frec(subary)) for key, subary in serialize_container(_ary)
-                    ))
+                    ])
         else:
             return f(_ary)
 
@@ -674,9 +707,10 @@ def thaw_impl(ary, actx):
         to come first.
     """
     if isinstance(ary, ArrayContainer) or is_array_container(ary):
-        return deserialize_container(ary, (
+        return deserialize_container(ary, [
             (key, thaw_impl(subary, actx))
-            for key, subary in serialize_container(ary)))
+            for key, subary in serialize_container(ary)
+            ])
     else:
         return actx.thaw(ary)
 
