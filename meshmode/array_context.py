@@ -198,13 +198,13 @@ def _is_array_container_ndarray(ary: np.ndarray):
 
 
 @serialize_container.register(np.ndarray)
-def _serialize_container_ndarray(ary: np.ndarray):
+def _serialize_ndarray_container(ary: np.ndarray):
     assert ary.dtype.char == "O"
     return np.ndenumerate(ary)
 
 
 @deserialize_container.register(np.ndarray)
-def _deserialize_container_ndarray(
+def _deserialize_ndarray_container(
         template: Any, iterable: Iterable[Tuple[Any, Any]]):
     # disallow subclasses
     assert type(template) is np.ndarray
@@ -457,7 +457,7 @@ class DataclassArrayContainerWithArithmetic(
 
 
 @serialize_container.register(DataclassArrayContainer)
-def _(ary: DataclassArrayContainer):
+def _serialize_dataclass_container(ary: DataclassArrayContainer):
     # FIXME: These field lists could be generated statically.
     z = [(fld.name, getattr(ary, fld.name))
             for fld in fields(ary)
@@ -466,7 +466,9 @@ def _(ary: DataclassArrayContainer):
 
 
 @deserialize_container.register(DataclassArrayContainer)
-def _(template: DataclassArrayContainer, iterable: Iterable[Tuple[Any, Any]]):
+def _deserialize_dataclass_container(
+        template: DataclassArrayContainer,
+        iterable: Iterable[Tuple[Any, Any]]):
     kwargs = dict(iterable)
     # FIXME: These field lists could be generated statically.
     for fld in fields(template):

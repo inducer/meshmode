@@ -294,12 +294,12 @@ class _EntryNotProvided:
 
 
 @serialize_container.register(DOFArray)
-def _serialize_container_dofarray(ary: DOFArray):
+def _serialize_dof_container(ary: DOFArray):
     return enumerate(ary._data)
 
 
 @deserialize_container.register(DOFArray)
-def _deserialize_container_dofarray(
+def _deserialize_dof_container(
         template: Any, iterable: Iterable[Tuple[Any, Any]]):
     def _raise_index_inconsistency(i, stream_i):
         raise ValueError(
