@@ -20,17 +20,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-
 from dataclasses import dataclass
+
 import numpy as np
 import numpy.linalg as la  # noqa
+
 import pyopencl as cl
 import pyopencl.array as cla  # noqa
-from pytools import memoize_method, memoize_in
-from pytools.obj_array import (
-        flat_obj_array, make_obj_array)
+
+from pytools import memoize_method, memoize_in, log_process
+from pytools.obj_array import flat_obj_array, make_obj_array
+
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
-from meshmode.dof_array import DOFArray, rec_map_dof_array_container
+from meshmode.dof_array import DOFArray
 from meshmode.array_context import (
         freeze, thaw,
         PyOpenCLArrayContext, make_loopy_program,
@@ -38,6 +40,9 @@ from meshmode.array_context import (
         map_array_container,
         DataclassArrayContainerWithArithmetic,
         )
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 # Features lost vs. https://github.com/inducer/grudge:
@@ -236,7 +241,7 @@ class DGDiscretization:
 
     def inverse_mass(self, vec):
         if not isinstance(vec, DOFArray):
-            return rec_map_dof_array_container(self.inverse_mass, vec)
+            return map_array_container(self.inverse_mass, vec)
 
         @memoize_in(self, "elwise_linear_knl")
         def knl():
@@ -289,7 +294,7 @@ class DGDiscretization:
 
     def face_mass(self, vec):
         if not isinstance(vec, DOFArray):
-            return rec_map_dof_array_container(self.face_mass, vec)
+            return map_array_container(self.face_mass, vec)
 
         @memoize_in(self, "face_mass_knl")
         def knl():
@@ -453,18 +458,12 @@ class WaveState(DataclassArrayContainerWithArithmetic):
         return self.u.array_context
 
 
-def ws_to_obj_array(ws):
-    return flat_obj_array(ws.u, ws.v)
-
-
-def obj_array_to_ws(ary):
-    return WaveState(u=ary[0], v=ary[1:])
-
-
+@log_process(logger)
 def main():
+    logging.basicConfig(level=logging.INFO)
+
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-
     actx = PyOpenCLArrayContext(queue)
 
     nel_1d = 16
@@ -479,7 +478,7 @@ def main():
     # no deep meaning here, just a fudge factor
     dt = 0.7/(nel_1d*order**2)
 
-    print("%d elements" % mesh.nelements)
+    logger.info("%d elements", mesh.nelements)
 
     discr = DGDiscretization(actx, mesh, order=order)
 
@@ -504,11 +503,11 @@ def main():
             # FIXME: Maybe an integral function to go with the
             # DOFArray would be nice?
             assert len(fields.u) == 1
-            print(istep, t, actx.np.linalg.norm(fields.u, 2))
-            vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep,
-                    [
-                        ("q", fields),
-                        ])
+            logger.info("[%05d] t %.5e / %.5e norm %.5e",
+                    istep, t, t_final, actx.np.linalg.norm(fields.u, 2))
+            vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep, [
+                ("q", fields),
+                ])
 
         t += dt
         istep += 1
