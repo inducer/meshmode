@@ -21,7 +21,6 @@ THE SOFTWARE.
 """
 
 from dataclasses import dataclass
-
 import numpy as np
 import numpy.linalg as la  # noqa
 
@@ -36,9 +35,10 @@ from meshmode.dof_array import DOFArray
 from meshmode.array_context import (
         freeze, thaw,
         PyOpenCLArrayContext, make_loopy_program,
-        ArrayContainer, NumpyObjectArray,
+        ArrayContainer,
         map_array_container,
-        DataclassArrayContainerWithArithmetic,
+        ArrayContainerWithArithmetic,
+        dataclass_array_container,
         )
 
 import logging
@@ -336,8 +336,9 @@ class DGDiscretization:
 
 # {{{ trace pair
 
+@dataclass_array_container
 @dataclass(frozen=True)
-class TracePair(DataclassArrayContainerWithArithmetic):
+class TracePair(ArrayContainerWithArithmetic):
     where: str
     interior: ArrayContainer
     exterior: ArrayContainer
@@ -445,10 +446,11 @@ def bump(actx, discr, t=0):
             / source_width**2))
 
 
+@dataclass_array_container
 @dataclass(frozen=True)
-class WaveState(DataclassArrayContainerWithArithmetic):
+class WaveState(ArrayContainerWithArithmetic):
     u: DOFArray
-    v: NumpyObjectArray
+    v: np.ndarray  # [object]
 
     def __post_init__(self):
         assert isinstance(self.v, np.ndarray) and self.v.dtype.char == "O"

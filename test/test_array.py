@@ -21,7 +21,6 @@ THE SOFTWARE.
 """
 
 from dataclasses import dataclass
-
 import pytest
 import numpy as np
 
@@ -29,7 +28,9 @@ import meshmode         # noqa: F401
 from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
-from meshmode.array_context import DataclassArrayContainerWithArithmetic
+from meshmode.array_context import (
+        dataclass_array_container,
+        ArrayContainerWithArithmetic)
 
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import PolynomialWarpAndBlendGroupFactory
@@ -308,8 +309,9 @@ def test_array_context_einsum_array_tripleprod(actx_factory, spec):
 
 # {{{ test array container
 
-@dataclass
-class MyContainer(DataclassArrayContainerWithArithmetic):
+@dataclass_array_container
+@dataclass(frozen=True)
+class MyContainer(ArrayContainerWithArithmetic):
     name: str
     mass: DOFArray
     momentum: np.ndarray

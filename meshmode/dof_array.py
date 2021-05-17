@@ -289,10 +289,6 @@ class DOFArray(ArrayContainerWithArithmetic):
 
 # {{{ ArrayContainer implementation
 
-class _EntryNotProvided:
-    pass
-
-
 @serialize_container.register(DOFArray)
 def _serialize_dof_container(ary: DOFArray):
     return enumerate(ary._data)
