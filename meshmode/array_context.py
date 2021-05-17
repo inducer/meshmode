@@ -110,22 +110,26 @@ class ArrayContainer:
     :class:`ArrayContext`.
 
     The functionality for the container is implemented through
-    :func:`functools.singledispatch`. The following methods are required
+    :func:`functools.singledispatch`. The following functions are required
 
-    * Serialization functionality is implemented in :func:`serialize_container`
-      and :func:`deserialize_container`. This allows enumeration of the
-      component arrays in a container and the construction of modified
-      containers from an iterable of those component arrays.
-      :func:`is_array_container` will return *True* for types that have
-      a container serialization function registered.
-    * Packages may register their own types as array containers. They must not
-      register other types (e.g. :class:`list`) as array containers.
+    * :func:`serialize_container` for serialization, which gives the components
+      of the array.
+    * :func:`deserialize_container` for deserialization, which constructs a
+      container from a set of components.
     * :func:`get_container_context` retrieves the :class:`ArrayContext` from
       a container, if it has one.
-    * The type :class:`numpy.ndarray` is considered an array container, but
-      only arrays with dtype *object* may be used as such. (This is so
-      because object arrays cannot be distinguished from non-object arrays
-      via their type.)
+
+    This allows enumeration of the component arrays in a container and the
+    construction of modified containers from an iterable of those component arrays.
+    :func:`is_array_container` will return *True* for types that have
+    a container serialization function registered.
+
+    Packages may register their own types as array containers. They must not
+    register other types (e.g. :class:`list`) as array containers.
+    The type :class:`numpy.ndarray` is considered an array container, but
+    only arrays with dtype *object* may be used as such. (This is so
+    because object arrays cannot be distinguished from non-object arrays
+    via their type.)
 
     The container and its serialization interface has goals and uses
     approaches similar to JAX's
@@ -139,7 +143,8 @@ class ArrayContainer:
     """
 
 
-def _serialize_container_default(ary: ArrayContainer) -> Iterable[Tuple[Any, Any]]:
+@singledispatch
+def serialize_container(ary: ArrayContainer) -> Iterable[Tuple[Any, Any]]:
     r"""Serialize the array container into an iterable over its components.
 
     The order of the components and their identifiers are entirely under
@@ -159,12 +164,8 @@ def _serialize_container_default(ary: ArrayContainer) -> Iterable[Tuple[Any, Any
     raise NotImplementedError(type(ary).__name__)
 
 
-serialize_container = singledispatch(_serialize_container_default)
-
-
 @singledispatch
-def deserialize_container(template: Any,
-        iterable: Iterable[Tuple[Any, Any]]):
+def deserialize_container(template, iterable: Iterable[Tuple[Any, Any]]):
     """Deserialize an iterable into an array container.
 
     :param template: an instance of an existing object that
@@ -172,28 +173,27 @@ def deserialize_container(template: Any,
         see :attr:`~numpy.class.__array_finalize__`.
     :param iterable: an iterable that mirrors the output of
         :meth:`serialize_container`.
-    :param actx: :class:`ArrayContext` to use when constructing the new
-        container, if it requires one at all. If not provided, attempt to get
-        a context from the *template*.
     """
     raise NotImplementedError(type(template).__name__)
 
 
-def is_array_container_type(cls: Any) -> bool:
-    """"Return *True* if the type*cls* has a registered implementation of
-    :func:`serialize_container`, or if it is :class:`ArrayContainer`.
+def is_array_container_type(cls: type) -> bool:
+    """
+    :returns: *True* if the type *cls* has a registered implementation of
+        :func:`serialize_container`, or if it is an :class:`ArrayContainer`.
     """
     return (
-            serialize_container.dispatch(cls) is not _serialize_container_default
-            or cls is ArrayContainer)
+            cls is ArrayContainer
+            or (serialize_container.dispatch(cls)
+                is not serialize_container.__wrapped__))
 
 
 def is_array_container(ary: Any) -> bool:
     """Return *True* if the instance *ary* has a registered implementation of
     :func:`serialize_container`.
     """
-    return serialize_container.dispatch(ary.__class__) \
-            is not _serialize_container_default
+    return (serialize_container.dispatch(ary.__class__)
+            is not serialize_container.__wrapped__)
 
 
 @singledispatch
@@ -212,10 +212,11 @@ def get_container_context(ary: ArrayContainer) -> Optional["ArrayContext"]:
 # {{{ object arrays as array containers
 
 @serialize_container.register(np.ndarray)
-def _serialize_ndarray_container(ary: np.ndarray):
+def _serialize_ndarray_container(ary: np.ndarray) -> Iterable[Tuple[Any, Any]]:
     if ary.dtype.char != "O":
-        raise ValueError("arrays that are not of dtype object may not be used as "
-                "array containers")
+        raise ValueError(
+                f"only object arrays are supported, given dtype '{ary.dtype}'")
+
     return np.ndenumerate(ary)
 
 
@@ -237,12 +238,12 @@ def _deserialize_ndarray_container(
 
 # {{{ get_container_context_recursively
 
-def get_container_context_recursively(ary):
-    """Walks the :class:`ArrayContainer` hierarchy to find an :class:`ArrayContext`
-    associated with it.
+def get_container_context_recursively(ary) -> Optional["ArrayContext"]:
+    """Walks the :class:`ArrayContainer` hierarchy to find an
+    :class:`ArrayContext` associated with it.
 
-    If different components that have different array contexts are found,
-    an assertion error is raised.
+    If different components that have different array contexts are found at
+    any level, an assertion error is raised.
     """
     actx = None
     if not is_array_container(ary):
@@ -275,7 +276,7 @@ def get_container_context_recursively(ary):
 def _map_binary_op_array_container(op, arg1, arg2):
     assert type(arg1) == type(arg2)
 
-    if isinstance(arg1, ArrayContainer) or is_array_container(arg1):
+    if is_array_container(arg1):
         return deserialize_container(arg1, [
             (key, _map_binary_op_array_container(op, subarg1, subarg2))
             for (key, subarg1), (_, subarg2) in zip(
@@ -326,10 +327,8 @@ class ArrayContainerWithArithmetic(ArrayContainer):
 
             raise AssertionError()  # should not get here
 
-        arg1_is_array_container = \
-                isinstance(arg1, ArrayContainer) or is_array_container(arg1)
-        arg2_is_array_container = \
-                isinstance(arg1, ArrayContainer) or is_array_container(arg2)
+        arg1_is_array_container = is_array_container(arg1)
+        arg2_is_array_container = is_array_container(arg2)
 
         if (arg1_is_array_container and arg2_is_array_container
                 and type(arg1) is type(arg2)):
@@ -465,37 +464,41 @@ def dataclass_array_container(cls):
     is checked for whether it is a subclass of :class:`ArrayContainer`,
     using :func:`is_array_container_type`.
     """
-    array_fields = [f for f in fields(cls)
-            if is_array_container_type(f.type)]
-    non_array_fields = [f for f in fields(cls)
-            if not is_array_container_type(f.type)]
+    from dataclasses import is_dataclass
+    assert is_dataclass(cls)
+
+    array_fields = [
+            f for f in fields(cls) if is_array_container_type(f.type)]
+    non_array_fields = [
+            f for f in fields(cls) if not is_array_container_type(f.type)]
 
     if not array_fields:
         raise ValueError(f"'{cls}' must have fields with array container type "
-                "in order to use the dataclass_array_container decorator")
+                "in order to use the 'dataclass_array_container' decorator")
 
-    ser_expr = ", ".join(f"({repr(f.name)}, ary.{f.name})" for f in array_fields)
+    serialize_expr = ", ".join(
+            f"({repr(f.name)}, ary.{f.name})" for f in array_fields)
     template_kwargs = ", ".join(
             f"{f.name}=template.{f.name}" for f in non_array_fields)
 
     from pytools.codegen import remove_common_indentation
-    ser_code = remove_common_indentation(f"""
+    serialize_code = remove_common_indentation(f"""
         from typing import Any, Iterable, Tuple
         from meshmode.array_context import serialize_container, deserialize_container
 
         @serialize_container.register(cls)
-        def serialize_{cls.__name__.lower()}(ary: cls):
-            return ({ser_expr},)
+        def _serialize_{cls.__name__.lower()}(ary: cls):
+            return ({serialize_expr},)
 
         @deserialize_container.register(cls)
-        def deserialize_{cls.__name__.lower()}(
+        def _deserialize_{cls.__name__.lower()}(
                 template: cls, iterable: Iterable[Tuple[Any, Any]]) -> cls:
             return cls(**dict(iterable), {template_kwargs})
         """)
 
     exec_dict = {"cls": cls}
-    exec(compile(ser_code, "<generated code>", "exec"), exec_dict)
-    exec_dict["_MODULE_SOURCE_CODE"] = ser_code
+    exec(compile(serialize_code, "<generated code>", "exec"), exec_dict)
+    exec_dict["_MODULE_SOURCE_CODE"] = serialize_code
 
     return cls
 
