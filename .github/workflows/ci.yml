@@ -162,6 +162,7 @@ jobs:
 
     mirgecom_examples:
         runs-on: ubuntu-latest
+        name: Examples for downstream project mirgecom
         steps:
         -   uses: actions/checkout@v2
         -   name: "Main Script"
