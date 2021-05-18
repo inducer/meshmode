@@ -476,7 +476,7 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def greater_equal(self, x, y): return self._bop(operator.ge, x, y)  # noqa: E704
     def less(self, x, y): return self._bop(operator.lt, x, y)  # noqa: E704
     def less_equal(self, x, y): return self._bop(operator.le, x, y)  # noqa: E704
-R
+
     # }}}
 
     def ones_like(self, ary):
