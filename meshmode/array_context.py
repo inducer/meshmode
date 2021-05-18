@@ -457,6 +457,15 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def _get_fake_numpy_linalg_namespace(self):
         return _PyOpenCLFakeNumpyLinalgNamespace(self._array_context)
 
+    # {{{ comparisons
+
+    # FIXME: This should be documentation, not a comment.
+    # These are here mainly because some arrays may choose to interpret
+    # equality comparison as a binary predicate of structural identity,
+    # i.e. more like "are you two equal", and not like numpy semantics.
+    # These operations provide access to numpy-style comparisons in that
+    # case.
+    
     def _bop(self, op, x, y):
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
         return obj_or_dof_array_vectorize_n_args(op, x, y)
@@ -467,6 +476,8 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def greater_equal(self, x, y): return self._bop(operator.ge, x, y)  # noqa: E704
     def less(self, x, y): return self._bop(operator.lt, x, y)  # noqa: E704
     def less_equal(self, x, y): return self._bop(operator.le, x, y)  # noqa: E704
+    
+    # }}}
 
     def ones_like(self, ary):
         def _ones_like(subary):
