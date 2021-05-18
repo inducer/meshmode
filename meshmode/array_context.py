@@ -1221,6 +1221,15 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def _get_fake_numpy_linalg_namespace(self):
         return _PyOpenCLFakeNumpyLinalgNamespace(self._array_context)
 
+    # {{{ comparisons
+
+    # FIXME: This should be documentation, not a comment.
+    # These are here mainly because some arrays may choose to interpret
+    # equality comparison as a binary predicate of structural identity,
+    # i.e. more like "are you two equal", and not like numpy semantics.
+    # These operations provide access to numpy-style comparisons in that
+    # case.
+
     def equal(self, x, y):
         return rec_multimap_array_container(operator.eq, x, y)
 
@@ -1238,6 +1247,8 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
 
     def less_equal(self, x, y):
         return rec_multimap_array_container(operator.le, x, y)
+
+    # }}}
 
     def ones_like(self, ary):
         def _ones_like(subary):
