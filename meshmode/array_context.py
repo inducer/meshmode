@@ -465,7 +465,7 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     # i.e. more like "are you two equal", and not like numpy semantics.
     # These operations provide access to numpy-style comparisons in that
     # case.
-    
+
     def _bop(self, op, x, y):
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
         return obj_or_dof_array_vectorize_n_args(op, x, y)
@@ -476,7 +476,7 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def greater_equal(self, x, y): return self._bop(operator.ge, x, y)  # noqa: E704
     def less(self, x, y): return self._bop(operator.lt, x, y)  # noqa: E704
     def less_equal(self, x, y): return self._bop(operator.le, x, y)  # noqa: E704
-    
+R
     # }}}
 
     def ones_like(self, ary):
