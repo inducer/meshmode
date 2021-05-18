@@ -30,7 +30,7 @@ from meshmode.array_context import (  # noqa
         as pytest_generate_tests)
 from meshmode.array_context import (
         dataclass_array_container,
-        ArrayContainerWithArithmetic)
+        with_container_arithmetic)
 
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import PolynomialWarpAndBlendGroupFactory
@@ -40,6 +40,17 @@ from pytools.obj_array import make_obj_array
 
 import logging
 logger = logging.getLogger(__name__)
+
+# {{{ work around possible lack of https://github.com/inducer/pyopencl/pull/472
+
+import pyopencl.array
+if not hasattr(pyopencl.array.Array, "__pos__"):
+    def _cl_array_pos(self):
+        return self
+
+    pyopencl.array.Array.__pos__ = _cl_array_pos
+
+# }}}
 
 
 def test_array_context_np_workalike(actx_factory):
@@ -309,9 +320,10 @@ def test_array_context_einsum_array_tripleprod(actx_factory, spec):
 
 # {{{ test array container
 
+@with_container_arithmetic(bcast_obj_array=False, rel_comparison=True)
 @dataclass_array_container
 @dataclass(frozen=True)
-class MyContainer(ArrayContainerWithArithmetic):
+class MyContainer:
     name: str
     mass: DOFArray
     momentum: np.ndarray
@@ -407,6 +419,9 @@ def test_container_arithmetic(actx_factory):
         rec_multimap_array_container(
                 partial(_check_allclose, lambda x: actx.np.sin(x)),
                 ary, actx.np.sin(ary))
+
+    with pytest.raises(TypeError):
+        ary_of_dofs + dc_of_dofs
 
     # }}}
 

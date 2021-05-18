@@ -21,6 +21,7 @@ THE SOFTWARE.
 """
 
 import operator
+from enum import Enum, auto as _enum_auto
 from dataclasses import fields
 from functools import partial, singledispatch, update_wrapper
 from abc import ABC, abstractmethod
@@ -48,7 +49,7 @@ __doc__ = """
 .. autofunction:: get_container_context
 .. autofunction:: get_container_context_recursively
 
-.. autoclass:: ArrayContainerWithArithmetic
+.. autoclass:: with_container_arithmetic
 .. autofunction:: dataclass_array_container
 .. autofunction:: map_array_container
 .. autofunction:: multimap_array_container
@@ -204,7 +205,7 @@ def get_container_context(ary: ArrayContainer) -> Optional["ArrayContext"]:
     of the container. For the recursive version, see
     :func:`get_container_context_recursively`.
     """
-    return None
+    return getattr(ary, "array_context", None)
 
 # }}}
 
@@ -271,182 +272,276 @@ def get_container_context_recursively(ary) -> Optional["ArrayContext"]:
 # }}}
 
 
-# {{{ ArrayContainerWithArithmetic
+# {{{ with_container_arithmetic
 
-def _map_binary_op_array_container(op, arg1, arg2):
-    assert type(arg1) == type(arg2)
+class _OpClass(Enum):
+    ARITHMETIC = _enum_auto
+    BITWISE = _enum_auto
+    SHIFT = _enum_auto
+    EQ_COMPARISON = _enum_auto
+    REL_COMPARISON = _enum_auto
 
-    if is_array_container(arg1):
-        return deserialize_container(arg1, [
-            (key, _map_binary_op_array_container(op, subarg1, subarg2))
-            for (key, subarg1), (_, subarg2) in zip(
-                serialize_container(arg1), serialize_container(arg2)
-                )
-            ])
+
+_UNARY_OP_AND_DUNDER = [
+        ("pos", "+{}", _OpClass.ARITHMETIC),
+        ("neg", "-{}", _OpClass.ARITHMETIC),
+        ("abs", "abs({})", _OpClass.ARITHMETIC),
+        ("inv", "~{}", _OpClass.BITWISE),
+        ]
+_BINARY_OP_AND_DUNDER = [
+        ("add", "{} + {}", True, _OpClass.ARITHMETIC),
+        ("sub", "{} - {}", True, _OpClass.ARITHMETIC),
+        ("mul", "{} * {}", True, _OpClass.ARITHMETIC),
+        ("truediv", "{} / {}", True, _OpClass.ARITHMETIC),
+        ("floordiv", "{} // {}", True, _OpClass.ARITHMETIC),
+        ("pow", "{} ** {}", True, _OpClass.ARITHMETIC),
+        ("mod", "{} % {}", True, _OpClass.ARITHMETIC),
+        ("divmod", "divmod({}, {})", True, _OpClass.ARITHMETIC),
+
+        ("and", "{} & {}", True, _OpClass.BITWISE),
+        ("or", "{} | {}", True, _OpClass.BITWISE),
+        ("xor", "{} ^ {}", True, _OpClass.BITWISE),
+
+        ("lshift", "{} << {}", False, _OpClass.SHIFT),
+        ("rshift", "{} >> {}", False, _OpClass.SHIFT),
+
+        ("eq", "{} == {}", False, _OpClass.EQ_COMPARISON),
+        ("ne", "{} != {}", False, _OpClass.EQ_COMPARISON),
+
+        ("lt", "{} < {}", False, _OpClass.REL_COMPARISON),
+        ("gt", "{} > {}", False, _OpClass.REL_COMPARISON),
+        ("le", "{} <= {}", False, _OpClass.REL_COMPARISON),
+        ("ge", "{} >= {}", False, _OpClass.REL_COMPARISON),
+        ]
+
+
+def _format_unary_op_str(op_str, arg1):
+    if isinstance(arg1, tuple):
+        arg1_entry, arg1_container = arg1
+        return (f"{op_str.format(arg1_entry)} "
+                f"for {arg1_entry} in {arg1_container}")
     else:
-        return op(arg1, arg2)
+        return op_str.format(arg1)
 
 
-class ArrayContainerWithArithmetic(ArrayContainer):
-    """Array container with basic arithmetic, comparisons and logic operators.
+def _format_binary_op_str(op_str, arg1, arg2):
+    if isinstance(arg1, tuple) and isinstance(arg2, tuple):
+        import sys
+        if sys.version_info >= (3, 10):
+            strict_arg = ", strict=__debug__"
+        else:
+            strict_arg = ""
+
+        arg1_entry, arg1_container = arg1
+        arg2_entry, arg2_container = arg2
+        return (f"{op_str.format(arg1_entry, arg2_entry)} "
+                f"for {arg1_entry}, {arg2_entry} "
+                f"in zip({arg1_container}, {arg2_container}{strict_arg})")
+
+    elif isinstance(arg1, tuple):
+        arg1_entry, arg1_container = arg1
+        return (f"{op_str.format(arg1_entry, arg2)} "
+                f"for {arg1_entry} in {arg1_container}")
+
+    elif isinstance(arg2, tuple):
+        arg2_entry, arg2_container = arg2
+        return (f"{op_str.format(arg1, arg2_entry)} "
+                f"for {arg2_entry} in {arg2_container}")
+    else:
+        return op_str.format(arg1, arg2)
+
+
+def with_container_arithmetic(
+        bcast_number=True, bcast_obj_array=None, bcast_numpy_array=False,
+        arithmetic=True, bitwise=False, shift=False,
+        eq_comparison=None, rel_comparison=None):
+    """A class decorator that implements built-in operators for array containers
+    by propagating the operations to the elements of the container.
+
+    :arg bcast_number: If *True*, numbers broadcast over the container
+        (with the container as the 'outer' structure).
+    :arg bcast_obj_array: If *True*, :mod:`numpy` object arrays broadcast over
+        the container.  (with the container as the 'inner' structure).
+    :arg bcast_numpy_array: If *True*, any :class:`numpy.ndarray` will broadcast
+        over the container.  (with the container as the 'inner' structure).
+    :arg arithmetic: Implement the conventional arithmetic operators, including
+        ``**``, :func:`divmod`, and ``//``. Also includes ``+`` and ``-`` as well as
+        :func:`abs`.
+    :arg bitwise: If *True*, implement bitwise and, or, not, and inversion.
+    :arg shift: If *True*, implement bit shifts.
+    :arg eq_comparison: If *True*, implement ``==`` and ``!=``.
+    :arg rel_comparison: If *True*, implement ``<``, ``<=``, ``>``, ``>=``.
+        In that case, if *eq_comparison* is unspecified, it is also set to
+        *True*.
+
+    Each operator class also includes the "reverse" operator class if applicable.
 
     .. note::
 
-        :class:`ArrayContainerWithArithmetic` instances support elementwise
-        ``<``, ``>``, ``<=``, ``>=``. (:mod:`numpy` object arrays containing
-        arrays do not)
+        To generate the code implementing the operators, this function relies on
+        class methods ``_deserialize_init_arrays_code`` and
+        ``_serialize_init_arrays_code``. This interface should be considered
+        undocumented and subject to change, however if you are curious, you may look
+        at its implementation in :class:`meshmode.dof_array.DOFArray`. For a simple
+        structure type, the implementation might look like this::
 
-    .. autoattribute:: array_context
+            @classmethod
+            def _serialize_init_arrays_code(cls, instance_name):
+                return {"u": f"{instance_name}.u", "v": f"{instance_name}.v"}
+
+            @classmethod
+            def _deserialize_init_arrays_code(cls, tmpl_instance_name, args):
+                return f"u={args['u']}, v={args['v']}"
+
+    :func:`dataclass_array_container` automatically generates an appropriate
+    implementation of these methods, so :func:`with_container_arithmetic`
+    should nest "outside" :func:dataclass_array_container`.
     """
 
-    @property
-    @abstractmethod
-    def array_context(self):
-        """An :class:`~meshmode.array_context.ArrayContext`."""
+    if bcast_obj_array is None:
+        raise TypeError("bcast_obj_array must be specified")
+    if rel_comparison is None:
+        raise TypeError("rel_comparison must be specified")
+    if rel_comparison and eq_comparison is None:
+        eq_comparison = True
+    if eq_comparison is None:
+        raise TypeError("eq_comparison must be specified")
+    if not bcast_obj_array and bcast_numpy_array:
+        raise TypeError("bcast_obj_array must be set if bcast_numpy_array is")
 
-    @classmethod
-    def _unary_op(cls, op, arg):
-        return rec_map_array_container(op, arg)
+    if bcast_numpy_array:
+        def numpy_pred(name):
+            return f"isinstance({name}, np.ndarray)"
+    elif bcast_obj_array:
+        def numpy_pred(name):
+            return f"isinstance({name}, np.ndarray) and {name}.dtype.char == 'O'"
+    else:
+        def numpy_pred(name):
+            return "False"  # optimized away
 
-    @classmethod
-    def _binary_op(cls, op, arg1, arg2):
-        from numbers import Number
-        from pytools.obj_array import obj_array_vectorize
+    desired_op_classes = set()
+    if arithmetic:
+        desired_op_classes.add(_OpClass.ARITHMETIC)
+    if bitwise:
+        desired_op_classes.add(_OpClass.BITWISE)
+    if shift:
+        desired_op_classes.add(_OpClass.SHIFT)
+    if eq_comparison:
+        desired_op_classes.add(_OpClass.EQ_COMPARISON)
+    if rel_comparison:
+        desired_op_classes.add(_OpClass.REL_COMPARISON)
 
-        is_arg1_ndarray = isinstance(arg1, np.ndarray)
-        if is_arg1_ndarray or isinstance(arg2, np.ndarray):
-            # do a bit of broadcasting
-            if is_arg1_ndarray:
-                return obj_array_vectorize(
-                        lambda subary: cls._binary_op(op, subary, arg2),
-                        arg1.astype(object, copy=False))
-            else:
-                return obj_array_vectorize(
-                        lambda subary: cls._binary_op(op, arg1, subary),
-                        arg2.astype(object, copy=False))
+    def wrap(cls):
+        from pytools.codegen import CodeGenerator
+        gen = CodeGenerator()
+        gen("""
+            from numbers import Number
+            import numpy as np
+            from meshmode.array_context import ArrayContainer
+            """)
+        gen("")
 
-            raise AssertionError()  # should not get here
+        def same_key(k1, k2):
+            assert k1 == k2
+            return k1
 
-        arg1_is_array_container = is_array_container(arg1)
-        arg2_is_array_container = is_array_container(arg2)
+        # {{{ unary operators
 
-        if (arg1_is_array_container and arg2_is_array_container
-                and type(arg1) is type(arg2)):
-            return _map_binary_op_array_container(op, arg1, arg2)
-        elif arg1_is_array_container and isinstance(arg2, Number):
-            return rec_map_array_container(lambda subary: op(subary, arg2), arg1)
-        elif isinstance(arg1, Number) and arg2_is_array_container:
-            return rec_map_array_container(lambda subary: op(arg1, subary), arg2)
-        else:
-            raise NotImplementedError(
-                f"operation '{op.__name__}' for arrays of type "
-                f"'{type(arg1).__name__}' and '{type(arg2).__name__}'")
+        for dunder_name, op_str, op_cls in _UNARY_OP_AND_DUNDER:
+            if op_cls not in desired_op_classes:
+                continue
 
-    # bit shifts unimplemented for now
+            fname = f"{cls.__name__.lower()}_{dunder_name}"
+            init_args = cls._deserialize_init_arrays_code("arg1", {
+                    key_arg1: _format_unary_op_str(op_str, expr_arg1)
+                    for key_arg1, expr_arg1 in
+                    cls._serialize_init_arrays_code("arg1").items()
+                    })
 
-    # {{{ arithmetic
+            gen(f"""
+                def {fname}(arg1):
+                    return cls({init_args})
+                cls.__{dunder_name}__ = {fname}""")
+            gen("")
 
-    def __add__(self, arg):
-        return self._binary_op(operator.add, self, arg)
+        # }}}
 
-    def __sub__(self, arg):
-        return self._binary_op(operator.sub, self, arg)
+        for dunder_name, op_str, reversible, op_cls in _BINARY_OP_AND_DUNDER:
+            if op_cls not in desired_op_classes:
+                continue
 
-    def __mul__(self, arg):
-        return self._binary_op(operator.mul, self, arg)
+            # {{{ "forward" binary operators
 
-    def __truediv__(self, arg):
-        return self._binary_op(operator.truediv, self, arg)
+            fname = f"{cls.__name__.lower()}_{dunder_name}"
+            zip_init_args = cls._deserialize_init_arrays_code("arg1", {
+                    same_key(key_arg1, key_arg2):
+                    _format_binary_op_str(op_str, expr_arg1, expr_arg2)
+                    for (key_arg1, expr_arg1), (key_arg2, expr_arg2) in zip(
+                        cls._serialize_init_arrays_code("arg1").items(),
+                        cls._serialize_init_arrays_code("arg2").items())
+                    })
+            bcast_init_args = cls._deserialize_init_arrays_code("arg1", {
+                    key_arg1: _format_binary_op_str(op_str, expr_arg1, "arg2")
+                    for key_arg1, expr_arg1 in
+                    cls._serialize_init_arrays_code("arg1").items()
+                    })
 
-    def __pow__(self, arg):
-        return self._binary_op(operator.pow, self, arg)
+            gen(f"""
+                def {fname}(arg1, arg2):
+                    if arg2.__class__ is cls:
+                        return cls({zip_init_args})
+                    if {bcast_number}:  # optimized away
+                        if isinstance(arg2, Number):
+                            return cls({bcast_init_args})
+                    if {numpy_pred("arg2")}:
+                        result = np.empty_like(arg2, dtype=object)
+                        for i in np.ndindex(arg2.shape):
+                            result[i] = {op_str.format("arg1", "arg2[i]")}
+                        return result
+                    return NotImplemented
+                cls.__{dunder_name}__ = {fname}""")
+            gen("")
 
-    def __mod__(self, arg):
-        return self._binary_op(operator.mod, self, arg)
+            # }}}
 
-    def __divmod__(self, arg):
-        return self._binary_op(divmod, self, arg)
+            # {{{ "reverse" binary operators
 
-    def __radd__(self, arg):
-        return self._binary_op(operator.add, arg, self)
+            if reversible:
+                fname = f"{cls.__name__.lower()}_r{dunder_name}"
+                bcast_init_args = cls._deserialize_init_arrays_code("arg2", {
+                        key_arg2: _format_binary_op_str(
+                            op_str, "arg1", expr_arg2)
+                        for key_arg2, expr_arg2 in
+                        cls._serialize_init_arrays_code("arg2").items()
+                        })
+                gen(f"""
+                    def {fname}(arg2, arg1):
+                        # assert other.__cls__ is not cls
 
-    def __rsub__(self, arg):
-        return self._binary_op(operator.sub, arg, self)
+                        if {bcast_number}:  # optimized away
+                            if isinstance(arg1, Number):
+                                return cls({bcast_init_args})
+                        if {numpy_pred("arg1")}:
+                            result = np.empty_like(arg1, dtype=object)
+                            for i in np.ndindex(arg1.shape):
+                                result[i] = {op_str.format("arg1[i]", "arg2")}
+                            return result
+                        return NotImplemented
 
-    def __rmul__(self, arg):
-        return self._binary_op(operator.mul, arg, self)
+                    cls.__r{dunder_name}__ = {fname}""")
+                gen("")
 
-    def __rtruediv__(self, arg):
-        return self._binary_op(operator.truediv, arg, self)
+            # }}}
 
-    def __rpow__(self, arg):
-        return self._binary_op(operator.pow, arg, self)
+        # This will evaluate the module, which is all we need.
+        code = gen.get().rstrip()+"\n"
+        result_dict = {"_MODULE_SOURCE_CODE": code, "cls": cls}
+        exec(compile(code, "<generated code>", "exec"), result_dict)
 
-    def __rmod__(self, arg):
-        return self._binary_op(operator.mod, arg, self)
+        return cls
 
-    def __rdivmod__(self, arg):
-        return self._binary_op(divmod, arg, self)
-
-    def __pos__(self):
-        return self
-
-    def __neg__(self):
-        return self._unary_op(operator.neg, self)
-
-    def __abs__(self):
-        return self._unary_op(operator.abs, self)
-
-    # }}}
-
-    # {{{ comparison
-
-    def __eq__(self, arg):
-        return self._binary_op(self.array_context.np.equal, self, arg)
-
-    def __ne__(self, arg):
-        return self._binary_op(self.array_context.np.not_equal, self, arg)
-
-    def __lt__(self, arg):
-        return self._binary_op(self.array_context.np.less, self, arg)
-
-    def __gt__(self, arg):
-        return self._binary_op(self.array_context.np.greater, self, arg)
-
-    def __le__(self, arg):
-        return self._binary_op(self.array_context.np.less_equal, self, arg)
-
-    def __ge__(self, arg):
-        return self._binary_op(self.array_context.np.greater_equal, self, arg)
-
-    # }}}
-
-    # {{{ logical
-
-    def __and__(self, arg):
-        return self._binary_op(operator.and_, self, arg)
-
-    def __xor__(self, arg):
-        return self._binary_op(operator.xor, self, arg)
-
-    def __or__(self, arg):
-        return self._binary_op(operator.or_, self, arg)
-
-    def __rand__(self, arg):
-        return self._binary_op(operator.and_, arg, self)
-
-    def __rxor__(self, arg):
-        return self._binary_op(operator.xor, arg, self)
-
-    def __ror__(self, arg):
-        return self._binary_op(operator.or_, arg, self)
-
-    # }}}
-
-
-@get_container_context.register(ArrayContainerWithArithmetic)
-def _get_array_container_ac_arith(ary: ArrayContainerWithArithmetic):
-    return ary.array_context
+    # we're being called as @with_container_arithmetic(...), with parens
+    return wrap
 
 # }}}
 
@@ -481,19 +576,46 @@ def dataclass_array_container(cls):
     template_kwargs = ", ".join(
             f"{f.name}=template.{f.name}" for f in non_array_fields)
 
+    lower_cls_name = cls.__name__.lower()
+
+    serialize_init_code = ", ".join(f"{repr(f.name)}: f'{{instance_name}}.{f.name}'"
+            for f in array_fields)
+    deserialize_init_code = ", ".join([
+            f"{f.name}={{args[{repr(f.name)}]}}" for f in array_fields
+            ] + [
+            f"{f.name}={{template_instance_name}}.{f.name}"
+            for f in non_array_fields
+            ])
+
     from pytools.codegen import remove_common_indentation
     serialize_code = remove_common_indentation(f"""
         from typing import Any, Iterable, Tuple
         from meshmode.array_context import serialize_container, deserialize_container
 
         @serialize_container.register(cls)
-        def _serialize_{cls.__name__.lower()}(ary: cls):
+        def serialize_{lower_cls_name}(ary: cls):
             return ({serialize_expr},)
 
         @deserialize_container.register(cls)
-        def _deserialize_{cls.__name__.lower()}(
+        def deserialize_{lower_cls_name}(
                 template: cls, iterable: Iterable[Tuple[Any, Any]]) -> cls:
             return cls(**dict(iterable), {template_kwargs})
+
+        # support for with_container_arithmetic
+
+        def _serialize_init_arrays_code_{lower_cls_name}(cls, instance_name):
+            return {{
+                {serialize_init_code}
+                }}
+        cls._serialize_init_arrays_code = classmethod(
+            _serialize_init_arrays_code_{lower_cls_name})
+
+        def _deserialize_init_arrays_code_{lower_cls_name}(
+                cls, template_instance_name, args):
+            return f"{deserialize_init_code}"
+
+        cls._deserialize_init_arrays_code = classmethod(
+            _deserialize_init_arrays_code_{lower_cls_name})
         """)
 
     exec_dict = {"cls": cls}

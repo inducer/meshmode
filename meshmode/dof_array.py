@@ -34,7 +34,7 @@ from pytools import single_valued, memoize_in
 
 from meshmode.array_context import (
         ArrayContext, make_loopy_program,
-        ArrayContainer, ArrayContainerWithArithmetic,
+        ArrayContainer, with_container_arithmetic,
         serialize_container, deserialize_container)
 from meshmode.array_context import (
         thaw as _thaw, thaw_impl, freeze as _freeze,
@@ -58,7 +58,11 @@ __doc__ = """
 
 # {{{ DOFArray
 
-class DOFArray(ArrayContainerWithArithmetic):
+@with_container_arithmetic(
+        bcast_obj_array=True,
+        bcast_numpy_array=True,
+        rel_comparison=True)
+class DOFArray(ArrayContainer):
     r"""This array type holds degree-of-freedom arrays for use with
     :class:`~meshmode.discretization.Discretization`,
     with one entry in the :class:`DOFArray` for each
@@ -101,20 +105,8 @@ class DOFArray(ArrayContainerWithArithmetic):
     .. attribute:: real
     .. attribute:: imag
 
-    Inherits from :class:`~meshmode.array_context.ArrayContainerWithArithmetic`.
-
-    Basic in-place operations are also supported. Note that not all array types
-    provided by :class:`meshmode.array_context.ArrayContext` implementations
-    support in-place operations. Those based on lazy evaluation are a salient
-    example.
-
-    .. automethod:: __iadd__
-    .. automethod:: __isub__
-    .. automethod:: __imul__
-    .. automethod:: __itruediv__
-    .. automethod:: __iand__
-    .. automethod:: __ixor__
-    .. automethod:: __ior__
+    Implements the usual set of arithmetic operations, including broadcasting
+    of numbers and over numpy object arrays.
 
     .. note::
 
@@ -223,6 +215,10 @@ class DOFArray(ArrayContainerWithArithmetic):
 
     def _ibop(self, f, arg):
         """Generic in-place binary operator without any broadcast support."""
+        from warnings import warn
+        warn("In-place operations on DOFArrays are deprecated. "
+                "They will be removed in 2022.", DeprecationWarning, stacklevel=2)
+
         if isinstance(arg, DOFArray):
             if len(self) != len(arg):
                 raise ValueError("'DOFArray' objects in binary operator must "
@@ -283,6 +279,17 @@ class DOFArray(ArrayContainerWithArithmetic):
         self._data = tuple([actx.from_numpy(ary_i) for ary_i in state])
 
     # }}}
+
+    @classmethod
+    def _serialize_init_arrays_code(cls, instance_name):
+        return {"_":
+                (f"{instance_name}_i", f"{instance_name}")}
+
+    @classmethod
+    def _deserialize_init_arrays_code(cls, template_instance_name, args):
+        (_, arg), = args.items()
+        # Why tuple([...])? https://stackoverflow.com/a/48592299
+        return (f"{template_instance_name}.array_context, tuple([{arg}])")
 
 # }}}
 
