@@ -76,6 +76,7 @@ intersphinx_mapping = {
     "https://documen.tician.de/pyopencl": None,
     "https://documen.tician.de/meshpy": None,
     "https://documen.tician.de/modepy": None,
+    "https://documen.tician.de/arraycontext": None,
     "https://documen.tician.de/loopy": None,
     "https://documen.tician.de/gmsh_interop": None,
     "https://documen.tician.de/pymetis": None,
