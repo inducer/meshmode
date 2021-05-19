@@ -336,12 +336,16 @@ def test_conformity_of_uniform_mesh(refinement_rounds):
     assert is_boundary_tag_empty(mesh, BTAG_ALL)
 
 
-@pytest.mark.parametrize("mesh_name", ["torus", "icosphere"])
+@pytest.mark.parametrize("mesh_name", ["torus", "icosphere", "cylinder"])
 def test_refine_surfaces(actx_factory, mesh_name, visualize=False):
     if mesh_name == "torus":
         mesh = mgen.generate_torus(10, 1, 40, 4, order=4)
     elif mesh_name == "icosphere":
         mesh = mgen.generate_icosphere(1, order=4)
+    elif mesh_name == "cylinder":
+        mesh = mgen.generate_surface_of_revolution(
+            np.array([[1.0, 1.0], [0.0, 1.0]]),
+            np.linspace(0, 2*np.pi, 6, endpoint=False), order=4)
     else:
         raise ValueError(f"invalid mesh name '{mesh_name}'")
 

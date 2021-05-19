@@ -61,6 +61,7 @@ Surfaces
 .. autofunction:: generate_torus
 .. autofunction:: refine_mesh_and_get_urchin_warper
 .. autofunction:: generate_urchin
+.. autofunction:: generate_surface_of_revolution
 
 Volumes
 -------
@@ -508,66 +509,46 @@ def generate_icosphere(r: float, order: int, *,
 # }}}
 
 
-# {{{ generate_cylinder
+# {{ generate_surface_of_revolution
 
-def generate_cylinder(r: float, order: int, *,
-        uniform_refinement_rounds: int = 0,
-        z_lower: float = 0.0,
-        z_upper: float = 1.0,
+def generate_surface_of_revolution(
+        curve: np.ndarray,
+        angle_discr: np.ndarray,
+        order: int, *,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
         unit_nodes: Optional[np.ndarray] = None):
     """
-    :param r: radius of the sphere.
+    :param curve: the curve parameterized by radius and height which is
+        rotated about z axis. Must have shape ``(2, n)``. First axis
+        must represent the radius and second axis must represent the height.
+    :param angle_discr: A discretization of ``[0, 2*pi)``.
     :param order: order of the (simplex) elements. If *unit_nodes* is also
         provided, the orders should match.
-    :param uniform_refinement_rounds: number of uniform refinement rounds to
-        perform after the initial mesh was created.
-    :param z_lower: lower bound for the z axis.
-    :param z_upper: upper bound for the z axis.
     :param node_vertex_consistency_tolerance: passed to the
         :class:`~meshmode.mesh.Mesh` constructor. If *False*, no checks are
         performed.
     :param unit_nodes: if given, the unit nodes to use. Must have shape
         ``(3, nnodes)``.
     """
-    circle_param = np.linspace(0.0, 1.0, 6, endpoint=False)
-    circle = r * np.array([ellipse(1.0, t)[:, 0] for t in circle_param]).T
-    n = circle.shape[1]
-    vertices = np.zeros((3, n*2))
-    vertices[:2, :n] = circle
-    vertices[:2, n:] = circle
-    vertices[2, :n] = z_lower
-    vertices[2, :n] = z_upper
+    n = len(angle_discr)
+    m = curve.shape[1]
+    vertices = np.zeros((3, n*m))
+    theta, r = np.meshgrid(angle_discr, curve[0, :])
+    _, h = np.meshgrid(angle_discr, curve[1, :])
+    vertices[0, :] = (np.sin(theta)*r).reshape((n*m,))
+    vertices[1, :] = (np.cos(theta)*r).reshape((n*m,))
+    vertices[2, :] = h.reshape((n*m,))
 
     tris = []
-    for i in range(n):
-        tris.append([i, (i+1) % n, i+n])
-        tris.append([i+n, (i+1) % n + n, (i+1) % n])
+    for i in range(m-1):
+        for j in range(n):
+            tris.append([i*m + j, (i + 1)*m + j, (i + 1)*m + (j + 1)%n])
+            tris.append([i*m + j, i*m + (j + 1)%n, (i + 1)*m + (j + 1)%n])
 
     vertex_indices = np.array(tris, dtype=np.int32)
 
     grp = make_group_from_vertices(vertices, vertex_indices, order,
                 unit_nodes=unit_nodes)
-
-    from meshmode.mesh import Mesh
-    mesh = Mesh(
-        vertices, [grp],
-        node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
-        is_conforming=True)
-
-    if uniform_refinement_rounds:
-        from meshmode.mesh.refinement import refine_uniformly
-        mesh = refine_uniformly(mesh, uniform_refinement_rounds)
-
-    # ensure vertices and nodes are still on the circle of radius r
-    def ensure_on_cylinder(arr):
-        res = arr.copy()
-        res[:2, :] *= r/np.sqrt(np.sum(arr[:2]**2, axis=0))
-        return res
-
-    vertices = ensure_on_cylinder(mesh.vertices)
-    grp, = mesh.groups
-    grp = grp.copy(nodes=ensure_on_cylinder(grp.nodes))
 
     from meshmode.mesh import Mesh
     return Mesh(
