@@ -21,7 +21,7 @@ THE SOFTWARE.
 """
 
 import operator
-from enum import Enum, auto as _enum_auto
+import enum
 from dataclasses import fields
 from functools import partial, singledispatch, update_wrapper
 from abc import ABC, abstractmethod
@@ -43,7 +43,6 @@ __doc__ = """
 
 .. autoclass:: ArrayContainer
 .. autofunction:: is_array_container
-.. autofunction:: is_array_container_type
 .. autofunction:: serialize_container
 .. autofunction:: deserialize_container
 .. autofunction:: get_container_context
@@ -274,12 +273,12 @@ def get_container_context_recursively(ary) -> Optional["ArrayContext"]:
 
 # {{{ with_container_arithmetic
 
-class _OpClass(Enum):
-    ARITHMETIC = _enum_auto
-    BITWISE = _enum_auto
-    SHIFT = _enum_auto
-    EQ_COMPARISON = _enum_auto
-    REL_COMPARISON = _enum_auto
+class _OpClass(enum.Enum):
+    ARITHMETIC = enum.auto
+    BITWISE = enum.auto
+    SHIFT = enum.auto
+    EQ_COMPARISON = enum.auto
+    REL_COMPARISON = enum.auto
 
 
 _UNARY_OP_AND_DUNDER = [
@@ -398,14 +397,20 @@ def with_container_arithmetic(
     should nest "outside" :func:dataclass_array_container`.
     """
 
+    # {{{ handle inputs
+
     if bcast_obj_array is None:
         raise TypeError("bcast_obj_array must be specified")
+
     if rel_comparison is None:
         raise TypeError("rel_comparison must be specified")
+
     if rel_comparison and eq_comparison is None:
         eq_comparison = True
+
     if eq_comparison is None:
         raise TypeError("eq_comparison must be specified")
+
     if not bcast_obj_array and bcast_numpy_array:
         raise TypeError("bcast_obj_array must be set if bcast_numpy_array is")
 
@@ -430,6 +435,8 @@ def with_container_arithmetic(
         desired_op_classes.add(_OpClass.EQ_COMPARISON)
     if rel_comparison:
         desired_op_classes.add(_OpClass.REL_COMPARISON)
+
+    # }}}
 
     def wrap(cls):
         from pytools.codegen import CodeGenerator
@@ -465,6 +472,8 @@ def with_container_arithmetic(
             gen("")
 
         # }}}
+
+        # {{{ binary operators
 
         for dunder_name, op_str, reversible, op_cls in _BINARY_OP_AND_DUNDER:
             if op_cls not in desired_op_classes:
@@ -533,6 +542,8 @@ def with_container_arithmetic(
 
             # }}}
 
+        # }}}
+
         # This will evaluate the module, which is all we need.
         code = gen.get().rstrip()+"\n"
         result_dict = {"_MODULE_SOURCE_CODE": code, "cls": cls}
@@ -556,8 +567,7 @@ def dataclass_array_container(cls):
 
     Attributes that are not array containers are allowed. In order to decide
     whether an attribute is an array container, the declared attribute type
-    is checked for whether it is a subclass of :class:`ArrayContainer`,
-    using :func:`is_array_container_type`.
+    is checked for whether it is a subclass of :class:`ArrayContainer`.
     """
     from dataclasses import is_dataclass
     assert is_dataclass(cls)
@@ -572,16 +582,16 @@ def dataclass_array_container(cls):
                 "in order to use the 'dataclass_array_container' decorator")
 
     serialize_expr = ", ".join(
-            f"({repr(f.name)}, ary.{f.name})" for f in array_fields)
+            f"({f.name!r}, ary.{f.name})" for f in array_fields)
     template_kwargs = ", ".join(
             f"{f.name}=template.{f.name}" for f in non_array_fields)
 
     lower_cls_name = cls.__name__.lower()
 
-    serialize_init_code = ", ".join(f"{repr(f.name)}: f'{{instance_name}}.{f.name}'"
+    serialize_init_code = ", ".join(f"{f.name!r}: f'{{instance_name}}.{f.name}'"
             for f in array_fields)
     deserialize_init_code = ", ".join([
-            f"{f.name}={{args[{repr(f.name)}]}}" for f in array_fields
+            f"{f.name}={{args[{f.name!r}]}}" for f in array_fields
             ] + [
             f"{f.name}={{template_instance_name}}.{f.name}"
             for f in non_array_fields
@@ -593,11 +603,11 @@ def dataclass_array_container(cls):
         from meshmode.array_context import serialize_container, deserialize_container
 
         @serialize_container.register(cls)
-        def serialize_{lower_cls_name}(ary: cls):
+        def _serialize_{lower_cls_name}(ary: cls):
             return ({serialize_expr},)
 
         @deserialize_container.register(cls)
-        def deserialize_{lower_cls_name}(
+        def _deserialize_{lower_cls_name}(
                 template: cls, iterable: Iterable[Tuple[Any, Any]]) -> cls:
             return cls(**dict(iterable), {template_kwargs})
 
