@@ -439,6 +439,14 @@ def with_container_arithmetic(
     # }}}
 
     def wrap(cls):
+        if (not hasattr(cls, "_serialize_init_arrays_code")
+                or not hasattr(cls, "_deserialize_init_arrays_code")):
+            raise TypeError(f"class '{cls.__name__}' must provide serialization "
+                    "code to generate arithmetic operations by implementing "
+                    "'_serialize_init_arrays_code' and "
+                    "'_deserialize_init_arrays_code'. If this is a dataclass, "
+                    "use the 'dataclass_array_container' decorator first.")
+
         from pytools.codegen import CodeGenerator
         gen = CodeGenerator()
         gen("""
@@ -458,7 +466,7 @@ def with_container_arithmetic(
             if op_cls not in desired_op_classes:
                 continue
 
-            fname = f"{cls.__name__.lower()}_{dunder_name}"
+            fname = f"_{cls.__name__.lower()}_{dunder_name}"
             init_args = cls._deserialize_init_arrays_code("arg1", {
                     key_arg1: _format_unary_op_str(op_str, expr_arg1)
                     for key_arg1, expr_arg1 in
@@ -481,7 +489,7 @@ def with_container_arithmetic(
 
             # {{{ "forward" binary operators
 
-            fname = f"{cls.__name__.lower()}_{dunder_name}"
+            fname = f"_{cls.__name__.lower()}_{dunder_name}"
             zip_init_args = cls._deserialize_init_arrays_code("arg1", {
                     same_key(key_arg1, key_arg2):
                     _format_binary_op_str(op_str, expr_arg1, expr_arg2)
@@ -516,7 +524,7 @@ def with_container_arithmetic(
             # {{{ "reverse" binary operators
 
             if reversible:
-                fname = f"{cls.__name__.lower()}_r{dunder_name}"
+                fname = f"_{cls.__name__.lower()}_r{dunder_name}"
                 bcast_init_args = cls._deserialize_init_arrays_code("arg2", {
                         key_arg2: _format_binary_op_str(
                             op_str, "arg1", expr_arg2)
