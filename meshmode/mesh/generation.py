@@ -512,15 +512,16 @@ def generate_icosphere(r: float, order: int, *,
 # {{ generate_surface_of_revolution
 
 def generate_surface_of_revolution(
-        curve: np.ndarray,
+        get_radius: Callable[[np.ndarray, np.ndarray], np.ndarray],
+        height_discr: np.ndarray,
         angle_discr: np.ndarray,
         order: int, *,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
         unit_nodes: Optional[np.ndarray] = None):
     """
-    :param curve: the curve parameterized by radius and height which is
-        rotated about z axis. Must have shape ``(2, n)``. First axis
-        must represent the radius and second axis must represent the height.
+    :param get_radius: A callable function that takes in an array of heights
+        and an array of angles and returns an array of radii.
+    :param height_discr: A discretization of ``[0, 2*pi)``.
     :param angle_discr: A discretization of ``[0, 2*pi)``.
     :param order: order of the (simplex) elements. If *unit_nodes* is also
         provided, the orders should match.
@@ -531,24 +532,45 @@ def generate_surface_of_revolution(
         ``(3, nnodes)``.
     """
     n = len(angle_discr)
-    m = curve.shape[1]
+    m = len(height_discr)
     vertices = np.zeros((3, n*m))
-    theta, r = np.meshgrid(angle_discr, curve[0, :])
-    _, h = np.meshgrid(angle_discr, curve[1, :])
-    vertices[0, :] = (np.sin(theta)*r).reshape((n*m,))
-    vertices[1, :] = (np.cos(theta)*r).reshape((n*m,))
-    vertices[2, :] = h.reshape((n*m,))
+    theta, h = np.meshgrid(angle_discr, height_discr)
+    theta = theta.flatten()
+    h = h.flatten()
+    r = get_radius(h, theta)
+    vertices[0, :] = np.cos(theta)*r
+    vertices[1, :] = np.sin(theta)*r
+    vertices[2, :] = h
 
     tris = []
     for i in range(m-1):
         for j in range(n):
-            tris.append([i*m + j, (i + 1)*m + j, (i + 1)*m + (j + 1)%n])
-            tris.append([i*m + j, i*m + (j + 1)%n, (i + 1)*m + (j + 1)%n])
+            tris.append([i*n + j, (i + 1)*n + j, (i + 1)*n + (j + 1)%n])
+            tris.append([i*n + j, i*n + (j + 1)%n, (i + 1)*n + (j + 1)%n])
 
     vertex_indices = np.array(tris, dtype=np.int32)
 
     grp = make_group_from_vertices(vertices, vertex_indices, order,
                 unit_nodes=unit_nodes)
+
+    from meshmode.mesh import Mesh
+    mesh = Mesh(
+            vertices, [grp],
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+            is_conforming=True)
+
+    # ensure vertices and nodes are still on the surface with radius r
+    def ensure_radius(arr):
+        res = arr.copy()
+        h = res[2, :].flatten()
+        theta = np.arctan2(res[1, :].flatten(), res[0, :].flatten())
+        r_expected = get_radius(h, theta).reshape(res[0, :].shape)
+        res[:2, :] *= r_expected/np.sum(res[:2, :]**2, axis=0)
+        return res
+
+    vertices = ensure_radius(mesh.vertices)
+    grp, = mesh.groups
+    grp = grp.copy(nodes=ensure_radius(grp.nodes))
 
     from meshmode.mesh import Mesh
     return Mesh(
