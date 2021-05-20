@@ -743,7 +743,12 @@ def map_array_container(f: Callable[[Any], Any], ary):
     :param ary: a (potentially nested) structure of :class:`ArrayContainer`\ s,
         or an instance of a base array type.
     """
-    return _map_array_container_impl(f, ary, recursive=False)
+    if is_array_container(ary):
+        return deserialize_container(ary, [
+                (key, f(subary)) for key, subary in serialize_container(ary)
+                ])
+    else:
+        return f(ary)
 
 
 def multimap_array_container(f: Callable[[Any], Any], *args):
