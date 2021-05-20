@@ -545,8 +545,8 @@ def generate_surface_of_revolution(
     tris = []
     for i in range(m-1):
         for j in range(n):
-            tris.append([i*n + j, (i + 1)*n + j, (i + 1)*n + (j + 1)%n])
-            tris.append([i*n + j, i*n + (j + 1)%n, (i + 1)*n + (j + 1)%n])
+            tris.append([i*n + j, (i + 1)*n + j, (i + 1)*n + (j + 1) % n])
+            tris.append([i*n + j, i*n + (j + 1) % n, (i + 1)*n + (j + 1) % n])
 
     vertex_indices = np.array(tris, dtype=np.int32)
 
