@@ -816,9 +816,7 @@ def freeze(ary, actx=None):
     See :meth:`ArrayContext.thaw`.
     """
     if is_array_container(ary):
-        return _map_array_container_impl(
-                partial(freeze, actx=actx), ary,
-                recursive=False)
+        return map_array_container(partial(freeze, actx=actx), ary)
     else:
         if actx is None:
             raise TypeError(
