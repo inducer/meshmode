@@ -32,7 +32,7 @@ from pytools.obj_array import flat_obj_array, make_obj_array
 
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
 from meshmode.dof_array import DOFArray, flat_norm
-from meshmode.array_context import (
+from arraycontext import (
         freeze, thaw,
         PyOpenCLArrayContext, make_loopy_program,
         ArrayContainer,
@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 # {{{ discretization
 
 def parametrization_derivative(actx, discr):
-    thawed_nodes = thaw(actx, discr.nodes())
+    thawed_nodes = thaw(discr.nodes(), actx)
 
     from meshmode.discretization import num_reference_derivative
     result = np.zeros((discr.ambient_dim, discr.dim), dtype=object)
@@ -177,12 +177,12 @@ class DGDiscretization:
 
     @memoize_method
     def vol_jacobian(self):
-        [a, b], [c, d] = thaw(self._setup_actx, self.parametrization_derivative())
+        [a, b], [c, d] = thaw(self.parametrization_derivative(), self._setup_actx)
         return freeze(a*d-b*c)
 
     @memoize_method
     def inverse_parametrization_derivative(self):
-        [a, b], [c, d] = thaw(self._setup_actx, self.parametrization_derivative())
+        [a, b], [c, d] = thaw(self.parametrization_derivative(), self._setup_actx)
 
         result = np.zeros((2, 2), dtype=object)
         det = a*d-b*c
@@ -377,7 +377,7 @@ def wave_flux(actx, discr, c, q_tpair):
     u = q_tpair.u
     v = q_tpair.v
 
-    normal = thaw(actx, discr.normal(q_tpair.where))
+    normal = thaw(discr.normal(q_tpair.where), actx)
 
     flux_weak = WaveState(
             u=np.dot(v.avg, normal),
@@ -432,7 +432,7 @@ def bump(actx, discr, t=0):
     source_width = 0.05
     source_omega = 3
 
-    nodes = thaw(actx, discr.volume_discr.nodes())
+    nodes = thaw(discr.volume_discr.nodes(), actx)
     center_dist = flat_obj_array([
         nodes[0] - source_center[0],
         nodes[1] - source_center[1],

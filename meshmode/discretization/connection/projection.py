@@ -26,7 +26,7 @@ from pytools import keyed_memoize_method, memoize_in
 
 import loopy as lp
 
-from meshmode.array_context import (
+from arraycontext import (
         make_loopy_program, is_array_container, map_array_container)
 from meshmode.discretization.connection.direct import (
         DiscretizationConnection,

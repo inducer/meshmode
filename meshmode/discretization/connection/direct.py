@@ -25,7 +25,7 @@ import numpy as np
 
 import loopy as lp
 from pytools import memoize_in, keyed_memoize_method
-from meshmode.array_context import (
+from arraycontext import (
         ArrayContext, make_loopy_program,
         is_array_container, map_array_container)
 

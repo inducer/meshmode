@@ -32,12 +32,11 @@ import numpy as np
 from pytools import MovedFunctionDeprecationWrapper
 from pytools import single_valued, memoize_in
 
-from meshmode.array_context import (
+from arraycontext import (
         ArrayContext, make_loopy_program,
         ArrayContainer, with_container_arithmetic,
-        serialize_container, deserialize_container)
-from meshmode.array_context import (
-        thaw as _thaw, thaw_impl, freeze as _freeze,
+        serialize_container, deserialize_container,
+        thaw as _thaw, freeze as _freeze,
         rec_map_array_container, rec_multimap_array_container,
         mapped_over_array_containers, multimapped_over_array_containers)
 
@@ -85,7 +84,7 @@ class DOFArray:
 
     .. attribute:: array_context
 
-        An :class:`meshmode.array_context.ArrayContext`.
+        An :class:`~arraycontext.ArrayContext`.
 
     .. attribute:: entry_dtype
 
@@ -96,7 +95,7 @@ class DOFArray:
 
     The following methods and attributes are implemented to mimic the
     functionality of :class:`~numpy.ndarray`\ s. They require the
-    :class:`DOFArray` to be :func:`~meshmode.array_context.thaw`\ ed.
+    :class:`DOFArray` to be :func:`~arraycontext.thaw`\ ed.
 
     .. attribute:: shape
     .. attribute:: size
@@ -113,10 +112,10 @@ class DOFArray:
 
         :class:`DOFArray` instances can be pickled and unpickled while the context
         manager :class:`array_context_for_pickling` is active. If, for an array
-        to be pickled, the :class:`~meshmode.array_context.ArrayContext` given to
+        to be pickled, the :class:`~arraycontext.ArrayContext` given to
         :func:`array_context_for_pickling` does not agree with :attr:`array_context`,
         the array is frozen and rethawed. If :attr:`array_context` is *None*,
-        the :class:`DOFArray` is :func:`~meshmode.array_context.thaw`\ ed into
+        the :class:`DOFArray` is :func:`~arraycontext.thaw`\ ed into
         the array context given to :func:`array_context_for_pickling`.
     """
 
@@ -148,7 +147,7 @@ class DOFArray:
         (one per :class:`~meshmode.discretization.ElementGroupBase`).
 
         :arg actx: If *None*, the arrays in *res_list* must be
-            :meth:`~meshmode.array_context.ArrayContext.thaw`\ ed.
+            :meth:`~arraycontext.ArrayContext.thaw`\ ed.
         """
         from warnings import warn
         warn("DOFArray.from_list is deprecated and will disappear in 2021.",
@@ -328,7 +327,7 @@ def _freeze_dofarray(ary, actx=None):
         tuple(ary.array_context.freeze(subary) for subary in ary._data))
 
 
-@thaw_impl.register(DOFArray)
+@_thaw.register(DOFArray)
 def _thaw_dofarray(ary, actx):
     if ary.array_context is not None:
         raise ValueError("cannot thaw DOFArray that already has an array context")
@@ -340,12 +339,12 @@ def _thaw_dofarray(ary, actx):
 
 def rec_map_dof_array_container(f: Callable[[Any], Any], ary):
     r"""Applies *f* recursively to an
-    :class:`~meshmode.array_context.ArrayContainer`.
+    :class:`~arraycontext.ArrayContainer`.
 
-    Similar to :func:`~meshmode.array_context.map_array_container`, but
+    Similar to :func:`~arraycontext.map_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    from meshmode.array_context import _map_array_container_impl
+    from arraycontext.container.traversal import _map_array_container_impl
     return _map_array_container_impl(f, ary, leaf_cls=DOFArray, recursive=True)
 
 
@@ -357,12 +356,12 @@ def mapped_over_dof_arrays(f):
 
 def rec_multimap_dof_array_container(f: Callable[[Any], Any], *args):
     r"""Applies *f* recursively to multiple
-    :class:`~meshmode.array_context.ArrayContainer`\ s.
+    :class:`~arraycontext.ArrayContainer`\ s.
 
-    Similar to :func:`~meshmode.array_context.multimap_array_container`, but
+    Similar to :func:`~arraycontext.multimap_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    from meshmode.array_context import _multimap_array_container_impl
+    from arraycontext.container.traversal import _multimap_array_container_impl
     return _multimap_array_container_impl(
             f, *args, leaf_cls=DOFArray, recursive=True)
 
@@ -388,7 +387,7 @@ def flatten(ary: ArrayContainer) -> Any:
     index varying slowest, element index next, and intra-element DOF
     index fastest.
 
-    Recurses into the :class:`~meshmode.array_context.ArrayContainer` for all
+    Recurses into the :class:`~arraycontext.ArrayContainer` for all
     :class:`DOFArray`\ s.
     """
 
@@ -461,7 +460,7 @@ def unflatten(actx: ArrayContext, discr,
         to handle :class:`DOFArray`\ s that have only one DOF per element,
         representing some per-element quantity.
 
-    Recurses into the :class:`~meshmode.array_context.ArrayContainer` for all
+    Recurses into the :class:`~arraycontext.ArrayContainer` for all
     :class:`DOFArray`\ s.
     """
     if ndofs_per_element_per_group is None:
@@ -504,7 +503,7 @@ def flat_norm(ary, ord=None):
     r"""Return an element-wise :math:`\ell^{\text{ord}}` norm of *ary*.
 
     :arg ary: may be a :class:`DOFArray` or a
-        :class:`~meshmode.array_context.ArrayContainer` containing them.
+        :class:`~arraycontext.ArrayContainer` containing them.
     """
 
     from numbers import Number
@@ -514,7 +513,7 @@ def flat_norm(ary, ord=None):
     if ord is None:
         ord = 2
 
-    from meshmode.array_context import is_array_container
+    from arraycontext import is_array_container
 
     import numpy.linalg as la
     if isinstance(ary, DOFArray):
@@ -578,7 +577,18 @@ obj_or_dof_array_vectorize_n_args = MovedFunctionDeprecationWrapper(
 obj_or_dof_array_vectorized_n_args = MovedFunctionDeprecationWrapper(
         multimapped_over_array_containers, deadline="2022")
 
-thaw = MovedFunctionDeprecationWrapper(_thaw, deadline="2022")
+
+def thaw(actx, ary):
+    from warnings import warn
+    warn("meshmode.dof_array.thaw is deprecated. Use arraycontext.thaw instead. "
+            "WARNING: The argument order is reversed between these two functions. "
+            "meshmode.dof_array.thaw will continue to work until 2022.",
+            DeprecationWarning, stacklevel=2)
+
+    # /!\ arg order flipped
+    return _thaw(ary, actx)
+
+
 freeze = MovedFunctionDeprecationWrapper(_freeze, deadline="2022")
 
 # }}}
