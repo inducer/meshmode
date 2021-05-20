@@ -109,8 +109,9 @@ class ArrayContainer:
     r"""A generic container for the array type supported by the
     :class:`ArrayContext`.
 
-    The functionality for the container is implemented through
-    :func:`functools.singledispatch`. The following functions are required
+    The functionality required for the container to operated is supplied via
+    :func:`functools.singledispatch`. Implementations of the following functions need
+    to be registered for a type serving as an :class:`ArrayContainer`:
 
     * :func:`serialize_container` for serialization, which gives the components
       of the array.
@@ -360,9 +361,9 @@ def with_container_arithmetic(
     :arg bcast_number: If *True*, numbers broadcast over the container
         (with the container as the 'outer' structure).
     :arg bcast_obj_array: If *True*, :mod:`numpy` object arrays broadcast over
-        the container.  (with the container as the 'inner' structure).
+        the container.  (with the container as the 'inner' structure)
     :arg bcast_numpy_array: If *True*, any :class:`numpy.ndarray` will broadcast
-        over the container.  (with the container as the 'inner' structure).
+        over the container.  (with the container as the 'inner' structure)
     :arg arithmetic: Implement the conventional arithmetic operators, including
         ``**``, :func:`divmod`, and ``//``. Also includes ``+`` and ``-`` as well as
         :func:`abs`.
@@ -373,7 +374,7 @@ def with_container_arithmetic(
         In that case, if *eq_comparison* is unspecified, it is also set to
         *True*.
 
-    Each operator class also includes the "reverse" operator class if applicable.
+    Each operator class also includes the "reverse" operators if applicable.
 
     .. note::
 
@@ -575,7 +576,7 @@ def dataclass_array_container(cls):
 
     Attributes that are not array containers are allowed. In order to decide
     whether an attribute is an array container, the declared attribute type
-    is checked for whether it is a subclass of :class:`ArrayContainer`.
+    is checked via :func:`is_array_container_type`.
     """
     from dataclasses import is_dataclass
     assert is_dataclass(cls)
@@ -792,6 +793,8 @@ def rec_multimap_array_container(f: Callable[[Any], Any], *args):
 
 def multimapped_over_array_containers(f: Callable[[Any], Any]):
     """Decorator around :func:`rec_multimap_array_container`."""
+    # can't use functools.partial, because its result is insufficiently
+    # function-y to be used as a method definition.
     def wrapper(*args):
         return rec_multimap_array_container(f, *args)
 
