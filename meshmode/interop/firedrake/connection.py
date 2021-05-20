@@ -415,7 +415,7 @@ class FiredrakeConnection:
             and stored in *out*, which is then returned.
         :arg actx:
             * If *out* is *None*, then *actx* is a
-              :class:`~meshmode.array_context.ArrayContext` on which
+              :class:`~arraycontext.ArrayContext` on which
               to create the :class:`~meshmode.dof_array.DOFArray`
             * If *out* is not *None*, *actx* must be *None* or *out*'s
               :attr:`~meshmode.dof_array.DOFArray.array_context`.
@@ -612,7 +612,7 @@ def build_connection_from_firedrake(actx, fdrake_fspace, grp_factory=None,
     meshmode discretization and facilitating
     transfer of functions to and from :mod:`firedrake`.
 
-    :arg actx: A :class:`~meshmode.array_context.ArrayContext`
+    :arg actx: A :class:`~arraycontext.ArrayContext`
         used to instantiate :attr:`FiredrakeConnection.discr`.
     :arg fdrake_fspace: A :mod:`firedrake` ``"DG"``
         function space (of class

@@ -34,7 +34,7 @@ from meshmode.discretization.connection.chained import \
 from meshmode.discretization.connection.projection import \
         L2ProjectionInverseDiscretizationConnection
 
-from meshmode.array_context import ArrayContext
+from arraycontext import ArrayContext
 from meshmode.discretization.connection.same_mesh import \
         make_same_mesh_connection
 from meshmode.discretization.connection.face import (

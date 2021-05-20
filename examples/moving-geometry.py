@@ -23,8 +23,7 @@ THE SOFTWARE.
 import numpy as np
 import pyopencl as cl
 
-from meshmode.dof_array import thaw
-from meshmode.array_context import PyOpenCLArrayContext
+from arraycontext import PyOpenCLArrayContext, thaw
 
 from pytools import memoize_in, keyed_memoize_in
 from pytools.obj_array import make_obj_array
@@ -201,7 +200,7 @@ def run(actx, *,
 
     def source(t, x):
         discr = reconstruct_discr_from_nodes(actx, discr0, x)
-        u = velocity_field(thaw(actx, discr.nodes()))
+        u = velocity_field(thaw(discr.nodes(), actx))
 
         # {{{
 
@@ -209,7 +208,7 @@ def run(actx, *,
         # profile some more operators (turned out well!)
 
         from meshmode.discretization import num_reference_derivative
-        x = thaw(actx, discr.nodes()[0])
+        x = thaw(discr.nodes()[0], actx)
         gradx = sum(
                 num_reference_derivative(discr, (i,), x)
                 for i in range(discr.dim))
@@ -229,7 +228,7 @@ def run(actx, *,
     maxiter = int(tmax // timestep) + 1
     dt = tmax / maxiter + 1.0e-15
 
-    x = thaw(actx, discr0.nodes())
+    x = thaw(discr0.nodes(), actx)
     t = 0.0
 
     if visualize:

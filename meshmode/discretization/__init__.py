@@ -29,7 +29,7 @@ import numpy as np
 from abc import ABCMeta, abstractproperty, abstractmethod
 from pytools import memoize_in, memoize_method, keyed_memoize_in
 from pytools.obj_array import make_obj_array
-from meshmode.array_context import ArrayContext, make_loopy_program
+from arraycontext import ArrayContext, make_loopy_program
 
 from warnings import warn
 

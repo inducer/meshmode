@@ -23,7 +23,7 @@ THE SOFTWARE.
 import numpy as np
 
 import pytest
-from meshmode.array_context import (  # noqa
+from arraycontext import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 

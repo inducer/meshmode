@@ -27,7 +27,7 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
-from meshmode.array_context import (
+from arraycontext import (
         make_loopy_program, is_array_container, map_array_container)
 from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup

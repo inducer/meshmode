@@ -26,9 +26,10 @@ import numpy as np
 import numpy.linalg as la
 
 import meshmode         # noqa: F401
-from meshmode.array_context import (  # noqa
+from arraycontext import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests)
+        as pytest_generate_tests,
+        thaw)
 
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
@@ -39,7 +40,7 @@ from meshmode.discretization.poly_element import (
         LegendreGaussLobattoTensorProductGroupFactory
         )
 from meshmode.mesh import Mesh, BTAG_ALL
-from meshmode.dof_array import thaw, flatten, flat_norm
+from meshmode.dof_array import flatten, flat_norm
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -144,7 +145,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
         print("h=%s -> %d elements" % (
                 h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
-        x = thaw(actx, vol_discr.nodes()[0])
+        x = thaw(vol_discr.nodes()[0], actx)
         vol_f = f(x)
 
         bdry_connection = make_face_restriction(
@@ -153,7 +154,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
         check_connection(actx, bdry_connection)
         bdry_discr = bdry_connection.to_discr
 
-        bdry_x = thaw(actx, bdry_discr.nodes()[0])
+        bdry_x = thaw(bdry_discr.nodes()[0], actx)
         bdry_f = f(bdry_x)
         bdry_f_2 = bdry_connection(vol_f)
 
@@ -266,7 +267,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
                 else:
                     assert ibatch == batch.to_element_face
 
-        all_face_x = thaw(actx, all_face_bdry_discr.nodes()[0])
+        all_face_x = thaw(all_face_bdry_discr.nodes()[0], actx)
         all_face_f = f(all_face_x)
 
         all_face_f_2 = all_face_bdry_discr.zeros(actx)
@@ -280,7 +281,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
                     boundary_tag, per_face_groups=per_face_groups)
             bdry_discr = bdry_connection.to_discr
 
-            bdry_x = thaw(actx, bdry_discr.nodes()[0])
+            bdry_x = thaw(bdry_discr.nodes()[0], actx)
             bdry_f = f(bdry_x)
 
             all_face_embedding = make_face_to_all_faces_embedding(
@@ -389,7 +390,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
         opp_face = make_opposite_face_connection(actx, bdry_connection)
         check_connection(actx, opp_face)
 
-        bdry_x = thaw(actx, bdry_discr.nodes()[0])
+        bdry_x = thaw(bdry_discr.nodes()[0], actx)
         bdry_f = f(bdry_x)
         bdry_f_2 = opp_face(bdry_f)
 
@@ -510,7 +511,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     else:
         raise TypeError
 
-    nodes = thaw(actx, vol_discr.nodes())
+    nodes = thaw(vol_discr.nodes(), actx)
     vol_one = 1 + 0 * nodes[0]
 
     from pytential import norm, integral  # noqa
@@ -584,10 +585,10 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
     def f(x):
         return 0.1*actx.np.sin(x)
 
-    x_low = thaw(actx, low_discr.nodes()[0])
+    x_low = thaw(low_discr.nodes()[0], actx)
     f_low = f(x_low)
 
-    x_high = thaw(actx, high_discr.nodes()[0])
+    x_high = thaw(high_discr.nodes()[0], actx)
     f_high_ref = f(x_high)
 
     f_high_num = cnx(f_low)
@@ -655,7 +656,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
         true_surf = 2*np.pi**(dim/2)/gamma(dim/2)
         true_vol = true_surf/dim
 
-        vol_x = thaw(actx, vol_discr.nodes())
+        vol_x = thaw(vol_discr.nodes(), actx)
 
         vol_one = vol_x[0]*0 + 1
         from pytential import norm, integral  # noqa
@@ -665,7 +666,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
         vol_eoc_rec.add_data_point(h, rel_vol_err)
         print("VOL", true_vol, comp_vol)
 
-        bdry_x = thaw(actx, bdry_discr.nodes())
+        bdry_x = thaw(bdry_discr.nodes(), actx)
 
         bdry_one_exact = bdry_x[0] * 0 + 1
 
@@ -743,7 +744,7 @@ def test_mesh_without_vertices(actx_factory):
     from meshmode.discretization import Discretization
     discr = Discretization(actx, mesh,
             InterpolatoryQuadratureSimplexGroupFactory(4))
-    thaw(actx, discr.nodes())
+    thaw(discr.nodes(), actx)
 
     from meshmode.discretization.visualization import make_visualizer
     make_visualizer(actx, discr, 4)
@@ -835,7 +836,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
     ref_axes = pytools.flatten([[i] for i in range(ambient_dim)])
 
     from meshmode.discretization import num_reference_derivative
-    x = thaw(actx, discr.nodes())
+    x = thaw(discr.nodes(), actx)
     num_reference_derivative(discr, ref_axes, x[0])
 
 # }}}
