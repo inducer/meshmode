@@ -1190,6 +1190,7 @@ class ArrayContext(ABC):
             spec,
             arg_names,
             options=_DEFAULT_LOOPY_OPTIONS,
+            lang_version=MOST_RECENT_LANGUAGE_VERSION,
             tags=tagged,
         )
 
