@@ -29,7 +29,8 @@ import numpy as np
 
 from pytools import memoize_method, Record
 from pytools.obj_array import make_obj_array
-from meshmode.dof_array import DOFArray, flatten, thaw
+from meshmode.array_context import thaw
+from meshmode.dof_array import DOFArray, flatten
 
 from modepy.shapes import Shape, Simplex, Hypercube
 

@@ -25,8 +25,9 @@ import numpy as np
 
 import loopy as lp
 from pytools import memoize_in, keyed_memoize_method
-from pytools.obj_array import obj_array_vectorized_n_args
-from meshmode.array_context import ArrayContext, make_loopy_program
+from meshmode.array_context import (
+        ArrayContext, make_loopy_program,
+        is_array_container, map_array_container)
 
 
 # {{{ interpolation batch
@@ -268,9 +269,11 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         return make_direct_full_resample_matrix(actx, self)
 
-    @obj_array_vectorized_n_args
     def __call__(self, ary):
         from meshmode.dof_array import DOFArray
+        if is_array_container(ary) and not isinstance(ary, DOFArray):
+            return map_array_container(self, ary)
+
         if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")
 

@@ -23,12 +23,11 @@ THE SOFTWARE.
 import numpy as np
 
 from pytools import keyed_memoize_method, memoize_in
-from pytools.obj_array import obj_array_vectorized_n_args
 
 import loopy as lp
 
-from meshmode.array_context import make_loopy_program
-from meshmode.dof_array import DOFArray
+from meshmode.array_context import (
+        make_loopy_program, is_array_container, map_array_container)
 from meshmode.discretization.connection.direct import (
         DiscretizationConnection,
         DirectDiscretizationConnection)
@@ -118,8 +117,11 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
 
         return weights
 
-    @obj_array_vectorized_n_args
     def __call__(self, ary):
+        from meshmode.dof_array import DOFArray
+        if is_array_container(ary) and not isinstance(ary, DOFArray):
+            return map_array_container(self, ary)
+
         if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")
 

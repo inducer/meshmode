@@ -20,18 +20,29 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-
+from dataclasses import dataclass
 import numpy as np
 import numpy.linalg as la  # noqa
+
 import pyopencl as cl
 import pyopencl.array as cla  # noqa
-from pytools import memoize_method, memoize_in
-from pytools.obj_array import (
-        flat_obj_array, make_obj_array,
-        obj_array_vectorize)
+
+from pytools import memoize_method, memoize_in, log_process
+from pytools.obj_array import flat_obj_array, make_obj_array
+
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
-from meshmode.dof_array import freeze, thaw
-from meshmode.array_context import PyOpenCLArrayContext, make_loopy_program
+from meshmode.dof_array import DOFArray, flat_norm
+from meshmode.array_context import (
+        freeze, thaw,
+        PyOpenCLArrayContext, make_loopy_program,
+        ArrayContainer,
+        map_array_container,
+        with_container_arithmetic,
+        dataclass_array_container,
+        )
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 # Features lost vs. https://github.com/inducer/grudge:
@@ -143,10 +154,6 @@ class DGDiscretization:
             raise ValueError(f"locations '{src}'->'{tgt}' not understood")
 
     def interp(self, src, tgt, vec):
-        if isinstance(vec, np.ndarray):
-            return obj_array_vectorize(
-                    lambda el: self.interp(src, tgt, el), vec)
-
         return self.get_connection(src, tgt)(vec)
 
     def get_discr(self, where):
@@ -233,8 +240,8 @@ class DGDiscretization:
         return actx.freeze(actx.from_numpy(matrix))
 
     def inverse_mass(self, vec):
-        if isinstance(vec, np.ndarray):
-            return obj_array_vectorize(self.inverse_mass, vec)
+        if not isinstance(vec, DOFArray):
+            return map_array_container(self.inverse_mass, vec)
 
         @memoize_in(self, "elwise_linear_knl")
         def knl():
@@ -286,8 +293,8 @@ class DGDiscretization:
         return actx.freeze(actx.from_numpy(matrix))
 
     def face_mass(self, vec):
-        if isinstance(vec, np.ndarray):
-            return obj_array_vectorize(self.face_mass, vec)
+        if not isinstance(vec, DOFArray):
+            return map_array_container(self.face_mass, vec)
 
         @memoize_in(self, "face_mass_knl")
         def knl():
@@ -329,21 +336,19 @@ class DGDiscretization:
 
 # {{{ trace pair
 
+@with_container_arithmetic(
+        bcast_obj_array=False, eq_comparison=False, rel_comparison=False)
+@dataclass_array_container
+@dataclass(frozen=True)
 class TracePair:
-    def __init__(self, where, interior, exterior):
-        self.where = where
-        self.interior = interior
-        self.exterior = exterior
+    where: str
+    interior: ArrayContainer
+    exterior: ArrayContainer
 
-    def __getitem__(self, index):
-        return TracePair(
-                self.where,
-                self.exterior[index],
-                self.interior[index])
-
-    def __len__(self):
-        assert len(self.exterior) == len(self.interior)
-        return len(self.exterior)
+    def __getattr__(self, name):
+        return map_array_container(
+                lambda ary: getattr(ary, name),
+                self)
 
     @property
     def int(self):
@@ -360,66 +365,56 @@ class TracePair:
 
 def interior_trace_pair(discr, vec):
     i = discr.interp("vol", "int_faces", vec)
-    e = obj_array_vectorize(discr.opposite_face_connection(), i)
-    return TracePair("int_faces", i, e)
+    e = discr.opposite_face_connection()(i)
+    return TracePair("int_faces", interior=i, exterior=e)
 
 # }}}
 
 
 # {{{ wave equation bits
 
-def wave_flux(actx, discr, c, w_tpair):
-    u = w_tpair[0]
-    v = w_tpair[1:]
+def wave_flux(actx, discr, c, q_tpair):
+    u = q_tpair.u
+    v = q_tpair.v
 
-    normal = thaw(actx, discr.normal(w_tpair.where))
+    normal = thaw(actx, discr.normal(q_tpair.where))
 
-    flux_weak = flat_obj_array(
-            np.dot(v.avg, normal),
-            normal[0] * u.avg,
-            normal[1] * u.avg)
+    flux_weak = WaveState(
+            u=np.dot(v.avg, normal),
+            v=normal * u.avg)
 
     # upwind
     v_jump = np.dot(normal, v.ext-v.int)
-    flux_weak += flat_obj_array(
-            0.5*(u.ext-u.int),
-            0.5*normal[0]*v_jump,
-            0.5*normal[1]*v_jump,
-            )
+    flux_weak += WaveState(
+            u=0.5*(u.ext-u.int),
+            v=0.5*normal*v_jump)
 
-    flux_strong = flat_obj_array(
-            np.dot(v.int, normal),
-            u.int * normal[0],
-            u.int * normal[1],
+    flux_strong = WaveState(
+            u=np.dot(v.int, normal),
+            v=u.int * normal,
             ) - flux_weak
 
-    return discr.interp(w_tpair.where, "all_faces", c*flux_strong)
+    return discr.interp(q_tpair.where, "all_faces", c*flux_strong)
 
 
-def wave_operator(actx, discr, c, w):
-    u = w[0]
-    v = w[1:]
-
-    dir_u = discr.interp("vol", BTAG_ALL, u)
-    dir_v = discr.interp("vol", BTAG_ALL, v)
-    dir_bval = flat_obj_array(dir_u, dir_v)
-    dir_bc = flat_obj_array(-dir_u, dir_v)
+def wave_operator(actx, discr, c, q):
+    dir_q = discr.interp("vol", BTAG_ALL, q)
+    dir_bc = WaveState(u=-dir_q.u, v=dir_q.v)
 
     return (
-            - flat_obj_array(
-                -c*discr.div(v),
-                -c*discr.grad(u)
+            WaveState(
+                u=c*discr.div(q.v),
+                v=c*discr.grad(q.u)
                 )
-            +  # noqa: W504
+            -  # noqa: W504
             discr.inverse_mass(
                 discr.face_mass(
                     wave_flux(actx, discr, c=c,
-                        w_tpair=interior_trace_pair(discr, w))
+                        q_tpair=interior_trace_pair(discr, q))
                     + wave_flux(actx, discr, c=c,
-                        w_tpair=TracePair(BTAG_ALL, dir_bval, dir_bc))
+                        q_tpair=TracePair(BTAG_ALL, dir_q, dir_bc))
                     ))
                 )
-
 
 # }}}
 
@@ -450,10 +445,27 @@ def bump(actx, discr, t=0):
             / source_width**2))
 
 
+@with_container_arithmetic(bcast_obj_array=True, rel_comparison=True)
+@dataclass_array_container
+@dataclass(frozen=True)
+class WaveState:
+    u: DOFArray
+    v: np.ndarray  # [object]
+
+    def __post_init__(self):
+        assert isinstance(self.v, np.ndarray) and self.v.dtype.char == "O"
+
+    @property
+    def array_context(self):
+        return self.u.array_context
+
+
+@log_process(logger)
 def main():
+    logging.basicConfig(level=logging.INFO)
+
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-
     actx = PyOpenCLArrayContext(queue)
 
     nel_1d = 16
@@ -468,20 +480,20 @@ def main():
     # no deep meaning here, just a fudge factor
     dt = 0.7/(nel_1d*order**2)
 
-    print("%d elements" % mesh.nelements)
+    logger.info("%d elements", mesh.nelements)
 
     discr = DGDiscretization(actx, mesh, order=order)
 
-    fields = flat_obj_array(
-            bump(actx, discr),
-            [discr.zeros(actx) for i in range(discr.dim)]
+    fields = WaveState(
+            u=bump(actx, discr),
+            v=make_obj_array([discr.zeros(actx) for i in range(discr.dim)]),
             )
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr.volume_discr)
 
-    def rhs(t, w):
-        return wave_operator(actx, discr, c=1, w=w)
+    def rhs(t, q):
+        return wave_operator(actx, discr, c=1, q=q)
 
     t = 0
     t_final = 3
@@ -492,18 +504,17 @@ def main():
         if istep % 10 == 0:
             # FIXME: Maybe an integral function to go with the
             # DOFArray would be nice?
-            assert len(fields[0]) == 1
-            print(istep, t, actx.np.linalg.norm(fields[0], 2))
-            vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep,
-                    [
-                        ("u", fields[0]),
-                        ("v", fields[1:]),
-                        ])
+            assert len(fields.u) == 1
+            logger.info("[%05d] t %.5e / %.5e norm %.5e",
+                    istep, t, t_final, flat_norm(fields.u, 2))
+            vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep, [
+                ("q", fields),
+                ])
 
         t += dt
         istep += 1
 
-    assert actx.np.linalg.norm(fields[0], 2) < 100
+    assert flat_norm(fields.u, 2) < 100
 
 
 if __name__ == "__main__":
