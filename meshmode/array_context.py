@@ -1325,8 +1325,7 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
 
 def _flatten_array(ary):
     import pyopencl.array as cl
-    if not isinstance(ary, cl.Array):
-        return ary
+    assert isinstance(ary, cl.Array)
 
     if ary.size == 0:
         # Work around https://github.com/inducer/pyopencl/pull/402
@@ -1350,12 +1349,32 @@ class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
         if ord is None:
             ord = 2
 
+        try:
+            from meshmode.dof_array import DOFArray
+        except ImportError:
+            pass
+        else:
+            if isinstance(ary, DOFArray):
+                from warnings import warn
+                warn("Taking an actx.np.linalg.norm of a DOFArray is deprecated. "
+                        "(DOFArrays use 2D arrays internally, and "
+                        "actx.np.linalg.norm should compute matrix norms of those.) "
+                        "This will stop working in 2022. "
+                        "Use meshmode.dof_array.flat_norm instead.",
+                        DeprecationWarning, stacklevel=2)
+
+                import numpy.linalg as la
+                return la.norm(
+                        [self.norm(_flatten_array(subary), ord=ord)
+                            for _, subary in serialize_container(ary)],
+                        ord=ord)
+
         if is_array_container(ary):
             import numpy.linalg as la
-            return la.norm([
-                self.norm(_flatten_array(subary), ord=ord)
-                for _, subary in serialize_container(ary)
-                ], ord=ord)
+            return la.norm(
+                    [self.norm(subary, ord=ord)
+                        for _, subary in serialize_container(ary)],
+                    ord=ord)
 
         if len(ary.shape) != 1:
             raise NotImplementedError("only vector norms are implemented")

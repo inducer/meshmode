@@ -51,6 +51,7 @@ __doc__ = """
 
 .. autofunction:: flatten
 .. autofunction:: unflatten
+.. autofunction:: flat_norm
 
 .. autofunction:: array_context_for_pickling
 """
@@ -480,6 +481,62 @@ def unflatten(actx: ArrayContext, discr,
 # }}}
 
 
+# {{{ flat_norm
+
+def _flatten_array(ary):
+    import pyopencl.array as cl
+    assert isinstance(ary, cl.Array)
+
+    if ary.size == 0:
+        # Work around https://github.com/inducer/pyopencl/pull/402
+        return ary._new_with_changes(
+                data=None, offset=0, shape=(0,), strides=(ary.dtype.itemsize,))
+    if ary.flags.f_contiguous:
+        return ary.reshape(-1, order="F")
+    elif ary.flags.c_contiguous:
+        return ary.reshape(-1, order="C")
+    else:
+        raise ValueError("cannot flatten group array of DOFArray for norm, "
+                f"with strides {ary.strides} of {ary.dtype}")
+
+
+def flat_norm(ary, ord=None):
+    r"""Return an element-wise :math:`\ell^{\text{ord}}` norm of *ary*.
+
+    :arg ary: may be a :class:`DOFArray` or a
+        :class:`~meshmode.array_context.ArrayContainer` containing them.
+    """
+
+    from numbers import Number
+    if isinstance(ary, Number):
+        return abs(ary)
+
+    if ord is None:
+        ord = 2
+
+    from meshmode.array_context import is_array_container
+
+    import numpy.linalg as la
+    if isinstance(ary, DOFArray):
+        actx = ary.array_context
+        return la.norm(
+                [
+                    actx.np.linalg.norm(_flatten_array(subary), ord=ord)
+                    for _, subary in serialize_container(ary)],
+                ord=ord)
+
+    elif is_array_container(ary):
+        return la.norm(
+                [flat_norm(subary, ord=ord)
+                    for _, subary in serialize_container(ary)],
+                ord=ord)
+
+    raise TypeError(
+            f"unsupported array type passed to flat_norm: {type(ary)}")
+
+# }}}
+
+
 # {{{ pickling
 
 _ARRAY_CONTEXT_FOR_PICKLING_TLS = threading.local()
@@ -511,14 +568,6 @@ def array_context_for_pickling(actx: ArrayContext):
 
 
 # {{{ deprecated
-
-def flat_norm(ary: DOFArray, ord=None):
-    from warnings import warn
-    warn("flat_norm is deprecated. Use array_context.np.linalg.norm instead. "
-            "flat_norm will disappear in 2022.",
-            DeprecationWarning, stacklevel=2)
-    return ary.array_context.np.linalg.norm(ary, ord=ord)
-
 
 obj_or_dof_array_vectorize = MovedFunctionDeprecationWrapper(
         rec_map_array_container, deadline="2022")

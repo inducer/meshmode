@@ -454,6 +454,23 @@ def test_container_freeze_thaw(actx_factory):
 
     # }}}
 
+
+@pytest.mark.parametrize("ord", [2, np.inf])
+def test_container_norm(actx_factory, ord):
+    actx = actx_factory()
+
+    ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs = _get_test_containers(actx)
+
+    from pytools.obj_array import make_obj_array
+    c = MyContainer(name="hey", mass=1, momentum=make_obj_array([2, 3]), enthalpy=5)
+    n1 = actx.np.linalg.norm(make_obj_array([c, c]), ord)
+    n2 = np.linalg.norm([1, 2, 3, 5]*2, ord)
+
+    assert abs(n1 - n2) < 1e-12
+
+    from meshmode.dof_array import flat_norm
+    assert abs(flat_norm(ary_dof, ord) - actx.np.linalg.norm(ary_dof, ord)) < 1e-12
+
 # }}}
 
 

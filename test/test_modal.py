@@ -29,7 +29,7 @@ from meshmode.array_context import (  # noqa
     pytest_generate_tests_for_pyopencl_array_context
     as pytest_generate_tests
     )
-from meshmode.dof_array import DOFArray
+from meshmode.dof_array import DOFArray, flat_norm
 from meshmode.mesh import (
     SimplexElementGroup,
     TensorProductElementGroup
@@ -110,7 +110,7 @@ def test_inverse_modal_connections(actx_factory, nodal_group_factory):
 
     # This error should be small since we composed a map with
     # its inverse
-    err = actx.np.linalg.norm(nodal_f - nodal_f_2)
+    err = flat_norm(nodal_f - nodal_f_2)
 
     assert err <= 1e-13
 
@@ -170,7 +170,7 @@ def test_modal_coefficients_by_projection(actx_factory, quad_group_factory):
     # Map nodal coefficients using the quadrature-based projection
     modal_f_computed = nodal_to_modal_conn_quad(nodal_f)
 
-    err = actx.np.linalg.norm(modal_f_expected - modal_f_computed)
+    err = flat_norm(modal_f_expected - modal_f_computed)
 
     assert err <= 1e-13
 
@@ -217,7 +217,7 @@ def test_quadrature_based_modal_connection_reverse(actx_factory, quad_group_fact
     # Back to nodal
     nodal_f_computed = modal_to_nodal_conn(modal_f_quad)
 
-    err = actx.np.linalg.norm(nodal_f - nodal_f_computed)
+    err = flat_norm(nodal_f - nodal_f_computed)
 
     assert err <= 1e-11
 
@@ -302,7 +302,7 @@ def test_modal_truncation(actx_factory, nodal_group_factory,
         # Now map truncated modal coefficients back to nodal
         nodal_f_truncated = modal_to_nodal_conn(modal_f_truncated)
 
-        err = actx.np.linalg.norm(nodal_f - nodal_f_truncated)
+        err = flat_norm(nodal_f - nodal_f_truncated)
         eoc_rec.add_data_point(h, err)
         threshold_lower = 0.8*truncated_order
         threshold_upper = 1.2*truncated_order

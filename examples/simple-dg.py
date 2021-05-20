@@ -31,7 +31,7 @@ from pytools import memoize_method, memoize_in, log_process
 from pytools.obj_array import flat_obj_array, make_obj_array
 
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
-from meshmode.dof_array import DOFArray
+from meshmode.dof_array import DOFArray, flat_norm
 from meshmode.array_context import (
         freeze, thaw,
         PyOpenCLArrayContext, make_loopy_program,
@@ -506,7 +506,7 @@ def main():
             # DOFArray would be nice?
             assert len(fields.u) == 1
             logger.info("[%05d] t %.5e / %.5e norm %.5e",
-                    istep, t, t_final, actx.np.linalg.norm(fields.u, 2))
+                    istep, t, t_final, flat_norm(fields.u, 2))
             vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep, [
                 ("q", fields),
                 ])
@@ -514,7 +514,7 @@ def main():
         t += dt
         istep += 1
 
-    assert actx.np.linalg.norm(fields.u, 2) < 100
+    assert flat_norm(fields.u, 2) < 100
 
 
 if __name__ == "__main__":
