@@ -677,13 +677,10 @@ def _multimap_array_container_impl(f, *args, leaf_cls=None, recursive=False):
         specific container classes. By default, the recursion is stopped when
         a non-:class:`ArrayContainer` class is encountered.
     """
-    def is_same_type(arys, template_ary):
-        return all(type(arys[i]) is type(template_ary) for i in container_indices)
-
     def rec(*_args):
         template_ary = _args[container_indices[0]]
-        assert is_same_type(_args, template_ary), \
-                "expected type '{type(template_ary).__name__}'"
+        assert all(type(arys[i]) is type(template_ary) for i in container_indices[1:]), \
+                "expected type '{type(template_ary).__name__}'"        
 
         if (type(template_ary) is leaf_cls
                 or not is_array_container(template_ary)):
