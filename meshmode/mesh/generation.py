@@ -519,7 +519,7 @@ def generate_surface_of_revolution(
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
         unit_nodes: Optional[np.ndarray] = None):
     """Return a cylinder aligned with the "height" axis aligned with the Z axis.
-    
+
     :param get_radius: A callable function that takes in a 1D array of heights
         and a 1D array of angles and returns a 1D array of radii.
     :param height_discr: A discretization of ``[0, 2*pi)``.
