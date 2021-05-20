@@ -595,7 +595,7 @@ def _get_cells_to_use(fdrake_mesh, bdy_id):
     cfspace = fdrake_mesh.coordinates.function_space()
     cell_node_list = cfspace.cell_node_list
 
-    boundary_nodes = cfspace.boundary_nodes(bdy_id, "topological")
+    boundary_nodes = cfspace.boundary_nodes(bdy_id)
     # Reduce along each cell: Is a vertex of the cell in boundary nodes?
     cell_is_near_bdy = np.any(np.isin(cell_node_list, boundary_nodes), axis=1)
 
