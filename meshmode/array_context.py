@@ -693,13 +693,13 @@ def _multimap_array_container_impl(f, *args, leaf_cls=None, recursive=False):
                 serialize_container(_args[i]) for i in container_indices
                 ]):
             key = None
-            for i, subary in zip(container_indices, subarys):
+            for i, (subkey, subary) in zip(container_indices, subarys):
                 if key is None:
-                    key = subary[0]
+                    key = subkey
                 else:
-                    assert key == subary[0]
+                    assert key == subkey
 
-                new_args[i] = subary[1]
+                new_args[i] = subary
 
             result.append((key, frec(*new_args)))
 
