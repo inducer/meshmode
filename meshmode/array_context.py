@@ -637,9 +637,8 @@ def dataclass_array_container(cls):
             _deserialize_init_arrays_code_{lower_cls_name})
         """)
 
-    exec_dict = {"cls": cls}
+    exec_dict = {"cls": cls, "_MODULE_SOURCE_CODE": serialize_code}
     exec(compile(serialize_code, "<generated code>", "exec"), exec_dict)
-    exec_dict["_MODULE_SOURCE_CODE"] = serialize_code
 
     return cls
 
