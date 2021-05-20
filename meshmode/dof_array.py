@@ -62,7 +62,7 @@ __doc__ = """
         bcast_obj_array=True,
         bcast_numpy_array=True,
         rel_comparison=True)
-class DOFArray(ArrayContainer):
+class DOFArray:
     r"""This array type holds degree-of-freedom arrays for use with
     :class:`~meshmode.discretization.Discretization`,
     with one entry in the :class:`DOFArray` for each
