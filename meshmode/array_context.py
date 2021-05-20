@@ -576,7 +576,7 @@ def dataclass_array_container(cls):
 
     Attributes that are not array containers are allowed. In order to decide
     whether an attribute is an array container, the declared attribute type
-    is checked via :func:`is_array_container_type`.
+    is checked by the criteria from :func:`is_array_container`.
     """
     from dataclasses import is_dataclass
     assert is_dataclass(cls)
@@ -679,8 +679,9 @@ def _multimap_array_container_impl(f, *args, leaf_cls=None, recursive=False):
     """
     def rec(*_args):
         template_ary = _args[container_indices[0]]
-        assert all(type(arys[i]) is type(template_ary) for i in container_indices[1:]), \
-                "expected type '{type(template_ary).__name__}'"        
+        assert all(
+                type(_args[i]) is type(template_ary) for i in container_indices[1:]
+                ), "expected type '{type(template_ary).__name__}'"
 
         if (type(template_ary) is leaf_cls
                 or not is_array_container(template_ary)):
