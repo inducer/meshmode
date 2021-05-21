@@ -181,7 +181,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
 
                 # Generate the basis tabulation matrix
                 tabulations = []
-                for ibasis, basis_fn in enumerate(sgrp.basis_obj().functions):
+                for basis_fn in sgrp.basis_obj().functions:
                     tabulations.append(basis_fn(batch.result_unit_nodes).flatten())
                 tabulations = actx.from_numpy(np.asarray(tabulations))
 
