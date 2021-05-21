@@ -419,31 +419,35 @@ def make_direct_full_resample_matrix(actx, conn):
     @memoize_in(actx, (make_direct_full_resample_matrix, "oversample_mat_knl"))
     def knl():
         return make_loopy_program(
-            """{[iel, idof, j]:
-                0<=iel<nelements and
-                0<=idof<n_to_nodes and
-                0<=j<n_from_nodes}""",
-            "result[itgt_base + to_element_indices[iel]*n_to_nodes + idof, \
-                    isrc_base + from_element_indices[iel]*n_from_nodes + j] \
-                = resample_mat[idof, j]",
+            [
+                "{[idof_init]: 0 <= idof_init < nnodes_tgt}",
+                "{[jdof_init]: 0 <= jdof_init < nnodes_src}",
+                "{[iel]: 0 <= iel < nelements}",
+                "{[idof]: 0 <= idof < n_to_nodes}",
+                "{[jdof]: 0 <= jdof < n_from_nodes}"
+            ],
+            """
+                result[idof_init, jdof_init] = 0 {id=init}
+                ... gbarrier {id=barrier, dep=init}
+                result[itgt_base + to_element_indices[iel]*n_to_nodes + idof,      \
+                       isrc_base + from_element_indices[iel]*n_from_nodes + jdof]  \
+                           = resample_mat[idof, jdof] {dep=barrier}
+            """,
             [
                 lp.GlobalArg("result", None,
                     shape="nnodes_tgt, nnodes_src",
                     offset=lp.auto),
-                lp.ValueArg("itgt_base,isrc_base", np.int32),
-                lp.ValueArg("nnodes_tgt,nnodes_src", np.int32),
+                lp.ValueArg("itgt_base, isrc_base", np.int32),
+                lp.ValueArg("nnodes_tgt, nnodes_src", np.int32),
                 "...",
-                ],
-            name="oversample_mat")
+            ],
+            name="oversample_mat"
+        )
 
     to_discr_ndofs = sum(grp.nelements*grp.nunit_dofs
             for grp in conn.to_discr.groups)
     from_discr_ndofs = sum(grp.nelements*grp.nunit_dofs
             for grp in conn.from_discr.groups)
-
-    result = actx.zeros(
-            (to_discr_ndofs, from_discr_ndofs),
-            dtype=conn.to_discr.real_dtype)
 
     from_group_sizes = [
             grp.nelements*grp.nunit_dofs
@@ -451,23 +455,29 @@ def make_direct_full_resample_matrix(actx, conn):
     from_group_starts = np.cumsum([0] + from_group_sizes)
 
     tgt_node_nr_base = 0
+    mats = []
     for i_tgrp, (tgrp, cgrp) in enumerate(
             zip(conn.to_discr.groups, conn.groups)):
         for i_batch, batch in enumerate(cgrp.batches):
             if not len(batch.from_element_indices):
                 continue
 
-            actx.call_loopy(knl(),
+            mats.append(
+                actx.call_loopy(
+                    knl(),
                     resample_mat=conn._resample_matrix(actx, i_tgrp, i_batch),
-                    result=result,
                     itgt_base=tgt_node_nr_base,
                     isrc_base=from_group_starts[batch.from_group_index],
                     from_element_indices=batch.from_element_indices,
-                    to_element_indices=batch.to_element_indices)
+                    to_element_indices=batch.to_element_indices,
+                    nnodes_tgt=to_discr_ndofs,
+                    nnodes_src=from_discr_ndofs,
+                )["result"]
+            )
 
         tgt_node_nr_base += tgrp.nelements*tgrp.nunit_dofs
 
-    return result
+    return sum(mats)
 
 # }}}
 
