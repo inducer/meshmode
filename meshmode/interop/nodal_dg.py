@@ -67,7 +67,17 @@ class NodalDGContext:
         # 2s delay still seems to run into
         # "ExceptionPexpect: Could not terminate the child"
         # -AK, 2021-03-28
-        self.octave._engine.repl.delayafterterminate = 15
+
+        delay = 5
+        # make sure we don't set non-existent variables
+        assert self.octave._engine.repl.child.delayafterclose is not None
+        assert self.octave._engine.repl.child.delayafterterminate is not None
+        assert self.octave._engine.repl.child.ptyproc.delayafterclose is not None
+        assert self.octave._engine.repl.child.ptyproc.delayafterterminate is not None
+        self.octave._engine.repl.child.delayafterclose = delay
+        self.octave._engine.repl.child.delayafterterminate = delay
+        self.octave._engine.repl.child.ptyproc.delayafterclose = delay
+        self.octave._engine.repl.child.ptyproc.delayafterterminate = delay
 
         self.octave.exit()
 
