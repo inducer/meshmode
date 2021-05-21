@@ -6,7 +6,6 @@ sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
 
 . /home/firedrake/firedrake/bin/activate
 grep -v loopy requirements.txt > /tmp/myreq.txt
-sed -i s/pyopencl.git/pyopencl.git@v2020.2.2/ /tmp/myreq.txt
 
 # no need for these in the Firedrake tests
 sed -i "/boxtree/ d" /tmp/myreq.txt
@@ -23,8 +22,7 @@ pip install dataclasses
 
 pip install pytest
 
-pip install -r /tmp/myreq.txt
-pip install --force-reinstall git+https://github.com/inducer/loopy.git@firedrake-usable_for_potentials
+pip install -r /tmp/myreq.txt 
 
 # Context: https://github.com/OP2/PyOP2/pull/605
 python -m pip install --force-reinstall git+https://github.com/inducer/pytools.git
