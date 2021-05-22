@@ -371,6 +371,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         nelements_result=self.to_discr.groups[i_tgrp].nelements,
                         n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
                     )["result"]
+
                 else:
                     batch_result = actx.call_loopy(
                         batch_pick_knl(),
@@ -381,10 +382,23 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         nelements_result=self.to_discr.groups[i_tgrp].nelements,
                         n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
                     )["result"]
+
                 batched_data.append(batch_result)
+
             # After computing each batched result, take the sum
             # to get the entire contribution over the group
-            group_data.append(sum(batched_data))
+            if batched_data:
+                group_data.append(sum(batched_data))
+            else:
+                # If no batched data at all, return zeros for this
+                # particular group array
+                group_data.append(
+                    actx.zeros(
+                        shape=(self.to_discr.groups[i_tgrp].nelements,
+                               self.to_discr.groups[i_tgrp].nunit_dofs),
+                        dtype=ary.entry_dtype
+                    )
+                )
 
         return DOFArray(actx, data=tuple(group_data))
 
