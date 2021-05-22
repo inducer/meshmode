@@ -279,7 +279,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         shape="nelements_vec, n_from_nodes",
                         offset=lp.auto, tags=IsDOFArray()),
                     lp.ValueArg("n_to_nodes", tags=ParameterValue(n_to_nodes)),
-                    lp.ValueArg("n_from_nodes", tags=ParameterValue(n_from_nodes)),
+                    # Specifying this breaks order 4 for some reason
+                    #lp.ValueArg("n_from_nodes", tags=ParameterValue(n_from_nodes)),
                     lp.ValueArg("nelements_result", np.int32),
                     lp.ValueArg("nelements_vec", np.int32),
                     "...",

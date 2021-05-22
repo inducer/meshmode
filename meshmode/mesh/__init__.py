@@ -210,7 +210,7 @@ class MeshElementGroup(Record):
         Do not supply *element_nr_base* and *node_nr_base*, they will be
         automatically assigned.
         """
-
+        
         super().__init__(
             order=order,
             vertex_indices=vertex_indices,
