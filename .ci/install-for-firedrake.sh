@@ -2,6 +2,9 @@ sudo chown -R $(whoami) /github/home || true
 sudo apt update
 sudo apt upgrade -y
 sudo apt install time
+
+# Otherwise we get missing CL symbols
+export PYOPENCL_CL_PRETEND_VERSION=2.1
 sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
 
 . /home/firedrake/firedrake/bin/activate
