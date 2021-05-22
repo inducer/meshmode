@@ -40,6 +40,7 @@ from arraycontext import (
         with_container_arithmetic,
         dataclass_array_container,
         )
+from arraycontext.metadata import FirstAxisIsElementsTag
 
 import logging
 logger = logging.getLogger(__name__)
@@ -243,28 +244,22 @@ class DGDiscretization:
         if not isinstance(vec, DOFArray):
             return map_array_container(self.inverse_mass, vec)
 
-        @memoize_in(self, "elwise_linear_knl")
-        def knl():
-            return make_loopy_program(
-                """{[iel,idof,j]:
-                    0<=iel<nelements and
-                    0<=idof<ndiscr_nodes_out and
-                    0<=j<ndiscr_nodes_in}""",
-                "result[iel,idof] = sum(j, mat[idof, j] * vec[iel, j])",
-                name="diff")
-
+        actx = vec.array_context
+        dtype = vec.entry_dtype
         discr = self.volume_discr
 
-        result = discr.empty_like(vec)
-
-        for grp in discr.groups:
-            matrix = self.get_inverse_mass_matrix(grp, vec.entry_dtype)
-
-            vec.array_context.call_loopy(
-                    knl(),
-                    mat=matrix, result=result[grp.index], vec=vec[grp.index])
-
-        return result/self.vol_jacobian()
+        return DOFArray(
+            actx,
+            data=tuple(
+                actx.einsum(
+                    "ij,ej->ei",
+                    self.get_inverse_mass_matrix(grp, dtype),
+                    vec_i,
+                    arg_names=("mass_inv_mat", "vec"),
+                    tagged=(FirstAxisIsElementsTag(),)
+                ) for grp, vec_i in zip(discr.groups, vec)
+            )
+        ) / self.vol_jacobian()
 
     @memoize_method
     def get_local_face_mass_matrix(self, afgrp, volgrp, dtype):
@@ -296,6 +291,9 @@ class DGDiscretization:
         if not isinstance(vec, DOFArray):
             return map_array_container(self.face_mass, vec)
 
+        actx = vec.array_context
+        dtype = vec.entry_dtype
+
         @memoize_in(self, "face_mass_knl")
         def knl():
             return make_loopy_program(
@@ -312,24 +310,27 @@ class DGDiscretization:
         all_faces_discr = all_faces_conn.to_discr
         vol_discr = all_faces_conn.from_discr
 
-        result = vol_discr.empty_like(vec)
-
         fj = self.face_jacobian("all_faces")
         vec = vec*fj
 
         assert len(all_faces_discr.groups) == len(vol_discr.groups)
 
-        for afgrp, volgrp in zip(all_faces_discr.groups, vol_discr.groups):
-            nfaces = volgrp.mesh_el_group.nfaces
-
-            matrix = self.get_local_face_mass_matrix(afgrp, volgrp, vec.entry_dtype)
-
-            vec.array_context.call_loopy(knl(),
-                    mat=matrix, result=result[volgrp.index],
-                    vec=vec[afgrp.index].reshape(
-                        nfaces, volgrp.nelements, afgrp.nunit_dofs))
-
-        return result
+        return DOFArray(
+            actx,
+            data=tuple(
+                actx.call_loopy(
+                    knl(),
+                    mat=self.get_local_face_mass_matrix(afgrp, volgrp, dtype),
+                    vec=vec_i.reshape(
+                        volgrp.mesh_el_group.nfaces,
+                        volgrp.nelements,
+                        afgrp.nunit_dofs
+                    )
+                )["result"]
+                for afgrp, volgrp, vec_i in zip(all_faces_discr.groups,
+                                                vol_discr.groups, vec)
+            )
+        )
 
 # }}}
 
