@@ -8,6 +8,11 @@ sudo apt install -y pocl-opencl-icd ocl-icd-opencl-dev
 grep -v loopy requirements.txt > /tmp/myreq.txt
 sed -i s/pyopencl.git/pyopencl.git@v2020.2.2/ /tmp/myreq.txt
 
+# no need for these in the Firedrake tests
+sed -i "/boxtree/ d" /tmp/myreq.txt
+sed -i "/sumpy/ d" /tmp/myreq.txt
+sed -i "/pytential/ d" /tmp/myreq.txt
+
 # This shouldn't be necessary, but...
 # https://github.com/inducer/meshmode/pull/48#issuecomment-687519451
 pip install pybind11

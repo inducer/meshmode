@@ -55,12 +55,12 @@ def _make_cross_face_batches(actx,
 
     tgt_bdry_nodes = np.array([
         thaw_to_numpy(actx, ary[i_tgt_grp])[tgt_bdry_element_indices]
-        for ary in tgt_bdry_discr.nodes()
+        for ary in tgt_bdry_discr.nodes(cached=False)
         ])
 
     src_bdry_nodes = np.array([
         thaw_to_numpy(actx, ary[i_src_grp])[src_bdry_element_indices]
-        for ary in src_bdry_discr.nodes()
+        for ary in src_bdry_discr.nodes(cached=False)
         ])
 
     tol = 1e4 * np.finfo(tgt_bdry_nodes.dtype).eps
@@ -69,7 +69,7 @@ def _make_cross_face_batches(actx,
     src_grp = src_bdry_discr.groups[i_src_grp]
 
     dim = src_grp.dim
-    ambient_dim, nelements, ntgt_unit_nodes = tgt_bdry_nodes.shape
+    _, nelements, ntgt_unit_nodes = tgt_bdry_nodes.shape
     assert tgt_bdry_nodes.shape == src_bdry_nodes.shape
 
     # {{{ invert face map (using Gauss-Newton)
@@ -79,9 +79,10 @@ def _make_cross_face_batches(actx,
     src_unit_nodes[:] = initial_guess.reshape(-1, 1, 1)
 
     import modepy as mp
-    vdm = mp.vandermonde(src_grp.basis(), src_grp.unit_nodes)
+    src_grp_basis_fcts = src_grp.basis_obj().functions
+    vdm = mp.vandermonde(src_grp_basis_fcts, src_grp.unit_nodes)
     inv_t_vdm = la.inv(vdm.T)
-    nsrc_funcs = len(src_grp.basis())
+    nsrc_funcs = len(src_grp_basis_fcts)
 
     def apply_map(unit_nodes):
         # unit_nodes: (dim, nelements, ntgt_unit_nodes)
@@ -89,7 +90,7 @@ def _make_cross_face_batches(actx,
         # basis_at_unit_nodes
         basis_at_unit_nodes = np.empty((nsrc_funcs, nelements, ntgt_unit_nodes))
 
-        for i, f in enumerate(src_grp.basis()):
+        for i, f in enumerate(src_grp_basis_fcts):
             basis_at_unit_nodes[i] = (
                     f(unit_nodes.reshape(dim, -1))
                     .reshape(nelements, ntgt_unit_nodes))
@@ -109,7 +110,7 @@ def _make_cross_face_batches(actx,
         dbasis_at_unit_nodes = np.empty(
                 (dim, nsrc_funcs, nelements, ntgt_unit_nodes))
 
-        for i, df in enumerate(src_grp.grad_basis()):
+        for i, df in enumerate(src_grp.basis_obj().gradients):
             df_result = df(unit_nodes.reshape(dim, -1))
 
             for rst_axis, df_r in enumerate(df_result):
@@ -222,7 +223,7 @@ def _make_cross_face_batches(actx,
 
         if max_resid < tol:
             logger.debug("_make_cross_face_batches: gauss-newton: done, "
-                    "final residual: %g" % max_resid)
+                    "final residual: %g", max_resid)
             break
 
         niter += 1
@@ -232,7 +233,7 @@ def _make_cross_face_batches(actx,
 
     # }}}
 
-    # {{{ find groups of src_unit_nodes
+    # {{{ find batches of src_unit_nodes
 
     done_elements = np.zeros(nelements, dtype=bool)
     while True:
@@ -250,7 +251,6 @@ def _make_cross_face_batches(actx,
         close_els = todo_elements[unit_node_dist < tol]
         done_elements[close_els] = True
 
-        from meshmode.discretization.connection.direct import InterpolationBatch
         yield InterpolationBatch(
                 from_group_index=i_src_grp,
                 from_element_indices=freeze_from_numpy(
@@ -287,7 +287,7 @@ def _make_bdry_el_lookup_table(actx, connection, igrp):
     iel_lookup = np.full((from_nelements, from_nfaces), -1,
             dtype=connection.from_discr.mesh.element_id_dtype)
 
-    for ibatch, batch in enumerate(connection.groups[igrp].batches):
+    for batch in connection.groups[igrp].batches:
         from_element_indices = thaw_to_numpy(actx, batch.from_element_indices)
         iel_lookup[from_element_indices, batch.to_element_face] = \
                 thaw_to_numpy(actx, batch.to_element_indices)
@@ -372,14 +372,14 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
 
                 assert np.array_equal(vbc_els[vbc_used_els], adj_els)
 
-                # find to_element_indices
+                # find tgt_bdry_element_indices
 
                 tgt_bdry_element_indices = thaw_to_numpy(
                         actx,
                         vbc_tgt_grp_face_batch.to_element_indices
                         )[vbc_used_els]
 
-                # find from_element_indices
+                # find src_bdry_element_indices
 
                 src_vol_element_indices = adj.neighbors[adj_tgt_flags]
                 src_element_faces = adj.neighbor_faces[adj_tgt_flags]

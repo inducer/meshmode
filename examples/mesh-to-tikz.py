@@ -1,4 +1,5 @@
 from meshmode.mesh.io import generate_gmsh, FileSource
+from meshmode.mesh.visualization import mesh_to_tikz
 
 h = 0.3
 order = 1
@@ -10,5 +11,4 @@ mesh = generate_gmsh(
             "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
         )
 
-from meshmode.mesh.visualization import mesh_to_tikz
 print(mesh_to_tikz(mesh))

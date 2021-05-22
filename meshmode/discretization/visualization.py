@@ -183,6 +183,19 @@ class _VisConnectivityGroup(Record):
     def primitive_element_size(self):
         return self.vis_connectivity.shape[2]
 
+
+def _check_discr_same_connectivity(discr, other):
+    if len(discr.groups) != len(other.groups):
+        return False
+
+    if not all(
+            sg.discretization_key() == og.discretization_key()
+            and sg.nelements == og.nelements
+            for sg, og in zip(discr.groups, other.groups)):
+        return False
+
+    return True
+
 # }}}
 
 
@@ -379,7 +392,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                     grp.dim, grp.order, vtk_version=vtk_version)
             el_connectivity = np.array(
                     vtk_lagrange_simplex_node_tuples_to_permutation(node_tuples),
-                    dtype=np.intp).reshape(1, 1, -1)
+                    dtype=np.intp).reshape((1, 1, -1))
 
             vtk_cell_type = self.simplex_cell_types[grp.dim]
 
@@ -392,7 +405,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                     grp.dim, grp.order, vtk_version=vtk_version)
             el_connectivity = np.array(
                     vtk_lagrange_quad_node_tuples_to_permutation(node_tuples),
-                    dtype=np.intp).reshape(1, 1, -1)
+                    dtype=np.intp).reshape((1, 1, -1))
 
             vtk_cell_type = self.tensor_cell_types[grp.dim]
 
@@ -442,10 +455,16 @@ class Visualizer:
     .. automethod:: write_vtk_file
     .. automethod:: write_parallel_vtk_file
     .. automethod:: write_xdmf_file
+
+    .. automethod:: copy_with_same_connectivity
     """
 
     def __init__(self, connection,
-            element_shrink_factor=None, is_equidistant=False):
+            element_shrink_factor=None,
+            is_equidistant=False,
+            _vtk_connectivity=None,
+            _vtk_lagrange_connectivity=None):
+
         self.connection = connection
         self.discr = connection.from_discr
         self.vis_discr = connection.to_discr
@@ -454,6 +473,42 @@ class Visualizer:
             element_shrink_factor = 1.0
         self.element_shrink_factor = element_shrink_factor
         self.is_equidistant = is_equidistant
+
+        self._cached_vtk_connectivity = _vtk_connectivity
+        self._cached_vtk_lagrange_connectivity = _vtk_lagrange_connectivity
+
+    def copy_with_same_connectivity(self, actx, discr, skip_tests=False):
+        """Makes a copy of the visualizer for a
+        :class:`~meshmode.discretization.Discretization` with the same group
+        structure as the original discretization. This can be useful when the
+        geometry is mapped (e.g. using :func:`~meshmode.mesh.processing.affine_map`)
+        and the connectivity can be reused.
+
+        The *"same group structure"* here means that the two discretizations
+        should have the same group types, number of elements, degrees of
+        freedom, etc.
+
+        :param skip_tests: If *True*, no checks in the group structure of the
+            discretizations are performed.
+        """
+
+        if not skip_tests:
+            if not _check_discr_same_connectivity(discr, self.discr):
+                raise ValueError("'discr' does not have matching group structures")
+
+        vis_discr = self.vis_discr.copy(actx=actx, mesh=discr.mesh)
+        conn = type(self.connection)(
+                discr, vis_discr,
+                groups=self.connection.groups,
+                is_surjective=self.connection.is_surjective)
+
+        return type(self)(
+                conn,
+                element_shrink_factor=self.element_shrink_factor,
+                is_equidistant=self.is_equidistant,
+                _vtk_connectivity=self._cached_vtk_connectivity,
+                _vtk_lagrange_connectivity=self._cached_vtk_lagrange_connectivity,
+                )
 
     @memoize_method
     def _vis_nodes_numpy(self):
@@ -466,6 +521,7 @@ class Visualizer:
     # {{{ mayavi
 
     def show_scalar_in_mayavi(self, field, **kwargs):
+        # pylint: disable=import-error
         import mayavi.mlab as mlab
 
         do_show = kwargs.pop("do_show", True)
@@ -515,15 +571,21 @@ class Visualizer:
     # {{{ vtk
 
     @property
-    @memoize_method
     def _vtk_connectivity(self):
-        return VTKConnectivity(self.connection)
+        if self._cached_vtk_connectivity is None:
+            self._cached_vtk_connectivity = VTKConnectivity(self.connection)
+
+        return self._cached_vtk_connectivity
 
     @property
-    @memoize_method
     def _vtk_lagrange_connectivity(self):
         assert self.is_equidistant
-        return VTKLagrangeConnectivity(self.connection)
+
+        if self._cached_vtk_lagrange_connectivity is None:
+            self._cached_vtk_lagrange_connectivity = \
+                    VTKLagrangeConnectivity(self.connection)
+
+        return self._cached_vtk_lagrange_connectivity
 
     def write_parallel_vtk_file(self, mpi_comm, file_name_pattern, names_and_fields,
                 compressor=None, real_only=False,
@@ -957,7 +1019,7 @@ class Visualizer:
                 nodes.append(0*nodes[0])
 
             from matplotlib.tri.triangulation import Triangulation
-            tri, args, kwargs = \
+            tri, _, kwargs = \
                 Triangulation.get_from_args_and_kwargs(
                         *nodes,
                         triangles=vis_connectivity.vis_connectivity.reshape(-1, 3))
@@ -994,7 +1056,7 @@ class Visualizer:
     # }}}
 
 
-def make_visualizer(actx, discr, vis_order,
+def make_visualizer(actx, discr, vis_order=None,
         element_shrink_factor=None, force_equidistant=False):
     """
     :arg vis_order: order of the visualization DOFs.
@@ -1003,29 +1065,42 @@ def make_visualizer(actx, discr, vis_order,
         equidistant nodes. If plotting high-order Lagrange VTK elements, this
         needs to be set to *True*.
     """
-    from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import OrderAndTypeBasedGroupFactory
 
-    if force_equidistant:
-        from meshmode.discretization.poly_element import (
+    vis_discr = None
+    if (element_shrink_factor is None
+            and not force_equidistant
+            and vis_order is None):
+        vis_discr = discr
+    else:
+        if force_equidistant:
+            from meshmode.discretization.poly_element import (
                 PolynomialEquidistantSimplexElementGroup as SimplexElementGroup,
                 EquidistantTensorProductElementGroup as TensorElementGroup)
-    else:
-        from meshmode.discretization.poly_element import (
+        else:
+            from meshmode.discretization.poly_element import (
                 PolynomialWarpAndBlendElementGroup as SimplexElementGroup,
                 LegendreGaussLobattoTensorProductElementGroup as TensorElementGroup)
 
-    from meshmode.discretization.poly_element import OrderAndTypeBasedGroupFactory
-    vis_discr = Discretization(
-            actx, discr.mesh,
-            OrderAndTypeBasedGroupFactory(
-                vis_order,
-                simplex_group_class=SimplexElementGroup,
-                tensor_product_group_class=TensorElementGroup),
-            real_dtype=discr.real_dtype)
+        vis_discr = discr.copy(
+                actx=actx,
+                group_factory=OrderAndTypeBasedGroupFactory(
+                    vis_order,
+                    simplex_group_class=SimplexElementGroup,
+                    tensor_product_group_class=TensorElementGroup),
+                )
 
-    from meshmode.discretization.connection import \
-            make_same_mesh_connection
+        if all(grp.discretization_key() == vgrp.discretization_key()
+                for grp, vgrp in zip(discr.groups, vis_discr.groups)):
+            from warnings import warn
+            warn("Visualization discretization is identical to base discretization. "
+                    "To avoid the creation of a separate discretization for "
+                    "visualization, avoid passing vis_order unless needed.",
+                    stacklevel=2)
 
+            vis_discr = discr
+
+    from meshmode.discretization.connection import make_same_mesh_connection
     return Visualizer(
             make_same_mesh_connection(actx, vis_discr, discr),
             element_shrink_factor=element_shrink_factor,
@@ -1042,8 +1117,10 @@ def draw_curve(discr):
     import matplotlib.pyplot as plt
     plt.plot(mesh.vertices[0], mesh.vertices[1], "o")
 
+    # pylint: disable=no-member
     color = plt.cm.rainbow(np.linspace(0, 1, len(discr.groups)))
-    for igrp, group in enumerate(discr.groups):
+
+    for igrp, _ in enumerate(discr.groups):
         group_nodes = np.array([
             discr._setup_actx.to_numpy(discr.nodes()[iaxis][igrp])
             for iaxis in range(discr.ambient_dim)

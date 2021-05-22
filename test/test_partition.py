@@ -43,7 +43,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Is there a smart way of choosing this number?
-# Currenly it is the same as the base from MPIBoundaryTransceiver
+# Currenly it is the same as the base from MPIBoundaryCommSetupHelper
 TAG_BASE = 83411
 TAG_SEND_REMOTE_NODES = TAG_BASE + 3
 TAG_SEND_LOCAL_NODES = TAG_BASE + 4
@@ -72,7 +72,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
 
     for n in mesh_pars:
         from meshmode.mesh.generation import generate_warped_rect_mesh
-        base_mesh = generate_warped_rect_mesh(dim, order=order, n=n)
+        base_mesh = generate_warped_rect_mesh(dim, order=order, nelements_side=n)
 
         if num_groups > 1:
             from meshmode.mesh.processing import split_mesh_groups
@@ -173,22 +173,22 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
 
 @pytest.mark.parametrize(("dim", "mesh_size", "num_parts", "scramble_partitions"),
         [
-            (2, 5, 4, False),
-            (2, 5, 4, True),
-            (2, 5, 5, False),
-            (2, 5, 5, True),
-            (2, 5, 7, False),
-            (2, 5, 7, True),
-            (2, 10, 32, False),
-            (3, 8, 32, False),
+            (2, 4, 4, False),
+            (2, 4, 4, True),
+            (2, 4, 5, False),
+            (2, 4, 5, True),
+            (2, 4, 7, False),
+            (2, 4, 7, True),
+            (2, 9, 32, False),
+            (3, 7, 32, False),
         ])
 @pytest.mark.parametrize("num_groups", [1, 2, 7])
 def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitions):
     np.random.seed(42)
-    n = (mesh_size,) * dim
+    nelements_per_axis = (mesh_size,) * dim
     from meshmode.mesh.generation import generate_regular_rect_mesh
-    meshes = [generate_regular_rect_mesh(a=(0 + i,) * dim, b=(1 + i,) * dim, n=n)
-                        for i in range(num_groups)]
+    meshes = [generate_regular_rect_mesh(a=(0 + i,) * dim, b=(1 + i,) * dim,
+              nelements_per_axis=nelements_per_axis) for i in range(num_groups)]
 
     from meshmode.mesh.processing import merge_disjoint_meshes
     mesh = merge_disjoint_meshes(meshes)
@@ -326,7 +326,7 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     if mesh_dist.is_mananger_rank():
         np.random.seed(42)
         from meshmode.mesh.generation import generate_warped_rect_mesh
-        meshes = [generate_warped_rect_mesh(dim, order=order, n=4)
+        meshes = [generate_warped_rect_mesh(dim, order=order, nelements_side=4)
                         for _ in range(num_groups)]
 
         if num_groups > 1:
@@ -353,35 +353,28 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
 
     from meshmode.distributed import get_connected_partitions
     connected_parts = get_connected_partitions(local_mesh)
-    assert i_local_part not in connected_parts
-    bdry_setup_helpers = {}
-    local_bdry_conns = {}
+
+    # Check that the connectivity makes sense before doing any communication
+    _test_connected_parts(mpi_comm, connected_parts)
 
     from meshmode.discretization.connection import make_face_restriction
     from meshmode.mesh import BTAG_PARTITION
+    local_bdry_conns = {}
     for i_remote_part in connected_parts:
         local_bdry_conns[i_remote_part] = make_face_restriction(
                 actx, vol_discr, group_factory, BTAG_PARTITION(i_remote_part))
 
-        setup_helper = bdry_setup_helpers[i_remote_part] = \
-                MPIBoundaryCommSetupHelper(
-                        mpi_comm, actx, local_bdry_conns[i_remote_part],
-                        i_remote_part, bdry_grp_factory=group_factory)
-
-        setup_helper.post_sends()
-
     remote_to_local_bdry_conns = {}
-    from meshmode.discretization.connection import check_connection
-    while bdry_setup_helpers:
-        for i_remote_part, setup_helper in bdry_setup_helpers.items():
-            if setup_helper.is_setup_ready():
-                assert bdry_setup_helpers.pop(i_remote_part) is setup_helper
-                conn = setup_helper.complete_setup()
+    with MPIBoundaryCommSetupHelper(mpi_comm, actx, local_bdry_conns,
+            bdry_grp_factory=group_factory) as bdry_setup_helper:
+        from meshmode.discretization.connection import check_connection
+        while True:
+            conns = bdry_setup_helper.complete_some()
+            if not conns:
+                break
+            for i_remote_part, conn in conns.items():
                 check_connection(actx, conn)
                 remote_to_local_bdry_conns[i_remote_part] = conn
-                break
-
-        # FIXME: Not ideal, busy-waits
 
     _test_data_transfer(mpi_comm,
                         actx,
@@ -392,6 +385,28 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     logger.debug("Rank %d exiting", i_local_part)
 
 
+def _test_connected_parts(mpi_comm, connected_parts):
+    num_parts = mpi_comm.Get_size()
+    i_local_part = mpi_comm.Get_rank()
+
+    assert i_local_part not in connected_parts
+
+    # Get the full adjacency
+    connected_mask = np.empty(num_parts, dtype=bool)
+    connected_mask[:] = False
+    for i_remote_part in connected_parts:
+        connected_mask[i_remote_part] = True
+    all_connected_masks = mpi_comm.allgather(connected_mask)
+
+    # Construct a list of parts that have the local part in their adjacency and
+    # make sure it agrees with connected_parts
+    parts_connected_to_me = set()
+    for i_remote_part in range(num_parts):
+        if all_connected_masks[i_remote_part][i_local_part]:
+            parts_connected_to_me.add(i_remote_part)
+    assert parts_connected_to_me == connected_parts
+
+
 # TODO
 def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
                         remote_to_local_bdry_conns, connected_parts):
@@ -400,23 +415,21 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
     def f(x):
         return 10*actx.np.sin(20.*x)
 
-    """
-    Here is a simplified example of what happens from
-    the point of view of the local rank.
-
-    Local rank:
-        1. Transfer local points from local boundary to remote boundary
-            to get remote points.
-        2. Send remote points to remote rank.
-    Remote rank:
-        3. Receive remote points from local rank.
-        4. Transfer remote points from remote boundary to local boundary
-            to get local points.
-        5. Send local points to local rank.
-    Local rank:
-        6. Receive local points from remote rank.
-        7. Check if local points are the same as the original local points.
-    """
+    # Here is a simplified example of what happens from
+    # the point of view of the local rank.
+    #
+    # Local rank:
+    #     1. Transfer local points from local boundary to remote boundary
+    #         to get remote points.
+    #     2. Send remote points to remote rank.
+    # Remote rank:
+    #     3. Receive remote points from local rank.
+    #     4. Transfer remote points from remote boundary to local boundary
+    #         to get local points.
+    #     5. Send local points to local rank.
+    # Local rank:
+    #     6. Receive local points from remote rank.
+    #     7. Check if local points are the same as the original local points.
 
     # 1.
     send_reqs = []

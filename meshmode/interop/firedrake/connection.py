@@ -131,6 +131,7 @@ class FiredrakeConnection:
     .. automethod:: __init__
     .. automethod:: from_meshmode
     .. automethod:: from_firedrake
+    .. automethod:: firedrake_fspace
     """
     def __init__(self, discr, fdrake_fspace, mm2fd_node_mapping, group_nr=None):
         """
@@ -218,10 +219,11 @@ class FiredrakeConnection:
         fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
 
         # compute and store resampling matrices
-        self._resampling_mat_fd2mm = resampling_matrix(element_grp.basis(),
+        element_grp_basis_fcts = element_grp.basis_obj().functions
+        self._resampling_mat_fd2mm = resampling_matrix(element_grp_basis_fcts,
                                                        new_nodes=mm_unit_nodes,
                                                        old_nodes=fd_unit_nodes)
-        self._resampling_mat_mm2fd = resampling_matrix(element_grp.basis(),
+        self._resampling_mat_mm2fd = resampling_matrix(element_grp_basis_fcts,
                                                        new_nodes=fd_unit_nodes,
                                                        old_nodes=mm_unit_nodes)
 
@@ -283,8 +285,18 @@ class FiredrakeConnection:
         """
         # Validate that *function* is convertible
         from firedrake.function import Function
-        if not isinstance(function, Function):
+        function_is_function_type = isinstance(function, Function)
+        # FIXME : Once ExternalOperator is fully implemented, we don't need
+        #         to try/except this block
+        if not function_is_function_type:
+            try:
+                from firedrake.pointwise_operators import ExternalOperator
+                function_is_extop_type = isinstance(function, ExternalOperator)
+            except ImportError:
+                function_is_extop_type = False
+        if not function_is_function_type and not function_is_extop_type:
             raise TypeError(f"'{function_name} must be a firedrake Function"
+                            " or ExternalOperator, "
                             f" but is of unexpected type '{type(function)}'")
         ufl_elt = function.function_space().ufl_element()
         if ufl_elt.family() != self._ufl_element.family():
@@ -620,8 +632,14 @@ PolynomialRecursiveNodesGroupFactory` with ``"lgl"`` nodes is used.
         imported, a :class:`~meshmode.discretization.poly_element.\
 PolynomialWarpAndBlendGroupFactory` is used.
     :arg restrict_to_boundary: (optional)
-        If not *None*, then must be a valid boundary marker for
-        ``fdrake_fspace.mesh()``. In this case, creates a
+        If not *None*, then must be one of the following:
+
+        * A valid boundary marker for ``fdrake_fspace.mesh()``
+        * A tuple of valid boundary markers for ``fdrake_fspace.mesh()``
+        * The string ``"on_boundary"`` (:mod:`firedrake` equivalent
+          to :class:`~meshmode.mesh.BTAG_ALL`).
+
+        If not *None*, creates a
         :class:`~meshmode.discretization.Discretization` on a submesh
         of ``fdrake_fspace.mesh()`` created from the cells with at least
         one vertex on a facet marked with the marker
@@ -669,14 +687,36 @@ PolynomialWarpAndBlendGroupFactory` is used.
         except ImportError:
             # If cannot be imported, uses warp-and-blend nodes
             grp_factory = PolynomialWarpAndBlendGroupFactory(degree)
+    # validate restrict_to_boundary, if present
     if restrict_to_boundary is not None:
-        uniq_markers = fdrake_fspace.mesh().exterior_facets.unique_markers
-        allowable_bdy_ids = list(uniq_markers) + ["on_boundary"]
-        if restrict_to_boundary not in allowable_bdy_ids:
-            raise ValueError("'restrict_to_boundary' must be one of"
-                            " the following allowable boundary ids: "
-                            f"{allowable_bdy_ids}, not "
-                            f"'{restrict_to_boundary}'")
+        firedrake_bdy_ids = fdrake_fspace.mesh().exterior_facets.unique_markers
+        # Integer case, just make sure it is a valid bdy id
+        if isinstance(restrict_to_boundary, int):
+            if restrict_to_boundary not in firedrake_bdy_ids:
+                raise ValueError("Unrecognized boundary id "
+                                 f"{restrict_to_boundary}. Valid boundary "
+                                 f"ids: {firedrake_bdy_ids}")
+        # Tuple case, make sure it is a tuple of valid bdy ids
+        elif isinstance(restrict_to_boundary, tuple):
+            for bdy_id in restrict_to_boundary:
+                if not isinstance(bdy_id, int):
+                    raise TypeError(f"Invalid type {type(bdy_id)} in "
+                                    "restrict_to_boundary. When "
+                                    "restrict_to_boundary is a tuple, each "
+                                    "entry must be of type int")
+                if bdy_id not in firedrake_bdy_ids:
+                    raise ValueError(f"Unrecognized boundary id {bdy_id}. Valid"
+                                     f" boundary ids: {firedrake_bdy_ids}.")
+        # String case, must be "on_boundary"
+        elif isinstance(restrict_to_boundary, str):
+            if restrict_to_boundary != "on_boundary":
+                raise ValueError(f"Unexpected value '{restrict_to_boundary}' "
+                                 "for restrict_to_boundary. Only valid string "
+                                 "is 'on_boundary'")
+        else:
+            raise TypeError(f"Invalid type {type(restrict_to_boundary)} for "
+                            "restrict_to_boundary. Must be an int, a tuple "
+                            "of ints, or the string 'on_boundary'.")
 
     # If only converting a portion of the mesh near the boundary, get
     # *cells_to_use* as described in

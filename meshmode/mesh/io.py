@@ -52,9 +52,12 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         # meshpy.tet.MeshInfo
         self.points = None
         self.elements = None
+        self.element_vertices = None
+        self.element_nodes = None
         self.element_types = None
         self.element_markers = None
         self.tags = None
+        self.groups = None
         self.gmsh_tag_index_to_mine = None
 
         if mesh_construction_kwargs is None:
@@ -123,19 +126,16 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             raise RuntimeError("empty mesh in gmsh input")
 
         groups = self.groups = []
-
         ambient_dim = self.points.shape[-1]
 
-        mesh_bulk_dim = max(
-                el_type.dimensions for el_type in el_type_hist.keys())
+        mesh_bulk_dim = max(el_type.dimensions for el_type in el_type_hist)
 
         # {{{ build vertex numbering
 
         # map set of face vertex indices to list of tags associated to face
         face_vertex_indices_to_tags = {}
         vertex_gmsh_index_to_mine = {}
-        for element, (el_vertices, el_type) in enumerate(zip(
-                self.element_vertices, self.element_types)):
+        for element, el_vertices in enumerate(self.element_vertices):
             for gmsh_vertex_nr in el_vertices:
                 if gmsh_vertex_nr not in vertex_gmsh_index_to_mine:
                     vertex_gmsh_index_to_mine[gmsh_vertex_nr] = \
@@ -185,8 +185,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     np.int32)
             i = 0
 
-            for element, (el_vertices, el_nodes, el_type) in enumerate(zip(
-                    self.element_vertices, self.element_nodes, self.element_types)):
+            for el_vertices, el_nodes, el_type in zip(
+                    self.element_vertices, self.element_nodes, self.element_types):
                 if el_type is not group_el_type:
                     continue
 
@@ -234,7 +234,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     )
             else:
                 # NOTE: already checked above
-                assert False
+                raise AssertionError()
 
             groups.append(group)
 
@@ -287,7 +287,7 @@ def read_gmsh(filename, force_ambient_dim=None, mesh_construction_kwargs=None):
     return recv.get_mesh()
 
 
-def generate_gmsh(source, dimensions=None, order=None, other_options=[],
+def generate_gmsh(source, dimensions=None, order=None, other_options=None,
         extension="geo", gmsh_executable="gmsh", force_ambient_dim=None,
         output_file_name="output.msh", mesh_construction_kwargs=None,
         target_unit=None):
@@ -303,6 +303,9 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=[],
     :arg target_unit: Value of the option *Geometry.OCCTargetUnit*.
         Supported values are the strings `'M'` or `'MM'`.
     """
+    if other_options is None:
+        other_options = []
+
     recv = GmshMeshReceiver(mesh_construction_kwargs=mesh_construction_kwargs)
 
     from gmsh_interop.runner import GmshRunner

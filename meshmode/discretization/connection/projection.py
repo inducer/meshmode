@@ -69,8 +69,8 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         if conn.from_discr.dim != conn.to_discr.dim:
             raise RuntimeError("cannot transport from face to element")
 
-        if not all(g.is_orthogonal_basis() for g in conn.to_discr.groups):
-            raise RuntimeError("`to_discr` must have an orthogonal basis")
+        if not all(g.is_orthonormal_basis() for g in conn.to_discr.groups):
+            raise RuntimeError("`to_discr` must have an orthonormal basis")
 
         self.conn = conn
         super().__init__(
@@ -105,11 +105,13 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         weights = {}
         jac = np.empty(self.to_discr.dim, dtype=object)
 
+        from meshmode.discretization.poly_element import diff_matrices
         for igrp, grp in enumerate(self.to_discr.groups):
+            matrices = diff_matrices(grp)
+
             for ibatch, batch in enumerate(self.conn.groups[igrp].batches):
                 for iaxis in range(grp.dim):
-                    mat = grp.diff_matrices()[iaxis]
-                    jac[iaxis] = mat.dot(batch.result_unit_nodes.T)
+                    jac[iaxis] = matrices[iaxis] @ batch.result_unit_nodes.T
 
                 weights[igrp, ibatch] = actx.freeze(actx.from_numpy(
                     det(jac) * grp.weights))
@@ -186,12 +188,11 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         # perform dot product (on reference element) to get basis coefficients
         c = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
 
-        for igrp, (tgrp, cgrp) in enumerate(
-                zip(self.to_discr.groups, self.conn.groups)):
+        for igrp, cgrp in enumerate(self.conn.groups):
             for ibatch, batch in enumerate(cgrp.batches):
                 sgrp = self.from_discr.groups[batch.from_group_index]
 
-                for ibasis, basis_fn in enumerate(sgrp.basis()):
+                for ibasis, basis_fn in enumerate(sgrp.basis_obj().functions):
                     basis = actx.from_numpy(
                             basis_fn(batch.result_unit_nodes).flatten())
 
@@ -210,9 +211,10 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
 
         # evaluate at unit_nodes to get the vector on to_discr
         result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
-        for igrp, grp in enumerate(self.to_discr.groups):
+        for grp in self.to_discr.groups:
             from modepy import vandermonde
-            vdm = actx.from_numpy(vandermonde(grp.basis(), grp.unit_nodes))
+            vdm = actx.from_numpy(vandermonde(grp.basis_obj().functions,
+                                              grp.unit_nodes))
             actx.call_loopy(
                     keval(),
                     result=result[grp.index],

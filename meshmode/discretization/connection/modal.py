@@ -225,10 +225,8 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             # to compute the modal coefficients.
             if isinstance(grp, QuadratureSimplexElementGroup):
 
-                if (
-                    grp._quadrature_rule().exact_to < 2*mgrp.order
-                    and not self._allow_approximate_quad
-                ):
+                if (grp.quadrature_rule().exact_to < 2*mgrp.order
+                        and not self._allow_approximate_quad):
                     raise ValueError("Quadrature rule is not exact, please "
                                      "set `allow_approximate_quad=True`")
 

@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import pytest
 import numpy as np
 
 import meshmode         # noqa: F401
@@ -27,11 +28,11 @@ from meshmode.array_context import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
-from pytools.obj_array import make_obj_array
-
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import PolynomialWarpAndBlendGroupFactory
 from meshmode.dof_array import flatten, unflatten, DOFArray
+
+from pytools.obj_array import make_obj_array
 
 import logging
 logger = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ def test_array_context_np_workalike(actx_factory):
 
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*2, b=(0.5,)*2, n=(8,)*2, order=3)
+            a=(-0.5,)*2, b=(0.5,)*2, nelements_per_axis=(8,)*2, order=3)
 
     discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
 
@@ -54,13 +55,25 @@ def test_array_context_np_workalike(actx_factory):
             ("maximum", 2),
             ("where", 3),
             ("conj", 1),
+            # ("empty_like", 1),    # NOTE: fails np.allclose, obviously
+            ("zeros_like", 1),
+            ("ones_like", 1),
             ]:
         args = [np.random.randn(discr.ndofs) for i in range(n_args)]
         ref_result = getattr(np, sym_name)(*args)
 
+        # {{{ test cl.Arrays
+
+        actx_args = [actx.from_numpy(arg) for arg in args]
+        actx_result = actx.to_numpy(getattr(actx.np, sym_name)(*actx_args))
+
+        assert np.allclose(actx_result, ref_result)
+
+        # }}}
+
         # {{{ test DOFArrays
 
-        actx_args = [unflatten(actx, discr, actx.from_numpy(arg)) for arg in args]
+        actx_args = [unflatten(actx, discr, arg) for arg in actx_args]
 
         actx_result = actx.to_numpy(
                 flatten(getattr(actx.np, sym_name)(*actx_args)))
@@ -71,8 +84,10 @@ def test_array_context_np_workalike(actx_factory):
 
         # {{{ test object arrays of DOFArrays
 
-        obj_array_args = [make_obj_array([arg]) for arg in actx_args]
+        if sym_name in ("empty_like", "zeros_like", "ones_like"):
+            continue
 
+        obj_array_args = [make_obj_array([arg]) for arg in actx_args]
         obj_array_result = actx.to_numpy(
                 flatten(getattr(actx.np, sym_name)(*obj_array_args)[0]))
 
@@ -86,7 +101,7 @@ def test_dof_array_arithmetic_same_as_numpy(actx_factory):
 
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*2, b=(0.5,)*2, n=(3,)*2, order=1)
+            a=(-0.5,)*2, b=(0.5,)*2, nelements_per_axis=(2,)*2, order=1)
 
     discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
 
@@ -230,6 +245,62 @@ def test_dof_array_reductions_same_as_numpy(actx_factory):
 
         assert isinstance(actx_red, Number)
         assert np.allclose(np_red, actx_red)
+
+
+# {{{ test array context einsum
+
+@pytest.mark.parametrize("spec", [
+    "ij->ij",
+    "ij->ji",
+    "ii->i",
+])
+def test_array_context_einsum_array_manipulation(actx_factory, spec):
+    from meshmode.array_context import FirstAxisIsElementsTag
+    actx = actx_factory()
+
+    mat = actx.from_numpy(np.random.randn(10, 10))
+    res = actx.to_numpy(actx.einsum(spec, mat,
+                                    tagged=(FirstAxisIsElementsTag())))
+    ans = np.einsum(spec, actx.to_numpy(mat))
+    assert np.allclose(res, ans)
+
+
+@pytest.mark.parametrize("spec", [
+    "ij,ij->ij",
+    "ij,ji->ij",
+    "ij,kj->ik",
+])
+def test_array_context_einsum_array_matmatprods(actx_factory, spec):
+    from meshmode.array_context import FirstAxisIsElementsTag
+    actx = actx_factory()
+
+    mat_a = actx.from_numpy(np.random.randn(5, 5))
+    mat_b = actx.from_numpy(np.random.randn(5, 5))
+    res = actx.to_numpy(actx.einsum(spec, mat_a, mat_b,
+                                    tagged=(FirstAxisIsElementsTag())))
+    ans = np.einsum(spec, actx.to_numpy(mat_a), actx.to_numpy(mat_b))
+    assert np.allclose(res, ans)
+
+
+@pytest.mark.parametrize("spec", [
+    "im,mj,k->ijk"
+])
+def test_array_context_einsum_array_tripleprod(actx_factory, spec):
+    from meshmode.array_context import FirstAxisIsElementsTag
+    actx = actx_factory()
+
+    mat_a = actx.from_numpy(np.random.randn(7, 5))
+    mat_b = actx.from_numpy(np.random.randn(5, 7))
+    vec = actx.from_numpy(np.random.randn(7))
+    res = actx.to_numpy(actx.einsum(spec, mat_a, mat_b, vec,
+                                    tagged=(FirstAxisIsElementsTag())))
+    ans = np.einsum(spec,
+                    actx.to_numpy(mat_a),
+                    actx.to_numpy(mat_b),
+                    actx.to_numpy(vec))
+    assert np.allclose(res, ans)
+
+# }}}
 
 
 if __name__ == "__main__":

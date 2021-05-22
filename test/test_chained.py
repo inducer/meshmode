@@ -63,7 +63,8 @@ def create_discretization(actx, ndim,
             mesh = generate_torus(10.0, 5.0, order=order,
                     n_minor=nelements, n_major=nelements)
         elif mesh_name == "warp":
-            mesh = generate_warped_rect_mesh(ndim, order=order, n=nelements)
+            mesh = generate_warped_rect_mesh(ndim, order=order,
+                    nelements_side=nelements)
         else:
             raise ValueError(f"unknown mesh name: {mesh_name}")
     else:
@@ -132,7 +133,7 @@ def test_chained_batch_table(actx_factory, ndim, visualize=False):
     conn = chained.connections[0]
     el_table = _build_element_lookup_table(actx, conn)
     for igrp, grp in enumerate(conn.groups):
-        for ibatch, batch in enumerate(grp.batches):
+        for batch in grp.batches:
             ifrom = batch.from_element_indices.get(actx.queue)
             jfrom = el_table[igrp][batch.to_element_indices.get(actx.queue)]
 
@@ -167,7 +168,7 @@ def test_chained_new_group_table(actx_factory, ndim, visualize=False):
             print(k)
             print(v)
 
-            igrp, ibatch, jgrp, jbatch = k
+            igrp, ibatch, _, _ = k
             mgroup, mbatch = v
             from_group_index = connections[0].groups[igrp] \
                     .batches[ibatch].from_group_index

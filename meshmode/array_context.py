@@ -20,17 +20,21 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-
+from typing import Union, Sequence
 from functools import partial
+import operator
 import numpy as np
 import loopy as lp
 from loopy.version import MOST_RECENT_LANGUAGE_VERSION
 from pytools import memoize_method
 from pytools.tag import Tag, UniqueTag
+from abc import ABC, abstractmethod
 
 __doc__ = """
 .. autofunction:: make_loopy_program
 .. autoclass:: IsDOFArray
+.. autoclass:: CommonSubexpressionTag
+.. autoclass:: FirstAxisIsElementsTag
 .. autoclass:: ArrayContext
 .. autoclass:: PyOpenCLArrayContext
 .. autofunction:: pytest_generate_tests_for_pyopencl_array_context
@@ -38,18 +42,24 @@ __doc__ = """
 """
 
 
-def make_loopy_program(domains, statements, kernel_data=["..."],
+_DEFAULT_LOOPY_OPTIONS = lp.Options(
+        no_numpy=True,
+        return_dict=True)
+
+
+def make_loopy_program(domains, statements, kernel_data=None,
         name="mm_actx_kernel"):
     """Return a :class:`loopy.LoopKernel` suitable for use with
     :meth:`ArrayContext.call_loopy`.
     """
+    if kernel_data is None:
+        kernel_data = ["..."]
+
     return lp.make_kernel(
             domains,
             statements,
             kernel_data=kernel_data,
-            options=lp.Options(
-                no_numpy=True,
-                return_dict=True),
+            options=_DEFAULT_LOOPY_OPTIONS,
             default_offset=lp.auto,
             name=name,
             lang_version=MOST_RECENT_LANGUAGE_VERSION)
@@ -70,6 +80,17 @@ class ParameterValue(UniqueTag):
         self.value = value
 
     # }}}
+
+def _loopy_get_default_entrypoint(t_unit):
+    try:
+        # main and "kernel callables" branch
+        return t_unit.default_entrypoint
+    except AttributeError:
+        try:
+            return t_unit.root_kernel
+        except AttributeError:
+            raise TypeError("unable to find default entry point for loopy "
+                    "translation unit")
 
 
 # {{{ ArrayContext
@@ -178,6 +199,30 @@ class _BaseFakeNumpyNamespace:
         else:
             raise AttributeError(name)
 
+    def _new_like(self, ary, alloc_like):
+        # FIXME: DOFArray should not be here (circular dependencies)
+        from meshmode.dof_array import DOFArray
+        from numbers import Number
+
+        if isinstance(ary, DOFArray):
+            return DOFArray(self._array_context, tuple([
+                alloc_like(subary) for subary in ary
+                ]))
+        elif isinstance(ary, np.ndarray) and ary.dtype.char == "O":
+            raise NotImplementedError("operation not implemented for object arrays")
+        elif isinstance(ary, Number):
+            # NOTE: `np.zeros_like(x)` returns `array(x, shape=())`, which
+            # is best implemented by concrete array contexts, if at all
+            raise NotImplementedError("operation not implemented for scalars")
+        else:
+            return alloc_like(ary)
+
+    def empty_like(self, ary):
+        return self._new_like(ary, self._array_context.empty_like)
+
+    def zeros_like(self, ary):
+        return self._new_like(ary, self._array_context.zeros_like)
+
     def conjugate(self, x):
         # NOTE: conjugate distributes over object arrays, but it looks for a
         # `conjugate` ufunc, while some implementations only have the shorter
@@ -193,10 +238,35 @@ class _BaseFakeNumpyLinalgNamespace:
         self._array_context = array_context
 
 
-class ArrayContext:
+# {{{ program metadata
+
+class CommonSubexpressionTag(Tag):
+    """A tag that is applicable to arrays indicating that this same array
+    may be evaluated multiple times, and that the implementation should
+    eliminate those redundant evaluations if possible.
+
+    .. versionadded:: 2021.2
+    """
+
+
+class FirstAxisIsElementsTag(Tag):
+    """A tag that is applicable to array outputs indicating that the
+    first index corresponds to element indices. This suggests that
+    the implementation should set element indices as the outermost
+    loop extent.
+
+    .. versionadded:: 2021.2
+    """
+
+# }}}
+
+
+class ArrayContext(ABC):
     """An interface that allows a
     :class:`~meshmode.discretization.Discretization` to create and interact
     with arrays of degrees of freedom without fully specifying their types.
+
+    .. versionadded:: 2020.2
 
     .. automethod:: empty
     .. automethod:: zeros
@@ -205,6 +275,7 @@ class ArrayContext:
     .. automethod:: from_numpy
     .. automethod:: to_numpy
     .. automethod:: call_loopy
+    .. automethod:: einsum
     .. attribute:: np
 
          Provides access to a namespace that serves as a work-alike to
@@ -221,8 +292,8 @@ class ArrayContext:
 
     .. automethod:: freeze
     .. automethod:: thaw
-
-    .. versionadded:: 2020.2
+    .. automethod:: tag
+    .. automethod:: tag_axis
     """
 
     def __init__(self):
@@ -231,11 +302,13 @@ class ArrayContext:
     def _get_fake_numpy_namespace(self):
         return _BaseFakeNumpyNamespace(self)
 
+    @abstractmethod
     def empty(self, shape, dtype):
-        raise NotImplementedError
+        pass
 
+    @abstractmethod
     def zeros(self, shape, dtype):
-        raise NotImplementedError
+        pass
 
     def empty_like(self, ary):
         return self.empty(shape=ary.shape, dtype=ary.dtype)
@@ -243,21 +316,23 @@ class ArrayContext:
     def zeros_like(self, ary):
         return self.zeros(shape=ary.shape, dtype=ary.dtype)
 
+    @abstractmethod
     def from_numpy(self, array: np.ndarray):
         r"""
         :returns: the :class:`numpy.ndarray` *array* converted to the
             array context's array type. The returned array will be
             :meth:`thaw`\ ed.
         """
-        raise NotImplementedError
+        pass
 
+    @abstractmethod
     def to_numpy(self, array):
         r"""
         :returns: *array*, an array recognized by the context, converted
             to a :class:`numpy.ndarray`. *array* must be
             :meth:`thaw`\ ed.
         """
-        raise NotImplementedError
+        pass
 
     def call_loopy(self, program, **kwargs):
         """Execute the :mod:`loopy` program *program* on the arguments
@@ -270,7 +345,6 @@ class ArrayContext:
         :return: a :class:`dict` of outputs from the program, each an
             array understood by the context.
         """
-        raise NotImplementedError
 
     @memoize_method
     def _get_scalar_func_loopy_program(self, c_name, nargs, naxes):
@@ -307,6 +381,7 @@ class ArrayContext:
 
         return prog
 
+    @abstractmethod
     def freeze(self, array):
         """Return a version of the context-defined array *array* that is
         'frozen', i.e. suitable for long-term storage and reuse. Frozen arrays
@@ -319,8 +394,8 @@ class ArrayContext:
         it is permitted to :meth:`thaw` it in a different one, as long as that
         context understands the array format.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     def thaw(self, array):
         """Take a 'frozen' array and return a new array representing the data in
         *array* that is able to perform arithmetic and other operations, using
@@ -332,7 +407,73 @@ class ArrayContext:
 
         The returned array may not be used with other contexts while thawed.
         """
-        raise NotImplementedError
+
+    @abstractmethod
+    def tag(self, tags: Union[Sequence[Tag], Tag], array):
+        """If the array type used by the array context is capable of capturing
+        metadata, return a version of *array* with the *tags* applied. *array*
+        itself is not modified.
+
+        .. versionadded:: 2021.2
+        """
+
+    @abstractmethod
+    def tag_axis(self, iaxis, tags: Union[Sequence[Tag], Tag], array):
+        """If the array type used by the array context is capable of capturing
+        metadata, return a version of *array* in which axis number *iaxis* has
+        the *tags* applied. *array* itself is not modified.
+
+        .. versionadded:: 2021.2
+        """
+
+    @memoize_method
+    def _get_einsum_prg(self, spec, arg_names, tagged):
+        return lp.make_einsum(
+            spec,
+            arg_names,
+            options=_DEFAULT_LOOPY_OPTIONS,
+            tags=tagged,
+        )
+
+    # This lives here rather than in .np because the interface does not
+    # agree with numpy's all that well. Why can't it, you ask?
+    # Well, optimizing generic einsum for OpenCL/GPU execution
+    # is actually difficult, even in eager mode, and so without added
+    # metadata describing what's happening, transform_loopy_program
+    # has a very difficult (hopeless?) job to do.
+    #
+    # Unfortunately, the existing metadata support (cf. .tag()) cannot
+    # help with eager mode execution [1], because, by definition, when the
+    # result is passed to .tag(), it is already computed.
+    # That's why einsum's interface here needs to be cluttered with
+    # metadata, and that's why it can't live under .np.
+    # [1] https://github.com/inducer/meshmode/issues/177
+    def einsum(self, spec, *args, arg_names=None, tagged=()):
+        """Computes the result of Einstein summation following the
+        convention in :func:`numpy.einsum`.
+
+        :arg spec: a string denoting the subscripts for
+            summation as a comma-separated list of subscript labels.
+            This follows the usual :func:`numpy.einsum` convention.
+            Note that the explicit indicator `->` for the precise output
+            form is required.
+        :arg args: a sequence of array-like operands, whose order matches
+            the subscript labels provided by *spec*.
+        :arg arg_names: an optional iterable of string types denoting
+            the names of the *args*. If *None*, default names will be
+            generated.
+        :arg tagged: an optional sequence of :class:`pytools.tag.Tag`
+            objects specifying the tags to be applied to the operation.
+
+        :return: the output of the einsum :mod:`loopy` program
+        """
+        if arg_names is None:
+            arg_names = tuple("arg%d" % i for i in range(len(args)))
+
+        prg = self._get_einsum_prg(spec, arg_names, tagged)
+        return self.call_loopy(
+            prg, **{arg_names[i]: arg for i, arg in enumerate(args)}
+        )["out"]
 
 # }}}
 
@@ -342,6 +483,25 @@ class ArrayContext:
 class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def _get_fake_numpy_linalg_namespace(self):
         return _PyOpenCLFakeNumpyLinalgNamespace(self._array_context)
+
+    def _bop(self, op, x, y):
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(op, x, y)
+
+    def equal(self, x, y): return self._bop(operator.eq, x, y)  # noqa: E704
+    def not_equal(self, x, y): return self._bop(operator.ne, x, y)  # noqa: E704
+    def greater(self, x, y): return self._bop(operator.gt, x, y)  # noqa: E704
+    def greater_equal(self, x, y): return self._bop(operator.ge, x, y)  # noqa: E704
+    def less(self, x, y): return self._bop(operator.lt, x, y)  # noqa: E704
+    def less_equal(self, x, y): return self._bop(operator.le, x, y)  # noqa: E704
+
+    def ones_like(self, ary):
+        def _ones_like(subary):
+            ones = self._array_context.empty_like(subary)
+            ones.fill(1)
+            return ones
+
+        return self._new_like(ary, _ones_like)
 
     def maximum(self, x, y):
         import pyopencl.array as cl_array
@@ -362,6 +522,8 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
         from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
 
         def where_inner(inner_crit, inner_then, inner_else):
+            if isinstance(inner_crit, bool):
+                return inner_then if inner_crit else inner_else
             return cl_array.if_positive(inner_crit != 0, inner_then, inner_else,
                     queue=self._array_context.queue)
 
@@ -379,6 +541,14 @@ class _PyOpenCLFakeNumpyNamespace(_BaseFakeNumpyNamespace):
     def max(self, a):
         import pyopencl.array as cl_array
         return cl_array.max(a, queue=self._array_context.queue).get()[()]
+
+    def stack(self, arrays, axis=0):
+        import pyopencl.array as cla
+        from meshmode.dof_array import obj_or_dof_array_vectorize_n_args
+        return obj_or_dof_array_vectorize_n_args(
+                lambda *args: cla.stack(arrays=args, axis=axis,  # pylint: disable=no-member  # noqa: E501
+                    queue=self._array_context.queue),
+                *arrays)
 
 
 def _flatten_grp_array(grp_ary):
@@ -403,7 +573,7 @@ class _PyOpenCLFakeNumpyLinalgNamespace(_BaseFakeNumpyLinalgNamespace):
         if ord is None:
             ord = 2
 
-        # Handling DOFArrays here is not beautiful, but it sure does avoid
+        # FIXME: Handling DOFArrays here is not beautiful, but it sure does avoid
         # downstream headaches.
         from meshmode.dof_array import DOFArray
         if isinstance(array, DOFArray):
@@ -503,21 +673,23 @@ class PyOpenCLArrayContext(ArrayContext):
         return cla.zeros(self.queue, shape=shape, dtype=dtype,
                 allocator=self.allocator)
 
-    def from_numpy(self, np_array: np.ndarray):
+    def from_numpy(self, array: np.ndarray):
         import pyopencl.array as cla
-        return cla.to_device(self.queue, np_array, allocator=self.allocator)
+        return cla.to_device(self.queue, array, allocator=self.allocator)
 
     def to_numpy(self, array):
         return array.get(queue=self.queue)
 
-    def call_loopy(self, program, **kwargs):
-        program = self.transform_loopy_program(program)
+    def call_loopy(self, t_unit, **kwargs):
+        t_unit = self.transform_loopy_program(t_unit)
+        default_entrypoint = _loopy_get_default_entrypoint(t_unit)
+        prg_name = default_entrypoint.name
 
-        evt, result = program(self.queue, **kwargs, allocator=self.allocator)
+        evt, result = t_unit(self.queue, **kwargs, allocator=self.allocator)
 
         if self._wait_event_queue_length is not False:
             wait_event_queue = self._kernel_name_to_wait_event_queue.setdefault(
-                    program.name, [])
+                    prg_name, [])
 
             wait_event_queue.append(evt)
             if len(wait_event_queue) > self._wait_event_queue_length:
@@ -535,59 +707,92 @@ class PyOpenCLArrayContext(ArrayContext):
     # }}}
 
     @memoize_method
-    def transform_loopy_program(self, program):
+    def transform_loopy_program(self, t_unit):
         # accommodate loopy with and without kernel callables
-        try:
-            options = program.options
-        except AttributeError:
-            options = program.root_kernel.options
+
+        default_entrypoint = _loopy_get_default_entrypoint(t_unit)
+        options = default_entrypoint.options
         if not (options.return_dict and options.no_numpy):
-            raise ValueError("Loopy program passed to call_loopy must "
+            raise ValueError("Loopy kernel passed to call_loopy must "
                     "have return_dict and no_numpy options set. "
                     "Did you use meshmode.array_context.make_loopy_program "
-                    "to create this program?")
+                    "to create this kernel?")
 
-        import loopy as lp
-        for arg in program.args:
+# Need to fix this since "program" is no longer a variable
+        for arg in t_unit.args:
             if isinstance(arg.tags, ParameterValue):
-                program = lp.fix_parameters(program, **{arg.name: arg.tags.value})
+                t_unit = lp.fix_parameters(t_unit, **{arg.name: arg.tags.value})
 
-        # FIXME: This could be much smarter.
-        # accommodate loopy with and without kernel callables
-        try:
-            all_inames = program.all_inames()
-        except AttributeError:
-            all_inames = program.root_kernel.all_inames()
-
-        inner_iname = None
+        all_inames = default_entrypoint.all_inames()
 
         has_dof_array = False
-        for arg in program.args:
+        for arg in t_unit.args:
             if isinstance(getattr(arg, "tags", None), IsDOFArray):
                 has_dof_array = True
                 break
 
+        # FIXME: This could be much smarter.
+        inner_iname = None
+        # New version
+        """
+        if (len(default_entrypoint.instructions) == 1
+                and isinstance(default_entrypoint.instructions[0], lp.Assignment)
+                and any(isinstance(tag, FirstAxisIsElementsTag)
+                    # FIXME: Firedrake branch lacks kernel tags
+                    for tag in getattr(default_entrypoint, "tags", ()))):
+            stmt, = default_entrypoint.instructions
+
+            out_inames = [v.name for v in stmt.assignee.index_tuple]
+            assert out_inames
+            outer_iname = out_inames[0]
+            if len(out_inames) >= 2:
+                inner_iname = out_inames[1]
+
+        elif "iel" in all_inames:
+            outer_iname = "iel"
+
+            if "idof" in all_inames:
+                inner_iname = "idof"
+        elif "i0" in all_inames:
+            outer_iname = "i0"
+        """
+
+        # My version
         if len(all_inames) == 1:
             outer_iname = all_inames[0]
-        elif program.name == "conn_projection_knl":
+        elif t_unit.name == "conn_projection_knl":
             outer_iname = "iel"
         # Needed for act_special_exp etc.
         elif "i0" in all_inames:
             outer_iname = "i0"
             if "i1" in all_inames:
                 inner_iname = "i1"
+
         elif has_dof_array:
             # Ce n'est pas tout à fait correct. Whether or not an array is a dof
             # array has no bearing on the names of the loop variables. The "special"
             # math operations, for instance, name the variables i0, i1.
             outer_iname = "iel"
             inner_iname = "idof"
+        # End my version
+
         else:
-            raise ValueError("outer_iname not defined in {}.".format(program.name))
+            raise RuntimeError(
+                "Unable to reason what outer_iname and inner_iname "
+                f"needs to be; all_inames is given as: {all_inames}"
+            )
 
         if inner_iname is not None:
-            program = lp.split_iname(program, inner_iname, 16, inner_tag="l.0")
-        return lp.tag_inames(program, {outer_iname: "g.0"})
+            t_unit = lp.split_iname(t_unit, inner_iname, 16, inner_tag="l.0")
+        return lp.tag_inames(t_unit, {outer_iname: "g.0"})
+
+    def tag(self, tags: Union[Sequence[Tag], Tag], array):
+        # Sorry, not capable.
+        return array
+
+    def tag_axis(self, iaxis, tags: Union[Sequence[Tag], Tag], array):
+        # Sorry, not capable.
+        return array
 
 # }}}
 

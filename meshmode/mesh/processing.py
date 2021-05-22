@@ -53,9 +53,10 @@ def find_group_indices(groups, meshwide_elems):
     """
     grps = np.zeros_like(meshwide_elems)
     next_grp_boundary = 0
-    for igrp, grp in enumerate(groups):
+    for grp in groups:
         next_grp_boundary += grp.nelements
         grps += meshwide_elems >= next_grp_boundary
+
     return grps
 
 
@@ -663,7 +664,7 @@ def find_volume_mesh_element_group_orientation(vertices, grp):
     mvs = [MultiVector(vec) for vec in spanning_object_array]
 
     from operator import xor
-    outer_prod = -reduce(xor, mvs)
+    outer_prod = -reduce(xor, mvs)      # pylint: disable=invalid-unary-operand-type
 
     if grp.dim == 1:
         # FIXME: This is a little weird.
@@ -756,9 +757,14 @@ def get_simplex_element_flip_matrix(order, unit_nodes, permutation=None):
     flipped_unit_nodes = barycentric_to_unit(flipped_bary_unit_nodes)
 
     dim = unit_nodes.shape[0]
+    shape = mp.Simplex(dim)
+    space = mp.PN(dim, order)
+    basis = mp.basis_for_space(space, shape)
     flip_matrix = mp.resampling_matrix(
-            mp.simplex_best_available_basis(dim, order),
-            flipped_unit_nodes, unit_nodes)
+        basis.functions,
+        flipped_unit_nodes,
+        unit_nodes
+    )
 
     flip_matrix[np.abs(flip_matrix) < 1e-15] = 0
 

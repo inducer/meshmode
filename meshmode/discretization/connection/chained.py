@@ -111,19 +111,19 @@ def _build_new_group_table(from_conn, to_conn):
     # the `result_unit_nodes` and only adding a new batch if necessary
     grp_to_grp = {}
     batch_info = [[] for i in range(nfrom_groups * nto_groups)]
-    for (igrp, ibatch), (fgrp, fbatch) in _iterbatches(from_conn.groups):
-        for (jgrp, jbatch), (tgrp, tbatch) in _iterbatches(to_conn.groups):
+    for (igrp, ibatch), (_, fbatch) in _iterbatches(from_conn.groups):
+        for (jgrp, jbatch), (_, tbatch) in _iterbatches(to_conn.groups):
             # compute result_unit_nodes
             ffgrp = from_conn.from_discr.groups[fbatch.from_group_index]
             from_matrix = mp.resampling_matrix(
-                    ffgrp.basis(),
+                    ffgrp.basis_obj().functions,
                     fbatch.result_unit_nodes,
                     ffgrp.unit_nodes)
             result_unit_nodes = from_matrix.dot(ffgrp.unit_nodes.T)
 
             tfgrp = to_conn.from_discr.groups[tbatch.from_group_index]
             to_matrix = mp.resampling_matrix(
-                    tfgrp.basis(),
+                    tfgrp.basis_obj().functions,
                     tbatch.result_unit_nodes,
                     tfgrp.unit_nodes)
             result_unit_nodes = to_matrix.dot(result_unit_nodes).T
@@ -196,6 +196,7 @@ def flatten_chained_connection(actx, connection):
         :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`.
     """
     from meshmode.discretization.connection import (
+            IdentityDiscretizationConnection,
             DirectDiscretizationConnection,
             DiscretizationConnectionElementGroup,
             make_same_mesh_connection)
@@ -204,6 +205,7 @@ def flatten_chained_connection(actx, connection):
         return connection
 
     if not connection.connections:
+        assert connection.to_discr is connection.from_discr
         return make_same_mesh_connection(actx, connection.to_discr,
                                          connection.from_discr)
 
@@ -212,6 +214,9 @@ def flatten_chained_connection(actx, connection):
     direct_connections = []
     for conn in connections:
         direct_connections.append(flatten_chained_connection(actx, conn))
+
+    direct_connections = [conn for conn in direct_connections
+            if not isinstance(conn, IdentityDiscretizationConnection)]
 
     # merge all the direct connections
     from_conn = direct_connections[0]

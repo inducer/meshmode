@@ -22,10 +22,9 @@ THE SOFTWARE.
 
 import numpy as np
 
+from pytools import log_process
 import logging
 logger = logging.getLogger(__name__)
-
-from pytools import log_process
 
 
 # {{{ Build interpolation batches for group
@@ -137,12 +136,11 @@ def make_refinement_connection(actx, refiner, coarse_discr, group_factory):
         raise ValueError(
             "coarse_discr does not live on the same mesh given to the refiner")
 
-    from meshmode.discretization import Discretization
-    fine_discr = Discretization(
-        actx,
-        fine_mesh,
-        group_factory,
-        real_dtype=coarse_discr.real_dtype)
+    fine_discr = coarse_discr.copy(
+        actx=actx,
+        mesh=fine_mesh,
+        group_factory=group_factory,
+        )
 
     groups = []
     for group_idx, (coarse_discr_group, fine_discr_group, record) in \

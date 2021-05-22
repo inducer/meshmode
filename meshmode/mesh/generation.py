@@ -20,16 +20,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from typing import Callable, Optional, Union
 
 import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
-from pytools import deprecate_keyword
+from pytools import log_process, deprecate_keyword
+
 import logging
 logger = logging.getLogger(__name__)
 
-from pytools import log_process
 
 __doc__ = """
 
@@ -41,6 +42,7 @@ Curves
 Curve parametrizations
 ^^^^^^^^^^^^^^^^^^^^^^
 
+.. autofunction:: circle
 .. autofunction:: ellipse
 .. autofunction:: cloverleaf
 .. data :: starfish
@@ -49,6 +51,7 @@ Curve parametrizations
 .. autofunction:: qbx_peanut
 .. autofunction:: apple
 .. autoclass:: WobblyCircle
+.. autoclass:: NArmedStarfish
 
 Surfaces
 --------
@@ -75,10 +78,18 @@ Tools for Iterative Refinement
 
 # {{{ test curve parametrizations
 
-def ellipse(aspect_ratio, t):
+def circle(t: np.ndarray):
     """
-    :arg t: the parametrization, runs from [0,1)
-    :return: an array of shape *(2, npoints)*
+    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :return: an array of shape ``(2, t.size)``.
+    """
+    return ellipse(1.0, t)
+
+
+def ellipse(aspect_ratio: float, t: np.ndarray):
+    """
+    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :return: an array of shape ``(2, t.size)``.
     """
 
     ilength = 2*np.pi
@@ -89,10 +100,10 @@ def ellipse(aspect_ratio, t):
         ])
 
 
-def cloverleaf(t):
+def cloverleaf(t: np.ndarray):
     """
-    :arg t: the parametrization, runs from [0,1)
-    :return: an array of shape *(2, npoints)*
+    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :return: an array of shape ``(2, t.size)``.
     """
 
     ilength = 2*np.pi
@@ -107,10 +118,10 @@ def cloverleaf(t):
         ])
 
 
-def drop(t):
+def drop(t: np.ndarray):
     """
-    :arg t: the parametrization, runs from [0,1)
-    :return: an array of shape *(2, npoints)*
+    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :return: an array of shape ``(2, t.size)``.
     """
 
     ilength = np.pi
@@ -124,8 +135,8 @@ def drop(t):
 
 def n_gon(n_corners, t):
     """
-    :arg t: the parametrization, runs from [0,1)
-    :return: an array of shape *(2, npoints)*
+    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :return: an array of shape ``(2, t.size)``.
     """
 
     t = t*n_corners
@@ -150,25 +161,26 @@ def n_gon(n_corners, t):
     return result
 
 
-def qbx_peanut(t):
+def qbx_peanut(t: np.ndarray):
+    """
+    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :return: an array of shape ``(2, t.size)``.
+    """
     ilength = 2*np.pi
     t = t*ilength
 
-    sin = np.sin
-    cos = np.cos
-    pi = np.pi
-
     return np.vstack([
-        0.75*cos(t-0.25*pi)*(1+0.3*sin(2*t)),
-        sin(t-0.25*pi)*(1+0.3*sin(2*t))
+        0.75 * np.cos(t-0.25*np.pi) * (1+0.3*np.sin(2*t)),
+        np.sin(t-0.25*np.pi) * (1+0.3*np.sin(2*t))
         ])
 
 
-def apple(a, t):
+def apple(a: float, t: np.ndarray):
     """
-    :arg a: 0 <= a <= 1/2; roundedness: 0 returns a circle, 1/2 returns a cardioid
-    :arg t: the parametrization, runs from [0,1)
-    :return: an array of shape *(2, npoints)*
+    :param a: roundness parameter in :math:`[0, 1/2]`, where :math:`0` gives
+        a circle and :math:`1/2` gives a cardioid.
+    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :return: an array of shape ``(2, t.size)``.
     """
     ilength = 2*np.pi
     t = t*ilength
@@ -187,22 +199,22 @@ class WobblyCircle:
     .. automethod:: random
     .. automethod:: __call__
     """
-    def __init__(self, coeffs):
+    def __init__(self, coeffs: np.ndarray):
         self.coeffs = coeffs
 
     @staticmethod
-    def random(ncoeffs, seed):
-        rng = np.random.mtrand.RandomState(seed)
-        coeffs = rng.rand(ncoeffs)
+    def random(ncoeffs: int, seed: int):
+        rng = np.random.default_rng(seed)
+        coeffs = rng.random(ncoeffs)
 
         coeffs = 0.95*coeffs/np.sum(np.abs(coeffs))
 
         return WobblyCircle(coeffs)
 
-    def __call__(self, t):
+    def __call__(self, t: np.ndarray):
         """
-        :arg t: the parametrization, runs from [0,1)
-        :return: an array of shape *(2, npoints)*
+        :param t: the parametrization, runs from :math:`[0, 1)`.
+        :return: an array of shape ``(2, t.size)``.
         """
 
         ilength = 2*np.pi
@@ -219,7 +231,11 @@ class WobblyCircle:
 
 
 class NArmedStarfish(WobblyCircle):
-    def __init__(self, n_arms, amplitude):
+    """Inherits from :class:`WobblyCircle`.
+
+    .. automethod:: __call__
+    """
+    def __init__(self, n_arms: int, amplitude: float):
         coeffs = np.zeros(n_arms)
         coeffs[-1] = amplitude
         super().__init__(coeffs)
@@ -232,23 +248,31 @@ starfish = NArmedStarfish(5, 0.25)
 
 # {{{ make_curve_mesh
 
-def make_curve_mesh(curve_f, element_boundaries, order,
-        unit_nodes=None,
-        node_vertex_consistency_tolerance=None,
-        closed=True,
-        return_parametrization_points=False):
+def make_curve_mesh(
+        curve_f: Callable[[np.ndarray], np.ndarray],
+        element_boundaries: np.ndarray, order: int, *,
+        unit_nodes: Optional[np.ndarray] = None,
+        node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
+        closed: bool = True,
+        return_parametrization_points: bool = False):
     """
-    :arg curve_f: A callable representing a parametrization for a curve,
-        accepting a vector of point locations and returning
-        an array of shape *(2, npoints)*.
-    :arg element_boundaries: a vector of element boundary locations in
-        :math:`[0,1]`, in order. 0 must be the first entry, 1 the
-        last one.
-    :arg closed: if *True*, the curve is assumed closed and the first and
+    :param curve_f: parametrization for a curve, accepting a vector of
+        point locations and returning an array of shape ``(2, npoints)``.
+    :param element_boundaries: a vector of element boundary locations in
+        :math:`[0, 1]`, in order. :math:`0` must be the first entry, :math:`1`
+        the last one.
+    :param order: order of the (simplex) elements. If *unit_nodes* is also
+        provided, the orders should match.
+    :param unit_nodes: if given, the unit nodes to use. Must have shape
+        ``(2, nnodes)``.
+    :param node_vertex_consistency_tolerance: passed to the
+        :class:`~meshmode.mesh.Mesh` constructor. If *False*, no checks are
+        performed.
+    :param closed: if *True*, the curve is assumed closed and the first and
         last of the *element_boundaries* must match.
-    :arg unit_nodes: if given, the unit nodes to use. Must have shape
-        ``(dim, nnodes)``.
-    :returns: a :class:`meshmode.mesh.Mesh`, or if *return_parametrization_points*
+    :param return_parametrization_points: if *True*, the parametrization points
+        at which all the nodes in the mesh were evaluated are also returned.
+    :returns: a :class:`~meshmode.mesh.Mesh`, or if *return_parametrization_points*
         is *True*, a tuple ``(mesh, par_points)``, where *par_points* is an array of
         parametrization points.
     """
@@ -309,8 +333,10 @@ def make_curve_mesh(curve_f, element_boundaries, order,
 # {{{ make_group_from_vertices
 
 @deprecate_keyword("group_factory", "group_cls")
-def make_group_from_vertices(vertices, vertex_indices, order,
-        group_cls=None, unit_nodes=None):
+def make_group_from_vertices(
+        vertices: np.ndarray, vertex_indices: np.ndarray, order: int, *,
+        group_cls: Optional[type] = None,
+        unit_nodes: Optional[np.ndarray] = None):
     # shape: (ambient_dim, nelements, nvertices)
     ambient_dim = vertices.shape[0]
     el_vertices = vertices[:, vertex_indices]
@@ -396,7 +422,10 @@ def make_group_from_vertices(vertices, vertex_indices, order,
 
 # {{{ generate_icosahedron
 
-def generate_icosahedron(r, order):
+def generate_icosahedron(
+        r: float, order: int, *,
+        node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
+        unit_nodes: Optional[np.ndarray] = None):
     # https://en.wikipedia.org/w/index.php?title=Icosahedron&oldid=387737307
 
     phi = (1+5**(1/2))/2
@@ -426,11 +455,13 @@ def generate_icosahedron(r, order):
 
     vertex_indices = np.array(tris, dtype=np.int32)
 
-    grp = make_group_from_vertices(vertices, vertex_indices, order)
+    grp = make_group_from_vertices(vertices, vertex_indices, order,
+            unit_nodes=unit_nodes)
 
     from meshmode.mesh import Mesh
     return Mesh(
             vertices, [grp],
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
             is_conforming=True)
 
 # }}}
@@ -438,18 +469,31 @@ def generate_icosahedron(r, order):
 
 # {{{ generate_icosphere
 
-def generate_icosphere(r, order, uniform_refinement_rounds=0):
-    mesh = generate_icosahedron(r, order)
+def generate_icosphere(r: float, order: int, *,
+        uniform_refinement_rounds: int = 0,
+        node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
+        unit_nodes: Optional[np.ndarray] = None):
+    """
+    :param r: radius of the sphere.
+    :param order: order of the (simplex) elements. If *unit_nodes* is also
+        provided, the orders should match.
+    :param uniform_refinement_rounds: number of uniform refinement rounds to
+        perform after the initial mesh was created.
+    :param node_vertex_consistency_tolerance: passed to the
+        :class:`~meshmode.mesh.Mesh` constructor. If *False*, no checks are
+        performed.
+    :param unit_nodes: if given, the unit nodes to use. Must have shape
+        ``(3, nnodes)``.
+    """
+    mesh = generate_icosahedron(r, order,
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+            unit_nodes=unit_nodes)
 
     if uniform_refinement_rounds:
-        # These come out conforming, so we're OK to use the faster refiner.
-        from meshmode.mesh.refinement import RefinerWithoutAdjacency
-        refiner = RefinerWithoutAdjacency(mesh)
-        for i in range(uniform_refinement_rounds):
-            refiner.refine_uniformly()
+        from meshmode.mesh.refinement import refine_uniformly
+        mesh = refine_uniformly(mesh, uniform_refinement_rounds)
 
-        mesh = refiner.get_current_mesh()
-
+    # ensure vertices and nodes are still on the sphere of radius r
     vertices = mesh.vertices * r / np.sqrt(np.sum(mesh.vertices**2, axis=0))
     grp, = mesh.groups
     grp = grp.copy(
@@ -458,6 +502,7 @@ def generate_icosphere(r, order, uniform_refinement_rounds=0):
     from meshmode.mesh import Mesh
     return Mesh(
             vertices, [grp],
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
             is_conforming=True)
 
 # }}}
@@ -465,8 +510,11 @@ def generate_icosphere(r, order, uniform_refinement_rounds=0):
 
 # {{{ generate_torus_and_cycle_vertices
 
-def generate_torus_and_cycle_vertices(r_major, r_minor,
-        n_major=20, n_minor=10, order=1):
+def generate_torus_and_cycle_vertices(
+        r_major: float, r_minor: float,
+        n_major: int = 20, n_minor: int = 10, order: int = 1,
+        node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
+        unit_nodes: Optional[np.ndarray] = None):
     a = r_major
     b = r_minor
     u, v = np.mgrid[0:2*np.pi:2*np.pi/n_major, 0:2*np.pi:2*np.pi/n_minor]
@@ -486,7 +534,8 @@ def generate_torus_and_cycle_vertices(r_major, r_minor,
             for i in range(n_major) for j in range(n_minor)])
 
     vertex_indices = np.array(vertex_indices, dtype=np.int32)
-    grp = make_group_from_vertices(vertices, vertex_indices, order)
+    grp = make_group_from_vertices(vertices, vertex_indices, order,
+            unit_nodes=unit_nodes)
 
     # ambient_dim, nelements, nunit_nodes
     nodes = grp.nodes.copy()
@@ -523,6 +572,7 @@ def generate_torus_and_cycle_vertices(r_major, r_minor,
     return (
             Mesh(
                 vertices, [grp.copy(nodes=nodes)],
+                node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
                 is_conforming=True),
             [idx(i, 0) for i in range(n_major)],
             [idx(0, j) for j in range(n_minor)])
@@ -530,7 +580,11 @@ def generate_torus_and_cycle_vertices(r_major, r_minor,
 # }}}
 
 
-def generate_torus(r_major, r_minor, n_major=20, n_minor=10, order=1):
+def generate_torus(
+        r_major: float, r_minor: float,
+        n_major: int = 20, n_minor: int = 10, order: int = 1,
+        node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
+        unit_nodes: Optional[np.ndarray] = None):
     r"""Generate a torus.
 
     .. figure:: images/torus.png
@@ -555,24 +609,41 @@ def generate_torus(r_major, r_minor, n_major=20, n_minor=10, order=1):
     :math:`n_\text{major} \times n_\text{minor}` contiguous rectangles, and then
     each rectangle is subdivided into two triangles.
 
-    :arg r_major: radius of the major circle
-    :arg r_minor: radius of the minor circle
-    :arg n_major: number of rectangles along major circle
-    :arg n_minor: number of rectangles along minor circle
-    :arg order: element order
-    :returns: a :class:`meshmode.mesh.Mesh` of a torus
+    :param r_major: radius of the major circle.
+    :param r_minor: radius of the minor circle.
+    :param n_major: number of rectangles along major circle.
+    :param n_minor: number of rectangles along minor circle.
+    :param order: order of the (simplex) elements. If *unit_nodes* is also
+        provided, the orders should match.
+    :param node_vertex_consistency_tolerance: passed to the
+        :class:`~meshmode.mesh.Mesh` constructor. If *False*, no checks are
+        performed.
+    :param unit_nodes: if given, the unit nodes to use. Must have shape
+        ``(3, nnodes)``.
+    :returns: a :class:`~meshmode.mesh.Mesh` of a torus.
 
     """
-    mesh, a_cycle, b_cycle = generate_torus_and_cycle_vertices(
-            r_major, r_minor, n_major, n_minor, order)
+    mesh, _, _ = generate_torus_and_cycle_vertices(
+            r_major, r_minor, n_major, n_minor, order,
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+            unit_nodes=unit_nodes)
+
     return mesh
 
 
 # {{{ get_urchin
 
-def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
-        min_rad=0.2, uniform_refinement_rounds=0):
+def refine_mesh_and_get_urchin_warper(
+        order: int, m: int, n: int, est_rel_interp_tolerance: float,
+        min_rad: float = 0.2,
+        uniform_refinement_rounds: int = 0):
     """
+    :param order: order of the (simplex) elements.
+    :param m: order of the spherical harmonic :math:`Y^m_n`.
+    :param n: order of the spherical harmonic :math:`Y^m_n`.
+    :param est_rel_interp_tolerance: a tolerance for the relative
+        interpolation error estimates on the warped version of the mesh.
+
     :returns: a tuple ``(refiner, warp_mesh)``, where *refiner* is
         a :class:`~meshmode.mesh.refinement.Refiner` (from which the unwarped mesh
         may be obtained), and whose
@@ -580,10 +651,7 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
         returns a locally-refined :class:`~meshmode.mesh.Mesh` of a sphere and
         *warp_mesh* is a callable taking and returning a mesh that warps the
         unwarped mesh into a smooth shape covered by a spherical harmonic of
-        order *(m, n)*.
-    :arg order: the polynomial order of the returned mesh
-    :arg est_rel_interp_tolerance: a tolerance for the relative
-        interpolation error estimates on the warped version of the mesh.
+        order :math:`(m, n)`.
 
     .. versionadded: 2018.1
     """
@@ -603,7 +671,7 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
         # Numpy takes arguments in the order (theta, phi)
         # *and* swaps their meanings, so passing the
         # arguments swapped maintains the intended meaning.
-        return sps.sph_harm(m, n, phi, theta)
+        return sps.sph_harm(m, n, phi, theta)       # pylint: disable=no-member
 
     def map_coords(pts):
         r = np.sqrt(np.sum(pts**2, axis=0))
@@ -631,7 +699,7 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
 
     # These come out conformal, so we're OK to use the faster refiner.
     refiner = RefinerWithoutAdjacency(unwarped_mesh)
-    for i in range(uniform_refinement_rounds):
+    for _ in range(uniform_refinement_rounds):
         refiner.refine_uniformly()
 
     nodes_sph = sph_harm(m, n, unwarped_mesh.groups[0].nodes).real
@@ -650,18 +718,29 @@ def refine_mesh_and_get_urchin_warper(order, m, n, est_rel_interp_tolerance,
             node_vertex_consistency_tolerance=est_rel_interp_tolerance)
 
 
-def generate_urchin(order, m, n, est_rel_interp_tolerance, min_rad=0.2):
+def generate_urchin(
+        order: int, m: int, n: int,
+        est_rel_interp_tolerance: float,
+        min_rad: float = 0.2):
     """
-    :returns: a refined :class:`~meshmode.mesh.Mesh` of a smooth shape covered
-        by a spherical harmonic of order *(m, n)*.
-    :arg order: the polynomial order of the returned mesh
-    :arg est_rel_interp_tolerance: a tolerance for the relative
+    :param order: order of the (simplex) elements. If *unit_nodes* is also
+        provided, the orders should match.
+    :param m: order of the spherical harmonic :math:`Y^m_n`.
+    :param n: order of the spherical harmonic :math:`Y^m_n`.
+    :param est_rel_interp_tolerance: a tolerance for the relative
         interpolation error estimates on the warped version of the mesh.
+
+    :returns: a refined :class:`~meshmode.mesh.Mesh` of a smooth shape covered
+        by a spherical harmonic of order :math:`(m, n)`.
 
     .. versionadded: 2018.1
     """
     refiner, warper = refine_mesh_and_get_urchin_warper(
-            order, m, n, est_rel_interp_tolerance, min_rad)
+            order, m, n, est_rel_interp_tolerance,
+            min_rad=min_rad,
+            uniform_refinement_rounds=0,
+            )
+
     return warper(refiner.get_current_mesh())
 
 # }}}
@@ -786,13 +865,13 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
             midpoints = np.empty((dim,)+shape_m1, dtype=coord_dtype)
             for idim in range(dim):
-                vshape = (shape_m1[idim],) + (1,)*idim
+                vshape = (shape_m1[idim],) + (1,)*(1-idim)
                 left_axis_coords = axis_coords[idim][:-1]
                 right_axis_coords = axis_coords[idim][1:]
                 midpoints[idim] = (
                         0.5*(left_axis_coords+right_axis_coords)).reshape(*vshape)
 
-            midpoints = midpoints.reshape(dim, -1)
+            midpoints = midpoints.reshape((dim, -1), order="F")
             vertices = np.concatenate((vertices, midpoints), axis=1)
 
         elif mesh_type is None:
@@ -880,7 +959,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
                 vertex_indices[itup]: itup
                 for itup in np.ndindex(shape)}
 
-    for tag_idx, tag in enumerate(boundary_tags):
+    for tag in boundary_tags:
         # Need to map the correct face vertices to the boundary tags
         for face in boundary_tag_to_face[tag]:
             if len(face) != 2:
@@ -890,8 +969,9 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
             side, axis = face
             try:
                 axis = axes.index(axis)
-            except ValueError:
-                raise ValueError("unrecognized axis in face identifier '%s'" % face)
+            except ValueError as exc:
+                raise ValueError(
+                        f"unrecognized axis in face identifier '{face}'") from exc
             if axis >= dim:
                 raise ValueError("axis in face identifier '%s' does not exist in %dD"
                         % (face, dim))
@@ -942,29 +1022,59 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 # {{{ generate_regular_rect_mesh
 
 @deprecate_keyword("group_factory", "group_cls")
-def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
-                               coord_dtype=np.float64,
+def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
+                               npoints_per_axis=None,
+                               order=1,
                                boundary_tag_to_face=None,
                                group_cls=None,
                                mesh_type=None,
+                               n=None,
                                ):
     """Create a semi-structured rectangular mesh with equispaced elements.
 
-    :param a: the lower left hand point of the rectangle
-    :param b: the upper right hand point of the rectangle
-    :param n: a tuple of integers indicating the total number of points
-      on [a,b].
+    :param a: the lower left hand point of the rectangle.
+    :param b: the upper right hand point of the rectangle.
+    :param nelements_per_axis: an optional tuple of integers indicating the
+        number of elements along each axis.
+    :param npoints_per_axis: an optional tuple of integers indicating the
+        number of points along each axis.
+    :param order: the mesh element order.
     :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
         See :func:`generate_box_mesh`.
     :param group_cls: see :func:`generate_box_mesh`.
     :param mesh_type: see :func:`generate_box_mesh`.
-    :param coord_dtype: see :func: `generate_box_mesh`.
+
+    .. note::
+
+        Specify only one of *nelements_per_axis* and *npoints_per_axis*.
     """
-    if min(n) < 2:
+    if n is not None:
+        from warnings import warn
+        warn("n parameter to generate_regular_rect_mesh is deprecated. Use "
+                "nelements_per_axis or npoints_per_axis instead. "
+                "n will disappear in 2022.",
+                DeprecationWarning, stacklevel=2)
+        if nelements_per_axis is not None:
+            raise TypeError("cannot specify both nelements_per_axis and n")
+        if npoints_per_axis is not None:
+            raise TypeError("cannot specify both npoints_per_axis and n")
+        npoints_per_axis = n
+    else:
+        if npoints_per_axis is not None:
+            if nelements_per_axis is not None:
+                raise TypeError("cannot specify both nelements_per_axis and "
+                    "npoints_per_axis")
+        elif nelements_per_axis is not None:
+            npoints_per_axis = tuple(nel_i+1 for nel_i in nelements_per_axis)
+        else:
+            raise TypeError("Must specify nelements_per_axis or "
+                "npoints_per_axis")
+
+    if min(npoints_per_axis) < 2:
         raise ValueError("need at least two points in each direction")
 
-    axis_coords = [np.linspace(a_i, b_i, n_i)
-            for a_i, b_i, n_i in zip(a, b, n)]
+    axis_coords = [np.linspace(a_i, b_i, npoints_i)
+            for a_i, b_i, npoints_i in zip(a, b, npoints_per_axis)]
 
     return generate_box_mesh(axis_coords, order=order, coord_dtype=coord_dtype,
                              boundary_tag_to_face=boundary_tag_to_face,
@@ -976,15 +1086,36 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), n=(5, 5), order=1,
 
 # {{{ generate_warped_rect_mesh
 
-def generate_warped_rect_mesh(dim, order, n, *, group_cls=None):
-    """Generate a mesh of a warped line/square/cube. Mainly useful for testing
+def generate_warped_rect_mesh(dim, order, *, nelements_side=None,
+        npoints_side=None, group_cls=None, n=None):
+    """Generate a mesh of a warped square/cube. Mainly useful for testing
     functionality with curvilinear meshes.
     """
+    if n is not None:
+        from warnings import warn
+        warn("n parameter to generate_warped_rect_mesh is deprecated. Use "
+                "nelements_side or npoints_side instead. n will disappear "
+                "in 2022.", DeprecationWarning, stacklevel=2)
+        if nelements_side is not None:
+            raise TypeError("cannot specify both nelements_side and n")
+        if npoints_side is not None:
+            raise TypeError("cannot specify both npoints_side and n")
+        npoints_side = n
+    else:
+        if npoints_side is not None:
+            if nelements_side is not None:
+                raise TypeError("cannot specify both nelements_side and "
+                    "npoints_side")
+        elif nelements_side is not None:
+            npoints_side = nelements_side + 1
 
-    assert dim in [1, 2, 3]
+    assert dim in [2, 3]
+
+    npoints_per_axis = (npoints_side,)*dim if npoints_side is not None else None
+
     mesh = generate_regular_rect_mesh(
             a=(-0.5,)*dim, b=(0.5,)*dim,
-            n=(n,)*dim, order=order, group_cls=group_cls)
+            npoints_per_axis=npoints_per_axis, order=order, group_cls=group_cls)
 
     def m(x):
         result = np.empty_like(x)
@@ -1050,7 +1181,7 @@ def warp_and_refine_until_resolved(
                                          "(NaN or Inf)")
 
         for egrp in warped_mesh.groups:
-            dim, nunit_nodes = egrp.unit_nodes.shape
+            dim, _ = egrp.unit_nodes.shape
 
             interp_err_est_mat = simplex_interp_error_coefficient_estimator_matrix(
                     egrp.unit_nodes, egrp.order,

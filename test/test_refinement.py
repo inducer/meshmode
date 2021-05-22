@@ -36,6 +36,7 @@ from meshmode.mesh.generation import (  # noqa: F401
         generate_icosahedron, generate_box_mesh, make_curve_mesh, ellipse)
 from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
 from meshmode.mesh.refinement import Refiner, RefinerWithoutAdjacency
+import meshmode.mesh.generation as mgen
 
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
@@ -224,9 +225,11 @@ def test_refinement_connection(
             mesh = get_blob_mesh(mesh_par, mesh_order)
             h = float(mesh_par)
         elif mesh_name == "warp":
-            from meshmode.mesh.generation import generate_warped_rect_mesh
-            mesh = generate_warped_rect_mesh(dim, order=mesh_order, n=mesh_par,
-                    group_cls=group_cls)
+            # FIXME: Leftover from n -> nelements_per_axis/npoints_per_axis change;
+            # should be nelements_per_axis, but if changed EOC order dips below
+            # threshold and test fails. Likely just need to tweak mesh sizes.
+            mesh = mgen.generate_warped_rect_mesh(dim, order=mesh_order,
+                    npoints_side=mesh_par, group_cls=group_cls)
             h = 1/mesh_par
         else:
             raise ValueError("mesh_name not recognized")
@@ -269,10 +272,13 @@ def test_refinement_connection(
 
         if visualize == "dots":
             import matplotlib.pyplot as plt
+            import matplotlib.cm as cm
+
             x = x.get(actx.queue)
             err = np.array(np.log10(
                 1e-16 + np.abs((f_interp - f_true).get(actx.queue))), dtype=float)
-            import matplotlib.cm as cm
+
+            # pylint: disable=no-member
             cmap = cm.ScalarMappable(cmap=cm.jet)
             cmap.set_array(err)
             plt.scatter(x[0], x[1], c=cmap.to_rgba(err), s=20, cmap=cmap)
@@ -321,14 +327,37 @@ def test_uniform_refinement(group_cls, with_adjacency):
 
 @pytest.mark.parametrize("refinement_rounds", [0, 1, 2])
 def test_conformity_of_uniform_mesh(refinement_rounds):
-    from meshmode.mesh.generation import generate_icosphere
-    mesh = generate_icosphere(r=1.0, order=4,
+    mesh = mgen.generate_icosphere(r=1.0, order=4,
             uniform_refinement_rounds=refinement_rounds)
 
     assert mesh.is_conforming
 
     from meshmode.mesh import is_boundary_tag_empty, BTAG_ALL
     assert is_boundary_tag_empty(mesh, BTAG_ALL)
+
+
+@pytest.mark.parametrize("mesh_name", ["torus", "icosphere"])
+def test_refine_surfaces(actx_factory, mesh_name, visualize=False):
+    if mesh_name == "torus":
+        mesh = mgen.generate_torus(10, 1, 40, 4, order=4)
+    elif mesh_name == "icosphere":
+        mesh = mgen.generate_icosphere(1, order=4)
+    else:
+        raise ValueError(f"invalid mesh name '{mesh_name}'")
+
+    if visualize:
+        actx = actx_factory()
+        from meshmode.mesh.visualization import vtk_visualize_mesh
+        vtk_visualize_mesh(actx, mesh, "surface.vtu")
+
+    # check for absence of node-vertex consistency error
+    from meshmode.mesh.refinement import refine_uniformly
+    refined_mesh = refine_uniformly(mesh, 1)
+
+    if visualize:
+        actx = actx_factory()
+        from meshmode.mesh.visualization import vtk_visualize_mesh
+        vtk_visualize_mesh(actx, refined_mesh, "surface-refined.vtu")
 
 
 if __name__ == "__main__":

@@ -118,6 +118,8 @@ class DiscretizationConnection:
     *   restricition to the boundary
     *   interpolation to a refined/coarsened mesh
     *   interpolation onto opposing faces
+    *   computing modal data from nodal coefficients
+    *   computing nodal coefficients from modal data
 
     .. attribute:: from_discr
 
@@ -145,7 +147,22 @@ class DiscretizationConnection:
         self.is_surjective = is_surjective
 
     def __call__(self, ary):
+        """Apply the connection. If applicable, may return a view of the data
+        instead of a copy, i.e. changes to *ary* may or may not appear
+        in the result returned by this method, and vice versa.
+        """
         raise NotImplementedError()
+
+
+class IdentityDiscretizationConnection(DiscretizationConnection):
+    """A no-op connection from a :class:`~meshmode.discretization.Discretization`
+    to the same discretization that returns the same data unmodified.
+    """
+    def __init__(self, discr):
+        super().__init__(discr, discr, True)
+
+    def __call__(self, ary):
+        return ary
 
 
 class DirectDiscretizationConnection(DiscretizationConnection):
@@ -192,7 +209,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             result = np.eye(nfrom_unit_nodes)
 
         else:
-            if len(from_grp.basis()) != nfrom_unit_nodes:
+            from_grp_basis_fcts = from_grp.basis_obj().functions
+            if len(from_grp_basis_fcts) != nfrom_unit_nodes:
                 from meshmode.discretization import NoninterpolatoryElementGroupError
                 raise NoninterpolatoryElementGroupError(
                         "%s does not support interpolation because it is not "
@@ -201,7 +219,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         "the ability to interpolate." % type(from_grp).__name__)
 
             result = mp.resampling_matrix(
-                    from_grp.basis(),
+                    from_grp_basis_fcts,
                     ibatch.result_unit_nodes, from_grp.unit_nodes)
 
         return actx.freeze(actx.from_numpy(result))
@@ -319,8 +337,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         else:
             result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
 
-        for i_tgrp, (tgrp, cgrp) in enumerate(
-                zip(self.to_discr.groups, self.groups)):
+        for i_tgrp, cgrp in enumerate(self.groups):
             for i_batch, batch in enumerate(cgrp.batches):
                 if not len(batch.from_element_indices):
                     continue

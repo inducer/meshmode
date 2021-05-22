@@ -20,14 +20,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import operator
+import operator as op
 import numpy as np
 from typing import Optional, Iterable, Any, Tuple, Union
-from functools import partial
 from loopy import GlobalArg, auto
+from functools import partial, update_wrapper
 from numbers import Number
-import operator as op
-import decorator
 import threading
 from contextlib import contextmanager
 
@@ -362,23 +360,23 @@ class DOFArray:
 
     # {{{ comparison
 
-    def __eq__(self, arg): return self._bop(op.eq, self, arg)  # noqa: E704
-    def __ne__(self, arg): return self._bop(op.ne, self, arg)  # noqa: E704
-    def __lt__(self, arg): return self._bop(op.lt, self, arg)  # noqa: E704
-    def __gt__(self, arg): return self._bop(op.gt, self, arg)  # noqa: E704
-    def __le__(self, arg): return self._bop(op.le, self, arg)  # noqa: E704
-    def __ge__(self, arg): return self._bop(op.ge, self, arg)  # noqa: E704
+    def __eq__(self, arg): return self._bop(self.array_context.np.equal, self, arg)  # noqa: E704,E501
+    def __ne__(self, arg): return self._bop(self.array_context.np.not_equal, self, arg)  # noqa: E704,E501
+    def __lt__(self, arg): return self._bop(self.array_context.np.less, self, arg)  # noqa: E704,E501
+    def __gt__(self, arg): return self._bop(self.array_context.np.greater, self, arg)  # noqa: E704,E501
+    def __le__(self, arg): return self._bop(self.array_context.np.less_equal, self, arg)  # noqa: E704,E501
+    def __ge__(self, arg): return self._bop(self.array_context.np.greater_equal, self, arg)  # noqa: E704,E501
 
     # }}}
 
     # {{{ logical
 
-    def __and__(self, arg): return self._bop(operator.and_, self, arg)  # noqa: E704
-    def __xor__(self, arg): return self._bop(operator.xor, self, arg)  # noqa: E704
-    def __or__(self, arg): return self._bop(operator.or_, self, arg)  # noqa: E704
-    def __rand__(self, arg): return self._bop(operator.and_, arg, self)  # noqa: E704
-    def __rxor__(self, arg): return self._bop(operator.xor, arg, self)  # noqa: E704
-    def __ror__(self, arg): return self._bop(operator.or_, arg, self)  # noqa: E704
+    def __and__(self, arg): return self._bop(op.and_, self, arg)  # noqa: E704
+    def __xor__(self, arg): return self._bop(op.xor, self, arg)  # noqa: E704
+    def __or__(self, arg): return self._bop(op.or_, self, arg)  # noqa: E704
+    def __rand__(self, arg): return self._bop(op.and_, arg, self)  # noqa: E704
+    def __rxor__(self, arg): return self._bop(op.xor, arg, self)  # noqa: E704
+    def __ror__(self, arg): return self._bop(op.or_, arg, self)  # noqa: E704
 
     def __iand__(self, arg): return self._ibop(op.iand, arg)        # noqa: E704
     def __ixor__(self, arg): return self._ibop(op.ixor, arg)        # noqa: E704
@@ -441,7 +439,10 @@ def obj_or_dof_array_vectorize(f, ary):
         return f(ary)
 
 
-obj_or_dof_array_vectorized = decorator.decorator(obj_or_dof_array_vectorize)
+def obj_or_dof_array_vectorized(f):
+    wrapper = partial(obj_or_dof_array_vectorize, f)
+    update_wrapper(wrapper, f)
+    return wrapper
 
 
 def obj_or_dof_array_vectorize_n_args(f, *args):
@@ -482,8 +483,28 @@ def obj_or_dof_array_vectorize_n_args(f, *args):
     return DOFArray(template_ary.array_context, tuple(result))
 
 
-obj_or_dof_array_vectorized_n_args = decorator.decorator(
-        obj_or_dof_array_vectorize_n_args)
+def obj_or_dof_array_vectorized_n_args(f):
+    # See also obj_array_vectorized_n_args fixes in
+    # https://github.com/inducer/pytools/pull/76
+    #
+    # Unfortunately, this can't use partial(), as the callable returned by it
+    # will not be turned into a bound method upon attribute access.
+    # This may happen here, because the decorator *could* be used
+    # on methods, since it can "look past" the leading `self` argument.
+    # Only exactly function objects receive this treatment.
+    #
+    # Spec link:
+    # https://docs.python.org/3/reference/datamodel.html#the-standard-type-hierarchy
+    # (under "Instance Methods", quote as of Py3.9.4)
+    # > Also notice that this transformation only happens for user-defined functions;
+    # > other callable objects (and all non-callable objects) are retrieved
+    # > without transformation.
+
+    def wrapper(*args):
+        return obj_or_dof_array_vectorize_n_args(f, *args)
+
+    update_wrapper(wrapper, f)
+    return wrapper
 
 # }}}
 

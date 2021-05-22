@@ -58,7 +58,6 @@ Predefined Boundary tags
 
 class BTAG_NONE:  # noqa: N801
     """A boundary tag representing an empty boundary or volume."""
-    pass
 
 
 class BTAG_ALL:  # noqa: N801
@@ -72,7 +71,6 @@ class BTAG_ALL:  # noqa: N801
     Instead, these boundaries will be tagged with
     :class:`BTAG_INDUCED_BOUNDARY`.
     """
-    pass
 
 
 class BTAG_REALLY_ALL:  # noqa: N801
@@ -86,7 +84,6 @@ class BTAG_REALLY_ALL:  # noqa: N801
     everything tagged with
     :class:`BTAG_INDUCED_BOUNDARY`
     """
-    pass
 
 
 class BTAG_NO_BOUNDARY:  # noqa: N801
@@ -94,7 +91,6 @@ class BTAG_NO_BOUNDARY:  # noqa: N801
     :class:`BTAG_ALL`. Among other things, this is used to keep rank boundaries
     out of :class:`BTAG_ALL`.
     """
-    pass
 
 
 class BTAG_PARTITION:  # noqa: N801
@@ -136,8 +132,6 @@ class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801
     # Don't be tempted to add a sphinx ref to the Firedrake stuff here.
     # This is unavailable in the Github doc build because
     # firedrakeproject.org seems to reject connections from Github.
-
-    pass
 
 
 SYSTEM_TAGS = {BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
@@ -313,11 +307,11 @@ class _ModepyElementGroup(MeshElementGroup):
         """
 
         if unit_nodes is not None:
-            _dim = unit_nodes.shape[0]
-            if dim is not None and _dim != dim:
+            if dim is None:
+                dim = unit_nodes.shape[0]
+
+            if unit_nodes.shape[0] != dim:
                 raise ValueError("'dim' does not match 'unit_nodes' dimension")
-            else:
-                dim = _dim
         else:
             if dim is None:
                 raise TypeError("'dim' must be passed if 'unit_nodes' is not passed")
@@ -410,8 +404,7 @@ class NodalAdjacency(Record):
     def __eq__(self, other):
         return (
                 type(self) == type(other)
-                and np.array_equal(self.neighbors_starts,
-                    other.neighbors_starts)
+                and np.array_equal(self.neighbors_starts, other.neighbors_starts)
                 and np.array_equal(self.neighbors, other.neighbors))
 
     def __ne__(self, other):
@@ -662,13 +655,14 @@ class Mesh(Record):
         *False* if it is known that some element interfaces are non-conforming.
         *None* if neither of the two is known.
 
+    .. automethod:: copy
     .. automethod:: __eq__
     .. automethod:: __ne__
     """
 
     face_id_dtype = np.int8
 
-    def __init__(self, vertices, groups, skip_tests=False,
+    def __init__(self, vertices, groups, *, skip_tests=False,
             node_vertex_consistency_tolerance=None,
             skip_element_orientation_test=False,
             nodal_adjacency=None,
@@ -678,8 +672,6 @@ class Mesh(Record):
             element_id_dtype=np.int32,
             is_conforming=None):
         """
-        The following are keyword-only:
-
         :arg skip_tests: Skip mesh tests, in case you want to load a broken
             mesh anyhow and then fix it inside of this data structure.
         :arg node_vertex_consistency_tolerance: If *False*, do not check
@@ -865,6 +857,8 @@ class Mesh(Record):
     @property
     def nodal_adjacency(self):
         from meshmode import DataUnavailable
+
+        # pylint: disable=access-member-before-definition
         if self._nodal_adjacency is False:
             raise DataUnavailable("nodal_adjacency")
 
@@ -887,6 +881,8 @@ class Mesh(Record):
     @property
     def facial_adjacency_groups(self):
         from meshmode import DataUnavailable
+
+        # pylint: disable=access-member-before-definition
         if self._facial_adjacency_groups is False:
             raise DataUnavailable("facial_adjacency_groups")
 
@@ -1084,7 +1080,7 @@ class _FlatFacialAdjacencyData:
     def __init__(self, nfaces, element_id_dtype, face_id_dtype):
         self.elements = np.empty(nfaces, dtype=element_id_dtype)
         self.element_faces = np.empty(nfaces, dtype=face_id_dtype)
-        self.neighbor_groups = np.empty(nfaces, dtype=np.int)
+        self.neighbor_groups = np.empty(nfaces, dtype=np.int64)
         self.neighbors = np.empty(nfaces, dtype=element_id_dtype)
         self.neighbor_faces = np.empty(nfaces, dtype=face_id_dtype)
 
@@ -1110,7 +1106,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
     face_nr_bases = np.empty((len(groups), max_faces), dtype=element_id_dtype)
     face_nr_bases[:] = -1
     for igrp, grp in enumerate(groups):
-        for fid, ref_fvi in enumerate(grp.face_vertex_indices()):
+        for fid in range(len(grp.face_vertex_indices())):
             face_nr_bases[igrp, fid] = n_total_faces
             n_total_faces += grp.nelements
 
@@ -1290,7 +1286,7 @@ def as_python(mesh, function_name="make_mesh"):
         if mesh._facial_adjacency_groups:
             cg("facial_adjacency_groups = []")
 
-            for igrp, fagrp_map in enumerate(mesh.facial_adjacency_groups):
+            for fagrp_map in mesh.facial_adjacency_groups:
                 cg("facial_adjacency_groups.append({%s})" % ",\n    ".join(
                     "{!r}: FacialAdjacencyGroup({})".format(
                         inb_grp, fagrp_params_str(fagrp))
@@ -1357,7 +1353,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
     :arg true_boundary_only: only verify for faces tagged with :class:`BTAG_ALL`.
     """
 
-    for igrp, fagrp_map in enumerate(mesh.facial_adjacency_groups):
+    for fagrp_map in mesh.facial_adjacency_groups:
         bdry_grp = fagrp_map.get(None)
         if bdry_grp is None:
             continue
