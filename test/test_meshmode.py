@@ -40,7 +40,7 @@ from meshmode.discretization.poly_element import (
         LegendreGaussLobattoTensorProductGroupFactory
         )
 from meshmode.mesh import Mesh, BTAG_ALL
-from meshmode.dof_array import flatten, flat_norm
+from meshmode.dof_array import flatten_to_numpy, flat_norm
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -163,9 +163,9 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
                     make_direct_full_resample_matrix
             mat = actx.to_numpy(
                     make_direct_full_resample_matrix(actx, bdry_connection))
-            bdry_f_2_by_mat = mat.dot(actx.to_numpy(flatten(vol_f)))
+            bdry_f_2_by_mat = mat.dot(flatten_to_numpy(actx, vol_f))
 
-            mat_error = la.norm(actx.to_numpy(flatten(bdry_f_2)) - bdry_f_2_by_mat)
+            mat_error = la.norm(flatten_to_numpy(actx, bdry_f_2) - bdry_f_2_by_mat)
             assert mat_error < 1e-14, mat_error
 
         err = flat_norm(bdry_f-bdry_f_2, np.inf)
@@ -444,8 +444,8 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
         normal_outward_expr = (
                 sym.normal(mesh.ambient_dim) | sym.nodes(mesh.ambient_dim))
 
-    normal_outward_check = actx.to_numpy(
-            flatten(bind(discr, normal_outward_expr)(actx).as_scalar())) > 0
+    normal_outward_check = flatten_to_numpy(actx,
+            bind(discr, normal_outward_expr)(actx).as_scalar()) > 0
 
     assert normal_outward_check.all(), normal_outward_check
 
@@ -548,7 +548,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
             | (sym.nodes(dim) + 0.5*sym.ones_vec(dim)),
             )(actx).as_scalar()
 
-    normal_outward_check = actx.to_numpy(flatten(normal_outward_check) > 0)
+    normal_outward_check = flatten_to_numpy(actx, normal_outward_check > 0)
     assert normal_outward_check.all(), normal_outward_check
 
 # }}}
@@ -703,7 +703,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
                 sym.normal(mesh.ambient_dim) | sym.nodes(mesh.ambient_dim),
                 )(actx).as_scalar()
 
-        normal_outward_check = actx.to_numpy(flatten(normal_outward_check) > 0)
+        normal_outward_check = flatten_to_numpy(actx, normal_outward_check > 0)
         assert normal_outward_check.all(), normal_outward_check
 
         # }}}
