@@ -50,6 +50,8 @@ __doc__ = """
 
 .. autofunction:: flatten
 .. autofunction:: unflatten
+.. autofunction:: flatten_to_numpy
+.. autofunction:: unflatten_from_numpy
 .. autofunction:: flat_norm
 
 .. autofunction:: array_context_for_pickling
@@ -338,8 +340,7 @@ def _thaw_dofarray(ary, actx):
 
 
 def rec_map_dof_array_container(f: Callable[[Any], Any], ary):
-    r"""Applies *f* recursively to an
-    :class:`~arraycontext.ArrayContainer`.
+    r"""Applies *f* recursively to an :class:`~arraycontext.ArrayContainer`.
 
     Similar to :func:`~arraycontext.map_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
@@ -355,8 +356,7 @@ def mapped_over_dof_arrays(f):
 
 
 def rec_multimap_dof_array_container(f: Callable[[Any], Any], *args):
-    r"""Applies *f* recursively to multiple
-    :class:`~arraycontext.ArrayContainer`\ s.
+    r"""Applies *f* recursively to multiple :class:`~arraycontext.ArrayContainer`\ s.
 
     Similar to :func:`~arraycontext.multimap_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
@@ -378,7 +378,7 @@ def multimapped_over_dof_arrays(f):
 
 # {{{ flatten / unflatten
 
-def flatten(ary: ArrayContainer) -> Any:
+def flatten(ary: ArrayContainer) -> ArrayContainer:
     r"""Convert all :class:`DOFArray`\ s into a "flat" array of degrees of
     freedom, where the resulting type of the array is given by the
     :attr:`DOFArray.array_context`.
@@ -392,6 +392,9 @@ def flatten(ary: ArrayContainer) -> Any:
     """
 
     def _flatten_dof_array(subary):
+        if not isinstance(subary, DOFArray):
+            return subary
+
         actx = subary.array_context
         if actx is None:
             raise ValueError("cannot flatten frozen DOFArrays")
@@ -431,10 +434,10 @@ def _unflatten(
             name="unflatten")
 
     group_sizes = [nel * ndof for nel, ndof in group_shapes]
+    total_group_size = sum(group_sizes)
 
-    if ary.size != sum(group_sizes):
-        raise ValueError("array has size %d, expected %d"
-                % (ary.size, sum(group_sizes)))
+    if ary.size != total_group_size:
+        raise ValueError(f"array has size {ary.size}, expected {total_group_size}")
 
     group_starts = np.cumsum([0] + group_sizes)
 
@@ -448,20 +451,23 @@ def _unflatten(
         for grp_start, (nel, ndof) in zip(group_starts, group_shapes)))
 
 
-def unflatten(actx: ArrayContext, discr,
-        ary: ArrayContainer,
-        ndofs_per_element_per_group: Optional[Iterable[int]] = None):
-    r"""Convert all 'flat' arrays returned by :func:`flatten` back to
+def unflatten(
+        actx: ArrayContext, discr, ary: ArrayContainer,
+        ndofs_per_element_per_group: Optional[Iterable[int]] = None
+        ) -> ArrayContainer:
+    r"""Convert all "flat" arrays returned by :func:`flatten` back to
     :class:`DOFArray`\ s.
+
+    This function recurses into the :class:`~arraycontext.ArrayContainer` for all
+    :class:`DOFArray`\ s. It assumes that all the :class:`DOFArray`\ s inside the
+    container *ary* have the same number of degrees of freedom per
+    element group in *discr*.
 
     :arg ndofs_per_element: if given, an iterable of numbers representing
         the number of degrees of freedom per element, overriding the numbers
         provided by the element groups in *discr*. May be used (for example)
         to handle :class:`DOFArray`\ s that have only one DOF per element,
         representing some per-element quantity.
-
-    Recurses into the :class:`~arraycontext.ArrayContainer` for all
-    :class:`DOFArray`\ s.
     """
     if ndofs_per_element_per_group is None:
         ndofs_per_element_per_group = [
@@ -476,6 +482,31 @@ def unflatten(actx: ArrayContext, discr,
         return _unflatten(actx, nel_ndof_per_element_per_group, subary)
 
     return rec_map_dof_array_container(_unflatten_dof_array, ary)
+
+
+def flatten_to_numpy(actx: ArrayContext, ary: ArrayContainer) -> ArrayContainer:
+    r"""Converts all :class:`DOFArray`\ s into "flat" :class:`numpy.ndarray`\ s
+    using :func:`flatten`.
+    """
+    def _flatten_to_numpy(subary):
+        return actx.to_numpy(flatten(_thaw(subary, actx)))
+
+    return rec_map_dof_array_container(_flatten_to_numpy, ary)
+
+
+def unflatten_from_numpy(
+        actx: ArrayContext, discr, ary: ArrayContainer,
+        ndofs_per_element_per_group: Optional[Iterable[int]] = None
+        ) -> ArrayContainer:
+    r"""Takes "flat" arrays returned by :func:`flatten_to_numpy` and
+    reconstructs the corresponding :class:`DOFArray`\ s using :func:`unflatten`.
+    """
+    def _unflatten_from_numpy(subary):
+        return unflatten(actx, discr,
+                actx.from_numpy(subary),
+                ndofs_per_element_per_group=ndofs_per_element_per_group)
+
+    return rec_map_dof_array_container(_unflatten_from_numpy, ary)
 
 # }}}
 
@@ -499,7 +530,7 @@ def _flatten_array(ary):
                 f"with strides {ary.strides} of {ary.dtype}")
 
 
-def flat_norm(ary, ord=None):
+def flat_norm(ary, ord=None) -> float:
     r"""Return an element-wise :math:`\ell^{\text{ord}}` norm of *ary*.
 
     :arg ary: may be a :class:`DOFArray` or a
@@ -531,7 +562,7 @@ def flat_norm(ary, ord=None):
                 ord=ord)
 
     raise TypeError(
-            f"unsupported array type passed to flat_norm: {type(ary)}")
+            f"unsupported array type passed to flat_norm: '{type(ary).__name__}'")
 
 # }}}
 
