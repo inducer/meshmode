@@ -489,7 +489,10 @@ def flatten_to_numpy(actx: ArrayContext, ary: ArrayContainer) -> ArrayContainer:
     using :func:`flatten`.
     """
     def _flatten_to_numpy(subary):
-        return actx.to_numpy(flatten(_thaw(subary, actx)))
+        if isinstance(subary, DOFArray) and subary.array_context is None:
+            subary = thaw(subary, actx)
+
+        return actx.to_numpy(flatten(subary))
 
     return rec_map_dof_array_container(_flatten_to_numpy, ary)
 
