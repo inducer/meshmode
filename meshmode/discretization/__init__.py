@@ -593,6 +593,7 @@ class Discretization:
                     ...
                 ],
                 name="nodes")
+            return result
 
         def resample_mesh_nodes(grp, iaxis):
             # TODO: would be nice to have the mesh use an array context already
