@@ -708,6 +708,7 @@ class PyOpenCLArrayContext(ArrayContext):
 
     @memoize_method
     def transform_loopy_program(self, t_unit):
+        print(t_unit.name)
         # accommodate loopy with and without kernel callables
 
         default_entrypoint = _loopy_get_default_entrypoint(t_unit)
@@ -718,7 +719,6 @@ class PyOpenCLArrayContext(ArrayContext):
                     "Did you use meshmode.array_context.make_loopy_program "
                     "to create this kernel?")
 
-# Need to fix this since "program" is no longer a variable
         for arg in t_unit.args:
             if isinstance(arg.tags, ParameterValue):
                 t_unit = lp.fix_parameters(t_unit, **{arg.name: arg.tags.value})

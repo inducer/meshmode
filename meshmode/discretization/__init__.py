@@ -611,7 +611,8 @@ class Discretization:
                     prg(),
                     resampling_mat=actx.from_numpy(grp.from_mesh_interp_matrix()),
                     nodes=nodes,
-                    )["result"]
+                    )[1]["result"]
+            
 
         result = make_obj_array([
             _DOFArray(None, tuple([
@@ -655,6 +656,10 @@ def num_reference_derivative(
         return make_loopy_program(
             "{[iel,idof,j]: 0 <= iel < nelements and 0 <= idof, j < nunit_dofs}",
             "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
+            kernel_data=[
+                GlobalArg("vec", None, shape=auto, tags=IsDOFArray()),
+                ...
+            ],
             name="diff")
 
     @keyed_memoize_in(actx,
@@ -677,7 +682,7 @@ def num_reference_derivative(
     return _DOFArray(actx, tuple(
             actx.call_loopy(
                 prg(), diff_mat=get_mat(grp, ref_axes), vec=vec[grp.index]
-                )["result"]
+                )[1]["result"]
             for grp in discr.groups))
 
 # }}}
