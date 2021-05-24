@@ -392,6 +392,8 @@ def flatten(ary: ArrayContainer) -> ArrayContainer:
     """
 
     def _flatten_dof_array(subary):
+        # NOTE: not all leaves in the container need to be DOFArrays, so we just
+        # leave any unrecognized entries alone
         if not isinstance(subary, DOFArray):
             return subary
 
@@ -490,7 +492,7 @@ def flatten_to_numpy(actx: ArrayContext, ary: ArrayContainer) -> ArrayContainer:
     """
     def _flatten_to_numpy(subary):
         if isinstance(subary, DOFArray) and subary.array_context is None:
-            subary = thaw(subary, actx)
+            subary = _thaw(subary, actx)
 
         return actx.to_numpy(flatten(subary))
 
@@ -505,11 +507,20 @@ def unflatten_from_numpy(
     reconstructs the corresponding :class:`DOFArray`\ s using :func:`unflatten`.
     """
     def _unflatten_from_numpy(subary):
-        return unflatten(actx, discr,
-                actx.from_numpy(subary),
-                ndofs_per_element_per_group=ndofs_per_element_per_group)
+        if isinstance(subary, np.ndarray) and subary.dtype.char != "O":
+            subary = actx.from_numpy(subary)
 
-    return rec_map_dof_array_container(_unflatten_from_numpy, ary)
+        from arraycontext import map_array_container, is_array_container
+        if is_array_container(subary):
+            return map_array_container(_unflatten_from_numpy, subary)
+        else:
+            if discr is None:
+                return subary
+
+            return unflatten(actx, discr, subary,
+                    ndofs_per_element_per_group=ndofs_per_element_per_group)
+
+    return _unflatten_from_numpy(ary)
 
 # }}}
 
