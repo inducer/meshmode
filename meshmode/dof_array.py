@@ -514,9 +514,6 @@ def unflatten_from_numpy(
         if is_array_container(subary):
             return map_array_container(_unflatten_from_numpy, subary)
         else:
-            if discr is None:
-                return subary
-
             return unflatten(actx, discr, subary,
                     ndofs_per_element_per_group=ndofs_per_element_per_group)
 
