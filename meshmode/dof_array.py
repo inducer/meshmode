@@ -390,7 +390,7 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
     if actx is None:
         raise ValueError("cannot flatten frozen DOFArrays")
 
-    @memoize_in(actx, (flatten, "flatten_prg"))
+    @memoize_in(actx, (_flatten_dof_array, "flatten_prg"))
     def prg():
         return make_loopy_program(
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
@@ -446,7 +446,7 @@ def _unflatten_dof_array(actx: ArrayContext, ary: Any,
         else:
             return ary
 
-    @memoize_in(actx, (unflatten, "unflatten_prg"))
+    @memoize_in(actx, (_unflatten_dof_array, "unflatten_prg"))
     def prg():
         return make_loopy_program(
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
