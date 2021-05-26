@@ -37,13 +37,12 @@ from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
         LegendreGaussLobattoTensorProductGroupFactory,
         )
-from meshmode.dof_array import thaw
-from meshmode.array_context import (  # noqa
+import meshmode.mesh.generation as mgen
+
+from arraycontext import thaw, _acf         # noqa: F401
+from arraycontext import (                  # noqa: F401
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
-
-import meshmode.mesh.generation as mgen
-from meshmode import _acf  # noqa: F401
 
 
 # {{{ test visualizer
@@ -159,7 +158,7 @@ def test_visualizers(actx_factory, dim, group_cls):
     from meshmode.discretization import Discretization
     discr = Discretization(actx, mesh, group_factory(target_order))
 
-    nodes = thaw(actx, discr.nodes())
+    nodes = thaw(discr.nodes(), actx)
     f = actx.np.sqrt(sum(nodes**2)) + 1j*nodes[0]
     g = VisualizerData(g=f)
     names_and_fields = [("f", f), ("g", g)]

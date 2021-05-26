@@ -24,8 +24,9 @@ from functools import partial
 import numpy as np
 import numpy.linalg as la
 import pytest
-import meshmode         # noqa: F401
-from meshmode.array_context import (  # noqa
+
+from arraycontext import _acf       # noqa: F401
+from arraycontext import (          # noqa: F401
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
@@ -35,7 +36,6 @@ from meshmode.discretization.poly_element import (
         LegendreGaussLobattoTensorProductGroupFactory,
         )
 import meshmode.mesh.generation as mgen
-from meshmode import _acf  # noqa: F401
 
 
 import logging

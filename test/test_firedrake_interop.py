@@ -27,7 +27,7 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 
-from meshmode.array_context import PyOpenCLArrayContext
+from arraycontext import PyOpenCLArrayContext
 
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import (

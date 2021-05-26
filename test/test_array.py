@@ -30,6 +30,7 @@ from arraycontext import (  # noqa: F401
         as pytest_generate_tests)
 
 from arraycontext import (
+        thaw,
         dataclass_array_container,
         with_container_arithmetic)
 
@@ -80,9 +81,7 @@ def _get_test_containers(actx, ambient_dim=2):
             b=(+0.5,)*ambient_dim,
             n=(3,)*ambient_dim, order=1)
     discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
-
-    from meshmode.array_context import thaw
-    x = thaw(actx, discr.nodes()[0])
+    x = thaw(discr.nodes()[0], actx)
 
     # pylint: disable=unexpected-keyword-arg, no-value-for-parameter
     dataclass_of_dofs = MyContainer(
