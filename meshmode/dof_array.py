@@ -424,8 +424,8 @@ def flatten(ary: ArrayContainer, *, strict: bool = True) -> ArrayContainer:
     Recurses into the :class:`~arraycontext.ArrayContainer` for all
     :class:`DOFArray`\ s.
 
-    :param strict: if *True* only :class:`DOFArray`\ s are allowed as leaves
-        in the container *ary*. If *False* any non-:class:`DOFArray` are
+    :param strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
+        in the container *ary*. If *False*, any non-:class:`DOFArray` are
         left as is.
     """
 
@@ -497,8 +497,8 @@ def unflatten(
         provided by the element groups in *discr*. May be used (for example)
         to handle :class:`DOFArray`\ s that have only one DOF per element,
         representing some per-element quantity.
-    :param strict: if *True* only :class:`DOFArray`\ s are allowed as leaves
-        in the container *ary*. If *False* any non-:class:`DOFArray` are
+    :param strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
+        in the container *ary*. If *False*, any non-:class:`DOFArray` are
         left as is.
     """
     group_shapes, group_starts = _unflatten_group_sizes(
