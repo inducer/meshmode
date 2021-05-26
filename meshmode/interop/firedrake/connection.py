@@ -436,7 +436,7 @@ class FiredrakeConnection:
                                  " *None* or 'out.array_context'")
         else:
             # If 'out' is not supplied, create it
-            from meshmode.array_context import ArrayContext
+            from arraycontext import ArrayContext
             if not isinstance(actx, ArrayContext):
                 raise TypeError("If 'out' is *None*, 'actx' must be of type "
                                 "ArrayContext, not '%s'." % type(actx))
