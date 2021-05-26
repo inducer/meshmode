@@ -488,7 +488,7 @@ def unflatten(
     :class:`DOFArray`\ s.
 
     This function recurses into the :class:`~arraycontext.ArrayContainer` for all
-    :class:`DOFArray`\ s. All class:`DOFArray`\ s inside the container 
+    :class:`DOFArray`\ s. All class:`DOFArray`\ s inside the container
     *ary* must agree on the mapping from element group number to number
     of degrees of freedom, as given by `ndofs_per_element_per_group`
     (or via *discr*).
