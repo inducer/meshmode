@@ -43,7 +43,7 @@ def _acf():
     argument when running them from the command line.
     """
     import pyopencl as cl
-    from meshmode.array_context import PyOpenCLArrayContext
+    from arraycontext import PyOpenCLArrayContext
 
     context = cl._csc()
     queue = cl.CommandQueue(context)

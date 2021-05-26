@@ -32,10 +32,11 @@ THE SOFTWARE.
 
 
 import numpy as np
+
+import arraycontext
 import meshmode.mesh
 import meshmode.discretization
 import meshmode.dof_array
-import meshmode.array_context
 
 
 class NodalDGContext:
@@ -166,7 +167,7 @@ class NodalDGContext:
         self.octave.push(name, ary.T)
 
     def pull_dof_array(
-            self, actx: meshmode.array_context.ArrayContext, name
+            self, actx: arraycontext.ArrayContext, name
             ) -> meshmode.dof_array.DOFArray:
         ary = self.octave.pull(name).T
 
