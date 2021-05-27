@@ -180,6 +180,40 @@ def test_affine_map():
             m_inv = m.inverted()
             assert la.norm(x-m_inv(m(x))) < 1e-10
 
+
+@pytest.mark.parametrize("ambient_dim", [2, 3])
+def test_mesh_rotation(ambient_dim, visualize=False):
+    order = 3
+
+    if ambient_dim == 2:
+        nelements = 32
+        mesh = mgen.make_curve_mesh(
+                partial(mgen.ellipse, 2.0),
+                np.linspace(0.0, 1.0, nelements + 1),
+                order=order)
+    elif ambient_dim == 3:
+        mesh = mgen.generate_torus(4.0, 2.0, order=order)
+    else:
+        raise ValueError("unsupported dimension")
+
+    from meshmode.mesh.processing import _get_rotation_matrix_from_angle_and_axis
+    mat = _get_rotation_matrix_from_angle_and_axis(
+            np.pi/3.0, np.array([1.0, 2.0, 1.4]))
+
+    # check that the matrix is in the rotation group
+    assert abs(abs(la.det(mat)) - 1) < 10e-14
+    assert la.norm(mat @ mat.T - np.eye(3)) < 1.0e-14
+
+    from meshmode.mesh.processing import rotate_mesh_around_axis
+    rotated_mesh = rotate_mesh_around_axis(mesh,
+            theta=np.pi/2.0,
+            axis=np.array([1, 0, 0]))
+
+    if visualize:
+        from meshmode.mesh.visualization import write_vertex_vtk_file
+        write_vertex_vtk_file(mesh, "mesh_rotation_original.vtu")
+        write_vertex_vtk_file(rotated_mesh, "mesh_rotation_rotated.vtu")
+
 # }}}
 
 
