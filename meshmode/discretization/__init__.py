@@ -538,7 +538,7 @@ class Discretization:
                 actx.freeze(
                     actx.call_loopy(
                         prg(),
-                        weights=actx.from_numpy(grp.weights),
+                        weights=actx.from_numpy(grp.quadrature_rule().weights),
                         nelements=grp.nelements,
                         )["result"])
                 for grp in self.groups))

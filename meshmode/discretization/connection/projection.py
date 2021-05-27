@@ -114,7 +114,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     jac[iaxis] = matrices[iaxis] @ batch.result_unit_nodes.T
 
                 weights[igrp, ibatch] = actx.freeze(actx.from_numpy(
-                    det(jac) * grp.weights))
+                    det(jac) * grp.quadrature_rule().weights))
 
         return weights
 

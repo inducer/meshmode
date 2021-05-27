@@ -375,8 +375,8 @@ def test_reversed_chained_connection(actx_factory, ndim, mesh_name):
         from_x = 0
         to_x = 0
         for d in range(ndim):
-            from_x += actx.np.cos(from_nodes[d]) ** (d + 1)
-            to_x += actx.np.cos(to_nodes[d]) ** (d + 1)
+            from_x = from_x + actx.np.cos(from_nodes[d]) ** (d + 1)
+            to_x = to_x + actx.np.cos(to_nodes[d]) ** (d + 1)
 
         from_interp = reverse(to_x)
 
