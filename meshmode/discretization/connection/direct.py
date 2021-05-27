@@ -422,7 +422,7 @@ def make_direct_full_resample_matrix(actx, conn):
         This function assumes a flattened DOF array, as produced by
         :class:`~meshmode.dof_array.flatten`.
 
-    :arg actx: an :class:`~meshmode.array_context.ArrayContext`.
+    :arg actx: an :class:`~arraycontext.ArrayContext`.
     :arg conn: a :class:`DirectDiscretizationConnection`.
     """
 

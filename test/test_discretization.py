@@ -23,16 +23,16 @@ THE SOFTWARE.
 
 import numpy as np
 # import numpy.linalg as la
+
 import meshmode.mesh.generation as mgen
 from meshmode.discretization import Discretization
-
-from meshmode.array_context import (  # noqa
-        pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests)
-
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
         )
+
+from arraycontext import (          # noqa: F401
+        pytest_generate_tests_for_pyopencl_array_context
+        as pytest_generate_tests)
 
 
 def test_discr_nodes_caching(actx_factory):

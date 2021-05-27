@@ -20,12 +20,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from dataclasses import dataclass
 from functools import reduce
+from numbers import Real
+from typing import Optional, Union
 
 import numpy as np
 import numpy.linalg as la
+
 import modepy as mp
-from dataclasses import dataclass
 
 
 __doc__ = """
@@ -37,8 +40,10 @@ __doc__ = """
 .. autofunction:: find_bounding_box
 .. autofunction:: merge_disjoint_meshes
 .. autofunction:: split_mesh_groups
+
 .. autofunction:: map_mesh
 .. autofunction:: affine_map
+.. autofunction:: rotate_mesh_around_axis
 """
 
 
@@ -1052,19 +1057,85 @@ def map_mesh(mesh, f):  # noqa
 
 # {{{ affine map
 
-def affine_map(mesh, A=None, b=None):  # noqa
-    """Apply the affine map *f(x)=Ax+b* to the geometry of *mesh*."""
+def affine_map(mesh,
+        A: Optional[Union[Real, np.ndarray]] = None,    # noqa: N803
+        b: Optional[Union[Real, np.ndarray]] = None):
+    """Apply the affine map :math:`f(x) = A x + b` to the geometry of *mesh*."""
 
-    if A is None:
-        A = np.eye(mesh.ambient_dim)  # noqa
+    if isinstance(A, Real):
+        A = np.diag([A] * mesh.ambient_dim)             # noqa: N806
 
-    if b is None:
-        b = np.zeros(A.shape[0])
+    if isinstance(b, Real):
+        b = np.array([b] * mesh.ambient_dim)
+
+    if A is None and b is None:
+        return mesh
+
+    if A is not None and A.shape != (mesh.ambient_dim, mesh.ambient_dim):
+        raise ValueError(f"A has shape '{A.shape}' for a {mesh.ambient_dim}d mesh")
+
+    if b is not None and b.shape != (mesh.ambient_dim,):
+        raise ValueError(f"b has shape '{b.shape}' for a {mesh.ambient_dim}d mesh")
+
+    if b is not None:
+        b = b.reshape(-1, 1)
 
     def f(x):
-        return np.dot(A, x) + b.reshape(-1, 1)
+        z = x
+        if A is not None:
+            z = A @ z
+
+        if b is not None:
+            z += b
+
+        return z
 
     return map_mesh(mesh, f)
+
+
+def _get_rotation_matrix_from_angle_and_axis(theta, axis):
+    # https://en.wikipedia.org/wiki/Rotation_matrix#Rotation_matrix_from_axis_and_angle
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+    ux, uy, uz = axis / np.linalg.norm(axis, ord=2)
+
+    return np.array([[
+        cos_t + ux**2 * (1 - cos_t),
+        ux * uy * (1 - cos_t) - uz * sin_t,
+        ux * uz * (1 - cos_t) + uy * sin_t
+        ], [
+        uy * ux * (1 - cos_t) + uz * sin_t,
+        cos_t + uy**2 * (1 - cos_t),
+        uy * uz * (1 - cos_t) - ux * sin_t
+        ], [
+        uz * ux * (1 - cos_t) - uy * sin_t,
+        uz * uy * (1 - cos_t) + ux * sin_t,
+        cos_t + uz**2 * (1 - cos_t)
+        ]])
+
+
+def rotate_mesh_around_axis(mesh, *,
+        theta: Real,
+        axis: Optional[np.ndarray] = None):
+    """Rotate the mesh by *theta* radians around the axis *axis*.
+
+    :param axis: a (not necessarily unit) vector. By default, the rotation is
+        performed around the :math:`z` axis.
+    """
+    if mesh.ambient_dim == 1:
+        return mesh
+    elif mesh.ambient_dim == 2:
+        axis = None
+    elif mesh.ambient_dim == 3:
+        pass
+    else:
+        raise ValueError(f"unsupported mesh dimension: {mesh.ambient_dim}")
+
+    if axis is None:
+        axis = np.array([0, 0, 1])
+
+    mat = _get_rotation_matrix_from_angle_and_axis(theta, axis)
+    return affine_map(mesh, A=mat[:mesh.ambient_dim, :mesh.ambient_dim])
 
 # }}}
 

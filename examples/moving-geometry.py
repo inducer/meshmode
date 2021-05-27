@@ -49,7 +49,7 @@ def plot_solution(actx, vis, filename, discr, t, x):
 def reconstruct_discr_from_nodes(actx, discr, x):
     @memoize_in(actx, (reconstruct_discr_from_nodes, "resample_by_mat_prg"))
     def resample_by_mat_prg():
-        from meshmode.array_context import make_loopy_program
+        from arraycontext import make_loopy_program
         return make_loopy_program(
             """
             {[iel, idof, j]:
