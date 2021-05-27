@@ -425,7 +425,11 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
                 grp_ary=grp_ary
             )["result"]
 
-    return actx.np.concatenate([_flatten(grp_ary) for grp_ary in ary])
+    if len(ary) == 1:
+        # Special case which avoids a copy
+        return _flatten(ary[0])
+    else:
+        return actx.np.concatenate([_flatten(grp_ary) for grp_ary in ary])
 
 
 def flatten(ary: ArrayContainer, *, strict: bool = True) -> ArrayContainer:
