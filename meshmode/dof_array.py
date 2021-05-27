@@ -426,7 +426,7 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
             )["result"]
 
     if len(ary) == 1:
-        # Special case which avoids a copy
+        # can avoid a copy if reshape succeeds
         return _flatten(ary[0])
     else:
         return actx.np.concatenate([_flatten(grp_ary) for grp_ary in ary])
