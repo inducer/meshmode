@@ -1273,6 +1273,8 @@ def as_python(mesh, function_name="make_mesh"):
         # {{{ facial adjacency groups
 
         def fagrp_params_str(fagrp):
+            if isinstance(fagrp, InterPartitionAdjacencyGroup):
+                raise NotImplementedError("Not implemented for distributed meshes.")
             params = {
                     "igroup": fagrp.igroup,
                     "ineighbor_group": repr(fagrp.ineighbor_group),
