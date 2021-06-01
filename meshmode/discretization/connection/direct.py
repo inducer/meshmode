@@ -26,7 +26,7 @@ import numpy as np
 import loopy as lp
 from pytools import memoize_in, keyed_memoize_method
 from pytools.obj_array import obj_array_vectorized_n_args
-from meshmode.array_context import ArrayContext, make_loopy_program, IsDOFArray, ParameterValue
+from meshmode.array_context import ArrayContext, make_loopy_program, IsOpArray, IsDOFArray, ParameterValue
 
 
 # {{{ interpolation batch
@@ -293,6 +293,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.GlobalArg("result", None,
                         shape="nelements_result, n_to_nodes",
                         offset=lp.auto, tags=IsDOFArray()),
+                    lp.GlobalArg("resample_mat", None,
+                        shape="n_to_nodes, n_from_nodes",
+                        offset=lp.auto, tags=IsOpArray()),
                     lp.GlobalArg("ary", None,
                         shape="nelements_vec, n_from_nodes",
                         offset=lp.auto, tags=IsDOFArray()),
@@ -309,7 +312,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_picking_knl"))
-        def pick_knl():
+        def pick_knl(n_to_nodes):
             knl = make_loopy_program(
                 """{[iel, idof]:
                     0<=iel<nelements and
@@ -326,6 +329,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("nelements_result", np.int32),
                     lp.ValueArg("nelements_vec", np.int32),
                     lp.ValueArg("n_from_nodes", np.int32),
+                    lp.ValueArg("n_to_nodes", np.int32, tags=ParameterValue(n_to_nodes)),
                     "...",
                     ],
                 name="resample_by_picking")
@@ -357,7 +361,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                             to_element_indices=batch.to_element_indices)
 
                 else:
-                    actx.call_loopy(pick_knl(),
+                    nelements, n_to_nodes = result[i_tgrp].shape
+                    actx.call_loopy(pick_knl(n_to_nodes),
                             pick_list=point_pick_indices,
                             result=result[i_tgrp],
                             ary=ary[batch.from_group_index],

@@ -74,6 +74,9 @@ class IsDOFArray(Tag):
     """
     pass
 
+class IsOpArray(Tag):
+    pass
+
 class ParameterValue(UniqueTag):
 
     def __init__(self, value):
