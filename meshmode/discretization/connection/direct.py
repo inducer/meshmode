@@ -77,6 +77,19 @@ class InterpolationBatch:
         :attr:`from_element_indices` to which this batch interpolates. (Since
         there is a fixed set of "from" unit nodes per batch, one batch will
         always go to a single face index.)
+
+        .. note::
+
+            This attribute is not required. It exists only to carry along
+            metadata from
+            :func:`~meshmode.discretization.connection.make_face_restriction`
+            to routines
+            that build upon its output, such as
+            :func:`~meshmode.discretization.connection.make_opposite_face_connection`.
+            If you are not building
+            or consuming face restrictions, it is safe to leave this
+            unset and/or ignore it. This attribute probably belongs in a subclass,
+            but that refactoring hasn't happened yet. (Sorry!)
     """
 
     def __init__(self, from_group_index, from_element_indices,
