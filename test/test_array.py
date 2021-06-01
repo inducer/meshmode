@@ -36,28 +36,12 @@ from arraycontext import (
 
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import PolynomialWarpAndBlendGroupFactory
-from meshmode.dof_array import flatten, unflatten, DOFArray
+from meshmode.dof_array import DOFArray, flat_norm
 
 from pytools.obj_array import make_obj_array
 
 import logging
 logger = logging.getLogger(__name__)
-
-
-def test_flatten_unflatten(actx_factory):
-    actx = actx_factory()
-
-    ambient_dim = 2
-    from meshmode.mesh.generation import generate_regular_rect_mesh
-    mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*ambient_dim,
-            b=(+0.5,)*ambient_dim,
-            n=(3,)*ambient_dim, order=1)
-    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
-
-    a = np.random.randn(discr.ndofs)
-    a_round_trip = actx.to_numpy(flatten(unflatten(actx, discr, actx.from_numpy(a))))
-    assert np.array_equal(a, a_round_trip)
 
 
 @with_container_arithmetic(bcast_obj_array=False, rel_comparison=True)
@@ -72,6 +56,41 @@ class MyContainer:
     @property
     def array_context(self):
         return self.mass.array_context
+
+
+def test_flatten_unflatten(actx_factory):
+    actx = actx_factory()
+
+    ambient_dim = 2
+    from meshmode.mesh.generation import generate_regular_rect_mesh
+    mesh = generate_regular_rect_mesh(
+            a=(-0.5,)*ambient_dim,
+            b=(+0.5,)*ambient_dim,
+            n=(3,)*ambient_dim, order=1)
+    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
+    a = np.random.randn(discr.ndofs)
+
+    from meshmode.dof_array import flatten, unflatten
+    a_round_trip = actx.to_numpy(flatten(unflatten(actx, discr, actx.from_numpy(a))))
+    assert np.array_equal(a, a_round_trip)
+
+    from meshmode.dof_array import flatten_to_numpy, unflatten_from_numpy
+    a_round_trip = flatten_to_numpy(actx, unflatten_from_numpy(actx, discr, a))
+    assert np.array_equal(a, a_round_trip)
+
+    x = thaw(discr.nodes(), actx)
+    avg_mass = DOFArray(actx, tuple([
+        actx.empty((grp.nelements, 1), a.dtype) for grp in discr.groups
+        ]))
+
+    c = MyContainer(name="flatten",
+            mass=avg_mass,
+            momentum=make_obj_array([x, x, x]),
+            enthalpy=x)
+
+    from meshmode.dof_array import unflatten_like
+    c_round_trip = unflatten_like(actx, flatten(c), c)
+    assert flat_norm(c - c_round_trip) < 1.0e-8
 
 
 def _get_test_containers(actx, ambient_dim=2):
@@ -111,8 +130,6 @@ def test_container_norm(actx_factory, ord):
     n2 = np.linalg.norm([1, 2, 3, 5]*2, ord)
 
     assert abs(n1 - n2) < 1e-12
-
-    from meshmode.dof_array import flat_norm
     assert abs(flat_norm(ary_dof, ord) - actx.np.linalg.norm(ary_dof, ord)) < 1e-12
 
 
