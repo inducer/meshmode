@@ -415,10 +415,10 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
         )
 
     def _flatten(grp_ary):
-        if grp_ary.flags.c_contiguous:
+        # If array has two axes, assume they are elements/dofs. If C-contiguous
+        # in those, "flat" and "unflat" memory layout agree.
+        if len(grp_ary.shape) == 2 and grp_ary.flags.c_contiguous:
             return grp_ary.reshape(-1, order="C")
-        elif grp_ary.flags.f_contiguous:
-            return grp_ary.reshape(-1, order="F")
         else:
             # NOTE: array has unsupported strides
             return actx.call_loopy(
