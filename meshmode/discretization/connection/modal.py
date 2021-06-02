@@ -153,7 +153,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
         def quadrature_matrix(grp, mgrp):
             vdm = mp.vandermonde(mgrp.basis_obj().functions,
                                  grp.unit_nodes)
-            w_diag = np.diag(grp.weights)
+            w_diag = np.diag(grp.quadrature_rule().weights)
             vtw = np.dot(vdm.T, w_diag)
             return actx.from_numpy(vtw)
 

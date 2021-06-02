@@ -295,40 +295,24 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         actx = ary.array_context
 
-        @memoize_in(actx, (DirectDiscretizationConnection, "resample_by_mat_knl"))
-        def mat_knl():
-            knl = make_loopy_program(
-                """{[iel, idof, j]:
-                    0<=iel<nelements and
-                    0<=idof<n_to_nodes and
-                    0<=j<n_from_nodes}""",
-                "result[to_element_indices[iel], idof] \
-                    = sum(j, resample_mat[idof, j] \
-                    * ary[from_element_indices[iel], j])",
-                [
-                    lp.GlobalArg("result", None,
-                        shape="nelements_result, n_to_nodes",
-                        offset=lp.auto),
-                    lp.GlobalArg("ary", None,
-                        shape="nelements_vec, n_from_nodes",
-                        offset=lp.auto),
-                    lp.ValueArg("nelements_result", np.int32),
-                    lp.ValueArg("nelements_vec", np.int32),
-                    "...",
-                    ],
-                name="resample_by_mat")
-
-            return knl
-
         @memoize_in(actx,
-                (DirectDiscretizationConnection, "resample_by_picking_knl"))
-        def pick_knl():
-            knl = make_loopy_program(
-                """{[iel, idof]:
-                    0<=iel<nelements and
-                    0<=idof<n_to_nodes}""",
-                "result[to_element_indices[iel], idof] \
-                    = ary[from_element_indices[iel], pick_list[idof]]",
+                (DirectDiscretizationConnection, "resample_by_mat_batch_knl"))
+        def batch_mat_knl():
+            return make_loopy_program(
+                [
+                    "{[iel_init]: 0 <= iel_init < nelements_result}",
+                    "{[idof_init]: 0 <= idof_init < n_to_nodes}",
+                    "{[iel]: 0 <= iel < nelements}",
+                    "{[idof]: 0 <= idof < n_to_nodes}",
+                    "{[jdof]: 0 <= jdof < n_from_nodes}"
+                ],
+                """
+                    result[iel_init, idof_init] = 0 {id=init}
+                    ... gbarrier {id=barrier, dep=init}
+                    result[to_element_indices[iel], idof] =  \
+                        sum(jdof, resample_mat[idof, jdof]   \
+                            * ary[from_element_indices[iel], jdof]) {dep=barrier}
+                """,
                 [
                     lp.GlobalArg("result", None,
                         shape="nelements_result, n_to_nodes",
@@ -340,17 +324,47 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("nelements_vec", np.int32),
                     lp.ValueArg("n_from_nodes", np.int32),
                     "...",
-                    ],
-                name="resample_by_picking")
+                ],
+                name="resample_by_mat_batch"
+            )
 
-            return knl
+        @memoize_in(actx,
+                (DirectDiscretizationConnection, "resample_by_picking_batch_knl"))
+        def batch_pick_knl():
+            return make_loopy_program(
+                [
+                    "{[iel_init]: 0 <= iel_init < nelements_result}",
+                    "{[idof_init]: 0 <= idof_init < n_to_nodes}",
+                    "{[iel]: 0 <= iel < nelements}",
+                    "{[idof]: 0 <= idof < n_to_nodes}"
+                ],
+                """
+                    result[iel_init, idof_init] = 0 {id=init}
+                    ... gbarrier {id=barrier, dep=init}
+                    result[to_element_indices[iel], idof] =              \
+                        ary[from_element_indices[iel], pick_list[idof]]  \
+                            {dep=barrier}
+                """,
+                [
+                    lp.GlobalArg("result", None,
+                        shape="nelements_result, n_to_nodes",
+                        offset=lp.auto),
+                    lp.GlobalArg("ary", None,
+                        shape="nelements_vec, n_from_nodes",
+                        offset=lp.auto),
+                    lp.ValueArg("nelements_result", np.int32),
+                    lp.ValueArg("nelements_vec", np.int32),
+                    lp.ValueArg("n_from_nodes", np.int32),
+                    "...",
+                ],
+                name="resample_by_picking_batch"
+            )
 
-        if self.is_surjective:
-            result = self.to_discr.empty(actx, dtype=ary.entry_dtype)
-        else:
-            result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
-
+        group_data = []
         for i_tgrp, cgrp in enumerate(self.groups):
+            # Loop over each batch in a group and evaluate the
+            # batch-contribution
+            batched_data = []
             for i_batch, batch in enumerate(cgrp.batches):
                 if not len(batch.from_element_indices):
                     continue
@@ -359,23 +373,47 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         actx, i_tgrp, i_batch)
 
                 if point_pick_indices is None:
-                    actx.call_loopy(mat_knl(),
-                            resample_mat=self._resample_matrix(
-                                actx, i_tgrp, i_batch),
-                            result=result[i_tgrp],
-                            ary=ary[batch.from_group_index],
-                            from_element_indices=batch.from_element_indices,
-                            to_element_indices=batch.to_element_indices)
+                    batch_result = actx.call_loopy(
+                        batch_mat_knl(),
+                        resample_mat=self._resample_matrix(
+                            actx, i_tgrp, i_batch
+                        ),
+                        ary=ary[batch.from_group_index],
+                        from_element_indices=batch.from_element_indices,
+                        to_element_indices=batch.to_element_indices,
+                        nelements_result=self.to_discr.groups[i_tgrp].nelements,
+                        n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
+                    )["result"]
 
                 else:
-                    actx.call_loopy(pick_knl(),
-                            pick_list=point_pick_indices,
-                            result=result[i_tgrp],
-                            ary=ary[batch.from_group_index],
-                            from_element_indices=batch.from_element_indices,
-                            to_element_indices=batch.to_element_indices)
+                    batch_result = actx.call_loopy(
+                        batch_pick_knl(),
+                        pick_list=point_pick_indices,
+                        ary=ary[batch.from_group_index],
+                        from_element_indices=batch.from_element_indices,
+                        to_element_indices=batch.to_element_indices,
+                        nelements_result=self.to_discr.groups[i_tgrp].nelements,
+                        n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
+                    )["result"]
 
-        return result
+                batched_data.append(batch_result)
+
+            # After computing each batched result, take the sum
+            # to get the entire contribution over the group
+            if batched_data:
+                group_data.append(sum(batched_data))
+            else:
+                # If no batched data at all, return zeros for this
+                # particular group array
+                group_data.append(
+                    actx.zeros(
+                        shape=(self.to_discr.groups[i_tgrp].nelements,
+                               self.to_discr.groups[i_tgrp].nunit_dofs),
+                        dtype=ary.entry_dtype
+                    )
+                )
+
+        return DOFArray(actx, data=tuple(group_data))
 
 # }}}
 
@@ -408,31 +446,35 @@ def make_direct_full_resample_matrix(actx, conn):
     @memoize_in(actx, (make_direct_full_resample_matrix, "oversample_mat_knl"))
     def knl():
         return make_loopy_program(
-            """{[iel, idof, j]:
-                0<=iel<nelements and
-                0<=idof<n_to_nodes and
-                0<=j<n_from_nodes}""",
-            "result[itgt_base + to_element_indices[iel]*n_to_nodes + idof, \
-                    isrc_base + from_element_indices[iel]*n_from_nodes + j] \
-                = resample_mat[idof, j]",
+            [
+                "{[idof_init]: 0 <= idof_init < nnodes_tgt}",
+                "{[jdof_init]: 0 <= jdof_init < nnodes_src}",
+                "{[iel]: 0 <= iel < nelements}",
+                "{[idof]: 0 <= idof < n_to_nodes}",
+                "{[jdof]: 0 <= jdof < n_from_nodes}"
+            ],
+            """
+                result[idof_init, jdof_init] = 0 {id=init}
+                ... gbarrier {id=barrier, dep=init}
+                result[itgt_base + to_element_indices[iel]*n_to_nodes + idof,      \
+                       isrc_base + from_element_indices[iel]*n_from_nodes + jdof]  \
+                           = resample_mat[idof, jdof] {dep=barrier}
+            """,
             [
                 lp.GlobalArg("result", None,
                     shape="nnodes_tgt, nnodes_src",
                     offset=lp.auto),
-                lp.ValueArg("itgt_base,isrc_base", np.int32),
-                lp.ValueArg("nnodes_tgt,nnodes_src", np.int32),
+                lp.ValueArg("itgt_base, isrc_base", np.int32),
+                lp.ValueArg("nnodes_tgt, nnodes_src", np.int32),
                 "...",
-                ],
-            name="oversample_mat")
+            ],
+            name="oversample_mat"
+        )
 
     to_discr_ndofs = sum(grp.nelements*grp.nunit_dofs
             for grp in conn.to_discr.groups)
     from_discr_ndofs = sum(grp.nelements*grp.nunit_dofs
             for grp in conn.from_discr.groups)
-
-    result = actx.zeros(
-            (to_discr_ndofs, from_discr_ndofs),
-            dtype=conn.to_discr.real_dtype)
 
     from_group_sizes = [
             grp.nelements*grp.nunit_dofs
@@ -440,23 +482,29 @@ def make_direct_full_resample_matrix(actx, conn):
     from_group_starts = np.cumsum([0] + from_group_sizes)
 
     tgt_node_nr_base = 0
+    mats = []
     for i_tgrp, (tgrp, cgrp) in enumerate(
             zip(conn.to_discr.groups, conn.groups)):
         for i_batch, batch in enumerate(cgrp.batches):
             if not len(batch.from_element_indices):
                 continue
 
-            actx.call_loopy(knl(),
+            mats.append(
+                actx.call_loopy(
+                    knl(),
                     resample_mat=conn._resample_matrix(actx, i_tgrp, i_batch),
-                    result=result,
                     itgt_base=tgt_node_nr_base,
                     isrc_base=from_group_starts[batch.from_group_index],
                     from_element_indices=batch.from_element_indices,
-                    to_element_indices=batch.to_element_indices)
+                    to_element_indices=batch.to_element_indices,
+                    nnodes_tgt=to_discr_ndofs,
+                    nnodes_src=from_discr_ndofs,
+                )["result"]
+            )
 
         tgt_node_nr_base += tgrp.nelements*tgrp.nunit_dofs
 
-    return result
+    return sum(mats)
 
 # }}}
 

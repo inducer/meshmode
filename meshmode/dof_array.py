@@ -28,6 +28,7 @@ from functools import partial, update_wrapper
 from typing import Any, Callable, Iterable, Optional, Tuple
 
 import numpy as np
+import loopy as lp
 
 from pytools import MovedFunctionDeprecationWrapper
 from pytools import single_valued, memoize_in
@@ -391,26 +392,45 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
     if actx is None:
         raise ValueError("cannot flatten frozen DOFArrays")
 
-    @memoize_in(actx, (_flatten_dof_array, "flatten_prg"))
+    @memoize_in(actx, (_flatten_dof_array, "flatten_grp_ary_prg"))
     def prg():
         return make_loopy_program(
-            "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
-            """result[grp_start + iel*ndofs_per_element + idof] \
-                = grp_ary[iel, idof]""",
-            name="flatten")
+            [
+                "{[iel]: 0 <= iel < nelements}",
+                "{[idof]: 0 <= idof < ndofs_per_element}"
+            ],
+            """
+                result[iel * ndofs_per_element + idof] = grp_ary[iel, idof]
+            """,
+            [
+                lp.GlobalArg("result", None,
+                             shape="nelements * ndofs_per_element"),
+                lp.GlobalArg("grp_ary", None,
+                             shape=("nelements", "ndofs_per_element")),
+                lp.ValueArg("nelements", np.int32),
+                lp.ValueArg("ndofs_per_element", np.int32),
+                "..."
+            ],
+            name="flatten_grp_ary"
+        )
 
-    group_sizes = [grp_ary.shape[0] * grp_ary.shape[1] for grp_ary in ary]
-    group_starts = np.cumsum([0] + group_sizes)
+    def _flatten(grp_ary):
+        # If array has two axes, assume they are elements/dofs. If C-contiguous
+        # in those, "flat" and "unflat" memory layout agree.
+        if len(grp_ary.shape) == 2 and grp_ary.flags.c_contiguous:
+            return grp_ary.reshape(-1, order="C")
+        else:
+            # NOTE: array has unsupported strides
+            return actx.call_loopy(
+                prg(),
+                grp_ary=grp_ary
+            )["result"]
 
-    result = actx.empty(group_starts[-1], dtype=ary.entry_dtype)
-
-    for grp_start, grp_ary in zip(group_starts, ary):
-        actx.call_loopy(prg(),
-                grp_ary=grp_ary,
-                result=result,
-                grp_start=grp_start)
-
-    return result
+    if len(ary) == 1:
+        # can avoid a copy if reshape succeeds
+        return _flatten(ary[0])
+    else:
+        return actx.np.concatenate([_flatten(grp_ary) for grp_ary in ary])
 
 
 def flatten(ary: ArrayContainer, *, strict: bool = True) -> ArrayContainer:
