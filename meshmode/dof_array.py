@@ -529,6 +529,10 @@ def unflatten_like(actx: ArrayContext,
     """
     from arraycontext import is_array_container
 
+    def _same_key(key1, key2):
+        assert key1 == key2
+        return key1
+
     def _unflatten_like(_ary, _prototype):
         if isinstance(_prototype, DOFArray):
             group_shapes = [subary.shape for subary in _prototype]
@@ -539,9 +543,11 @@ def unflatten_like(actx: ArrayContext,
                     actx, _ary, group_shapes, group_starts,
                     strict=True)
         elif is_array_container(_prototype):
+            assert type(_ary) is type(_prototype)
+
             return deserialize_container(_prototype, [
-                (key, _unflatten_like(subary, subprototype))
-                for (_, subary), (key, subprototype) in zip(
+                (_same_key(key1, key2), _unflatten_like(subary, subprototype))
+                for (key1, subary), (key2, subprototype) in zip(
                     serialize_container(_ary),
                     serialize_container(_prototype))
                 ])
