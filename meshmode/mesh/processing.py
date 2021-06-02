@@ -224,6 +224,8 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
                 neighbors = global_elem_to_part_elem[facial_adj.neighbors[
                             adj_indices] + elem_base_j] - part_elem_base_j
                 neighbor_faces = facial_adj.neighbor_faces[adj_indices]
+                mats = facial_adj.aff_transform_mats[adj_indices, :, :]
+                vecs = facial_adj.aff_transform_vecs[adj_indices, :]
 
                 from meshmode.mesh import FacialAdjacencyGroup
                 local_to_local_adjacency_groups[i_part_grp][j_part_grp] =\
@@ -232,7 +234,9 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
                                         elements=elements,
                                         element_faces=element_faces,
                                         neighbors=neighbors,
-                                        neighbor_faces=neighbor_faces)
+                                        neighbor_faces=neighbor_faces,
+                                        aff_transform_mats=mats,
+                                        aff_transform_vecs=vecs)
 
     return local_to_local_adjacency_groups
 
@@ -263,12 +267,22 @@ class _NonLocalAdjacencyData:
     .. attribute:: neighbor_faces
 
        The index of the shared face inside the remote element.
+
+    .. attribute:: aff_transform_mats
+
+       The matrix part of the affine mapping from local to remote element.
+
+    .. attribute:: aff_transform_vecs
+
+       The vector part of the affine mapping from local to remote element.
     """
     elements: np.ndarray
     element_faces: np.ndarray
     neighbor_parts: np.ndarray
     global_neighbors: np.ndarray
     neighbor_faces: np.ndarray
+    aff_transform_mats: np.ndarray
+    aff_transform_vecs: np.ndarray
 
 
 def _collect_nonlocal_adjacency_data(mesh, part_per_elem, global_elem_to_part_elem,
@@ -326,9 +340,13 @@ def _collect_nonlocal_adjacency_data(mesh, part_per_elem, global_elem_to_part_el
                 global_neighbors = facial_adj.neighbors[adj_indices] + elem_base_j
                 neighbor_parts = part_per_elem[global_neighbors]
                 neighbor_faces = facial_adj.neighbor_faces[adj_indices]
+                mats = facial_adj.aff_transform_mats[adj_indices]
+                vecs = facial_adj.aff_transform_vecs[adj_indices]
 
-                pairwise_adj.append(_NonLocalAdjacencyData(elements, element_faces,
-                            neighbor_parts, global_neighbors, neighbor_faces))
+                pairwise_adj.append(
+                    _NonLocalAdjacencyData(
+                        elements, element_faces, neighbor_parts, global_neighbors,
+                        neighbor_faces, mats, vecs))
 
         if pairwise_adj:
             nonlocal_adj_data[i_part_grp] = _NonLocalAdjacencyData(
@@ -336,7 +354,9 @@ def _collect_nonlocal_adjacency_data(mesh, part_per_elem, global_elem_to_part_el
                 np.concatenate([adj.element_faces for adj in pairwise_adj]),
                 np.concatenate([adj.neighbor_parts for adj in pairwise_adj]),
                 np.concatenate([adj.global_neighbors for adj in pairwise_adj]),
-                np.concatenate([adj.neighbor_faces for adj in pairwise_adj]))
+                np.concatenate([adj.neighbor_faces for adj in pairwise_adj]),
+                np.concatenate([adj.aff_transform_mats for adj in pairwise_adj]),
+                np.concatenate([adj.aff_transform_vecs for adj in pairwise_adj]))
 
     return nonlocal_adj_data
 
@@ -452,6 +472,9 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbors = np.empty(0, dtype=mesh.element_id_dtype)
             neighbor_elements = np.empty(0, dtype=mesh.element_id_dtype)
             neighbor_faces = np.empty(0, dtype=mesh.face_id_dtype)
+            mats = np.empty((0, mesh.ambient_dim, mesh.ambient_dim),
+                dtype=np.float64)
+            vecs = np.empty((0, mesh.ambient_dim), dtype=np.float64)
 
         elif bdry is None:
             # Non-local adjacency only
@@ -466,6 +489,8 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbors = -flags
             neighbor_elements = global_elem_to_neighbor_elem[nl.global_neighbors]
             neighbor_faces = nl.neighbor_faces
+            mats = nl.aff_transform_mats
+            vecs = nl.aff_transform_vecs
 
         elif nl is None:
             # Boundary only
@@ -476,6 +501,8 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbors = bdry.neighbors
             neighbor_elements = np.full(nfaces, -1, dtype=mesh.element_id_dtype)
             neighbor_faces = np.zeros(nfaces, dtype=mesh.face_id_dtype)
+            from meshmode.mesh import _make_affine_identity_transforms
+            mats, vecs = _make_affine_identity_transforms(mesh.ambient_dim, nfaces)
 
         else:
             # Both; need to merge together
@@ -488,6 +515,9 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbors = np.empty(nfaces, dtype=mesh.element_id_dtype)
             neighbor_elements = np.empty(nfaces, dtype=mesh.element_id_dtype)
             neighbor_faces = np.empty(nfaces, dtype=mesh.face_id_dtype)
+            mats = np.empty((nfaces, mesh.ambient_dim, mesh.ambient_dim),
+                dtype=np.float64)
+            vecs = np.empty((nfaces, mesh.ambient_dim), dtype=np.float64)
 
             # Combine lists of elements/faces and sort to assist in merging
             combined_elements = np.concatenate((nl.elements, bdry.elements))
@@ -509,6 +539,8 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbor_elements[nonlocal_indices] = global_elem_to_neighbor_elem[
                         nl.global_neighbors]
             neighbor_faces[nonlocal_indices] = nl.neighbor_faces
+            mats[nonlocal_indices] = nl.aff_transform_mats
+            vecs[nonlocal_indices] = nl.aff_transform_vecs
 
             # Merge boundary part
             bdry_indices = np.where(perm >= nnonlocal)[0]
@@ -518,6 +550,11 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbor_parts[bdry_indices] = -1
             neighbor_elements[bdry_indices] = -1
             neighbor_faces[bdry_indices] = 0
+            from meshmode.mesh import _make_affine_identity_transforms
+            bdry_mats, bdry_vecs = _make_affine_identity_transforms(
+                mesh.ambient_dim, nbdry)
+            mats[bdry_indices, :, :] = bdry_mats
+            vecs[bdry_indices, :] = bdry_vecs
 
         from meshmode.mesh import InterPartitionAdjacencyGroup
         inter_partition_adj_groups.append(InterPartitionAdjacencyGroup(
@@ -525,7 +562,9 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
                     element_faces=element_faces, neighbors=neighbors,
                     neighbor_partitions=neighbor_parts,
                     partition_neighbors=neighbor_elements,
-                    neighbor_faces=neighbor_faces))
+                    neighbor_faces=neighbor_faces,
+                    aff_transform_mats=mats,
+                    aff_transform_vecs=vecs))
 
     return inter_partition_adj_groups
 

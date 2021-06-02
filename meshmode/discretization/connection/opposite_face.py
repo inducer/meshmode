@@ -42,7 +42,8 @@ def thaw_to_numpy(actx, array):
 def _make_cross_face_batches(actx,
         tgt_bdry_discr, src_bdry_discr,
         i_tgt_grp, i_src_grp,
-        tgt_bdry_element_indices, src_bdry_element_indices):
+        tgt_bdry_element_indices, src_bdry_element_indices,
+        tgt_aff_transforms=None, src_aff_transforms=None):
 
     if tgt_bdry_discr.dim == 0:
         return [InterpolationBatch(
@@ -52,15 +53,24 @@ def _make_cross_face_batches(actx,
             result_unit_nodes=src_bdry_discr.groups[i_src_grp].unit_nodes,
             to_element_face=None)]
 
-    tgt_bdry_nodes = np.array([
+    def transform(aff_transforms, x):
+        if aff_transforms is not None:
+            mats, vecs = aff_transforms
+            return (
+                np.einsum("edi,ien->den", mats, x)
+                + vecs.T.reshape(vecs.shape[1], -1, 1))
+        else:
+            return x
+
+    tgt_bdry_nodes = transform(tgt_aff_transforms, np.array([
         thaw_to_numpy(actx, ary[i_tgt_grp])[tgt_bdry_element_indices]
         for ary in tgt_bdry_discr.nodes(cached=False)
-        ])
+        ]))
 
-    src_bdry_nodes = np.array([
+    src_bdry_nodes = transform(src_aff_transforms, np.array([
         thaw_to_numpy(actx, ary[i_src_grp])[src_bdry_element_indices]
         for ary in src_bdry_discr.nodes(cached=False)
-        ])
+        ]))
 
     tol = 1e4 * np.finfo(tgt_bdry_nodes.dtype).eps
 
@@ -449,6 +459,10 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
                         vbc_tgt_grp_face_batch.to_element_indices
                         )[vbc_used_els]
 
+                tgt_aff_transforms = (
+                    adj.aff_transform_mats[adj_tgt_flags, :, :],
+                    adj.aff_transform_vecs[adj_tgt_flags, :])
+
                 # find src_bdry_element_indices
 
                 src_vol_element_indices = adj.neighbors[adj_tgt_flags]
@@ -488,7 +502,8 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
                         bdry_discr, bdry_discr,
                         i_tgt_grp, i_src_grp,
                         tgt_bdry_element_indices,
-                        src_bdry_element_indices)
+                        src_bdry_element_indices,
+                        tgt_aff_transforms=tgt_aff_transforms)
                 groups[i_tgt_grp].extend(batches)
 
     from meshmode.discretization.connection import (
@@ -560,6 +575,9 @@ def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
         i_remote_faces = rem_ipag.element_faces[indices]
         i_local_vol_elems = rem_ipag.partition_neighbors[indices]
         i_local_faces = rem_ipag.neighbor_faces[indices]
+        remote_aff_transforms = (
+            rem_ipag.aff_transform_mats[indices, :, :],
+            rem_ipag.aff_transform_vecs[indices, :])
 
         del indices
 
@@ -603,13 +621,18 @@ def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
                     i_remote_faces[local_indices]]
             assert (matched_remote_bdry_el_indices >= 0).all()
 
+            src_aff_transforms = (
+                remote_aff_transforms[0][local_indices, :, :],
+                remote_aff_transforms[1][local_indices, :])
+
             # }}}
 
             grp_batches = _make_cross_face_batches(actx,
                         local_bdry_conn.to_discr, remote_bdry_discr,
                         i_local_grp, rem_ipag.igroup,
                         matched_local_bdry_el_indices,
-                        matched_remote_bdry_el_indices)
+                        matched_remote_bdry_el_indices,
+                        src_aff_transforms=src_aff_transforms)
 
             part_batches[i_local_grp].extend(grp_batches)
 

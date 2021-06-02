@@ -468,6 +468,18 @@ class FacialAdjacencyGroup(Record):
 
         Zero if ``neighbors[i]`` is negative.
 
+    .. attribute:: aff_transform_mats
+
+        ``np.float64 [nfagrp_elements, ambient_dim, ambient_dim]``.
+        ``aff_transform_mats[iface, :, :]`` gives the matrix part of the affine
+        mapping from face *iface* to the corresponding neighbor face.
+
+    .. attribute:: aff_transform_vecs
+
+        ``np.float64 [nfagrp_elements, ambient_dim]``.
+        ``aff_transform_vecs[iface, :]`` gives the vector part of the affine
+        mapping from face *iface* to the corresponding neighbor face.
+
     .. automethod:: __eq__
     .. automethod:: __ne__
     """
@@ -481,6 +493,8 @@ class FacialAdjacencyGroup(Record):
                 and np.array_equal(self.element_faces, other.element_faces)
                 and np.array_equal(self.neighbors, other.neighbors)
                 and np.array_equal(self.neighbor_faces, other.neighbor_faces)
+                and np.array_equal(self.aff_transform_mats, other.aff_transform_mats)
+                and np.array_equal(self.aff_transform_vecs, other.aff_transform_vecs)
                 )
 
     def __ne__(self, other):
@@ -553,6 +567,18 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
 
         If ``neighbor_partitions[i]`` is negative, ``elements[i]`` is on a true
         boundary and is not connected to any other :class:``Mesh``.
+
+    .. attribute:: aff_transform_mats
+
+        ``np.float64 [nfagrp_elements, ambient_dim, ambient_dim]``.
+        ``aff_transform_mats[iface, :, :]`` gives the matrix part of the affine
+        mapping from face *iface* to the corresponding neighbor face.
+
+    .. attribute:: aff_transform_vecs
+
+        ``np.float64 [nfagrp_elements, ambient_dim]``.
+        ``aff_transform_vecs[iface, :]`` gives the vector part of the affine
+        mapping from face *iface* to the corresponding neighbor face.
 
     .. versionadded:: 2017.1
     """
@@ -1128,6 +1154,14 @@ def _match_faces_by_vertices(groups, face_ids, vertex_index_map_func=None):
     return np.stack((order[match_indices], order[match_indices+1]))
 
 
+def _make_affine_identity_transforms(ambient_dim, nfaces):
+    mats = np.zeros((nfaces, ambient_dim, ambient_dim), dtype=np.float64)
+    for idim in range(ambient_dim):
+        mats[:, idim, idim] = 1
+    vecs = np.zeros((nfaces, ambient_dim), dtype=np.float64)
+    return mats, vecs
+
+
 def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
                                      element_id_dtype,
                                      face_id_dtype,
@@ -1199,13 +1233,17 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
         for i_neighbor_grp in connected_groups:
             is_neighbor_adj = (
                 is_grp_adj & (face_id_pairs[1].groups == i_neighbor_grp))
+            mats, vecs = _make_affine_identity_transforms(
+                grp.nodes.shape[0], np.count_nonzero(is_neighbor_adj))
             grp_map[i_neighbor_grp] = FacialAdjacencyGroup(
                 igroup=igrp,
                 ineighbor_group=i_neighbor_grp,
                 elements=face_id_pairs[0].elements[is_neighbor_adj],
                 element_faces=face_id_pairs[0].faces[is_neighbor_adj],
                 neighbors=face_id_pairs[1].elements[is_neighbor_adj],
-                neighbor_faces=face_id_pairs[1].faces[is_neighbor_adj])
+                neighbor_faces=face_id_pairs[1].faces[is_neighbor_adj],
+                aff_transform_mats=mats,
+                aff_transform_vecs=vecs)
             face_has_neighbor[
                 face_id_pairs[0].faces[is_neighbor_adj],
                 face_id_pairs[0].elements[is_neighbor_adj]] = True
@@ -1229,13 +1267,17 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
                             tag_mask |= boundary_tag_bit(tag)
                         neighbors[i] = -((-neighbors[i]) | tag_mask)
             neighbor_faces = np.zeros(len(elements), dtype=face_id_dtype)
+            mats, vecs = _make_affine_identity_transforms(
+                grp.nodes.shape[0], len(elements))
             grp_map[None] = FacialAdjacencyGroup(
                 igroup=igrp,
                 ineighbor_group=None,
                 elements=elements,
                 element_faces=element_faces,
                 neighbors=neighbors,
-                neighbor_faces=neighbor_faces)
+                neighbor_faces=neighbor_faces,
+                aff_transform_mats=mats,
+                aff_transform_vecs=vecs)
 
         facial_adjacency_groups.append(grp_map)
 
@@ -1302,6 +1344,10 @@ def as_python(mesh, function_name="make_mesh"):
                     "element_faces": _numpy_array_as_python(fagrp.element_faces),
                     "neighbors": _numpy_array_as_python(fagrp.neighbors),
                     "neighbor_faces": _numpy_array_as_python(fagrp.neighbor_faces),
+                    "aff_transform_mats": _numpy_array_as_python(
+                        fagrp.aff_transform_mats),
+                    "aff_transform_vecs": _numpy_array_as_python(
+                        fagrp.aff_transform_vecs),
                     }
             return ",\n    ".join(f"{k}={v}" for k, v in params.items())
 
