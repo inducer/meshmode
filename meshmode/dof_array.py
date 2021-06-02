@@ -220,7 +220,7 @@ class DOFArray:
         """Generic in-place binary operator without any broadcast support."""
         from warnings import warn
         warn("In-place operations on DOFArrays are deprecated. "
-                "They will be removed in 2022.", DeprecationWarning, stacklevel=2)
+                "They will be removed in 2022.", DeprecationWarning, stacklevel=3)
 
         if isinstance(arg, DOFArray):
             if len(self) != len(arg):
