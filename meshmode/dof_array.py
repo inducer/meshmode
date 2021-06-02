@@ -51,6 +51,7 @@ __doc__ = """
 
 .. autofunction:: flatten
 .. autofunction:: unflatten
+.. autofunction:: unflatten_like
 .. autofunction:: flatten_to_numpy
 .. autofunction:: unflatten_from_numpy
 .. autofunction:: flat_norm
@@ -220,7 +221,7 @@ class DOFArray:
         """Generic in-place binary operator without any broadcast support."""
         from warnings import warn
         warn("In-place operations on DOFArrays are deprecated. "
-                "They will be removed in 2022.", DeprecationWarning, stacklevel=2)
+                "They will be removed in 2022.", DeprecationWarning, stacklevel=3)
 
         if isinstance(arg, DOFArray):
             if len(self) != len(arg):
@@ -531,6 +532,64 @@ def unflatten(
                 strict=strict)
 
     return rec_map_dof_array_container(_unflatten, ary)
+
+
+def unflatten_like(
+        actx: ArrayContext, ary: ArrayContainer, prototype: ArrayContainer, *,
+        strict: bool = True,
+        ) -> ArrayContainer:
+    r"""Convert all "flat" arrays returned by :func:`flatten` back to
+    :class:`DOFArray`\ s based on a *prototype* container.
+
+    This function allows doing a roundtrip with :func:`flatten` for containers
+    which have :class:`DOFArray`\ s with different numbers of degrees of
+    freedom. This is unlike :func:`unflatten`, where all the :class:`DOFArray`\ s
+    must agree on the number of degrees of freedom per element group.
+    For example, this enables "unflattening" of arrays associated with different
+    :class:`~meshmode.discretization.Discretization`\ s within the same
+    container.
+
+    :param prototype: an array container with the same structure as *ary*,
+        whose :class:`DOFArray` leaves are used to get the sizes to
+        unflatten *ary*.
+    :param strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
+        in the container *ary*. If *False*, any non-:class:`DOFArray` are
+        left as is.
+    """
+    from arraycontext import is_array_container
+
+    def _same_key(key1, key2):
+        assert key1 == key2
+        return key1
+
+    def _unflatten_like(_ary, _prototype):
+        if isinstance(_prototype, DOFArray):
+            group_shapes = [subary.shape for subary in _prototype]
+            group_sizes = [subary.size for subary in _prototype]
+            group_starts = np.cumsum([0] + group_sizes)
+
+            return _unflatten_dof_array(
+                    actx, _ary, group_shapes, group_starts,
+                    strict=True)
+        elif is_array_container(_prototype):
+            assert type(_ary) is type(_prototype)
+
+            return deserialize_container(_prototype, [
+                (_same_key(key1, key2), _unflatten_like(subary, subprototype))
+                for (key1, subary), (key2, subprototype) in zip(
+                    serialize_container(_ary),
+                    serialize_container(_prototype))
+                ])
+        else:
+            if strict:
+                raise ValueError("cannot unflatten array "
+                        f"with prototype '{type(_prototype).__name__}'; "
+                        "use 'strict=False' to leave the array unchanged")
+
+            assert type(_ary) is type(_prototype)
+            return _ary
+
+    return _unflatten_like(ary, prototype)
 
 
 def flatten_to_numpy(actx: ArrayContext, ary: ArrayContainer, *,
