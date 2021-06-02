@@ -514,11 +514,17 @@ def unflatten(
     return rec_map_dof_array_container(_unflatten, ary)
 
 
-def unflatten_like(actx: ArrayContext,
-        ary: ArrayContainer,
-        prototype: ArrayContainer, strict: bool = True) -> ArrayContainer:
+def unflatten_like(
+        actx: ArrayContext, ary: ArrayContainer, prototype: ArrayContainer, *,
+        strict: bool = True,
+        ) -> ArrayContainer:
     r"""Convert all "flat" arrays returned by :func:`flatten` back to
     :class:`DOFArray`\ s based on a *prototype* container.
+
+    This function allows doing a roundtrip with :func:`flatten` for containers
+    which have :class:`DOFArray`\ s with different numbers of degrees of
+    freedom. This is unlike :func:`unflatten`, where all the :class:`DOFArray`\ s
+    must agree on the number of degrees of freedom per element group.
 
     :param prototype: an array container with the same structure as *ary*,
         whose :class:`DOFArray` leaves are used to get the sizes to
