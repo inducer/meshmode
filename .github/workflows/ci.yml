@@ -153,10 +153,12 @@ jobs:
             env:
                 DOWNSTREAM_PROJECT: ${{ matrix.downstream_project }}
             run: |
+                curl -L -O https://tiker.net/ci-support-v0
+                . ./ci-support-v0
+                transfer_requirements_git_urls ../requirements.txt ./requirements.txt
+                
                 source .ci/install-downstream.sh
 
-                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/ci-support.sh
-                source ./ci-support.sh
                 build_py_project_in_conda_env
                 test_py_project
 
@@ -169,13 +171,13 @@ jobs:
             env:
                 DOWNSTREAM_PROJECT: mirgecom
             run: |
+                curl -L -O https://tiker.net/ci-support-v0
+                . ./ci-support-v0
+                transfer_requirements_git_urls ../requirements.txt ./requirements.txt
+
                 source .ci/install-downstream.sh
 
-                curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/ci-support.sh
-                source ./ci-support.sh
                 build_py_project_in_conda_env
-
                 examples/run_examples.sh ./examples
-
 
 # vim: sw=4
