@@ -42,7 +42,8 @@ def thaw_to_numpy(actx, array):
 def _make_cross_face_batches(actx,
         tgt_bdry_discr, src_bdry_discr,
         i_tgt_grp, i_src_grp,
-        tgt_bdry_element_indices, src_bdry_element_indices):
+        tgt_bdry_element_indices, src_bdry_element_indices,
+        tgt_aff_transform=None, src_aff_transform=None):
 
     if tgt_bdry_discr.dim == 0:
         return [InterpolationBatch(
@@ -52,15 +53,33 @@ def _make_cross_face_batches(actx,
             result_unit_nodes=src_bdry_discr.groups[i_src_grp].unit_nodes,
             to_element_face=None)]
 
-    tgt_bdry_nodes = np.array([
+    if tgt_aff_transform is None:
+        tgt_aff_transform = (None, None)
+
+    if src_aff_transform is None:
+        src_aff_transform = (None, None)
+
+    def transform(aff_transform, x):
+        mat, vec = aff_transform
+        if mat is not None:
+            result = mat @ x
+        else:
+            result = x
+        if vec is not None:
+            result = result + vec[:, np.newaxis, np.newaxis]
+        else:
+            result = x
+        return result
+
+    tgt_bdry_nodes = transform(tgt_aff_transform, np.array([
         thaw_to_numpy(actx, ary[i_tgt_grp])[tgt_bdry_element_indices]
         for ary in tgt_bdry_discr.nodes(cached=False)
-        ])
+        ]))
 
-    src_bdry_nodes = np.array([
+    src_bdry_nodes = transform(src_aff_transform, np.array([
         thaw_to_numpy(actx, ary[i_src_grp])[src_bdry_element_indices]
         for ary in src_bdry_discr.nodes(cached=False)
-        ])
+        ]))
 
     tol = 1e4 * np.finfo(tgt_bdry_nodes.dtype).eps
 
@@ -488,7 +507,8 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
                         bdry_discr, bdry_discr,
                         i_tgt_grp, i_src_grp,
                         tgt_bdry_element_indices,
-                        src_bdry_element_indices)
+                        src_bdry_element_indices,
+                        tgt_aff_transform=adj.aff_transform)
                 groups[i_tgt_grp].extend(batches)
 
     from meshmode.discretization.connection import (
@@ -609,7 +629,8 @@ def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
                         local_bdry_conn.to_discr, remote_bdry_discr,
                         i_local_grp, rem_ipag.igroup,
                         matched_local_bdry_el_indices,
-                        matched_remote_bdry_el_indices)
+                        matched_remote_bdry_el_indices,
+                        src_aff_transform=rem_ipag.aff_transform)
 
             part_batches[i_local_grp].extend(grp_batches)
 

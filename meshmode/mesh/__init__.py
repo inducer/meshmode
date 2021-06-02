@@ -468,9 +468,31 @@ class FacialAdjacencyGroup(Record):
 
         Zero if ``neighbors[i]`` is negative.
 
+    .. attribute:: aff_transform
+
+        ``(np.float64 [ambient_dim, ambient_dim], np.float64 [ambient_dim])`` or
+        (None, None). ``aff_transform[0]`` and ``aff_transform[1]`` give the
+        respective matrix and vector parts of the affine mapping from a face to its
+        corresponding neighbor face.
+
     .. automethod:: __eq__
     .. automethod:: __ne__
     """
+
+    def __init__(self, igroup, ineighbor_group, *,
+            elements, element_faces,
+            neighbors, neighbor_faces,
+            aff_transform=None,
+            **kwargs):
+        if aff_transform is None:
+            aff_transform = (None, None)
+
+        Record.__init__(self,
+            igroup=igroup, ineighbor_group=ineighbor_group,
+            elements=elements, element_faces=element_faces,
+            neighbors=neighbors, neighbor_faces=neighbor_faces,
+            aff_transform=aff_transform,
+            **kwargs)
 
     def __eq__(self, other):
         return (
@@ -481,7 +503,18 @@ class FacialAdjacencyGroup(Record):
                 and np.array_equal(self.element_faces, other.element_faces)
                 and np.array_equal(self.neighbors, other.neighbors)
                 and np.array_equal(self.neighbor_faces, other.neighbor_faces)
-                )
+                and (
+                    np.array_equal(self.aff_transform[0], other.aff_transform[0])
+                    if (
+                        self.aff_transform[0] is not None
+                        and other.aff_transform[0] is not None)
+                    else self.aff_transform[0] == other.aff_transform[0])
+                and (
+                    np.array_equal(self.aff_transform[1], other.aff_transform[1])
+                    if (
+                        self.aff_transform[1] is not None
+                        and other.aff_transform[1] is not None)
+                    else self.aff_transform[1] == other.aff_transform[1]))
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -554,8 +587,30 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
         If ``neighbor_partitions[i]`` is negative, ``elements[i]`` is on a true
         boundary and is not connected to any other :class:``Mesh``.
 
+    .. attribute:: aff_transform
+
+        ``(np.float64 [ambient_dim, ambient_dim], np.float64 [ambient_dim])`` or
+        (None, None). ``aff_transform[0]`` and ``aff_transform[1]`` give the
+        respective matrix and vector parts of the affine mapping from a face to its
+        corresponding neighbor face.
+
     .. versionadded:: 2017.1
     """
+
+    def __init__(self, igroup, ineighbor_group, *,
+            elements, element_faces,
+            neighbors, neighbor_faces,
+            partition_neighbors, neighbor_partitions,
+            aff_transform=None,
+            **kwargs):
+        FacialAdjacencyGroup.__init__(self,
+            igroup=igroup, ineighbor_group=ineighbor_group,
+            elements=elements, element_faces=element_faces,
+            neighbors=neighbors, neighbor_faces=neighbor_faces,
+            aff_transform=aff_transform,
+            partition_neighbors=partition_neighbors,
+            neighbor_partitions=neighbor_partitions,
+            **kwargs)
 
     def __eq__(self, other):
         return (super.__eq__(self, other)
@@ -1297,11 +1352,18 @@ def as_python(mesh, function_name="make_mesh"):
                 raise NotImplementedError(f"Not implemented for {fagrp.__class__}.")
             params = {
                     "igroup": fagrp.igroup,
-                    "ineighbor_group": repr(fagrp.ineighbor_group),
+                    "ineighbor_group": fagrp.ineighbor_group,
                     "elements": _numpy_array_as_python(fagrp.elements),
                     "element_faces": _numpy_array_as_python(fagrp.element_faces),
                     "neighbors": _numpy_array_as_python(fagrp.neighbors),
                     "neighbor_faces": _numpy_array_as_python(fagrp.neighbor_faces),
+                    "aff_transform": (
+                            _numpy_array_as_python(fagrp.aff_transform[0])
+                            if fagrp.aff_transform[0] is not None
+                            else None,
+                            _numpy_array_as_python(fagrp.aff_transform[1])
+                            if fagrp.aff_transform[1] is not None
+                            else None)
                     }
             return ",\n    ".join(f"{k}={v}" for k, v in params.items())
 
