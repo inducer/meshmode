@@ -23,7 +23,7 @@ THE SOFTWARE.
 from dataclasses import dataclass
 from functools import reduce
 from numbers import Real
-from typing import Optional, Union
+from typing import Optional, Union  # Tuple
 
 import numpy as np
 import numpy.linalg as la
@@ -232,7 +232,8 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
                                         elements=elements,
                                         element_faces=element_faces,
                                         neighbors=neighbors,
-                                        neighbor_faces=neighbor_faces)
+                                        neighbor_faces=neighbor_faces,
+                                        aff_transform=facial_adj.aff_transform)
 
     return local_to_local_adjacency_groups
 
@@ -240,35 +241,46 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
 @dataclass
 class _NonLocalAdjacencyData:
     """
-    Data structure for intermediate storage of non-local adjacency data. Each
-    attribute is a :class:`numpy.ndarray` and contains an entry for every local
-    element face that is shared with a remote element.
+    Data structure for intermediate storage of non-local adjacency data.
 
     .. attribute:: elements
 
-        The group-relative element index.
+        ``element_id_t [nfaces]``. ``elements[i]`` stores the group-relative
+        element index of the local face.
 
     .. attribute:: element_faces
 
-        The index of the shared face inside the local element.
+        ``face_id_t [nfaces]``. ``element_faces[i]`` stores the element-relative
+        face index of the local face.
 
     .. attribute:: neighbor_parts
 
-       The partition containing the remote element.
+        ``int [nfaces]``. ``neighbor_parts[i]`` stores the partition of the remote
+        face.
 
     .. attribute:: global_neighbors
 
-       The global element index of the remote element.
+        ``element_id_t [nfaces]``. ``global_neighbors[i]`` stores the global element
+        index of the remote face.
 
     .. attribute:: neighbor_faces
 
-       The index of the shared face inside the remote element.
+        ``face_id_t [nfaces]``. ``neighbor_faces[i]`` stores the element-relative
+        face index of the remote face.
+
+#     .. attribute:: aff_transform
+
+#         ``(float [ndim, ndim], float [ndim])``. ``aff_transform[0]`` and
+#         ``aff_transform[1]`` store the matrix and vector parts of the affine
+#         transformation that maps the local faces to the remote faces.
+
     """
     elements: np.ndarray
     element_faces: np.ndarray
     neighbor_parts: np.ndarray
     global_neighbors: np.ndarray
     neighbor_faces: np.ndarray
+#     aff_transform: Tuple[np.ndarray, np.ndarray]
 
 
 def _collect_nonlocal_adjacency_data(mesh, part_per_elem, global_elem_to_part_elem,
@@ -326,9 +338,17 @@ def _collect_nonlocal_adjacency_data(mesh, part_per_elem, global_elem_to_part_el
                 global_neighbors = facial_adj.neighbors[adj_indices] + elem_base_j
                 neighbor_parts = part_per_elem[global_neighbors]
                 neighbor_faces = facial_adj.neighbor_faces[adj_indices]
+                # FIXME: Need to split pairwise_adj according to facial adjacency
+                # group so that aff_transform can be preserved
+                if (
+                        facial_adj.aff_transform[0] is not None
+                        or facial_adj.aff_transform[1] is not None):
+                    raise NotImplementedError
 
-                pairwise_adj.append(_NonLocalAdjacencyData(elements, element_faces,
-                            neighbor_parts, global_neighbors, neighbor_faces))
+                pairwise_adj.append(
+                    _NonLocalAdjacencyData(
+                        elements, element_faces, neighbor_parts, global_neighbors,
+                        neighbor_faces))
 
         if pairwise_adj:
             nonlocal_adj_data[i_part_grp] = _NonLocalAdjacencyData(
