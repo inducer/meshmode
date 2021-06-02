@@ -525,6 +525,9 @@ def unflatten_like(
     which have :class:`DOFArray`\ s with different numbers of degrees of
     freedom. This is unlike :func:`unflatten`, where all the :class:`DOFArray`\ s
     must agree on the number of degrees of freedom per element group.
+    For example, this enables "unflattening" of arrays associated with different
+    :class:`~meshmode.discretization.Discretization`\ s within the same
+    container.
 
     :param prototype: an array container with the same structure as *ary*,
         whose :class:`DOFArray` leaves are used to get the sizes to
