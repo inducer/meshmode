@@ -80,9 +80,8 @@ def _compute_global_elem_to_part_elem(part_per_element, parts, element_id_dtype)
         to its corresponding partition-wide index if that partition belongs to
         *parts* (and if not, to -1).
     """
-    global_elem_to_part_elem = np.empty(len(part_per_element),
+    global_elem_to_part_elem = np.full(len(part_per_element), -1,
                 dtype=element_id_dtype)
-    global_elem_to_part_elem[:] = -1
     for ipart in parts:
         belongs_to_part = part_per_element == ipart
         global_elem_to_part_elem[belongs_to_part] = (
@@ -460,8 +459,7 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             element_faces = nl.element_faces
             neighbor_parts = nl.neighbor_parts
             from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
-            flags = np.empty_like(elements)
-            flags[:] = boundary_tag_bit(BTAG_REALLY_ALL)
+            flags = np.full_like(elements, boundary_tag_bit(BTAG_REALLY_ALL))
             for i_neighbor_part in all_neighbor_parts:
                 flags[neighbor_parts == i_neighbor_part] |= (
                     boundary_tag_bit(BTAG_PARTITION(i_neighbor_part)))
@@ -474,13 +472,10 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             nfaces = len(bdry.elements)
             elements = bdry.elements
             element_faces = bdry.element_faces
-            neighbor_parts = np.empty(nfaces, dtype=np.int32)
-            neighbor_parts.fill(-1)
+            neighbor_parts = np.full(nfaces, -1, dtype=np.int32)
             neighbors = bdry.neighbors
-            neighbor_elements = np.empty(nfaces, dtype=mesh.element_id_dtype)
-            neighbor_elements.fill(-1)
-            neighbor_faces = np.empty(nfaces, dtype=mesh.face_id_dtype)
-            neighbor_faces.fill(0)
+            neighbor_elements = np.full(nfaces, -1, dtype=mesh.element_id_dtype)
+            neighbor_faces = np.zeros(nfaces, dtype=mesh.face_id_dtype)
 
         else:
             # Both; need to merge together
