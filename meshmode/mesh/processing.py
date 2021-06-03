@@ -80,9 +80,8 @@ def _compute_global_elem_to_part_elem(part_per_element, parts, element_id_dtype)
         to its corresponding partition-wide index if that partition belongs to
         *parts* (and if not, to -1).
     """
-    global_elem_to_part_elem = np.empty(len(part_per_element),
+    global_elem_to_part_elem = np.full(len(part_per_element), -1,
                 dtype=element_id_dtype)
-    global_elem_to_part_elem[:] = -1
     for ipart in parts:
         belongs_to_part = part_per_element == ipart
         global_elem_to_part_elem[belongs_to_part] = (
@@ -447,52 +446,48 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
         bdry = bdry_data[i_part_grp]
         if nl is None and bdry is None:
             # Neither non-local adjacency nor boundary
-            elements = np.array([], dtype=mesh.element_id_dtype)
-            element_faces = np.array([], dtype=mesh.face_id_dtype)
-            neighbor_parts = np.array([], dtype=np.int32)
-            neighbors = np.array([], dtype=mesh.element_id_dtype)
-            neighbor_elements = np.array([], dtype=mesh.element_id_dtype)
-            neighbor_faces = np.array([], dtype=mesh.face_id_dtype)
+            elements = np.empty(0, dtype=mesh.element_id_dtype)
+            element_faces = np.empty(0, dtype=mesh.face_id_dtype)
+            neighbor_parts = np.empty(0, dtype=np.int32)
+            neighbors = np.empty(0, dtype=mesh.element_id_dtype)
+            neighbor_elements = np.empty(0, dtype=mesh.element_id_dtype)
+            neighbor_faces = np.empty(0, dtype=mesh.face_id_dtype)
 
         elif bdry is None:
             # Non-local adjacency only
             elements = nl.elements
             element_faces = nl.element_faces
             neighbor_parts = nl.neighbor_parts
-            neighbors = np.empty_like(elements)
-            for inonlocal in range(len(neighbors)):
-                i_neighbor_part = neighbor_parts[inonlocal]
-                from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
-                neighbors[inonlocal] = -(
-                                boundary_tag_bit(BTAG_REALLY_ALL)
-                                | boundary_tag_bit(BTAG_PARTITION(i_neighbor_part)))
+            from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
+            flags = np.full_like(elements, boundary_tag_bit(BTAG_REALLY_ALL))
+            for i_neighbor_part in all_neighbor_parts:
+                flags[neighbor_parts == i_neighbor_part] |= (
+                    boundary_tag_bit(BTAG_PARTITION(i_neighbor_part)))
+            neighbors = -flags
             neighbor_elements = global_elem_to_neighbor_elem[nl.global_neighbors]
             neighbor_faces = nl.neighbor_faces
 
         elif nl is None:
             # Boundary only
-            nelems = len(bdry.elements)
+            nfaces = len(bdry.elements)
             elements = bdry.elements
             element_faces = bdry.element_faces
-            neighbor_parts = np.empty(nelems, dtype=np.int32)
-            neighbor_parts.fill(-1)
+            neighbor_parts = np.full(nfaces, -1, dtype=np.int32)
             neighbors = bdry.neighbors
-            neighbor_elements = np.empty(nelems, dtype=mesh.element_id_dtype)
-            neighbor_elements.fill(-1)
-            neighbor_faces = np.empty(nelems, dtype=mesh.face_id_dtype)
-            neighbor_faces.fill(-1)
+            neighbor_elements = np.full(nfaces, -1, dtype=mesh.element_id_dtype)
+            neighbor_faces = np.zeros(nfaces, dtype=mesh.face_id_dtype)
 
         else:
             # Both; need to merge together
             nnonlocal = len(nl.elements)
             nbdry = len(bdry.elements)
-            nelems = nnonlocal + nbdry
-            elements = np.empty(nelems, dtype=mesh.element_id_dtype)
-            element_faces = np.empty(nelems, dtype=mesh.face_id_dtype)
-            neighbor_parts = np.empty(nelems, dtype=np.int32)
-            neighbors = np.empty(nelems, dtype=mesh.element_id_dtype)
-            neighbor_elements = np.empty(nelems, dtype=mesh.element_id_dtype)
-            neighbor_faces = np.empty(nelems, dtype=mesh.face_id_dtype)
+            nfaces = nnonlocal + nbdry
+            elements = np.empty(nfaces, dtype=mesh.element_id_dtype)
+            element_faces = np.empty(nfaces, dtype=mesh.face_id_dtype)
+            neighbor_parts = np.empty(nfaces, dtype=np.int32)
+            neighbors = np.empty(nfaces, dtype=mesh.element_id_dtype)
+            neighbor_elements = np.empty(nfaces, dtype=mesh.element_id_dtype)
+            neighbor_faces = np.empty(nfaces, dtype=mesh.face_id_dtype)
 
             # Combine lists of elements/faces and sort to assist in merging
             combined_elements = np.concatenate((nl.elements, bdry.elements))
@@ -522,7 +517,7 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbors[bdry_indices] = bdry.neighbors
             neighbor_parts[bdry_indices] = -1
             neighbor_elements[bdry_indices] = -1
-            neighbor_faces[bdry_indices] = -1
+            neighbor_faces[bdry_indices] = 0
 
         from meshmode.mesh import InterPartitionAdjacencyGroup
         inter_partition_adj_groups.append(InterPartitionAdjacencyGroup(
