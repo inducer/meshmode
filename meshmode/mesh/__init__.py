@@ -1142,7 +1142,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
             faces=indices[0].flatten().astype(face_id_dtype)))
     face_ids = _concatenate_face_ids(face_ids_per_group)
 
-    matches = _match_faces_by_vertices(groups, face_ids)
+    face_index_pairs = _match_faces_by_vertices(groups, face_ids)
 
     del igrp
     del grp
@@ -1150,21 +1150,29 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
     # Get ((grp#, elem#, face#), (neighbor grp#, neighbor elem#, neighbor face#))
     # for every face (both ways)
 
-    matches_both_ways = np.stack((
-        np.concatenate((matches[0, :], matches[1, :])),
-        np.concatenate((matches[1, :], matches[0, :]))))
-    order = np.lexsort((matches_both_ways[1, :], matches_both_ways[0, :]))
-    sorted_matches = matches_both_ways[:, order]
+    face_index_pairs_both_ways = np.stack((
+        np.concatenate((
+            face_index_pairs[0, :],
+            face_index_pairs[1, :])),
+        np.concatenate((
+            face_index_pairs[1, :],
+            face_index_pairs[0, :]))))
+    # Sort by group, then neighbor group. Sort face indices because face_ids is
+    # already ordered by group
+    order = np.lexsort((
+        face_index_pairs_both_ways[1, :],
+        face_index_pairs_both_ways[0, :]))
+    face_index_pairs_both_ways_sorted = face_index_pairs_both_ways[:, order]
 
     face_id_pairs = (
         _FaceIDs(
-            groups=face_ids.groups[sorted_matches[0, :]],
-            elements=face_ids.elements[sorted_matches[0, :]],
-            faces=face_ids.faces[sorted_matches[0, :]]),
+            groups=face_ids.groups[face_index_pairs_both_ways_sorted[0, :]],
+            elements=face_ids.elements[face_index_pairs_both_ways_sorted[0, :]],
+            faces=face_ids.faces[face_index_pairs_both_ways_sorted[0, :]]),
         _FaceIDs(
-            groups=face_ids.groups[sorted_matches[1, :]],
-            elements=face_ids.elements[sorted_matches[1, :]],
-            faces=face_ids.faces[sorted_matches[1, :]]))
+            groups=face_ids.groups[face_index_pairs_both_ways_sorted[1, :]],
+            elements=face_ids.elements[face_index_pairs_both_ways_sorted[1, :]],
+            faces=face_ids.faces[face_index_pairs_both_ways_sorted[1, :]]))
 
     # {{{ build facial_adjacency_groups data structure
 
