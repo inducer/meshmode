@@ -1051,7 +1051,7 @@ def _boundary_tag_bit(boundary_tags, btag_to_index, boundary_tag):
 class _FaceIDs:
     """
     Data structure for storage of a list of face identifiers (group, element, face).
-    Each attribute is a :class:`numpy.ndarray`.
+    Each attribute is a :class:`numpy.ndarray` of shape (nfaces,).
 
     .. attribute:: groups
 
