@@ -1137,7 +1137,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
     for igrp, grp in enumerate(groups):
         indices = np.indices((grp.nfaces, grp.nelements), dtype=element_id_dtype)
         face_ids_per_group.append(_FaceIDs(
-            groups=np.zeros(grp.nelements * grp.nfaces, dtype=int) + igrp,
+            groups=np.full(grp.nelements * grp.nfaces, igrp),
             elements=indices[1].flatten(),
             faces=indices[0].flatten().astype(face_id_dtype)))
     face_ids = _concatenate_face_ids(face_ids_per_group)
@@ -1182,8 +1182,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
     for igrp, grp in enumerate(groups):
         grp_map = {}
 
-        face_has_neighbor = np.empty((grp.nfaces, grp.nelements), dtype=bool)
-        face_has_neighbor[:, :] = False
+        face_has_neighbor = np.full((grp.nfaces, grp.nelements), False)
 
         is_grp_adj = face_id_pairs[0].groups == igrp
         connected_groups = np.unique(face_id_pairs[1].groups[is_grp_adj])
@@ -1205,10 +1204,10 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
         if has_bdry:
             faces, elements = np.where(~face_has_neighbor)
             element_faces = faces.astype(face_id_dtype)
-            neighbors = np.empty(len(elements), dtype=element_id_dtype)
-            neighbors[:] = -(
-                boundary_tag_bit(BTAG_ALL)
-                | boundary_tag_bit(BTAG_REALLY_ALL))
+            neighbors = np.full(len(elements),
+                -(boundary_tag_bit(BTAG_ALL)
+                    | boundary_tag_bit(BTAG_REALLY_ALL)),
+                dtype=element_id_dtype)
             if face_vertex_indices_to_tags is not None:
                 for i in range(len(elements)):
                     ref_fvi = grp.face_vertex_indices()[element_faces[i]]
