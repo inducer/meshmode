@@ -1048,6 +1048,43 @@ def _boundary_tag_bit(boundary_tags, btag_to_index, boundary_tag):
 
 # {{{ vertex-based facial adjacency
 
+class _FlatFacialAdjacencyData:
+    """
+    Data structure for intermediate storage of facial adjacency data. Each attribute
+    is a :class:`numpy.ndarray` containing data for each stored face and its
+    adjacent neighbor.
+
+    .. attribute:: elements
+
+        The group-relative element index.
+
+    .. attribute:: element_faces
+
+        The index of the shared face inside the element.
+
+    .. attribute:: neighbor_groups
+
+        The group containing the adjacent element, or -1 if the face is not shared.
+
+    .. attribute:: neighbors
+
+        The mesh-wide element index of the adjacent element, or boundary tag
+        information if the face is not shared.
+
+    .. attribute:: neighbor_faces
+
+        The index of the shared face inside the adjacent element, or zero if the
+        face is not shared.
+
+    """
+    def __init__(self, nfaces, element_id_dtype, face_id_dtype):
+        self.elements = np.empty(nfaces, dtype=element_id_dtype)
+        self.element_faces = np.empty(nfaces, dtype=face_id_dtype)
+        self.neighbor_groups = np.empty(nfaces, dtype=np.int64)
+        self.neighbors = np.empty(nfaces, dtype=element_id_dtype)
+        self.neighbor_faces = np.empty(nfaces, dtype=face_id_dtype)
+
+
 class _FaceIDs:
     """
     Data structure for storage of a list of face identifiers (group, element, face).
