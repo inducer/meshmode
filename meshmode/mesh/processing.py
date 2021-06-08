@@ -1081,7 +1081,7 @@ def affine_map(mesh,
             z = A @ z
 
         if b is not None:
-            z += b
+            z = z + b
 
         return z
 
