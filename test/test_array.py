@@ -24,8 +24,8 @@ from dataclasses import dataclass
 import pytest
 import numpy as np
 
-import meshmode         # noqa: F401
-from arraycontext import (  # noqa: F401
+from arraycontext import _acf           # noqa: F401
+from arraycontext import (              # noqa: F401
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
@@ -80,7 +80,7 @@ def test_flatten_unflatten(actx_factory):
 
     x = thaw(discr.nodes(), actx)
     avg_mass = DOFArray(actx, tuple([
-        actx.empty((grp.nelements, 1), a.dtype) for grp in discr.groups
+        (np.pi + actx.zeros((grp.nelements, 1), a.dtype)) for grp in discr.groups
         ]))
 
     c = MyContainer(name="flatten",
