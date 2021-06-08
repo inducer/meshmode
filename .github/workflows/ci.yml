@@ -38,14 +38,10 @@ jobs:
     pytest3:
         name: Pytest Conda Py3
         runs-on: ubuntu-latest
-        strategy:
-            matrix:
-                loopy-branch: [main, kernel_callables_v3-edit2]
         steps:
         -   uses: actions/checkout@v2
         -   name: "Main Script"
             run: |
-                sed -i "s/loopy.git/loopy.git@${{ matrix.loopy-branch }}/g" requirements.txt
                 sudo apt update && sudo apt install octave
 
                 export MPLBACKEND=Agg
@@ -88,14 +84,10 @@ jobs:
     examples3:
         name: Examples Conda Py3
         runs-on: ubuntu-latest
-        strategy:
-            matrix:
-                loopy-branch: [main, kernel_callables_v3-edit2]
         steps:
         -   uses: actions/checkout@v2
         -   name: "Main Script"
             run: |
-                sed -i "s/loopy.git/loopy.git@${{ matrix.loopy-branch }}/g" requirements.txt
                 export MPLBACKEND=Agg
                 USE_CONDA_BUILD=1
                 curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/build-py-project-and-run-examples.sh
