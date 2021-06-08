@@ -181,6 +181,27 @@ def test_affine_map():
             assert la.norm(x-m_inv(m(x))) < 1e-10
 
 
+def test_partial_affine_map(dim=2):
+    orig_mesh = mgen.generate_regular_rect_mesh(
+            a=(0,)*dim, b=(5, 3, 4)[:dim], npoints_per_axis=(10, 6, 7)[:dim],
+            order=1)
+
+    from meshmode.mesh.processing import affine_map
+    mesh = affine_map(orig_mesh, b=np.pi)
+    mesh = affine_map(orig_mesh, b=np.pi)
+    assert la.norm(orig_mesh.vertices - mesh.vertices + np.pi) < 1.0e-14
+
+    mesh = affine_map(orig_mesh, b=np.array([np.pi] * dim))
+    assert la.norm(orig_mesh.vertices - mesh.vertices + np.pi) < 1.0e-14
+
+    mesh = affine_map(orig_mesh, A=np.pi)
+    mesh = affine_map(orig_mesh, A=np.pi)
+    assert la.norm(orig_mesh.vertices - mesh.vertices / np.pi) < 1.0e-14
+
+    mesh = affine_map(orig_mesh, A=np.pi * np.eye(dim))
+    assert la.norm(orig_mesh.vertices - mesh.vertices / np.pi) < 1.0e-14
+
+
 @pytest.mark.parametrize("ambient_dim", [2, 3])
 def test_mesh_rotation(ambient_dim, visualize=False):
     order = 3
