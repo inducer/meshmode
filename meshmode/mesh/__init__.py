@@ -1146,9 +1146,10 @@ def _match_faces_by_vertices(groups, face_ids, vertex_index_map_func=None):
             face_vertex_indices[:len(ref_fvi), indices] = (
                 vertex_index_map_func(grp_fvi).T)
 
+    # Normalize vertex-based "face identifiers" by sorting
+    face_vertex_indices_increasing = np.sort(face_vertex_indices, axis=0)
     # Lexicographically sort the face vertex indices, then diff the result to find
     # faces with the same vertices
-    face_vertex_indices_increasing = np.sort(face_vertex_indices, axis=0)
     order = np.lexsort(face_vertex_indices_increasing)
     diffs = np.diff(face_vertex_indices_increasing[:, order], axis=1)
     match_indices, = (~np.any(diffs, axis=0)).nonzero()
