@@ -65,7 +65,11 @@ __doc__ = """
 @with_container_arithmetic(
         bcast_obj_array=True,
         bcast_numpy_array=True,
-        rel_comparison=True)
+        rel_comparison=True,
+        _same_cls_check="""
+            if arg1.array_context is not arg2.array_context:
+                raise ValueError("array contexts of both arguments must match")
+            """)
 class DOFArray:
     r"""This array type holds degree-of-freedom arrays for use with
     :class:`~meshmode.discretization.Discretization`,
