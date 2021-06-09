@@ -180,7 +180,7 @@ class _BaseFakeNumpyNamespace:
             # FIXME: Maybe involve loopy type inference?
             result = actx.empty(args[0].shape, args[0].dtype)
             prg = actx._get_scalar_func_loopy_program(
-                    c_name, nargs=len(args), naxes=len(args[0].shape))
+                    c_name, nargs=len(args), naxes=len(args[0].shape), shape=args[0].shape, dtype=args[0].dtype)
             actx.call_loopy(prg, out=result,
                     **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result
@@ -350,7 +350,7 @@ class ArrayContext(ABC):
         """
 
     @memoize_method
-    def _get_scalar_func_loopy_program(self, c_name, nargs, naxes):
+    def _get_scalar_func_loopy_program(self, c_name, nargs, naxes, shape=None, dtype=None):
         from pymbolic import var
 
         var_names = ["i%d" % i for i in range(naxes)]
@@ -377,10 +377,14 @@ class ArrayContext(ABC):
         for arg in prog.args:
             if isinstance(arg, lp.ArrayArg):
                 arg.tags = IsDOFArray()
-            if arg.name == "out":
-                arg.is_output_only = True
-
-
+                if shape is not None:
+                    arg.shape = shape
+                if dtype is not None:
+                    arg.dtype = dtype
+                if arg.name == "out":
+                    arg.is_output_only = True
+            if isinstance(arg, lp.ValueArg) and shape is not None:
+                arg.tags = ParameterValue(shape[int(arg.name[1])])
 
         return prog
 
