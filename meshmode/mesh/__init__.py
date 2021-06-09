@@ -1195,8 +1195,9 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
         np.concatenate((
             face_index_pairs[1, :],
             face_index_pairs[0, :]))))
-    # Sort by group, then neighbor group. Sort face indices because face_ids is
-    # already ordered by group
+    # Accomplish a sort by group, then neighbor group. This is done by sorting by
+    # the indices in face_ids. Realize that those are already ordered by group by
+    # construction.
     order = np.lexsort((
         face_index_pairs_both_ways[1, :],
         face_index_pairs_both_ways[0, :]))
