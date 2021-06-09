@@ -1117,11 +1117,19 @@ def _concatenate_face_ids(face_ids_list):
 
 def _match_faces_by_vertices(groups, face_ids, vertex_index_map_func=None):
     """
-    Return matching faces in *face_ids*, where two faces match if they have the
-    same vertices. Expressed as a :class:`np.ndarray` of shape ``(2, nmatches)`` of
-    indices into *face_ids*. *vertex_index_map_func* is used to map vertices to
-    other vertices; it must accept (possibly multidimensional) numpy arrays of
-    vertex indices.
+    Return matching faces in *face_ids* (expressed as pairs of indices into
+    *face_ids*), where two faces match if they have the same vertices.
+
+    :arg groups: A list of :class:`~meshmode.mesh.MeshElementGroup` to which the
+        faces in *face_ids* belong.
+    :arg face_ids: A :class:`~meshmode.mesh._FaceIDs` containing the faces selected
+        for matching.
+    :arg vertex_index_map_func: An optional function that maps a set of vertex
+        indices (stored in a :class:`numpy.ndarray`) to another set of vertex
+        indices. Must accept multidimensional arrays as input and return an array
+        of the same shape.
+    :returns: A :class:`numpy.ndarray` of shape ``(2, nmatches)`` of indices into
+        *face_ids*.
     """
     if vertex_index_map_func is None:
         def vertex_index_map_func(vertices):
