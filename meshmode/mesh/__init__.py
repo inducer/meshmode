@@ -1088,7 +1088,7 @@ class _FlatFacialAdjacencyData:
 class _FaceIDs:
     """
     Data structure for storage of a list of face identifiers (group, element, face).
-    Each attribute is a :class:`numpy.ndarray` of shape (nfaces,).
+    Each attribute is a :class:`numpy.ndarray` of shape ``(nfaces,)``.
 
     .. attribute:: groups
 
@@ -1118,7 +1118,7 @@ def _concatenate_face_ids(face_ids_list):
 def _match_faces_by_vertices(groups, face_ids, vertex_index_map_func=None):
     """
     Return matching faces in *face_ids*, where two faces match if they have the
-    same vertices. Expressed as a :class:`np.ndarray` of shape (2,nmatches) of
+    same vertices. Expressed as a :class:`np.ndarray` of shape ``(2, nmatches)`` of
     indices into *face_ids*. *vertex_index_map_func* is used to map vertices to
     other vertices; it must accept (possibly multidimensional) numpy arrays of
     vertex indices.
