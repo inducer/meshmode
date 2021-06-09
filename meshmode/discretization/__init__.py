@@ -419,7 +419,7 @@ class Discretization:
                 np.float64: np.complex128
                 }[self.real_dtype.type])
 
-        self._setup_actx = actx
+        self._setup_actx = actx.clone()
         self._group_factory = group_factory
         self._cached_nodes = None
 
