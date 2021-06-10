@@ -571,8 +571,8 @@ class Discretization:
             raise ElementGroupTypeError("Element groups must be nodal.")
 
         @memoize_in(actx, (Discretization, "nodes_prg"))
-        def prg():
-        #def prg(nelements, ndiscr_nodes, nmesh_nodes, fp_format):
+        #def prg():
+        def prg(nelements, ndiscr_nodes, nmesh_nodes, fp_format):
             result = make_loopy_program(
                 """{[iel,idof,j]:
                     0<=iel<nelements and
@@ -583,13 +583,13 @@ class Discretization:
                         sum(j, resampling_mat[idof, j] * nodes[iel, j])
                     """,
                 kernel_data=[
-                    GlobalArg("result", None, shape=auto, tags=IsDOFArray()),
-                    GlobalArg("nodes", None, shape=auto, tags=None),
-                    GlobalArg("resampling_mat", None, shape=auto),
+                    GlobalArg("result", fp_format, shape=(nelements, ndiscr_nodes), tags=IsDOFArray()),
+                    GlobalArg("nodes", fp_format, shape=auto, tags=None),
+                    GlobalArg("resampling_mat", fp_format, shape=(ndiscr_nodes, nmesh_nodes)),
                     # Many errors when these are specified
-                    #ValueArg("nelements", tags=ParameterValue(nelements)),
-                    #ValueArg("ndiscr_nodes", tags=ParameterValue(ndiscr_nodes)),
-                    #ValueArg("nmesh_nodes", tags=ParameterValue(nmesh_nodes)),
+                    ValueArg("nelements", tags=ParameterValue(nelements)),
+                    ValueArg("ndiscr_nodes", tags=ParameterValue(ndiscr_nodes)),
+                    ValueArg("nmesh_nodes", tags=ParameterValue(nmesh_nodes)),
                     ...
                 ],
                 name="nodes")
@@ -607,11 +607,19 @@ class Discretization:
                     and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
                 return nodes
 
-            return actx.call_loopy(
-                    prg(),
+            fp_format = nodes.dtype
+            resampling_mat = actx.from_numpy(grp.from_mesh_interp_matrix())
+            ndiscr_nodes, nmesh_nodes = resampling_mat.shape
+            nelements = nodes.shape[0]
+
+            prog  = prg(nelements, ndiscr_nodes, nmesh_nodes, fp_format)
+            
+            result = actx.call_loopy(
+                    prog,
                     resampling_mat=actx.from_numpy(grp.from_mesh_interp_matrix()),
                     nodes=nodes,
                     )[1]["result"]
+            return result
             
 
         result = make_obj_array([
