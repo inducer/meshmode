@@ -198,7 +198,7 @@ class DGDiscretization:
         return self.volume_discr.zeros(actx)
 
     def grad(self, vec):
-        ipder = self.inverse_parametrization_derivative()
+        ipder = thaw(self.inverse_parametrization_derivative(), vec.array_context)
 
         from meshmode.discretization import num_reference_derivative
         dref = [
@@ -259,7 +259,7 @@ class DGDiscretization:
                     tagged=(FirstAxisIsElementsTag(),)
                 ) for grp, vec_i in zip(discr.groups, vec)
             )
-        ) / self.vol_jacobian()
+        ) / thaw(self.vol_jacobian(), actx)
 
     @memoize_method
     def get_local_face_mass_matrix(self, afgrp, volgrp, dtype):
@@ -310,7 +310,7 @@ class DGDiscretization:
         all_faces_discr = all_faces_conn.to_discr
         vol_discr = all_faces_conn.from_discr
 
-        fj = self.face_jacobian("all_faces")
+        fj = thaw(self.face_jacobian("all_faces"), vec.array_context)
         vec = vec*fj
 
         assert len(all_faces_discr.groups) == len(vol_discr.groups)

@@ -56,7 +56,7 @@ def test_nodal_dg_interop(actx_factory, dim):
 
         for ax in range(dim):
             x_ax = ndgctx.pull_dof_array(actx, ndgctx.AXES[ax])
-            err = flat_norm(x_ax-discr.nodes()[ax], np.inf)
+            err = flat_norm(x_ax-thaw(discr.nodes()[ax], actx), np.inf)
             assert err < 1e-15
 
         n0 = thaw(discr.nodes()[0], actx)
