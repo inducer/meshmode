@@ -23,7 +23,7 @@ THE SOFTWARE.
 import operator as op
 import numpy as np
 from typing import Optional, Iterable, Any, Tuple, Union
-from loopy import GlobalArg, auto
+from loopy import GlobalArg, ValueArg, auto
 from functools import partial, update_wrapper
 from numbers import Number
 import threading
@@ -32,7 +32,7 @@ from contextlib import contextmanager
 from pytools import single_valued, memoize_in
 from pytools.obj_array import obj_array_vectorize, obj_array_vectorize_n_args
 
-from meshmode.array_context import ArrayContext, make_loopy_program, IsDOFArray
+from meshmode.array_context import ArrayContext, make_loopy_program, IsDOFArray, ParameterValue
 
 __doc__ = """
 .. autoclass:: DOFArray
