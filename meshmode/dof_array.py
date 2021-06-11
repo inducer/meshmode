@@ -567,13 +567,15 @@ def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
     actx = ary.array_context
 
     @memoize_in(actx, (flatten, "flatten_prg"))
-    def prg():
+    def prg(nelements, ndofs, dtype):
         return make_loopy_program(
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
             """result[grp_start + iel*ndofs_per_element + idof] \
                 = grp_ary[iel, idof]""",
             kernel_data=[
-                GlobalArg("grp_ary", None, shape=auto, tags=IsDOFArray()),
+                GlobalArg("grp_ary", dtype, shape=(nelements, ndofs), tags=IsDOFArray()),
+                ValueArg("nelements", tags=ParameterValue(nelements)),
+                ValueArg("ndofs_per_element", tags=ParameterValue(ndofs)),
                 ...
             ],
             name="flatten")
@@ -581,7 +583,10 @@ def flatten(ary: Union[DOFArray, np.ndarray]) -> Any:
     result = actx.empty(group_starts[-1], dtype=ary.entry_dtype)
 
     for grp_start, grp_ary in zip(group_starts, ary):
-        actx.call_loopy(prg(), grp_ary=grp_ary, result=result, grp_start=grp_start)
+        nelements, ndofs = grp_ary.shape
+        dtype = grp_ary.dtype
+        prog = prg(nelements, ndofs, dtype)
+        actx.call_loopy(prog, grp_ary=grp_ary, result=result, grp_start=grp_start)
 
     return result
 

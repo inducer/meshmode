@@ -179,8 +179,10 @@ class _BaseFakeNumpyNamespace:
             actx = self._array_context
             # FIXME: Maybe involve loopy type inference?
             result = actx.empty(args[0].shape, args[0].dtype)
+            from loopy.types import to_loopy_type
+            dtype = to_loopy_type(args[0].dtype)
             prg = actx._get_scalar_func_loopy_program(
-                    c_name, nargs=len(args), naxes=len(args[0].shape), shape=args[0].shape, dtype=args[0].dtype)
+                    c_name, nargs=len(args), naxes=len(args[0].shape), shape=args[0].shape, dtype=dtype)
             actx.call_loopy(prg, out=result,
                     **{"inp%d" % i: arg for i, arg in enumerate(args)})
             return result

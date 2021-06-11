@@ -29,7 +29,7 @@ import numpy as np
 from abc import ABCMeta, abstractproperty, abstractmethod
 from pytools import memoize_in, memoize_method, keyed_memoize_in
 from pytools.obj_array import make_obj_array
-from meshmode.array_context import ArrayContext, make_loopy_program, IsDOFArray, ParameterValue
+from meshmode.array_context import ArrayContext, make_loopy_program, IsDOFArray, ParameterValue, IsOpArray
 from loopy import GlobalArg, ValueArg, auto
 
 from warnings import warn
@@ -585,8 +585,7 @@ class Discretization:
                 kernel_data=[
                     GlobalArg("result", fp_format, shape=(nelements, ndiscr_nodes), tags=IsDOFArray()),
                     GlobalArg("nodes", fp_format, shape=auto, tags=None),
-                    GlobalArg("resampling_mat", fp_format, shape=(ndiscr_nodes, nmesh_nodes)),
-                    # Many errors when these are specified
+                    GlobalArg("resampling_mat", fp_format, shape=(ndiscr_nodes, nmesh_nodes), tags=IsOpArray()),
                     ValueArg("nelements", tags=ParameterValue(nelements)),
                     ValueArg("ndiscr_nodes", tags=ParameterValue(ndiscr_nodes)),
                     ValueArg("nmesh_nodes", tags=ParameterValue(nmesh_nodes)),
