@@ -7,7 +7,7 @@ git+https://github.com/inducer/modepy.git#egg=modepy
 git+https://github.com/inducer/pyopencl.git#egg=pyopencl
 git+https://github.com/inducer/islpy.git#egg=islpy
 
-git+https://github.com/inducer/arraycontext.git@freeze-thaw-usability#egg=arraycontext
+git+https://github.com/inducer/arraycontext.git#egg=arraycontext
 
 # required by pytential, which is in turn needed for some tests
 git+https://github.com/inducer/pymbolic.git#egg=pymbolic
