@@ -295,10 +295,12 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         actx = ary.array_context
 
+        from arraycontext.metadata import ElementInameTag, DOFInameTag
+
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_mat_batch_knl"))
         def batch_mat_knl():
-            return make_loopy_program(
+            t_unit = make_loopy_program(
                 [
                     "{[iel_init]: 0 <= iel_init < nelements_result}",
                     "{[idof_init]: 0 <= idof_init < n_to_nodes}",
@@ -325,13 +327,20 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("n_from_nodes", np.int32),
                     "...",
                 ],
-                name="resample_by_mat_batch"
+                name="resample_by_mat_batch",
             )
+            t_unit = lp.tag_inames(t_unit, {
+                "iel_init": ElementInameTag(),
+                "iel": ElementInameTag(),
+                "idof_init": DOFInameTag(),
+                "idof": DOFInameTag(),
+                })
+            return t_unit
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_picking_batch_knl"))
         def batch_pick_knl():
-            return make_loopy_program(
+            t_unit = make_loopy_program(
                 [
                     "{[iel_init]: 0 <= iel_init < nelements_result}",
                     "{[idof_init]: 0 <= idof_init < n_to_nodes}",
@@ -357,8 +366,15 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("n_from_nodes", np.int32),
                     "...",
                 ],
-                name="resample_by_picking_batch"
+                name="resample_by_picking_batch",
             )
+            t_unit = lp.tag_inames(t_unit, {
+                "iel_init": ElementInameTag(),
+                "iel": ElementInameTag(),
+                "idof_init": DOFInameTag(),
+                "idof": DOFInameTag(),
+                })
+            return t_unit
 
         group_data = []
         for i_tgrp, cgrp in enumerate(self.groups):
