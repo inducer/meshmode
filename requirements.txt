@@ -7,13 +7,14 @@ git+https://github.com/inducer/modepy.git#egg=modepy
 git+https://github.com/inducer/pyopencl.git#egg=pyopencl
 git+https://github.com/inducer/islpy.git#egg=islpy
 
-git+https://github.com/inducer/arraycontext.git#egg=arraycontext
-
 # required by pytential, which is in turn needed for some tests
 git+https://github.com/inducer/pymbolic.git#egg=pymbolic
 
 # also depends on pymbolic, so should come after it
-git+https://github.com/inducer/loopy.git#egg=loopy
+git+https://github.com/inducer/loopy.git@iname-tags#egg=loopy
+
+# depends on loopy, so should come after it.
+git+https://github.com/inducer/arraycontext.git@iname-tag-transform#egg=arraycontext
 
 # more pytential dependencies
 git+https://github.com/inducer/boxtree.git#egg=boxtree

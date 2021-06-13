@@ -31,6 +31,8 @@ from arraycontext import (  # noqa
         as pytest_generate_tests,
         thaw)
 
+from arraycontext import _acf  # noqa: F401
+
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
