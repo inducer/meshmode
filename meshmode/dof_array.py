@@ -646,23 +646,6 @@ def unflatten_from_numpy(
 
 # {{{ flat_norm
 
-def _flatten_array(ary):
-    import pyopencl.array as cl
-    assert isinstance(ary, cl.Array)
-
-    if ary.size == 0:
-        # Work around https://github.com/inducer/pyopencl/pull/402
-        return ary._new_with_changes(
-                data=None, offset=0, shape=(0,), strides=(ary.dtype.itemsize,))
-    if ary.flags.f_contiguous:
-        return ary.reshape(-1, order="F")
-    elif ary.flags.c_contiguous:
-        return ary.reshape(-1, order="C")
-    else:
-        raise ValueError("cannot flatten group array of DOFArray for norm, "
-                f"with strides {ary.strides} of {ary.dtype}")
-
-
 def flat_norm(ary, ord=None) -> float:
     r"""Return an element-wise :math:`\ell^{\text{ord}}` norm of *ary*.
 
@@ -684,7 +667,7 @@ def flat_norm(ary, ord=None) -> float:
         actx = ary.array_context
         return la.norm(
                 [
-                    actx.np.linalg.norm(_flatten_array(subary), ord=ord)
+                    actx.np.linalg.norm(actx.np.ravel(ary, order="A"), ord=ord)
                     for _, subary in serialize_container(ary)],
                 ord=ord)
 
