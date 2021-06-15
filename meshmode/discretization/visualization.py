@@ -641,8 +641,9 @@ class Visualizer:
                 par_manifest_filename=par_manifest_filename,
                 par_file_names=[
                     file_name_pattern.format(rank=rank)
-                    for rank in range(nranks)]
-        )
+                    for rank in range(nranks)
+                    ]
+                )
 
     def write_vtk_file(self, file_name, names_and_fields,
             compressor=None, real_only=False, overwrite=False,
