@@ -131,6 +131,7 @@ class FiredrakeConnection:
     .. automethod:: __init__
     .. automethod:: from_meshmode
     .. automethod:: from_firedrake
+    .. automethod:: firedrake_fspace
     """
     def __init__(self, discr, fdrake_fspace, mm2fd_node_mapping, group_nr=None):
         """
@@ -218,10 +219,11 @@ class FiredrakeConnection:
         fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
 
         # compute and store resampling matrices
-        self._resampling_mat_fd2mm = resampling_matrix(element_grp.basis(),
+        element_grp_basis_fcts = element_grp.basis_obj().functions
+        self._resampling_mat_fd2mm = resampling_matrix(element_grp_basis_fcts,
                                                        new_nodes=mm_unit_nodes,
                                                        old_nodes=fd_unit_nodes)
-        self._resampling_mat_mm2fd = resampling_matrix(element_grp.basis(),
+        self._resampling_mat_mm2fd = resampling_matrix(element_grp_basis_fcts,
                                                        new_nodes=fd_unit_nodes,
                                                        old_nodes=mm_unit_nodes)
 
@@ -283,8 +285,18 @@ class FiredrakeConnection:
         """
         # Validate that *function* is convertible
         from firedrake.function import Function
-        if not isinstance(function, Function):
+        function_is_function_type = isinstance(function, Function)
+        # FIXME : Once ExternalOperator is fully implemented, we don't need
+        #         to try/except this block
+        if not function_is_function_type:
+            try:
+                from firedrake.pointwise_operators import ExternalOperator
+                function_is_extop_type = isinstance(function, ExternalOperator)
+            except ImportError:
+                function_is_extop_type = False
+        if not function_is_function_type and not function_is_extop_type:
             raise TypeError(f"'{function_name} must be a firedrake Function"
+                            " or ExternalOperator, "
                             f" but is of unexpected type '{type(function)}'")
         ufl_elt = function.function_space().ufl_element()
         if ufl_elt.family() != self._ufl_element.family():
@@ -342,7 +354,7 @@ class FiredrakeConnection:
                 raise ValueError("shape != () and '%s' is of type DOFArray"
                                  " instead of np.ndarray." % field_name)
             check_dof_array(field, field_name)
-        elif isinstance(field, np.ndarray) and field.dtype == np.object:
+        elif isinstance(field, np.ndarray) and field.dtype == object:
             if shape is not None and field.shape != shape:
                 raise ValueError(f"'{field_name}.shape' must be {shape}, not "
                                  f"'{field.shape}'")
@@ -403,7 +415,7 @@ class FiredrakeConnection:
             and stored in *out*, which is then returned.
         :arg actx:
             * If *out* is *None*, then *actx* is a
-              :class:`~meshmode.array_context.ArrayContext` on which
+              :class:`~arraycontext.ArrayContext` on which
               to create the :class:`~meshmode.dof_array.DOFArray`
             * If *out* is not *None*, *actx* must be *None* or *out*'s
               :attr:`~meshmode.dof_array.DOFArray.array_context`.
@@ -424,14 +436,14 @@ class FiredrakeConnection:
                                  " *None* or 'out.array_context'")
         else:
             # If 'out' is not supplied, create it
-            from meshmode.array_context import ArrayContext
+            from arraycontext import ArrayContext
             if not isinstance(actx, ArrayContext):
                 raise TypeError("If 'out' is *None*, 'actx' must be of type "
                                 "ArrayContext, not '%s'." % type(actx))
             if fspace_shape == ():
                 out = self.discr.empty(actx, dtype=function_data.dtype)
             else:
-                out = np.ndarray(fspace_shape, dtype=np.object)
+                out = np.ndarray(fspace_shape, dtype=object)
                 for multi_index in np.ndindex(fspace_shape):
                     out[multi_index] = \
                         self.discr.empty(actx, dtype=function_data.dtype)
@@ -583,7 +595,7 @@ def _get_cells_to_use(fdrake_mesh, bdy_id):
     cfspace = fdrake_mesh.coordinates.function_space()
     cell_node_list = cfspace.cell_node_list
 
-    boundary_nodes = cfspace.boundary_nodes(bdy_id, "topological")
+    boundary_nodes = cfspace.boundary_nodes(bdy_id)
     # Reduce along each cell: Is a vertex of the cell in boundary nodes?
     cell_is_near_bdy = np.any(np.isin(cell_node_list, boundary_nodes), axis=1)
 
@@ -600,7 +612,7 @@ def build_connection_from_firedrake(actx, fdrake_fspace, grp_factory=None,
     meshmode discretization and facilitating
     transfer of functions to and from :mod:`firedrake`.
 
-    :arg actx: A :class:`~meshmode.array_context.ArrayContext`
+    :arg actx: A :class:`~arraycontext.ArrayContext`
         used to instantiate :attr:`FiredrakeConnection.discr`.
     :arg fdrake_fspace: A :mod:`firedrake` ``"DG"``
         function space (of class
@@ -620,8 +632,14 @@ PolynomialRecursiveNodesGroupFactory` with ``"lgl"`` nodes is used.
         imported, a :class:`~meshmode.discretization.poly_element.\
 PolynomialWarpAndBlendGroupFactory` is used.
     :arg restrict_to_boundary: (optional)
-        If not *None*, then must be a valid boundary marker for
-        ``fdrake_fspace.mesh()``. In this case, creates a
+        If not *None*, then must be one of the following:
+
+        * A valid boundary marker for ``fdrake_fspace.mesh()``
+        * A tuple of valid boundary markers for ``fdrake_fspace.mesh()``
+        * The string ``"on_boundary"`` (:mod:`firedrake` equivalent
+          to :class:`~meshmode.mesh.BTAG_ALL`).
+
+        If not *None*, creates a
         :class:`~meshmode.discretization.Discretization` on a submesh
         of ``fdrake_fspace.mesh()`` created from the cells with at least
         one vertex on a facet marked with the marker
@@ -669,14 +687,36 @@ PolynomialWarpAndBlendGroupFactory` is used.
         except ImportError:
             # If cannot be imported, uses warp-and-blend nodes
             grp_factory = PolynomialWarpAndBlendGroupFactory(degree)
+    # validate restrict_to_boundary, if present
     if restrict_to_boundary is not None:
-        uniq_markers = fdrake_fspace.mesh().exterior_facets.unique_markers
-        allowable_bdy_ids = list(uniq_markers) + ["on_boundary"]
-        if restrict_to_boundary not in allowable_bdy_ids:
-            raise ValueError("'restrict_to_boundary' must be one of"
-                            " the following allowable boundary ids: "
-                            f"{allowable_bdy_ids}, not "
-                            f"'{restrict_to_boundary}'")
+        firedrake_bdy_ids = fdrake_fspace.mesh().exterior_facets.unique_markers
+        # Integer case, just make sure it is a valid bdy id
+        if isinstance(restrict_to_boundary, int):
+            if restrict_to_boundary not in firedrake_bdy_ids:
+                raise ValueError("Unrecognized boundary id "
+                                 f"{restrict_to_boundary}. Valid boundary "
+                                 f"ids: {firedrake_bdy_ids}")
+        # Tuple case, make sure it is a tuple of valid bdy ids
+        elif isinstance(restrict_to_boundary, tuple):
+            for bdy_id in restrict_to_boundary:
+                if not isinstance(bdy_id, int):
+                    raise TypeError(f"Invalid type {type(bdy_id)} in "
+                                    "restrict_to_boundary. When "
+                                    "restrict_to_boundary is a tuple, each "
+                                    "entry must be of type int")
+                if bdy_id not in firedrake_bdy_ids:
+                    raise ValueError(f"Unrecognized boundary id {bdy_id}. Valid"
+                                     f" boundary ids: {firedrake_bdy_ids}.")
+        # String case, must be "on_boundary"
+        elif isinstance(restrict_to_boundary, str):
+            if restrict_to_boundary != "on_boundary":
+                raise ValueError(f"Unexpected value '{restrict_to_boundary}' "
+                                 "for restrict_to_boundary. Only valid string "
+                                 "is 'on_boundary'")
+        else:
+            raise TypeError(f"Invalid type {type(restrict_to_boundary)} for "
+                            "restrict_to_boundary. Must be an int, a tuple "
+                            "of ints, or the string 'on_boundary'.")
 
     # If only converting a portion of the mesh near the boundary, get
     # *cells_to_use* as described in

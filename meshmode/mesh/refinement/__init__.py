@@ -148,6 +148,7 @@ class Refiner:
         #print tri_node_tuples, tri_result
         #self.simplex_node_tuples, self.simplex_result = tesselatetet()
         self.last_mesh = mesh
+        self.last_split_elements = None
 
         # {{{ initialization
 
@@ -270,7 +271,7 @@ class Refiner:
     def get_empty_refine_flags(self):
         return np.zeros(
                 self.last_mesh.nelements - self.get_refine_base_index(),
-                np.bool)
+                dtype=bool)
 
     def get_previous_mesh(self):
         return self.previous_mesh
@@ -384,7 +385,8 @@ class Refiner:
 
     def refine(self, refine_flags):
         """
-        :arg refine_flags: a :class:`numpy.ndarray` of dtype bool of length ``mesh.nelements``
+        :arg refine_flags: an :class:`~numpy.ndarray` of :class:`~numpy.dtype`
+            :class:`bool` and length :attr:`meshmode.mesh.Mesh.nelements`,
             indicating which elements should be split.
         """
 
@@ -821,7 +823,7 @@ class Refiner:
 
         from meshmode.mesh import Mesh
 
-        refine_flags = refine_flags.astype(np.bool)
+        refine_flags = refine_flags.astype(bool)
 
         self.previous_mesh = self.last_mesh
         self.last_mesh = Mesh(

@@ -58,7 +58,6 @@ Predefined Boundary tags
 
 class BTAG_NONE:  # noqa: N801
     """A boundary tag representing an empty boundary or volume."""
-    pass
 
 
 class BTAG_ALL:  # noqa: N801
@@ -72,7 +71,6 @@ class BTAG_ALL:  # noqa: N801
     Instead, these boundaries will be tagged with
     :class:`BTAG_INDUCED_BOUNDARY`.
     """
-    pass
 
 
 class BTAG_REALLY_ALL:  # noqa: N801
@@ -86,7 +84,6 @@ class BTAG_REALLY_ALL:  # noqa: N801
     everything tagged with
     :class:`BTAG_INDUCED_BOUNDARY`
     """
-    pass
 
 
 class BTAG_NO_BOUNDARY:  # noqa: N801
@@ -94,7 +91,6 @@ class BTAG_NO_BOUNDARY:  # noqa: N801
     :class:`BTAG_ALL`. Among other things, this is used to keep rank boundaries
     out of :class:`BTAG_ALL`.
     """
-    pass
 
 
 class BTAG_PARTITION:  # noqa: N801
@@ -136,8 +132,6 @@ class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801
     # Don't be tempted to add a sphinx ref to the Firedrake stuff here.
     # This is unavailable in the Github doc build because
     # firedrakeproject.org seems to reject connections from Github.
-
-    pass
 
 
 SYSTEM_TAGS = {BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
@@ -313,11 +307,11 @@ class _ModepyElementGroup(MeshElementGroup):
         """
 
         if unit_nodes is not None:
-            _dim = unit_nodes.shape[0]
-            if dim is not None and _dim != dim:
+            if dim is None:
+                dim = unit_nodes.shape[0]
+
+            if unit_nodes.shape[0] != dim:
                 raise ValueError("'dim' does not match 'unit_nodes' dimension")
-            else:
-                dim = _dim
         else:
             if dim is None:
                 raise TypeError("'dim' must be passed if 'unit_nodes' is not passed")
@@ -410,8 +404,7 @@ class NodalAdjacency(Record):
     def __eq__(self, other):
         return (
                 type(self) == type(other)
-                and np.array_equal(self.neighbors_starts,
-                    other.neighbors_starts)
+                and np.array_equal(self.neighbors_starts, other.neighbors_starts)
                 and np.array_equal(self.neighbors, other.neighbors))
 
     def __ne__(self, other):
@@ -662,13 +655,14 @@ class Mesh(Record):
         *False* if it is known that some element interfaces are non-conforming.
         *None* if neither of the two is known.
 
+    .. automethod:: copy
     .. automethod:: __eq__
     .. automethod:: __ne__
     """
 
     face_id_dtype = np.int8
 
-    def __init__(self, vertices, groups, skip_tests=False,
+    def __init__(self, vertices, groups, *, skip_tests=False,
             node_vertex_consistency_tolerance=None,
             skip_element_orientation_test=False,
             nodal_adjacency=None,
@@ -678,8 +672,6 @@ class Mesh(Record):
             element_id_dtype=np.int32,
             is_conforming=None):
         """
-        The following are keyword-only:
-
         :arg skip_tests: Skip mesh tests, in case you want to load a broken
             mesh anyhow and then fix it inside of this data structure.
         :arg node_vertex_consistency_tolerance: If *False*, do not check
@@ -865,6 +857,8 @@ class Mesh(Record):
     @property
     def nodal_adjacency(self):
         from meshmode import DataUnavailable
+
+        # pylint: disable=access-member-before-definition
         if self._nodal_adjacency is False:
             raise DataUnavailable("nodal_adjacency")
 
@@ -887,6 +881,8 @@ class Mesh(Record):
     @property
     def facial_adjacency_groups(self):
         from meshmode import DataUnavailable
+
+        # pylint: disable=access-member-before-definition
         if self._facial_adjacency_groups is False:
             raise DataUnavailable("facial_adjacency_groups")
 
@@ -1052,150 +1048,198 @@ def _boundary_tag_bit(boundary_tags, btag_to_index, boundary_tag):
 
 # {{{ vertex-based facial adjacency
 
+class _FaceIDs:
+    """
+    Data structure for storage of a list of face identifiers (group, element, face).
+    Each attribute is a :class:`numpy.ndarray` of shape ``(nfaces,)``.
+
+    .. attribute:: groups
+
+        The index of the group containing the face.
+
+    .. attribute:: elements
+
+        The group-relative index of the element containing the face.
+
+    .. attribute:: faces
+
+        The element-relative index of face.
+    """
+    def __init__(self, groups, elements, faces):
+        self.groups = groups
+        self.elements = elements
+        self.faces = faces
+
+
+def _concatenate_face_ids(face_ids_list):
+    return _FaceIDs(
+        groups=np.concatenate([ids.groups for ids in face_ids_list]),
+        elements=np.concatenate([ids.elements for ids in face_ids_list]),
+        faces=np.concatenate([ids.faces for ids in face_ids_list]))
+
+
+def _match_faces_by_vertices(groups, face_ids, vertex_index_map_func=None):
+    """
+    Return matching faces in *face_ids* (expressed as pairs of indices into
+    *face_ids*), where two faces match if they have the same vertices.
+
+    :arg groups: A list of :class:`~meshmode.mesh.MeshElementGroup` to which the
+        faces in *face_ids* belong.
+    :arg face_ids: A :class:`~meshmode.mesh._FaceIDs` containing the faces selected
+        for matching.
+    :arg vertex_index_map_func: An optional function that maps a set of vertex
+        indices (stored in a :class:`numpy.ndarray`) to another set of vertex
+        indices. Must accept multidimensional arrays as input and return an array
+        of the same shape.
+    :returns: A :class:`numpy.ndarray` of shape ``(2, nmatches)`` of indices into
+        *face_ids*.
+    """
+    if vertex_index_map_func is None:
+        def vertex_index_map_func(vertices):
+            return vertices
+
+    from pytools import single_valued
+    vertex_id_dtype = single_valued(grp.vertex_indices.dtype for grp in groups)
+
+    nfaces = len(face_ids.groups)
+
+    max_face_vertices = max(len(ref_fvi) for grp in groups
+        for ref_fvi in grp.face_vertex_indices())
+
+    face_vertex_indices = np.empty((max_face_vertices, nfaces),
+        dtype=vertex_id_dtype)
+    face_vertex_indices[:, :] = -1
+
+    for igrp, grp in enumerate(groups):
+        for fid, ref_fvi in enumerate(grp.face_vertex_indices()):
+            indices, = np.where((face_ids.groups == igrp) & (face_ids.faces == fid))
+            grp_fvi = grp.vertex_indices[face_ids.elements[indices], :][:, ref_fvi]
+            face_vertex_indices[:len(ref_fvi), indices] = (
+                vertex_index_map_func(grp_fvi).T)
+
+    # Normalize vertex-based "face identifiers" by sorting
+    face_vertex_indices_increasing = np.sort(face_vertex_indices, axis=0)
+    # Lexicographically sort the face vertex indices, then diff the result to find
+    # faces with the same vertices
+    order = np.lexsort(face_vertex_indices_increasing)
+    diffs = np.diff(face_vertex_indices_increasing[:, order], axis=1)
+    match_indices, = (~np.any(diffs, axis=0)).nonzero()
+
+    return np.stack((order[match_indices], order[match_indices+1]))
+
+
 def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
                                      element_id_dtype,
                                      face_id_dtype,
                                      face_vertex_indices_to_tags=None):
     if not groups:
         return None
+
     boundary_tag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
 
     def boundary_tag_bit(boundary_tag):
         return _boundary_tag_bit(boundary_tags, boundary_tag_to_index, boundary_tag)
 
-    # FIXME Native code would make this faster
+    # Match up adjacent faces according to their vertex indices
 
-    # create face_map, which is a mapping of
-    # (vertices on a face) ->
-    #  [(igrp, iel_grp, face_idx) for elements bordering that face]
-    face_map = {}
+    face_ids_per_group = []
     for igrp, grp in enumerate(groups):
-        for fid, face_vertex_indices in enumerate(grp.face_vertex_indices()):
-            all_fvi = grp.vertex_indices[:, face_vertex_indices]
+        indices = np.indices((grp.nfaces, grp.nelements), dtype=element_id_dtype)
+        face_ids_per_group.append(_FaceIDs(
+            groups=np.full(grp.nelements * grp.nfaces, igrp),
+            elements=indices[1].flatten(),
+            faces=indices[0].flatten().astype(face_id_dtype)))
+    face_ids = _concatenate_face_ids(face_ids_per_group)
 
-            for iel_grp, fvi in enumerate(all_fvi):
-                face_map.setdefault(
-                        frozenset(fvi), []).append((igrp, iel_grp, fid))
+    face_index_pairs = _match_faces_by_vertices(groups, face_ids)
 
     del igrp
     del grp
 
-    # maps tuples (igrp, ineighbor_group) to number of elements
-    group_count = {}
-    for face_tuples in face_map.values():
-        if len(face_tuples) == 2:
-            (igrp, _, _), (inb_grp, _, _) = face_tuples
-            group_count[igrp, inb_grp] = group_count.get((igrp, inb_grp), 0) + 1
-            group_count[inb_grp, igrp] = group_count.get((inb_grp, igrp), 0) + 1
-        elif len(face_tuples) == 1:
-            (igrp, _, _), = face_tuples
-            group_count[igrp, None] = group_count.get((igrp, None), 0) + 1
-        else:
-            raise RuntimeError("unexpected number of adjacent faces")
+    # Get ((grp#, elem#, face#), (neighbor grp#, neighbor elem#, neighbor face#))
+    # for every face (both ways)
 
-    del face_tuples
-    del igrp
+    face_index_pairs_both_ways = np.stack((
+        np.concatenate((
+            face_index_pairs[0, :],
+            face_index_pairs[1, :])),
+        np.concatenate((
+            face_index_pairs[1, :],
+            face_index_pairs[0, :]))))
+    # Accomplish a sort by group, then neighbor group. This is done by sorting by
+    # the indices in face_ids. Realize that those are already ordered by group by
+    # construction.
+    order = np.lexsort((
+        face_index_pairs_both_ways[1, :],
+        face_index_pairs_both_ways[0, :]))
+    face_index_pairs_both_ways_sorted = face_index_pairs_both_ways[:, order]
 
-    # {{{ build facial_adjacency_groups data structure, still empty
+    face_id_pairs = (
+        _FaceIDs(
+            groups=face_ids.groups[face_index_pairs_both_ways_sorted[0, :]],
+            elements=face_ids.elements[face_index_pairs_both_ways_sorted[0, :]],
+            faces=face_ids.faces[face_index_pairs_both_ways_sorted[0, :]]),
+        _FaceIDs(
+            groups=face_ids.groups[face_index_pairs_both_ways_sorted[1, :]],
+            elements=face_ids.elements[face_index_pairs_both_ways_sorted[1, :]],
+            faces=face_ids.faces[face_index_pairs_both_ways_sorted[1, :]]))
+
+    # {{{ build facial_adjacency_groups data structure
+
     from meshmode.mesh import FacialAdjacencyGroup, BTAG_ALL, BTAG_REALLY_ALL
 
     facial_adjacency_groups = []
-    for igroup in range(len(groups)):
+    for igrp, grp in enumerate(groups):
         grp_map = {}
+
+        face_has_neighbor = np.full((grp.nfaces, grp.nelements), False)
+
+        is_grp_adj = face_id_pairs[0].groups == igrp
+        connected_groups = np.unique(face_id_pairs[1].groups[is_grp_adj])
+        for i_neighbor_grp in connected_groups:
+            is_neighbor_adj = (
+                is_grp_adj & (face_id_pairs[1].groups == i_neighbor_grp))
+            grp_map[i_neighbor_grp] = FacialAdjacencyGroup(
+                igroup=igrp,
+                ineighbor_group=i_neighbor_grp,
+                elements=face_id_pairs[0].elements[is_neighbor_adj],
+                element_faces=face_id_pairs[0].faces[is_neighbor_adj],
+                neighbors=face_id_pairs[1].elements[is_neighbor_adj],
+                neighbor_faces=face_id_pairs[1].faces[is_neighbor_adj])
+            face_has_neighbor[
+                face_id_pairs[0].faces[is_neighbor_adj],
+                face_id_pairs[0].elements[is_neighbor_adj]] = True
+
+        has_bdry = not np.all(face_has_neighbor)
+        if has_bdry:
+            faces, elements = np.where(~face_has_neighbor)
+            element_faces = faces.astype(face_id_dtype)
+            neighbors = np.full(len(elements),
+                -(boundary_tag_bit(BTAG_ALL)
+                    | boundary_tag_bit(BTAG_REALLY_ALL)),
+                dtype=element_id_dtype)
+            if face_vertex_indices_to_tags is not None:
+                for i in range(len(elements)):
+                    ref_fvi = grp.face_vertex_indices()[element_faces[i]]
+                    fvi = frozenset(grp.vertex_indices[elements[i], ref_fvi])
+                    tags = face_vertex_indices_to_tags.get(fvi, None)
+                    if tags is not None:
+                        tag_mask = 0
+                        for tag in tags:
+                            tag_mask |= boundary_tag_bit(tag)
+                        neighbors[i] = -((-neighbors[i]) | tag_mask)
+            neighbor_faces = np.zeros(len(elements), dtype=face_id_dtype)
+            grp_map[None] = FacialAdjacencyGroup(
+                igroup=igrp,
+                ineighbor_group=None,
+                elements=elements,
+                element_faces=element_faces,
+                neighbors=neighbors,
+                neighbor_faces=neighbor_faces)
+
         facial_adjacency_groups.append(grp_map)
 
-        bdry_count = group_count.get((igroup, None))
-        if bdry_count is not None:
-            elements = np.empty(bdry_count, dtype=element_id_dtype)
-            element_faces = np.empty(bdry_count, dtype=face_id_dtype)
-            neighbors = np.empty(bdry_count, dtype=element_id_dtype)
-            neighbor_faces = np.zeros(bdry_count, dtype=face_id_dtype)
-
-            # Ensure uninitialized entries get noticed
-            elements.fill(-1)
-            element_faces.fill(-1)
-            neighbor_faces.fill(-1)
-
-            neighbors.fill(-(
-                    boundary_tag_bit(BTAG_ALL)
-                    | boundary_tag_bit(BTAG_REALLY_ALL)))
-
-            grp_map[None] = FacialAdjacencyGroup(
-                    igroup=igroup,
-                    ineighbor_group=None,
-                    elements=elements,
-                    element_faces=element_faces,
-                    neighbors=neighbors,
-                    neighbor_faces=neighbor_faces)
-
-        for ineighbor_group in range(len(groups)):
-            nb_count = group_count.get((igroup, ineighbor_group))
-            if nb_count is not None:
-                elements = np.empty(nb_count, dtype=element_id_dtype)
-                element_faces = np.empty(nb_count, dtype=face_id_dtype)
-                neighbors = np.empty(nb_count, dtype=element_id_dtype)
-                neighbor_faces = np.empty(nb_count, dtype=face_id_dtype)
-
-                # Ensure uninitialized entries get noticed
-                elements.fill(-1)
-                element_faces.fill(-1)
-                neighbors.fill(-1)
-                neighbor_faces.fill(-1)
-
-                grp_map[ineighbor_group] = FacialAdjacencyGroup(
-                        igroup=igroup,
-                        ineighbor_group=ineighbor_group,
-                        elements=elements,
-                        element_faces=element_faces,
-                        neighbors=neighbors,
-                        neighbor_faces=neighbor_faces)
-
-    del igroup
-    del ineighbor_group
-    del grp_map
-
     # }}}
-
-    # maps tuples (igrp, ineighbor_group) to number of elements filled in group
-    fill_count = {}
-    for face_tuples in face_map.values():
-        if len(face_tuples) == 2:
-            for (igroup, iel, iface), (ineighbor_group, inb_el, inb_face) in [
-                    (face_tuples[0], face_tuples[1]),
-                    (face_tuples[1], face_tuples[0]),
-                    ]:
-                idx = fill_count.get((igroup, ineighbor_group), 0)
-                fill_count[igroup, ineighbor_group] = idx + 1
-
-                fagrp = facial_adjacency_groups[igroup][ineighbor_group]
-                fagrp.elements[idx] = iel
-                fagrp.element_faces[idx] = iface
-                fagrp.neighbors[idx] = inb_el
-                fagrp.neighbor_faces[idx] = inb_face
-
-        elif len(face_tuples) == 1:
-            (igroup, iel, iface), = face_tuples
-
-            idx = fill_count.get((igroup, None), 0)
-            fill_count[igroup, None] = idx + 1
-
-            fagrp = facial_adjacency_groups[igroup][None]
-            fagrp.elements[idx] = iel
-            fagrp.element_faces[idx] = iface
-            # mark tags if present
-            if face_vertex_indices_to_tags:
-                face_vertex_indices = groups[igroup].face_vertex_indices()[iface]
-                fvi = frozenset(groups[igroup].vertex_indices[
-                        iel, face_vertex_indices])
-                tags = face_vertex_indices_to_tags.get(fvi, None)
-                if tags is not None:
-                    tag_mask = 0
-                    for tag in tags:
-                        tag_mask |= boundary_tag_bit(tag)
-                    fagrp.neighbors[idx] = -(-(fagrp.neighbors[idx]) | tag_mask)
-
-        else:
-            raise RuntimeError("unexpected number of adjacent faces")
 
     return facial_adjacency_groups
 
@@ -1249,6 +1293,8 @@ def as_python(mesh, function_name="make_mesh"):
         # {{{ facial adjacency groups
 
         def fagrp_params_str(fagrp):
+            if type(fagrp) != FacialAdjacencyGroup:
+                raise NotImplementedError(f"Not implemented for {fagrp.__class__}.")
             params = {
                     "igroup": fagrp.igroup,
                     "ineighbor_group": repr(fagrp.ineighbor_group),
@@ -1262,7 +1308,7 @@ def as_python(mesh, function_name="make_mesh"):
         if mesh._facial_adjacency_groups:
             cg("facial_adjacency_groups = []")
 
-            for igrp, fagrp_map in enumerate(mesh.facial_adjacency_groups):
+            for fagrp_map in mesh.facial_adjacency_groups:
                 cg("facial_adjacency_groups.append({%s})" % ",\n    ".join(
                     "{!r}: FacialAdjacencyGroup({})".format(
                         inb_grp, fagrp_params_str(fagrp))
@@ -1329,7 +1375,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
     :arg true_boundary_only: only verify for faces tagged with :class:`BTAG_ALL`.
     """
 
-    for igrp, fagrp_map in enumerate(mesh.facial_adjacency_groups):
+    for fagrp_map in mesh.facial_adjacency_groups:
         bdry_grp = fagrp_map.get(None)
         if bdry_grp is None:
             continue
@@ -1341,7 +1387,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
 
         # An array of flags for each face indicating whether we have encountered
         # a boundary condition for that face.
-        seen = np.zeros_like(nb_el_bits, dtype=np.bool)
+        seen = np.zeros_like(nb_el_bits, dtype=bool)
 
         if true_boundary_only:
             tag_bit = mesh.boundary_tag_bit(BTAG_ALL)

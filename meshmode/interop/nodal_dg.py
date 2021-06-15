@@ -32,13 +32,14 @@ THE SOFTWARE.
 
 
 import numpy as np
+
+import arraycontext
 import meshmode.mesh
 import meshmode.discretization
 import meshmode.dof_array
-import meshmode.array_context
 
 
-class NodalDGContext(object):
+class NodalDGContext:
     """Should be used as a context manager to ensure proper cleanup.
 
     .. automethod:: __init__
@@ -64,7 +65,20 @@ class NodalDGContext(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Work around https://github.com/pexpect/pexpect/issues/462
-        self.octave._engine.repl.delayafterterminate = 2
+        # 2s delay still seems to run into
+        # "ExceptionPexpect: Could not terminate the child"
+        # -AK, 2021-03-28
+
+        delay = 5
+        # make sure we don't set non-existent variables
+        assert self.octave._engine.repl.child.delayafterclose is not None
+        assert self.octave._engine.repl.child.delayafterterminate is not None
+        assert self.octave._engine.repl.child.ptyproc.delayafterclose is not None
+        assert self.octave._engine.repl.child.ptyproc.delayafterterminate is not None
+        self.octave._engine.repl.child.delayafterclose = delay
+        self.octave._engine.repl.child.delayafterterminate = delay
+        self.octave._engine.repl.child.ptyproc.delayafterclose = delay
+        self.octave._engine.repl.child.ptyproc.delayafterterminate = delay
 
         self.octave.exit()
 
@@ -148,14 +162,12 @@ class NodalDGContext(object):
                 PolynomialGivenNodesGroupFactory(order, unit_nodes))
 
     def push_dof_array(self, name, ary: meshmode.dof_array.DOFArray):
-        """
-        """
         grp_array, = ary
         ary = ary.array_context.to_numpy(grp_array)
         self.octave.push(name, ary.T)
 
     def pull_dof_array(
-            self, actx: meshmode.array_context.ArrayContext, name
+            self, actx: arraycontext.ArrayContext, name
             ) -> meshmode.dof_array.DOFArray:
         ary = self.octave.pull(name).T
 

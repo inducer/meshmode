@@ -27,13 +27,14 @@ from meshmode.discretization.connection.direct import (
         InterpolationBatch,
         DiscretizationConnectionElementGroup,
         DiscretizationConnection,
+        IdentityDiscretizationConnection,
         DirectDiscretizationConnection)
 from meshmode.discretization.connection.chained import \
         ChainedDiscretizationConnection
 from meshmode.discretization.connection.projection import \
         L2ProjectionInverseDiscretizationConnection
 
-from meshmode.array_context import ArrayContext
+from arraycontext import ArrayContext
 from meshmode.discretization.connection.same_mesh import \
         make_same_mesh_connection
 from meshmode.discretization.connection.face import (
@@ -46,6 +47,8 @@ from meshmode.discretization.connection.refinement import \
         make_refinement_connection
 from meshmode.discretization.connection.chained import \
         flatten_chained_connection
+from meshmode.discretization.connection.modal import \
+        NodalToModalDiscretizationConnection, ModalToNodalDiscretizationConnection
 
 import logging
 logger = logging.getLogger(__name__)
@@ -53,9 +56,12 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
         "DiscretizationConnection",
+        "IdentityDiscretizationConnection",
         "DirectDiscretizationConnection",
         "ChainedDiscretizationConnection",
         "L2ProjectionInverseDiscretizationConnection",
+        "NodalToModalDiscretizationConnection",
+        "ModalToNodalDiscretizationConnection",
 
         "make_same_mesh_connection",
         "FACE_RESTR_INTERIOR", "FACE_RESTR_ALL",
@@ -74,10 +80,16 @@ __doc__ = """
 Base classes
 ------------
 .. autoclass:: DiscretizationConnection
+.. autoclass:: IdentityDiscretizationConnection
 .. autoclass:: ChainedDiscretizationConnection
 .. autoclass:: L2ProjectionInverseDiscretizationConnection
 .. autoclass:: DirectDiscretizationConnection
 
+Mapping between modal and nodal representations
+-----------------------------------------------
+
+.. autoclass:: NodalToModalDiscretizationConnection
+.. autoclass:: ModalToNodalDiscretizationConnection
 
 Same-mesh connections
 ---------------------
@@ -126,8 +138,8 @@ def check_connection(actx: ArrayContext, connection: DirectDiscretizationConnect
                     actx.thaw(batch.from_element_indices))
             to_element_indices = actx.to_numpy(actx.thaw(batch.to_element_indices))
 
-            assert (0 <= from_element_indices).all()
-            assert (0 <= to_element_indices).all()
+            assert (from_element_indices >= 0).all()
+            assert (to_element_indices >= 0).all()
             assert (from_element_indices < fgrp.nelements).all()
             assert (to_element_indices < tgrp.nelements).all()
             if batch.to_element_face is not None:

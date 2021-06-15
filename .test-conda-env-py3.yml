@@ -6,8 +6,8 @@ channels:
 dependencies:
 - python=3
 - git
+- libhwloc=2
 - numpy
-- libhwloc=1
 - pocl
 - mako
 - pyopencl
@@ -23,10 +23,13 @@ dependencies:
 # for pymetis
 - pybind11
 
+# for MPI-based tests
+- mpi4py
+
 # for xdmf/hdf5 visualizer
 - h5py
 
 # Only needed to make pylint succeed
-- matplotlib
+- matplotlib-base
 
 - pip

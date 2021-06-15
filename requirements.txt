@@ -7,6 +7,8 @@ git+https://github.com/inducer/modepy.git#egg=modepy
 git+https://github.com/inducer/pyopencl.git#egg=pyopencl
 git+https://github.com/inducer/islpy.git#egg=islpy
 
+git+https://github.com/inducer/arraycontext.git#egg=arraycontext
+
 # required by pytential, which is in turn needed for some tests
 git+https://github.com/inducer/pymbolic.git#egg=pymbolic
 
@@ -16,7 +18,7 @@ git+https://github.com/inducer/loopy.git#egg=loopy
 # more pytential dependencies
 git+https://github.com/inducer/boxtree.git#egg=boxtree
 git+https://github.com/inducer/sumpy.git#egg=sumpy
-git+https://github.com/inducer/pytential.git#pytential
+git+https://github.com/inducer/pytential.git#egg=pytential
 
 # requires pymetis for tests for partition_mesh
 git+https://github.com/inducer/pymetis.git#egg=pymetis

@@ -13,7 +13,11 @@ This set of instructions is intended for 64-bit Linux and MacOS computers.
     Everywhere else, just making sure you have the ``g++`` package should be
     enough.
 
-#.  Installing `miniforge for Python 3 on your respective system <https://github.com/conda-forge/miniforge>`_.
+#.  Install `miniforge <https://github.com/conda-forge/miniforge>`_::
+
+        curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
+        # then run
+        bash ./Miniforge3-*.sh
 
 #.  ``export CONDA=/WHERE/YOU/INSTALLED/miniforge3``
 
@@ -31,7 +35,12 @@ This set of instructions is intended for 64-bit Linux and MacOS computers.
 
 #.  Type the following command::
 
-        hash -r; for i in pymbolic cgen genpy modepy pyvisfile loopy meshmode; do python -m pip install git+https://github.com/inducer/$i.git; done
+        hash -r; for i in pymbolic cgen genpy modepy pyvisfile loopy arraycontext meshmode; do python -m pip install --editable "git+https://github.com/inducer/$i.git#egg=$i"; done
+
+.. note::
+
+    In each case, you may leave out the ``--editable`` flag if you would not like
+    a checkout of the source code.
 
 Next time you want to use :mod:`meshmode`, just run the following command::
 
@@ -85,11 +94,15 @@ OTHER DEALINGS IN THE SOFTWARE.
 Acknowledgments
 ===============
 
-Andreas Klöckner's work on :mod:`meshmode` was supported in part by
+Work on meshmode was supported in part by
 
-* US Navy ONR grant number N00014-14-1-0117
-* the US National Science Foundation under grant numbers DMS-1418961 and CCF-1524433.
+* the Department of Energy, National Nuclear Security Administration,
+  under Award Number DE-NA0003963,
+* the US Navy ONR, under grant number N00014-14-1-0117, and
+* the US National Science Foundation under grant numbers DMS-1418961, CCF-1524433,
+  DMS-1654756, SHF-1911019, and OAC-1931577.
 
-AK also gratefully acknowledges a hardware gift from Nvidia Corporation.  The
-views and opinions expressed herein do not necessarily reflect those of the
+AK also gratefully acknowledges a hardware gift from Nvidia Corporation.
+
+The views and opinions expressed herein do not necessarily reflect those of the
 funding agencies.

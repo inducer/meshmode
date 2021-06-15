@@ -23,11 +23,12 @@ THE SOFTWARE.
 import numpy as np
 
 import pytest
-from meshmode.array_context import (  # noqa
+from arraycontext import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
-from meshmode.dof_array import thaw, flatten
+from arraycontext import thaw
+from meshmode.dof_array import flatten_to_numpy, flat_norm
 
 import logging
 logger = logging.getLogger(__name__)
@@ -63,7 +64,8 @@ def create_discretization(actx, ndim,
             mesh = generate_torus(10.0, 5.0, order=order,
                     n_minor=nelements, n_major=nelements)
         elif mesh_name == "warp":
-            mesh = generate_warped_rect_mesh(ndim, order=order, n=nelements)
+            mesh = generate_warped_rect_mesh(ndim, order=order,
+                    nelements_side=nelements)
         else:
             raise ValueError(f"unknown mesh name: {mesh_name}")
     else:
@@ -132,7 +134,7 @@ def test_chained_batch_table(actx_factory, ndim, visualize=False):
     conn = chained.connections[0]
     el_table = _build_element_lookup_table(actx, conn)
     for igrp, grp in enumerate(conn.groups):
-        for ibatch, batch in enumerate(grp.batches):
+        for batch in grp.batches:
             ifrom = batch.from_element_indices.get(actx.queue)
             jfrom = el_table[igrp][batch.to_element_indices.get(actx.queue)]
 
@@ -167,7 +169,7 @@ def test_chained_new_group_table(actx_factory, ndim, visualize=False):
             print(k)
             print(v)
 
-            igrp, ibatch, jgrp, jbatch = k
+            igrp, ibatch, _, _ = k
             mgroup, mbatch = v
             from_group_index = connections[0].groups[igrp] \
                     .batches[ibatch].from_group_index
@@ -207,12 +209,12 @@ def test_chained_connection(actx_factory, ndim, visualize=False):
         from functools import reduce
         return 0.1 * reduce(lambda x, y: x * actx.np.sin(5 * y), x)
 
-    x = thaw(actx, connections[0].from_discr.nodes())
+    x = thaw(connections[0].from_discr.nodes(), actx)
     fx = f(x)
     f1 = chained(fx)
     f2 = connections[1](connections[0](fx))
 
-    assert actx.np.linalg.norm(f1-f2, np.inf) / actx.np.linalg.norm(f2) < 1e-11
+    assert flat_norm(f1-f2, np.inf) / flat_norm(f2) < 1e-11
 
 
 @pytest.mark.parametrize("ndim", [2, 3])
@@ -239,11 +241,11 @@ def test_chained_full_resample_matrix(actx_factory, ndim, visualize=False):
 
     resample_mat = actx.to_numpy(make_full_resample_matrix(actx, chained))
 
-    x = thaw(actx, connections[0].from_discr.nodes())
+    x = thaw(connections[0].from_discr.nodes(), actx)
     fx = f(x)
-    f1 = resample_mat @ actx.to_numpy(flatten(fx))
-    f2 = actx.to_numpy(flatten(chained(fx)))
-    f3 = actx.to_numpy(flatten(connections[1](connections[0](fx))))
+    f1 = resample_mat @ flatten_to_numpy(actx, fx)
+    f2 = flatten_to_numpy(actx, chained(fx))
+    f3 = flatten_to_numpy(actx, connections[1](connections[0](fx)))
 
     assert np.allclose(f1, f2)
     assert np.allclose(f2, f3)
@@ -293,7 +295,7 @@ def test_chained_to_direct(actx_factory, ndim, chain_type,
 
     if chain_type < 3:
         to_element_indices = np.full(direct.to_discr.mesh.nelements, 0,
-                                     dtype=np.int)
+                                     dtype=np.int64)
         for grp in direct.groups:
             for batch in grp.batches:
                 for i in batch.to_element_indices.get(actx.queue):
@@ -304,17 +306,17 @@ def test_chained_to_direct(actx_factory, ndim, chain_type,
         from functools import reduce
         return 0.1 * reduce(lambda x, y: x * actx.np.sin(5 * y), x)
 
-    x = thaw(actx, connections[0].from_discr.nodes())
+    x = thaw(connections[0].from_discr.nodes(), actx)
     fx = f(x)
 
     t_start = time.time()
-    f1 = actx.to_numpy(flatten(direct(fx)))
+    f1 = flatten_to_numpy(actx, direct(fx))
     t_end = time.time()
     if visualize:
         print("[TIME] Direct: {:.5e}".format(t_end - t_start))
 
     t_start = time.time()
-    f2 = actx.to_numpy(flatten(chained(fx)))
+    f2 = flatten_to_numpy(actx, chained(fx))
     t_end = time.time()
     if visualize:
         print("[TIME] Chained: {:.5e}".format(t_end - t_start))
@@ -367,20 +369,20 @@ def test_reversed_chained_connection(actx_factory, ndim, mesh_name):
         reverse = L2ProjectionInverseDiscretizationConnection(chained)
 
         # create test vector
-        from_nodes = thaw(actx, chained.from_discr.nodes())
-        to_nodes = thaw(actx, chained.to_discr.nodes())
+        from_nodes = thaw(chained.from_discr.nodes(), actx)
+        to_nodes = thaw(chained.to_discr.nodes(), actx)
 
         from_x = 0
         to_x = 0
         for d in range(ndim):
-            from_x += actx.np.cos(from_nodes[d]) ** (d + 1)
-            to_x += actx.np.cos(to_nodes[d]) ** (d + 1)
+            from_x = from_x + actx.np.cos(from_nodes[d]) ** (d + 1)
+            to_x = to_x + actx.np.cos(to_nodes[d]) ** (d + 1)
 
         from_interp = reverse(to_x)
 
         return (1.0 / nelements,
-                actx.np.linalg.norm(from_interp - from_x, np.inf)
-                / actx.np.linalg.norm(from_x, np.inf))
+                flat_norm(from_interp - from_x, np.inf)
+                / flat_norm(from_x, np.inf))
 
     from pytools.convergence import EOCRecorder
     eoc = EOCRecorder()

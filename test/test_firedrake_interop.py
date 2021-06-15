@@ -27,7 +27,7 @@ from pyopencl.tools import (  # noqa
         pytest_generate_tests_for_pyopencl
         as pytest_generate_tests)
 
-from meshmode.array_context import PyOpenCLArrayContext
+from arraycontext import PyOpenCLArrayContext
 
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import (
@@ -435,7 +435,8 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
         elif fdrake_mesh_name == "warp":
             from meshmode.mesh.generation import generate_warped_rect_mesh
             from meshmode.interop.firedrake import export_mesh_to_firedrake
-            mm_mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par)
+            mm_mesh = generate_warped_rect_mesh(dim, order=4,
+                nelements_side=mesh_par)
             fdrake_mesh, _, _ = export_mesh_to_firedrake(mm_mesh)
             h = 1/mesh_par
         else:
@@ -531,7 +532,8 @@ def test_to_fd_transfer(ctx_factory, fspace_degree, mesh_name, mesh_pars, dim):
             h = float(mesh_par)
         elif mesh_name == "warp":
             from meshmode.mesh.generation import generate_warped_rect_mesh
-            mm_mesh = generate_warped_rect_mesh(dim, order=4, n=mesh_par)
+            mm_mesh = generate_warped_rect_mesh(dim, order=4,
+                nelements_side=mesh_par)
             h = 1/mesh_par
         else:
             raise ValueError("mesh_name not recognized")

@@ -22,13 +22,13 @@ THE SOFTWARE.
 
 import numpy as np
 
-from pytools import keyed_memoize_method, memoize_in
-from pytools.obj_array import obj_array_vectorized_n_args
+from pytools import keyed_memoize_method, keyed_memoize_in, memoize_in
 
 import loopy as lp
 
-from meshmode.array_context import make_loopy_program
-from meshmode.dof_array import DOFArray
+from arraycontext import (
+        make_loopy_program, is_array_container, map_array_container)
+from arraycontext.metadata import FirstAxisIsElementsTag
 from meshmode.discretization.connection.direct import (
         DiscretizationConnection,
         DirectDiscretizationConnection)
@@ -69,8 +69,8 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         if conn.from_discr.dim != conn.to_discr.dim:
             raise RuntimeError("cannot transport from face to element")
 
-        if not all(g.is_orthogonal_basis() for g in conn.to_discr.groups):
-            raise RuntimeError("`to_discr` must have an orthogonal basis")
+        if not all(g.is_orthonormal_basis() for g in conn.to_discr.groups):
+            raise RuntimeError("`to_discr` must have an orthonormal basis")
 
         self.conn = conn
         super().__init__(
@@ -103,21 +103,26 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
             return det_v
 
         weights = {}
-        jac = np.empty(self.to_discr.dim, dtype=np.object)
+        jac = np.empty(self.to_discr.dim, dtype=object)
 
+        from meshmode.discretization.poly_element import diff_matrices
         for igrp, grp in enumerate(self.to_discr.groups):
+            matrices = diff_matrices(grp)
+
             for ibatch, batch in enumerate(self.conn.groups[igrp].batches):
                 for iaxis in range(grp.dim):
-                    mat = grp.diff_matrices()[iaxis]
-                    jac[iaxis] = mat.dot(batch.result_unit_nodes.T)
+                    jac[iaxis] = matrices[iaxis] @ batch.result_unit_nodes.T
 
                 weights[igrp, ibatch] = actx.freeze(actx.from_numpy(
-                    det(jac) * grp.weights))
+                    det(jac) * grp.quadrature_rule().weights))
 
         return weights
 
-    @obj_array_vectorized_n_args
     def __call__(self, ary):
+        from meshmode.dof_array import DOFArray
+        if is_array_container(ary) and not isinstance(ary, DOFArray):
+            return map_array_container(self, ary)
+
         if not isinstance(ary, DOFArray):
             raise TypeError("non-array passed to discretization connection")
 
@@ -129,96 +134,99 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx, (L2ProjectionInverseDiscretizationConnection,
             "conn_projection_knl"))
         def kproj():
-            return make_loopy_program([
-                "{[iel]: 0 <= iel < nelements}",
-                "{[idof_quad]: 0 <= idof_quad < n_from_nodes}"
+            return make_loopy_program(
+                [
+                    "{[iel_init]: 0 <= iel_init < n_to_elements}",
+                    "{[idof_init]: 0 <= idof_init < n_to_nodes}",
+                    "{[iel]: 0 <= iel < nelements}",
+                    "{[i_quad]: 0 <= i_quad < n_to_nodes}",
+                    "{[ibasis]: 0 <= ibasis < n_to_nodes}"
                 ],
                 """
-                for iel
-                    <> element_dot = sum(idof_quad,
-                                ary[from_element_indices[iel], idof_quad]
-                                * basis[idof_quad] * weights[idof_quad])
-
-                    result[to_element_indices[iel], ibasis] = \
-                            result[to_element_indices[iel], ibasis] + element_dot
-                end
+                    result[iel_init, idof_init] = 0 {id=init}
+                    ... gbarrier {id=barrier, dep=init}
+                    result[to_element_indices[iel], ibasis] =               \
+                        result[to_element_indices[iel], ibasis] +           \
+                        sum(i_quad, ary[from_element_indices[iel], i_quad]  \
+                                    * basis_tabulation[ibasis, i_quad]      \
+                                    * weights[i_quad]) {dep=barrier}
                 """,
                 [
                     lp.GlobalArg("ary", None,
-                        shape=("n_from_elements", "n_from_nodes")),
+                                 shape=("n_from_elements", "n_from_nodes")),
                     lp.GlobalArg("result", None,
-                        shape=("n_to_elements", "n_to_nodes")),
-                    lp.GlobalArg("basis", None,
-                        shape="n_from_nodes"),
+                                 shape=("n_to_elements", "n_to_nodes")),
+                    lp.GlobalArg("basis_tabulation", None,
+                                 shape=("n_to_nodes", "n_to_nodes")),
                     lp.GlobalArg("weights", None,
-                        shape="n_from_nodes"),
+                                 shape="n_from_nodes"),
                     lp.ValueArg("n_from_elements", np.int32),
+                    lp.ValueArg("n_from_nodes", np.int32),
                     lp.ValueArg("n_to_elements", np.int32),
                     lp.ValueArg("n_to_nodes", np.int32),
-                    lp.ValueArg("ibasis", np.int32),
                     "..."
-                    ],
-                name="conn_projection_knl")
-
-        @memoize_in(actx, (L2ProjectionInverseDiscretizationConnection,
-            "conn_evaluation_knl"))
-        def keval():
-            return make_loopy_program([
-                "{[iel]: 0 <= iel < nelements}",
-                "{[idof]: 0 <= idof < n_to_nodes}",
-                "{[ibasis]: 0 <= ibasis < n_to_nodes}"
                 ],
-                """
-                    result[iel, idof] = result[iel, idof] + \
-                        sum(ibasis, vdm[idof, ibasis] * coefficients[iel, ibasis])
-                """,
-                [
-                    lp.GlobalArg("coefficients", None,
-                        shape=("nelements", "n_to_nodes")),
-                    "..."
-                    ],
-                name="conn_evaluate_knl")
+                name="conn_projection_knl"
+            )
 
         # compute weights on each refinement of the reference element
         weights = self._batch_weights(actx)
 
         # perform dot product (on reference element) to get basis coefficients
-        c = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
-
-        for igrp, (tgrp, cgrp) in enumerate(
-                zip(self.to_discr.groups, self.conn.groups)):
+        c_group_data = []
+        for igrp, cgrp in enumerate(self.conn.groups):
+            c_batch_data = []
             for ibatch, batch in enumerate(cgrp.batches):
                 sgrp = self.from_discr.groups[batch.from_group_index]
 
-                for ibasis, basis_fn in enumerate(sgrp.basis()):
-                    basis = actx.from_numpy(
-                            basis_fn(batch.result_unit_nodes).flatten())
+                # Generate the basis tabulation matrix
+                tabulations = []
+                for basis_fn in sgrp.basis_obj().functions:
+                    tabulations.append(basis_fn(batch.result_unit_nodes).flatten())
+                tabulations = actx.from_numpy(np.asarray(tabulations))
 
-                    # NOTE: batch.*_element_indices are reversed here because
-                    # they are from the original forward connection, but
-                    # we are going in reverse here. a bit confusing, but
-                    # saves on recreating the connection groups and batches.
-                    actx.call_loopy(kproj(),
-                            ibasis=ibasis,
-                            ary=ary[sgrp.index],
-                            basis=basis,
-                            weights=weights[igrp, ibatch],
-                            result=c[igrp],
-                            from_element_indices=batch.to_element_indices,
-                            to_element_indices=batch.from_element_indices)
+                # NOTE: batch.*_element_indices are reversed here because
+                # they are from the original forward connection, but
+                # we are going in reverse here. a bit confusing, but
+                # saves on recreating the connection groups and batches.
+                c_batch_data.append(
+                    actx.call_loopy(
+                        kproj(),
+                        ary=ary[sgrp.index],
+                        basis_tabulation=tabulations,
+                        weights=weights[igrp, ibatch],
+                        from_element_indices=batch.to_element_indices,
+                        to_element_indices=batch.from_element_indices,
+                        n_to_elements=self.to_discr.groups[igrp].nelements,
+                        n_to_nodes=self.to_discr.groups[igrp].nunit_dofs,
+                    )["result"]
+                )
 
-        # evaluate at unit_nodes to get the vector on to_discr
-        result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
-        for igrp, grp in enumerate(self.to_discr.groups):
+            c_group_data.append(sum(c_batch_data))
+        coefficients = DOFArray(actx, data=tuple(c_group_data))
+
+        @keyed_memoize_in(
+            actx, (L2ProjectionInverseDiscretizationConnection,
+                   "vandermonde_matrix"),
+            lambda grp: grp.discretization_key()
+        )
+        def vandermonde_matrix(grp):
             from modepy import vandermonde
-            vdm = actx.from_numpy(vandermonde(grp.basis(), grp.unit_nodes))
-            actx.call_loopy(
-                    keval(),
-                    result=result[grp.index],
-                    vdm=vdm,
-                    coefficients=c[grp.index])
+            vdm = vandermonde(grp.basis_obj().functions,
+                              grp.unit_nodes)
+            return actx.from_numpy(vdm)
 
-        return result
+        return DOFArray(
+            actx,
+            data=tuple(
+                actx.einsum("ij,ej->ei",
+                            vandermonde_matrix(grp),
+                            c_i,
+                            arg_names=("vdm", "coeffs"),
+                            tagged=(FirstAxisIsElementsTag(),))
+                for grp, c_i in zip(self.to_discr.groups, coefficients)
+            )
+        )
 
 
 # vim: foldmethod=marker

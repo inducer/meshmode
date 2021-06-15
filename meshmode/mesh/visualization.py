@@ -27,6 +27,7 @@ __doc__ = """
 .. autofunction:: draw_curve
 .. autofunction:: write_vertex_vtk_file
 .. autofunction:: mesh_to_tikz
+.. autofunction:: vtk_visualize_mesh
 """
 
 
@@ -85,9 +86,10 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
 
     if draw_nodal_adjacency:
         def global_iel_to_group_and_iel(global_iel):
-            for igrp, grp in enumerate(mesh.groups):
+            for grp in mesh.groups:
                 if global_iel < grp.nelements:
                     return grp, global_iel
+
                 global_iel -= grp.nelements
 
             raise ValueError("invalid element nr")
@@ -120,8 +122,8 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
                         color="green", head_width=1e-2, lw=1e-2)
 
     if draw_face_numbers:
-        for igrp, grp in enumerate(mesh.groups):
-            for iel, el in enumerate(grp.vertex_indices):
+        for grp in mesh.groups:
+            for el in grp.vertex_indices:
                 elverts = mesh.vertices[:, el]
                 el_center = np.mean(elverts, axis=-1)
 
@@ -298,5 +300,24 @@ def mesh_to_tikz(mesh):
     return "\n".join(lines)
 
 # }}}
+
+
+# {{{ visualize_mesh
+
+def vtk_visualize_mesh(actx, mesh, filename, vtk_high_order=True):
+    order = max(mgrp.order for mgrp in mesh.groups)
+
+    from meshmode.discretization.poly_element import \
+            PolynomialWarpAndBlendGroupFactory
+    from meshmode.discretization import Discretization
+    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+
+    from meshmode.discretization.visualization import make_visualizer
+    vis = make_visualizer(actx, discr, order, force_equidistant=vtk_high_order)
+
+    vis.write_vtk_file(filename, [], use_high_order=vtk_high_order)
+
+# }}}
+
 
 # vim: foldmethod=marker

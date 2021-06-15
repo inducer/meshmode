@@ -27,6 +27,8 @@ __doc__ = """
 .. exception:: FileExistsError
 """
 
+from builtins import FileExistsError  # noqa: F401
+
 
 class Error(RuntimeError):
     pass
@@ -36,15 +38,12 @@ class DataUnavailable(Error):
     pass
 
 
-from builtins import FileExistsError  # noqa: F401
-
-
 def _acf():
     """A tiny undocumented function to pass to tests that take an ``actx_factory``
     argument when running them from the command line.
     """
     import pyopencl as cl
-    from meshmode.array_context import PyOpenCLArrayContext
+    from arraycontext import PyOpenCLArrayContext
 
     context = cl._csc()
     queue = cl.CommandQueue(context)

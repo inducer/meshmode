@@ -20,12 +20,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from dataclasses import dataclass
 from functools import reduce
+from numbers import Real
+from typing import Optional, Union
 
 import numpy as np
 import numpy.linalg as la
+
 import modepy as mp
-from dataclasses import dataclass
 
 
 __doc__ = """
@@ -37,8 +40,10 @@ __doc__ = """
 .. autofunction:: find_bounding_box
 .. autofunction:: merge_disjoint_meshes
 .. autofunction:: split_mesh_groups
+
 .. autofunction:: map_mesh
 .. autofunction:: affine_map
+.. autofunction:: rotate_mesh_around_axis
 """
 
 
@@ -53,9 +58,10 @@ def find_group_indices(groups, meshwide_elems):
     """
     grps = np.zeros_like(meshwide_elems)
     next_grp_boundary = 0
-    for igrp, grp in enumerate(groups):
+    for grp in groups:
         next_grp_boundary += grp.nelements
         grps += meshwide_elems >= next_grp_boundary
+
     return grps
 
 
@@ -74,15 +80,13 @@ def _compute_global_elem_to_part_elem(part_per_element, parts, element_id_dtype)
         to its corresponding partition-wide index if that partition belongs to
         *parts* (and if not, to -1).
     """
-    n_elems_in_part = {ipart: 0 for ipart in parts}
-    global_elem_to_part_elem = np.empty(len(part_per_element),
+    global_elem_to_part_elem = np.full(len(part_per_element), -1,
                 dtype=element_id_dtype)
-    global_elem_to_part_elem[:] = -1
-    for ielem, ipart in enumerate(part_per_element):
-        if ipart not in parts:
-            continue
-        global_elem_to_part_elem[ielem] = n_elems_in_part[ipart]
-        n_elems_in_part[ipart] += 1
+    for ipart in parts:
+        belongs_to_part = part_per_element == ipart
+        global_elem_to_part_elem[belongs_to_part] = (
+            np.cumsum(belongs_to_part)[belongs_to_part]-1)
+
     return global_elem_to_part_elem
 
 
@@ -442,52 +446,48 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
         bdry = bdry_data[i_part_grp]
         if nl is None and bdry is None:
             # Neither non-local adjacency nor boundary
-            elements = np.array([], dtype=mesh.element_id_dtype)
-            element_faces = np.array([], dtype=mesh.face_id_dtype)
-            neighbor_parts = np.array([], dtype=np.int32)
-            neighbors = np.array([], dtype=mesh.element_id_dtype)
-            neighbor_elements = np.array([], dtype=mesh.element_id_dtype)
-            neighbor_faces = np.array([], dtype=mesh.face_id_dtype)
+            elements = np.empty(0, dtype=mesh.element_id_dtype)
+            element_faces = np.empty(0, dtype=mesh.face_id_dtype)
+            neighbor_parts = np.empty(0, dtype=np.int32)
+            neighbors = np.empty(0, dtype=mesh.element_id_dtype)
+            neighbor_elements = np.empty(0, dtype=mesh.element_id_dtype)
+            neighbor_faces = np.empty(0, dtype=mesh.face_id_dtype)
 
         elif bdry is None:
             # Non-local adjacency only
             elements = nl.elements
             element_faces = nl.element_faces
             neighbor_parts = nl.neighbor_parts
-            neighbors = np.empty_like(elements)
-            for inonlocal in range(len(neighbors)):
-                i_neighbor_part = neighbor_parts[inonlocal]
-                from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
-                neighbors[inonlocal] = -(
-                                boundary_tag_bit(BTAG_REALLY_ALL)
-                                | boundary_tag_bit(BTAG_PARTITION(i_neighbor_part)))
+            from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
+            flags = np.full_like(elements, boundary_tag_bit(BTAG_REALLY_ALL))
+            for i_neighbor_part in all_neighbor_parts:
+                flags[neighbor_parts == i_neighbor_part] |= (
+                    boundary_tag_bit(BTAG_PARTITION(i_neighbor_part)))
+            neighbors = -flags
             neighbor_elements = global_elem_to_neighbor_elem[nl.global_neighbors]
             neighbor_faces = nl.neighbor_faces
 
         elif nl is None:
             # Boundary only
-            nelems = len(bdry.elements)
+            nfaces = len(bdry.elements)
             elements = bdry.elements
             element_faces = bdry.element_faces
-            neighbor_parts = np.empty(nelems, dtype=np.int32)
-            neighbor_parts.fill(-1)
+            neighbor_parts = np.full(nfaces, -1, dtype=np.int32)
             neighbors = bdry.neighbors
-            neighbor_elements = np.empty(nelems, dtype=mesh.element_id_dtype)
-            neighbor_elements.fill(-1)
-            neighbor_faces = np.empty(nelems, dtype=mesh.face_id_dtype)
-            neighbor_faces.fill(-1)
+            neighbor_elements = np.full(nfaces, -1, dtype=mesh.element_id_dtype)
+            neighbor_faces = np.zeros(nfaces, dtype=mesh.face_id_dtype)
 
         else:
             # Both; need to merge together
             nnonlocal = len(nl.elements)
             nbdry = len(bdry.elements)
-            nelems = nnonlocal + nbdry
-            elements = np.empty(nelems, dtype=mesh.element_id_dtype)
-            element_faces = np.empty(nelems, dtype=mesh.face_id_dtype)
-            neighbor_parts = np.empty(nelems, dtype=np.int32)
-            neighbors = np.empty(nelems, dtype=mesh.element_id_dtype)
-            neighbor_elements = np.empty(nelems, dtype=mesh.element_id_dtype)
-            neighbor_faces = np.empty(nelems, dtype=mesh.face_id_dtype)
+            nfaces = nnonlocal + nbdry
+            elements = np.empty(nfaces, dtype=mesh.element_id_dtype)
+            element_faces = np.empty(nfaces, dtype=mesh.face_id_dtype)
+            neighbor_parts = np.empty(nfaces, dtype=np.int32)
+            neighbors = np.empty(nfaces, dtype=mesh.element_id_dtype)
+            neighbor_elements = np.empty(nfaces, dtype=mesh.element_id_dtype)
+            neighbor_faces = np.empty(nfaces, dtype=mesh.face_id_dtype)
 
             # Combine lists of elements/faces and sort to assist in merging
             combined_elements = np.concatenate((nl.elements, bdry.elements))
@@ -517,7 +517,7 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbors[bdry_indices] = bdry.neighbors
             neighbor_parts[bdry_indices] = -1
             neighbor_elements[bdry_indices] = -1
-            neighbor_faces[bdry_indices] = -1
+            neighbor_faces[bdry_indices] = 0
 
         from meshmode.mesh import InterPartitionAdjacencyGroup
         inter_partition_adj_groups.append(InterPartitionAdjacencyGroup(
@@ -652,7 +652,7 @@ def find_volume_mesh_element_group_orientation(vertices, grp):
 
     spanning_object_array = np.empty(
             (nspan_vectors, ambient_dim),
-            dtype=np.object)
+            dtype=object)
 
     for ispan in range(nspan_vectors):
         for idim in range(ambient_dim):
@@ -664,7 +664,7 @@ def find_volume_mesh_element_group_orientation(vertices, grp):
     mvs = [MultiVector(vec) for vec in spanning_object_array]
 
     from operator import xor
-    outer_prod = -reduce(xor, mvs)
+    outer_prod = -reduce(xor, mvs)      # pylint: disable=invalid-unary-operand-type
 
     if grp.dim == 1:
         # FIXME: This is a little weird.
@@ -757,9 +757,14 @@ def get_simplex_element_flip_matrix(order, unit_nodes, permutation=None):
     flipped_unit_nodes = barycentric_to_unit(flipped_bary_unit_nodes)
 
     dim = unit_nodes.shape[0]
+    shape = mp.Simplex(dim)
+    space = mp.PN(dim, order)
+    basis = mp.basis_for_space(space, shape)
     flip_matrix = mp.resampling_matrix(
-            mp.simplex_best_available_basis(dim, order),
-            flipped_unit_nodes, unit_nodes)
+        basis.functions,
+        flipped_unit_nodes,
+        unit_nodes
+    )
 
     flip_matrix[np.abs(flip_matrix) < 1e-15] = 0
 
@@ -807,7 +812,7 @@ def perform_flips(mesh, flip_flags, skip_tests=False):
         flipped.
     """
 
-    flip_flags = flip_flags.astype(np.bool)
+    flip_flags = flip_flags.astype(bool)
 
     from meshmode.mesh import Mesh
 
@@ -1047,19 +1052,85 @@ def map_mesh(mesh, f):  # noqa
 
 # {{{ affine map
 
-def affine_map(mesh, A=None, b=None):  # noqa
-    """Apply the affine map *f(x)=Ax+b* to the geometry of *mesh*."""
+def affine_map(mesh,
+        A: Optional[Union[Real, np.ndarray]] = None,    # noqa: N803
+        b: Optional[Union[Real, np.ndarray]] = None):
+    """Apply the affine map :math:`f(x) = A x + b` to the geometry of *mesh*."""
 
-    if A is None:
-        A = np.eye(mesh.ambient_dim)  # noqa
+    if isinstance(A, Real):
+        A = np.diag([A] * mesh.ambient_dim)             # noqa: N806
 
-    if b is None:
-        b = np.zeros(A.shape[0])
+    if isinstance(b, Real):
+        b = np.array([b] * mesh.ambient_dim)
+
+    if A is None and b is None:
+        return mesh
+
+    if A is not None and A.shape != (mesh.ambient_dim, mesh.ambient_dim):
+        raise ValueError(f"A has shape '{A.shape}' for a {mesh.ambient_dim}d mesh")
+
+    if b is not None and b.shape != (mesh.ambient_dim,):
+        raise ValueError(f"b has shape '{b.shape}' for a {mesh.ambient_dim}d mesh")
+
+    if b is not None:
+        b = b.reshape(-1, 1)
 
     def f(x):
-        return np.dot(A, x) + b.reshape(-1, 1)
+        z = x
+        if A is not None:
+            z = A @ z
+
+        if b is not None:
+            z = z + b
+
+        return z
 
     return map_mesh(mesh, f)
+
+
+def _get_rotation_matrix_from_angle_and_axis(theta, axis):
+    # https://en.wikipedia.org/wiki/Rotation_matrix#Rotation_matrix_from_axis_and_angle
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+    ux, uy, uz = axis / np.linalg.norm(axis, ord=2)
+
+    return np.array([[
+        cos_t + ux**2 * (1 - cos_t),
+        ux * uy * (1 - cos_t) - uz * sin_t,
+        ux * uz * (1 - cos_t) + uy * sin_t
+        ], [
+        uy * ux * (1 - cos_t) + uz * sin_t,
+        cos_t + uy**2 * (1 - cos_t),
+        uy * uz * (1 - cos_t) - ux * sin_t
+        ], [
+        uz * ux * (1 - cos_t) - uy * sin_t,
+        uz * uy * (1 - cos_t) + ux * sin_t,
+        cos_t + uz**2 * (1 - cos_t)
+        ]])
+
+
+def rotate_mesh_around_axis(mesh, *,
+        theta: Real,
+        axis: Optional[np.ndarray] = None):
+    """Rotate the mesh by *theta* radians around the axis *axis*.
+
+    :param axis: a (not necessarily unit) vector. By default, the rotation is
+        performed around the :math:`z` axis.
+    """
+    if mesh.ambient_dim == 1:
+        return mesh
+    elif mesh.ambient_dim == 2:
+        axis = None
+    elif mesh.ambient_dim == 3:
+        pass
+    else:
+        raise ValueError(f"unsupported mesh dimension: {mesh.ambient_dim}")
+
+    if axis is None:
+        axis = np.array([0, 0, 1])
+
+    mat = _get_rotation_matrix_from_angle_and_axis(theta, axis)
+    return affine_map(mesh, A=mat[:mesh.ambient_dim, :mesh.ambient_dim])
 
 # }}}
 

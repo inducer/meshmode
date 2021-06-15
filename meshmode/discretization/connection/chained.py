@@ -23,7 +23,6 @@ THE SOFTWARE.
 import numpy as np
 
 from pytools import Record
-from pytools.obj_array import obj_array_vectorized_n_args
 
 import modepy as mp
 from meshmode.discretization.connection.direct import \
@@ -62,7 +61,6 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
 
         self.connections = connections
 
-    @obj_array_vectorized_n_args
     def __call__(self, ary):
         for cnx in self.connections:
             ary = cnx(ary)
@@ -85,7 +83,7 @@ def _iterbatches(groups):
 
 
 def _build_element_lookup_table(actx, conn):
-    el_table = [np.full(g.nelements, -1, dtype=np.int)
+    el_table = [np.full(g.nelements, -1, dtype=np.int64)
                 for g in conn.to_discr.groups]
 
     for (igrp, _), (_, batch) in _iterbatches(conn.groups):
@@ -111,19 +109,19 @@ def _build_new_group_table(from_conn, to_conn):
     # the `result_unit_nodes` and only adding a new batch if necessary
     grp_to_grp = {}
     batch_info = [[] for i in range(nfrom_groups * nto_groups)]
-    for (igrp, ibatch), (fgrp, fbatch) in _iterbatches(from_conn.groups):
-        for (jgrp, jbatch), (tgrp, tbatch) in _iterbatches(to_conn.groups):
+    for (igrp, ibatch), (_, fbatch) in _iterbatches(from_conn.groups):
+        for (jgrp, jbatch), (_, tbatch) in _iterbatches(to_conn.groups):
             # compute result_unit_nodes
             ffgrp = from_conn.from_discr.groups[fbatch.from_group_index]
             from_matrix = mp.resampling_matrix(
-                    ffgrp.basis(),
+                    ffgrp.basis_obj().functions,
                     fbatch.result_unit_nodes,
                     ffgrp.unit_nodes)
             result_unit_nodes = from_matrix.dot(ffgrp.unit_nodes.T)
 
             tfgrp = to_conn.from_discr.groups[tbatch.from_group_index]
             to_matrix = mp.resampling_matrix(
-                    tfgrp.basis(),
+                    tfgrp.basis_obj().functions,
                     tbatch.result_unit_nodes,
                     tfgrp.unit_nodes)
             result_unit_nodes = to_matrix.dot(result_unit_nodes).T
@@ -189,13 +187,14 @@ def flatten_chained_connection(actx, connection):
         If a large number of connections is chained, the number of groups and
         batches can become very large.
 
-    :arg actx: An instance of :class:`meshmode.array_context.ArrayContext`.
+    :arg actx: An instance of :class:`arraycontext.ArrayContext`.
     :arg connection: An instance of
         :class:`~meshmode.discretization.connection.DiscretizationConnection`.
     :return: An instance of
         :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`.
     """
     from meshmode.discretization.connection import (
+            IdentityDiscretizationConnection,
             DirectDiscretizationConnection,
             DiscretizationConnectionElementGroup,
             make_same_mesh_connection)
@@ -204,6 +203,7 @@ def flatten_chained_connection(actx, connection):
         return connection
 
     if not connection.connections:
+        assert connection.to_discr is connection.from_discr
         return make_same_mesh_connection(actx, connection.to_discr,
                                          connection.from_discr)
 
@@ -213,6 +213,9 @@ def flatten_chained_connection(actx, connection):
     for conn in connections:
         direct_connections.append(flatten_chained_connection(actx, conn))
 
+    direct_connections = [conn for conn in direct_connections
+            if not isinstance(conn, IdentityDiscretizationConnection)]
+
     # merge all the direct connections
     from_conn = direct_connections[0]
     for to_conn in direct_connections[1:]:
@@ -220,8 +223,8 @@ def flatten_chained_connection(actx, connection):
         grp_to_grp, batch_info = _build_new_group_table(from_conn, to_conn)
 
         # distribute the indices to new groups and batches
-        from_bins = [[np.empty(0, dtype=np.int) for _ in g] for g in batch_info]
-        to_bins = [[np.empty(0, dtype=np.int) for _ in g] for g in batch_info]
+        from_bins = [[np.empty(0, dtype=np.int64) for _ in g] for g in batch_info]
+        to_bins = [[np.empty(0, dtype=np.int64) for _ in g] for g in batch_info]
 
         for (igrp, ibatch), (_, from_batch) in _iterbatches(from_conn.groups):
             from_to_element_indices = actx.to_numpy(from_batch.to_element_indices)
@@ -273,7 +276,7 @@ def make_full_resample_matrix(actx, connection):
         This method will be very slow, both in terms of speed and memory
         usage, and should only be used for testing or if absolutely necessary.
 
-    :arg actx: a :class:`meshmode.array_context.ArrayContext`.
+    :arg actx: a :class:`arraycontext.ArrayContext`.
     :arg connection: a
         :class:`~meshmode.discretization.connection.DiscretizationConnection`.
     :return: a :class:`pyopencl.array.Array` of shape

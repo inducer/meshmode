@@ -60,9 +60,6 @@ pygments_style = "sphinx"
 
 html_theme = "furo"
 
-html_theme_options = {
-        }
-
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
@@ -76,8 +73,10 @@ intersphinx_mapping = {
     "https://documen.tician.de/pyopencl": None,
     "https://documen.tician.de/meshpy": None,
     "https://documen.tician.de/modepy": None,
+    "https://documen.tician.de/arraycontext": None,
     "https://documen.tician.de/loopy": None,
     "https://documen.tician.de/gmsh_interop": None,
+    "https://documen.tician.de/pymetis": None,
     "https://firedrakeproject.org/": None,
     "https://tisaac.gitlab.io/recursivenodes/": None,
     "https://fenics.readthedocs.io/projects/fiat/en/latest/": None,
@@ -86,4 +85,3 @@ intersphinx_mapping = {
 }
 
 autoclass_content = "class"
-autodoc_typehints = "description"

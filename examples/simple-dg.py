@@ -20,18 +20,30 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-
+from dataclasses import dataclass
 import numpy as np
 import numpy.linalg as la  # noqa
+
 import pyopencl as cl
 import pyopencl.array as cla  # noqa
-from pytools import memoize_method, memoize_in
-from pytools.obj_array import (
-        flat_obj_array, make_obj_array,
-        obj_array_vectorize)
+
+from pytools import memoize_method, memoize_in, log_process
+from pytools.obj_array import flat_obj_array, make_obj_array
+
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
-from meshmode.dof_array import freeze, thaw
-from meshmode.array_context import PyOpenCLArrayContext, make_loopy_program
+from meshmode.dof_array import DOFArray, flat_norm
+from arraycontext import (
+        freeze, thaw,
+        PyOpenCLArrayContext, make_loopy_program,
+        ArrayContainer,
+        map_array_container,
+        with_container_arithmetic,
+        dataclass_array_container,
+        )
+from arraycontext.metadata import FirstAxisIsElementsTag
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 # Features lost vs. https://github.com/inducer/grudge:
@@ -44,12 +56,13 @@ from meshmode.array_context import PyOpenCLArrayContext, make_loopy_program
 # {{{ discretization
 
 def parametrization_derivative(actx, discr):
-    thawed_nodes = thaw(actx, discr.nodes())
+    thawed_nodes = thaw(discr.nodes(), actx)
 
+    from meshmode.discretization import num_reference_derivative
     result = np.zeros((discr.ambient_dim, discr.dim), dtype=object)
     for iambient in range(discr.ambient_dim):
         for idim in range(discr.dim):
-            result[iambient, idim] = discr.num_reference_derivative(
+            result[iambient, idim] = num_reference_derivative(discr,
                     (idim,), thawed_nodes[iambient])
 
     return result
@@ -70,10 +83,6 @@ class DGDiscretization:
     @property
     def _setup_actx(self):
         return self.volume_discr._setup_actx
-
-    @property
-    def array_context(self):
-        return self.volume_discr.array_context
 
     @property
     def dim(self):
@@ -146,10 +155,6 @@ class DGDiscretization:
             raise ValueError(f"locations '{src}'->'{tgt}' not understood")
 
     def interp(self, src, tgt, vec):
-        if isinstance(vec, np.ndarray):
-            return obj_array_vectorize(
-                    lambda el: self.interp(src, tgt, el), vec)
-
         return self.get_connection(src, tgt)(vec)
 
     def get_discr(self, where):
@@ -173,12 +178,12 @@ class DGDiscretization:
 
     @memoize_method
     def vol_jacobian(self):
-        [a, b], [c, d] = thaw(self._setup_actx, self.parametrization_derivative())
+        [a, b], [c, d] = thaw(self.parametrization_derivative(), self._setup_actx)
         return freeze(a*d-b*c)
 
     @memoize_method
     def inverse_parametrization_derivative(self):
-        [a, b], [c, d] = thaw(self._setup_actx, self.parametrization_derivative())
+        [a, b], [c, d] = thaw(self.parametrization_derivative(), self._setup_actx)
 
         result = np.zeros((2, 2), dtype=object)
         det = a*d-b*c
@@ -193,10 +198,11 @@ class DGDiscretization:
         return self.volume_discr.zeros(actx)
 
     def grad(self, vec):
-        ipder = self.inverse_parametrization_derivative()
+        ipder = thaw(self.inverse_parametrization_derivative(), vec.array_context)
 
+        from meshmode.discretization import num_reference_derivative
         dref = [
-                self.volume_discr.num_reference_derivative((idim,), vec)
+                num_reference_derivative(self.volume_discr, (idim,), vec)
                 for idim in range(self.volume_discr.dim)]
 
         return make_obj_array([
@@ -228,39 +234,32 @@ class DGDiscretization:
     def get_inverse_mass_matrix(self, grp, dtype):
         import modepy as mp
         matrix = mp.inverse_mass_matrix(
-                grp.basis(),
+                grp.basis_obj().functions,
                 grp.unit_nodes)
 
         actx = self._setup_actx
         return actx.freeze(actx.from_numpy(matrix))
 
     def inverse_mass(self, vec):
-        if isinstance(vec, np.ndarray):
-            return obj_array_vectorize(
-                    lambda el: self.inverse_mass(el), vec)
+        if not isinstance(vec, DOFArray):
+            return map_array_container(self.inverse_mass, vec)
 
-        @memoize_in(self, "elwise_linear_knl")
-        def knl():
-            return make_loopy_program(
-                """{[iel,idof,j]:
-                    0<=iel<nelements and
-                    0<=idof<ndiscr_nodes_out and
-                    0<=j<ndiscr_nodes_in}""",
-                "result[iel,idof] = sum(j, mat[idof, j] * vec[iel, j])",
-                name="diff")
-
+        actx = vec.array_context
+        dtype = vec.entry_dtype
         discr = self.volume_discr
 
-        result = discr.empty_like(vec)
-
-        for grp in discr.groups:
-            matrix = self.get_inverse_mass_matrix(grp, vec.entry_dtype)
-
-            vec.array_context.call_loopy(
-                    knl(),
-                    mat=matrix, result=result[grp.index], vec=vec[grp.index])
-
-        return result/self.vol_jacobian()
+        return DOFArray(
+            actx,
+            data=tuple(
+                actx.einsum(
+                    "ij,ej->ei",
+                    self.get_inverse_mass_matrix(grp, dtype),
+                    vec_i,
+                    arg_names=("mass_inv_mat", "vec"),
+                    tagged=(FirstAxisIsElementsTag(),)
+                ) for grp, vec_i in zip(discr.groups, vec)
+            )
+        ) / thaw(self.vol_jacobian(), actx)
 
     @memoize_method
     def get_local_face_mass_matrix(self, afgrp, volgrp, dtype):
@@ -280,7 +279,8 @@ class DGDiscretization:
         for face in mp.faces_for_shape(shape):
             face_vertices = unit_vertices[np.array(face.volume_vertex_indices)].T
             matrix[:, face.face_index, :] = mp.nodal_face_mass_matrix(
-                    volgrp.basis(), volgrp.unit_nodes, afgrp.unit_nodes,
+                    volgrp.basis_obj().functions,
+                    volgrp.unit_nodes, afgrp.unit_nodes,
                     volgrp.order,
                     face_vertices)
 
@@ -288,8 +288,11 @@ class DGDiscretization:
         return actx.freeze(actx.from_numpy(matrix))
 
     def face_mass(self, vec):
-        if isinstance(vec, np.ndarray):
-            return obj_array_vectorize(lambda el: self.face_mass(el), vec)
+        if not isinstance(vec, DOFArray):
+            return map_array_container(self.face_mass, vec)
+
+        actx = vec.array_context
+        dtype = vec.entry_dtype
 
         @memoize_in(self, "face_mass_knl")
         def knl():
@@ -307,45 +310,46 @@ class DGDiscretization:
         all_faces_discr = all_faces_conn.to_discr
         vol_discr = all_faces_conn.from_discr
 
-        result = vol_discr.empty_like(vec)
-
-        fj = self.face_jacobian("all_faces")
+        fj = thaw(self.face_jacobian("all_faces"), vec.array_context)
         vec = vec*fj
 
         assert len(all_faces_discr.groups) == len(vol_discr.groups)
 
-        for afgrp, volgrp in zip(all_faces_discr.groups, vol_discr.groups):
-            nfaces = volgrp.mesh_el_group.nfaces
-
-            matrix = self.get_local_face_mass_matrix(afgrp, volgrp, vec.entry_dtype)
-
-            vec.array_context.call_loopy(knl(),
-                    mat=matrix, result=result[volgrp.index],
-                    vec=vec[afgrp.index].reshape(
-                        nfaces, volgrp.nelements, afgrp.nunit_dofs))
-
-        return result
+        return DOFArray(
+            actx,
+            data=tuple(
+                actx.call_loopy(
+                    knl(),
+                    mat=self.get_local_face_mass_matrix(afgrp, volgrp, dtype),
+                    vec=vec_i.reshape(
+                        volgrp.mesh_el_group.nfaces,
+                        volgrp.nelements,
+                        afgrp.nunit_dofs
+                    )
+                )["result"]
+                for afgrp, volgrp, vec_i in zip(all_faces_discr.groups,
+                                                vol_discr.groups, vec)
+            )
+        )
 
 # }}}
 
 
 # {{{ trace pair
 
+@with_container_arithmetic(
+        bcast_obj_array=False, eq_comparison=False, rel_comparison=False)
+@dataclass_array_container
+@dataclass(frozen=True)
 class TracePair:
-    def __init__(self, where, interior, exterior):
-        self.where = where
-        self.interior = interior
-        self.exterior = exterior
+    where: str
+    interior: ArrayContainer
+    exterior: ArrayContainer
 
-    def __getitem__(self, index):
-        return TracePair(
-                self.where,
-                self.exterior[index],
-                self.interior[index])
-
-    def __len__(self):
-        assert len(self.exterior) == len(self.interior)
-        return len(self.exterior)
+    def __getattr__(self, name):
+        return map_array_container(
+                lambda ary: getattr(ary, name),
+                self)
 
     @property
     def int(self):
@@ -362,68 +366,56 @@ class TracePair:
 
 def interior_trace_pair(discr, vec):
     i = discr.interp("vol", "int_faces", vec)
-    e = obj_array_vectorize(
-            lambda el: discr.opposite_face_connection()(el),
-            i)
-    return TracePair("int_faces", i, e)
+    e = discr.opposite_face_connection()(i)
+    return TracePair("int_faces", interior=i, exterior=e)
 
 # }}}
 
 
 # {{{ wave equation bits
 
-def wave_flux(actx, discr, c, w_tpair):
-    u = w_tpair[0]
-    v = w_tpair[1:]
+def wave_flux(actx, discr, c, q_tpair):
+    u = q_tpair.u
+    v = q_tpair.v
 
-    normal = thaw(actx, discr.normal(w_tpair.where))
+    normal = thaw(discr.normal(q_tpair.where), actx)
 
-    flux_weak = flat_obj_array(
-            np.dot(v.avg, normal),
-            normal[0] * u.avg,
-            normal[1] * u.avg)
+    flux_weak = WaveState(
+            u=np.dot(v.avg, normal),
+            v=normal * u.avg)
 
     # upwind
-    v_jump = np.dot(normal, v.int-v.ext)
-    flux_weak -= flat_obj_array(
-            0.5*(u.int-u.ext),
-            0.5*normal[0]*v_jump,
-            0.5*normal[1]*v_jump,
-            )
+    v_jump = np.dot(normal, v.ext-v.int)
+    flux_weak += WaveState(
+            u=0.5*(u.ext-u.int),
+            v=0.5*normal*v_jump)
 
-    flux_strong = flat_obj_array(
-            np.dot(v.int, normal),
-            u.int * normal[0],
-            u.int * normal[1],
+    flux_strong = WaveState(
+            u=np.dot(v.int, normal),
+            v=u.int * normal,
             ) - flux_weak
 
-    return discr.interp(w_tpair.where, "all_faces", c*flux_strong)
+    return discr.interp(q_tpair.where, "all_faces", c*flux_strong)
 
 
-def wave_operator(actx, discr, c, w):
-    u = w[0]
-    v = w[1:]
-
-    dir_u = discr.interp("vol", BTAG_ALL, u)
-    dir_v = discr.interp("vol", BTAG_ALL, v)
-    dir_bval = flat_obj_array(dir_u, dir_v)
-    dir_bc = flat_obj_array(-dir_u, dir_v)
+def wave_operator(actx, discr, c, q):
+    dir_q = discr.interp("vol", BTAG_ALL, q)
+    dir_bc = WaveState(u=-dir_q.u, v=dir_q.v)
 
     return (
-            - flat_obj_array(
-                -c*discr.div(v),
-                -c*discr.grad(u)
+            WaveState(
+                u=c*discr.div(q.v),
+                v=c*discr.grad(q.u)
                 )
-            +  # noqa: W504
+            -  # noqa: W504
             discr.inverse_mass(
                 discr.face_mass(
                     wave_flux(actx, discr, c=c,
-                        w_tpair=interior_trace_pair(discr, w))
+                        q_tpair=interior_trace_pair(discr, q))
                     + wave_flux(actx, discr, c=c,
-                        w_tpair=TracePair(BTAG_ALL, dir_bval, dir_bc))
+                        q_tpair=TracePair(BTAG_ALL, dir_q, dir_bc))
                     ))
                 )
-
 
 # }}}
 
@@ -441,7 +433,7 @@ def bump(actx, discr, t=0):
     source_width = 0.05
     source_omega = 3
 
-    nodes = thaw(actx, discr.volume_discr.nodes())
+    nodes = thaw(discr.volume_discr.nodes(), actx)
     center_dist = flat_obj_array([
         nodes[0] - source_center[0],
         nodes[1] - source_center[1],
@@ -454,10 +446,27 @@ def bump(actx, discr, t=0):
             / source_width**2))
 
 
+@with_container_arithmetic(bcast_obj_array=True, rel_comparison=True)
+@dataclass_array_container
+@dataclass(frozen=True)
+class WaveState:
+    u: DOFArray
+    v: np.ndarray  # [object]
+
+    def __post_init__(self):
+        assert isinstance(self.v, np.ndarray) and self.v.dtype.char == "O"
+
+    @property
+    def array_context(self):
+        return self.u.array_context
+
+
+@log_process(logger)
 def main():
+    logging.basicConfig(level=logging.INFO)
+
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-
     actx = PyOpenCLArrayContext(queue)
 
     nel_1d = 16
@@ -465,27 +474,27 @@ def main():
     mesh = generate_regular_rect_mesh(
             a=(-0.5, -0.5),
             b=(0.5, 0.5),
-            n=(nel_1d, nel_1d))
+            nelements_per_axis=(nel_1d, nel_1d))
 
     order = 3
 
     # no deep meaning here, just a fudge factor
-    dt = 0.75/(nel_1d*order**2)
+    dt = 0.7/(nel_1d*order**2)
 
-    print("%d elements" % mesh.nelements)
+    logger.info("%d elements", mesh.nelements)
 
     discr = DGDiscretization(actx, mesh, order=order)
 
-    fields = flat_obj_array(
-            bump(actx, discr),
-            [discr.zeros(actx) for i in range(discr.dim)]
+    fields = WaveState(
+            u=bump(actx, discr),
+            v=make_obj_array([discr.zeros(actx) for i in range(discr.dim)]),
             )
 
     from meshmode.discretization.visualization import make_visualizer
-    vis = make_visualizer(actx, discr.volume_discr, discr.order+3)
+    vis = make_visualizer(actx, discr.volume_discr)
 
-    def rhs(t, w):
-        return wave_operator(actx, discr, c=1, w=w)
+    def rhs(t, q):
+        return wave_operator(actx, discr, c=1, q=q)
 
     t = 0
     t_final = 3
@@ -496,16 +505,17 @@ def main():
         if istep % 10 == 0:
             # FIXME: Maybe an integral function to go with the
             # DOFArray would be nice?
-            assert len(fields[0]) == 1
-            print(istep, t, la.norm(actx.to_numpy(fields[0][0])))
-            vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep,
-                    [
-                        ("u", fields[0]),
-                        ("v", fields[1:]),
-                        ])
+            assert len(fields.u) == 1
+            logger.info("[%05d] t %.5e / %.5e norm %.5e",
+                    istep, t, t_final, flat_norm(fields.u, 2))
+            vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep, [
+                ("q", fields),
+                ])
 
         t += dt
         istep += 1
+
+    assert flat_norm(fields.u, 2) < 100
 
 
 if __name__ == "__main__":
