@@ -631,7 +631,6 @@ class Visualizer:
 
             par_manifest_filename = par_manifest_filename[:-4] + ".pvtu"
 
-        import os
         self.write_vtk_file(
                 file_name=file_name_pattern.format(rank=rank),
                 names_and_fields=names_and_fields,
@@ -641,10 +640,9 @@ class Visualizer:
                 use_high_order=use_high_order,
                 par_manifest_filename=par_manifest_filename,
                 par_file_names=[
-                    os.path.basename(file_name_pattern.format(rank=rank))
-                    for rank in range(nranks)
-                    ]
-                )
+                    file_name_pattern.format(rank=rank)
+                    for rank in range(nranks)]
+        )
 
     def write_vtk_file(self, file_name, names_and_fields,
             compressor=None, real_only=False, overwrite=False,
@@ -807,8 +805,11 @@ class Visualizer:
                         "par_file_names are given")
 
             if responsible_for_writing_par_manifest:
+                parfile_relnames = [
+                    os.path.relpath(pn, start=os.dirname(par_manifest_filename))
+                    for pn in par_file_names]
                 with open(par_manifest_filename, "w") as outf:
-                    generator = ParallelXMLGenerator(par_file_names)
+                    generator = ParallelXMLGenerator(parfile_relnames)
                     generator(grid).write(outf)
 
         # }}}
