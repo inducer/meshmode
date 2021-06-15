@@ -604,7 +604,8 @@ class Visualizer:
             is assumed.
         :arg file_name_pattern: A file name pattern (required to end in ``.vtu``)
             that will be used with :meth:`str.format` with an (integer)
-            argument of ``rank`` to obtain the per-rank file name.
+            argument of ``rank`` to obtain the per-rank file name. Relative
+            path names are also supported.
         :arg par_manifest_filename: as in :meth:`write_vtk_file`.
             If not given, *par_manifest_filename* is synthesized by
             substituting rank 0 into *file_name_pattern* and replacing the file
@@ -629,7 +630,8 @@ class Visualizer:
                         "ending in '.vtu'")
 
             par_manifest_filename = par_manifest_filename[:-4] + ".pvtu"
-
+    
+        import os
         self.write_vtk_file(
                 file_name=file_name_pattern.format(rank=rank),
                 names_and_fields=names_and_fields,
@@ -639,7 +641,7 @@ class Visualizer:
                 use_high_order=use_high_order,
                 par_manifest_filename=par_manifest_filename,
                 par_file_names=[
-                    file_name_pattern.format(rank=rank)
+                    os.path.basename(file_name_pattern.format(rank=rank))
                     for rank in range(nranks)
                     ]
                 )
