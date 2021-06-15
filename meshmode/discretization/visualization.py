@@ -807,7 +807,7 @@ class Visualizer:
 
             if responsible_for_writing_par_manifest:
                 parfile_relnames = [
-                    os.path.relpath(pn, start=os.dirname(par_manifest_filename))
+                    os.path.relpath(pn, start=os.path.dirname(par_manifest_filename))
                     for pn in par_file_names]
                 with open(par_manifest_filename, "w") as outf:
                     generator = ParallelXMLGenerator(parfile_relnames)
