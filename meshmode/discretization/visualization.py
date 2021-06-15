@@ -630,7 +630,7 @@ class Visualizer:
                         "ending in '.vtu'")
 
             par_manifest_filename = par_manifest_filename[:-4] + ".pvtu"
-    
+
         import os
         self.write_vtk_file(
                 file_name=file_name_pattern.format(rank=rank),
