@@ -66,6 +66,14 @@ def find_group_indices(groups, meshwide_elems):
     return grps
 
 
+def _repeat_matrix(mat, n):
+    """
+    Return an array of shape ``(n, mat.shape[0], mat.shape[1])`` consisting of *n*
+    copies of *mat*.
+    """
+    return np.repeat(mat.reshape(1, mat.shape[0], mat.shape[1]), n, axis=0)
+
+
 # {{{ partition_mesh
 
 def _compute_global_elem_to_part_elem(part_per_element, parts, element_id_dtype):
@@ -225,8 +233,14 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
                 neighbors = global_elem_to_part_elem[facial_adj.neighbors[
                             adj_indices] + elem_base_j] - part_elem_base_j
                 neighbor_faces = facial_adj.neighbor_faces[adj_indices]
-                mats = facial_adj.aff_transform_mats[adj_indices, :, :]
-                vecs = facial_adj.aff_transform_vecs[adj_indices, :]
+                mats = (
+                    facial_adj.aff_transform_mats[adj_indices, :, :]
+                    if facial_adj.aff_transform_mats is not None
+                    else None)
+                vecs = (
+                    facial_adj.aff_transform_vecs[adj_indices, :]
+                    if facial_adj.aff_transform_vecs is not None
+                    else None)
 
                 from meshmode.mesh import FacialAdjacencyGroup
                 local_to_local_adjacency_groups[i_part_grp][j_part_grp] =\
@@ -341,8 +355,14 @@ def _collect_nonlocal_adjacency_data(mesh, part_per_elem, global_elem_to_part_el
                 global_neighbors = facial_adj.neighbors[adj_indices] + elem_base_j
                 neighbor_parts = part_per_elem[global_neighbors]
                 neighbor_faces = facial_adj.neighbor_faces[adj_indices]
-                mats = facial_adj.aff_transform_mats[adj_indices]
-                vecs = facial_adj.aff_transform_vecs[adj_indices]
+                mats = (
+                    facial_adj.aff_transform_mats[adj_indices, :, :]
+                    if facial_adj.aff_transform_mats is not None
+                    else None)
+                vecs = (
+                    facial_adj.aff_transform_vecs[adj_indices, :]
+                    if facial_adj.aff_transform_vecs is not None
+                    else None)
 
                 pairwise_adj.append(
                     _NonLocalAdjacencyData(
@@ -350,14 +370,36 @@ def _collect_nonlocal_adjacency_data(mesh, part_per_elem, global_elem_to_part_el
                         neighbor_faces, mats, vecs))
 
         if pairwise_adj:
+            if any([
+                    adj.aff_transform_mats is not None
+                    for adj in pairwise_adj]):
+                eye = np.eye(mesh.ambient_dim, dtype=np.float64)
+                concatenated_mats = np.concatenate([
+                    adj.aff_transform_mats
+                    if adj.aff_transform_mats is not None
+                    else _repeat_matrix(eye, len(adj.elements))
+                    for adj in pairwise_adj])
+            else:
+                concatenated_mats = None
+            if any([
+                    adj.aff_transform_vecs is not None
+                    for adj in pairwise_adj]):
+                concatenated_vecs = np.concatenate([
+                    adj.aff_transform_vecs
+                    if adj.aff_transform_vecs is not None
+                    else np.zeros((len(adj.elements), mesh.ambient_dim),
+                        dtype=np.float64)
+                    for adj in pairwise_adj])
+            else:
+                concatenated_vecs = None
             nonlocal_adj_data[i_part_grp] = _NonLocalAdjacencyData(
                 np.concatenate([adj.elements for adj in pairwise_adj]),
                 np.concatenate([adj.element_faces for adj in pairwise_adj]),
                 np.concatenate([adj.neighbor_parts for adj in pairwise_adj]),
                 np.concatenate([adj.global_neighbors for adj in pairwise_adj]),
                 np.concatenate([adj.neighbor_faces for adj in pairwise_adj]),
-                np.concatenate([adj.aff_transform_mats for adj in pairwise_adj]),
-                np.concatenate([adj.aff_transform_vecs for adj in pairwise_adj]))
+                concatenated_mats,
+                concatenated_vecs)
 
     return nonlocal_adj_data
 
@@ -473,9 +515,8 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbors = np.empty(0, dtype=mesh.element_id_dtype)
             neighbor_elements = np.empty(0, dtype=mesh.element_id_dtype)
             neighbor_faces = np.empty(0, dtype=mesh.face_id_dtype)
-            mats = np.empty((0, mesh.ambient_dim, mesh.ambient_dim),
-                dtype=np.float64)
-            vecs = np.empty((0, mesh.ambient_dim), dtype=np.float64)
+            mats = None
+            vecs = None
 
         elif bdry is None:
             # Non-local adjacency only
@@ -502,8 +543,8 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbors = bdry.neighbors
             neighbor_elements = np.full(nfaces, -1, dtype=mesh.element_id_dtype)
             neighbor_faces = np.zeros(nfaces, dtype=mesh.face_id_dtype)
-            from meshmode.mesh import _make_affine_identity_transforms
-            mats, vecs = _make_affine_identity_transforms(mesh.ambient_dim, nfaces)
+            mats = None
+            vecs = None
 
         else:
             # Both; need to merge together
@@ -516,9 +557,14 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbors = np.empty(nfaces, dtype=mesh.element_id_dtype)
             neighbor_elements = np.empty(nfaces, dtype=mesh.element_id_dtype)
             neighbor_faces = np.empty(nfaces, dtype=mesh.face_id_dtype)
-            mats = np.empty((nfaces, mesh.ambient_dim, mesh.ambient_dim),
-                dtype=np.float64)
-            vecs = np.empty((nfaces, mesh.ambient_dim), dtype=np.float64)
+            mats = (
+                _repeat_matrix(np.eye(mesh.ambient_dim, dtype=np.float64), nfaces)
+                if nl.aff_transform_mats is not None
+                else None)
+            vecs = (
+                np.zeros((nfaces, mesh.ambient_dim), dtype=np.float64)
+                if nl.aff_transform_vecs is not None
+                else None)
 
             # Combine lists of elements/faces and sort to assist in merging
             combined_elements = np.concatenate((nl.elements, bdry.elements))
@@ -540,8 +586,10 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbor_elements[nonlocal_indices] = global_elem_to_neighbor_elem[
                         nl.global_neighbors]
             neighbor_faces[nonlocal_indices] = nl.neighbor_faces
-            mats[nonlocal_indices] = nl.aff_transform_mats
-            vecs[nonlocal_indices] = nl.aff_transform_vecs
+            if nl.aff_transform_mats is not None:
+                mats[nonlocal_indices] = nl.aff_transform_mats
+            if nl.aff_transform_vecs is not None:
+                vecs[nonlocal_indices] = nl.aff_transform_vecs
 
             # Merge boundary part
             bdry_indices = np.where(perm >= nnonlocal)[0]
@@ -551,11 +599,6 @@ def _create_inter_partition_adjacency_groups(mesh, part_per_element,
             neighbor_parts[bdry_indices] = -1
             neighbor_elements[bdry_indices] = -1
             neighbor_faces[bdry_indices] = 0
-            from meshmode.mesh import _make_affine_identity_transforms
-            bdry_mats, bdry_vecs = _make_affine_identity_transforms(
-                mesh.ambient_dim, nbdry)
-            mats[bdry_indices, :, :] = bdry_mats
-            vecs[bdry_indices, :] = bdry_vecs
 
         from meshmode.mesh import InterPartitionAdjacencyGroup
         inter_partition_adj_groups.append(InterPartitionAdjacencyGroup(
@@ -1159,7 +1202,12 @@ def _match_boundary_faces(mesh, glued_boundary_mappings, tol):
             tree.insert(ivertex, bdry_n_vertex_bboxes[:, :, ivertex])
 
         mat, vec = aff_transform
-        mapped_bdry_m_vertices = mat @ bdry_m_vertices + vec.reshape(-1, 1)
+        if mat is not None:
+            mapped_bdry_m_vertices = mat @ bdry_m_vertices
+        else:
+            mapped_bdry_m_vertices = bdry_m_vertices
+        if vec is not None:
+            mapped_bdry_m_vertices = mapped_bdry_m_vertices + vec.reshape(-1, 1)
 
         equivalent_vertices = np.empty((2, nvertices), dtype=mesh.element_id_dtype)
         for ivertex in range(nvertices):
@@ -1292,10 +1340,19 @@ def _construct_glued_mesh(mesh, glued_boundary_mappings,
         from meshmode.mesh import _boundary_tag_bit
         return _boundary_tag_bit(boundary_tags, btag_to_index, btag)
 
-    mats_for_mapping = np.stack(
-        mat for _, _, (mat, _) in glued_boundary_mappings)
-    vecs_for_mapping = np.stack(
-        vec for _, _, (_, vec) in glued_boundary_mappings)
+    mapping_has_mat = np.array([
+        mat is not None for _, _, (mat, _) in glued_boundary_mappings])
+    mapping_has_vec = np.array([
+        vec is not None for _, _, (_, vec) in glued_boundary_mappings])
+
+    mats_for_mapping = np.stack([
+        mat if mat is not None
+        else np.eye(mesh.ambient_dim, dtype=np.float64)
+        for _, _, (mat, _) in glued_boundary_mappings])
+    vecs_for_mapping = np.stack([
+        vec if vec is not None
+        else np.zeros(mesh.ambient_dim, dtype=np.float64)
+        for _, _, (_, vec) in glued_boundary_mappings])
 
     from meshmode.mesh import FacialAdjacencyGroup
 
@@ -1327,13 +1384,25 @@ def _construct_glued_mesh(mesh, glued_boundary_mappings,
             merged_indices = _compute_face_indices_from_mask(face_has_neighbor)
             nfaces = np.max(merged_indices) + 1
 
+            mapping_indices = mapping_indices_grp_map[ineighbor_grp]
+
             elements = np.empty(nfaces, dtype=mesh.element_id_dtype)
             element_faces = np.empty(nfaces, dtype=mesh.face_id_dtype)
             neighbors = np.empty(nfaces, dtype=mesh.element_id_dtype)
             neighbor_faces = np.empty(nfaces, dtype=mesh.face_id_dtype)
-            mats = np.empty((nfaces, mesh.ambient_dim, mesh.ambient_dim),
-                dtype=np.float64)
-            vecs = np.empty((nfaces, mesh.ambient_dim), dtype=np.float64)
+
+            mats = (
+                _repeat_matrix(np.eye(mesh.ambient_dim, dtype=np.float64), nfaces)
+                if (
+                    old_adj.aff_transform_mats is not None
+                    or np.any(mapping_has_mat[mapping_indices]))
+                else None)
+            vecs = (
+                np.zeros((nfaces, mesh.ambient_dim), dtype=np.float64)
+                if (
+                    old_adj.aff_transform_vecs is not None
+                    or np.any(mapping_has_vec[mapping_indices]))
+                else None)
 
             if old_adj is not None:
                 indices = merged_indices[old_adj.element_faces, old_adj.elements]
@@ -1341,8 +1410,10 @@ def _construct_glued_mesh(mesh, glued_boundary_mappings,
                 element_faces[indices] = old_adj.element_faces
                 neighbors[indices] = old_adj.neighbors
                 neighbor_faces[indices] = old_adj.neighbor_faces
-                mats[indices, :, :] = old_adj.aff_transform_mats
-                vecs[indices, :] = old_adj.aff_transform_vecs
+                if old_adj.aff_transform_mats is not None:
+                    mats[indices, :, :] = old_adj.aff_transform_mats
+                if old_adj.aff_transform_vecs is not None:
+                    vecs[indices, :] = old_adj.aff_transform_vecs
 
             if grp_pair_face_ids is not None:
                 face_ids = grp_pair_face_ids[0]
@@ -1352,9 +1423,10 @@ def _construct_glued_mesh(mesh, glued_boundary_mappings,
                 element_faces[indices] = face_ids.faces
                 neighbors[indices] = neighbor_face_ids.elements
                 neighbor_faces[indices] = neighbor_face_ids.faces
-                mapping_indices = mapping_indices_grp_map[ineighbor_grp]
-                mats[indices, :, :] = mats_for_mapping[mapping_indices, :, :]
-                vecs[indices, :] = vecs_for_mapping[mapping_indices, :]
+                if mats is not None:
+                    mats[indices, :, :] = mats_for_mapping[mapping_indices, :, :]
+                if vecs is not None:
+                    vecs[indices, :] = vecs_for_mapping[mapping_indices, :]
 
             fagrp_map[ineighbor_grp] = FacialAdjacencyGroup(
                 igroup=igrp,
@@ -1393,9 +1465,7 @@ def _construct_glued_mesh(mesh, glued_boundary_mappings,
                 elements=old_bdry_grp.elements[indices],
                 element_faces=old_bdry_grp.element_faces[indices],
                 neighbors=-flags,
-                neighbor_faces=old_bdry_grp.neighbor_faces[indices],
-                aff_transform_mats=old_bdry_grp.aff_transform_mats[indices, :, :],
-                aff_transform_vecs=old_bdry_grp.aff_transform_vecs[indices, :])
+                neighbor_faces=old_bdry_grp.neighbor_faces[indices])
 
         facial_adjacency_groups.append(fagrp_map)
 
@@ -1429,13 +1499,29 @@ def glue_mesh_boundaries(mesh, glued_boundary_mappings, tol=1e-12):
     glued_boundary_mappings_both_ways = []
 
     for btag_m, btag_n, aff_transform in glued_boundary_mappings:
-        aff_transform_np = np.array(aff_transform[0]), np.array(aff_transform[1])
+        transform_mat = (
+            np.array(aff_transform[0])
+            if aff_transform is not None and aff_transform[0] is not None
+            else None)
+        transform_vec = (
+            np.array(aff_transform[1])
+            if aff_transform is not None and aff_transform[1] is not None
+            else None)
         glued_boundary_mappings_both_ways.append(
-            (btag_m, btag_n, aff_transform_np))
+            (btag_m, btag_n, (transform_mat, transform_vec)))
         if (btag_n, btag_m) not in mapped_btags:
-            transform_mat, transform_vec = aff_transform_np
-            inv_transform_mat = la.inv(transform_mat)
-            inv_transform_vec = -inv_transform_mat @ transform_vec
+            if transform_mat is not None:
+                inv_transform_mat = la.inv(transform_mat)
+                inv_transform_vec = (
+                    -inv_transform_mat @ transform_vec
+                    if transform_vec is not None
+                    else None)
+            else:
+                inv_transform_mat = None
+                inv_transform_vec = (
+                    -transform_vec
+                    if transform_vec is not None
+                    else None)
             glued_boundary_mappings_both_ways.append(
                 (btag_n, btag_m, (inv_transform_mat, inv_transform_vec)))
 

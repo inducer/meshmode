@@ -334,18 +334,11 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         int_neighbors = int_neighbors[remaining_int_facs]
         int_neighbor_faces = int_neighbor_faces[remaining_int_facs]
 
-    # TODO: Figure out how to get ambient_dim
-#     from meshmode.mesh import _make_affine_identity_transforms
-#     int_mats, int_vecs = _make_affine_identity_transforms(
-#         ambient_dim, len(int_elements))
-
     interconnectivity_grp = FacialAdjacencyGroup(igroup=0, ineighbor_group=0,
                                                  elements=int_elements,
                                                  neighbors=int_neighbors,
                                                  element_faces=int_element_faces,
                                                  neighbor_faces=int_neighbor_faces)
-#                                                  aff_transform_mats=int_mats,
-#                                                  aff_transform_vecs=int_vecs)
 
     # }}}
 
@@ -393,18 +386,11 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                              new_ext_neighbor_faces))
         ext_neighbors = np.concatenate((ext_neighbors, new_ext_neighbors))
 
-    # TODO: Figure out how to get ambient_dim
-#     from meshmode.mesh import _make_affine_identity_transforms
-#     ext_mats, ext_vecs = _make_affine_identity_transforms(
-#         ambient_dim, len(ext_elements))
-
     exterior_grp = FacialAdjacencyGroup(igroup=0, ineighbor=None,
                                         elements=ext_elements,
                                         element_faces=ext_element_faces,
                                         neighbors=ext_neighbors,
                                         neighbor_faces=ext_neighbor_faces)
-#                                         aff_transform_mats=ext_mats,
-#                                         aff_transform_vecs=ext_vecs)
 
     # }}}
 
@@ -761,9 +747,6 @@ build_connection_from_firedrake`.
                                                  element_faces=new_element_faces,
                                                  neighbors=fagrp.neighbors,
                                                  neighbor_faces=new_neighbor_faces)
-# TODO: Find out if something extra needs to be done here
-#                                                  aff_transform_mats=fagrp.aff_transform_mats,
-#                                                  aff_transform_vecs=fagrp.aff_transform_vecs)
                 facial_adjacency_groups[igroup][ineighbor_group] = new_fagrp
 
     return (Mesh(vertices, [group],

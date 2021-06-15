@@ -54,13 +54,14 @@ def _make_cross_face_batches(actx,
             to_element_face=None)]
 
     def transform(aff_transforms, x):
-        if aff_transforms is not None:
-            mats, vecs = aff_transforms
-            return (
-                np.einsum("edi,ien->den", mats, x)
-                + vecs.T.reshape(vecs.shape[1], -1, 1))
+        mats, vecs = aff_transforms if aff_transforms is not None else (None, None)
+        if mats is not None:
+            result = np.einsum("edi,ien->den", mats, x)
         else:
-            return x
+            result = x
+        if vecs is not None:
+            result = result + vecs.T.reshape(vecs.shape[1], -1, 1)
+        return result
 
     tgt_bdry_nodes = transform(tgt_aff_transforms, np.array([
         thaw_to_numpy(actx, ary[i_tgt_grp])[tgt_bdry_element_indices]
@@ -459,9 +460,18 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
                         vbc_tgt_grp_face_batch.to_element_indices
                         )[vbc_used_els]
 
+                mats = (
+                    adj.aff_transform_mats[adj_tgt_flags, :, :]
+                    if adj.aff_transform_mats is not None
+                    else None)
+                vecs = (
+                    adj.aff_transform_vecs[adj_tgt_flags, :]
+                    if adj.aff_transform_vecs is not None
+                    else None)
                 tgt_aff_transforms = (
-                    adj.aff_transform_mats[adj_tgt_flags, :, :],
-                    adj.aff_transform_vecs[adj_tgt_flags, :])
+                    (mats, vecs)
+                    if mats is not None or vecs is not None
+                    else None)
 
                 # find src_bdry_element_indices
 
@@ -575,9 +585,15 @@ def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
         i_remote_faces = rem_ipag.element_faces[indices]
         i_local_vol_elems = rem_ipag.partition_neighbors[indices]
         i_local_faces = rem_ipag.neighbor_faces[indices]
-        remote_aff_transforms = (
-            rem_ipag.aff_transform_mats[indices, :, :],
-            rem_ipag.aff_transform_vecs[indices, :])
+
+        remote_aff_mats = (
+            rem_ipag.aff_transform_mats[indices, :, :]
+            if rem_ipag.aff_transform_mats is not None
+            else None)
+        remote_aff_vecs = (
+            rem_ipag.aff_transform_vecs[indices, :]
+            if rem_ipag.aff_transform_vecs is not None
+            else None)
 
         del indices
 
@@ -621,9 +637,18 @@ def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
                     i_remote_faces[local_indices]]
             assert (matched_remote_bdry_el_indices >= 0).all()
 
+            mats = (
+                remote_aff_mats[local_indices, :, :]
+                if remote_aff_mats is not None
+                else None)
+            vecs = (
+                remote_aff_vecs[local_indices, :]
+                if remote_aff_vecs is not None
+                else None)
             src_aff_transforms = (
-                remote_aff_transforms[0][local_indices, :, :],
-                remote_aff_transforms[1][local_indices, :])
+                (mats, vecs)
+                if mats is not None or vecs is not None
+                else None)
 
             # }}}
 
