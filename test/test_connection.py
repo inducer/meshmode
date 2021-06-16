@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from arraycontext import _acf  # noqa: F401
 from functools import partial
 import numpy as np  # noqa: F401
 import numpy.linalg as la  # noqa: F401
