@@ -259,6 +259,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         tol = np.finfo(ibatch.result_unit_nodes.dtype).eps * tol_multiplier
 
         dim, ntgt_nodes = ibatch.result_unit_nodes.shape
+        if dim == 0:
+            assert ntgt_nodes == 1
+            return actx.freeze(actx.from_numpy(np.array([0], dtype=np.int32)))
+
         dist_vecs = (ibatch.result_unit_nodes.reshape(dim, -1, 1)
                 - from_grp.unit_nodes.reshape(dim, 1, -1))
         dists = np.sqrt(np.sum(dist_vecs**2, axis=0))
