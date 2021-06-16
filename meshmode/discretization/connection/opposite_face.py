@@ -193,7 +193,7 @@ def _make_cross_face_batches(actx,
             df_inv_resid[1] = 1/det * (-ata[0, 1] * atb[0] + ata[0, 0]*atb[1])
 
         else:
-            # The boundary of a 3D mesh is 2D, so that's the
+            # The boundary of a 3D mesh is 2D, so that (the case right above) is the
             # highest-dimensional case we genuinely care about.
             #
             # This stinks, performance-wise, because it's not vectorized.
