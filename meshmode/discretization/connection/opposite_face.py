@@ -222,6 +222,47 @@ def _make_cross_face_batches(actx,
         max_resid = np.max(np.abs(resid))
 
         if max_resid < tol:
+            if 0:
+                near_zero = np.abs(src_unit_nodes) < 1e-5
+                near_one = np.abs(src_unit_nodes-1) < 1e-5
+                near_mone = np.abs(src_unit_nodes+1) < 1e-5
+                reasonable = near_zero | near_one | near_mone
+                if np.any(~reasonable):
+                    unreasonable_els, unreasonable_nodes = np.where(
+                            np.any(~reasonable, axis=0))
+                    mapped = apply_map(src_unit_nodes)
+                    # print(src_unit_nodes[~reasonable])
+                    urel = unreasonable_els[0]
+                    tgt_urel = tgt_bdry_nodes[:, urel]
+                    src_urel = src_bdry_nodes[:, urel]
+
+                    dist_vecs = tgt_urel.reshape(3, -1, 1) - src_urel.reshape(3, 1, -1)
+                    dists = np.sqrt(np.sum(dist_vecs**2, axis=0))
+
+                    mat = (dists < 1e-12)
+                    from_indices = np.array([np.where(row)[0][0] for row in mat])
+
+                    sunodes = src_bdry_discr.groups[i_src_grp].unit_nodes
+
+                    print("GOOD UNIT NODES")
+                    print(sunodes[:, from_indices])
+                    print("BAD UNIT NODES")
+                    print(src_unit_nodes[:, urel])
+                    print()
+
+                    fixed_src_unit_nodes = src_unit_nodes.copy()
+                    fixed_src_unit_nodes[:, urel] = sunodes[:, from_indices]
+                    mapped_fixed = apply_map(fixed_src_unit_nodes)
+
+                    print("FIXED RESIDUAL")
+                    print(np.max(np.abs(mapped_fixed[:, urel]
+                        - tgt_bdry_nodes[:, urel])))
+                    print("UNFIXED RESIDUAL")
+                    print(np.max(np.abs(mapped[:, urel] - tgt_bdry_nodes[:, urel])))
+
+
+                    pu.db
+
             logger.debug("_make_cross_face_batches: gauss-newton: done, "
                     "final residual: %g", max_resid)
             break
