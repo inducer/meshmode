@@ -45,8 +45,7 @@ logger = logging.getLogger(__name__)
 
 
 def connection_is_permutation(actx, conn):
-    for i_tgrp, (tgrp, cgrp) in enumerate(
-            zip(conn.to_discr.groups, conn.groups)):
+    for i_tgrp, cgrp in enumerate(conn.groups):
         for i_batch, batch in enumerate(cgrp.batches):
             if not len(batch.from_element_indices):
                 continue
