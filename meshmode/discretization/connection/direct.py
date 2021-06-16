@@ -28,6 +28,7 @@ from pytools import memoize_in, keyed_memoize_method
 from arraycontext import (
         ArrayContext, make_loopy_program,
         is_array_container, map_array_container)
+from arraycontext.metadata import ElementInameTag, DOFInameTag
 
 
 # {{{ interpolation batch
@@ -99,10 +100,63 @@ class InterpolationBatch:
         self.to_element_indices = to_element_indices
         self.result_unit_nodes = result_unit_nodes
         self.to_element_face = to_element_face
+        self._global_from_element_indices_cache = None
 
     @property
     def nelements(self):
         return len(self.from_element_indices)
+
+    def _global_from_element_indices(self, actx, to_group):
+        """Returns a version of :attr:`from_element_indices` that is usable
+        without :attr:`to_element_indices`.  Elements for which no 'from'-side
+        data exists (the result will be set to zero) are marked with a
+        "from-element index" of -1.
+
+        :arg: actx: A :class:`arraycontext.ArrayContext` with which to compute
+            the index set if not already available.
+        :arg to_group: The :class:`~meshmode.discretization.ElementGroup`
+            that holds the result of this interpolation batch.
+        """
+        if self._global_from_element_indices_cache is not None:
+            return self._global_from_element_indices_cache
+
+        @memoize_in(actx, (InterpolationBatch._global_from_element_indices,
+            "compose_index_maps_kernel"))
+        def compose_index_maps_kernel():
+            t_unit = make_loopy_program(
+                [
+                    "{[iel_init]: 0 <= iel_init < nelements_result}",
+                    "{[iel]: 0 <= iel < nelements}",
+                ],
+                """
+                    global_from_element_indices[iel_init] = -1 {id=init}
+                    ... gbarrier {id=barrier, dep=init}
+                    global_from_element_indices[to_element_indices[iel]] =  \
+                        from_element_indices[iel] {dep=barrier}
+                """,
+                [
+                    lp.GlobalArg("global_from_element_indices", None,
+                        shape="nelements_result",
+                        offset=lp.auto),
+                    "...",
+                ],
+                name="compose_index_maps",
+            )
+            t_unit = lp.tag_inames(t_unit, {
+                "iel_init": ElementInameTag(),
+                "iel": ElementInameTag(),
+                })
+            return t_unit
+
+        result = actx.freeze(actx.call_loopy(
+            compose_index_maps_kernel(),
+            from_element_indices=self.from_element_indices,
+            to_element_indices=self.to_element_indices,
+            nelements_result=to_group.nelements,
+        )["global_from_element_indices"])
+
+        self._global_from_element_indices_cache = result
+        return result
 
 # }}}
 
@@ -295,44 +349,32 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         actx = ary.array_context
 
-        from arraycontext.metadata import ElementInameTag, DOFInameTag
-
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_mat_batch_knl"))
         def batch_mat_knl():
             t_unit = make_loopy_program(
                 [
-                    "{[iel_init]: 0 <= iel_init < nelements_result}",
-                    "{[idof_init]: 0 <= idof_init < n_to_nodes}",
                     "{[iel]: 0 <= iel < nelements}",
                     "{[idof]: 0 <= idof < n_to_nodes}",
                     "{[jdof]: 0 <= jdof < n_from_nodes}"
                 ],
                 """
-                    result[iel_init, idof_init] = 0 {id=init}
-                    ... gbarrier {id=barrier, dep=init}
-                    result[to_element_indices[iel], idof] =  \
-                        sum(jdof, resample_mat[idof, jdof]   \
-                            * ary[from_element_indices[iel], jdof]) {dep=barrier}
+                    result[iel, idof] =  (
+                        sum(jdof, resample_mat[idof, jdof]
+                            * ary[from_element_indices[iel], jdof])
+                        if from_element_indices[iel] != -1 else 0)
                 """,
                 [
-                    lp.GlobalArg("result", None,
-                        shape="nelements_result, n_to_nodes",
-                        offset=lp.auto),
                     lp.GlobalArg("ary", None,
                         shape="nelements_vec, n_from_nodes",
                         offset=lp.auto),
-                    lp.ValueArg("nelements_result", np.int32),
                     lp.ValueArg("nelements_vec", np.int32),
-                    lp.ValueArg("n_from_nodes", np.int32),
                     "...",
                 ],
                 name="resample_by_mat_batch",
             )
             t_unit = lp.tag_inames(t_unit, {
-                "iel_init": ElementInameTag(),
                 "iel": ElementInameTag(),
-                "idof_init": DOFInameTag(),
                 "idof": DOFInameTag(),
                 })
             return t_unit
@@ -342,26 +384,18 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         def batch_pick_knl():
             t_unit = make_loopy_program(
                 [
-                    "{[iel_init]: 0 <= iel_init < nelements_result}",
-                    "{[idof_init]: 0 <= idof_init < n_to_nodes}",
                     "{[iel]: 0 <= iel < nelements}",
                     "{[idof]: 0 <= idof < n_to_nodes}"
                 ],
                 """
-                    result[iel_init, idof_init] = 0 {id=init}
-                    ... gbarrier {id=barrier, dep=init}
-                    result[to_element_indices[iel], idof] =              \
-                        ary[from_element_indices[iel], pick_list[idof]]  \
-                            {dep=barrier}
+                    result[iel, idof] = (
+                        ary[from_element_indices[iel], pick_list[idof]]
+                        if from_element_indices[iel] != -1 else 0)
                 """,
                 [
-                    lp.GlobalArg("result", None,
-                        shape="nelements_result, n_to_nodes",
-                        offset=lp.auto),
                     lp.GlobalArg("ary", None,
                         shape="nelements_vec, n_from_nodes",
                         offset=lp.auto),
-                    lp.ValueArg("nelements_result", np.int32),
                     lp.ValueArg("nelements_vec", np.int32),
                     lp.ValueArg("n_from_nodes", np.int32),
                     "...",
@@ -369,9 +403,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 name="resample_by_picking_batch",
             )
             t_unit = lp.tag_inames(t_unit, {
-                "iel_init": ElementInameTag(),
                 "iel": ElementInameTag(),
-                "idof_init": DOFInameTag(),
                 "idof": DOFInameTag(),
                 })
             return t_unit
@@ -395,9 +427,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                             actx, i_tgrp, i_batch
                         ),
                         ary=ary[batch.from_group_index],
-                        from_element_indices=batch.from_element_indices,
-                        to_element_indices=batch.to_element_indices,
-                        nelements_result=self.to_discr.groups[i_tgrp].nelements,
+                        from_element_indices=batch._global_from_element_indices(
+                            actx, self.to_discr.groups[i_tgrp]),
                         n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
                     )["result"]
 
@@ -406,9 +437,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         batch_pick_knl(),
                         pick_list=point_pick_indices,
                         ary=ary[batch.from_group_index],
-                        from_element_indices=batch.from_element_indices,
-                        to_element_indices=batch.to_element_indices,
-                        nelements_result=self.to_discr.groups[i_tgrp].nelements,
+                        from_element_indices=batch._global_from_element_indices(
+                            actx, self.to_discr.groups[i_tgrp]),
                         n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
                     )["result"]
 
