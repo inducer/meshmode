@@ -53,7 +53,8 @@ Simplicial group types
 
 .. autoclass:: InterpolatoryQuadratureSimplexElementGroup
 .. autoclass:: QuadratureSimplexElementGroup
-.. autoclass:: PolynomialWarpAndBlendElementGroup
+.. autoclass:: PolynomialWarpAndBlend2DRestrictingElementGroup
+.. autoclass:: PolynomialWarpAndBlend3DRestrictingElementGroup
 .. autoclass:: PolynomialRecursiveNodesElementGroup
 .. autoclass:: PolynomialEquidistantSimplexElementGroup
 .. autoclass:: PolynomialGivenNodesElementGroup
@@ -80,7 +81,8 @@ Simplicial group factories
 
 .. autoclass:: InterpolatoryQuadratureSimplexGroupFactory
 .. autoclass:: QuadratureSimplexGroupFactory
-.. autoclass:: PolynomialWarpAndBlendGroupFactory
+.. autoclass:: PolynomialWarpAndBlend2DRestrictingGroupFactory
+.. autoclass:: PolynomialWarpAndBlend3DRestrictingGroupFactory
 .. autoclass:: PolynomialRecursiveNodesGroupFactory
 .. autoclass:: PolynomialEquidistantSimplexGroupFactory
 .. autoclass:: PolynomialGivenNodesGroupFactory
@@ -289,6 +291,16 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
 
     Uses :func:`modepy.warp_and_blend_nodes`.
     """
+    def __init__(self, mesh_el_group, order, index):
+        from warnings import warn
+        warn("PolynomialWarpAndBlendElementGroup is deprecated, since "
+                "the facial restrictions of the 3D nodes are not the 2D nodes. "
+                "It will go away in 2022. "
+                "Use PolynomialWarpAndBlend2DRestrictingElementGroup or "
+                "PolynomialWarpAndBlend3DRestrictingElementGroup instead.",
+                DeprecationWarning, stacklevel=2)
+        super().__init__(mesh_el_group, order, index)
+
     @property
     @memoize_method
     def _interp_nodes(self):
@@ -301,6 +313,66 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
 
         dim2, _ = result.shape
         assert dim2 == dim
+        return result
+
+
+class PolynomialWarpAndBlend2DRestrictingElementGroup(
+        _MassMatrixQuadratureElementGroup):
+    """Elemental discretization with a number of nodes matching the number of
+    polynomials in :math:`P^k`, hence usable for differentiation and
+    interpolation. Interpolation nodes edge-clustered for avoidance of Runge
+    phenomena. Nodes are present on the boundary of the simplex.
+    Provides nodes in two and fewer dimensions, based on the 2D
+    warp-and-blend nodes and their facial restrictions.
+
+    Uses :func:`modepy.warp_and_blend_nodes`.
+    """
+    @property
+    @memoize_method
+    def _interp_nodes(self):
+        dim = self.mesh_el_group.dim
+        if self.order == 0:
+            result = mp.warp_and_blend_nodes(dim, 1)
+            result = np.mean(result, axis=1).reshape(-1, 1)
+        elif dim >= 3:
+            raise ValueError(
+                    "PolynomialWarpAndBlend2DRestrictingElementGroup does not "
+                    f"provide nodes in {dim}D")
+        else:
+            result = mp.warp_and_blend_nodes(dim, self.order)
+
+        dim2, _ = result.shape
+        assert dim2 == dim
+        return result
+
+
+class PolynomialWarpAndBlend3DRestrictingElementGroup(
+        _MassMatrixQuadratureElementGroup):
+    """Elemental discretization with a number of nodes matching the number of
+    polynomials in :math:`P^k`, hence usable for differentiation and
+    interpolation. Interpolation nodes edge-clustered for avoidance of Runge
+    phenomena. Nodes are present on the boundary of the simplex.
+    Provides nodes in two and fewer dimensions, based on the 3D
+    warp-and-blend nodes and their facial restrictions.
+
+    Uses :func:`modepy.warp_and_blend_nodes`.
+    """
+    @property
+    @memoize_method
+    def _interp_nodes(self):
+        dim = self.mesh_el_group.dim
+        if self.order == 0:
+            result = mp.warp_and_blend_nodes(dim, 1)
+            result = np.mean(result, axis=1).reshape(-1, 1)
+        else:
+            result = mp.warp_and_blend_nodes(3, self.order)
+            tol = np.finfo(result.dtype).eps * 50
+            for d in range(dim, 3):
+                wanted = np.abs(result[d] - (-1)) < tol
+                result = result[:, wanted]
+
+            result = result[:dim]
+
         return result
 
 
@@ -609,8 +681,31 @@ class QuadratureSimplexGroupFactory(HomogeneousOrderBasedGroupFactory):
 
 
 class PolynomialWarpAndBlendGroupFactory(HomogeneousOrderBasedGroupFactory):
+    def __init__(self, order):
+        from warnings import warn
+        warn("PolynomialWarpAndBlendGroupFactory is deprecated, since "
+                "the facial restrictions of the 3D nodes are not the 2D nodes. "
+                "It will go away in 2022. "
+                "Use PolynomialWarpAndBlend2DRestrictingGroupFactory or "
+                "PolynomialWarpAndBlend3DRestrictingGroupFactory instead.",
+                DeprecationWarning, stacklevel=2)
+
+        super().__init__(order)
+
     mesh_group_class = _MeshSimplexElementGroup
     group_class = PolynomialWarpAndBlendElementGroup
+
+
+class PolynomialWarpAndBlend2DRestrictingGroupFactory(
+        HomogeneousOrderBasedGroupFactory):
+    mesh_group_class = _MeshSimplexElementGroup
+    group_class = PolynomialWarpAndBlend2DRestrictingElementGroup
+
+
+class PolynomialWarpAndBlend3DRestrictingGroupFactory(
+        HomogeneousOrderBasedGroupFactory):
+    mesh_group_class = _MeshSimplexElementGroup
+    group_class = PolynomialWarpAndBlend3DRestrictingElementGroup
 
 
 class PolynomialRecursiveNodesGroupFactory(HomogeneousOrderBasedGroupFactory):
@@ -673,5 +768,29 @@ class LegendreGaussLobattoTensorProductGroupFactory(
 
 # }}}
 
+
+# undocumented for now, mainly for internal use
+def default_simplex_group_factory(base_dim, order):
+    """
+    :arg base_dim: The dimension of the 'base' discretization to be used.
+        The returned group factory will also support creating lower-dimensional
+        discretizations.
+    """
+
+    try:
+        # recursivenodes is only importable in Python 3.8 since
+        # it uses :func:`math.comb`, so need to check if it can
+        # be imported.
+        import recursivenodes  # noqa: F401
+    except ImportError:
+        # If it cannot be imported, use warp-and-blend nodes.
+        if base_dim <= 2:
+            return PolynomialWarpAndBlend2DRestrictingGroupFactory(order)
+        elif base_dim == 3:
+            return PolynomialWarpAndBlend3DRestrictingGroupFactory(order)
+        else:
+            raise ValueError(f"no usable set of nodes found for {base_dim}D")
+
+    return PolynomialRecursiveNodesGroupFactory(order, family="lgl")
 
 # vim: fdm=marker

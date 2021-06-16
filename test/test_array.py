@@ -35,7 +35,7 @@ from arraycontext import (
         with_container_arithmetic)
 
 from meshmode.discretization import Discretization
-from meshmode.discretization.poly_element import PolynomialWarpAndBlendGroupFactory
+from meshmode.discretization.poly_element import default_simplex_group_factory
 from meshmode.dof_array import DOFArray, flat_norm
 
 from pytools.obj_array import make_obj_array
@@ -67,7 +67,7 @@ def test_flatten_unflatten(actx_factory):
             a=(-0.5,)*ambient_dim,
             b=(+0.5,)*ambient_dim,
             n=(3,)*ambient_dim, order=1)
-    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
+    discr = Discretization(actx, mesh, default_simplex_group_factory(ambient_dim, 3))
     a = np.random.randn(discr.ndofs)
 
     from meshmode.dof_array import flatten, unflatten
@@ -99,7 +99,7 @@ def _get_test_containers(actx, ambient_dim=2):
             a=(-0.5,)*ambient_dim,
             b=(+0.5,)*ambient_dim,
             n=(3,)*ambient_dim, order=1)
-    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
+    discr = Discretization(actx, mesh, default_simplex_group_factory(ambient_dim, 3))
     x = thaw(discr.nodes()[0], actx)
 
     # pylint: disable=unexpected-keyword-arg, no-value-for-parameter
