@@ -20,11 +20,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from functools import partial
 import numpy as np  # noqa: F401
 import numpy.linalg as la  # noqa: F401
 
 import meshmode         # noqa: F401
-from meshmode.array_context import (  # noqa
+from arraycontext import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
@@ -32,7 +33,8 @@ from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
         PolynomialWarpAndBlendGroupFactory,
         PolynomialEquidistantSimplexGroupFactory,
-        LegendreGaussLobattoTensorProductGroupFactory
+        LegendreGaussLobattoTensorProductGroupFactory,
+        PolynomialRecursiveNodesGroupFactory,
         )
 from meshmode.discretization import Discretization
 from meshmode.discretization.connection import FACE_RESTR_ALL
@@ -62,7 +64,8 @@ def connection_is_permutation(actx, conn):
 @pytest.mark.parametrize("group_factory", [
         PolynomialWarpAndBlendGroupFactory,
         PolynomialEquidistantSimplexGroupFactory,
-        LegendreGaussLobattoTensorProductGroupFactory
+        LegendreGaussLobattoTensorProductGroupFactory,
+        partial(PolynomialRecursiveNodesGroupFactory, family="lgl"),
         ])
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("order", [1, 2, 3, 4, 5])
