@@ -20,10 +20,10 @@ def main():
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlendGroupFactory
+            PolynomialWarpAndBlend3DRestrictingGroupFactory
 
     discr = Discretization(
-            actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+            actx, mesh, PolynomialWarpAndBlend3DRestrictingGroupFactory(order))
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, order)

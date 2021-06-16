@@ -39,7 +39,8 @@ import meshmode.mesh.generation as mgen
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
+    PolynomialWarpAndBlend2DRestrictingGroupFactory,
+    PolynomialWarpAndBlend3DRestrictingGroupFactory,
     PolynomialEquidistantSimplexGroupFactory,
     LegendreGaussLobattoTensorProductGroupFactory,
     GaussLegendreTensorProductGroupFactory,
@@ -160,11 +161,11 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
 
 @pytest.mark.parametrize(("refiner_cls", "group_factory"), [
     (Refiner, InterpolatoryQuadratureSimplexGroupFactory),
-    (Refiner, PolynomialWarpAndBlendGroupFactory),
+    (Refiner, "warp_and_blend"),
     (Refiner, PolynomialEquidistantSimplexGroupFactory),
 
     (RefinerWithoutAdjacency, InterpolatoryQuadratureSimplexGroupFactory),
-    (RefinerWithoutAdjacency, PolynomialWarpAndBlendGroupFactory),
+    (RefinerWithoutAdjacency, "warp_and_blend"),
     (RefinerWithoutAdjacency, PolynomialEquidistantSimplexGroupFactory),
 
     (RefinerWithoutAdjacency, LegendreGaussLobattoTensorProductGroupFactory),
@@ -183,10 +184,18 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
     #partial(random_refine_flags, 0.4)
     partial(even_refine_flags, 2)
 ])
-# test_refinement_connection(cl._csc, RefinerWithoutAdjacency, PolynomialWarpAndBlendGroupFactory, 'warp', 2, [4, 5, 6], 5, partial(even_refine_flags, 2))  # noqa: E501
+# test_refinement_connection(cl._csc, RefinerWithoutAdjacency, PolynomialWarpAndBlend2DRestrictingGroupFactory, 'warp', 2, [4, 5, 6], 5, partial(even_refine_flags, 2))  # noqa: E501
 def test_refinement_connection(
         actx_factory, refiner_cls, group_factory,
         mesh_name, dim, mesh_pars, mesh_order, refine_flags, visualize=False):
+
+    if group_factory == "warp_and_blend":
+        group_factory = {
+                1: PolynomialWarpAndBlend2DRestrictingGroupFactory,
+                2: PolynomialWarpAndBlend2DRestrictingGroupFactory,
+                3: PolynomialWarpAndBlend3DRestrictingGroupFactory,
+                }[dim]
+
     group_cls = group_factory.mesh_group_class
     if issubclass(group_cls, TensorProductElementGroup):
         if mesh_name in ["circle", "blob"]:
