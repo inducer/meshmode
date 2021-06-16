@@ -70,7 +70,6 @@ def _make_cross_face_batches(actx,
 
     dim = src_grp.dim
     _, nelements, ntgt_unit_nodes = tgt_bdry_nodes.shape
-    assert tgt_bdry_nodes.shape == src_bdry_nodes.shape
 
     # {{{ invert face map (using Gauss-Newton)
 
@@ -101,7 +100,9 @@ def _make_cross_face_batches(actx,
         one_deviation = np.abs(np.sum(intp_coeffs, axis=0) - 1)
         assert (one_deviation < tol).all(), np.max(one_deviation)
 
-        return np.einsum("fet,aef->aet", intp_coeffs, src_bdry_nodes)
+        mapped = np.einsum("fet,aef->aet", intp_coeffs, src_bdry_nodes)
+        assert tgt_bdry_nodes.shape == mapped.shape
+        return mapped
 
     def get_map_jacobian(unit_nodes):
         # unit_nodes: (dim, nelements, ntgt_unit_nodes)
