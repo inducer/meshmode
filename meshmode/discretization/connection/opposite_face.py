@@ -23,6 +23,7 @@ THE SOFTWARE.
 
 import numpy as np
 import numpy.linalg as la
+from meshmode.discretization.connection.direct import InterpolationBatch
 
 import logging
 logger = logging.getLogger(__name__)
@@ -43,15 +44,13 @@ def _make_cross_face_batches(actx,
         i_tgt_grp, i_src_grp,
         tgt_bdry_element_indices, src_bdry_element_indices):
 
-    from meshmode.discretization.connection.direct import InterpolationBatch
     if tgt_bdry_discr.dim == 0:
-        yield InterpolationBatch(
+        return [InterpolationBatch(
             from_group_index=i_src_grp,
             from_element_indices=freeze_from_numpy(actx, src_bdry_element_indices),
             to_element_indices=freeze_from_numpy(actx, tgt_bdry_element_indices),
             result_unit_nodes=src_bdry_discr.groups[i_src_grp].unit_nodes,
-            to_element_face=None)
-        return
+            to_element_face=None)]
 
     tgt_bdry_nodes = np.array([
         thaw_to_numpy(actx, ary[i_tgt_grp])[tgt_bdry_element_indices]
@@ -68,10 +67,71 @@ def _make_cross_face_batches(actx,
     src_mesh_grp = src_bdry_discr.mesh.groups[i_src_grp]
     src_grp = src_bdry_discr.groups[i_src_grp]
 
+    src_unit_nodes = _find_src_unit_nodes_by_matching(
+            tgt_bdry_nodes=tgt_bdry_nodes,
+            src_bdry_nodes=src_bdry_nodes,
+            src_grp=src_grp, tol=tol)
+    if src_unit_nodes is None:
+        src_unit_nodes = _find_src_unit_nodes_via_gauss_newton(
+            tgt_bdry_nodes=tgt_bdry_nodes,
+            src_bdry_nodes=src_bdry_nodes,
+            src_grp=src_grp, src_mesh_grp=src_mesh_grp,
+            tgt_bdry_discr=tgt_bdry_discr, src_bdry_discr=src_bdry_discr,
+            tol=tol)
+
+    return list(_find_src_unit_nodes_batches(
+            actx=actx, src_unit_nodes=src_unit_nodes,
+            i_src_grp=i_src_grp,
+            tgt_bdry_element_indices=tgt_bdry_element_indices,
+            src_bdry_element_indices=src_bdry_element_indices,
+            tol=tol))
+
+# }}}
+
+
+# {{{ _find_src_unit_nodes_by_matching
+
+def _find_src_unit_nodes_by_matching(
+        tgt_bdry_nodes,
+        src_bdry_nodes,
+        src_grp, tol):
+    ambient_dim, nelements, ntgt_unit_nodes = tgt_bdry_nodes.shape
+
+    dist_vecs = (tgt_bdry_nodes.reshape(ambient_dim, nelements, -1, 1)
+            - src_bdry_nodes.reshape(ambient_dim, nelements, 1, -1))
+
+    # shape: (nelements, num_tgt_nodes, num_source_nodes)
+    is_close = la.norm(dist_vecs, axis=0, ord=2) < tol
+
+    num_close_vertices = np.sum(is_close.astype(np.int32), axis=-1)
+    if not (num_close_vertices == 1).all():
+        return None
+
+    # Success: it's just a permutation
+    source_indices = np.where(is_close)[-1].reshape(nelements, ntgt_unit_nodes)
+
+    # check
+    matched_src_bdry_nodes = src_bdry_nodes[
+            :, np.arange(nelements).reshape(-1, 1), source_indices]
+    dist_vecs = tgt_bdry_nodes - matched_src_bdry_nodes
+    is_close = la.norm(dist_vecs, axis=0, ord=2) < tol
+    assert is_close.all()
+
+    return src_grp.unit_nodes[:, source_indices]
+
+# }}}
+
+
+# {{{ _find_src_unit_nodes_via_gauss_newton
+
+def _find_src_unit_nodes_via_gauss_newton(
+        tgt_bdry_nodes,
+        src_bdry_nodes,
+        src_grp, src_mesh_grp,
+        tgt_bdry_discr, src_bdry_discr,
+        tol):
     dim = src_grp.dim
     _, nelements, ntgt_unit_nodes = tgt_bdry_nodes.shape
-
-    # {{{ invert face map (using Gauss-Newton)
 
     initial_guess = np.mean(src_mesh_grp.vertex_unit_coordinates(), axis=0)
     src_unit_nodes = np.empty((dim, nelements, ntgt_unit_nodes))
@@ -162,7 +222,7 @@ def _make_cross_face_batches(actx,
 
     # }}}
 
-    logger.debug("_make_cross_face_batches: begin gauss-newton")
+    logger.debug("_find_src_unit_nodes_via_gauss_newton: begin")
 
     niter = 0
     while True:
@@ -223,18 +283,27 @@ def _make_cross_face_batches(actx,
         max_resid = np.max(np.abs(resid))
 
         if max_resid < tol:
-            logger.debug("_make_cross_face_batches: gauss-newton: done, "
+            logger.debug("_find_src_unit_nodes_via_gauss_newton: done, "
                     "final residual: %g", max_resid)
-            break
+            return src_unit_nodes
 
         niter += 1
         if niter > 10:
             raise RuntimeError("Gauss-Newton (for finding opposite-face reference "
                     "coordinates) did not converge (residual: %g)" % max_resid)
 
-    # }}}
+    raise AssertionError()
 
-    # {{{ find batches of src_unit_nodes
+# }}}
+
+
+# {{{ _find_src_unit_nodes_batches
+
+def _find_src_unit_nodes_batches(
+        actx, src_unit_nodes, i_src_grp,
+        tgt_bdry_element_indices, src_bdry_element_indices,
+        tol):
+    dim, nelements, _ = src_unit_nodes.shape
 
     done_elements = np.zeros(nelements, dtype=bool)
     while True:
@@ -261,7 +330,7 @@ def _make_cross_face_batches(actx,
                 result_unit_nodes=template_unit_nodes,
                 to_element_face=None)
 
-    # }}}
+# }}}
 
 
 def _find_ibatch_for_face(vbc_tgt_grp_batches, iface):
