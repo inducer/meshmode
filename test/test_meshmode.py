@@ -808,7 +808,12 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
         plt.savefig("test_mesh_multiple_groups_2d_elements.png", dpi=300)
 
     from meshmode.discretization import Discretization
-    grp_factory = default_simplex_group_factory(base_dim=ambient_dim, order=order)
+
+    def grp_factory(mesh_el_group, index):
+        return default_simplex_group_factory(
+                base_dim=ambient_dim, order=order + 2 if index == 0 else order
+                )(mesh_el_group, index)
+
     discr = Discretization(actx, mesh, grp_factory)
 
     if visualize:
