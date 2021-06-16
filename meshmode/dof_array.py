@@ -667,7 +667,7 @@ def flat_norm(ary, ord=None) -> float:
         actx = ary.array_context
         return la.norm(
                 [
-                    actx.np.linalg.norm(actx.np.ravel(ary, order="A"), ord=ord)
+                    actx.np.linalg.norm(actx.np.ravel(subary, order="A"), ord=ord)
                     for _, subary in serialize_container(ary)],
                 ord=ord)
 
