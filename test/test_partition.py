@@ -33,8 +33,7 @@ from arraycontext import (                  # noqa: F401
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
-from meshmode.discretization.poly_element import (
-        PolynomialWarpAndBlendGroupFactory)
+from meshmode.discretization.poly_element import default_simplex_group_factory
 from meshmode.mesh import BTAG_ALL
 
 import pytest
@@ -62,11 +61,11 @@ TAG_SEND_LOCAL_NODES = TAG_BASE + 4
         ])
 def test_partition_interpolation(actx_factory, dim, mesh_pars,
                                  num_parts, num_groups, part_method):
-    np.random.seed(42)
-    group_factory = PolynomialWarpAndBlendGroupFactory
-    actx = actx_factory()
-
     order = 4
+
+    np.random.seed(42)
+    group_factory = default_simplex_group_factory(base_dim=dim, order=order)
+    actx = actx_factory()
 
     def f(x):
         return 10.*actx.np.sin(50.*x)
@@ -105,7 +104,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
                 connected_parts.add((i_local_part, i_remote_part))
 
         from meshmode.discretization import Discretization
-        vol_discrs = [Discretization(actx, part_meshes[i], group_factory(order))
+        vol_discrs = [Discretization(actx, part_meshes[i], group_factory)
                         for i in range(num_parts)]
 
         from meshmode.mesh import BTAG_PARTITION
@@ -116,12 +115,12 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
         for i_local_part, i_remote_part in connected_parts:
             # Mark faces within local_mesh that are connected to remote_mesh
             local_bdry_conn = make_face_restriction(actx, vol_discrs[i_local_part],
-                                                    group_factory(order),
+                                                    group_factory,
                                                     BTAG_PARTITION(i_remote_part))
 
             # Mark faces within remote_mesh that are connected to local_mesh
             remote_bdry_conn = make_face_restriction(actx, vol_discrs[i_remote_part],
-                                                     group_factory(order),
+                                                     group_factory,
                                                      BTAG_PARTITION(i_local_part))
 
             bdry_nelements = sum(
@@ -342,7 +341,7 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     else:
         local_mesh = mesh_dist.receive_mesh_part()
 
-    group_factory = PolynomialWarpAndBlendGroupFactory(order)
+    group_factory = default_simplex_group_factory(base_dim=dim, order=order)
 
     from arraycontext import PyOpenCLArrayContext
     cl_ctx = cl.create_some_context()

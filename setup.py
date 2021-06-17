@@ -50,7 +50,7 @@ def main():
               # 2019.1 is required for the Firedrake CIs, which use an very specific
               # version of Loopy.
               "loopy>=2019.1",
-              
+
               "arraycontext",
 
               "recursivenodes",

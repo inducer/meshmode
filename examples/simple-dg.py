@@ -74,8 +74,9 @@ class DGDiscretization:
 
         from meshmode.discretization import Discretization
         from meshmode.discretization.poly_element import \
-                PolynomialWarpAndBlendGroupFactory
-        self.group_factory = PolynomialWarpAndBlendGroupFactory(order=order)
+                PolynomialWarpAndBlend2DRestrictingGroupFactory
+        self.group_factory = PolynomialWarpAndBlend2DRestrictingGroupFactory(
+                order=order)
         self.volume_discr = Discretization(actx, mesh, self.group_factory)
 
         assert self.volume_discr.dim == 2

@@ -36,7 +36,9 @@ from arraycontext import _acf  # noqa: F401
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
-        PolynomialWarpAndBlendGroupFactory,
+        default_simplex_group_factory,
+        PolynomialWarpAndBlend2DRestrictingGroupFactory,
+        PolynomialWarpAndBlend3DRestrictingGroupFactory,
         PolynomialRecursiveNodesGroupFactory,
         PolynomialEquidistantSimplexGroupFactory,
         LegendreGaussLobattoTensorProductGroupFactory
@@ -53,11 +55,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def normalize_group_factory(dim, grp_factory):
+    if grp_factory == "warp_and_blend":
+        return {
+            0: PolynomialWarpAndBlend2DRestrictingGroupFactory,
+            1: PolynomialWarpAndBlend2DRestrictingGroupFactory,
+            2: PolynomialWarpAndBlend2DRestrictingGroupFactory,
+            3: PolynomialWarpAndBlend3DRestrictingGroupFactory,
+            }[dim]
+    else:
+        assert not isinstance(grp_factory, str)
+        return grp_factory
+
+
 # {{{ convergence of boundary interpolation
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
+    "warp_and_blend",
     partial(PolynomialRecursiveNodesGroupFactory, family="lgl"),
 
     # Redundant, no information gain.
@@ -88,6 +103,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
 
     actx = actx_factory()
 
+    group_factory = normalize_group_factory(dim, group_factory)
     if group_factory is LegendreGaussLobattoTensorProductGroupFactory:
         group_cls = TensorProductElementGroup
     else:
@@ -186,7 +202,8 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
+    "warp_and_blend",
+    partial(PolynomialRecursiveNodesGroupFactory, family="lgl"),
     LegendreGaussLobattoTensorProductGroupFactory,
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
@@ -202,6 +219,8 @@ def test_all_faces_interpolation(actx_factory, group_factory,
         pytest.skip("tensor products not implemented on blobs")
 
     actx = actx_factory()
+
+    group_factory = normalize_group_factory(dim, group_factory)
 
     if group_factory is LegendreGaussLobattoTensorProductGroupFactory:
         group_cls = TensorProductElementGroup
@@ -308,7 +327,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
+    "warp_and_blend",
     LegendreGaussLobattoTensorProductGroupFactory,
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
@@ -325,6 +344,8 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
 
     logging.basicConfig(level=logging.INFO)
     actx = actx_factory()
+
+    group_factory = normalize_group_factory(dim, group_factory)
 
     if group_factory is LegendreGaussLobattoTensorProductGroupFactory:
         group_cls = TensorProductElementGroup
@@ -426,7 +447,7 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
 
     from meshmode.discretization import Discretization
     discr = Discretization(actx, mesh,
-            PolynomialWarpAndBlendGroupFactory(3))
+            default_simplex_group_factory(base_dim=3, order=3))
 
     from pytential import bind, sym
 
@@ -480,7 +501,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     actx = actx_factory()
 
     if group_cls is SimplexElementGroup:
-        group_factory = PolynomialWarpAndBlendGroupFactory(mesh_order + 3)
+        group_factory = default_simplex_group_factory(dim, order=mesh_order + 3)
     elif group_cls is TensorProductElementGroup:
         group_factory = LegendreGaussLobattoTensorProductGroupFactory(mesh_order + 3)
     else:
@@ -789,7 +810,13 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
         plt.savefig("test_mesh_multiple_groups_2d_elements.png", dpi=300)
 
     from meshmode.discretization import Discretization
-    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+
+    def grp_factory(mesh_el_group, index):
+        return default_simplex_group_factory(
+                base_dim=ambient_dim, order=order + 2 if index == 0 else order
+                )(mesh_el_group, index)
+
+    discr = Discretization(actx, mesh, grp_factory)
 
     if visualize:
         group_id = discr.empty(actx, dtype=np.int32)
@@ -810,7 +837,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
             check_connection)
     for boundary_tag in [BTAG_ALL, FACE_RESTR_INTERIOR, FACE_RESTR_ALL]:
         conn = make_face_restriction(actx, discr,
-                group_factory=PolynomialWarpAndBlendGroupFactory(order),
+                group_factory=grp_factory,
                 boundary_tag=boundary_tag,
                 per_face_groups=False)
         check_connection(actx, conn)
