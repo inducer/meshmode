@@ -14,7 +14,7 @@ git+https://github.com/inducer/pymbolic.git#egg=pymbolic
 git+https://github.com/inducer/loopy.git#egg=loopy
 
 # depends on loopy, so should come after it.
-git+https://github.com/inducer/arraycontext.git@iname-tag-transform#egg=arraycontext
+git+https://github.com/inducer/arraycontext.git#egg=arraycontext
 
 # more pytential dependencies
 git+https://github.com/inducer/boxtree.git#egg=boxtree
