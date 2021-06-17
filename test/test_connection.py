@@ -101,20 +101,8 @@ def test_bdry_restriction_is_permutation(actx_factory, group_factory, dim, order
 
     assert connection_is_permutation(actx, bdry_connection)
 
-    is_lgl = group_factory is LegendreGaussLobattoTensorProductGroupFactory
-
-    # FIXME: This should pass unconditionally
-    should_pass = (
-            (dim == 3 and order < 2)
-            or (dim == 2 and not is_lgl)
-            or (dim == 2 and is_lgl and order < 4)
-            )
-
-    if should_pass:
-        opp_face = make_opposite_face_connection(actx, bdry_connection)
-        assert connection_is_permutation(actx, opp_face)
-    else:
-        pytest.xfail("https://github.com/inducer/meshmode/pull/105")
+    opp_face = make_opposite_face_connection(actx, bdry_connection)
+    assert connection_is_permutation(actx, opp_face)
 
 
 if __name__ == "__main__":
