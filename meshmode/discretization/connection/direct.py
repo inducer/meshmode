@@ -370,7 +370,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         actx = ary.array_context
 
         @memoize_in(actx,
-                (DirectDiscretizationConnection, "resample_by_mat_batch_knl"))
+                (DirectDiscretizationConnection, "resample_by_mat_knl"))
         def batch_mat_knl():
             return make_loopy_program(
                 [
@@ -391,11 +391,11 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("nelements_vec", np.int32),
                     "...",
                 ],
-                name="resample_by_mat_batch",
+                name="resample_by_mat",
             )
 
         @memoize_in(actx,
-                (DirectDiscretizationConnection, "resample_by_picking_batch_knl"))
+                (DirectDiscretizationConnection, "resample_by_picking_knl"))
         def batch_pick_knl():
             return make_loopy_program(
                 [
@@ -415,7 +415,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("n_from_nodes", np.int32),
                     "...",
                 ],
-                name="resample_by_picking_batch",
+                name="resample_by_picking",
             )
 
         group_data = []
@@ -478,7 +478,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
     def _apply_with_inplace_updates(self, ary):
         actx = ary.array_context
 
-        @memoize_in(actx, (DirectDiscretizationConnection, "resample_by_mat_knl"))
+        @memoize_in(actx, (DirectDiscretizationConnection,
+            "resample_by_mat_knl_inplace"))
         def mat_knl():
             knl = make_loopy_program(
                 """{[iel, idof, j]:
@@ -499,12 +500,12 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("nelements_vec", np.int32),
                     "...",
                     ],
-                name="resample_by_mat")
+                name="resample_by_mat_inplace")
 
             return knl
 
         @memoize_in(actx,
-                (DirectDiscretizationConnection, "resample_by_picking_knl"))
+                (DirectDiscretizationConnection, "resample_by_picking_knl_inplace"))
         def pick_knl():
             knl = make_loopy_program(
                 """{[iel, idof]:
@@ -524,7 +525,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("n_from_nodes", np.int32),
                     "...",
                     ],
-                name="resample_by_picking")
+                name="resample_by_picking_inplace")
 
             return knl
 
