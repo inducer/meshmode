@@ -24,7 +24,7 @@ THE SOFTWARE.
 """
 
 from abc import abstractproperty
-from typing import Tuple
+from typing import Tuple, ClassVar
 from warnings import warn
 
 import numpy as np
@@ -629,8 +629,8 @@ class ElementGroupFactory:
 
 
 class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
-    mesh_group_class = type
-    group_class = type
+    mesh_group_class: ClassVar[type]
+    group_class: ClassVar[type]
 
     def __init__(self, order):
         self.order = order
@@ -720,6 +720,9 @@ class PolynomialRecursiveNodesGroupFactory(HomogeneousOrderBasedGroupFactory):
 
         return PolynomialRecursiveNodesElementGroup(
                 mesh_el_group, self.order, self.family, index)
+
+    mesh_group_class = _MeshSimplexElementGroup
+    group_class = PolynomialRecursiveNodesElementGroup
 
 
 class PolynomialEquidistantSimplexGroupFactory(HomogeneousOrderBasedGroupFactory):
