@@ -1546,6 +1546,16 @@ def map_mesh(mesh, f):  # noqa
     """Apply the map *f* to the mesh. *f* needs to accept and return arrays of
     shape ``(ambient_dim, npoints)``."""
 
+    if mesh._facial_adjacency_groups is not None:
+        has_adj_transforms = any([
+            adj.aff_transform_mats is not None or adj.aff_transform_vecs is not None
+            for fagrp_map in mesh.facial_adjacency_groups
+            for adj in fagrp_map.values()])
+        if has_adj_transforms:
+            raise ValueError("cannot apply a general map to a mesh that has "
+                "transforms in its facial adjacency. If the map is affine, "
+                "use affine_map instead")
+
     vertices = f(mesh.vertices)
     if not vertices.flags.c_contiguous:
         vertices = np.copy(vertices, order="C")
