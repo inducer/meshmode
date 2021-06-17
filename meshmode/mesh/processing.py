@@ -1157,10 +1157,10 @@ def _compute_face_indices_from_mask(mask):
     return indices
 
 
-def _match_boundary_faces(mesh, glued_boundary_mappings, tol):
+def _match_boundary_faces(mesh, glued_boundary_mappings):
     face_id_pairs_for_mapping = []
 
-    for btag_m, btag_n, aff_transform in glued_boundary_mappings:
+    for btag_m, btag_n, aff_transform, tol in glued_boundary_mappings:
         bdry_m_face_ids = _get_bdry_face_ids(mesh, btag_m)
         bdry_n_face_ids = _get_bdry_face_ids(mesh, btag_n)
 
@@ -1327,8 +1327,8 @@ def _translate_boundary_pair_adjacency_into_group_pair_adjacency(mesh,
 def _construct_glued_mesh(mesh, glued_boundary_mappings,
         face_id_pairs_for_group_pair, mapping_indices_for_group_pair):
     glued_btags = (
-        set(btag_m for btag_m, _, _ in glued_boundary_mappings)
-        | set(btag_n for _, btag_n, _ in glued_boundary_mappings))
+        set(btag_m for btag_m, _, _, _ in glued_boundary_mappings)
+        | set(btag_n for _, btag_n, _, _ in glued_boundary_mappings))
 
     boundary_tags = [
         btag for btag in mesh.boundary_tags
@@ -1341,18 +1341,18 @@ def _construct_glued_mesh(mesh, glued_boundary_mappings,
         return _boundary_tag_bit(boundary_tags, btag_to_index, btag)
 
     mapping_has_mat = np.array([
-        mat is not None for _, _, (mat, _) in glued_boundary_mappings])
+        mat is not None for _, _, (mat, _), _ in glued_boundary_mappings])
     mapping_has_vec = np.array([
-        vec is not None for _, _, (_, vec) in glued_boundary_mappings])
+        vec is not None for _, _, (_, vec), _ in glued_boundary_mappings])
 
     mats_for_mapping = np.stack([
         mat if mat is not None
         else np.eye(mesh.ambient_dim, dtype=np.float64)
-        for _, _, (mat, _) in glued_boundary_mappings])
+        for _, _, (mat, _), _ in glued_boundary_mappings])
     vecs_for_mapping = np.stack([
         vec if vec is not None
         else np.zeros(mesh.ambient_dim, dtype=np.float64)
-        for _, _, (_, vec) in glued_boundary_mappings])
+        for _, _, (_, vec), _ in glued_boundary_mappings])
 
     from meshmode.mesh import FacialAdjacencyGroup
 
@@ -1474,7 +1474,7 @@ def _construct_glued_mesh(mesh, glued_boundary_mappings,
         facial_adjacency_groups=facial_adjacency_groups)
 
 
-def glue_mesh_boundaries(mesh, glued_boundary_mappings, tol=1e-12):
+def glue_mesh_boundaries(mesh, glued_boundary_mappings):
     """
     Create a new mesh from *mesh* in which one or more pairs of boundaries are
     "glued" together such that the boundary surfaces become part of the interior
@@ -1484,21 +1484,20 @@ def glue_mesh_boundaries(mesh, glued_boundary_mappings, tol=1e-12):
     transformation (though the vertex ordering need not be the same).
 
     :arg glued_boundary_mappings: a :class:`list` of tuples
-        (btag_m, btag_n, aff_transform) which each specify a mapping between two
-        boundaries in *mesh* that should be glued together. aff_transform is a tuple
-        (mat, vec) that represents the affine mapping from the vertices of boundary
-        btag_m into the vertices of boundary btag_n.
-    :arg tol: tolerance allowed between the vertex coordinates of one boundary and
-        the transformed vertex coordinates of another boundary when attempting to
-        match the two.
+        *(btag_m, btag_n, aff_transform, tol)* which each specify a mapping between
+        two boundaries in *mesh* that should be glued together. *aff_transform* is a
+        tuple *(mat, vec)* that represents the affine mapping from the vertices of
+        boundary *btag_m* into the vertices of boundary *btag_n*. *tol* is the
+        tolerance allowed between the vertex coordinates of *btag_n* and the
+        transformed vertex coordinates of *btag_m* when attempting to match the two.
     """
     mapped_btags = set(
         (btag_m, btag_n)
-        for btag_m, btag_n, _ in glued_boundary_mappings)
+        for btag_m, btag_n, _, _ in glued_boundary_mappings)
 
     glued_boundary_mappings_both_ways = []
 
-    for btag_m, btag_n, aff_transform in glued_boundary_mappings:
+    for btag_m, btag_n, aff_transform, tol in glued_boundary_mappings:
         transform_mat = (
             np.array(aff_transform[0])
             if aff_transform is not None and aff_transform[0] is not None
@@ -1508,7 +1507,7 @@ def glue_mesh_boundaries(mesh, glued_boundary_mappings, tol=1e-12):
             if aff_transform is not None and aff_transform[1] is not None
             else None)
         glued_boundary_mappings_both_ways.append(
-            (btag_m, btag_n, (transform_mat, transform_vec)))
+            (btag_m, btag_n, (transform_mat, transform_vec), tol))
         if (btag_n, btag_m) not in mapped_btags:
             if transform_mat is not None:
                 inv_transform_mat = la.inv(transform_mat)
@@ -1523,10 +1522,10 @@ def glue_mesh_boundaries(mesh, glued_boundary_mappings, tol=1e-12):
                     if transform_vec is not None
                     else None)
             glued_boundary_mappings_both_ways.append(
-                (btag_n, btag_m, (inv_transform_mat, inv_transform_vec)))
+                (btag_n, btag_m, (inv_transform_mat, inv_transform_vec), tol))
 
     face_id_pairs_for_mapping = _match_boundary_faces(mesh,
-        glued_boundary_mappings_both_ways, tol)
+        glued_boundary_mappings_both_ways)
 
     face_id_pairs_for_group_pair, mapping_indices_for_group_pair = (
         _translate_boundary_pair_adjacency_into_group_pair_adjacency(
