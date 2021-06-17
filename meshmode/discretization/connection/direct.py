@@ -371,7 +371,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_mat_batch_knl"))
         def batch_mat_knl():
-            t_unit = make_loopy_program(
+            return make_loopy_program(
                 [
                     "{[iel]: 0 <= iel < nelements}",
                     "{[idof]: 0 <= idof < n_to_nodes}",
@@ -392,16 +392,11 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 ],
                 name="resample_by_mat_batch",
             )
-            t_unit = lp.tag_inames(t_unit, {
-                "iel": ElementInameTag(),
-                "idof": DOFInameTag(),
-                })
-            return t_unit
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_picking_batch_knl"))
         def batch_pick_knl():
-            t_unit = make_loopy_program(
+            return make_loopy_program(
                 [
                     "{[iel]: 0 <= iel < nelements}",
                     "{[idof]: 0 <= idof < n_to_nodes}"
@@ -421,11 +416,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 ],
                 name="resample_by_picking_batch",
             )
-            t_unit = lp.tag_inames(t_unit, {
-                "iel": ElementInameTag(),
-                "idof": DOFInameTag(),
-                })
-            return t_unit
 
         group_data = []
         for i_tgrp, cgrp in enumerate(self.groups):
