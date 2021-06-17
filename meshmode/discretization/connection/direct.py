@@ -29,7 +29,6 @@ from pytools import memoize_in, keyed_memoize_method
 from arraycontext import (
         ArrayContext, make_loopy_program,
         is_array_container, map_array_container)
-from arraycontext.metadata import ElementInameTag, DOFInameTag
 
 
 # {{{ interpolation batch
@@ -124,7 +123,14 @@ class InterpolationBatch:
         @memoize_in(actx, (InterpolationBatch._global_from_element_indices,
             "compose_index_maps_kernel"))
         def compose_index_maps_kernel():
-            t_unit = make_loopy_program(
+            # FIXME: Current arraycontext (2021-06-17, 9e5fb5d) does not map
+            # the iel_init iname to a GPU axis, leading this kernel to likely
+            # be very slow. Fortunately, this should only run during
+            # problem setup.
+            #
+            # cf. https://github.com/inducer/arraycontext/pull/29
+            # for a strategy that could/should be used instead.
+            return make_loopy_program(
                 [
                     "{[iel_init]: 0 <= iel_init < nelements_result}",
                     "{[iel]: 0 <= iel < nelements}",
@@ -143,11 +149,6 @@ class InterpolationBatch:
                 ],
                 name="compose_index_maps",
             )
-            t_unit = lp.tag_inames(t_unit, {
-                "iel_init": ElementInameTag(),
-                "iel": ElementInameTag(),
-                })
-            return t_unit
 
         result = actx.freeze(actx.call_loopy(
             compose_index_maps_kernel(),
