@@ -25,9 +25,9 @@ pip install dataclasses
 
 pip install pytest
 
-pip install -r /tmp/myreq.txt
+pip install -r /tmp/myreq.txt 
 
-# Use updated loopy for test
-python -m pip install --force-reinstall git+https://github.com/inducer/loopy.git
+# Context: https://github.com/OP2/PyOP2/pull/605
+python -m pip install --force-reinstall git+https://github.com/inducer/pytools.git
 
 pip install .
