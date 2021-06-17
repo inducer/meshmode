@@ -1603,20 +1603,79 @@ def affine_map(mesh,
     if b is not None and b.shape != (mesh.ambient_dim,):
         raise ValueError(f"b has shape '{b.shape}' for a {mesh.ambient_dim}d mesh")
 
-    if b is not None:
-        b = b.reshape(-1, 1)
-
     def f(x):
         z = x
         if A is not None:
             z = A @ z
 
         if b is not None:
-            z = z + b
+            z = z + b.reshape(-1, 1)
 
         return z
 
-    return map_mesh(mesh, f)
+    vertices = f(mesh.vertices)
+    if not vertices.flags.c_contiguous:
+        vertices = np.copy(vertices, order="C")
+
+    # {{{ assemble new groups list
+
+    new_groups = []
+
+    for group in mesh.groups:
+        mapped_nodes = f(group.nodes.reshape(mesh.ambient_dim, -1))
+        if not mapped_nodes.flags.c_contiguous:
+            mapped_nodes = np.copy(mapped_nodes, order="C")
+
+        new_groups.append(group.copy(
+            nodes=mapped_nodes.reshape(*group.nodes.shape)))
+
+    # }}}
+
+    # {{{ assemble new facial adjacency groups
+
+    if mesh._facial_adjacency_groups is not None:
+        # For a facial adjancency transform T(x) = Gx + h in the original mesh,
+        # its corresponding transform in the new mesh will be (T')(x) = G'x + h',
+        # where:
+        # G' = G
+        # h' = Ah + (I - G)b
+        has_adj_transform_vecs = any([
+            adj.aff_transform_vecs is not None
+            for fagrp_map in mesh.facial_adjacency_groups
+            for adj in fagrp_map.values()])
+        if has_adj_transform_vecs:
+            facial_adjacency_groups = []
+            for old_fagrp_map in mesh.facial_adjacency_groups:
+                fagrp_map = {}
+                for ineighbor_grp, old_adj in old_fagrp_map.items():
+                    if ineighbor_grp is None:
+                        continue
+                    if old_adj.aff_transform_vecs is not None:
+                        if A is not None:
+                            aff_transform_vecs = (
+                                np.einsum("ij,fj->fi", A,
+                                    old_adj.aff_transform_vecs))
+                        else:
+                            aff_transform_vecs = old_adj.aff_transform_vecs.copy()
+                        if b is not None:
+                            mats = old_adj.aff_transform_mats
+                            aff_transform_vecs += b.reshape(1, -1) - mats @ b
+                        fagrp_map[ineighbor_grp] = old_adj.copy(
+                            aff_transform_vecs=aff_transform_vecs)
+                    else:
+                        fagrp_map[ineighbor_grp] = old_adj.copy()
+                facial_adjacency_groups.append(fagrp_map)
+        else:
+            facial_adjacency_groups = mesh.facial_adjacency_groups.copy()
+    else:
+        facial_adjacency_groups = None
+
+    # }}}
+
+    return mesh.copy(
+            vertices=vertices, groups=new_groups,
+            facial_adjacency_groups=facial_adjacency_groups,
+            is_conforming=mesh.is_conforming)
 
 
 def _get_rotation_matrix_from_angle_and_axis(theta, axis):
