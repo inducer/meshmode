@@ -690,10 +690,11 @@ _ARRAY_CONTEXT_FOR_PICKLING_TLS = threading.local()
 
 @contextmanager
 def array_context_for_pickling(actx: ArrayContext):
-    r"""For the current thread, set the array context to be used for pickling
-    and unpickling :class:`DOFArray`\ s to *actx*.
+    r"""A context manager that, for the current thread, sets the array
+    context to be used for pickling and unpickling :class:`DOFArray`\ s
+    to *actx*.
 
-    .. versionadded:: 2021.x
+    .. versionadded:: 2021.1
     """
     try:
         existing_pickle_actx = _ARRAY_CONTEXT_FOR_PICKLING_TLS.actx
