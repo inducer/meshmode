@@ -255,7 +255,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         from_grp = self.from_discr.groups[ibatch.from_group_index]
 
         if tol_multiplier is None:
-            tol_multiplier = 50
+            tol_multiplier = 250
 
         tol = np.finfo(ibatch.result_unit_nodes.dtype).eps * tol_multiplier
 
