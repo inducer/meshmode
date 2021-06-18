@@ -19,10 +19,6 @@ sed -i "/pytential/ d" /tmp/myreq.txt
 # https://github.com/inducer/meshmode/pull/48#issuecomment-687519451
 pip install pybind11
 
-# The Firedrake container is based on Py3.6 as of 2020-10-10, which
-# doesn't have dataclasses.
-pip install dataclasses
-
 pip install pytest
 
 pip install -r /tmp/myreq.txt 
