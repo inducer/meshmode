@@ -379,10 +379,12 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     "{[jdof]: 0 <= jdof < n_from_nodes}"
                 ],
                 """
-                    result[iel, idof] =  (
-                        sum(jdof, resample_mat[idof, jdof]
+                # https://github.com/inducer/loopy/issues/427
+                if from_element_indices[iel] != -1
+                    <> rowres = sum(jdof, resample_mat[idof, jdof]
                             * ary[from_element_indices[iel], jdof])
-                        if from_element_indices[iel] != -1 else 0)
+                end
+                result[iel, idof] =  rowres if from_element_indices[iel] != -1 else 0
                 """,
                 [
                     lp.GlobalArg("ary", None,
