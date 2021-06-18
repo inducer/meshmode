@@ -22,6 +22,7 @@ THE SOFTWARE.
 
 
 import numpy as np
+import numpy.linalg as la
 
 import loopy as lp
 from pytools import memoize_in, keyed_memoize_method
@@ -250,28 +251,33 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         :class:`pyopencl.array.Array` containing the index subset.
         """
 
-        mat = actx.to_numpy(actx.thaw(
-                self._resample_matrix(actx, to_group_index, ibatch_index)))
-
-        nrows, ncols = mat.shape
-        result = np.zeros(nrows, dtype=self.to_discr.mesh.element_id_dtype)
+        ibatch = self.groups[to_group_index].batches[ibatch_index]
+        from_grp = self.from_discr.groups[ibatch.from_group_index]
 
         if tol_multiplier is None:
-            tol_multiplier = 50
+            tol_multiplier = 250
 
-        tol = np.finfo(mat.dtype).eps * tol_multiplier
+        tol = np.finfo(ibatch.result_unit_nodes.dtype).eps * tol_multiplier
 
-        for irow in range(nrows):
-            one_indices, = np.where(np.abs(mat[irow] - 1) < tol)
-            zero_indices, = np.where(np.abs(mat[irow]) < tol)
+        dim, ntgt_nodes = ibatch.result_unit_nodes.shape
+        if dim == 0:
+            assert ntgt_nodes == 1
+            return actx.freeze(actx.from_numpy(np.array([0], dtype=np.int32)))
 
-            if len(one_indices) != 1:
+        dist_vecs = (ibatch.result_unit_nodes.reshape(dim, -1, 1)
+                - from_grp.unit_nodes.reshape(dim, 1, -1))
+        dists = la.norm(dist_vecs, axis=0, ord=2)
+
+        result = np.zeros(ntgt_nodes, dtype=self.to_discr.mesh.element_id_dtype)
+
+        for irow in range(ntgt_nodes):
+            close_indices, = np.where(dists[irow] < tol)
+
+            if len(close_indices) != 1:
                 return None
-            if len(zero_indices) != ncols - 1:
-                return None
 
-            one_index, = one_indices
-            result[irow] = one_index
+            close_index, = close_indices
+            result[irow] = close_index
 
         return actx.freeze(actx.from_numpy(result))
 

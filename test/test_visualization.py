@@ -33,7 +33,7 @@ from pytools.obj_array import make_obj_array
 
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
-        PolynomialWarpAndBlendGroupFactory,
+        default_simplex_group_factory,
         InterpolatoryQuadratureSimplexGroupFactory,
         LegendreGaussLobattoTensorProductGroupFactory,
         )
@@ -224,10 +224,9 @@ def test_copy_visualizer(actx_factory, ambient_dim, visualize=True):
             )
 
     from meshmode.discretization import Discretization
-    discr = Discretization(actx, mesh,
-            PolynomialWarpAndBlendGroupFactory(target_order))
-    translated_discr = Discretization(actx, translated_mesh,
-            PolynomialWarpAndBlendGroupFactory(target_order))
+    grp_factory = default_simplex_group_factory(ambient_dim, target_order)
+    discr = Discretization(actx, mesh, grp_factory)
+    translated_discr = Discretization(actx, translated_mesh, grp_factory)
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order, force_equidistant=True)

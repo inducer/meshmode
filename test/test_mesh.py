@@ -32,7 +32,7 @@ from arraycontext import (          # noqa: F401
 
 from meshmode.mesh import Mesh, SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
-        PolynomialWarpAndBlendGroupFactory,
+        default_simplex_group_factory,
         LegendreGaussLobattoTensorProductGroupFactory,
         )
 import meshmode.mesh.generation as mgen
@@ -62,9 +62,7 @@ def test_nonequal_rect_mesh_generation(actx_factory, dim, mesh_type,
             order=3, mesh_type=mesh_type)
 
     from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlendGroupFactory as GroupFactory
-    discr = Discretization(actx, mesh, GroupFactory(3))
+    discr = Discretization(actx, mesh, default_simplex_group_factory(dim, 3))
 
     if visualize:
         from meshmode.discretization.visualization import make_visualizer
@@ -95,7 +93,7 @@ def test_box_mesh(actx_factory, visualize=False):
 
         actx = actx_factory()
         discr = Discretization(actx, mesh,
-                PolynomialWarpAndBlendGroupFactory(7))
+                default_simplex_group_factory(mesh.dim, 7))
 
         from meshmode.discretization.visualization import make_visualizer
         vis = make_visualizer(actx, discr, 7)
@@ -305,7 +303,7 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
                 target_unit="MM",
                 )
 
-        discr_grp_factory = PolynomialWarpAndBlendGroupFactory(order)
+        discr_grp_factory = default_simplex_group_factory(base_dim=2, order=order)
     else:
         ambient_dim = 3
         mesh = mgen.generate_regular_rect_mesh(

@@ -40,7 +40,8 @@ from meshmode.discretization.poly_element import (
     # Simplex group factories
     ModalSimplexGroupFactory,
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
+    PolynomialWarpAndBlend2DRestrictingGroupFactory,
+    PolynomialWarpAndBlend3DRestrictingGroupFactory,
     PolynomialRecursiveNodesGroupFactory,
     PolynomialEquidistantSimplexGroupFactory,
     # Tensor product group factories
@@ -62,7 +63,7 @@ import pytest
 
 @pytest.mark.parametrize("nodal_group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
+    PolynomialWarpAndBlend2DRestrictingGroupFactory,
     partial(PolynomialRecursiveNodesGroupFactory, family="lgl"),
     PolynomialEquidistantSimplexGroupFactory,
     LegendreGaussLobattoTensorProductGroupFactory,
@@ -223,7 +224,7 @@ def test_quadrature_based_modal_connection_reverse(actx_factory, quad_group_fact
 
 @pytest.mark.parametrize("nodal_group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
+    "warp_and_blend",
     LegendreGaussLobattoTensorProductGroupFactory,
     ])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
@@ -232,6 +233,12 @@ def test_quadrature_based_modal_connection_reverse(actx_factory, quad_group_fact
     ])
 def test_modal_truncation(actx_factory, nodal_group_factory,
                           dim, mesh_pars):
+
+    if nodal_group_factory == "warp_and_blend":
+        nodal_group_factory = {
+                2: PolynomialWarpAndBlend2DRestrictingGroupFactory,
+                3: PolynomialWarpAndBlend3DRestrictingGroupFactory,
+                }[dim]
 
     if nodal_group_factory is LegendreGaussLobattoTensorProductGroupFactory:
         group_cls = TensorProductElementGroup
