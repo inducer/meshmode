@@ -31,6 +31,8 @@ from arraycontext import (  # noqa
         as pytest_generate_tests,
         thaw)
 
+from arraycontext import _acf  # noqa: F401
+
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
@@ -414,6 +416,10 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
         bdry_x = thaw(bdry_discr.nodes()[0], actx)
         bdry_f = f(bdry_x)
         bdry_f_2 = opp_face(bdry_f)
+
+        # Ensure test coverage for non-in-place kernels in DirectConnection
+        bdry_f_2_no_inp = opp_face(bdry_f, _force_no_inplace_updates=True)
+        assert flat_norm(bdry_f_2-bdry_f_2_no_inp, np.inf) < 1e-14
 
         err = flat_norm(bdry_f-bdry_f_2, np.inf)
         eoc_rec.add_data_point(h, err)
@@ -847,6 +853,11 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
             check_connection(actx, opposite)
 
             op_bdry_f = opposite(bdry_f)
+
+            # Ensure test coverage for non-in-place kernels in DirectConnection
+            op_bdry_f_no_inplace = opposite(bdry_f, _force_no_inplace_updates=True)
+            assert flat_norm(op_bdry_f - op_bdry_f_no_inplace, np.inf) < 1e-15
+
             error = flat_norm(bdry_f - op_bdry_f, np.inf)
             assert error < 1.0e-11, error
 
