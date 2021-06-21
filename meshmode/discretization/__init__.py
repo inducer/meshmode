@@ -29,8 +29,9 @@ import numpy as np
 from abc import ABCMeta, abstractproperty, abstractmethod
 from pytools import memoize_in, memoize_method, keyed_memoize_in
 from pytools.obj_array import make_obj_array
-from meshmode.array_context import ArrayContext, make_loopy_program, IsDOFArray, ParameterValue, IsOpArray
+from meshmode.array_context import IsDOFArray, ParameterValue, IsOpArray
 from loopy import GlobalArg, ValueArg, auto
+from arraycontext import ArrayContext, make_loopy_program
 
 from warnings import warn
 
@@ -420,7 +421,7 @@ class Discretization:
                 np.float64: np.complex128
                 }[self.real_dtype.type])
 
-        self._setup_actx = actx
+        self._setup_actx = actx.clone()
         self._group_factory = group_factory
         self._cached_nodes = None
 
@@ -543,7 +544,7 @@ class Discretization:
                 actx.freeze(
                     actx.call_loopy(
                         prg(),
-                        weights=actx.from_numpy(grp.weights),
+                        weights=actx.from_numpy(grp.quadrature_rule().weights),
                         nelements=grp.nelements,
                         )[1]["result"])
                 for grp in self.groups))

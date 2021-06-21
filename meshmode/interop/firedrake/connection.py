@@ -39,8 +39,7 @@ from meshmode.interop.firedrake.reference_cell import (
 from meshmode.mesh.processing import get_simplex_element_flip_matrix
 
 from meshmode.discretization.poly_element import (
-    PolynomialWarpAndBlendGroupFactory,
-    PolynomialRecursiveNodesGroupFactory,
+    default_simplex_group_factory,
     ElementGroupFactory)
 from meshmode.discretization import (
     Discretization, InterpolatoryElementGroupBase)
@@ -415,7 +414,7 @@ class FiredrakeConnection:
             and stored in *out*, which is then returned.
         :arg actx:
             * If *out* is *None*, then *actx* is a
-              :class:`~meshmode.array_context.ArrayContext` on which
+              :class:`~arraycontext.ArrayContext` on which
               to create the :class:`~meshmode.dof_array.DOFArray`
             * If *out* is not *None*, *actx* must be *None* or *out*'s
               :attr:`~meshmode.dof_array.DOFArray.array_context`.
@@ -436,7 +435,7 @@ class FiredrakeConnection:
                                  " *None* or 'out.array_context'")
         else:
             # If 'out' is not supplied, create it
-            from meshmode.array_context import ArrayContext
+            from arraycontext import ArrayContext
             if not isinstance(actx, ArrayContext):
                 raise TypeError("If 'out' is *None*, 'actx' must be of type "
                                 "ArrayContext, not '%s'." % type(actx))
@@ -595,7 +594,7 @@ def _get_cells_to_use(fdrake_mesh, bdy_id):
     cfspace = fdrake_mesh.coordinates.function_space()
     cell_node_list = cfspace.cell_node_list
 
-    boundary_nodes = cfspace.boundary_nodes(bdy_id, "topological")
+    boundary_nodes = cfspace.boundary_nodes(bdy_id)
     # Reduce along each cell: Is a vertex of the cell in boundary nodes?
     cell_is_near_bdy = np.any(np.isin(cell_node_list, boundary_nodes), axis=1)
 
@@ -612,7 +611,7 @@ def build_connection_from_firedrake(actx, fdrake_fspace, grp_factory=None,
     meshmode discretization and facilitating
     transfer of functions to and from :mod:`firedrake`.
 
-    :arg actx: A :class:`~meshmode.array_context.ArrayContext`
+    :arg actx: A :class:`~arraycontext.ArrayContext`
         used to instantiate :attr:`FiredrakeConnection.discr`.
     :arg fdrake_fspace: A :mod:`firedrake` ``"DG"``
         function space (of class
@@ -623,14 +622,7 @@ def build_connection_from_firedrake(actx, fdrake_fspace, grp_factory=None,
         a :class:`~meshmode.discretization.poly_element.ElementGroupFactory`
         whose group class is a subclass of
         :class:`~meshmode.discretization.InterpolatoryElementGroupBase`.
-        If *None*, and :mod:`recursivenodes` can be imported,
-        a :class:`~meshmode.discretization.poly_element.\
-PolynomialRecursiveNodesGroupFactory` with ``"lgl"`` nodes is used.
-        Note that :mod:`recursivenodes` may not be importable
-        as it uses :func:`math.comb`, which is new in Python 3.8.
-        In the case that :mod:`recursivenodes` cannot be successfully
-        imported, a :class:`~meshmode.discretization.poly_element.\
-PolynomialWarpAndBlendGroupFactory` is used.
+        If *None*, and a default factory is automatically selected.
     :arg restrict_to_boundary: (optional)
         If not *None*, then must be one of the following:
 
@@ -659,6 +651,16 @@ PolynomialWarpAndBlendGroupFactory` is used.
                          "must be be "
                          "'Discontinuous Lagrange', not '%s'."
                          % ufl_elt.family())
+
+    # If only converting a portion of the mesh near the boundary, get
+    # *cells_to_use* as described in
+    # :func:`meshmode.interop.firedrake.mesh.import_firedrake_mesh`
+    cells_to_use = _get_cells_to_use(fdrake_fspace.mesh(),
+                                     restrict_to_boundary)
+
+    mm_mesh, orient = import_firedrake_mesh(fdrake_fspace.mesh(),
+                                            cells_to_use=cells_to_use)
+
     # Make sure grp_factory is the right type if provided, and
     # uses an interpolatory class.
     if grp_factory is not None:
@@ -676,17 +678,9 @@ PolynomialWarpAndBlendGroupFactory` is used.
                             % type(grp_factory.group_class))
     # If not provided, make one
     else:
-        degree = ufl_elt.degree()
-        try:
-            # recursivenodes is only importable in Python 3.8 since
-            # it uses :func:`math.comb`, so need to check if it can
-            # be imported
-            import recursivenodes  # noqa : F401
-            family = "lgl"  # L-G-Legendre
-            grp_factory = PolynomialRecursiveNodesGroupFactory(degree, family)
-        except ImportError:
-            # If cannot be imported, uses warp-and-blend nodes
-            grp_factory = PolynomialWarpAndBlendGroupFactory(degree)
+        grp_factory = default_simplex_group_factory(
+                mm_mesh.dim, ufl_elt.degree())
+
     # validate restrict_to_boundary, if present
     if restrict_to_boundary is not None:
         firedrake_bdy_ids = fdrake_fspace.mesh().exterior_facets.unique_markers
@@ -718,15 +712,7 @@ PolynomialWarpAndBlendGroupFactory` is used.
                             "restrict_to_boundary. Must be an int, a tuple "
                             "of ints, or the string 'on_boundary'.")
 
-    # If only converting a portion of the mesh near the boundary, get
-    # *cells_to_use* as described in
-    # :func:`meshmode.interop.firedrake.mesh.import_firedrake_mesh`
-    cells_to_use = _get_cells_to_use(fdrake_fspace.mesh(),
-                                     restrict_to_boundary)
-
     # Create to_discr
-    mm_mesh, orient = import_firedrake_mesh(fdrake_fspace.mesh(),
-                                            cells_to_use=cells_to_use)
     to_discr = Discretization(actx, mm_mesh, grp_factory)
 
     # get firedrake unit nodes and map onto meshmode reference element

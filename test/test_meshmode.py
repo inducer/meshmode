@@ -26,20 +26,25 @@ import numpy as np
 import numpy.linalg as la
 
 import meshmode         # noqa: F401
-from meshmode.array_context import (  # noqa
+from arraycontext import (  # noqa
         pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests)
+        as pytest_generate_tests,
+        thaw)
+
+from arraycontext import _acf  # noqa: F401
 
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
-        PolynomialWarpAndBlendGroupFactory,
+        default_simplex_group_factory,
+        PolynomialWarpAndBlend2DRestrictingGroupFactory,
+        PolynomialWarpAndBlend3DRestrictingGroupFactory,
         PolynomialRecursiveNodesGroupFactory,
         PolynomialEquidistantSimplexGroupFactory,
         LegendreGaussLobattoTensorProductGroupFactory
         )
 from meshmode.mesh import Mesh, BTAG_ALL
-from meshmode.dof_array import thaw, flatten
+from meshmode.dof_array import flatten_to_numpy, flat_norm
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -50,11 +55,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def normalize_group_factory(dim, grp_factory):
+    if grp_factory == "warp_and_blend":
+        return {
+            0: PolynomialWarpAndBlend2DRestrictingGroupFactory,
+            1: PolynomialWarpAndBlend2DRestrictingGroupFactory,
+            2: PolynomialWarpAndBlend2DRestrictingGroupFactory,
+            3: PolynomialWarpAndBlend3DRestrictingGroupFactory,
+            }[dim]
+    else:
+        assert not isinstance(grp_factory, str)
+        return grp_factory
+
+
 # {{{ convergence of boundary interpolation
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
+    "warp_and_blend",
     partial(PolynomialRecursiveNodesGroupFactory, family="lgl"),
 
     # Redundant, no information gain.
@@ -85,6 +103,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
 
     actx = actx_factory()
 
+    group_factory = normalize_group_factory(dim, group_factory)
     if group_factory is LegendreGaussLobattoTensorProductGroupFactory:
         group_cls = TensorProductElementGroup
     else:
@@ -144,7 +163,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
         print("h=%s -> %d elements" % (
                 h, sum(mgrp.nelements for mgrp in mesh.groups)))
 
-        x = thaw(actx, vol_discr.nodes()[0])
+        x = thaw(vol_discr.nodes()[0], actx)
         vol_f = f(x)
 
         bdry_connection = make_face_restriction(
@@ -153,7 +172,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
         check_connection(actx, bdry_connection)
         bdry_discr = bdry_connection.to_discr
 
-        bdry_x = thaw(actx, bdry_discr.nodes()[0])
+        bdry_x = thaw(bdry_discr.nodes()[0], actx)
         bdry_f = f(bdry_x)
         bdry_f_2 = bdry_connection(vol_f)
 
@@ -162,12 +181,12 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
                     make_direct_full_resample_matrix
             mat = actx.to_numpy(
                     make_direct_full_resample_matrix(actx, bdry_connection))
-            bdry_f_2_by_mat = mat.dot(actx.to_numpy(flatten(vol_f)))
+            bdry_f_2_by_mat = mat.dot(flatten_to_numpy(actx, vol_f))
 
-            mat_error = la.norm(actx.to_numpy(flatten(bdry_f_2)) - bdry_f_2_by_mat)
+            mat_error = la.norm(flatten_to_numpy(actx, bdry_f_2) - bdry_f_2_by_mat)
             assert mat_error < 1e-14, mat_error
 
-        err = actx.np.linalg.norm(bdry_f-bdry_f_2, np.inf)
+        err = flat_norm(bdry_f-bdry_f_2, np.inf)
         eoc_rec.add_data_point(h, err)
 
     order_slack = 0.75 if mesh_name == "blob" else 0.5
@@ -183,7 +202,8 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
+    "warp_and_blend",
+    partial(PolynomialRecursiveNodesGroupFactory, family="lgl"),
     LegendreGaussLobattoTensorProductGroupFactory,
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
@@ -199,6 +219,8 @@ def test_all_faces_interpolation(actx_factory, group_factory,
         pytest.skip("tensor products not implemented on blobs")
 
     actx = actx_factory()
+
+    group_factory = normalize_group_factory(dim, group_factory)
 
     if group_factory is LegendreGaussLobattoTensorProductGroupFactory:
         group_cls = TensorProductElementGroup
@@ -266,7 +288,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
                 else:
                     assert ibatch == batch.to_element_face
 
-        all_face_x = thaw(actx, all_face_bdry_discr.nodes()[0])
+        all_face_x = thaw(all_face_bdry_discr.nodes()[0], actx)
         all_face_f = f(all_face_x)
 
         all_face_f_2 = all_face_bdry_discr.zeros(actx)
@@ -280,7 +302,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
                     boundary_tag, per_face_groups=per_face_groups)
             bdry_discr = bdry_connection.to_discr
 
-            bdry_x = thaw(actx, bdry_discr.nodes()[0])
+            bdry_x = thaw(bdry_discr.nodes()[0], actx)
             bdry_f = f(bdry_x)
 
             all_face_embedding = make_face_to_all_faces_embedding(
@@ -290,7 +312,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
 
             all_face_f_2 = all_face_f_2 + all_face_embedding(bdry_f)
 
-        err = actx.np.linalg.norm(all_face_f-all_face_f_2, np.inf)
+        err = flat_norm(all_face_f-all_face_f_2, np.inf)
         eoc_rec.add_data_point(h, err)
 
     print(eoc_rec)
@@ -305,7 +327,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
+    "warp_and_blend",
     LegendreGaussLobattoTensorProductGroupFactory,
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
@@ -322,6 +344,8 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
 
     logging.basicConfig(level=logging.INFO)
     actx = actx_factory()
+
+    group_factory = normalize_group_factory(dim, group_factory)
 
     if group_factory is LegendreGaussLobattoTensorProductGroupFactory:
         group_cls = TensorProductElementGroup
@@ -389,11 +413,15 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
         opp_face = make_opposite_face_connection(actx, bdry_connection)
         check_connection(actx, opp_face)
 
-        bdry_x = thaw(actx, bdry_discr.nodes()[0])
+        bdry_x = thaw(bdry_discr.nodes()[0], actx)
         bdry_f = f(bdry_x)
         bdry_f_2 = opp_face(bdry_f)
 
-        err = actx.np.linalg.norm(bdry_f-bdry_f_2, np.inf)
+        # Ensure test coverage for non-in-place kernels in DirectConnection
+        bdry_f_2_no_inp = opp_face(bdry_f, _force_no_inplace_updates=True)
+        assert flat_norm(bdry_f_2-bdry_f_2_no_inp, np.inf) < 1e-14
+
+        err = flat_norm(bdry_f-bdry_f_2, np.inf)
         eoc_rec.add_data_point(h, err)
 
     print(eoc_rec)
@@ -423,7 +451,7 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
 
     from meshmode.discretization import Discretization
     discr = Discretization(actx, mesh,
-            PolynomialWarpAndBlendGroupFactory(3))
+            default_simplex_group_factory(base_dim=3, order=3))
 
     from pytential import bind, sym
 
@@ -443,8 +471,8 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
         normal_outward_expr = (
                 sym.normal(mesh.ambient_dim) | sym.nodes(mesh.ambient_dim))
 
-    normal_outward_check = actx.to_numpy(
-            flatten(bind(discr, normal_outward_expr)(actx).as_scalar())) > 0
+    normal_outward_check = flatten_to_numpy(actx,
+            bind(discr, normal_outward_expr)(actx).as_scalar()) > 0
 
     assert normal_outward_check.all(), normal_outward_check
 
@@ -477,7 +505,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     actx = actx_factory()
 
     if group_cls is SimplexElementGroup:
-        group_factory = PolynomialWarpAndBlendGroupFactory(mesh_order + 3)
+        group_factory = default_simplex_group_factory(dim, order=mesh_order + 3)
     elif group_cls is TensorProductElementGroup:
         group_factory = LegendreGaussLobattoTensorProductGroupFactory(mesh_order + 3)
     else:
@@ -510,7 +538,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     else:
         raise TypeError
 
-    nodes = thaw(actx, vol_discr.nodes())
+    nodes = thaw(vol_discr.nodes(), actx)
     vol_one = 1 + 0 * nodes[0]
 
     from pytential import norm, integral  # noqa
@@ -547,7 +575,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
             | (sym.nodes(dim) + 0.5*sym.ones_vec(dim)),
             )(actx).as_scalar()
 
-    normal_outward_check = actx.to_numpy(flatten(normal_outward_check) > 0)
+    normal_outward_check = flatten_to_numpy(actx, normal_outward_check > 0)
     assert normal_outward_check.all(), normal_outward_check
 
 # }}}
@@ -584,17 +612,17 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
     def f(x):
         return 0.1*actx.np.sin(x)
 
-    x_low = thaw(actx, low_discr.nodes()[0])
+    x_low = thaw(low_discr.nodes()[0], actx)
     f_low = f(x_low)
 
-    x_high = thaw(actx, high_discr.nodes()[0])
+    x_high = thaw(high_discr.nodes()[0], actx)
     f_high_ref = f(x_high)
 
     f_high_num = cnx(f_low)
 
     err = (
-            actx.np.linalg.norm(f_high_ref-f_high_num, np.inf)
-            / actx.np.linalg.norm(f_high_ref, np.inf))
+            flat_norm(f_high_ref-f_high_num, np.inf)
+            / flat_norm(f_high_ref, np.inf))
 
     print(err)
     assert err < 1e-2
@@ -655,7 +683,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
         true_surf = 2*np.pi**(dim/2)/gamma(dim/2)
         true_vol = true_surf/dim
 
-        vol_x = thaw(actx, vol_discr.nodes())
+        vol_x = thaw(vol_discr.nodes(), actx)
 
         vol_one = vol_x[0]*0 + 1
         from pytential import norm, integral  # noqa
@@ -665,7 +693,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
         vol_eoc_rec.add_data_point(h, rel_vol_err)
         print("VOL", true_vol, comp_vol)
 
-        bdry_x = thaw(actx, bdry_discr.nodes())
+        bdry_x = thaw(bdry_discr.nodes(), actx)
 
         bdry_one_exact = bdry_x[0] * 0 + 1
 
@@ -702,7 +730,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
                 sym.normal(mesh.ambient_dim) | sym.nodes(mesh.ambient_dim),
                 )(actx).as_scalar()
 
-        normal_outward_check = actx.to_numpy(flatten(normal_outward_check) > 0)
+        normal_outward_check = flatten_to_numpy(actx, normal_outward_check > 0)
         assert normal_outward_check.all(), normal_outward_check
 
         # }}}
@@ -743,7 +771,7 @@ def test_mesh_without_vertices(actx_factory):
     from meshmode.discretization import Discretization
     discr = Discretization(actx, mesh,
             InterpolatoryQuadratureSimplexGroupFactory(4))
-    thaw(actx, discr.nodes())
+    thaw(discr.nodes(), actx)
 
     from meshmode.discretization.visualization import make_visualizer
     make_visualizer(actx, discr, 4)
@@ -786,7 +814,13 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
         plt.savefig("test_mesh_multiple_groups_2d_elements.png", dpi=300)
 
     from meshmode.discretization import Discretization
-    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+
+    def grp_factory(mesh_el_group, index):
+        return default_simplex_group_factory(
+                base_dim=ambient_dim, order=order + 2 if index == 0 else order
+                )(mesh_el_group, index)
+
+    discr = Discretization(actx, mesh, grp_factory)
 
     if visualize:
         group_id = discr.empty(actx, dtype=np.int32)
@@ -807,7 +841,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
             check_connection)
     for boundary_tag in [BTAG_ALL, FACE_RESTR_INTERIOR, FACE_RESTR_ALL]:
         conn = make_face_restriction(actx, discr,
-                group_factory=PolynomialWarpAndBlendGroupFactory(order),
+                group_factory=grp_factory,
                 boundary_tag=boundary_tag,
                 per_face_groups=False)
         check_connection(actx, conn)
@@ -819,7 +853,12 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
             check_connection(actx, opposite)
 
             op_bdry_f = opposite(bdry_f)
-            error = actx.np.linalg.norm(bdry_f - op_bdry_f, np.inf)
+
+            # Ensure test coverage for non-in-place kernels in DirectConnection
+            op_bdry_f_no_inplace = opposite(bdry_f, _force_no_inplace_updates=True)
+            assert flat_norm(op_bdry_f - op_bdry_f_no_inplace, np.inf) < 1e-15
+
+            error = flat_norm(bdry_f - op_bdry_f, np.inf)
             assert error < 1.0e-11, error
 
         if boundary_tag == FACE_RESTR_ALL:
@@ -827,7 +866,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
             check_connection(actx, embedding)
 
             em_bdry_f = embedding(bdry_f)
-            error = actx.np.linalg.norm(bdry_f - em_bdry_f)
+            error = flat_norm(bdry_f - em_bdry_f)
             assert error < 1.0e-11, error
 
     # check some derivatives (nb: flatten is a generator)
@@ -835,7 +874,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
     ref_axes = pytools.flatten([[i] for i in range(ambient_dim)])
 
     from meshmode.discretization import num_reference_derivative
-    x = thaw(actx, discr.nodes())
+    x = thaw(discr.nodes(), actx)
     num_reference_derivative(discr, ref_axes, x[0])
 
 # }}}

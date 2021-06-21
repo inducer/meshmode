@@ -61,6 +61,7 @@ Surfaces
 .. autofunction:: generate_torus
 .. autofunction:: refine_mesh_and_get_urchin_warper
 .. autofunction:: generate_urchin
+.. autofunction:: generate_surface_of_revolution
 
 Volumes
 -------
@@ -498,6 +499,79 @@ def generate_icosphere(r: float, order: int, *,
     grp, = mesh.groups
     grp = grp.copy(
             nodes=grp.nodes * r / np.sqrt(np.sum(grp.nodes**2, axis=0)))
+
+    from meshmode.mesh import Mesh
+    return Mesh(
+            vertices, [grp],
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+            is_conforming=True)
+
+# }}}
+
+
+# {{ generate_surface_of_revolution
+
+def generate_surface_of_revolution(
+        get_radius: Callable[[np.ndarray, np.ndarray], np.ndarray],
+        height_discr: np.ndarray,
+        angle_discr: np.ndarray,
+        order: int, *,
+        node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
+        unit_nodes: Optional[np.ndarray] = None):
+    """Return a cylinder aligned with the "height" axis aligned with the Z axis.
+
+    :param get_radius: A callable function that takes in a 1D array of heights
+        and a 1D array of angles and returns a 1D array of radii.
+    :param height_discr: A discretization of ``[0, 2*pi)``.
+    :param angle_discr: A discretization of ``[0, 2*pi)``.
+    :param order: order of the (simplex) elements. If *unit_nodes* is also
+        provided, the orders should match.
+    :param node_vertex_consistency_tolerance: passed to the
+        :class:`~meshmode.mesh.Mesh` constructor. If *False*, no checks are
+        performed.
+    :param unit_nodes: if given, the unit nodes to use. Must have shape
+        ``(3, nnodes)``.
+    """
+    n = len(angle_discr)
+    m = len(height_discr)
+    vertices = np.zeros((3, n*m))
+    theta, h = np.meshgrid(angle_discr, height_discr)
+    theta = theta.flatten()
+    h = h.flatten()
+    r = get_radius(h, theta)
+    vertices[0, :] = np.cos(theta)*r
+    vertices[1, :] = np.sin(theta)*r
+    vertices[2, :] = h
+
+    tris = []
+    for i in range(m-1):
+        for j in range(n):
+            tris.append([i*n + j, (i + 1)*n + j, (i + 1)*n + (j + 1) % n])
+            tris.append([i*n + j, i*n + (j + 1) % n, (i + 1)*n + (j + 1) % n])
+
+    vertex_indices = np.array(tris, dtype=np.int32)
+
+    grp = make_group_from_vertices(vertices, vertex_indices, order,
+                unit_nodes=unit_nodes)
+
+    from meshmode.mesh import Mesh
+    mesh = Mesh(
+            vertices, [grp],
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+            is_conforming=True)
+
+    # ensure vertices and nodes are still on the surface with radius r
+    def ensure_radius(arr):
+        res = arr.copy()
+        h = res[2, :].flatten()
+        theta = np.arctan2(res[1, :].flatten(), res[0, :].flatten())
+        r_expected = get_radius(h, theta).reshape(res[0, :].shape)
+        res[:2, :] *= r_expected/np.sum(res[:2, :]**2, axis=0)
+        return res
+
+    vertices = ensure_radius(mesh.vertices)
+    grp, = mesh.groups
+    grp = grp.copy(nodes=ensure_radius(grp.nodes))
 
     from meshmode.mesh import Mesh
     return Mesh(
@@ -1120,13 +1194,17 @@ def generate_warped_rect_mesh(dim, order, *, nelements_side=None,
 
     def m(x):
         result = np.empty_like(x)
-        result[0] = (
-                1.5*x[0] + np.cos(x[0])
-                + 0.1*np.sin(10*x[1]))
-        result[1] = (
-                0.05*np.cos(10*x[0])
-                + 1.3*x[1] + np.sin(x[1]))
-        if len(x) == 3:
+        if len(x) >= 2:
+            result[0] = (
+                    1.5*x[0] + np.cos(x[0])
+                    + 0.1*np.sin(10*x[1]))
+            result[1] = (
+                    0.05*np.cos(10*x[0])
+                    + 1.3*x[1] + np.sin(x[1]))
+        else:
+            result[0] = 1.5*x[0] + np.cos(x[0])
+
+        if len(x) >= 3:
             result[2] = x[2] + np.sin(x[0] / 2) / 2
         return result
 

@@ -33,17 +33,16 @@ from pytools.obj_array import make_obj_array
 
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
-        PolynomialWarpAndBlendGroupFactory,
+        default_simplex_group_factory,
         InterpolatoryQuadratureSimplexGroupFactory,
         LegendreGaussLobattoTensorProductGroupFactory,
         )
-from meshmode.dof_array import thaw
-from meshmode.array_context import (  # noqa
+import meshmode.mesh.generation as mgen
+
+from arraycontext import thaw, _acf         # noqa: F401
+from arraycontext import (                  # noqa: F401
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
-
-import meshmode.mesh.generation as mgen
-from meshmode import _acf  # noqa: F401
 
 
 # {{{ test visualizer
@@ -159,7 +158,7 @@ def test_visualizers(actx_factory, dim, group_cls):
     from meshmode.discretization import Discretization
     discr = Discretization(actx, mesh, group_factory(target_order))
 
-    nodes = thaw(actx, discr.nodes())
+    nodes = thaw(discr.nodes(), actx)
     f = actx.np.sqrt(sum(nodes**2)) + 1j*nodes[0]
     g = VisualizerData(g=f)
     names_and_fields = [("f", f), ("g", g)]
@@ -225,10 +224,9 @@ def test_copy_visualizer(actx_factory, ambient_dim, visualize=True):
             )
 
     from meshmode.discretization import Discretization
-    discr = Discretization(actx, mesh,
-            PolynomialWarpAndBlendGroupFactory(target_order))
-    translated_discr = Discretization(actx, translated_mesh,
-            PolynomialWarpAndBlendGroupFactory(target_order))
+    grp_factory = default_simplex_group_factory(ambient_dim, target_order)
+    discr = Discretization(actx, mesh, grp_factory)
+    translated_discr = Discretization(actx, translated_mesh, grp_factory)
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order, force_equidistant=True)

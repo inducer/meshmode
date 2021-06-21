@@ -22,6 +22,8 @@ THE SOFTWARE.
 
 import pyopencl as cl
 
+from arraycontext import PyOpenCLArrayContext
+
 
 # This example provides a brief template for bringing information in
 # from firedrake and makes some plots to help you better understand
@@ -50,7 +52,6 @@ def main():
     # Make connections
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    from meshmode.array_context import PyOpenCLArrayContext
     actx = PyOpenCLArrayContext(queue)
 
     fd_connection = build_connection_from_firedrake(actx, fd_fspace)

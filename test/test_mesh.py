@@ -24,18 +24,18 @@ from functools import partial
 import numpy as np
 import numpy.linalg as la
 import pytest
-import meshmode         # noqa: F401
-from meshmode.array_context import (  # noqa
+
+from arraycontext import _acf       # noqa: F401
+from arraycontext import (          # noqa: F401
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
 from meshmode.mesh import Mesh, SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
-        PolynomialWarpAndBlendGroupFactory,
+        default_simplex_group_factory,
         LegendreGaussLobattoTensorProductGroupFactory,
         )
 import meshmode.mesh.generation as mgen
-from meshmode import _acf  # noqa: F401
 
 
 import logging
@@ -62,9 +62,7 @@ def test_nonequal_rect_mesh_generation(actx_factory, dim, mesh_type,
             order=3, mesh_type=mesh_type)
 
     from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlendGroupFactory as GroupFactory
-    discr = Discretization(actx, mesh, GroupFactory(3))
+    discr = Discretization(actx, mesh, default_simplex_group_factory(dim, 3))
 
     if visualize:
         from meshmode.discretization.visualization import make_visualizer
@@ -95,7 +93,7 @@ def test_box_mesh(actx_factory, visualize=False):
 
         actx = actx_factory()
         discr = Discretization(actx, mesh,
-                PolynomialWarpAndBlendGroupFactory(7))
+                default_simplex_group_factory(mesh.dim, 7))
 
         from meshmode.discretization.visualization import make_visualizer
         vis = make_visualizer(actx, discr, 7)
@@ -180,6 +178,61 @@ def test_affine_map():
             m_inv = m.inverted()
             assert la.norm(x-m_inv(m(x))) < 1e-10
 
+
+def test_partial_affine_map(dim=2):
+    orig_mesh = mgen.generate_regular_rect_mesh(
+            a=(0,)*dim, b=(5, 3, 4)[:dim], npoints_per_axis=(10, 6, 7)[:dim],
+            order=1)
+
+    from meshmode.mesh.processing import affine_map
+    mesh = affine_map(orig_mesh, b=np.pi)
+    mesh = affine_map(orig_mesh, b=np.pi)
+    assert la.norm(orig_mesh.vertices - mesh.vertices + np.pi) < 1.0e-14
+
+    mesh = affine_map(orig_mesh, b=np.array([np.pi] * dim))
+    assert la.norm(orig_mesh.vertices - mesh.vertices + np.pi) < 1.0e-14
+
+    mesh = affine_map(orig_mesh, A=np.pi)
+    mesh = affine_map(orig_mesh, A=np.pi)
+    assert la.norm(orig_mesh.vertices - mesh.vertices / np.pi) < 1.0e-14
+
+    mesh = affine_map(orig_mesh, A=np.pi * np.eye(dim))
+    assert la.norm(orig_mesh.vertices - mesh.vertices / np.pi) < 1.0e-14
+
+
+@pytest.mark.parametrize("ambient_dim", [2, 3])
+def test_mesh_rotation(ambient_dim, visualize=False):
+    order = 3
+
+    if ambient_dim == 2:
+        nelements = 32
+        mesh = mgen.make_curve_mesh(
+                partial(mgen.ellipse, 2.0),
+                np.linspace(0.0, 1.0, nelements + 1),
+                order=order)
+    elif ambient_dim == 3:
+        mesh = mgen.generate_torus(4.0, 2.0, order=order)
+    else:
+        raise ValueError("unsupported dimension")
+
+    from meshmode.mesh.processing import _get_rotation_matrix_from_angle_and_axis
+    mat = _get_rotation_matrix_from_angle_and_axis(
+            np.pi/3.0, np.array([1.0, 2.0, 1.4]))
+
+    # check that the matrix is in the rotation group
+    assert abs(abs(la.det(mat)) - 1) < 10e-14
+    assert la.norm(mat @ mat.T - np.eye(3)) < 1.0e-14
+
+    from meshmode.mesh.processing import rotate_mesh_around_axis
+    rotated_mesh = rotate_mesh_around_axis(mesh,
+            theta=np.pi/2.0,
+            axis=np.array([1, 0, 0]))
+
+    if visualize:
+        from meshmode.mesh.visualization import write_vertex_vtk_file
+        write_vertex_vtk_file(mesh, "mesh_rotation_original.vtu")
+        write_vertex_vtk_file(rotated_mesh, "mesh_rotation_rotated.vtu")
+
 # }}}
 
 
@@ -250,7 +303,7 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
                 target_unit="MM",
                 )
 
-        discr_grp_factory = PolynomialWarpAndBlendGroupFactory(order)
+        discr_grp_factory = default_simplex_group_factory(base_dim=2, order=order)
     else:
         ambient_dim = 3
         mesh = mgen.generate_regular_rect_mesh(

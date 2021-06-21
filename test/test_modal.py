@@ -24,12 +24,13 @@ THE SOFTWARE.
 from functools import partial
 import numpy as np
 
-import meshmode                       # noqa: F401
-from meshmode.array_context import (  # noqa
+from arraycontext import thaw, _acf     # noqa: F401
+from arraycontext import (              # noqa: F401
     pytest_generate_tests_for_pyopencl_array_context
     as pytest_generate_tests
     )
-from meshmode.dof_array import DOFArray
+
+from meshmode.dof_array import DOFArray, flat_norm
 from meshmode.mesh import (
     SimplexElementGroup,
     TensorProductElementGroup
@@ -39,7 +40,8 @@ from meshmode.discretization.poly_element import (
     # Simplex group factories
     ModalSimplexGroupFactory,
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
+    PolynomialWarpAndBlend2DRestrictingGroupFactory,
+    PolynomialWarpAndBlend3DRestrictingGroupFactory,
     PolynomialRecursiveNodesGroupFactory,
     PolynomialEquidistantSimplexGroupFactory,
     # Tensor product group factories
@@ -55,15 +57,13 @@ from meshmode.discretization.connection.modal import (
     ModalToNodalDiscretizationConnection
     )
 
-from meshmode.dof_array import thaw
-
 import meshmode.mesh.generation as mgen
 import pytest
 
 
 @pytest.mark.parametrize("nodal_group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
+    PolynomialWarpAndBlend2DRestrictingGroupFactory,
     partial(PolynomialRecursiveNodesGroupFactory, family="lgl"),
     PolynomialEquidistantSimplexGroupFactory,
     LegendreGaussLobattoTensorProductGroupFactory,
@@ -100,7 +100,7 @@ def test_inverse_modal_connections(actx_factory, nodal_group_factory):
         modal_disc, nodal_disc
     )
 
-    x_nodal = thaw(actx, nodal_disc.nodes()[0])
+    x_nodal = thaw(nodal_disc.nodes()[0], actx)
     nodal_f = f(x_nodal)
 
     # Map nodal coefficients of f to modal coefficients
@@ -110,7 +110,7 @@ def test_inverse_modal_connections(actx_factory, nodal_group_factory):
 
     # This error should be small since we composed a map with
     # its inverse
-    err = actx.np.linalg.norm(nodal_f - nodal_f_2)
+    err = flat_norm(nodal_f - nodal_f_2)
 
     assert err <= 1e-13
 
@@ -142,7 +142,7 @@ def test_modal_coefficients_by_projection(actx_factory, quad_group_factory):
     def f(x):
         return 2*actx.np.sin(5*x)
 
-    x_nodal = thaw(actx, nodal_disc.nodes()[0])
+    x_nodal = thaw(nodal_disc.nodes()[0], actx)
     nodal_f = f(x_nodal)
 
     # Compute modal coefficients we expect to get
@@ -170,7 +170,7 @@ def test_modal_coefficients_by_projection(actx_factory, quad_group_factory):
     # Map nodal coefficients using the quadrature-based projection
     modal_f_computed = nodal_to_modal_conn_quad(nodal_f)
 
-    err = actx.np.linalg.norm(modal_f_expected - modal_f_computed)
+    err = flat_norm(modal_f_expected - modal_f_computed)
 
     assert err <= 1e-13
 
@@ -208,7 +208,7 @@ def test_quadrature_based_modal_connection_reverse(actx_factory, quad_group_fact
     def f(x):
         return 1 + 2*x + 3*x**2
 
-    x_nodal = thaw(actx, nodal_disc.nodes()[0])
+    x_nodal = thaw(nodal_disc.nodes()[0], actx)
     nodal_f = f(x_nodal)
 
     # Map nodal coefficients using the quadrature-based projection
@@ -217,14 +217,14 @@ def test_quadrature_based_modal_connection_reverse(actx_factory, quad_group_fact
     # Back to nodal
     nodal_f_computed = modal_to_nodal_conn(modal_f_quad)
 
-    err = actx.np.linalg.norm(nodal_f - nodal_f_computed)
+    err = flat_norm(nodal_f - nodal_f_computed)
 
     assert err <= 1e-11
 
 
 @pytest.mark.parametrize("nodal_group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlendGroupFactory,
+    "warp_and_blend",
     LegendreGaussLobattoTensorProductGroupFactory,
     ])
 @pytest.mark.parametrize(("dim", "mesh_pars"), [
@@ -233,6 +233,12 @@ def test_quadrature_based_modal_connection_reverse(actx_factory, quad_group_fact
     ])
 def test_modal_truncation(actx_factory, nodal_group_factory,
                           dim, mesh_pars):
+
+    if nodal_group_factory == "warp_and_blend":
+        nodal_group_factory = {
+                2: PolynomialWarpAndBlend2DRestrictingGroupFactory,
+                3: PolynomialWarpAndBlend3DRestrictingGroupFactory,
+                }[dim]
 
     if nodal_group_factory is LegendreGaussLobattoTensorProductGroupFactory:
         group_cls = TensorProductElementGroup
@@ -273,7 +279,7 @@ def test_modal_truncation(actx_factory, nodal_group_factory,
             modal_disc, nodal_disc
         )
 
-        x_nodal = thaw(actx, nodal_disc.nodes()[0])
+        x_nodal = thaw(nodal_disc.nodes()[0], actx)
         nodal_f = f(x_nodal)
 
         # Map to modal
@@ -302,7 +308,7 @@ def test_modal_truncation(actx_factory, nodal_group_factory,
         # Now map truncated modal coefficients back to nodal
         nodal_f_truncated = modal_to_nodal_conn(modal_f_truncated)
 
-        err = actx.np.linalg.norm(nodal_f - nodal_f_truncated)
+        err = flat_norm(nodal_f - nodal_f_truncated)
         eoc_rec.add_data_point(h, err)
         threshold_lower = 0.8*truncated_order
         threshold_upper = 1.2*truncated_order

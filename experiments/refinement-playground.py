@@ -186,9 +186,10 @@ def refine_and_generate_chart_function(mesh, filename, function):
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlendGroupFactory
+            default_simplex_group_factory
     discr = Discretization(
-            cl_ctx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+            cl_ctx, mesh, default_simplex_group_factory(
+                base_dim=mesh.dim, order=order))
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(queue, discr, order)
     remove_if_exists("connectivity2.vtu")

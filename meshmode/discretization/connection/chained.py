@@ -23,7 +23,6 @@ THE SOFTWARE.
 import numpy as np
 
 from pytools import Record
-from pytools.obj_array import obj_array_vectorized_n_args
 
 import modepy as mp
 from meshmode.discretization.connection.direct import \
@@ -62,7 +61,6 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
 
         self.connections = connections
 
-    @obj_array_vectorized_n_args
     def __call__(self, ary):
         for cnx in self.connections:
             ary = cnx(ary)
@@ -189,7 +187,7 @@ def flatten_chained_connection(actx, connection):
         If a large number of connections is chained, the number of groups and
         batches can become very large.
 
-    :arg actx: An instance of :class:`meshmode.array_context.ArrayContext`.
+    :arg actx: An instance of :class:`arraycontext.ArrayContext`.
     :arg connection: An instance of
         :class:`~meshmode.discretization.connection.DiscretizationConnection`.
     :return: An instance of
@@ -278,7 +276,7 @@ def make_full_resample_matrix(actx, connection):
         This method will be very slow, both in terms of speed and memory
         usage, and should only be used for testing or if absolutely necessary.
 
-    :arg actx: a :class:`meshmode.array_context.ArrayContext`.
+    :arg actx: a :class:`arraycontext.ArrayContext`.
     :arg connection: a
         :class:`~meshmode.discretization.connection.DiscretizationConnection`.
     :return: a :class:`pyopencl.array.Array` of shape

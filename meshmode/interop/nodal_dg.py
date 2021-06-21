@@ -32,10 +32,11 @@ THE SOFTWARE.
 
 
 import numpy as np
+
+import arraycontext
 import meshmode.mesh
 import meshmode.discretization
 import meshmode.dof_array
-import meshmode.array_context
 
 
 class NodalDGContext:
@@ -67,7 +68,17 @@ class NodalDGContext:
         # 2s delay still seems to run into
         # "ExceptionPexpect: Could not terminate the child"
         # -AK, 2021-03-28
-        self.octave._engine.repl.delayafterterminate = 15
+
+        delay = 5
+        # make sure we don't set non-existent variables
+        assert self.octave._engine.repl.child.delayafterclose is not None
+        assert self.octave._engine.repl.child.delayafterterminate is not None
+        assert self.octave._engine.repl.child.ptyproc.delayafterclose is not None
+        assert self.octave._engine.repl.child.ptyproc.delayafterterminate is not None
+        self.octave._engine.repl.child.delayafterclose = delay
+        self.octave._engine.repl.child.delayafterterminate = delay
+        self.octave._engine.repl.child.ptyproc.delayafterclose = delay
+        self.octave._engine.repl.child.ptyproc.delayafterterminate = delay
 
         self.octave.exit()
 
@@ -156,7 +167,7 @@ class NodalDGContext:
         self.octave.push(name, ary.T)
 
     def pull_dof_array(
-            self, actx: meshmode.array_context.ArrayContext, name
+            self, actx: arraycontext.ArrayContext, name
             ) -> meshmode.dof_array.DOFArray:
         ary = self.octave.pull(name).T
 
