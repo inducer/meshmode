@@ -386,7 +386,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                              new_ext_neighbor_faces))
         ext_neighbors = np.concatenate((ext_neighbors, new_ext_neighbors))
 
-    exterior_grp = FacialAdjacencyGroup(igroup=0, ineighbor=None,
+    exterior_grp = FacialAdjacencyGroup(igroup=0, ineighbor_group=None,
                                         elements=ext_elements,
                                         element_faces=ext_element_faces,
                                         neighbors=ext_neighbors,
