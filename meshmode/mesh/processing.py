@@ -40,6 +40,7 @@ __doc__ = """
 .. autofunction:: find_bounding_box
 .. autofunction:: merge_disjoint_meshes
 .. autofunction:: split_mesh_groups
+.. autofunction:: glue_mesh_boundaries
 
 .. autofunction:: map_mesh
 .. autofunction:: affine_map
@@ -1054,6 +1055,401 @@ def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
         return mesh, subgroup_to_group_map
     else:
         return mesh
+
+# }}}
+
+
+# {{{ mesh boundary gluing
+
+def _get_bdry_face_ids(mesh, btag):
+    btag_bit = mesh.boundary_tag_bit(btag)
+
+    from meshmode.mesh import _FaceIDs
+    face_ids_per_group = []
+    for igrp, fagrp_map in enumerate(mesh.facial_adjacency_groups):
+        bdry_grp = fagrp_map.get(None)
+        if bdry_grp is not None:
+            bdry_face_indices, = np.where((-bdry_grp.neighbors & btag_bit) != 0)
+            grp_face_ids = _FaceIDs(
+                groups=np.zeros(len(bdry_face_indices), dtype=int) + igrp,
+                elements=bdry_grp.elements[bdry_face_indices],
+                faces=bdry_grp.element_faces[bdry_face_indices])
+        else:
+            grp_face_ids = _FaceIDs(
+                groups=np.empty(0, dtype=int),
+                elements=np.empty(0, dtype=mesh.element_id_dtype),
+                faces=np.empty(0, dtype=mesh.face_id_dtype))
+        face_ids_per_group.append(grp_face_ids)
+
+    from meshmode.mesh import _concatenate_face_ids
+    return _concatenate_face_ids(face_ids_per_group)
+
+
+def _get_face_vertex_indices(mesh, face_ids):
+    max_face_vertices = max(
+        len(ref_fvi)
+        for grp in mesh.groups
+        for ref_fvi in grp.face_vertex_indices())
+
+    face_vertex_indices_per_group = []
+    for igrp, grp in enumerate(mesh.groups):
+        is_grp = face_ids.groups == igrp
+        face_vertex_indices = np.full(
+            (np.count_nonzero(is_grp), max_face_vertices), -1,
+            dtype=mesh.vertex_id_dtype)
+        for fid, ref_fvi in enumerate(grp.face_vertex_indices()):
+            is_face = is_grp & (face_ids.faces == fid)
+            is_face_grp = face_ids.faces[is_grp] == fid
+            face_vertex_indices[is_face_grp, :len(ref_fvi)] = (
+                grp.vertex_indices[face_ids.elements[is_face], :][:, ref_fvi])
+        face_vertex_indices_per_group.append(face_vertex_indices)
+
+    return np.stack(face_vertex_indices_per_group)
+
+
+def _compute_face_indices_from_mask(mask):
+    # Order by face, then by element
+    indices = np.cumsum(mask).reshape(mask.shape) - 1
+    indices[~mask] = -1
+    return indices
+
+
+def _match_boundary_faces(mesh, glued_boundary_mappings, tol):
+    face_id_pairs_for_mapping = []
+
+    for btag_m, btag_n, aff_transform in glued_boundary_mappings:
+        bdry_m_face_ids = _get_bdry_face_ids(mesh, btag_m)
+        bdry_n_face_ids = _get_bdry_face_ids(mesh, btag_n)
+
+        from pytools import single_valued
+        nfaces = single_valued((
+            len(bdry_m_face_ids.groups),
+            len(bdry_m_face_ids.elements),
+            len(bdry_m_face_ids.faces),
+            len(bdry_n_face_ids.groups),
+            len(bdry_n_face_ids.elements),
+            len(bdry_n_face_ids.faces)))
+
+        bdry_m_face_vertex_indices = _get_face_vertex_indices(mesh, bdry_m_face_ids)
+        bdry_n_face_vertex_indices = _get_face_vertex_indices(mesh, bdry_n_face_ids)
+
+        bdry_m_vertex_indices = np.unique(bdry_m_face_vertex_indices)
+        bdry_m_vertex_indices = bdry_m_vertex_indices[bdry_m_vertex_indices >= 0]
+        bdry_n_vertex_indices = np.unique(bdry_n_face_vertex_indices)
+        bdry_n_vertex_indices = bdry_n_vertex_indices[bdry_n_vertex_indices >= 0]
+
+        nvertices = single_valued((
+            len(bdry_m_vertex_indices),
+            len(bdry_n_vertex_indices)))
+
+        bdry_m_vertices = mesh.vertices[:, bdry_m_vertex_indices]
+        bdry_n_vertices = mesh.vertices[:, bdry_n_vertex_indices]
+
+        # FIXME: This approach is probably slow; see if there's a way to do
+        # something like this using numpy constructs
+        bdry_n_bbox = (
+            np.min(bdry_n_vertices, axis=1),
+            np.max(bdry_n_vertices, axis=1))
+        from pytools.spatial_btree import SpatialBinaryTreeBucket
+        tree = SpatialBinaryTreeBucket(bdry_n_bbox[0], bdry_n_bbox[1])
+        bdry_n_vertex_bboxes = np.stack((
+            bdry_n_vertices - tol,
+            bdry_n_vertices + tol))
+        for ivertex in range(nvertices):
+            tree.insert(ivertex, bdry_n_vertex_bboxes[:, :, ivertex])
+
+        mat, vec = aff_transform
+        mapped_bdry_m_vertices = mat @ bdry_m_vertices + vec.reshape(-1, 1)
+
+        equivalent_vertices = np.empty((2, nvertices), dtype=mesh.element_id_dtype)
+        for ivertex in range(nvertices):
+            bdry_m_index = bdry_m_vertex_indices[ivertex]
+            mapped_bdry_m_vertex = mapped_bdry_m_vertices[:, ivertex]
+            matches = np.array(list(tree.generate_matches(mapped_bdry_m_vertex)))
+            match_bboxes = bdry_n_vertex_bboxes[:, :, matches]
+            in_bbox = np.all(
+                (mapped_bdry_m_vertex[:, np.newaxis] >= match_bboxes[0, :, :])
+                & (mapped_bdry_m_vertex[:, np.newaxis] <= match_bboxes[1, :, :]),
+                axis=0)
+            candidate_indices = matches[in_bbox]
+            if len(candidate_indices) == 0:
+                raise RuntimeError("failed to find a matching vertex for vertex "
+                    f"{bdry_m_index} at {mapped_bdry_m_vertex}")
+            displacement = (
+                mapped_bdry_m_vertex.reshape(-1, 1)
+                - bdry_n_vertices[:, candidate_indices])
+            distance_sq = np.sum(displacement**2, axis=0)
+            bdry_n_index = bdry_n_vertex_indices[
+                candidate_indices[np.argmin(distance_sq)]]
+            equivalent_vertices[:, ivertex] = [bdry_m_index, bdry_n_index]
+
+        from meshmode.mesh import _concatenate_face_ids
+        face_ids = _concatenate_face_ids([bdry_m_face_ids, bdry_n_face_ids])
+
+        max_vertex_index = max([np.max(grp.vertex_indices) for grp in mesh.groups])
+        vertex_index_map, = np.indices((max_vertex_index+1,),
+            dtype=mesh.element_id_dtype)
+        vertex_index_map[equivalent_vertices[0, :]] = equivalent_vertices[1, :]
+
+        from meshmode.mesh import _match_faces_by_vertices
+        face_index_pairs = _match_faces_by_vertices(mesh.groups, face_ids,
+            vertex_index_map_func=lambda vs: vertex_index_map[vs])
+
+        assert face_index_pairs.shape[1] == nfaces
+
+        from meshmode.mesh import _FaceIDs
+        order = np.argsort(face_index_pairs[0, :])
+        face_id_pairs_for_mapping.append((
+            _FaceIDs(
+                groups=face_ids.groups[face_index_pairs[0, order]],
+                elements=face_ids.elements[face_index_pairs[0, order]],
+                faces=face_ids.faces[face_index_pairs[0, order]]),
+            _FaceIDs(
+                groups=face_ids.groups[face_index_pairs[1, order]],
+                elements=face_ids.elements[face_index_pairs[1, order]],
+                faces=face_ids.faces[face_index_pairs[1, order]])))
+
+    return face_id_pairs_for_mapping
+
+
+def _translate_boundary_pair_adjacency_into_group_pair_adjacency(mesh,
+        glued_boundary_mappings, face_id_pairs_for_mapping):
+    face_id_pairs_for_group_pair = []
+    mapping_indices_for_group_pair = []
+
+    for igrp, grp in enumerate(mesh.groups):
+        face_id_pairs_grp_map = {}
+        mapping_indices_grp_map = {}
+
+        connected_groups = np.unique(np.concatenate([
+            face_id_pairs[1].groups[face_id_pairs[0].groups == igrp]
+            for face_id_pairs in face_id_pairs_for_mapping]))
+
+        for ineighbor_grp in connected_groups:
+            adj_data_for_mapping = []
+            face_has_neighbor = np.full((grp.nfaces, grp.nelements), False)
+
+            for imap in range(len(glued_boundary_mappings)):
+                mapping_face_id_pairs = face_id_pairs_for_mapping[imap]
+                is_grp_pair = (
+                    (mapping_face_id_pairs[0].groups == igrp)
+                    & (mapping_face_id_pairs[1].groups == ineighbor_grp))
+                elements = mapping_face_id_pairs[0].elements[is_grp_pair]
+                element_faces = mapping_face_id_pairs[0].faces[is_grp_pair]
+                neighbors = mapping_face_id_pairs[1].elements[is_grp_pair]
+                neighbor_faces = mapping_face_id_pairs[1].faces[is_grp_pair]
+                adj_data_for_mapping.append(
+                    (elements, element_faces, neighbors, neighbor_faces))
+                face_has_neighbor[element_faces, elements] = True
+
+            translated_indices = _compute_face_indices_from_mask(face_has_neighbor)
+            nfaces = np.max(translated_indices) + 1
+
+            from meshmode.mesh import _FaceIDs
+            face_id_pairs = (
+                _FaceIDs(
+                    groups=np.zeros(nfaces, dtype=int) + igrp,
+                    elements=np.empty(nfaces, dtype=mesh.element_id_dtype),
+                    faces=np.empty(nfaces, dtype=mesh.face_id_dtype)),
+                _FaceIDs(
+                    groups=np.zeros(nfaces, dtype=int) + ineighbor_grp,
+                    elements=np.empty(nfaces, dtype=mesh.element_id_dtype),
+                    faces=np.empty(nfaces, dtype=mesh.face_id_dtype)))
+
+            mapping_indices = np.empty(nfaces, dtype=int)
+
+            for imap, (elements, element_faces, neighbors, neighbor_faces) in (
+                    enumerate(adj_data_for_mapping)):
+                indices = translated_indices[element_faces, elements]
+                face_id_pairs[0].elements[indices] = elements
+                face_id_pairs[0].faces[indices] = element_faces
+                face_id_pairs[1].elements[indices] = neighbors
+                face_id_pairs[1].faces[indices] = neighbor_faces
+                mapping_indices[indices] = imap
+
+            face_id_pairs_grp_map[ineighbor_grp] = face_id_pairs
+            mapping_indices_grp_map[ineighbor_grp] = mapping_indices
+
+        face_id_pairs_for_group_pair.append(face_id_pairs_grp_map)
+        mapping_indices_for_group_pair.append(mapping_indices_grp_map)
+
+    return face_id_pairs_for_group_pair, mapping_indices_for_group_pair
+
+
+def _construct_glued_mesh(mesh, glued_boundary_mappings,
+        face_id_pairs_for_group_pair, mapping_indices_for_group_pair):
+    glued_btags = (
+        set(btag_m for btag_m, _, _ in glued_boundary_mappings)
+        | set(btag_n for _, btag_n, _ in glued_boundary_mappings))
+
+    boundary_tags = [
+        btag for btag in mesh.boundary_tags
+        if btag not in glued_btags]
+
+    btag_to_index = {btag: i for i, btag in enumerate(boundary_tags)}
+
+    def boundary_tag_bit(btag):
+        from meshmode.mesh import _boundary_tag_bit
+        return _boundary_tag_bit(boundary_tags, btag_to_index, btag)
+
+    mats_for_mapping = np.stack(
+        mat for _, _, (mat, _) in glued_boundary_mappings)
+    vecs_for_mapping = np.stack(
+        vec for _, _, (_, vec) in glued_boundary_mappings)
+
+    from meshmode.mesh import FacialAdjacencyGroup
+
+    facial_adjacency_groups = []
+
+    for igrp, grp in enumerate(mesh.groups):
+        fagrp_map = {}
+
+        old_fagrp_map = mesh.facial_adjacency_groups[igrp]
+        face_id_pairs_grp_map = face_id_pairs_for_group_pair[igrp]
+        mapping_indices_grp_map = mapping_indices_for_group_pair[igrp]
+
+        connected_groups = (
+            set(
+                ineighbor_grp for ineighbor_grp in old_fagrp_map.keys()
+                if ineighbor_grp is not None)
+            | set(ineighbor_grp for ineighbor_grp in face_id_pairs_grp_map.keys()))
+
+        for ineighbor_grp in connected_groups:
+            face_has_neighbor = np.full((grp.nfaces, grp.nelements), False)
+            old_adj = old_fagrp_map.get(ineighbor_grp)
+            if old_adj is not None:
+                face_has_neighbor[old_adj.element_faces, old_adj.elements] = True
+            grp_pair_face_ids = face_id_pairs_grp_map.get(ineighbor_grp)
+            if grp_pair_face_ids is not None:
+                face_ids = grp_pair_face_ids[0]
+                face_has_neighbor[face_ids.faces, face_ids.elements] = True
+
+            merged_indices = _compute_face_indices_from_mask(face_has_neighbor)
+            nfaces = np.max(merged_indices) + 1
+
+            elements = np.empty(nfaces, dtype=mesh.element_id_dtype)
+            element_faces = np.empty(nfaces, dtype=mesh.face_id_dtype)
+            neighbors = np.empty(nfaces, dtype=mesh.element_id_dtype)
+            neighbor_faces = np.empty(nfaces, dtype=mesh.face_id_dtype)
+            mats = np.empty((nfaces, mesh.ambient_dim, mesh.ambient_dim),
+                dtype=np.float64)
+            vecs = np.empty((nfaces, mesh.ambient_dim), dtype=np.float64)
+
+            if old_adj is not None:
+                indices = merged_indices[old_adj.element_faces, old_adj.elements]
+                elements[indices] = old_adj.elements
+                element_faces[indices] = old_adj.element_faces
+                neighbors[indices] = old_adj.neighbors
+                neighbor_faces[indices] = old_adj.neighbor_faces
+                mats[indices, :, :] = old_adj.aff_transform_mats
+                vecs[indices, :] = old_adj.aff_transform_vecs
+
+            if grp_pair_face_ids is not None:
+                face_ids = grp_pair_face_ids[0]
+                neighbor_face_ids = grp_pair_face_ids[1]
+                indices = merged_indices[face_ids.faces, face_ids.elements]
+                elements[indices] = face_ids.elements
+                element_faces[indices] = face_ids.faces
+                neighbors[indices] = neighbor_face_ids.elements
+                neighbor_faces[indices] = neighbor_face_ids.faces
+                mapping_indices = mapping_indices_grp_map[ineighbor_grp]
+                mats[indices, :, :] = mats_for_mapping[mapping_indices, :, :]
+                vecs[indices, :] = vecs_for_mapping[mapping_indices, :]
+
+            fagrp_map[ineighbor_grp] = FacialAdjacencyGroup(
+                igroup=igrp,
+                ineighbor_group=ineighbor_grp,
+                elements=elements,
+                element_faces=element_faces,
+                neighbors=neighbors,
+                neighbor_faces=neighbor_faces,
+                aff_transform_mats=mats,
+                aff_transform_vecs=vecs)
+
+        is_bdry = np.full((grp.nfaces, grp.nelements), True)
+        for ineighbor_grp in connected_groups:
+            adj = fagrp_map.get(ineighbor_grp)
+            is_bdry[adj.element_faces, adj.elements] = False
+
+        if np.any(is_bdry):
+            old_bdry_grp = old_fagrp_map[None]
+            indices, = np.where(is_bdry[
+                old_bdry_grp.element_faces,
+                old_bdry_grp.elements])
+
+            old_flags = -old_bdry_grp.neighbors[indices]
+            flags = old_flags.copy()
+            for btag in mesh.boundary_tags:
+                old_btag_bit = mesh.boundary_tag_bit(btag)
+                flags &= ~old_btag_bit
+            for btag in boundary_tags:
+                old_btag_bit = mesh.boundary_tag_bit(btag)
+                btag_bit = boundary_tag_bit(btag)
+                flags[(old_flags & old_btag_bit) != 0] |= btag_bit
+
+            fagrp_map[None] = FacialAdjacencyGroup(
+                igroup=igrp,
+                ineighbor_group=None,
+                elements=old_bdry_grp.elements[indices],
+                element_faces=old_bdry_grp.element_faces[indices],
+                neighbors=-flags,
+                neighbor_faces=old_bdry_grp.neighbor_faces[indices],
+                aff_transform_mats=old_bdry_grp.aff_transform_mats[indices, :, :],
+                aff_transform_vecs=old_bdry_grp.aff_transform_vecs[indices, :])
+
+        facial_adjacency_groups.append(fagrp_map)
+
+    return mesh.copy(
+        boundary_tags=boundary_tags,
+        facial_adjacency_groups=facial_adjacency_groups)
+
+
+def glue_mesh_boundaries(mesh, glued_boundary_mappings, tol=1e-12):
+    """
+    Create a new mesh from *mesh* in which one or more pairs of boundaries are
+    "glued" together such that the boundary surfaces become part of the interior
+    of the mesh. This can be used to construct, e.g., periodic boundaries.
+
+    Corresponding boundaries' vertices must map into each other via an affine
+    transformation (though the vertex ordering need not be the same).
+
+    :arg glued_boundary_mappings: a :class:`list` of tuples
+        (btag_m, btag_n, aff_transform) which each specify a mapping between two
+        boundaries in *mesh* that should be glued together. aff_transform is a tuple
+        (mat, vec) that represents the affine mapping from the vertices of boundary
+        btag_m into the vertices of boundary btag_n.
+    :arg tol: tolerance allowed between the vertex coordinates of one boundary and
+        the transformed vertex coordinates of another boundary when attempting to
+        match the two.
+    """
+    mapped_btags = set(
+        (btag_m, btag_n)
+        for btag_m, btag_n, _ in glued_boundary_mappings)
+
+    glued_boundary_mappings_both_ways = []
+
+    for btag_m, btag_n, aff_transform in glued_boundary_mappings:
+        aff_transform_np = np.array(aff_transform[0]), np.array(aff_transform[1])
+        glued_boundary_mappings_both_ways.append(
+            (btag_m, btag_n, aff_transform_np))
+        if (btag_n, btag_m) not in mapped_btags:
+            transform_mat, transform_vec = aff_transform_np
+            inv_transform_mat = la.inv(transform_mat)
+            inv_transform_vec = -inv_transform_mat @ transform_vec
+            glued_boundary_mappings_both_ways.append(
+                (btag_n, btag_m, (inv_transform_mat, inv_transform_vec)))
+
+    face_id_pairs_for_mapping = _match_boundary_faces(mesh,
+        glued_boundary_mappings_both_ways, tol)
+
+    face_id_pairs_for_group_pair, mapping_indices_for_group_pair = (
+        _translate_boundary_pair_adjacency_into_group_pair_adjacency(
+            mesh, glued_boundary_mappings_both_ways, face_id_pairs_for_mapping))
+
+    glued_mesh = _construct_glued_mesh(mesh, glued_boundary_mappings_both_ways,
+        face_id_pairs_for_group_pair, mapping_indices_for_group_pair)
+
+    return glued_mesh
 
 # }}}
 
