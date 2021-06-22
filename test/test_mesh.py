@@ -200,6 +200,109 @@ def test_partial_affine_map(dim=2):
     assert la.norm(orig_mesh.vertices - mesh.vertices / np.pi) < 1.0e-14
 
 
+def test_affine_map_with_facial_adjacency_transforms(visualize=False):
+    orig_mesh = mgen.generate_periodic_annular_cylinder_slice_mesh(
+        4, (1, 2, 0), 0.5, 1)
+
+    if visualize:
+        from meshmode.mesh.visualization import write_vertex_vtk_file
+        write_vertex_vtk_file(orig_mesh, "affine_map_facial_adj_original.vtu")
+
+    def get_rotation(amount, axis, center=None):
+        from meshmode.mesh.processing import _get_rotation_matrix_from_angle_and_axis
+        mat = _get_rotation_matrix_from_angle_and_axis(amount, axis)
+        if center is None:
+            return mat
+        else:
+            # x0 + R @ (x - x0) = R @ x + (I - R) @ x0
+            vec = (np.eye(orig_mesh.ambient_dim) - mat) @ center
+            return mat, vec
+
+    mat_lower_to_upper = get_rotation(np.pi/2, np.array([0, 0, 1]))
+    mat_upper_to_lower = get_rotation(-np.pi/2, np.array([0, 0, 1]))
+
+    def find_matching_matrices(mats, query_mat, tol):
+        diff = np.abs(mats - query_mat[np.newaxis, :, :])
+        return np.where(np.einsum("fij->f", diff) < tol)[0]
+
+    tol = 1e-12
+
+    orig_adj = orig_mesh.facial_adjacency_groups[0][0]
+
+    periodic_lower_face_indices = find_matching_matrices(
+        orig_adj.aff_transform_mats, mat_lower_to_upper, tol)
+    periodic_upper_face_indices = find_matching_matrices(
+        orig_adj.aff_transform_mats, mat_upper_to_lower, tol)
+    nonperiodic_face_indices = find_matching_matrices(
+        orig_adj.aff_transform_mats, np.eye(orig_mesh.ambient_dim), tol)
+
+    assert len(periodic_lower_face_indices) > 0
+    assert len(periodic_upper_face_indices) > 0
+    assert len(nonperiodic_face_indices) > 0
+
+    from meshmode.mesh.processing import affine_map
+
+    def check_adj_aff_transforms(adj, *,
+            lower_to_upper_transform,
+            upper_to_lower_transform,
+            max_err=1e-12):
+        assert la.norm(
+            adj.aff_transform_mats[periodic_lower_face_indices, :, :]
+            - lower_to_upper_transform[0]) < max_err
+        assert la.norm(
+            adj.aff_transform_vecs[periodic_lower_face_indices, :]
+            - lower_to_upper_transform[1]) < max_err
+
+        assert la.norm(
+            adj.aff_transform_mats[periodic_upper_face_indices, :, :]
+            - upper_to_lower_transform[0]) < max_err
+        assert la.norm(
+            adj.aff_transform_vecs[periodic_upper_face_indices, :]
+            - upper_to_lower_transform[1]) < max_err
+
+        assert la.norm(
+            adj.aff_transform_mats[nonperiodic_face_indices, :, :]
+            - np.eye(orig_mesh.ambient_dim)) < max_err
+        assert la.norm(adj.aff_transform_vecs[nonperiodic_face_indices, :]) < max_err
+
+    # Matrix only
+    mesh = affine_map(orig_mesh, A=get_rotation(np.pi/2, np.array([0, 0, 1])))
+
+    if visualize:
+        write_vertex_vtk_file(mesh, "affine_map_facial_adj_matrix.vtu")
+
+    check_adj_aff_transforms(mesh.facial_adjacency_groups[0][0],
+        lower_to_upper_transform=get_rotation(
+            np.pi/2, np.array([0, 0, 1]), np.array([-2, 1, 0])),
+        upper_to_lower_transform=get_rotation(
+            -np.pi/2, np.array([0, 0, 1]), np.array([-2, 1, 0])))
+
+    # Vector only
+    mesh = affine_map(orig_mesh, b=np.array([0, -2, 0]))
+
+    if visualize:
+        write_vertex_vtk_file(mesh, "affine_map_facial_adj_vector.vtu")
+
+    check_adj_aff_transforms(mesh.facial_adjacency_groups[0][0],
+        lower_to_upper_transform=get_rotation(
+            np.pi/2, np.array([0, 0, 1]), np.array([1, 0, 0])),
+        upper_to_lower_transform=get_rotation(
+            -np.pi/2, np.array([0, 0, 1]), np.array([1, 0, 0])))
+
+    # Matrix and vector
+    transform = get_rotation(np.pi/2, np.array([0, 0, 1]), np.array([1, 1, 0]))
+    mesh = affine_map(orig_mesh, A=transform[0], b=transform[1])
+
+    if visualize:
+        write_vertex_vtk_file(mesh, "affine_map_facial_adj_matrix_and_vector.vtu")
+
+    check_adj_aff_transforms(mesh.facial_adjacency_groups[0][0],
+        lower_to_upper_transform=get_rotation(
+            np.pi/2, np.array([0, 0, 1]), np.array([0, 1, 0])),
+        upper_to_lower_transform=get_rotation(
+            -np.pi/2, np.array([0, 0, 1]), np.array([0, 1, 0])))
+
+
 @pytest.mark.parametrize("ambient_dim", [2, 3])
 def test_mesh_rotation(ambient_dim, visualize=False):
     order = 3
@@ -758,6 +861,158 @@ def test_quad_mesh_3d(mesh_name, order=3, visualize=False):
     if visualize:
         from meshmode.mesh.visualization import write_vertex_vtk_file
         write_vertex_vtk_file(mesh, f"quad_mesh_3d_{mesh_name}.vtu", overwrite=True)
+
+# }}}
+
+
+# {{{ mesh boundary gluing
+
+def _get_rotation(amount, axis, center=None):
+    from meshmode.mesh.processing import _get_rotation_matrix_from_angle_and_axis
+    mat = _get_rotation_matrix_from_angle_and_axis(amount, axis)
+    if center is None:
+        return mat
+    else:
+        # x0 + R @ (x - x0) = R @ x + (I - R) @ x0
+        vec = (np.eye(3) - mat) @ center
+        return mat, vec
+
+
+def test_glued_mesh():
+    n = 4
+    center = (1, 2, 3)
+
+    orig_mesh = mgen.generate_annular_cylinder_slice_mesh(n, center, 0.5, 1)
+
+    transform_lower_to_upper = _get_rotation(np.pi/2, np.array([0, 0, 1]), center)
+    transform_upper_to_lower = _get_rotation(-np.pi/2, np.array([0, 0, 1]), center)
+
+    from meshmode.mesh.processing import glue_mesh_boundaries
+    mesh = glue_mesh_boundaries(orig_mesh,
+        glued_boundary_mappings=[
+            ("-theta", "+theta", transform_lower_to_upper, 1e-12)
+        ])
+
+    assert "-theta" not in mesh.boundary_tags
+    assert "+theta" not in mesh.boundary_tags
+
+    def find_matching_transforms(mats, vecs, query_transform, tol):
+        mat_diff = np.abs(mats - query_transform[0][np.newaxis, :, :])
+        vec_diff = np.abs(vecs - query_transform[1][np.newaxis, :])
+        return np.where(
+            (np.einsum("fij->f", mat_diff) < tol)
+            & (np.einsum("fi->f", vec_diff) < tol))[0]
+
+    tol = 1e-12
+
+    orig_adj = orig_mesh.facial_adjacency_groups[0][0]
+    adj = mesh.facial_adjacency_groups[0][0]
+    bdry = mesh.facial_adjacency_groups[0][None]
+
+    assert adj.aff_transform_mats is not None
+    assert adj.aff_transform_vecs is not None
+
+    periodic_lower_face_indices = find_matching_transforms(
+        adj.aff_transform_mats, adj.aff_transform_vecs, transform_lower_to_upper,
+        tol)
+    periodic_upper_face_indices = find_matching_transforms(
+        adj.aff_transform_mats, adj.aff_transform_vecs, transform_upper_to_lower,
+        tol)
+    nonperiodic_face_indices = find_matching_transforms(
+        adj.aff_transform_mats, adj.aff_transform_vecs,
+        (np.eye(orig_mesh.ambient_dim), np.array([0, 0, 0])), tol)
+
+    assert len(periodic_lower_face_indices) == 2*n**2
+    assert len(periodic_upper_face_indices) == 2*n**2
+    assert len(nonperiodic_face_indices) == len(orig_adj.elements)
+    assert len(bdry.elements) == 8*n**2
+
+    occurrence_counts = np.zeros(
+        (mesh.groups[0].nfaces, mesh.nelements), dtype=int)
+
+    # Check that every face present in the facial adjacency has a match
+    occurrence_counts[adj.element_faces, adj.elements] += 1
+    occurrence_counts[adj.neighbor_faces, adj.neighbors] += 1
+    assert np.count_nonzero(occurrence_counts == 2) == len(adj.elements)
+
+    # Check that boundary faces and interior faces are disjoint
+    occurrence_counts[bdry.element_faces, bdry.elements] += 1
+    assert np.count_nonzero(occurrence_counts == 1) == len(bdry.elements)
+
+
+def test_partial_glued_mesh():
+    n = 4
+    orig_mesh = mgen.generate_annular_cylinder_slice_mesh(n, (0, 0, 0), 0.5, 1)
+
+    # Matrix only
+    mat_lower_to_upper = _get_rotation(np.pi/2, np.array([0, 0, 1]))
+    mat_upper_to_lower = _get_rotation(-np.pi/2, np.array([0, 0, 1]))
+
+    from meshmode.mesh.processing import glue_mesh_boundaries
+    mesh = glue_mesh_boundaries(orig_mesh,
+        glued_boundary_mappings=[
+            ("-theta", "+theta", (mat_lower_to_upper, None), 1e-12)
+        ])
+
+    orig_adj = orig_mesh.facial_adjacency_groups[0][0]
+    adj = mesh.facial_adjacency_groups[0][0]
+    bdry = mesh.facial_adjacency_groups[0][None]
+
+    assert adj.aff_transform_mats is not None
+    assert adj.aff_transform_vecs is None
+
+    def find_matching_matrices(mats, query_mat, tol):
+        diff = np.abs(mats - query_mat[np.newaxis, :, :])
+        return np.where(np.einsum("fij->f", diff) < tol)[0]
+
+    tol = 1e-12
+
+    periodic_lower_face_indices = find_matching_matrices(
+        adj.aff_transform_mats, mat_lower_to_upper, tol)
+    periodic_upper_face_indices = find_matching_matrices(
+        adj.aff_transform_mats, mat_upper_to_lower, tol)
+    nonperiodic_face_indices = find_matching_matrices(
+        adj.aff_transform_mats, np.eye(orig_mesh.ambient_dim), tol)
+
+    assert len(periodic_lower_face_indices) == 2*n**2
+    assert len(periodic_upper_face_indices) == 2*n**2
+    assert len(nonperiodic_face_indices) == len(orig_adj.elements)
+    assert len(bdry.elements) == 8*n**2
+
+    # Vector only
+    vec_lower_to_upper = np.array([0, 0, 1])
+    vec_upper_to_lower = np.array([0, 0, -1])
+
+    from meshmode.mesh.processing import glue_mesh_boundaries
+    mesh = glue_mesh_boundaries(orig_mesh,
+        glued_boundary_mappings=[
+            ("-z", "+z", (None, vec_lower_to_upper), 1e-12)
+        ])
+
+    orig_adj = orig_mesh.facial_adjacency_groups[0][0]
+    adj = mesh.facial_adjacency_groups[0][0]
+    bdry = mesh.facial_adjacency_groups[0][None]
+
+    assert adj.aff_transform_mats is None
+    assert adj.aff_transform_vecs is not None
+
+    def find_matching_vectors(vecs, query_vec, tol):
+        diff = np.abs(vecs - query_vec[np.newaxis, :])
+        return np.where(np.einsum("fi->f", diff) < tol)[0]
+
+    tol = 1e-12
+
+    periodic_lower_face_indices = find_matching_vectors(
+        adj.aff_transform_vecs, vec_lower_to_upper, tol)
+    periodic_upper_face_indices = find_matching_vectors(
+        adj.aff_transform_vecs, vec_upper_to_lower, tol)
+    nonperiodic_face_indices = find_matching_vectors(
+        adj.aff_transform_vecs, np.array([0, 0, 0]), tol)
+
+    assert len(periodic_lower_face_indices) == 2*n**2
+    assert len(periodic_upper_face_indices) == 2*n**2
+    assert len(nonperiodic_face_indices) == len(orig_adj.elements)
+    assert len(bdry.elements) == 8*n**2
 
 # }}}
 

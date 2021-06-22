@@ -334,13 +334,14 @@ def test_all_faces_interpolation(actx_factory, group_factory,
     ("segment", 1, [8, 16, 32]),
     ("blob", 2, [1e-1, 8e-2, 5e-2]),
     ("warp", 2, [3, 5, 7]),
-    ("warp", 3, [5, 7])
+    ("warp", 3, [5, 7]),
+    ("periodic", 3, [5, 7])
     ])
 def test_opposite_face_interpolation(actx_factory, group_factory,
         mesh_name, dim, mesh_pars):
     if (group_factory is LegendreGaussLobattoTensorProductGroupFactory
-            and mesh_name in ["segment", "blob"]):
-        pytest.skip("tensor products not implemented on blobs")
+            and mesh_name in ["segment", "blob", "periodic"]):
+        pytest.skip(f"tensor products not implemented on {mesh_name}")
 
     logging.basicConfig(level=logging.INFO)
     actx = actx_factory()
@@ -394,6 +395,13 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
         elif mesh_name == "warp":
             mesh = mgen.generate_warped_rect_mesh(dim, order=order,
                     nelements_side=mesh_par, group_cls=group_cls)
+
+            h = 1/mesh_par
+        elif mesh_name == "periodic":
+            assert dim == 3
+
+            mesh = mgen.generate_periodic_annular_cylinder_slice_mesh(
+                mesh_par, (1, 2, 3), 0.5, 1)
 
             h = 1/mesh_par
         else:
