@@ -45,6 +45,7 @@ __doc__ = """
 .. autofunction:: find_bounding_box
 .. autofunction:: merge_disjoint_meshes
 .. autofunction:: split_mesh_groups
+.. autofunction:: glue_mesh_boundaries
 
 .. autofunction:: map_mesh
 .. autofunction:: affine_map
@@ -887,6 +888,249 @@ def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
         return mesh, subgroup_to_group_map
     else:
         return mesh
+
+# }}}
+
+
+# {{{ vertex matching
+
+# FIXME: This tree-based approach is probably slow; see if there's a way to do
+# something like this using numpy constructs
+def _match_vertices(
+        mesh, src_vertex_indices, tgt_vertex_indices, aff_map=None, tol=1e-12):
+    from meshmode.mesh.tools import AffineMap
+    if aff_map is None:
+        aff_map = AffineMap()
+
+    src_vertices = mesh.vertices[:, src_vertex_indices]
+    tgt_vertices = mesh.vertices[:, tgt_vertex_indices]
+
+    tgt_vertex_bboxes = np.stack((
+        tgt_vertices - tol,
+        tgt_vertices + tol))
+
+    from pytools.spatial_btree import SpatialBinaryTreeBucket
+    tree = SpatialBinaryTreeBucket(
+        np.min(tgt_vertex_bboxes[0], axis=1),
+        np.max(tgt_vertex_bboxes[1], axis=1))
+    for ivertex in range(len(tgt_vertex_indices)):
+        tree.insert(ivertex, tgt_vertex_bboxes[:, :, ivertex])
+
+    mapped_src_vertices = aff_map(src_vertices)
+
+    matched_tgt_vertices = np.full(len(src_vertex_indices), -1)
+    for ivertex in range(len(src_vertex_indices)):
+        mapped_src_vertex = mapped_src_vertices[:, ivertex]
+        matches = np.array(list(tree.generate_matches(mapped_src_vertex)))
+        match_bboxes = tgt_vertex_bboxes[:, :, matches]
+        in_bbox = np.all(
+            (mapped_src_vertex[:, np.newaxis] >= match_bboxes[0, :, :])
+            & (mapped_src_vertex[:, np.newaxis] <= match_bboxes[1, :, :]),
+            axis=0)
+        candidate_indices = matches[in_bbox]
+        if len(candidate_indices) == 0:
+            continue
+        displacement = (
+            mapped_src_vertex.reshape(-1, 1)
+            - tgt_vertices[:, candidate_indices])
+        distance_sq = np.sum(displacement**2, axis=0)
+        matched_tgt_vertices[ivertex] = (
+            tgt_vertex_indices[candidate_indices[np.argmin(distance_sq)]])
+
+    return matched_tgt_vertices
+
+# }}}
+
+
+# {{{ boundary face matching
+
+def _get_boundary_face_ids(mesh, btag):
+    from meshmode.mesh import _FaceIDs
+    face_ids_per_boundary_group = []
+    for igrp, fagrp_list in enumerate(mesh.facial_adjacency_groups):
+        matching_bdry_grps = [
+            fagrp for fagrp in fagrp_list
+            if isinstance(fagrp, BoundaryAdjacencyGroup)
+            and fagrp.boundary_tag == btag]
+        for bdry_grp in matching_bdry_grps:
+            face_ids = _FaceIDs(
+                groups=np.full(len(bdry_grp.elements), igrp),
+                elements=bdry_grp.elements,
+                faces=bdry_grp.element_faces)
+            face_ids_per_boundary_group.append(face_ids)
+
+    from meshmode.mesh import _concatenate_face_ids
+    return _concatenate_face_ids(face_ids_per_boundary_group)
+
+
+def _get_face_vertex_indices(mesh, face_ids):
+    max_face_vertices = max(
+        len(ref_fvi)
+        for grp in mesh.groups
+        for ref_fvi in grp.face_vertex_indices())
+
+    face_vertex_indices_per_group = []
+    for igrp, grp in enumerate(mesh.groups):
+        belongs_to_group = face_ids.groups == igrp
+        faces = face_ids.faces[belongs_to_group]
+        elements = face_ids.elements[belongs_to_group]
+        face_vertex_indices = np.full(
+            (len(faces), max_face_vertices), -1,
+            dtype=mesh.vertex_id_dtype)
+        for fid, ref_fvi in enumerate(grp.face_vertex_indices()):
+            is_face = faces == fid
+            face_vertex_indices[is_face, :len(ref_fvi)] = (
+                grp.vertex_indices[elements[is_face], :][:, ref_fvi])
+        face_vertex_indices_per_group.append(face_vertex_indices)
+
+    return np.stack(face_vertex_indices_per_group)
+
+
+def _match_boundary_faces(mesh, btag_m, btag_n, aff_map, tol):
+    bdry_m_face_ids = _get_boundary_face_ids(mesh, btag_m)
+    bdry_n_face_ids = _get_boundary_face_ids(mesh, btag_n)
+
+    from pytools import single_valued
+    nfaces = single_valued((
+        len(bdry_m_face_ids.groups),
+        len(bdry_m_face_ids.elements),
+        len(bdry_m_face_ids.faces),
+        len(bdry_n_face_ids.groups),
+        len(bdry_n_face_ids.elements),
+        len(bdry_n_face_ids.faces)))
+
+    bdry_m_face_vertex_indices = _get_face_vertex_indices(mesh, bdry_m_face_ids)
+    bdry_n_face_vertex_indices = _get_face_vertex_indices(mesh, bdry_n_face_ids)
+
+    bdry_m_vertex_indices = np.unique(bdry_m_face_vertex_indices)
+    bdry_m_vertex_indices = bdry_m_vertex_indices[bdry_m_vertex_indices >= 0]
+    bdry_n_vertex_indices = np.unique(bdry_n_face_vertex_indices)
+    bdry_n_vertex_indices = bdry_n_vertex_indices[bdry_n_vertex_indices >= 0]
+
+    matched_bdry_n_vertex_indices = _match_vertices(
+        mesh, bdry_m_vertex_indices, bdry_n_vertex_indices,
+        aff_map=aff_map, tol=tol)
+
+    unmatched_bdry_m_vertex_indices = bdry_m_vertex_indices[
+        np.where(matched_bdry_n_vertex_indices < 0)[0]]
+    if len(unmatched_bdry_m_vertex_indices) > 0:
+        # TODO: What's the best way to log these?
+        # for vertex_index in unmatched_bdry_m_vertex_indices:
+        #     ...
+        raise RuntimeError("unable to match vertices between boundaries"
+            f" {btag_m} and {btag_n}")
+
+    from meshmode.mesh import _concatenate_face_ids
+    face_ids = _concatenate_face_ids([bdry_m_face_ids, bdry_n_face_ids])
+
+    max_vertex_index = max([np.max(grp.vertex_indices) for grp in mesh.groups])
+    vertex_index_map, = np.indices((max_vertex_index+1,),
+        dtype=mesh.element_id_dtype)
+    vertex_index_map[bdry_m_vertex_indices] = matched_bdry_n_vertex_indices
+
+    from meshmode.mesh import _match_faces_by_vertices
+    face_index_pairs = _match_faces_by_vertices(mesh.groups, face_ids,
+        vertex_index_map_func=lambda vs: vertex_index_map[vs])
+
+    assert face_index_pairs.shape[1] == nfaces
+
+    order = np.argsort(face_index_pairs[0, :])
+
+    from meshmode.mesh import _FaceIDs
+    return (
+        _FaceIDs(
+            groups=face_ids.groups[face_index_pairs[0, order]],
+            elements=face_ids.elements[face_index_pairs[0, order]],
+            faces=face_ids.faces[face_index_pairs[0, order]]),
+        _FaceIDs(
+            groups=face_ids.groups[face_index_pairs[1, order]],
+            elements=face_ids.elements[face_index_pairs[1, order]],
+            faces=face_ids.faces[face_index_pairs[1, order]]))
+
+# }}}
+
+
+# {{{ boundary gluing
+
+def _complete_glued_boundary_mappings(partial_glued_boundary_mappings):
+    partial_btag_pairs = set(
+        (btag_m, btag_n)
+        for btag_m, btag_n, _, _ in partial_glued_boundary_mappings)
+
+    glued_boundary_mappings = []
+    for btag_m, btag_n, aff_map, tol in partial_glued_boundary_mappings:
+        glued_boundary_mappings.append((btag_m, btag_n, aff_map, tol))
+        if (btag_n, btag_m) not in partial_btag_pairs:
+            inv_aff_map = aff_map.inverted()
+            glued_boundary_mappings.append((btag_n, btag_m, inv_aff_map, tol))
+
+    return glued_boundary_mappings
+
+
+def glue_mesh_boundaries(mesh, glued_boundary_mappings):
+    """
+    Create a new mesh from *mesh* in which one or more pairs of boundaries are
+    "glued" together such that the boundary surfaces become part of the interior
+    of the mesh. This can be used to construct, e.g., periodic boundaries.
+
+    Corresponding boundaries' vertices must map into each other via an affine
+    transformation (though the vertex ordering need not be the same).
+
+    :arg glued_boundary_mappings: a :class:`list` of tuples
+        *(btag_m, btag_n, aff_map, tol)* which each specify a mapping between two
+        boundaries in *mesh* that should be glued together. *aff_map* is a
+        :class:`~meshmode.mesh.tools.AffineMap` that represents the affine mapping
+        from the vertices of boundary *btag_m* into the vertices of boundary
+        *btag_n*. *tol* is the tolerance allowed between the vertex coordinates of
+        *btag_n* and the transformed vertex coordinates of *btag_m* when attempting
+        to match the two.
+    """
+    glued_boundary_mappings = _complete_glued_boundary_mappings(
+        glued_boundary_mappings)
+
+    glued_btags = (
+        set(btag_m for btag_m, _, _, _ in glued_boundary_mappings)
+        | set(btag_n for _, btag_n, _, _ in glued_boundary_mappings))
+
+    face_id_pairs_for_mapping = []
+    for btag_m, btag_n, aff_map, tol in glued_boundary_mappings:
+        face_id_pairs_for_mapping.append(_match_boundary_faces(mesh,
+            btag_m, btag_n, aff_map, tol))
+
+    from meshmode.mesh import InteriorAdjacencyGroup, BoundaryAdjacencyGroup
+
+    facial_adjacency_groups = []
+
+    for igrp, old_fagrp_list in enumerate(mesh.facial_adjacency_groups):
+        fagrp_list = [
+            fagrp for fagrp in old_fagrp_list
+            if not isinstance(fagrp, BoundaryAdjacencyGroup)
+            or fagrp.boundary_tag not in glued_btags]
+
+        for imap, (_, _, aff_map, _) in enumerate(glued_boundary_mappings):
+            mapping_face_id_pairs = face_id_pairs_for_mapping[imap]
+            belongs_to_group = mapping_face_id_pairs[0].groups == igrp
+            for ineighbor_grp in range(len(mesh.groups)):
+                indices, = np.where(
+                    belongs_to_group
+                    & (mapping_face_id_pairs[1].groups == ineighbor_grp))
+                if len(indices) > 0:
+                    elements = mapping_face_id_pairs[0].elements[indices]
+                    element_faces = mapping_face_id_pairs[0].faces[indices]
+                    neighbors = mapping_face_id_pairs[1].elements[indices]
+                    neighbor_faces = mapping_face_id_pairs[1].faces[indices]
+                    fagrp_list.append(InteriorAdjacencyGroup(
+                        igroup=igrp,
+                        ineighbor_group=ineighbor_grp,
+                        elements=elements,
+                        element_faces=element_faces,
+                        neighbors=neighbors,
+                        neighbor_faces=neighbor_faces,
+                        aff_map=aff_map))
+
+        facial_adjacency_groups.append(fagrp_list)
+
+    return mesh.copy(facial_adjacency_groups=facial_adjacency_groups)
 
 # }}}
 
