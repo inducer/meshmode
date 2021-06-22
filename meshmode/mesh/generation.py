@@ -70,6 +70,7 @@ Volumes
 .. autofunction:: generate_box_mesh
 .. autofunction:: generate_regular_rect_mesh
 .. autofunction:: generate_warped_rect_mesh
+.. autofunction:: generate_annular_cylinder_slice_mesh
 
 Tools for Iterative Refinement
 ------------------------------
@@ -1263,6 +1264,58 @@ def generate_warped_rect_mesh(dim, order, *, nelements_side=None,
 
     from meshmode.mesh.processing import map_mesh
     return map_mesh(mesh, m)
+
+# }}}
+
+
+# {{{ generate_annular_cylinder_slice_mesh
+
+def generate_annular_cylinder_slice_mesh(
+        n, center, inner_radius, outer_radius, periodic=False):
+    r"""
+    Generate a slice of a 3D annular cylinder for
+    :math:`\theta \in [-\frac{\pi}{4}, \frac{\pi}{4}]`. Optionally periodic in
+    $\theta$.
+    """
+    unit_mesh = generate_regular_rect_mesh(
+        a=(0,)*3,
+        b=(1,)*3,
+        nelements_per_axis=(n,)*3,
+        boundary_tag_to_face={
+            "-r": ["-x"],
+            "+r": ["+x"],
+            "-theta": ["-y"],
+            "+theta": ["+y"],
+            "-z": ["-z"],
+            "+z": ["+z"],
+            })
+
+    def transform(x):
+        r = inner_radius*(1 - x[0]) + outer_radius*x[0]
+        theta = -np.pi/4*(1 - x[1]) + np.pi/4*x[1]
+        z = -0.5*(1 - x[2]) + 0.5*x[2]
+        return (
+            center[0] + r*np.cos(theta),
+            center[1] + r*np.sin(theta),
+            center[2] + z)
+
+    from meshmode.mesh.processing import map_mesh
+    mesh = map_mesh(unit_mesh, lambda x: np.stack(transform(x)))
+
+    if periodic:
+        from meshmode.mesh.processing import _get_rotation_matrix_from_angle_and_axis
+        matrix = _get_rotation_matrix_from_angle_and_axis(
+            np.pi/2, np.array([0, 0, 1]))
+        from meshmode.mesh.tools import AffineMap
+        aff_map = AffineMap(matrix, center - matrix @ center)
+
+        from meshmode.mesh.processing import glue_mesh_boundaries
+        periodic_mesh = glue_mesh_boundaries(mesh,
+            glued_boundary_mappings=[("-theta", "+theta", aff_map, 1e-12)])
+
+        return periodic_mesh
+    else:
+        return mesh
 
 # }}}
 
