@@ -1,11 +1,10 @@
 Python 3 POCL:
   script: |
-    sed -i "s/loopy.git/loopy.git@$LOOPY_BRANCH/g" requirements.txt
     export PY_EXE=python3
     export PYOPENCL_TEST=portable:pthread
     # cython is here because pytential (for now, for TS) depends on it
     export EXTRA_INSTALL="pybind11 cython numpy mako mpi4py oct2py"
-    curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/build-and-test-py-project.sh
+    curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/build-and-test-py-project.sh
     . ./build-and-test-py-project.sh
   tags:
   - python3
@@ -16,19 +15,14 @@ Python 3 POCL:
   artifacts:
     reports:
       junit: test/pytest.xml
-  parallel:
-    matrix:
-      - LOOPY_BRANCH: main
-      - LOOPY_BRANCH: kernel_callables_v3-edit2
 
 Python 3 Nvidia Titan V:
   script: |
-    sed -i "s/loopy.git/loopy.git@$LOOPY_BRANCH/g" requirements.txt
     export PY_EXE=python3
     export PYOPENCL_TEST=nvi:titan
     export EXTRA_INSTALL="pybind11 cython numpy mako oct2py"
     # cython is here because pytential (for now, for TS) depends on it
-    curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/build-and-test-py-project.sh
+    curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/build-and-test-py-project.sh
     . ./build-and-test-py-project.sh
   tags:
   - python3
@@ -38,20 +32,15 @@ Python 3 Nvidia Titan V:
   artifacts:
     reports:
       junit: test/pytest.xml
-  parallel:
-    matrix:
-      - LOOPY_BRANCH: main
-      - LOOPY_BRANCH: kernel_callables_v3-edit2
 
 Python 3 POCL Examples:
   script:
-  - sed -i "s/loopy.git/loopy.git@$LOOPY_BRANCH/g" requirements.txt
   - test -n "$SKIP_EXAMPLES" && exit
   - export PY_EXE=python3
   - export PYOPENCL_TEST=portable:pthread
   # cython is here because pytential (for now, for TS) depends on it
   - export EXTRA_INSTALL="pybind11 cython numpy mako matplotlib"
-  - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/build-py-project-and-run-examples.sh
+  - curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/build-py-project-and-run-examples.sh
   - ". ./build-py-project-and-run-examples.sh"
   tags:
   - python3
@@ -59,10 +48,6 @@ Python 3 POCL Examples:
   - large-node
   except:
   - tags
-  parallel:
-    matrix:
-      - LOOPY_BRANCH: main
-      - LOOPY_BRANCH: kernel_callables_v3-edit2
 
 Python 3 POCL Firedrake:
   tags:
@@ -89,11 +74,8 @@ Python 3 POCL Firedrake Examples:
 
 Python 3 Conda:
   script: |
-    sed -i "s/loopy.git/loopy.git@$LOOPY_BRANCH/g" requirements.txt
-    CONDA_ENVIRONMENT=.test-conda-env-py3.yml
     export MPLBACKEND=Agg
-
-    curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/build-and-test-py-project-within-miniconda.sh
+    curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/build-and-test-py-project-within-miniconda.sh
     . ./build-and-test-py-project-within-miniconda.sh
   tags:
   # - docker-runner
@@ -101,22 +83,18 @@ Python 3 Conda:
   - large-node
   except:
   - tags
-  parallel:
-    matrix:
-      - LOOPY_BRANCH: main
-      - LOOPY_BRANCH: kernel_callables_v3-edit2
 
 Documentation:
   script:
   - EXTRA_INSTALL="pybind11 cython numpy"
-  - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/build-docs.sh
+  - curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/build-docs.sh
   - ". ./build-docs.sh"
   tags:
   - python3
 
 Flake8:
   script:
-  - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/main/prepare-and-run-flake8.sh
+  - curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/prepare-and-run-flake8.sh
   - . ./prepare-and-run-flake8.sh "$CI_PROJECT_NAME" test examples
   tags:
   - python3
@@ -127,7 +105,7 @@ Pylint:
   script: |
     export PY_EXE=python3
     EXTRA_INSTALL="Cython pybind11 numpy mako matplotlib scipy mpi4py oct2py"
-    curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
+    curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
     . ./prepare-and-run-pylint.sh "$CI_PROJECT_NAME" examples/*.py test/test_*.py
   tags:
   - python3

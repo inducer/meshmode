@@ -51,6 +51,8 @@ def main():
               # version of Loopy.
               "loopy>=2019.1",
 
+              "arraycontext",
+
               "recursivenodes",
               "dataclasses; python_version<='3.6'",
               ],

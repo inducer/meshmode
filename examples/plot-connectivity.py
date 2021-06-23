@@ -1,7 +1,7 @@
 import numpy as np  # noqa
 import pyopencl as cl
-from meshmode.array_context import PyOpenCLArrayContext
-from meshmode.dof_array import thaw
+
+from arraycontext import PyOpenCLArrayContext, thaw
 
 order = 4
 
@@ -20,16 +20,16 @@ def main():
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlendGroupFactory
+            PolynomialWarpAndBlend3DRestrictingGroupFactory
 
     discr = Discretization(
-            actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+            actx, mesh, PolynomialWarpAndBlend3DRestrictingGroupFactory(order))
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, order)
 
     vis.write_vtk_file("geometry.vtu", [
-        ("f", thaw(actx, discr.nodes()[0])),
+        ("f", thaw(discr.nodes()[0], actx)),
         ])
 
     from meshmode.discretization.visualization import \

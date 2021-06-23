@@ -26,14 +26,14 @@ THE SOFTWARE.
 import numpy as np
 import pyopencl as cl
 
-from meshmode.dof_array import thaw, flatten, unflatten
+from meshmode.dof_array import flatten, unflatten, flat_norm
 
-from meshmode.array_context import (  # noqa
+from arraycontext import thaw, _acf         # noqa: F401
+from arraycontext import (                  # noqa: F401
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
-from meshmode.discretization.poly_element import (
-        PolynomialWarpAndBlendGroupFactory)
+from meshmode.discretization.poly_element import default_simplex_group_factory
 from meshmode.mesh import BTAG_ALL
 
 import pytest
@@ -61,18 +61,18 @@ TAG_SEND_LOCAL_NODES = TAG_BASE + 4
         ])
 def test_partition_interpolation(actx_factory, dim, mesh_pars,
                                  num_parts, num_groups, part_method):
-    np.random.seed(42)
-    group_factory = PolynomialWarpAndBlendGroupFactory
-    actx = actx_factory()
-
     order = 4
+
+    np.random.seed(42)
+    group_factory = default_simplex_group_factory(base_dim=dim, order=order)
+    actx = actx_factory()
 
     def f(x):
         return 10.*actx.np.sin(50.*x)
 
     for n in mesh_pars:
         from meshmode.mesh.generation import generate_warped_rect_mesh
-        base_mesh = generate_warped_rect_mesh(dim, order=order, n=n)
+        base_mesh = generate_warped_rect_mesh(dim, order=order, nelements_side=n)
 
         if num_groups > 1:
             from meshmode.mesh.processing import split_mesh_groups
@@ -104,7 +104,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
                 connected_parts.add((i_local_part, i_remote_part))
 
         from meshmode.discretization import Discretization
-        vol_discrs = [Discretization(actx, part_meshes[i], group_factory(order))
+        vol_discrs = [Discretization(actx, part_meshes[i], group_factory)
                         for i in range(num_parts)]
 
         from meshmode.mesh import BTAG_PARTITION
@@ -115,12 +115,12 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
         for i_local_part, i_remote_part in connected_parts:
             # Mark faces within local_mesh that are connected to remote_mesh
             local_bdry_conn = make_face_restriction(actx, vol_discrs[i_local_part],
-                                                    group_factory(order),
+                                                    group_factory,
                                                     BTAG_PARTITION(i_remote_part))
 
             # Mark faces within remote_mesh that are connected to local_mesh
             remote_bdry_conn = make_face_restriction(actx, vol_discrs[i_remote_part],
-                                                     group_factory(order),
+                                                     group_factory,
                                                      BTAG_PARTITION(i_local_part))
 
             bdry_nelements = sum(
@@ -155,11 +155,11 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
             check_connection(actx, remote_to_local_conn)
             check_connection(actx, local_to_remote_conn)
 
-            true_local_points = f(thaw(actx, local_bdry.nodes()[0]))
+            true_local_points = f(thaw(local_bdry.nodes()[0], actx))
             remote_points = local_to_remote_conn(true_local_points)
             local_points = remote_to_local_conn(remote_points)
 
-            err = actx.np.linalg.norm(true_local_points - local_points, np.inf)
+            err = flat_norm(true_local_points - local_points, np.inf)
 
             # Can't currently expect exact results due to limitations of
             # interpolation "snapping" in DirectDiscretizationConnection's
@@ -173,22 +173,22 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
 
 @pytest.mark.parametrize(("dim", "mesh_size", "num_parts", "scramble_partitions"),
         [
-            (2, 5, 4, False),
-            (2, 5, 4, True),
-            (2, 5, 5, False),
-            (2, 5, 5, True),
-            (2, 5, 7, False),
-            (2, 5, 7, True),
-            (2, 10, 32, False),
-            (3, 8, 32, False),
+            (2, 4, 4, False),
+            (2, 4, 4, True),
+            (2, 4, 5, False),
+            (2, 4, 5, True),
+            (2, 4, 7, False),
+            (2, 4, 7, True),
+            (2, 9, 32, False),
+            (3, 7, 32, False),
         ])
 @pytest.mark.parametrize("num_groups", [1, 2, 7])
 def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitions):
     np.random.seed(42)
-    n = (mesh_size,) * dim
+    nelements_per_axis = (mesh_size,) * dim
     from meshmode.mesh.generation import generate_regular_rect_mesh
-    meshes = [generate_regular_rect_mesh(a=(0 + i,) * dim, b=(1 + i,) * dim, n=n)
-                        for i in range(num_groups)]
+    meshes = [generate_regular_rect_mesh(a=(0 + i,) * dim, b=(1 + i,) * dim,
+              nelements_per_axis=nelements_per_axis) for i in range(num_groups)]
 
     from meshmode.mesh.processing import merge_disjoint_meshes
     mesh = merge_disjoint_meshes(meshes)
@@ -326,7 +326,7 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     if mesh_dist.is_mananger_rank():
         np.random.seed(42)
         from meshmode.mesh.generation import generate_warped_rect_mesh
-        meshes = [generate_warped_rect_mesh(dim, order=order, n=4)
+        meshes = [generate_warped_rect_mesh(dim, order=order, nelements_side=4)
                         for _ in range(num_groups)]
 
         if num_groups > 1:
@@ -341,9 +341,9 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     else:
         local_mesh = mesh_dist.receive_mesh_part()
 
-    group_factory = PolynomialWarpAndBlendGroupFactory(order)
+    group_factory = default_simplex_group_factory(base_dim=dim, order=order)
 
-    from meshmode.array_context import PyOpenCLArrayContext
+    from arraycontext import PyOpenCLArrayContext
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(queue)
@@ -436,7 +436,7 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
     for i_remote_part in connected_parts:
         conn = remote_to_local_bdry_conns[i_remote_part]
         bdry_discr = local_bdry_conns[i_remote_part].to_discr
-        bdry_x = thaw(actx, bdry_discr.nodes()[0])
+        bdry_x = thaw(bdry_discr.nodes()[0], actx)
 
         true_local_f = f(bdry_x)
         remote_f = conn(true_local_f)
@@ -506,7 +506,7 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
     # 7.
     for i_remote_part in connected_parts:
         bdry_discr = local_bdry_conns[i_remote_part].to_discr
-        bdry_x = thaw(actx, bdry_discr.nodes()[0])
+        bdry_x = thaw(bdry_discr.nodes()[0], actx)
 
         true_local_f = actx.to_numpy(flatten(f(bdry_x)))
         local_f = local_f_data[i_remote_part]

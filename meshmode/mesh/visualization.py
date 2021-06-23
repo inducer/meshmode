@@ -122,8 +122,8 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
                         color="green", head_width=1e-2, lw=1e-2)
 
     if draw_face_numbers:
-        for igrp, grp in enumerate(mesh.groups):
-            for iel, el in enumerate(grp.vertex_indices):
+        for grp in mesh.groups:
+            for el in grp.vertex_indices:
                 elverts = mesh.vertices[:, el]
                 el_center = np.mean(elverts, axis=-1)
 
@@ -308,9 +308,10 @@ def vtk_visualize_mesh(actx, mesh, filename, vtk_high_order=True):
     order = max(mgrp.order for mgrp in mesh.groups)
 
     from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlendGroupFactory
+            default_simplex_group_factory
     from meshmode.discretization import Discretization
-    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(order))
+    discr = Discretization(actx, mesh, default_simplex_group_factory(
+        mesh.dim, order))
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, order, force_equidistant=vtk_high_order)

@@ -20,16 +20,23 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from dataclasses import dataclass
+import pytest
 import numpy as np
 
-import meshmode         # noqa: F401
-from meshmode.array_context import (  # noqa
+from arraycontext import _acf           # noqa: F401
+from arraycontext import (              # noqa: F401
         pytest_generate_tests_for_pyopencl_array_context
         as pytest_generate_tests)
 
+from arraycontext import (
+        thaw,
+        dataclass_array_container,
+        with_container_arithmetic)
+
 from meshmode.discretization import Discretization
-from meshmode.discretization.poly_element import PolynomialWarpAndBlendGroupFactory
-from meshmode.dof_array import flatten, unflatten, DOFArray
+from meshmode.discretization.poly_element import default_simplex_group_factory
+from meshmode.dof_array import DOFArray, flat_norm, array_context_for_pickling
 
 from pytools.obj_array import make_obj_array
 
@@ -37,199 +44,108 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def test_array_context_np_workalike(actx_factory):
+@with_container_arithmetic(bcast_obj_array=False, rel_comparison=True)
+@dataclass_array_container
+@dataclass(frozen=True)
+class MyContainer:
+    name: str
+    mass: DOFArray
+    momentum: np.ndarray
+    enthalpy: DOFArray
+
+    @property
+    def array_context(self):
+        return self.mass.array_context
+
+
+def test_flatten_unflatten(actx_factory):
     actx = actx_factory()
 
+    ambient_dim = 2
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*2, b=(0.5,)*2, n=(8,)*2, order=3)
+            a=(-0.5,)*ambient_dim,
+            b=(+0.5,)*ambient_dim,
+            n=(3,)*ambient_dim, order=1)
+    discr = Discretization(actx, mesh, default_simplex_group_factory(ambient_dim, 3))
+    a = np.random.randn(discr.ndofs)
 
-    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
+    from meshmode.dof_array import flatten, unflatten
+    a_round_trip = actx.to_numpy(flatten(unflatten(actx, discr, actx.from_numpy(a))))
+    assert np.array_equal(a, a_round_trip)
 
-    for sym_name, n_args in [
-            ("sin", 1),
-            ("exp", 1),
-            ("arctan2", 2),
-            ("minimum", 2),
-            ("maximum", 2),
-            ("where", 3),
-            ("conj", 1),
-            ]:
-        args = [np.random.randn(discr.ndofs) for i in range(n_args)]
-        ref_result = getattr(np, sym_name)(*args)
+    from meshmode.dof_array import flatten_to_numpy, unflatten_from_numpy
+    a_round_trip = flatten_to_numpy(actx, unflatten_from_numpy(actx, discr, a))
+    assert np.array_equal(a, a_round_trip)
 
-        # {{{ test DOFArrays
+    x = thaw(discr.nodes(), actx)
+    avg_mass = DOFArray(actx, tuple([
+        (np.pi + actx.zeros((grp.nelements, 1), a.dtype)) for grp in discr.groups
+        ]))
 
-        actx_args = [unflatten(actx, discr, actx.from_numpy(arg)) for arg in args]
+    c = MyContainer(name="flatten",
+            mass=avg_mass,
+            momentum=make_obj_array([x, x, x]),
+            enthalpy=x)
 
-        actx_result = actx.to_numpy(
-                flatten(getattr(actx.np, sym_name)(*actx_args)))
-
-        assert np.allclose(actx_result, ref_result)
-
-        # }}}
-
-        # {{{ test object arrays of DOFArrays
-
-        obj_array_args = [make_obj_array([arg]) for arg in actx_args]
-
-        obj_array_result = actx.to_numpy(
-                flatten(getattr(actx.np, sym_name)(*obj_array_args)[0]))
-
-        assert np.allclose(obj_array_result, ref_result)
-
-        # }}}
+    from meshmode.dof_array import unflatten_like
+    c_round_trip = unflatten_like(actx, flatten(c), c)
+    assert flat_norm(c - c_round_trip) < 1.0e-8
 
 
-def test_dof_array_arithmetic_same_as_numpy(actx_factory):
-    actx = actx_factory()
-
+def _get_test_containers(actx, ambient_dim=2):
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*2, b=(0.5,)*2, n=(3,)*2, order=1)
+            a=(-0.5,)*ambient_dim,
+            b=(+0.5,)*ambient_dim,
+            n=(3,)*ambient_dim, order=1)
+    discr = Discretization(actx, mesh, default_simplex_group_factory(ambient_dim, 3))
+    x = thaw(discr.nodes()[0], actx)
 
-    discr = Discretization(actx, mesh, PolynomialWarpAndBlendGroupFactory(3))
+    # pylint: disable=unexpected-keyword-arg, no-value-for-parameter
+    dataclass_of_dofs = MyContainer(
+            name="container",
+            mass=x,
+            momentum=make_obj_array([x, x]),
+            enthalpy=x)
 
-    def get_real(ary):
-        return ary.real
+    ary_dof = x
+    ary_of_dofs = make_obj_array([x, x, x])
+    mat_of_dofs = np.empty((2, 2), dtype=object)
+    for i in np.ndindex(mat_of_dofs.shape):
+        mat_of_dofs[i] = x
 
-    def get_imag(ary):
-        return ary.real
-
-    import operator
-    from pytools import generate_nonnegative_integer_tuples_below as gnitb
-    from random import uniform, randrange
-    for op_func, n_args, use_integers in [
-            (operator.add, 2, False),
-            (operator.sub, 2, False),
-            (operator.mul, 2, False),
-            (operator.truediv, 2, False),
-            (operator.pow, 2, False),
-            # FIXME pyopencl.Array doesn't do mod.
-            #(operator.mod, 2, True),
-            #(operator.mod, 2, False),
-            #(operator.imod, 2, True),
-            #(operator.imod, 2, False),
-            # FIXME: Two outputs
-            #(divmod, 2, False),
-
-            (operator.iadd, 2, False),
-            (operator.isub, 2, False),
-            (operator.imul, 2, False),
-            (operator.itruediv, 2, False),
-
-            (operator.and_, 2, True),
-            (operator.xor, 2, True),
-            (operator.or_, 2, True),
-
-            (operator.iand, 2, True),
-            (operator.ixor, 2, True),
-            (operator.ior, 2, True),
-
-            (operator.ge, 2, False),
-            (operator.lt, 2, False),
-            (operator.gt, 2, False),
-            (operator.eq, 2, True),
-            (operator.ne, 2, True),
-
-            (operator.pos, 1, False),
-            (operator.neg, 1, False),
-            (operator.abs, 1, False),
-
-            (get_real, 1, False),
-            (get_imag, 1, False),
-            ]:
-        for is_array_flags in gnitb(2, n_args):
-            if sum(is_array_flags) == 0:
-                # all scalars, no need to test
-                continue
-
-            if is_array_flags[0] == 0 and op_func in [
-                    operator.iadd, operator.isub,
-                    operator.imul, operator.itruediv,
-                    operator.iand, operator.ixor, operator.ior,
-                    ]:
-                # can't do in place operations with a scalar lhs
-                continue
-
-            args = [
-                    (0.5+np.random.rand(discr.ndofs)
-                        if not use_integers else
-                        np.random.randint(3, 200, discr.ndofs))
-
-                    if is_array_flag else
-                    (uniform(0.5, 2)
-                        if not use_integers
-                        else randrange(3, 200))
-                    for is_array_flag in is_array_flags]
-
-            # {{{ get reference numpy result
-
-            # make a copy for the in place operators
-            ref_args = [
-                    arg.copy() if isinstance(arg, np.ndarray) else arg
-                    for arg in args]
-            ref_result = op_func(*ref_args)
-
-            # }}}
-
-            # {{{ test DOFArrays
-
-            actx_args = [
-                    unflatten(actx, discr, actx.from_numpy(arg))
-                    if isinstance(arg, np.ndarray) else arg
-                    for arg in args]
-
-            actx_result = actx.to_numpy(flatten(op_func(*actx_args)))
-
-            assert np.allclose(actx_result, ref_result)
-
-            # }}}
-
-            # {{{ test object arrays of DOFArrays
-
-            # It would be very nice if comparisons on object arrays behaved
-            # consistently with everything else. Alas, they do not. Instead:
-            #
-            # 0.5 < obj_array(DOFArray) -> obj_array([True])
-            #
-            # because hey, 0.5 < DOFArray returned something truthy.
-
-            if op_func not in [
-                    operator.eq, operator.ne,
-                    operator.le, operator.lt,
-                    operator.ge, operator.gt,
-
-                    operator.iadd, operator.isub,
-                    operator.imul, operator.itruediv,
-                    operator.iand, operator.ixor, operator.ior,
-
-                    # All Python objects are real-valued, right?
-                    get_imag,
-                    ]:
-                obj_array_args = [
-                        make_obj_array([arg]) if isinstance(arg, DOFArray) else arg
-                        for arg in actx_args]
-
-                obj_array_result = actx.to_numpy(
-                        flatten(op_func(*obj_array_args)[0]))
-
-                assert np.allclose(obj_array_result, ref_result)
-
-            # }}}
+    return ary_dof, ary_of_dofs, mat_of_dofs, dataclass_of_dofs
 
 
-def test_dof_array_reductions_same_as_numpy(actx_factory):
+@pytest.mark.parametrize("ord", [2, np.inf])
+def test_container_norm(actx_factory, ord):
     actx = actx_factory()
 
-    from numbers import Number
-    for name in ["sum", "min", "max"]:
-        ary = np.random.randn(3000)
-        np_red = getattr(np, name)(ary)
-        actx_red = getattr(actx.np, name)(actx.from_numpy(ary))
+    ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs = _get_test_containers(actx)
 
-        assert isinstance(actx_red, Number)
-        assert np.allclose(np_red, actx_red)
+    from pytools.obj_array import make_obj_array
+    c = MyContainer(name="hey", mass=1, momentum=make_obj_array([2, 3]), enthalpy=5)
+    n1 = actx.np.linalg.norm(make_obj_array([c, c]), ord)
+    n2 = np.linalg.norm([1, 2, 3, 5]*2, ord)
+
+    assert abs(n1 - n2) < 1e-12
+    assert abs(flat_norm(ary_dof, ord) - actx.np.linalg.norm(ary_dof, ord)) < 1e-12
+
+
+def test_dof_array_pickling(actx_factory):
+    actx = actx_factory()
+    ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs = _get_test_containers(actx)
+
+    from pickle import loads, dumps
+    with array_context_for_pickling(actx):
+        pkl = dumps((mat_of_dofs, dc_of_dofs))
+
+    with array_context_for_pickling(actx):
+        mat2_of_dofs, dc2_of_dofs = loads(pkl)
+
+    assert flat_norm(mat_of_dofs - mat2_of_dofs, np.inf) == 0
+    assert flat_norm(dc_of_dofs - dc2_of_dofs, np.inf) == 0
 
 
 if __name__ == "__main__":

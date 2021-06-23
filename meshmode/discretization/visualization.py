@@ -29,7 +29,8 @@ import numpy as np
 
 from pytools import memoize_method, Record
 from pytools.obj_array import make_obj_array
-from meshmode.dof_array import DOFArray, flatten, thaw
+from arraycontext import thaw
+from meshmode.dof_array import DOFArray, flatten
 
 from modepy.shapes import Shape, Simplex, Hypercube
 
@@ -514,7 +515,7 @@ class Visualizer:
     def _vis_nodes_numpy(self):
         actx = self.vis_discr._setup_actx
         return np.array([
-            actx.to_numpy(flatten(thaw(actx, ary)))
+            actx.to_numpy(flatten(thaw(ary, actx)))
             for ary in self.vis_discr.nodes()
             ])
 
@@ -603,7 +604,8 @@ class Visualizer:
             is assumed.
         :arg file_name_pattern: A file name pattern (required to end in ``.vtu``)
             that will be used with :meth:`str.format` with an (integer)
-            argument of ``rank`` to obtain the per-rank file name.
+            argument of ``rank`` to obtain the per-rank file name. Relative
+            path names are also supported.
         :arg par_manifest_filename: as in :meth:`write_vtk_file`.
             If not given, *par_manifest_filename* is synthesized by
             substituting rank 0 into *file_name_pattern* and replacing the file
@@ -804,8 +806,11 @@ class Visualizer:
                         "par_file_names are given")
 
             if responsible_for_writing_par_manifest:
+                parfile_relnames = [
+                    os.path.relpath(pn, start=os.path.dirname(par_manifest_filename))
+                    for pn in par_file_names]
                 with open(par_manifest_filename, "w") as outf:
-                    generator = ParallelXMLGenerator(par_file_names)
+                    generator = ParallelXMLGenerator(parfile_relnames)
                     generator(grid).write(outf)
 
         # }}}
@@ -819,7 +824,7 @@ class Visualizer:
         actx = self.vis_discr._setup_actx
         return resample_to_numpy(
                 lambda x: x,
-                thaw(actx, self.vis_discr.nodes()),
+                thaw(self.vis_discr.nodes(), actx),
                 stack=True, by_group=True)
 
     def _vtk_to_xdmf_cell_type(self, cell_type):
@@ -1056,7 +1061,7 @@ class Visualizer:
     # }}}
 
 
-def make_visualizer(actx, discr, vis_order,
+def make_visualizer(actx, discr, vis_order=None,
         element_shrink_factor=None, force_equidistant=False):
     """
     :arg vis_order: order of the visualization DOFs.
@@ -1067,22 +1072,38 @@ def make_visualizer(actx, discr, vis_order,
     """
     from meshmode.discretization.poly_element import OrderAndTypeBasedGroupFactory
 
-    if force_equidistant:
-        from meshmode.discretization.poly_element import (
+    vis_discr = None
+    if (element_shrink_factor is None
+            and not force_equidistant
+            and vis_order is None):
+        vis_discr = discr
+    else:
+        if force_equidistant:
+            from meshmode.discretization.poly_element import (
                 PolynomialEquidistantSimplexElementGroup as SimplexElementGroup,
                 EquidistantTensorProductElementGroup as TensorElementGroup)
-    else:
-        from meshmode.discretization.poly_element import (
+        else:
+            from meshmode.discretization.poly_element import (
                 PolynomialWarpAndBlendElementGroup as SimplexElementGroup,
                 LegendreGaussLobattoTensorProductElementGroup as TensorElementGroup)
 
-    vis_discr = discr.copy(
-            actx=actx,
-            group_factory=OrderAndTypeBasedGroupFactory(
-                vis_order,
-                simplex_group_class=SimplexElementGroup,
-                tensor_product_group_class=TensorElementGroup),
-            )
+        vis_discr = discr.copy(
+                actx=actx,
+                group_factory=OrderAndTypeBasedGroupFactory(
+                    vis_order,
+                    simplex_group_class=SimplexElementGroup,
+                    tensor_product_group_class=TensorElementGroup),
+                )
+
+        if all(grp.discretization_key() == vgrp.discretization_key()
+                for grp, vgrp in zip(discr.groups, vis_discr.groups)):
+            from warnings import warn
+            warn("Visualization discretization is identical to base discretization. "
+                    "To avoid the creation of a separate discretization for "
+                    "visualization, avoid passing vis_order unless needed.",
+                    stacklevel=2)
+
+            vis_discr = discr
 
     from meshmode.discretization.connection import make_same_mesh_connection
     return Visualizer(

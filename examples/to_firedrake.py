@@ -24,6 +24,8 @@ THE SOFTWARE.
 import numpy as np
 import pyopencl as cl
 
+from arraycontext import PyOpenCLArrayContext, thaw
+
 
 # Nb: Some of the initial setup was adapted from meshmode/examplse/simple-dg.py
 #     written by Andreas Klockner:
@@ -49,7 +51,6 @@ def main():
 
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    from meshmode.array_context import PyOpenCLArrayContext
     actx = PyOpenCLArrayContext(queue)
 
     nel_1d = 16
@@ -57,7 +58,7 @@ def main():
     mesh = generate_regular_rect_mesh(
             a=(-0.5, -0.5),
             b=(0.5, 0.5),
-            n=(nel_1d, nel_1d))
+            nelements_per_axis=(nel_1d, nel_1d))
 
     order = 3
 
@@ -72,9 +73,8 @@ def main():
     #           = e^x Real(e^{iy})
     #           = e^x cos(y)
     nodes = discr.nodes()
-    from meshmode.dof_array import thaw
     for i in range(len(nodes)):
-        nodes[i] = thaw(actx, nodes[i])
+        nodes[i] = thaw(nodes[i], actx)
     # First index is dimension
     candidate_sol = actx.np.exp(nodes[0]) * actx.np.cos(nodes[1])
 

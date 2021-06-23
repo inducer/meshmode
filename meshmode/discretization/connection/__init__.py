@@ -27,13 +27,14 @@ from meshmode.discretization.connection.direct import (
         InterpolationBatch,
         DiscretizationConnectionElementGroup,
         DiscretizationConnection,
+        IdentityDiscretizationConnection,
         DirectDiscretizationConnection)
 from meshmode.discretization.connection.chained import \
         ChainedDiscretizationConnection
 from meshmode.discretization.connection.projection import \
         L2ProjectionInverseDiscretizationConnection
 
-from meshmode.array_context import ArrayContext
+from arraycontext import ArrayContext
 from meshmode.discretization.connection.same_mesh import \
         make_same_mesh_connection
 from meshmode.discretization.connection.face import (
@@ -55,6 +56,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
         "DiscretizationConnection",
+        "IdentityDiscretizationConnection",
         "DirectDiscretizationConnection",
         "ChainedDiscretizationConnection",
         "L2ProjectionInverseDiscretizationConnection",
@@ -78,6 +80,7 @@ __doc__ = """
 Base classes
 ------------
 .. autoclass:: DiscretizationConnection
+.. autoclass:: IdentityDiscretizationConnection
 .. autoclass:: ChainedDiscretizationConnection
 .. autoclass:: L2ProjectionInverseDiscretizationConnection
 .. autoclass:: DirectDiscretizationConnection

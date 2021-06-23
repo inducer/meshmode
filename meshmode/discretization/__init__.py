@@ -29,7 +29,7 @@ import numpy as np
 from abc import ABCMeta, abstractproperty, abstractmethod
 from pytools import memoize_in, memoize_method, keyed_memoize_in
 from pytools.obj_array import make_obj_array
-from meshmode.array_context import ArrayContext, make_loopy_program
+from arraycontext import ArrayContext, make_loopy_program
 
 from warnings import warn
 
@@ -177,14 +177,14 @@ class NodalElementGroupBase(ElementGroupBase):
     equipped with nodes. Nodes are specific locations defined on the
     reference element (:attr:`~ElementGroupBase.shape`)
     defining a degree of freedom by point evaluation at that location.
-    Such element groups can have an associated quadrature rule to perform
+    Such element groups have an associated quadrature rule to perform
     numerical integration, but are not necessarily usable (unisolvent)
     for interpolation.
 
     Inherits from :class:`ElementGroupBase`.
 
     .. autoattribute:: unit_nodes
-    .. autoattribute:: weights
+    .. automethod:: quadrature_rule
     """
 
     @property
@@ -194,18 +194,41 @@ class NodalElementGroupBase(ElementGroupBase):
         """
         return self.unit_nodes.shape[-1]
 
-    @abstractproperty
+    @property
+    @memoize_method
     def unit_nodes(self):
         """Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
         of reference coordinates of interpolation nodes.
+
+        Note: this method dispatches to the nodes of the underlying
+        quadrature rule. This means, for interpolatory element groups,
+        interpolation nodes are collocated with quadrature nodes.
+        """
+        result = self.quadrature_rule().nodes
+        if len(result.shape) == 1:
+            result = np.array([result])
+
+        dim2, _ = result.shape
+        assert dim2 == self.mesh_el_group.dim
+        return result
+
+    @abstractmethod
+    def quadrature_rule(self):
+        """Returns a :class:`modepy.Quadrature` object for the
+        element group.
         """
 
-    @abstractproperty
+    @property
     def weights(self):
         """Returns a :class:`numpy.ndarray` of shape ``(nunit_dofs,)``
         containing quadrature weights applicable on the reference
         element.
         """
+        warn("`grp.weights` is deprecated and will be dropped "
+             "in version 2022.x. To access the quadrature weights, use "
+             "`grp.quadrature_rule().weights` instead.",
+             DeprecationWarning, stacklevel=2)
+        return self.quadrature_rule().weights
 
 # }}}
 
@@ -231,24 +254,24 @@ class ElementGroupWithBasis(ElementGroupBase):
 
     @memoize_method
     def mode_ids(self):
-        warn("`grp.mode_ids()` will be dropped in version 2022.x "
-             "To access the basis function mode ids, use "
+        warn("`grp.mode_ids()` is deprecated and will be dropped "
+             "in version 2022.x. To access the basis function mode ids, use "
              "`grp.basis_obj().mode_ids` instead.",
              DeprecationWarning, stacklevel=2)
         return self.basis_obj().mode_ids
 
     @memoize_method
     def basis(self):
-        warn("`grp.basis()` will be dropped in version 2022.x "
-             "To access the basis functions, use "
+        warn("`grp.basis()` is deprecated and will be dropped "
+             "in version 2022.x. To access the basis functions, use "
              "`grp.basis_obj().functions` instead.",
              DeprecationWarning, stacklevel=2)
         return self.basis_obj().functions
 
     @memoize_method
     def grad_basis(self):
-        warn("`grp.grad_basis()` will be dropped in version 2022.x "
-             "To access the basis function gradients, use "
+        warn("`grp.grad_basis()` is deprecated and will be dropped "
+             "in version 2022.x. To access the basis function gradients, use "
              "`grp.basis_obj().gradients` instead.",
              DeprecationWarning, stacklevel=2)
         return self.basis_obj().gradients
@@ -267,8 +290,9 @@ class ElementGroupWithBasis(ElementGroupBase):
             return False
 
     def is_orthogonal_basis(self):
-        warn("`is_orthogonal_basis` will be dropped in version 2022.x "
-             "since orthonormality is the more operationally important case. "
+        warn("`is_orthogonal_basis` is deprecated and will be dropped "
+             "in version 2022.x since orthonormality is the more "
+             "operationally important case. "
              "Use `is_orthonormal_basis` instead.",
              DeprecationWarning, stacklevel=2)
         return self.is_orthonormal_basis()
@@ -395,8 +419,9 @@ class Discretization:
                 np.float64: np.complex128
                 }[self.real_dtype.type])
 
-        self._setup_actx = actx
+        self._setup_actx = actx.clone()
         self._group_factory = group_factory
+        self._cached_nodes = None
 
     def copy(self, actx=None, mesh=None, group_factory=None, real_dtype=None):
         """Creates a new object of the same type with all arguments that are not
@@ -513,18 +538,27 @@ class Discretization:
                 actx.freeze(
                     actx.call_loopy(
                         prg(),
-                        weights=actx.from_numpy(grp.weights),
+                        weights=actx.from_numpy(grp.quadrature_rule().weights),
                         nelements=grp.nelements,
                         )["result"])
                 for grp in self.groups))
 
-    @memoize_method
-    def nodes(self):
+    def nodes(self, cached=True):
         r"""
+        :arg cached: A :class:`bool` indicating whether the computed
+            nodes should be stored for future use.
         :returns: object array of shape ``(ambient_dim,)`` containing
             :class:`~meshmode.dof_array.DOFArray`\ s of (global) nodal
             locations on the :attr:`~mesh`.
         """
+
+        if self._cached_nodes is not None:
+            if not cached:
+                from warnings import warn
+                warn("It was requested that the computed nodes not be cached, "
+                        "but a cached copy of the nodes was already present.",
+                        stacklevel=2)
+            return self._cached_nodes
 
         actx = self._setup_actx
 
@@ -562,11 +596,14 @@ class Discretization:
                     nodes=nodes,
                     )["result"]
 
-        return make_obj_array([
+        result = make_obj_array([
             _DOFArray(None, tuple([
                 actx.freeze(resample_mesh_nodes(grp, iaxis)) for grp in self.groups
                 ]))
             for iaxis in range(self.ambient_dim)])
+        if cached:
+            self._cached_nodes = result
+        return result
 
 
 def num_reference_derivative(

@@ -27,14 +27,13 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
-from meshmode.array_context import make_loopy_program
-from meshmode.dof_array import DOFArray
+from arraycontext import (
+        make_loopy_program, is_array_container, map_array_container)
 from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
 
 from pytools import memoize_in, keyed_memoize_in
-from pytools.obj_array import obj_array_vectorized_n_args
 
 
 class NodalToModalDiscretizationConnection(DiscretizationConnection):
@@ -154,7 +153,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
         def quadrature_matrix(grp, mgrp):
             vdm = mp.vandermonde(mgrp.basis_obj().functions,
                                  grp.unit_nodes)
-            w_diag = np.diag(grp.weights)
+            w_diag = np.diag(grp.quadrature_rule().weights)
             vtw = np.dot(vdm.T, w_diag)
             return actx.from_numpy(vtw)
 
@@ -198,7 +197,6 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
         return output
 
-    @obj_array_vectorized_n_args
     def __call__(self, ary):
         """Computes modal coefficients data from a functions
         nodal coefficients.
@@ -206,6 +204,9 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
         :arg ary: a :class:`meshmode.dof_array.DOFArray` containing
             nodal coefficient data.
         """
+        from meshmode.dof_array import DOFArray
+        if is_array_container(ary) and not isinstance(ary, DOFArray):
+            return map_array_container(self, ary)
 
         if not isinstance(ary, DOFArray):
             raise TypeError("Non-array passed to discretization connection")
@@ -225,10 +226,8 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             # to compute the modal coefficients.
             if isinstance(grp, QuadratureSimplexElementGroup):
 
-                if (
-                    grp._quadrature_rule().exact_to < 2*mgrp.order
-                    and not self._allow_approximate_quad
-                ):
+                if (grp.quadrature_rule().exact_to < 2*mgrp.order
+                        and not self._allow_approximate_quad):
                     raise ValueError("Quadrature rule is not exact, please "
                                      "set `allow_approximate_quad=True`")
 
@@ -320,13 +319,15 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
                 to_discr=to_discr,
                 is_surjective=True)
 
-    @obj_array_vectorized_n_args
     def __call__(self, ary):
         """Computes nodal coefficients from modal data.
 
         :arg ary: a :class:`meshmode.dof_array.DOFArray` containing
             modal coefficient data.
         """
+        from meshmode.dof_array import DOFArray
+        if is_array_container(ary) and not isinstance(ary, DOFArray):
+            return map_array_container(self, ary)
 
         if not isinstance(ary, DOFArray):
             raise TypeError("Non-array passed to discretization connection")

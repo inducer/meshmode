@@ -13,7 +13,11 @@ This set of instructions is intended for 64-bit Linux and MacOS computers.
     Everywhere else, just making sure you have the ``g++`` package should be
     enough.
 
-#.  Installing `miniforge for Python 3 on your respective system <https://github.com/conda-forge/miniforge>`_.
+#.  Install `miniforge <https://github.com/conda-forge/miniforge>`_::
+
+        curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
+        # then run
+        bash ./Miniforge3-*.sh
 
 #.  ``export CONDA=/WHERE/YOU/INSTALLED/miniforge3``
 
@@ -31,7 +35,7 @@ This set of instructions is intended for 64-bit Linux and MacOS computers.
 
 #.  Type the following command::
 
-        hash -r; for i in pymbolic cgen genpy modepy pyvisfile loopy meshmode; do python -m pip install --editable "git+https://github.com/inducer/$i.git#egg=$i"; done
+        hash -r; for i in pymbolic cgen genpy modepy pyvisfile loopy arraycontext meshmode; do python -m pip install --editable "git+https://github.com/inducer/$i.git#egg=$i"; done
 
 .. note::
 
