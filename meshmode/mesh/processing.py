@@ -1518,7 +1518,8 @@ def glue_mesh_boundaries(mesh, glued_boundary_mappings):
             else:
                 inv_transform_mat = None
                 inv_transform_vec = (
-                    -transform_vec
+                    # https://github.com/PyCQA/pylint/issues/4608
+                    -transform_vec  # pylint: disable=invalid-unary-operand-type
                     if transform_vec is not None
                     else None)
             glued_boundary_mappings_both_ways.append(
