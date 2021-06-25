@@ -1,44 +1,16 @@
-import sys  # noqa: F401
-import os  # noqa: F401
+from urllib.request import urlopen
 
-# -- General configuration ------------------------------------------------
+_conf_url = \
+        "https://raw.githubusercontent.com/inducer/sphinxconfig/main/sphinxconfig.py"
+with urlopen(_conf_url) as _inf:
+    exec(compile(_inf.read(), _conf_url, "exec"), globals())
 
-# If your documentation needs a minimal Sphinx version, state it here.
-#needs_sphinx = "1.0"
-
-# Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named "sphinx.ext.*") or your custom
-# ones.
-extensions = [
-    "sphinx.ext.autodoc",
-    "sphinx.ext.doctest",
-    "sphinx.ext.intersphinx",
-    "sphinx.ext.mathjax",
+extensions.extend([
     "sphinx.ext.graphviz",
-    "sphinx_copybutton",
-]
+])
 
-# Add any paths that contain templates here, relative to this directory.
-templates_path = ["_templates"]
+copyright = "2014-21, Meshmode contributors"
 
-# The suffix of source filenames.
-source_suffix = ".rst"
-
-# The encoding of source files.
-#source_encoding = "utf-8-sig"
-
-# The master toctree document.
-master_doc = "index"
-
-# General information about the project.
-project = u"meshmode"
-copyright = u"2014, Andreas Klöckner"
-
-# The version info for the project you're documenting, acts as replacement for
-# |version| and |release|, also used in various other places throughout the
-# built documents.
-#
-# The short X.Y version.
 ver_dic = {}
 exec(
         compile(
@@ -47,24 +19,6 @@ exec(
 version = ".".join(str(x) for x in ver_dic["VERSION"])
 # The full version, including alpha/beta/rc tags.
 release = ver_dic["VERSION_TEXT"]
-
-# List of patterns, relative to source directory, that match files and
-# directories to ignore when looking for source files.
-exclude_patterns = ["_build"]
-
-# The name of the Pygments (syntax highlighting) style to use.
-pygments_style = "sphinx"
-
-
-# -- Options for HTML output ----------------------------------------------
-
-html_theme = "furo"
-
-# Add any paths that contain custom static files (such as style sheets) here,
-# relative to this directory. They are copied after the builtin static files,
-# so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = []
-
 
 intersphinx_mapping = {
     "https://docs.python.org/3/": None,
@@ -83,5 +37,3 @@ intersphinx_mapping = {
     "https://finat.github.io/FInAT/": None,
     "h5py": ("https://docs.h5py.org/en/stable", None),
 }
-
-autoclass_content = "class"
