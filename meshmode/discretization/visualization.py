@@ -604,7 +604,8 @@ class Visualizer:
             is assumed.
         :arg file_name_pattern: A file name pattern (required to end in ``.vtu``)
             that will be used with :meth:`str.format` with an (integer)
-            argument of ``rank`` to obtain the per-rank file name.
+            argument of ``rank`` to obtain the per-rank file name. Relative
+            path names are also supported.
         :arg par_manifest_filename: as in :meth:`write_vtk_file`.
             If not given, *par_manifest_filename* is synthesized by
             substituting rank 0 into *file_name_pattern* and replacing the file
@@ -805,8 +806,11 @@ class Visualizer:
                         "par_file_names are given")
 
             if responsible_for_writing_par_manifest:
+                parfile_relnames = [
+                    os.path.relpath(pn, start=os.path.dirname(par_manifest_filename))
+                    for pn in par_file_names]
                 with open(par_manifest_filename, "w") as outf:
-                    generator = ParallelXMLGenerator(par_file_names)
+                    generator = ParallelXMLGenerator(parfile_relnames)
                     generator(grid).write(outf)
 
         # }}}

@@ -280,7 +280,7 @@ class DOFArray:
             raise RuntimeError("DOFArray instances can only be unpickled while "
                     "array_context_for_pickling is active.")
 
-        self.array_context = actx
+        self._array_context = actx
         self._data = tuple([actx.from_numpy(ary_i) for ary_i in state])
 
     # }}}
