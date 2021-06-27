@@ -428,9 +428,9 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
     def _flatten(grp_ary):
         # If array has two axes, assume they are elements/dofs. If C-contiguous
         # in those, "flat" and "unflat" memory layout agree.
-        if len(grp_ary.shape) == 2 and grp_ary.flags.c_contiguous:
-            return grp_ary.reshape(-1, order="C")
-        else:
+        try:
+            return actx.np.ravel(grp_ary, order="C")
+        except ValueError:
             # NOTE: array has unsupported strides
             return actx.call_loopy(
                 prg(),
@@ -654,7 +654,7 @@ def unflatten_from_numpy(
 
 # {{{ flat_norm
 
-def flat_norm(ary, ord=None) -> float:
+def flat_norm(ary, ord=None) -> Any:
     r"""Return an element-wise :math:`\ell^{\text{ord}}` norm of *ary*.
 
     :arg ary: may be a :class:`DOFArray` or a
