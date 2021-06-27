@@ -26,12 +26,12 @@ import numpy as np
 import numpy.linalg as la
 
 import meshmode         # noqa: F401
-from arraycontext import (  # noqa
-        pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests,
-        thaw)
+from arraycontext import thaw
 
-from arraycontext import _acf  # noqa: F401
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from arraycontext import pytest_generate_tests_for_array_contexts
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (

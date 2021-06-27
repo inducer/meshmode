@@ -26,10 +26,12 @@ from functools import partial
 import numpy as np
 import pytest
 
-from arraycontext import thaw, _acf         # noqa: F401
-from arraycontext import (                  # noqa: F401
-        pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests)
+from arraycontext import thaw
+
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from arraycontext import pytest_generate_tests_for_array_contexts
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 from meshmode.dof_array import flat_norm
 from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
