@@ -200,11 +200,6 @@ class PyOpenCLArrayContext(PyOpenCLArrayContextBase):
     """
 
     def transform_loopy_program(self, t_unit):
-        try:
-            return self._loopy_transform_cache[t_unit]
-        except KeyError:
-            pass
-
         default_ep = t_unit.default_entrypoint
         options = default_ep.options
         if not (options.return_dict and options.no_numpy):
@@ -216,7 +211,6 @@ class PyOpenCLArrayContext(PyOpenCLArrayContextBase):
         transformed_t_unit = _transform_loopy_inner(t_unit)
 
         if transformed_t_unit is not None:
-            self._loopy_transform_cache[t_unit] = transformed_t_unit
             return t_unit
 
         warn("meshmode.array_context.PyOpenCLArrayContext."
