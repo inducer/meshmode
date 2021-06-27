@@ -23,7 +23,8 @@ THE SOFTWARE.
 import numpy as np
 import pyopencl as cl
 
-from arraycontext import PyOpenCLArrayContext, thaw
+from meshmode.array_context import PyOpenCLArrayContext
+from arraycontext import thaw
 
 from pytools import memoize_in, keyed_memoize_in
 from pytools.obj_array import make_obj_array

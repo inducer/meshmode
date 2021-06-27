@@ -32,9 +32,10 @@ from pytools.obj_array import flat_obj_array, make_obj_array
 
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
 from meshmode.dof_array import DOFArray, flat_norm
+from meshmode.array_context import PyOpenCLArrayContext
 from arraycontext import (
         freeze, thaw,
-        PyOpenCLArrayContext, make_loopy_program,
+        make_loopy_program,
         ArrayContainer,
         map_array_container,
         with_container_arithmetic,
@@ -475,7 +476,7 @@ def main():
 
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = PyOpenCLArrayContext(queue, force_device_scalars=True)
 
     nel_1d = 16
     from meshmode.mesh.generation import generate_regular_rect_mesh
