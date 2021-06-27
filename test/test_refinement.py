@@ -304,7 +304,7 @@ def test_refinement_connection(
                         ])
 
         err = flat_norm(f_interp - f_true, np.inf)
-        eoc_rec.add_data_point(h, err)
+        eoc_rec.add_data_point(h, actx.to_numpy(err))
 
     order_slack = 0.5
     if mesh_name == "blob" and order > 1:

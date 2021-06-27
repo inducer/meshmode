@@ -392,7 +392,7 @@ def test_reversed_chained_connection(actx_factory, ndim, mesh_name):
 
     for n in mesh_sizes:
         h, error = run(n, order)
-        eoc.add_data_point(h, error)
+        eoc.add_data_point(h, actx.to_numpy(error))
 
     print(eoc)
 

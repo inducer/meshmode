@@ -187,7 +187,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
             assert mat_error < 1e-14, mat_error
 
         err = flat_norm(bdry_f-bdry_f_2, np.inf)
-        eoc_rec.add_data_point(h, err)
+        eoc_rec.add_data_point(h, actx.to_numpy(err))
 
     order_slack = 0.75 if mesh_name == "blob" else 0.5
     print(eoc_rec)
@@ -313,7 +313,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
             all_face_f_2 = all_face_f_2 + all_face_embedding(bdry_f)
 
         err = flat_norm(all_face_f-all_face_f_2, np.inf)
-        eoc_rec.add_data_point(h, err)
+        eoc_rec.add_data_point(h, actx.to_numpy(err))
 
     print(eoc_rec)
     assert (
@@ -422,7 +422,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
         assert flat_norm(bdry_f_2-bdry_f_2_no_inp, np.inf) < 1e-14
 
         err = flat_norm(bdry_f-bdry_f_2, np.inf)
-        eoc_rec.add_data_point(h, err)
+        eoc_rec.add_data_point(h, actx.to_numpy(err))
 
     print(eoc_rec)
     assert (
