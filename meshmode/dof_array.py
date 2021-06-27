@@ -662,17 +662,17 @@ def flat_norm(ary, ord=None) -> float:
 
     from arraycontext import is_array_container
 
-    import numpy.linalg as la
+    from arraycontext.fake_numpy import _scalar_list_norm
     if isinstance(ary, DOFArray):
         actx = ary.array_context
-        return la.norm(
+        return _scalar_list_norm(
                 [
                     actx.np.linalg.norm(actx.np.ravel(subary, order="A"), ord=ord)
                     for _, subary in serialize_container(ary)],
                 ord=ord)
 
     elif is_array_container(ary):
-        return la.norm(
+        return _scalar_list_norm(
                 [flat_norm(subary, ord=ord)
                     for _, subary in serialize_container(ary)],
                 ord=ord)
