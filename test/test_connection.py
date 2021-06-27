@@ -20,15 +20,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from arraycontext import _acf  # noqa: F401
 from functools import partial
 import numpy as np  # noqa: F401
 import numpy.linalg as la  # noqa: F401
 
 import meshmode         # noqa: F401
-from arraycontext import (  # noqa
-        pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests)
+
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from arraycontext import pytest_generate_tests_for_array_contexts
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
+
 
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (

@@ -28,10 +28,11 @@ import pyopencl as cl
 
 from meshmode.dof_array import flatten, unflatten, flat_norm
 
-from arraycontext import thaw, _acf         # noqa: F401
-from arraycontext import (                  # noqa: F401
-        pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests)
+from arraycontext import thaw
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from arraycontext import pytest_generate_tests_for_array_contexts
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 from meshmode.discretization.poly_element import default_simplex_group_factory
 from meshmode.mesh import BTAG_ALL

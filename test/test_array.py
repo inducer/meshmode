@@ -24,10 +24,10 @@ from dataclasses import dataclass
 import pytest
 import numpy as np
 
-from arraycontext import _acf           # noqa: F401
-from arraycontext import (              # noqa: F401
-        pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests)
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from arraycontext import pytest_generate_tests_for_array_contexts
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 from arraycontext import (
         thaw,
