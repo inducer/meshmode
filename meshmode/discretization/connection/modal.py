@@ -27,6 +27,9 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
+import loopy as lp
+from meshmode.transform_metadata import (
+        ConcurrentElementInameTag, ConcurrentDOFInameTag)
 from arraycontext import (
         make_loopy_program, is_array_container, map_array_container)
 from meshmode.discretization import InterpolatoryElementGroupBase
@@ -132,7 +135,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx, (NodalToModalDiscretizationConnection,
                            "apply_quadrature_proj_knl"))
         def quad_proj_keval():
-            return make_loopy_program([
+            t_unit = make_loopy_program([
                 "{[iel]: 0 <= iel < nelements}",
                 "{[idof]: 0 <= idof < n_to_dofs}",
                 "{[ibasis]: 0 <= ibasis < n_from_dofs}"
@@ -143,6 +146,9 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
                                             * nodal_coeffs[iel, ibasis])
                 """,
                 name="apply_quadrature_proj_knl")
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         @keyed_memoize_in(actx, (NodalToModalDiscretizationConnection,
                                  "quadrature_matrix"),
@@ -170,7 +176,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx, (NodalToModalDiscretizationConnection,
                            "apply_inv_vandermonde_knl"))
         def vinv_keval():
-            return make_loopy_program([
+            t_unit = make_loopy_program([
                 "{[iel]: 0 <= iel < nelements}",
                 "{[idof]: 0 <= idof < n_from_dofs}",
                 "{[jdof]: 0 <= jdof < n_from_dofs}"
@@ -181,6 +187,9 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
                                             * nodal_coeffs[iel, jdof])
                 """,
                 name="apply_inv_vandermonde_knl")
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         @keyed_memoize_in(actx, (NodalToModalDiscretizationConnection,
                                  "vandermonde_inverse"),
@@ -342,7 +351,7 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx, (ModalToNodalDiscretizationConnection,
                            "evaluation_knl"))
         def keval():
-            return make_loopy_program([
+            t_unit = make_loopy_program([
                 "{[iel]: 0 <= iel < nelements}",
                 "{[idof]: 0 <= idof < n_to_dofs}",
                 "{[ibasis]: 0 <= ibasis < n_from_dofs}"
@@ -353,6 +362,9 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
                                             * coefficients[iel, ibasis])
                 """,
                 name="modal_to_nodal_evaluation_knl")
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         @keyed_memoize_in(actx, (ModalToNodalDiscretizationConnection, "matrix"),
                            lambda to_grp, from_grp: (

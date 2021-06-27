@@ -25,6 +25,8 @@ import numpy as np
 import numpy.linalg as la
 
 import loopy as lp
+from meshmode.transform_metadata import (
+        ConcurrentElementInameTag, ConcurrentDOFInameTag)
 from pytools import memoize_in, keyed_memoize_method
 from arraycontext import (
         ArrayContext, make_loopy_program,
@@ -123,14 +125,7 @@ class InterpolationBatch:
         @memoize_in(actx, (InterpolationBatch._global_from_element_indices,
             "compose_index_maps_kernel"))
         def compose_index_maps_kernel():
-            # FIXME: Current arraycontext (2021-06-17, 9e5fb5d) does not map
-            # the iel_init iname to a GPU axis, leading this kernel to likely
-            # be very slow. Fortunately, this should only run during
-            # problem setup.
-            #
-            # cf. https://github.com/inducer/arraycontext/pull/29
-            # for a strategy that could/should be used instead.
-            return make_loopy_program(
+            t_unit = make_loopy_program(
                 [
                     "{[iel_init]: 0 <= iel_init < nelements_result}",
                     "{[iel]: 0 <= iel < nelements}",
@@ -149,6 +144,9 @@ class InterpolationBatch:
                 ],
                 name="compose_index_maps",
             )
+            return lp.tag_inames(t_unit, {
+                "iel_init": ConcurrentElementInameTag(),
+                "iel": ConcurrentElementInameTag()})
 
         result = actx.freeze(actx.call_loopy(
             compose_index_maps_kernel(),
@@ -372,7 +370,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_mat_knl"))
         def batch_mat_knl():
-            return make_loopy_program(
+            t_unit = make_loopy_program(
                 [
                     "{[iel]: 0 <= iel < nelements}",
                     "{[idof]: 0 <= idof < n_to_nodes}",
@@ -395,11 +393,14 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 ],
                 name="resample_by_mat",
             )
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_picking_knl"))
         def batch_pick_knl():
-            return make_loopy_program(
+            t_unit = make_loopy_program(
                 [
                     "{[iel]: 0 <= iel < nelements}",
                     "{[idof]: 0 <= idof < n_to_nodes}"
@@ -419,6 +420,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 ],
                 name="resample_by_picking",
             )
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         group_data = []
         for i_tgrp, cgrp in enumerate(self.groups):
@@ -483,7 +487,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx, (DirectDiscretizationConnection,
             "resample_by_mat_knl_inplace"))
         def mat_knl():
-            knl = make_loopy_program(
+            t_unit = make_loopy_program(
                 """{[iel, idof, j]:
                     0<=iel<nelements and
                     0<=idof<n_to_nodes and
@@ -504,12 +508,14 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     ],
                 name="resample_by_mat_inplace")
 
-            return knl
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_picking_knl_inplace"))
         def pick_knl():
-            knl = make_loopy_program(
+            t_unit = make_loopy_program(
                 """{[iel, idof]:
                     0<=iel<nelements and
                     0<=idof<n_to_nodes}""",
@@ -529,7 +535,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     ],
                 name="resample_by_picking_inplace")
 
-            return knl
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         if self.is_surjective:
             result = self.to_discr.empty(actx, dtype=ary.entry_dtype)

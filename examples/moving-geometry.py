@@ -50,7 +50,7 @@ def reconstruct_discr_from_nodes(actx, discr, x):
     @memoize_in(actx, (reconstruct_discr_from_nodes, "resample_by_mat_prg"))
     def resample_by_mat_prg():
         from arraycontext import make_loopy_program
-        return make_loopy_program(
+        t_unit = make_loopy_program(
             """
             {[iel, idof, j]:
                 0 <= iel < nelements
@@ -61,6 +61,13 @@ def reconstruct_discr_from_nodes(actx, discr, x):
             result[iel, idof] = sum(j, resampling_mat[idof, j] * nodes[iel, j])
             """,
             name="resample_by_mat_prg")
+
+        import loopy as lp
+        from meshmode.transform_metadata import (
+                ConcurrentElementInameTag, ConcurrentDOFInameTag)
+        return lp.tag_inames(t_unit, {
+            "iel": ConcurrentElementInameTag(),
+            "idof": ConcurrentDOFInameTag()})
 
     @keyed_memoize_in(actx,
             (reconstruct_discr_from_nodes, "to_mesh_interp_matrix"),

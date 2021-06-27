@@ -33,6 +33,8 @@ import loopy as lp
 from pytools import MovedFunctionDeprecationWrapper
 from pytools import single_valued, memoize_in
 
+from meshmode.transform_metadata import (
+            ConcurrentElementInameTag, ConcurrentDOFInameTag)
 from arraycontext import (
         ArrayContext, make_loopy_program,
         ArrayContainer, with_container_arithmetic,
@@ -400,7 +402,7 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
 
     @memoize_in(actx, (_flatten_dof_array, "flatten_grp_ary_prg"))
     def prg():
-        return make_loopy_program(
+        t_unit = make_loopy_program(
             [
                 "{[iel]: 0 <= iel < nelements}",
                 "{[idof]: 0 <= idof < ndofs_per_element}"
@@ -419,6 +421,9 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
             ],
             name="flatten_grp_ary"
         )
+        return lp.tag_inames(t_unit, {
+            "iel": ConcurrentElementInameTag(),
+            "idof": ConcurrentDOFInameTag()})
 
     def _flatten(grp_ary):
         # If array has two axes, assume they are elements/dofs. If C-contiguous
@@ -475,10 +480,13 @@ def _unflatten_dof_array(actx: ArrayContext, ary: Any,
 
     @memoize_in(actx, (_unflatten_dof_array, "unflatten_prg"))
     def prg():
-        return make_loopy_program(
+        t_unit = make_loopy_program(
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
             "result[iel, idof] = ary[grp_start + iel*ndofs_per_element + idof]",
             name="unflatten")
+        return lp.tag_inames(t_unit, {
+            "iel": ConcurrentElementInameTag(),
+            "idof": ConcurrentDOFInameTag()})
 
     return DOFArray(actx, tuple(
         actx.call_loopy(

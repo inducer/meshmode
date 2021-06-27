@@ -40,7 +40,7 @@ from arraycontext import (
         with_container_arithmetic,
         dataclass_array_container,
         )
-from arraycontext.metadata import FirstAxisIsElementsTag
+from meshmode.transform_metadata import FirstAxisIsElementsTag
 
 import logging
 logger = logging.getLogger(__name__)
@@ -297,7 +297,7 @@ class DGDiscretization:
 
         @memoize_in(self, "face_mass_knl")
         def knl():
-            return make_loopy_program(
+            t_unit = make_loopy_program(
                 """{[iel,idof,f,j]:
                     0<=iel<nelements and
                     0<=f<nfaces and
@@ -306,6 +306,13 @@ class DGDiscretization:
                 "result[iel,idof] = "
                 "sum(f, sum(j, mat[idof, f, j] * vec[f, iel, j]))",
                 name="face_mass")
+
+            import loopy as lp
+            from meshmode.transform_metadata import (
+                    ConcurrentElementInameTag, ConcurrentDOFInameTag)
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         all_faces_conn = self.get_connection("vol", "all_faces")
         all_faces_discr = all_faces_conn.to_discr

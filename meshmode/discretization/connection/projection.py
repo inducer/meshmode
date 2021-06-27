@@ -28,7 +28,7 @@ import loopy as lp
 
 from arraycontext import (
         make_loopy_program, is_array_container, map_array_container)
-from arraycontext.metadata import FirstAxisIsElementsTag
+from meshmode.transform_metadata import FirstAxisIsElementsTag
 from meshmode.discretization.connection.direct import (
         DiscretizationConnection,
         DirectDiscretizationConnection)
@@ -134,7 +134,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx, (L2ProjectionInverseDiscretizationConnection,
             "conn_projection_knl"))
         def kproj():
-            return make_loopy_program(
+            t_unit = make_loopy_program(
                 [
                     "{[iel_init]: 0 <= iel_init < n_to_elements}",
                     "{[idof_init]: 0 <= idof_init < n_to_nodes}",
@@ -168,6 +168,14 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 ],
                 name="conn_projection_knl"
             )
+            from meshmode.transform_metadata import (
+                    ConcurrentElementInameTag, ConcurrentDOFInameTag)
+            return lp.tag_inames(t_unit, {
+                    "iel_init": ConcurrentElementInameTag(),
+                    "idof_init": ConcurrentDOFInameTag(),
+                    "iel": ConcurrentElementInameTag(),
+                    "ibasis": ConcurrentDOFInameTag(),
+                    })
 
         # compute weights on each refinement of the reference element
         weights = self._batch_weights(actx)
