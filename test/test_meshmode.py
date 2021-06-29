@@ -690,7 +690,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
 
         comp_vol = integral(vol_discr, vol_one)
         rel_vol_err = abs(true_vol - comp_vol) / true_vol
-        vol_eoc_rec.add_data_point(h, rel_vol_err)
+        vol_eoc_rec.add_data_point(h, actx.to_numpy(rel_vol_err))
         print("VOL", true_vol, comp_vol)
 
         bdry_x = thaw(bdry_discr.nodes(), actx)
@@ -703,7 +703,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
 
         comp_surf = integral(bdry_discr, bdry_one)
         rel_surf_err = abs(true_surf - comp_surf) / true_surf
-        surf_eoc_rec.add_data_point(h, rel_surf_err)
+        surf_eoc_rec.add_data_point(h, actx.to_numpy(rel_surf_err))
         print("SURF", true_surf, comp_surf)
 
         if visualize:
