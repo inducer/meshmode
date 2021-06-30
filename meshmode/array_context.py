@@ -91,14 +91,16 @@ def _transform_loopy_inner(t_unit):
         for stmt in default_ep.instructions:
             if isinstance(stmt, lp.MultiAssignmentBase):
                 for assignee in stmt.assignees:
+                    if isinstance(assignee, Variable):
+                        # some scalar assignee kernel => no concurrency in the
+                        # workload => skip
+                        continue
                     if not isinstance(assignee, Subscript):
                         raise ValueError("assignees in "
                                 "ElementwiseMapKernelTag-tagged kernels must be "
                                 "subscripts")
 
-                    subscripts = assignee.index_tuple[:2]
-
-                    for i, subscript in enumerate(subscripts):
+                    for i, subscript in enumerate(assignee.index_tuple[:2]):
                         if (not isinstance(subscript, Variable)
                                 or subscript.name not in default_ep.all_inames()):
                             raise ValueError("subscripts in "
