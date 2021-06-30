@@ -245,7 +245,7 @@ def test_mesh_to_tikz():
     order = 1
 
     mesh = generate_gmsh(
-            FileSource("../test/blob-2d.step"), 2, order=order,
+            FileSource("blob-2d.step"), 2, order=order,
             force_ambient_dim=2,
             other_options=[
                 "-string", "Mesh.CharacteristicLengthMax = %s;" % h],
