@@ -651,15 +651,13 @@ class Mesh(Record):
 
     .. attribute:: facial_adjacency_groups
 
-        A list of mappings from neighbor group IDs to instances of
-        :class:`FacialAdjacencyGroup`.
+        A list of lists of instances of :class:`FacialAdjacencyGroup`.
 
-        ``facial_adjacency_groups[igrp][ineighbor_group]`` gives
-        the set of facial adjacency relations between group *igrp*
-        and *ineighbor_group*. *ineighbor_group* and *igrp* may be
-        identical, or *ineighbor_group* may be *None*, in which case
-        an :class:`InterPartitionAdjacencyGroup` group containing boundary
-        faces is returned.
+        ``facial_adjacency_groups[igrp]`` gives the facial adjacency relations for
+        group *igrp*, expressed as a list of :class:`FacialAdjacencyGroup` instances.
+        Each entry has a corresponding (but not necessarily unique)
+        *ineighbor_group* to which the adjacent faces belong. *ineighbor_group*
+        may also be *None* if the entry stores boundary faces.
 
         Referencing this attribute may raise
         :exc:`meshmode.DataUnavailable`.
@@ -669,17 +667,21 @@ class Mesh(Record):
             :width: 60%
 
         For example for the mesh in the figure, the following data structure
-        would be present::
+        could be present::
 
             [
-                {...},  # connectivity for group 0
-                {...},  # connectivity for group 1
-                {...},  # connectivity for group 2
-                {       # connectivity for group 3
-                    1: FacialAdjacencyGroup(...)  # towards group 1, green
-                    2: FacialAdjacencyGroup(...)  # towards group 2, pink
-                    None: FacialAdjacencyGroup(...)  # towards the boundary, orange
-                }
+                [...],  # connectivity for group 0
+                [...],  # connectivity for group 1
+                [...],  # connectivity for group 2
+                # connectivity for group 3
+                [
+                    # towards group 1, green
+                    FacialAdjacencyGroup(ineighbor_group=1, ...),
+                    # towards group 2, pink
+                    FacialAdjacencyGroup(ineighbor_group=2, ...),
+                    # towards the boundary, orange
+                    FacialAdjacencyGroup(ineighbor_group=None, ...)
+                ]
             ]
 
         (Note that element groups are not necessarily geometrically contiguous
@@ -840,8 +842,8 @@ class Mesh(Record):
 
             if facial_adjacency_groups:
                 assert len(facial_adjacency_groups) == len(self.groups)
-                for fagrp_map in facial_adjacency_groups:
-                    for fagrp in fagrp_map.values():
+                for fagrp_list in facial_adjacency_groups:
+                    for fagrp in fagrp_list:
                         nfagrp_elements, = fagrp.elements.shape
 
                         assert fagrp.element_faces.dtype == self.face_id_dtype
@@ -1245,7 +1247,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
 
     facial_adjacency_groups = []
     for igrp, grp in enumerate(groups):
-        grp_map = {}
+        grp_list = []
 
         face_has_neighbor = np.full((grp.nfaces, grp.nelements), False)
 
@@ -1254,13 +1256,14 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
         for i_neighbor_grp in connected_groups:
             is_neighbor_adj = (
                 is_grp_adj & (face_id_pairs[1].groups == i_neighbor_grp))
-            grp_map[i_neighbor_grp] = FacialAdjacencyGroup(
-                igroup=igrp,
-                ineighbor_group=i_neighbor_grp,
-                elements=face_id_pairs[0].elements[is_neighbor_adj],
-                element_faces=face_id_pairs[0].faces[is_neighbor_adj],
-                neighbors=face_id_pairs[1].elements[is_neighbor_adj],
-                neighbor_faces=face_id_pairs[1].faces[is_neighbor_adj])
+            grp_list.append(
+                FacialAdjacencyGroup(
+                    igroup=igrp,
+                    ineighbor_group=i_neighbor_grp,
+                    elements=face_id_pairs[0].elements[is_neighbor_adj],
+                    element_faces=face_id_pairs[0].faces[is_neighbor_adj],
+                    neighbors=face_id_pairs[1].elements[is_neighbor_adj],
+                    neighbor_faces=face_id_pairs[1].faces[is_neighbor_adj]))
             face_has_neighbor[
                 face_id_pairs[0].faces[is_neighbor_adj],
                 face_id_pairs[0].elements[is_neighbor_adj]] = True
@@ -1284,15 +1287,16 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
                             tag_mask |= boundary_tag_bit(tag)
                         neighbors[i] = -((-neighbors[i]) | tag_mask)
             neighbor_faces = np.zeros(len(elements), dtype=face_id_dtype)
-            grp_map[None] = FacialAdjacencyGroup(
-                igroup=igrp,
-                ineighbor_group=None,
-                elements=elements,
-                element_faces=element_faces,
-                neighbors=neighbors,
-                neighbor_faces=neighbor_faces)
+            grp_list.append(
+                FacialAdjacencyGroup(
+                    igroup=igrp,
+                    ineighbor_group=None,
+                    elements=elements,
+                    element_faces=element_faces,
+                    neighbors=neighbors,
+                    neighbor_faces=neighbor_faces))
 
-        facial_adjacency_groups.append(grp_map)
+        facial_adjacency_groups.append(grp_list)
 
     # }}}
 
@@ -1370,11 +1374,11 @@ def as_python(mesh, function_name="make_mesh"):
         if mesh._facial_adjacency_groups:
             cg("facial_adjacency_groups = []")
 
-            for fagrp_map in mesh.facial_adjacency_groups:
-                cg("facial_adjacency_groups.append({%s})" % ",\n    ".join(
-                    "{!r}: FacialAdjacencyGroup({})".format(
-                        inb_grp, fagrp_params_str(fagrp))
-                    for inb_grp, fagrp in fagrp_map.items()))
+            for fagrp_list in mesh.facial_adjacency_groups:
+                cg("facial_adjacency_groups.append([%s])" % ",\n    ".join(
+                    "FacialAdjacencyGroup({})".format(
+                        fagrp_params_str(fagrp))
+                    for fagrp in fagrp_list))
 
         else:
             cg("facial_adjacency_groups = %r" % mesh._facial_adjacency_groups)
@@ -1437,38 +1441,40 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
     :arg true_boundary_only: only verify for faces tagged with :class:`BTAG_ALL`.
     """
 
-    for fagrp_map in mesh.facial_adjacency_groups:
-        bdry_grp = fagrp_map.get(None)
-        if bdry_grp is None:
+    for fagrp_list in mesh.facial_adjacency_groups:
+        bdry_grps = [grp for grp in fagrp_list if grp.ineighbor_group is None]
+        if not bdry_grps:
             continue
 
-        nb_elements = bdry_grp.neighbors
-        assert (nb_elements < 0).all()
+        for bdry_grp in bdry_grps:
+            nb_elements = bdry_grp.neighbors
+            assert (nb_elements < 0).all()
 
-        nb_el_bits = -nb_elements
+            nb_el_bits = -nb_elements
 
-        # An array of flags for each face indicating whether we have encountered
-        # a boundary condition for that face.
-        seen = np.zeros_like(nb_el_bits, dtype=bool)
+            # An array of flags for each face indicating whether we have encountered
+            # a boundary condition for that face.
+            seen = np.zeros_like(nb_el_bits, dtype=bool)
 
-        if true_boundary_only:
-            tag_bit = mesh.boundary_tag_bit(BTAG_ALL)
-            tag_set = (nb_el_bits & tag_bit) != 0
+            if true_boundary_only:
+                tag_bit = mesh.boundary_tag_bit(BTAG_ALL)
+                tag_set = (nb_el_bits & tag_bit) != 0
 
-            # Consider non-boundary faces 'seen'
-            seen = seen | ~tag_set
+                # Consider non-boundary faces 'seen'
+                seen = seen | ~tag_set
 
-        for btag in boundary_tags:
-            tag_bit = mesh.boundary_tag_bit(btag)
-            tag_set = (nb_el_bits & tag_bit) != 0
+            for btag in boundary_tags:
+                tag_bit = mesh.boundary_tag_bit(btag)
+                tag_set = (nb_el_bits & tag_bit) != 0
 
-            if (seen & tag_set).any():
-                raise RuntimeError("faces with multiple boundary conditions found")
+                if (seen & tag_set).any():
+                    raise RuntimeError("faces with multiple boundary conditions "
+                        "found")
 
-            seen = seen | tag_set
+                seen = seen | tag_set
 
-        if not incomplete_ok and not seen.all():
-            raise RuntimeError("found faces without boundary conditions")
+            if not incomplete_ok and not seen.all():
+                raise RuntimeError("found faces without boundary conditions")
 
 # }}}
 
@@ -1485,13 +1491,16 @@ def is_boundary_tag_empty(mesh, boundary_tag):
         return True
 
     for igrp in range(len(mesh.groups)):
-        bdry_fagrp = mesh.facial_adjacency_groups[igrp].get(None, None)
-        if bdry_fagrp is None:
+        bdry_fagrps = [
+            grp for grp in mesh.facial_adjacency_groups[igrp]
+            if grp.ineighbor_group is None]
+        if not bdry_fagrps:
             continue
 
-        neg = bdry_fagrp.neighbors < 0
-        if (-bdry_fagrp.neighbors[neg] & btag_bit).any():
-            return False
+        for bdry_fagrp in bdry_fagrps:
+            neg = bdry_fagrp.neighbors < 0
+            if (-bdry_fagrp.neighbors[neg] & btag_bit).any():
+                return False
 
     return True
 

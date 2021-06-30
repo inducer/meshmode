@@ -25,6 +25,7 @@ THE SOFTWARE.
 
 from dataclasses import dataclass
 import numpy as np
+from typing import List
 
 from meshmode.mesh import InterPartitionAdjacencyGroup
 
@@ -125,7 +126,7 @@ class MPIMeshDistributor:
 
 @dataclass
 class RemoteGroupInfo:
-    inter_partition_adj_group: InterPartitionAdjacencyGroup
+    inter_partition_adj_groups: List[InterPartitionAdjacencyGroup]
     vol_elem_indices: np.ndarray
     bdry_elem_indices: np.ndarray
     bdry_faces: np.ndarray
@@ -138,8 +139,9 @@ def make_remote_group_infos(actx, bdry_conn):
 
     return [
             RemoteGroupInfo(
-                inter_partition_adj_group=(
-                    local_vol_mesh.facial_adjacency_groups[igrp][None]),
+                inter_partition_adj_groups=[
+                    fagrp for fagrp in local_vol_mesh.facial_adjacency_groups[igrp]
+                    if isinstance(fagrp, InterPartitionAdjacencyGroup)],
                 vol_elem_indices=np.concatenate([
                     actx.to_numpy(batch.from_element_indices)
                     for batch in bdry_conn.groups[igrp].batches]),
@@ -289,8 +291,8 @@ def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs
                     + mesh.groups[fagrp.igroup].element_nr_base,
                     fagrp.neighbors
                     + mesh.groups[fagrp.ineighbor_group].element_nr_base])
-                for fadj in mesh.facial_adjacency_groups
-                for to_grp, fagrp in fadj.items()
+                for fagrp_list in mesh.facial_adjacency_groups
+                for fagrp in fagrp_list
                 if fagrp.ineighbor_group is not None
                 ])
         sorted_neighbor_el_pairs = neighbor_el_pairs[
@@ -321,9 +323,11 @@ def get_connected_partitions(mesh):
     :returns: the set of partition numbers that are connected to `mesh`
     """
     connected_parts = set()
-    for adj in mesh.facial_adjacency_groups:
-        grp = adj.get(None, None)
-        if isinstance(grp, InterPartitionAdjacencyGroup):
+    for fagrp_list in mesh.facial_adjacency_groups:
+        grps = [
+            grp for grp in fagrp_list
+            if isinstance(grp, InterPartitionAdjacencyGroup)]
+        for grp in grps:
             indices = grp.neighbor_partitions >= 0
             connected_parts = connected_parts.union(
                     grp.neighbor_partitions[indices])
