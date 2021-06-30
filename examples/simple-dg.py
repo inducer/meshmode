@@ -32,7 +32,8 @@ from pytools.obj_array import flat_obj_array, make_obj_array
 
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
 from meshmode.dof_array import DOFArray, flat_norm
-from meshmode.array_context import PyOpenCLArrayContext
+from meshmode.array_context import (PyOpenCLArrayContext,
+                                    PytatoPyOpenCLArrayContext)
 from arraycontext import (
         freeze, thaw,
         make_loopy_program,
@@ -471,12 +472,15 @@ class WaveState:
 
 
 @log_process(logger)
-def main():
+def main(lazy=False):
     logging.basicConfig(level=logging.INFO)
 
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue, force_device_scalars=True)
+    if lazy:
+        actx = PytatoPyOpenCLArrayContext(queue)
+    else:
+        actx = PyOpenCLArrayContext(queue, force_device_scalars=True)
 
     nel_1d = 16
     from meshmode.mesh.generation import generate_regular_rect_mesh
@@ -505,11 +509,13 @@ def main():
     def rhs(t, q):
         return wave_operator(actx, discr, c=1, q=q)
 
-    t = 0
+    compiled_rhs = actx.compile(rhs)
+
+    t = np.float64(0)
     t_final = 3
     istep = 0
     while t < t_final:
-        fields = rk4_step(fields, t, dt, rhs)
+        fields = rk4_step(fields, t, dt, compiled_rhs)
 
         if istep % 10 == 0:
             # FIXME: Maybe an integral function to go with the
@@ -528,6 +534,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description="Wave Equation Solver")
+    parser.add_argument("--lazy", action="store_true",
+                        help="switch to a lazy computation mode")
+    args = parser.parse_args()
+    main(lazy=args.lazy)
 
 # vim: foldmethod=marker
