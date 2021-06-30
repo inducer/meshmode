@@ -52,6 +52,7 @@ def _transform_loopy_inner(t_unit):
 
     from pymbolic.primitives import Subscript, Variable
 
+    return None
     default_ep = t_unit.default_entrypoint
 
     # FIXME: Firedrake branch lacks kernel tags
