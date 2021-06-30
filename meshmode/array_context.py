@@ -211,7 +211,7 @@ class PyOpenCLArrayContext(PyOpenCLArrayContextBase):
         transformed_t_unit = _transform_loopy_inner(t_unit)
 
         if transformed_t_unit is not None:
-            return t_unit
+            return transformed_t_unit
 
         warn("meshmode.array_context.PyOpenCLArrayContext."
                 "transform_loopy_program fell back on "
