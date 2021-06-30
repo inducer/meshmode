@@ -735,19 +735,20 @@ build_connection_from_firedrake`.
     with ProcessLogger(logger, "Flipping FacialAdjacencyGroups"):
         facial_adjacency_groups = []
         for igroup, fagrps in enumerate(unflipped_facial_adjacency_groups):
-            facial_adjacency_groups.append({})
-            for ineighbor_group, fagrp in fagrps.items():
+            facial_adjacency_groups.append([])
+            for fagrp in fagrps:
                 new_element_faces = flip_local_face_indices(fagrp.element_faces,
                                                             fagrp.elements)
                 new_neighbor_faces = flip_local_face_indices(fagrp.neighbor_faces,
                                                              fagrp.neighbors)
-                new_fagrp = FacialAdjacencyGroup(igroup=igroup,
-                                                 ineighbor_group=ineighbor_group,
-                                                 elements=fagrp.elements,
-                                                 element_faces=new_element_faces,
-                                                 neighbors=fagrp.neighbors,
-                                                 neighbor_faces=new_neighbor_faces)
-                facial_adjacency_groups[igroup][ineighbor_group] = new_fagrp
+                facial_adjacency_groups[igroup].append(
+                    FacialAdjacencyGroup(
+                        igroup=igroup,
+                        ineighbor_group=fagrp.ineighbor_group,
+                        elements=fagrp.elements,
+                        element_faces=new_element_faces,
+                        neighbors=fagrp.neighbors,
+                        neighbor_faces=new_neighbor_faces))
 
     return (Mesh(vertices, [group],
                  boundary_tags=bdy_tags,

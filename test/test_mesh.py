@@ -531,16 +531,15 @@ def test_boundary_tags():
     outer_btag_bit = mesh.boundary_tag_bit("outer_bdy")
     inner_btag_bit = mesh.boundary_tag_bit("inner_bdy")
     for igrp in range(len(mesh.groups)):
-        bdry_fagrp = mesh.facial_adjacency_groups[igrp].get(None, None)
-
-        if bdry_fagrp is None:
-            continue
-
-        for nbrs in bdry_fagrp.neighbors:
-            if (-nbrs) & outer_btag_bit:
-                num_marked_outer_bdy += 1
-            if (-nbrs) & inner_btag_bit:
-                num_marked_inner_bdy += 1
+        bdry_fagrps = [
+            fagrp for fagrp in mesh.facial_adjacency_groups[igrp]
+            if fagrp.ineighbor_group is None]
+        for bdry_fagrp in bdry_fagrps:
+            for nbrs in bdry_fagrp.neighbors:
+                if (-nbrs) & outer_btag_bit:
+                    num_marked_outer_bdy += 1
+                if (-nbrs) & inner_btag_bit:
+                    num_marked_inner_bdy += 1
 
     # raise errors if wrong number of elements marked
     if num_marked_inner_bdy != num_on_inner_bdy:
@@ -627,16 +626,15 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
     btag_1_bit = mesh.boundary_tag_bit("btag_test_1")
     btag_2_bit = mesh.boundary_tag_bit("btag_test_2")
     for igrp in range(len(mesh.groups)):
-        bdry_fagrp = mesh.facial_adjacency_groups[igrp].get(None, None)
-
-        if bdry_fagrp is None:
-            continue
-
-        for nbrs in bdry_fagrp.neighbors:
-            if (-nbrs) & btag_1_bit:
-                num_marked_bdy_1 += 1
-            if (-nbrs) & btag_2_bit:
-                num_marked_bdy_2 += 1
+        bdry_fagrps = [
+            fagrp for fagrp in mesh.facial_adjacency_groups[igrp]
+            if fagrp.ineighbor_group is None]
+        for bdry_fagrp in bdry_fagrps:
+            for nbrs in bdry_fagrp.neighbors:
+                if (-nbrs) & btag_1_bit:
+                    num_marked_bdy_1 += 1
+                if (-nbrs) & btag_2_bit:
+                    num_marked_bdy_2 += 1
 
     # raise errors if wrong number of elements marked
     if num_marked_bdy_1 != num_on_bdy:

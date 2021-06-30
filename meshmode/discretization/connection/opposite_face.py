@@ -421,95 +421,98 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
         for i_tgt_grp in range(ngrps):
             vbc_tgt_grp_batches = volume_to_bdry_conn.groups[i_tgt_grp].batches
 
-            adj = vol_mesh.facial_adjacency_groups[i_tgt_grp][i_src_grp]
+            adj_grps = [
+                adj for adj in vol_mesh.facial_adjacency_groups[i_tgt_grp]
+                if adj.ineighbor_group == i_src_grp]
 
-            for i_face_tgt in range(vol_mesh.groups[i_tgt_grp].nfaces):
-                vbc_tgt_grp_face_batch = _find_ibatch_for_face(
-                        vbc_tgt_grp_batches, i_face_tgt)
+            for adj in adj_grps:
+                for i_face_tgt in range(vol_mesh.groups[i_tgt_grp].nfaces):
+                    vbc_tgt_grp_face_batch = _find_ibatch_for_face(
+                            vbc_tgt_grp_batches, i_face_tgt)
 
-                # {{{ index wrangling
+                    # {{{ index wrangling
 
-                # The elements in the adjacency group will be a subset of
-                # the elements in the restriction interpolation batch:
-                # Imagine an inter-group boundary. The volume-to-boundary
-                # connection will include all faces as targets, whereas
-                # there will be separate adjacency groups for intra- and
-                # inter-group connections.
+                    # The elements in the adjacency group will be a subset of
+                    # the elements in the restriction interpolation batch:
+                    # Imagine an inter-group boundary. The volume-to-boundary
+                    # connection will include all faces as targets, whereas
+                    # there will be separate adjacency groups for intra- and
+                    # inter-group connections.
 
-                adj_tgt_flags = adj.element_faces == i_face_tgt
-                adj_els = adj.elements[adj_tgt_flags]
-                if adj_els.size == 0:
-                    # NOTE: this case can happen for inter-group boundaries
-                    # when all elements are adjacent on the same face
-                    # index, so all other ones will be empty
-                    continue
+                    adj_tgt_flags = adj.element_faces == i_face_tgt
+                    adj_els = adj.elements[adj_tgt_flags]
+                    if adj_els.size == 0:
+                        # NOTE: this case can happen for inter-group boundaries
+                        # when all elements are adjacent on the same face
+                        # index, so all other ones will be empty
+                        continue
 
-                vbc_els = thaw_to_numpy(actx,
-                        vbc_tgt_grp_face_batch.from_element_indices)
+                    vbc_els = thaw_to_numpy(actx,
+                            vbc_tgt_grp_face_batch.from_element_indices)
 
-                if len(adj_els) == len(vbc_els):
-                    # Same length: assert (below) that the two use the same
-                    # ordering.
-                    vbc_used_els = slice(None)
+                    if len(adj_els) == len(vbc_els):
+                        # Same length: assert (below) that the two use the same
+                        # ordering.
+                        vbc_used_els = slice(None)
 
-                else:
-                    # Genuine subset: figure out an index mapping.
-                    vbc_els_sort_idx = np.argsort(vbc_els)
-                    vbc_used_els = vbc_els_sort_idx[np.searchsorted(
-                        vbc_els, adj_els, sorter=vbc_els_sort_idx
-                        )]
+                    else:
+                        # Genuine subset: figure out an index mapping.
+                        vbc_els_sort_idx = np.argsort(vbc_els)
+                        vbc_used_els = vbc_els_sort_idx[np.searchsorted(
+                            vbc_els, adj_els, sorter=vbc_els_sort_idx
+                            )]
 
-                assert np.array_equal(vbc_els[vbc_used_els], adj_els)
+                    assert np.array_equal(vbc_els[vbc_used_els], adj_els)
 
-                # find tgt_bdry_element_indices
+                    # find tgt_bdry_element_indices
 
-                tgt_bdry_element_indices = thaw_to_numpy(
-                        actx,
-                        vbc_tgt_grp_face_batch.to_element_indices
-                        )[vbc_used_els]
+                    tgt_bdry_element_indices = thaw_to_numpy(
+                            actx,
+                            vbc_tgt_grp_face_batch.to_element_indices
+                            )[vbc_used_els]
 
-                # find src_bdry_element_indices
+                    # find src_bdry_element_indices
 
-                src_vol_element_indices = adj.neighbors[adj_tgt_flags]
-                src_element_faces = adj.neighbor_faces[adj_tgt_flags]
+                    src_vol_element_indices = adj.neighbors[adj_tgt_flags]
+                    src_element_faces = adj.neighbor_faces[adj_tgt_flags]
 
-                src_bdry_element_indices = src_grp_el_lookup[
-                        src_vol_element_indices, src_element_faces]
+                    src_bdry_element_indices = src_grp_el_lookup[
+                            src_vol_element_indices, src_element_faces]
 
-                # }}}
+                    # }}}
 
-                # {{{ visualization (for debugging)
+                    # {{{ visualization (for debugging)
 
-                if 0:
-                    print("TVE", adj.elements[adj_tgt_flags])
-                    print("TBE", tgt_bdry_element_indices)
-                    print("FVE", src_vol_element_indices)
-                    from meshmode.mesh.visualization import draw_2d_mesh
-                    import matplotlib.pyplot as pt
-                    draw_2d_mesh(vol_discr.mesh, draw_element_numbers=True,
-                            set_bounding_box=True,
-                            draw_vertex_numbers=False,
-                            draw_face_numbers=True,
-                            fill=None)
-                    pt.figure()
+                    if 0:
+                        print("TVE", adj.elements[adj_tgt_flags])
+                        print("TBE", tgt_bdry_element_indices)
+                        print("FVE", src_vol_element_indices)
+                        from meshmode.mesh.visualization import draw_2d_mesh
+                        import matplotlib.pyplot as pt
+                        draw_2d_mesh(vol_discr.mesh, draw_element_numbers=True,
+                                set_bounding_box=True,
+                                draw_vertex_numbers=False,
+                                draw_face_numbers=True,
+                                fill=None)
+                        pt.figure()
 
-                    draw_2d_mesh(bdry_discr.mesh, draw_element_numbers=True,
-                            set_bounding_box=True,
-                            draw_vertex_numbers=False,
-                            draw_face_numbers=True,
-                            fill=None)
+                        draw_2d_mesh(bdry_discr.mesh, draw_element_numbers=True,
+                                set_bounding_box=True,
+                                draw_vertex_numbers=False,
+                                draw_face_numbers=True,
+                                fill=None)
 
-                    pt.show()
+                        pt.show()
 
-                # }}}
+                    # }}}
 
-                batches = _make_cross_face_batches(actx,
-                        bdry_discr, bdry_discr,
-                        i_tgt_grp, i_src_grp,
-                        tgt_bdry_element_indices,
-                        src_bdry_element_indices,
-                        tgt_aff_transform=adj.aff_transform)
-                groups[i_tgt_grp].extend(batches)
+                    batches = _make_cross_face_batches(actx,
+                            bdry_discr, bdry_discr,
+                            i_tgt_grp, i_src_grp,
+                            tgt_bdry_element_indices,
+                            src_bdry_element_indices,
+                            tgt_aff_transform=adj.aff_transform)
+                    groups[i_tgt_grp].extend(batches)
 
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
@@ -569,70 +572,71 @@ def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
     # (See the find_group_indices below.)
 
     for rgi in remote_group_infos:
-        rem_ipag = rgi.inter_partition_adj_group
+        rem_ipags = rgi.inter_partition_adj_groups
 
-        indices = (i_local_part == rem_ipag.neighbor_partitions)
-        if not np.any(indices):
-            # Skip because remote group is not connected to i_local_part.
-            continue
-
-        i_remote_vol_elems = rem_ipag.elements[indices]
-        i_remote_faces = rem_ipag.element_faces[indices]
-        i_local_vol_elems = rem_ipag.partition_neighbors[indices]
-        i_local_faces = rem_ipag.neighbor_faces[indices]
-
-        del indices
-
-        i_local_grps = find_group_indices(local_vol_groups, i_local_vol_elems)
-
-        # {{{ make remote_vol_to_bdry
-
-        remote_approx_vol_nelements = np.max(rgi.vol_elem_indices)+1
-        remote_approx_nfaces = np.max(rgi.bdry_faces)+1
-        remote_vol_to_bdry = np.full(
-                (remote_approx_vol_nelements, remote_approx_nfaces),
-                -1, dtype=remote_bdry_discr.mesh.element_id_dtype)
-        remote_vol_to_bdry[rgi.vol_elem_indices, rgi.bdry_faces] = \
-                rgi.bdry_elem_indices
-
-        # }}}
-
-        for i_local_grp in np.unique(i_local_grps):
-
-            # {{{ come up with matched_{local,remote}_bdry_el_indices
-
-            local_vol_to_bdry = _make_bdry_el_lookup_table(actx, local_bdry_conn,
-                        i_local_grp)
-
-            local_indices = np.where(i_local_grps == i_local_grp)[0]
-            if len(local_indices) == 0:
+        for rem_ipag in rem_ipags:
+            indices = (i_local_part == rem_ipag.neighbor_partitions)
+            if not np.any(indices):
+                # Skip because remote group is not connected to i_local_part.
                 continue
 
-            local_grp_vol_elems = (
-                    i_local_vol_elems[local_indices]
-                    - local_vol_groups[i_local_grp].element_nr_base)
-            # These are group-local.
-            remote_grp_vol_elems = i_remote_vol_elems[local_indices]
+            i_remote_vol_elems = rem_ipag.elements[indices]
+            i_remote_faces = rem_ipag.element_faces[indices]
+            i_local_vol_elems = rem_ipag.partition_neighbors[indices]
+            i_local_faces = rem_ipag.neighbor_faces[indices]
 
-            matched_local_bdry_el_indices = local_vol_to_bdry[
-                    local_grp_vol_elems,
-                    i_local_faces[local_indices]]
-            assert (matched_local_bdry_el_indices >= 0).all()
-            matched_remote_bdry_el_indices = remote_vol_to_bdry[
-                    remote_grp_vol_elems,
-                    i_remote_faces[local_indices]]
-            assert (matched_remote_bdry_el_indices >= 0).all()
+            del indices
+
+            i_local_grps = find_group_indices(local_vol_groups, i_local_vol_elems)
+
+            # {{{ make remote_vol_to_bdry
+
+            remote_approx_vol_nelements = np.max(rgi.vol_elem_indices)+1
+            remote_approx_nfaces = np.max(rgi.bdry_faces)+1
+            remote_vol_to_bdry = np.full(
+                    (remote_approx_vol_nelements, remote_approx_nfaces),
+                    -1, dtype=remote_bdry_discr.mesh.element_id_dtype)
+            remote_vol_to_bdry[rgi.vol_elem_indices, rgi.bdry_faces] = \
+                    rgi.bdry_elem_indices
 
             # }}}
 
-            grp_batches = _make_cross_face_batches(actx,
-                        local_bdry_conn.to_discr, remote_bdry_discr,
-                        i_local_grp, rem_ipag.igroup,
-                        matched_local_bdry_el_indices,
-                        matched_remote_bdry_el_indices,
-                        src_aff_transform=rem_ipag.aff_transform)
+            for i_local_grp in np.unique(i_local_grps):
 
-            part_batches[i_local_grp].extend(grp_batches)
+                # {{{ come up with matched_{local,remote}_bdry_el_indices
+
+                local_vol_to_bdry = _make_bdry_el_lookup_table(actx, local_bdry_conn,
+                            i_local_grp)
+
+                local_indices = np.where(i_local_grps == i_local_grp)[0]
+                if len(local_indices) == 0:
+                    continue
+
+                local_grp_vol_elems = (
+                        i_local_vol_elems[local_indices]
+                        - local_vol_groups[i_local_grp].element_nr_base)
+                # These are group-local.
+                remote_grp_vol_elems = i_remote_vol_elems[local_indices]
+
+                matched_local_bdry_el_indices = local_vol_to_bdry[
+                        local_grp_vol_elems,
+                        i_local_faces[local_indices]]
+                assert (matched_local_bdry_el_indices >= 0).all()
+                matched_remote_bdry_el_indices = remote_vol_to_bdry[
+                        remote_grp_vol_elems,
+                        i_remote_faces[local_indices]]
+                assert (matched_remote_bdry_el_indices >= 0).all()
+
+                # }}}
+
+                grp_batches = _make_cross_face_batches(actx,
+                            local_bdry_conn.to_discr, remote_bdry_discr,
+                            i_local_grp, rem_ipag.igroup,
+                            matched_local_bdry_el_indices,
+                            matched_remote_bdry_el_indices,
+                            src_aff_transform=rem_ipag.aff_transform)
+
+                part_batches[i_local_grp].extend(grp_batches)
 
     return DirectDiscretizationConnection(
             from_discr=remote_bdry_discr,

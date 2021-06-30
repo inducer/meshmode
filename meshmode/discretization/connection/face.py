@@ -116,24 +116,25 @@ def _get_face_vertices(mesh, boundary_tag):
 
         btag_bit = mesh.boundary_tag_bit(boundary_tag)
 
-        for fagrp_map in mesh.facial_adjacency_groups:
-            bdry_grp = fagrp_map.get(None)
-            if bdry_grp is None:
-                continue
+        for fagrp_list in mesh.facial_adjacency_groups:
+            bdry_grps = [
+                fagrp for fagrp in fagrp_list
+                if fagrp.ineighbor_group is None]
 
-            assert (bdry_grp.neighbors < 0).all()
+            for bdry_grp in bdry_grps:
+                assert (bdry_grp.neighbors < 0).all()
 
-            grp = mesh.groups[bdry_grp.igroup]
+                grp = mesh.groups[bdry_grp.igroup]
 
-            nb_el_bits = -bdry_grp.neighbors
-            face_relevant_flags = (nb_el_bits & btag_bit) != 0
+                nb_el_bits = -bdry_grp.neighbors
+                face_relevant_flags = (nb_el_bits & btag_bit) != 0
 
-            for fvi in grp.face_vertex_indices():
-                bdry_vertex_vol_nrs.update(
-                        grp.vertex_indices
-                        [bdry_grp.elements[face_relevant_flags]]
-                        [:, np.array(fvi, dtype=np.intp)]
-                        .flat)
+                for fvi in grp.face_vertex_indices():
+                    bdry_vertex_vol_nrs.update(
+                            grp.vertex_indices
+                            [bdry_grp.elements[face_relevant_flags]]
+                            [:, np.array(fvi, dtype=np.intp)]
+                            .flat)
 
         return np.array(sorted(bdry_vertex_vol_nrs), dtype=np.intp)
 
@@ -214,7 +215,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
     if boundary_tag not in [FACE_RESTR_ALL, FACE_RESTR_INTERIOR]:
         btag_bit = discr.mesh.boundary_tag_bit(boundary_tag)
 
-    for igrp, (grp, fagrp_map) in enumerate(
+    for igrp, (grp, fagrp_list) in enumerate(
             zip(discr.groups, discr.mesh.facial_adjacency_groups)):
 
         mgrp = grp.mesh_el_group
@@ -229,7 +230,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
         group_boundary_faces = []
 
         if boundary_tag is FACE_RESTR_INTERIOR:
-            for fagrp in fagrp_map.values():
+            for fagrp in fagrp_list:
                 if fagrp.ineighbor_group is None:
                     # boundary faces -> not looking for those
                     continue
@@ -245,8 +246,10 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
                     )
 
         else:
-            bdry_grp = fagrp_map.get(None)
-            if bdry_grp is not None:
+            bdry_grps = [
+                fagrp for fagrp in fagrp_list
+                if fagrp.ineighbor_group is None]
+            for bdry_grp in bdry_grps:
                 nb_el_bits = -bdry_grp.neighbors
                 face_relevant_flags = (nb_el_bits & btag_bit) != 0
 
