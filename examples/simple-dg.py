@@ -513,14 +513,14 @@ def main(lazy=False):
     compiled_rhs = actx_rhs.compile(rhs)
 
     def rhs_wrapper(t, q):
-        return actx_outer.thaw(actx_rhs.freeze(
-            compiled_rhs(t, actx_rhs.thaw(actx_outer.freeze(q)))))
+        r = compiled_rhs(t, thaw(freeze(q, actx_outer), actx_rhs))
+        return thaw(freeze(r, actx_rhs), actx_outer)
 
     t = np.float64(0)
     t_final = 3
     istep = 0
     while t < t_final:
-        fields = rk4_step(fields, t, dt, compiled_rhs)
+        fields = rk4_step(fields, t, dt, rhs_wrapper)
 
         if istep % 10 == 0:
             # FIXME: Maybe an integral function to go with the
