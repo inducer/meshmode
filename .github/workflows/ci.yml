@@ -93,6 +93,11 @@ jobs:
                 curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/build-py-project-and-run-examples.sh
                 . ./build-py-project-and-run-examples.sh
 
+
+                # Test lazy eval
+                rm -f *.vtu
+                python simple-dg.py --lazy
+
     docs:
         name: Documentation
         runs-on: ubuntu-latest

@@ -27,6 +27,7 @@ THE SOFTWARE.
 import sys
 from warnings import warn
 from arraycontext import PyOpenCLArrayContext as PyOpenCLArrayContextBase
+from arraycontext import PytatoPyOpenCLArrayContext as PytatoPyOpenCLArrayContextBase
 from arraycontext.pytest import (
         _PytestPyOpenCLArrayContextFactoryWithClass,
         register_pytest_array_context_factory)
@@ -302,5 +303,10 @@ else:
 
 # }}}
 
+
+class PytatoPyOpenCLArrayContext(PytatoPyOpenCLArrayContextBase):
+    def transform_loopy_program(self, t_unit):
+        # FIXME: Do not parallelize for now.
+        return t_unit
 
 # vim: foldmethod=marker

@@ -583,7 +583,7 @@ class Discretization:
                     result[iel, idof] = \
                         sum(j, resampling_mat[idof, j] * nodes[iel, j])
                     """,
-                name="nodes")
+                name="lp_nodes")
 
             return lp.tag_inames(t_unit, {
                 "iel": ConcurrentElementInameTag(),
