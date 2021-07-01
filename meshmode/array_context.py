@@ -306,62 +306,62 @@ else:
 
 class PytatoPyOpenCLArrayContext(PytatoPyOpenCLArrayContextBase):
     def transform_loopy_program(self, t_unit):
+        # Do not parallelize for now.
         return t_unit
-        import loopy as lp
-        from loopy.translation_unit import for_each_kernel
 
-        nwg = 48
-        nwi = (16, 2)
+        if False:
+            import loopy as lp
+            from loopy.translation_unit import for_each_kernel
 
-        @for_each_kernel
-        def gridify(knl):
+            nwg = 48
+            nwi = (16, 2)
 
-            # {{{ Pattern matching inames
+            @for_each_kernel
+            def gridify(knl):
 
-            for insn in knl.instructions:
-                if isinstance(insn, lp.CallInstruction):
-                    # must be a callable kernel, don't touch.
-                    pass
-                elif isinstance(insn, lp.Assignment):
-                    bigger_loop = None
-                    smaller_loop = None
-                    for iname in insn.within_inames:
-                        if iname.startswith("iel"):
-                            assert bigger_loop is None
-                            bigger_loop = iname
-                        if iname.startswith("idof"):
-                            assert smaller_loop is None
-                            smaller_loop = iname
+                # {{{ Pattern matching inames
 
-                    if bigger_loop or smaller_loop:
-                        if (bigger_loop is None
-                                and smaller_loop is None):
-                            continue
-                    # else:
-                    #     sorted_inames = sorted(tuple(insn.within_inames),
-                    #             key=knl.get_constant_iname_length)
-                    #     # print(sorted_inames)
-                    #     if len(sorted_inames) == 2:
-                    #         smaller_loop = sorted_inames[0]
-                    #         bigger_loop = sorted_inames[1]
+                for insn in knl.instructions:
+                    if isinstance(insn, lp.CallInstruction):
+                        # must be a callable kernel, don't touch.
+                        pass
+                    elif isinstance(insn, lp.Assignment):
+                        bigger_loop = None
+                        smaller_loop = None
+                        for iname in insn.within_inames:
+                            if iname.startswith("iel"):
+                                assert bigger_loop is None
+                                bigger_loop = iname
+                            if iname.startswith("idof"):
+                                assert smaller_loop is None
+                                smaller_loop = iname
 
-                        # knl = lp.chunk_iname(knl, bigger_loop, nwg,
-                        #         outer_tag="g.0")
-                        # knl = lp.split_iname(knl, f"{bigger_loop}_inner",
-                        #         nwi[0], inner_tag="l.1")
+                        if bigger_loop or smaller_loop:
+                            assert (bigger_loop is not None
+                                    and smaller_loop is not None)
+                        else:
+                            sorted_inames = sorted(tuple(insn.within_inames),
+                                    key=knl.get_constant_iname_length)
+                            smaller_loop = sorted_inames[0]
+                            bigger_loop = sorted_inames[1]
+
+                        knl = lp.chunk_iname(knl, bigger_loop, nwg,
+                                outer_tag="g.0")
+                        knl = lp.split_iname(knl, f"{bigger_loop}_inner",
+                                nwi[0], inner_tag="l.1")
                         knl = lp.split_iname(knl, smaller_loop,
                                 nwi[1], inner_tag="l.0")
-                elif isinstance(insn, lp.BarrierInstruction):
-                    pass
-                else:
-                    raise NotImplementedError
+                    elif isinstance(insn, lp.BarrierInstruction):
+                        pass
+                    else:
+                        raise NotImplementedError
 
-            # }}}
+                # }}}
 
-            return knl
+                return knl
 
-        t_unit = lp.set_options(t_unit, "insert_additional_gbarriers")
+            t_unit = lp.set_options(t_unit, "insert_additional_gbarriers")
 
-        return gridify(t_unit)
+            return gridify(t_unit)
 
 # vim: foldmethod=marker
