@@ -477,10 +477,11 @@ def main(lazy=False):
 
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
+    actx_outer = PyOpenCLArrayContext(queue, force_device_scalars=True)
     if lazy:
-        actx = PytatoPyOpenCLArrayContext(queue)
+        actx_rhs = PytatoPyOpenCLArrayContext(queue)
     else:
-        actx = PyOpenCLArrayContext(queue, force_device_scalars=True)
+        actx_rhs = actx_outer
 
     nel_1d = 16
     from meshmode.mesh.generation import generate_regular_rect_mesh
@@ -496,20 +497,24 @@ def main(lazy=False):
 
     logger.info("%d elements", mesh.nelements)
 
-    discr = DGDiscretization(actx, mesh, order=order)
+    discr = DGDiscretization(actx_outer, mesh, order=order)
 
     fields = WaveState(
-            u=bump(actx, discr),
-            v=make_obj_array([discr.zeros(actx) for i in range(discr.dim)]),
+            u=bump(actx_outer, discr),
+            v=make_obj_array([discr.zeros(actx_outer) for i in range(discr.dim)]),
             )
 
     from meshmode.discretization.visualization import make_visualizer
-    vis = make_visualizer(actx, discr.volume_discr)
+    vis = make_visualizer(actx_outer, discr.volume_discr)
 
     def rhs(t, q):
-        return wave_operator(actx, discr, c=1, q=q)
+        return wave_operator(actx_rhs, discr, c=1, q=q)
 
-    compiled_rhs = actx.compile(rhs)
+    compiled_rhs = actx_rhs.compile(rhs)
+
+    def rhs_wrapper(t, q):
+        return actx_outer.thaw(actx_rhs.freeze(
+            compiled_rhs(t, actx_rhs.thaw(actx_outer.freeze(q)))))
 
     t = np.float64(0)
     t_final = 3
@@ -522,7 +527,7 @@ def main(lazy=False):
             # DOFArray would be nice?
             assert len(fields.u) == 1
             logger.info("[%05d] t %.5e / %.5e norm %.5e",
-                    istep, t, t_final, actx.to_numpy(flat_norm(fields.u, 2)))
+                    istep, t, t_final, actx_outer.to_numpy(flat_norm(fields.u, 2)))
             vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep, [
                 ("q", fields),
                 ])
