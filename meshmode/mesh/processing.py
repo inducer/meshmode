@@ -213,7 +213,7 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
             neighbors_are_local = global_elem_to_part_elem[facial_adj.neighbors
                         + elem_base_j] >= 0
 
-            adj_indices = np.where(elements_are_local & neighbors_are_local)[0]
+            adj_indices, = np.where(elements_are_local & neighbors_are_local)
 
             if len(adj_indices) > 0:
                 part_elem_base_i = part_mesh_group_elem_base[i_part_grp]
@@ -329,7 +329,7 @@ def _collect_nonlocal_adjacency_data(mesh, part_per_elem, global_elem_to_part_el
                         + elem_base_i] >= 0
             neighbors_are_nonlocal = global_elem_to_part_elem[facial_adj.neighbors
                         + elem_base_j] < 0
-            adj_indices = np.where(elements_are_local & neighbors_are_nonlocal)[0]
+            adj_indices, = np.where(elements_are_local & neighbors_are_nonlocal)
 
             if len(adj_indices) > 0:
                 part_elem_base_i = part_mesh_group_elem_base[i_part_grp]
@@ -409,8 +409,8 @@ def _collect_bdry_data(mesh, global_elem_to_part_elem, part_mesh_groups,
         for bdry_grp in bdry_grps:
             elem_base = mesh.groups[igrp].element_nr_base
 
-            adj_indices = np.where(global_elem_to_part_elem[bdry_grp.elements
-                        + elem_base] >= 0)[0]
+            adj_indices, = np.where(global_elem_to_part_elem[bdry_grp.elements
+                        + elem_base] >= 0)
 
             if len(adj_indices) > 0:
                 part_elem_base = part_mesh_group_elem_base[i_part_grp]
@@ -509,7 +509,7 @@ def partition_mesh(mesh, part_per_element, part_num):
         "part_per_element must have shape (mesh.nelements,)")
 
     # Contains the indices of the elements requested.
-    queried_elems = np.where(np.array(part_per_element) == part_num)[0]
+    queried_elems, = np.where(np.array(part_per_element) == part_num)
 
     global_elem_to_part_elem = _compute_global_elem_to_part_elem(part_per_element,
                 {part_num}, mesh.element_id_dtype)
