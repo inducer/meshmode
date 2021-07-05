@@ -127,11 +127,12 @@ class DOFArray:
     """
 
     def __init__(self, actx: Optional[ArrayContext], data: Tuple[Any]):
-        if not (actx is None or isinstance(actx, ArrayContext)):
-            raise TypeError("actx must be of type ArrayContext")
+        if __debug__:
+            if not (actx is None or isinstance(actx, ArrayContext)):
+                raise TypeError("actx must be of type ArrayContext")
 
-        if not isinstance(data, tuple):
-            raise TypeError("'data' argument must be a tuple")
+            if not isinstance(data, tuple):
+                raise TypeError("'data' argument must be a tuple")
 
         self._array_context = actx
         self._data = data
