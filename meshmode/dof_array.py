@@ -166,7 +166,7 @@ class DOFArray:
         return cls(actx, tuple(res_list))
 
     def __str__(self):
-        return str(self._data)
+        return f"DOFArray({str(self._data)})"
 
     def __repr__(self):
         return f"DOFArray({repr(self._data)})"
