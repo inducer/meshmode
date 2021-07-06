@@ -29,6 +29,12 @@ import numpy.linalg as la
 
 import modepy as mp
 
+from meshmode.mesh import (
+    InteriorAdjacencyGroup,
+    BoundaryAdjacencyGroup,
+    InterPartitionAdjacencyGroup
+)
+
 
 __doc__ = """
 .. autofunction:: find_group_indices
@@ -183,10 +189,11 @@ def _get_connected_partitions(
     connected_parts = set()
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
-        for facial_adj in facial_adj_list:
+        int_grps = [
+            grp for grp in facial_adj_list
+            if isinstance(grp, InteriorAdjacencyGroup)]
+        for facial_adj in int_grps:
             jgrp = facial_adj.ineighbor_group
-            if jgrp is None:
-                continue
 
             elem_base_i = mesh.groups[igrp].element_nr_base
             elem_base_j = mesh.groups[jgrp].element_nr_base
@@ -220,10 +227,9 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
     :arg part_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *part_mesh_groups*.
 
-    :returns: A :class:`list` of :class:`list`\ s, *local_to_local_adjacency_groups*,
-        where ``local_to_local_adjacency_groups[igrp]`` is a list of instances of
-        :class:`~meshmode.mesh.FacialAdjacencyGroup` that contain the local-to-local
-        adjacency.
+    :returns: A list of lists of `~meshmode.mesh.InteriorAdjacencyGroup` instances
+        corresponding to the entries in *mesh.facial_adjacency_groups* that
+        have local-to-local adjacency.
     """
     local_to_local_adjacency_groups = [[] for _ in part_mesh_groups]
 
@@ -232,10 +238,12 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
         if i_part_grp is None:
             continue
 
-        for facial_adj in facial_adj_list:
+        int_grps = [
+            grp for grp in facial_adj_list
+            if isinstance(grp, InteriorAdjacencyGroup)]
+
+        for facial_adj in int_grps:
             jgrp = facial_adj.ineighbor_group
-            if jgrp is None:
-                continue
 
             j_part_grp = global_group_to_part_group[jgrp]
             if j_part_grp is None:
@@ -262,9 +270,8 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
                             adj_indices] + elem_base_j] - part_elem_base_j
                 neighbor_faces = facial_adj.neighbor_faces[adj_indices]
 
-                from meshmode.mesh import FacialAdjacencyGroup
                 local_to_local_adjacency_groups[i_part_grp].append(
-                    FacialAdjacencyGroup(
+                    InteriorAdjacencyGroup(
                         igroup=i_part_grp,
                         ineighbor_group=j_part_grp,
                         elements=elements,
@@ -314,10 +321,12 @@ def _create_nonlocal_adjacency_groups(
         if i_part_grp is None:
             continue
 
-        for facial_adj in facial_adj_list:
+        int_grps = [
+            grp for grp in facial_adj_list
+            if isinstance(grp, InteriorAdjacencyGroup)]
+
+        for facial_adj in int_grps:
             jgrp = facial_adj.ineighbor_group
-            if jgrp is None:
-                continue
 
             elem_base_i = mesh.groups[igrp].element_nr_base
             elem_base_j = mesh.groups[jgrp].element_nr_base
@@ -335,9 +344,9 @@ def _create_nonlocal_adjacency_groups(
                             adj_indices] + elem_base_i] - part_elem_base_i
                 element_faces = facial_adj.element_faces[adj_indices]
                 global_neighbors = facial_adj.neighbors[adj_indices] + elem_base_j
-                partition_neighbors = global_elem_to_neighbor_elem[global_neighbors]
-                neighbor_parts = part_per_element[global_neighbors]
+                neighbors = global_elem_to_neighbor_elem[global_neighbors]
                 neighbor_faces = facial_adj.neighbor_faces[adj_indices]
+                neighbor_parts = part_per_element[global_neighbors]
 
                 from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
                 flags = np.full_like(elements, boundary_tag_bit(BTAG_REALLY_ALL))
@@ -345,16 +354,15 @@ def _create_nonlocal_adjacency_groups(
                     flags[neighbor_parts == i_neighbor_part] |= (
                         boundary_tag_bit(BTAG_PARTITION(i_neighbor_part)))
 
-                from meshmode.mesh import InterPartitionAdjacencyGroup
                 nonlocal_adj_groups[i_part_grp].append(
                     InterPartitionAdjacencyGroup(
-                        igroup=i_part_grp, ineighbor_group=None,
+                        igroup=i_part_grp,
                         elements=elements,
                         element_faces=element_faces,
-                        neighbors=-flags,
+                        flags=flags,
+                        neighbors=neighbors,
                         neighbor_faces=neighbor_faces,
                         neighbor_partitions=neighbor_parts,
-                        partition_neighbors=partition_neighbors,
                         aff_transform=facial_adj.aff_transform))
 
     return nonlocal_adj_groups
@@ -376,7 +384,7 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, part_mesh_groups,
     :arg part_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *part_mesh_groups*.
 
-    :returns: A list of lists of `~meshmode.mesh.FacialAdjacencyGroup` instances
+    :returns: A list of lists of `~meshmode.mesh.BoundaryAdjacencyGroup` instances
         corresponding to the entries in *mesh.facial_adjacency_groups* that have
         boundary faces.
     """
@@ -389,7 +397,7 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, part_mesh_groups,
 
         bdry_grps = [
             grp for grp in facial_adj_list
-            if grp.ineighbor_group is None]
+            if isinstance(grp, BoundaryAdjacencyGroup)]
 
         for bdry_grp in bdry_grps:
             elem_base = mesh.groups[igrp].element_nr_base
@@ -403,16 +411,14 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, part_mesh_groups,
                 elements = global_elem_to_part_elem[bdry_grp.elements[adj_indices]
                             + elem_base] - part_elem_base
                 element_faces = bdry_grp.element_faces[adj_indices]
-                neighbors = bdry_grp.neighbors[adj_indices]
+                flags = bdry_grp.flags[adj_indices]
 
-                from meshmode.mesh import FacialAdjacencyGroup
                 bdry_adj_groups[i_part_grp].append(
-                    FacialAdjacencyGroup(
-                        igroup=i_part_grp, ineighbor_group=None,
+                    BoundaryAdjacencyGroup(
+                        igroup=i_part_grp,
                         elements=elements,
                         element_faces=element_faces,
-                        neighbors=neighbors,
-                        neighbor_faces=np.zeros_like(element_faces)))
+                        flags=flags))
 
     return bdry_adj_groups
 
