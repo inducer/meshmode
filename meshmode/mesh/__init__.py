@@ -36,6 +36,8 @@ __doc__ = """
 
 .. autoclass:: NodalAdjacency
 .. autoclass:: FacialAdjacencyGroup
+.. autoclass:: InteriorAdjacencyGroup
+.. autoclass:: BoundaryAdjacencyGroup
 .. autoclass:: InterPartitionAdjacencyGroup
 
 .. autofunction:: as_python
@@ -416,9 +418,10 @@ class NodalAdjacency(Record):
 # {{{ facial adjacency
 
 class FacialAdjacencyGroup(Record):
-    """Describes facial element adjacency information for one
+    """
+    Describes facial element adjacency information for one
     :class:`MeshElementGroup`, i.e. information about elements that share (part
-    of) a face.
+    of) a face or elements that lie on a boundary.
 
     .. image:: images/facial-adjacency-group.png
         :align: center
@@ -430,6 +433,42 @@ class FacialAdjacencyGroup(Record):
     necessarily contiguous like the figure may suggest.)
 
     .. attribute:: igroup
+    """
+
+    def __init__(self, igroup, **kwargs):
+        Record.__init__(self, igroup=igroup, **kwargs)
+
+    def __eq__(self, other):
+        return (
+                type(self) == type(other)
+                and self.igroup == other.igroup)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def _as_python(self, **kwargs):
+        return (
+            f"{self.__class__.__name__}("
+            + ",\n    ".join(f"{k}={v}" for k, v in kwargs.items())
+            + ")")
+
+    def as_python(self):
+        if type(self) != FacialAdjacencyGroup:
+            raise NotImplementedError(f"Not implemented for {type(self)}.")
+        return self._as_python(igroup=self.igroup)
+
+# }}}
+
+
+# {{{ interior adjacency
+
+class InteriorAdjacencyGroup(FacialAdjacencyGroup):
+    """Describes interior facial element adjacency information for one
+    :class:`MeshElementGroup`.
+
+    .. attribute:: igroup
+
+        The mesh element group number of this group.
 
     .. attribute:: ineighbor_group
 
@@ -439,34 +478,24 @@ class FacialAdjacencyGroup(Record):
 
     .. attribute:: elements
 
-        ``element_id_t [nfagrp_elements]``. ``elements[i]``
-        Group-local element numbers.
+        ``element_id_t [nfagrp_elements]``. ``elements[i]`` gives the
+        element number within :attr:`igroup` of the interior face.
 
     .. attribute:: element_faces
 
-        ``face_id_t [nfagrp_elements]``. ``element_faces[i]``
-        indicate what face index of the opposite element indicated in
-        ``neighbors[iface]`` touches face number *iface* of element
-        number *iel_grp* in this element group.
+        ``face_id_t [nfagrp_elements]``. ``element_faces[i]`` gives the face
+        index of the interior face in element ``elements[i]``.
 
     .. attribute:: neighbors
 
-        ``element_id_t [nfagrp_elements]``. ``neighbors[i]``
-        gives the element number within :attr:`ineighbor_group` of the element
-        opposite ``elements[i]``.
-
-        If this number is negative, then this indicates that this is a
-        boundary face, and the bits set in ``-neighbors[i]``
-        should be interpreted according to :attr:`Mesh.boundary_tags`.
+        ``element_id_t [nfagrp_elements]``. ``neighbors[i]`` gives the element
+        number within :attr:`ineighbor_group` of the element opposite
+        ``elements[i]``.
 
     .. attribute:: neighbor_faces
 
-        ``face_id_t [nfagrp_elements]``. ``neighbor_faces[i]`` indicate what
-        face index of the opposite element indicated in ``neighbors[i]`` has
-        facial contact with face number ``element_faces[i]`` of element number
-        ``elements[i]`` in element group *igroup*.
-
-        Zero if ``neighbors[i]`` is negative.
+        ``face_id_t [nfagrp_elements]``. ``neighbor_faces[i]`` gives the
+        face index of the opposite face in element ``neighbors[i]``
 
     .. attribute:: aff_transform
 
@@ -479,7 +508,8 @@ class FacialAdjacencyGroup(Record):
     .. automethod:: __ne__
     """
 
-    def __init__(self, igroup, ineighbor_group, *,
+    def __init__(self, igroup, *,
+            ineighbor_group,
             elements, element_faces,
             neighbors, neighbor_faces,
             aff_transform=None,
@@ -487,8 +517,11 @@ class FacialAdjacencyGroup(Record):
         if aff_transform is None:
             aff_transform = (None, None)
 
-        Record.__init__(self,
-            igroup=igroup, ineighbor_group=ineighbor_group,
+        FacialAdjacencyGroup.__init__(self,
+            # FacialAdjacencyGroup
+            igroup=igroup,
+            # InteriorAdjacencyGroup
+            ineighbor_group=ineighbor_group,
             elements=elements, element_faces=element_faces,
             neighbors=neighbors, neighbor_faces=neighbor_faces,
             aff_transform=aff_transform,
@@ -496,79 +529,128 @@ class FacialAdjacencyGroup(Record):
 
     def __eq__(self, other):
         return (
-                type(self) == type(other)
-                and self.igroup == other.igroup
-                and self.ineighbor_group == other.ineighbor_group
-                and np.array_equal(self.elements, other.elements)
-                and np.array_equal(self.element_faces, other.element_faces)
-                and np.array_equal(self.neighbors, other.neighbors)
-                and np.array_equal(self.neighbor_faces, other.neighbor_faces)
-                and (
-                    np.array_equal(self.aff_transform[0], other.aff_transform[0])
-                    if (
-                        self.aff_transform[0] is not None
-                        and other.aff_transform[0] is not None)
-                    else self.aff_transform[0] == other.aff_transform[0])
-                and (
-                    np.array_equal(self.aff_transform[1], other.aff_transform[1])
-                    if (
-                        self.aff_transform[1] is not None
-                        and other.aff_transform[1] is not None)
-                    else self.aff_transform[1] == other.aff_transform[1]))
+            super().__eq__(other)
+            and self.ineighbor_group == other.ineighbor_group
+            and np.array_equal(self.elements, other.elements)
+            and np.array_equal(self.element_faces, other.element_faces)
+            and np.array_equal(self.neighbors, other.neighbors)
+            and np.array_equal(self.neighbor_faces, other.neighbor_faces)
+            and (
+                np.array_equal(self.aff_transform[0], other.aff_transform[0])
+                if (
+                    self.aff_transform[0] is not None
+                    and other.aff_transform[0] is not None)
+                else self.aff_transform[0] == other.aff_transform[0])
+            and (
+                np.array_equal(self.aff_transform[1], other.aff_transform[1])
+                if (
+                    self.aff_transform[1] is not None
+                    and other.aff_transform[1] is not None)
+                else self.aff_transform[1] == other.aff_transform[1]))
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
+    def as_python(self):
+        if type(self) != InteriorAdjacencyGroup:
+            raise NotImplementedError(f"Not implemented for {type(self)}.")
+        return self._as_python(
+            igroup=self.igroup,
+            ineighbor_group=self.ineighbor_group,
+            elements=_numpy_array_as_python(self.elements),
+            element_faces=_numpy_array_as_python(self.element_faces),
+            neighbors=_numpy_array_as_python(self.neighbors),
+            neighbor_faces=_numpy_array_as_python(self.neighbor_faces),
+            aff_transform=(
+                _numpy_array_as_python(self.aff_transform[0])
+                if self.aff_transform[0] is not None
+                else None,
+                _numpy_array_as_python(self.aff_transform[1])
+                if self.aff_transform[1] is not None
+                else None))
+
+# }}}
+
+
+# {{{ boundary adjacency
+
+class BoundaryAdjacencyGroup(FacialAdjacencyGroup):
+    """Describes boundary adjacency information for one :class:`MeshElementGroup`.
+
+    .. attribute:: igroup
+
+        The mesh element group number of this group.
+
+    .. attribute:: elements
+
+        ``element_id_t [nfagrp_elements]``. ``elements[i]`` gives the
+        element number within :attr:`igroup` of the boundary face.
+
+    .. attribute:: element_faces
+
+        ``face_id_t [nfagrp_elements]``. ``element_faces[i]`` gives the face
+        index of the boundary face in element ``elements[i]``.
+
+    .. attribute:: flags
+
+        ``element_id_t [nfagrp_elements]``. ``flags[i]`` stores bits that
+        should be interpreted according to :attr:`Mesh.boundary_tags`.
+    """
+
+    def __eq__(self, other):
+        return (
+            super().__eq__(other)
+            and np.array_equal(self.elements, other.elements)
+            and np.array_equal(self.element_faces, other.element_faces)
+            and np.array_equal(self.flags, other.flags))
+
+    def as_python(self):
+        if type(self) != BoundaryAdjacencyGroup:
+            raise NotImplementedError(f"Not implemented for {type(self)}.")
+        return self._as_python(
+            igroup=self.igroup,
+            elements=_numpy_array_as_python(self.elements),
+            element_faces=_numpy_array_as_python(self.element_faces),
+            flags=_numpy_array_as_python(self.flags))
 
 # }}}
 
 
 # {{{ partition adjacency
 
-class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
+class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
     """
-    Describes boundary adjacency information of elements in one
+    Describes inter-partition adjacency information for one
     :class:`MeshElementGroup`.
 
     .. attribute:: igroup
 
-        The group number of this group.
-
-    .. attribute:: ineighbor_group
-
-        *None* for boundary faces.
+        The mesh element group number of this group.
 
     .. attribute:: elements
 
         Group-local element numbers.
         Element ``element_id_dtype elements[i]`` and face
         ``face_id_dtype element_faces[i]`` is connected to neighbor element
-        ``element_id_dtype partition_neighbors[i]`` with face
+        ``element_id_dtype neighbors[i]`` with face
         ``face_id_dtype global_neighbor_faces[i]``. The partition number it connects
         to is ``neighbor_partitions[i]``.
 
     .. attribute:: element_faces
 
         ``face_id_dtype element_faces[i]`` gives the face of
-        ``element_id_dtype elements[i]`` that is connected to
-        ``partition_neighbors[i]``.
+        ``element_id_dtype elements[i]`` that is connected to ``neighbors[i]``.
+
+    .. attribute:: flags
+
+        ``element_id_t [nfagrp_elements]``. ``flags[i]`` stores bits that
+        should be interpreted according to :attr:`Mesh.boundary_tags`.
 
     .. attribute:: neighbors
 
-        Since this is a boundary, ``element_id_dtype neighbors[i]`` is interpreted
-        as a boundary tag. ``-neighbors[i]`` should be interpreted according to
-        :class:``Mesh.boundary_tags``.
-
-    .. attribute:: partition_neighbors
-
-        ``element_id_dtype partition_neighbors[i]`` gives the volume element number
+        ``element_id_dtype neighbors[i]`` gives the volume element number
         within the neighboring partition of the element connected to
         ``element_id_dtype elements[i]`` (which is a boundary element index). Use
         `~meshmode.mesh.processing.find_group_indices` to find the group that
         the element belongs to, then subtract ``element_nr_base`` to find the
         element of the group.
-
-        If ``partition_neighbors[i]`` is negative, ``elements[i]`` is on a true
-        boundary and is not connected to any other :class:``Mesh``.
 
     .. attribute:: neighbor_faces
 
@@ -576,16 +658,10 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
         neighboring partition of the face connected to
         ``element_id_dtype elements[i]``
 
-        If ``neighbor_partitions[i]`` is negative, ``elements[i]`` is on a true
-        boundary and is not connected to any other :class:``Mesh``.
-
     .. attribute:: neighbor_partitions
 
         ``neighbor_partitions[i]`` gives the partition number that ``elements[i]``
         is connected to.
-
-        If ``neighbor_partitions[i]`` is negative, ``elements[i]`` is on a true
-        boundary and is not connected to any other :class:``Mesh``.
 
     .. attribute:: aff_transform
 
@@ -597,25 +673,65 @@ class InterPartitionAdjacencyGroup(FacialAdjacencyGroup):
     .. versionadded:: 2017.1
     """
 
-    def __init__(self, igroup, ineighbor_group, *,
+    def __init__(self, igroup, *,
             elements, element_faces,
+            flags,
             neighbors, neighbor_faces,
-            partition_neighbors, neighbor_partitions,
+            neighbor_partitions,
             aff_transform=None,
             **kwargs):
-        FacialAdjacencyGroup.__init__(self,
-            igroup=igroup, ineighbor_group=ineighbor_group,
+        if aff_transform is None:
+            aff_transform = (None, None)
+
+        BoundaryAdjacencyGroup.__init__(self,
+            # FacialAdjacencyGroup
+            igroup=igroup,
+            # BoundaryAdjacencyGroup
             elements=elements, element_faces=element_faces,
+            flags=flags,
+            # InterPartitionAdjacencyGroup
             neighbors=neighbors, neighbor_faces=neighbor_faces,
-            aff_transform=aff_transform,
-            partition_neighbors=partition_neighbors,
             neighbor_partitions=neighbor_partitions,
+            aff_transform=aff_transform,
             **kwargs)
 
     def __eq__(self, other):
-        return (super.__eq__(self, other)
-            and np.array_equal(self.partition_neighbors, other.partition_neighbors)
-            and np.array_equal(self.neighbor_partitions, other.neighbor_partitions))
+        return (
+            super().__eq__(other)
+            and np.array_equal(self.neighbors, other.neighbors)
+            and np.array_equal(self.neighbor_faces, other.neighbor_faces)
+            and np.array_equal(self.neighbor_partitions, other.neighbor_partitions)
+            and (
+                np.array_equal(self.aff_transform[0], other.aff_transform[0])
+                if (
+                    self.aff_transform[0] is not None
+                    and other.aff_transform[0] is not None)
+                else self.aff_transform[0] == other.aff_transform[0])
+            and (
+                np.array_equal(self.aff_transform[1], other.aff_transform[1])
+                if (
+                    self.aff_transform[1] is not None
+                    and other.aff_transform[1] is not None)
+                else self.aff_transform[1] == other.aff_transform[1]))
+
+    def as_python(self):
+        if type(self) != InterPartitionAdjacencyGroup:
+            raise NotImplementedError(f"Not implemented for {type(self)}.")
+        return self._as_python(
+            igroup=self.igroup,
+            elements=_numpy_array_as_python(self.elements),
+            element_faces=_numpy_array_as_python(self.element_faces),
+            flags=_numpy_array_as_python(self.flags),
+            neighbors=_numpy_array_as_python(self.neighbors),
+            neighbor_faces=_numpy_array_as_python(self.neighbor_faces),
+            neighbor_partitions=_numpy_array_as_python(self.neighbor_partitions),
+            aff_transform=(
+                _numpy_array_as_python(self.aff_transform[0])
+                if self.aff_transform[0] is not None
+                else None,
+                _numpy_array_as_python(self.aff_transform[1])
+                if self.aff_transform[1] is not None
+                else None))
 
 # }}}
 
@@ -655,9 +771,6 @@ class Mesh(Record):
 
         ``facial_adjacency_groups[igrp]`` gives the facial adjacency relations for
         group *igrp*, expressed as a list of :class:`FacialAdjacencyGroup` instances.
-        Each entry has a corresponding (but not necessarily unique)
-        *ineighbor_group* to which the adjacent faces belong. *ineighbor_group*
-        may also be *None* if the entry stores boundary faces.
 
         Referencing this attribute may raise
         :exc:`meshmode.DataUnavailable`.
@@ -676,11 +789,11 @@ class Mesh(Record):
                 # connectivity for group 3
                 [
                     # towards group 1, green
-                    FacialAdjacencyGroup(ineighbor_group=1, ...),
+                    InteriorAdjacencyGroup(ineighbor_group=1, ...),
                     # towards group 2, pink
-                    FacialAdjacencyGroup(ineighbor_group=2, ...),
+                    InteriorAdjacencyGroup(ineighbor_group=2, ...),
                     # towards the boundary, orange
-                    FacialAdjacencyGroup(ineighbor_group=None, ...)
+                    BoundaryAdjacencyGroup(...)
                 ]
             ]
 
@@ -844,21 +957,22 @@ class Mesh(Record):
                 assert len(facial_adjacency_groups) == len(self.groups)
                 for fagrp_list in facial_adjacency_groups:
                     for fagrp in fagrp_list:
-                        nfagrp_elements, = fagrp.elements.shape
-
-                        assert fagrp.element_faces.dtype == self.face_id_dtype
-                        assert fagrp.element_faces.shape == (nfagrp_elements,)
-
-                        assert fagrp.neighbors.dtype == self.element_id_dtype
-                        assert fagrp.neighbors.shape == (nfagrp_elements,)
-
-                        assert fagrp.neighbor_faces.dtype == self.face_id_dtype
-                        assert fagrp.neighbor_faces.shape == (nfagrp_elements,)
-
-                        if fagrp.ineighbor_group is None:
-                            is_bdry = fagrp.neighbors < 0
+                        if isinstance(fagrp, InteriorAdjacencyGroup):
+                            nfagrp_elements, = fagrp.elements.shape
+                            assert fagrp.element_faces.dtype == self.face_id_dtype
+                            assert fagrp.element_faces.shape == (nfagrp_elements,)
+                            assert fagrp.neighbors.dtype == self.element_id_dtype
+                            assert fagrp.neighbors.shape == (nfagrp_elements,)
+                            assert fagrp.neighbor_faces.dtype == self.face_id_dtype
+                            assert fagrp.neighbor_faces.shape == (nfagrp_elements,)
+                        else:
+                            nfagrp_elements, = fagrp.elements.shape
+                            assert fagrp.element_faces.dtype == self.face_id_dtype
+                            assert fagrp.element_faces.shape == (nfagrp_elements,)
+                            assert fagrp.flags.dtype == self.element_id_dtype
+                            assert fagrp.flags.shape == (nfagrp_elements,)
                             assert ((1 << btag_to_index[BTAG_REALLY_ALL])
-                                    & -fagrp.neighbors[is_bdry]).all(), \
+                                    & fagrp.flags).all(), \
                                     "boundary faces without BTAG_REALLY_ALL found"
 
             from meshmode.mesh.processing import \
@@ -1243,8 +1357,6 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
 
     # {{{ build facial_adjacency_groups data structure
 
-    from meshmode.mesh import FacialAdjacencyGroup, BTAG_ALL, BTAG_REALLY_ALL
-
     facial_adjacency_groups = []
     for igrp, grp in enumerate(groups):
         grp_list = []
@@ -1257,7 +1369,7 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
             is_neighbor_adj = (
                 is_grp_adj & (face_id_pairs[1].groups == i_neighbor_grp))
             grp_list.append(
-                FacialAdjacencyGroup(
+                InteriorAdjacencyGroup(
                     igroup=igrp,
                     ineighbor_group=i_neighbor_grp,
                     elements=face_id_pairs[0].elements[is_neighbor_adj],
@@ -1272,9 +1384,9 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
         if has_bdry:
             faces, elements = np.where(~face_has_neighbor)
             element_faces = faces.astype(face_id_dtype)
-            neighbors = np.full(len(elements),
-                -(boundary_tag_bit(BTAG_ALL)
-                    | boundary_tag_bit(BTAG_REALLY_ALL)),
+            flags = np.full(len(elements),
+                boundary_tag_bit(BTAG_ALL)
+                    | boundary_tag_bit(BTAG_REALLY_ALL),
                 dtype=element_id_dtype)
             if face_vertex_indices_to_tags is not None:
                 for i in range(len(elements)):
@@ -1285,16 +1397,13 @@ def _compute_facial_adjacency_from_vertices(groups, boundary_tags,
                         tag_mask = 0
                         for tag in tags:
                             tag_mask |= boundary_tag_bit(tag)
-                        neighbors[i] = -((-neighbors[i]) | tag_mask)
-            neighbor_faces = np.zeros(len(elements), dtype=face_id_dtype)
+                        flags[i] = flags[i] | tag_mask
             grp_list.append(
-                FacialAdjacencyGroup(
+                BoundaryAdjacencyGroup(
                     igroup=igrp,
-                    ineighbor_group=None,
                     elements=elements,
                     element_faces=element_faces,
-                    neighbors=neighbors,
-                    neighbor_faces=neighbor_faces))
+                    flags=flags))
 
         facial_adjacency_groups.append(grp_list)
 
@@ -1325,8 +1434,14 @@ def as_python(mesh, function_name="make_mesh"):
 
         import numpy as np
         from meshmode.mesh import (
-            Mesh, MeshElementGroup, FacialAdjacencyGroup,
-            BTAG_ALL, BTAG_REALLY_ALL)
+            Mesh,
+            MeshElementGroup,
+            FacialAdjacencyGroup,
+            InteriorAdjacencyGroup,
+            BoundaryAdjacencyGroup,
+            InterPartitionAdjacencyGroup,
+            BTAG_ALL,
+            BTAG_REALLY_ALL)
 
         """)
 
@@ -1351,34 +1466,15 @@ def as_python(mesh, function_name="make_mesh"):
 
         # {{{ facial adjacency groups
 
-        def fagrp_params_str(fagrp):
-            if type(fagrp) != FacialAdjacencyGroup:
-                raise NotImplementedError(f"Not implemented for {fagrp.__class__}.")
-            params = {
-                    "igroup": fagrp.igroup,
-                    "ineighbor_group": fagrp.ineighbor_group,
-                    "elements": _numpy_array_as_python(fagrp.elements),
-                    "element_faces": _numpy_array_as_python(fagrp.element_faces),
-                    "neighbors": _numpy_array_as_python(fagrp.neighbors),
-                    "neighbor_faces": _numpy_array_as_python(fagrp.neighbor_faces),
-                    "aff_transform": (
-                            _numpy_array_as_python(fagrp.aff_transform[0])
-                            if fagrp.aff_transform[0] is not None
-                            else None,
-                            _numpy_array_as_python(fagrp.aff_transform[1])
-                            if fagrp.aff_transform[1] is not None
-                            else None)
-                    }
-            return ",\n    ".join(f"{k}={v}" for k, v in params.items())
-
         if mesh._facial_adjacency_groups:
             cg("facial_adjacency_groups = []")
 
             for fagrp_list in mesh.facial_adjacency_groups:
-                cg("facial_adjacency_groups.append([%s])" % ",\n    ".join(
-                    "FacialAdjacencyGroup({})".format(
-                        fagrp_params_str(fagrp))
-                    for fagrp in fagrp_list))
+                cg("facial_adjacency_groups.append([")
+                with Indentation(cg):
+                    for fagrp in fagrp_list:
+                        cg(fagrp.as_python() + ",")
+                cg("])")
 
         else:
             cg("facial_adjacency_groups = %r" % mesh._facial_adjacency_groups)
@@ -1442,15 +1538,14 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
     """
 
     for fagrp_list in mesh.facial_adjacency_groups:
-        bdry_grps = [grp for grp in fagrp_list if grp.ineighbor_group is None]
+        bdry_grps = [
+            grp for grp in fagrp_list
+            if isinstance(grp, BoundaryAdjacencyGroup)]
         if not bdry_grps:
             continue
 
         for bdry_grp in bdry_grps:
-            nb_elements = bdry_grp.neighbors
-            assert (nb_elements < 0).all()
-
-            nb_el_bits = -nb_elements
+            nb_el_bits = bdry_grp.flags
 
             # An array of flags for each face indicating whether we have encountered
             # a boundary condition for that face.
@@ -1493,13 +1588,12 @@ def is_boundary_tag_empty(mesh, boundary_tag):
     for igrp in range(len(mesh.groups)):
         bdry_fagrps = [
             grp for grp in mesh.facial_adjacency_groups[igrp]
-            if grp.ineighbor_group is None]
+            if isinstance(grp, BoundaryAdjacencyGroup)]
         if not bdry_fagrps:
             continue
 
         for bdry_fagrp in bdry_fagrps:
-            neg = bdry_fagrp.neighbors < 0
-            if (-bdry_fagrp.neighbors[neg] & btag_bit).any():
+            if (bdry_fagrp.flags & btag_bit).any():
                 return False
 
     return True

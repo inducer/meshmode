@@ -35,7 +35,12 @@ pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         [PytestPyOpenCLArrayContextFactory])
 
 from meshmode.discretization.poly_element import default_simplex_group_factory
-from meshmode.mesh import BTAG_ALL
+from meshmode.mesh import (
+    BTAG_ALL,
+    InteriorAdjacencyGroup,
+    BoundaryAdjacencyGroup,
+    InterPartitionAdjacencyGroup
+)
 
 import pytest
 import os
@@ -175,10 +180,11 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
 def _check_for_cross_rank_adj(mesh, part_per_element):
     for igrp, grp in enumerate(mesh.groups):
         fagrp_list = mesh.facial_adjacency_groups[igrp]
-        for fagrp in fagrp_list:
+        int_grps = [
+            grp for grp in fagrp_list
+            if isinstance(grp, InteriorAdjacencyGroup)]
+        for fagrp in int_grps:
             ineighbor_grp = fagrp.ineighbor_group
-            if ineighbor_grp is None:
-                continue
             neighbor_grp = mesh.groups[ineighbor_grp]
             for iface in range(len(fagrp.elements)):
                 part = part_per_element[fagrp.elements[iface] + grp.element_nr_base]
@@ -244,7 +250,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
         for i_remote_part in neighbors:
             connected_parts.add((i_local_part, i_remote_part))
 
-    from meshmode.mesh import BTAG_PARTITION, InterPartitionAdjacencyGroup
+    from meshmode.mesh import BTAG_PARTITION
     from meshmode.mesh.processing import find_group_indices
     num_tags = np.zeros((num_parts,))
 
@@ -269,17 +275,14 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                 if isinstance(fagrp, InterPartitionAdjacencyGroup)]
             ipagrp_count += len(ipagrps)
             for ipagrp in ipagrps:
-                tags = -ipagrp.neighbors
-                assert np.all(tags >= 0)
+                assert np.all(ipagrp.flags >= 0)
                 elem_base = part.groups[grp_num].element_nr_base
                 for idx in range(len(ipagrp.elements)):
-                    if ipagrp.partition_neighbors[idx] == -1:
-                        continue
                     elem = ipagrp.elements[idx]
                     meshwide_elem = elem_base + elem
                     face = ipagrp.element_faces[idx]
                     n_part_num = ipagrp.neighbor_partitions[idx]
-                    n_meshwide_elem = ipagrp.partition_neighbors[idx]
+                    n_meshwide_elem = ipagrp.neighbors[idx]
                     n_face = ipagrp.neighbor_faces[idx]
                     num_tags[n_part_num] += 1
                     n_part, n_part_to_global = new_meshes[n_part_num]
@@ -299,7 +302,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                             n_part_num, n_grp_num, n_elem, n_face]
                         found_reverse_adj = found_reverse_adj or (
                             part_num == n_ipagrp.neighbor_partitions[n_idx]
-                            and meshwide_elem == n_ipagrp.partition_neighbors[n_idx]
+                            and meshwide_elem == n_ipagrp.neighbors[n_idx]
                             and face == n_ipagrp.neighbor_faces[n_idx])
                         if found_reverse_adj:
                             _, n_part_to_global = new_meshes[n_part_num]
@@ -317,13 +320,16 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                     p_n_elem = p_meshwide_n_elem - p_n_elem_base
 
                     f_groups = mesh.facial_adjacency_groups[p_grp_num]
-                    for p_bnd_adj in f_groups:
-                        for idx in range(len(p_bnd_adj.elements)):
-                            if (p_elem == p_bnd_adj.elements[idx]
-                                     and face == p_bnd_adj.element_faces[idx]):
-                                assert p_n_elem == p_bnd_adj.neighbors[idx],\
+                    int_groups = [
+                        grp for grp in f_groups
+                        if isinstance(grp, InteriorAdjacencyGroup)]
+                    for adj in int_groups:
+                        for idx in range(len(adj.elements)):
+                            if (p_elem == adj.elements[idx]
+                                     and face == adj.element_faces[idx]):
+                                assert p_n_elem == adj.neighbors[idx],\
                                         "Tag does not give correct neighbor"
-                                assert n_face == p_bnd_adj.neighbor_faces[idx],\
+                                assert n_face == adj.neighbor_faces[idx],\
                                         "Tag does not give correct neighbor"
 
     assert ipagrp_count > 0 or not has_cross_rank_adj,\
@@ -341,12 +347,13 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
 def count_tags(mesh, tag):
     num_bnds = 0
     for fagrp_list in mesh.facial_adjacency_groups:
-        bdry_grps = [fagrp for fagrp in fagrp_list if fagrp.ineighbor_group is None]
+        bdry_grps = [
+            fagrp for fagrp in fagrp_list
+            if isinstance(fagrp, BoundaryAdjacencyGroup)]
         for bdry_grp in bdry_grps:
-            for neighbors in bdry_grp.neighbors:
-                if neighbors < 0:
-                    if -neighbors & mesh.boundary_tag_bit(tag) != 0:
-                        num_bnds += 1
+            for flags in bdry_grp.flags:
+                if flags & mesh.boundary_tag_bit(tag) != 0:
+                    num_bnds += 1
     return num_bnds
 
 # }}}

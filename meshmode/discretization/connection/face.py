@@ -117,17 +117,15 @@ def _get_face_vertices(mesh, boundary_tag):
         btag_bit = mesh.boundary_tag_bit(boundary_tag)
 
         for fagrp_list in mesh.facial_adjacency_groups:
+            from meshmode.mesh import BoundaryAdjacencyGroup
             bdry_grps = [
                 fagrp for fagrp in fagrp_list
-                if fagrp.ineighbor_group is None]
+                if isinstance(fagrp, BoundaryAdjacencyGroup)]
 
             for bdry_grp in bdry_grps:
-                assert (bdry_grp.neighbors < 0).all()
-
                 grp = mesh.groups[bdry_grp.igroup]
 
-                nb_el_bits = -bdry_grp.neighbors
-                face_relevant_flags = (nb_el_bits & btag_bit) != 0
+                face_relevant_flags = (bdry_grp.flags & btag_bit) != 0
 
                 for fvi in grp.face_vertex_indices():
                     bdry_vertex_vol_nrs.update(
@@ -230,11 +228,11 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
         group_boundary_faces = []
 
         if boundary_tag is FACE_RESTR_INTERIOR:
-            for fagrp in fagrp_list:
-                if fagrp.ineighbor_group is None:
-                    # boundary faces -> not looking for those
-                    continue
-
+            from meshmode.mesh import InteriorAdjacencyGroup
+            int_grps = [
+                fagrp for fagrp in fagrp_list
+                if isinstance(fagrp, InteriorAdjacencyGroup)]
+            for fagrp in int_grps:
                 group_boundary_faces.extend(
                         zip(fagrp.elements, fagrp.element_faces))
 
@@ -246,13 +244,12 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
                     )
 
         else:
+            from meshmode.mesh import BoundaryAdjacencyGroup
             bdry_grps = [
                 fagrp for fagrp in fagrp_list
-                if fagrp.ineighbor_group is None]
+                if isinstance(fagrp, BoundaryAdjacencyGroup)]
             for bdry_grp in bdry_grps:
-                nb_el_bits = -bdry_grp.neighbors
-                face_relevant_flags = (nb_el_bits & btag_bit) != 0
-
+                face_relevant_flags = (bdry_grp.flags & btag_bit) != 0
                 group_boundary_faces.extend(
                             zip(
                                 bdry_grp.elements[face_relevant_flags],

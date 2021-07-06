@@ -26,8 +26,16 @@ import numpy as np
 
 from modepy import resampling_matrix, simplex_best_available_basis
 
-from meshmode.mesh import (BTAG_ALL, BTAG_REALLY_ALL, BTAG_INDUCED_BOUNDARY,
-    FacialAdjacencyGroup, Mesh, NodalAdjacency, SimplexElementGroup)
+from meshmode.mesh import (
+    BTAG_ALL,
+    BTAG_REALLY_ALL,
+    BTAG_INDUCED_BOUNDARY,
+    Mesh,
+    SimplexElementGroup,
+    NodalAdjacency,
+    InteriorAdjacencyGroup,
+    BoundaryAdjacencyGroup
+    )
 from meshmode.interop.firedrake.reference_cell import (
     get_affine_reference_simplex_mapping, get_finat_element_unit_nodes)
 
@@ -244,27 +252,26 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         fd_loc_fac_nr_to_mm[fd_local_facet_nr] = mm_local_facet_nr
 
     # build a look-up table from firedrake markers to the appropriate values
-    # in the neighbors array for the external and internal facial adjacency
-    # groups
+    # in the flags array for the external facial adjacency groups
     bdy_tags = _get_firedrake_boundary_tags(
         top, tag_induced_boundary=cells_to_use is not None)
     boundary_tag_to_index = {bdy_tag: i for i, bdy_tag in enumerate(bdy_tags)}
-    marker_to_neighbor_value = {}
+    marker_to_flag_value = {}
     from meshmode.mesh import _boundary_tag_bit
     # for convenience,
     # None maps to the boundary tag for a boundary facet with no marker
-    marker_to_neighbor_value[None] = \
-        -(_boundary_tag_bit(bdy_tags, boundary_tag_to_index, BTAG_REALLY_ALL)
-          | _boundary_tag_bit(bdy_tags, boundary_tag_to_index, BTAG_ALL))
+    marker_to_flag_value[None] = (
+        _boundary_tag_bit(bdy_tags, boundary_tag_to_index, BTAG_REALLY_ALL)
+        | _boundary_tag_bit(bdy_tags, boundary_tag_to_index, BTAG_ALL))
     # firedrake exterior facets with no marker are assigned the
     # a dummy marker
     from firedrake.mesh import unmarked as fd_unmarked
-    marker_to_neighbor_value[fd_unmarked] = marker_to_neighbor_value[None]
+    marker_to_flag_value[fd_unmarked] = marker_to_flag_value[None]
     # Now figure out the appropriate tags for each firedrake markers
     for marker in top.exterior_facets.unique_markers:
-        marker_to_neighbor_value[marker] = \
-            -(_boundary_tag_bit(bdy_tags, boundary_tag_to_index, marker)
-              | -marker_to_neighbor_value[None])
+        marker_to_flag_value[marker] = (
+            _boundary_tag_bit(bdy_tags, boundary_tag_to_index, marker)
+            | marker_to_flag_value[None])
 
     # {{{ build the FacialAdjacencyGroup for internal connectivity
 
@@ -277,7 +284,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         np.array([[fd_loc_fac_nr_to_mm[fac_nr] for fac_nr in fac_nrs]
                   for fac_nrs in int_fac_loc_nr])
     # elements neighbors element_faces neighbor_faces are as required
-    # for a :class:`FacialAdjacencyGroup`.
+    # for a :class:`InteriorAdjacencyGroup`.
 
     int_elements = int_facet_cell.flatten()
     int_neighbors = np.concatenate((int_facet_cell[:, 1], int_facet_cell[:, 0]))
@@ -314,18 +321,16 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                               newly_created_exterior_facs)
         new_ext_elements = int_elements[newly_created_exterior_facs]
         new_ext_element_faces = int_element_faces[newly_created_exterior_facs]
-        new_ext_neighbor_tag = -(_boundary_tag_bit(bdy_tags,
-                                                  boundary_tag_to_index,
-                                                  BTAG_REALLY_ALL)
-                                | _boundary_tag_bit(bdy_tags,
-                                                    boundary_tag_to_index,
-                                                    BTAG_INDUCED_BOUNDARY))
-        new_ext_neighbors = np.full(new_ext_elements.shape,
-                                    new_ext_neighbor_tag,
-                                    dtype=IntType)
-        new_ext_neighbor_faces = np.full(new_ext_elements.shape,
-                                         0,
-                                         dtype=Mesh.face_id_dtype)
+        new_ext_flag = (
+            _boundary_tag_bit(bdy_tags,
+                              boundary_tag_to_index,
+                              BTAG_REALLY_ALL)
+            | _boundary_tag_bit(bdy_tags,
+                                boundary_tag_to_index,
+                                BTAG_INDUCED_BOUNDARY))
+        new_ext_flags = np.full(new_ext_elements.shape,
+                                new_ext_flag,
+                                dtype=IntType)
         # Remove any (previously) interior facets that have become exterior
         # facets
         remaining_int_facs = np.logical_not(newly_created_exterior_facs)
@@ -334,7 +339,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         int_neighbors = int_neighbors[remaining_int_facs]
         int_neighbor_faces = int_neighbor_faces[remaining_int_facs]
 
-    interconnectivity_grp = FacialAdjacencyGroup(igroup=0, ineighbor_group=0,
+    interconnectivity_grp = InteriorAdjacencyGroup(igroup=0, ineighbor_group=0,
                                                  elements=int_elements,
                                                  neighbors=int_neighbors,
                                                  element_faces=int_element_faces,
@@ -350,8 +355,6 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     ext_element_faces = np.array([fd_loc_fac_nr_to_mm[fac_nr] for fac_nr in
                                   top.exterior_facets.local_facet_dat.data],
                                  dtype=Mesh.face_id_dtype)
-    ext_neighbor_faces = np.zeros(ext_element_faces.shape,
-                                  dtype=Mesh.face_id_dtype)
     # If only using some of the cells, throw away unused cells and
     # move to new cell index
     exterior_facet_markers = top.exterior_facets.markers
@@ -360,20 +363,19 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         ext_elements = np.vectorize(cells_to_use_inv.__getitem__)(
             ext_elements[to_keep])
         ext_element_faces = ext_element_faces[to_keep]
-        ext_neighbor_faces = ext_neighbor_faces[to_keep]
         if exterior_facet_markers is not None:
             exterior_facet_markers = exterior_facet_markers[to_keep]
 
     # tag the boundary, making sure to record custom tags
     # (firedrake "markers") if present
     if top.exterior_facets.markers is not None:
-        ext_neighbors = np.zeros(ext_elements.shape, dtype=IntType)
+        ext_flags = np.zeros(ext_elements.shape, dtype=IntType)
         for ifac, marker in enumerate(exterior_facet_markers):
-            ext_neighbors[ifac] = marker_to_neighbor_value[marker]
+            ext_flags[ifac] = marker_to_flag_value[marker]
     else:
-        ext_neighbors = np.full(ext_elements.shape,
-                                marker_to_neighbor_value[None],
-                                dtype=IntType)
+        ext_flags = np.full(ext_elements.shape,
+                            marker_to_flag_value[None],
+                            dtype=IntType)
 
     # If not using all the cells, some interior facets may have become
     # exterior facets:
@@ -382,15 +384,12 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         ext_elements = np.concatenate((ext_elements, new_ext_elements))
         ext_element_faces = np.concatenate((ext_element_faces,
                                             new_ext_element_faces))
-        ext_neighbor_faces = np.concatenate((ext_neighbor_faces,
-                                             new_ext_neighbor_faces))
-        ext_neighbors = np.concatenate((ext_neighbors, new_ext_neighbors))
+        ext_flags = np.concatenate((ext_flags, new_ext_flags))
 
-    exterior_grp = FacialAdjacencyGroup(igroup=0, ineighbor=None,
+    exterior_grp = BoundaryAdjacencyGroup(igroup=0,
                                         elements=ext_elements,
                                         element_faces=ext_element_faces,
-                                        neighbors=ext_neighbors,
-                                        neighbor_faces=ext_neighbor_faces)
+                                        flags=ext_flags)
 
     # }}}
 
@@ -737,18 +736,28 @@ build_connection_from_firedrake`.
         for igroup, fagrps in enumerate(unflipped_facial_adjacency_groups):
             facial_adjacency_groups.append([])
             for fagrp in fagrps:
-                new_element_faces = flip_local_face_indices(fagrp.element_faces,
-                                                            fagrp.elements)
-                new_neighbor_faces = flip_local_face_indices(fagrp.neighbor_faces,
-                                                             fagrp.neighbors)
-                facial_adjacency_groups[igroup].append(
-                    FacialAdjacencyGroup(
-                        igroup=igroup,
-                        ineighbor_group=fagrp.ineighbor_group,
-                        elements=fagrp.elements,
-                        element_faces=new_element_faces,
-                        neighbors=fagrp.neighbors,
-                        neighbor_faces=new_neighbor_faces))
+                if isinstance(fagrp, InteriorAdjacencyGroup):
+                    new_element_faces = flip_local_face_indices(
+                        fagrp.element_faces, fagrp.elements)
+                    new_neighbor_faces = flip_local_face_indices(
+                        fagrp.neighbor_faces, fagrp.neighbors)
+                    facial_adjacency_groups[igroup].append(
+                        InteriorAdjacencyGroup(
+                            igroup=igroup,
+                            ineighbor_group=fagrp.ineighbor_group,
+                            elements=fagrp.elements,
+                            element_faces=new_element_faces,
+                            neighbors=fagrp.neighbors,
+                            neighbor_faces=new_neighbor_faces))
+                else:
+                    new_element_faces = flip_local_face_indices(
+                        fagrp.element_faces, fagrp.elements)
+                    facial_adjacency_groups[igroup].append(
+                        BoundaryAdjacencyGroup(
+                            igroup=igroup,
+                            elements=fagrp.elements,
+                            element_faces=new_element_faces,
+                            flags=fagrp.flags))
 
     return (Mesh(vertices, [group],
                  boundary_tags=bdy_tags,

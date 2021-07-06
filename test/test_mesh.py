@@ -31,7 +31,11 @@ from arraycontext import pytest_generate_tests_for_array_contexts
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         [PytestPyOpenCLArrayContextFactory])
 
-from meshmode.mesh import Mesh, SimplexElementGroup, TensorProductElementGroup
+from meshmode.mesh import (
+    Mesh,
+    SimplexElementGroup,
+    TensorProductElementGroup,
+    BoundaryAdjacencyGroup)
 from meshmode.discretization.poly_element import (
         default_simplex_group_factory,
         LegendreGaussLobattoTensorProductGroupFactory,
@@ -533,12 +537,12 @@ def test_boundary_tags():
     for igrp in range(len(mesh.groups)):
         bdry_fagrps = [
             fagrp for fagrp in mesh.facial_adjacency_groups[igrp]
-            if fagrp.ineighbor_group is None]
+            if isinstance(fagrp, BoundaryAdjacencyGroup)]
         for bdry_fagrp in bdry_fagrps:
-            for nbrs in bdry_fagrp.neighbors:
-                if (-nbrs) & outer_btag_bit:
+            for flags in bdry_fagrp.flags:
+                if flags & outer_btag_bit:
                     num_marked_outer_bdy += 1
-                if (-nbrs) & inner_btag_bit:
+                if flags & inner_btag_bit:
                     num_marked_inner_bdy += 1
 
     # raise errors if wrong number of elements marked
@@ -628,12 +632,12 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
     for igrp in range(len(mesh.groups)):
         bdry_fagrps = [
             fagrp for fagrp in mesh.facial_adjacency_groups[igrp]
-            if fagrp.ineighbor_group is None]
+            if isinstance(fagrp, BoundaryAdjacencyGroup)]
         for bdry_fagrp in bdry_fagrps:
-            for nbrs in bdry_fagrp.neighbors:
-                if (-nbrs) & btag_1_bit:
+            for flags in bdry_fagrp.flags:
+                if flags & btag_1_bit:
                     num_marked_bdy_1 += 1
-                if (-nbrs) & btag_2_bit:
+                if flags & btag_2_bit:
                     num_marked_bdy_2 += 1
 
     # raise errors if wrong number of elements marked

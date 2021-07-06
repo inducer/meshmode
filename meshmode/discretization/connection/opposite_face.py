@@ -419,9 +419,11 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
         for i_tgt_grp in range(ngrps):
             vbc_tgt_grp_batches = volume_to_bdry_conn.groups[i_tgt_grp].batches
 
+            from meshmode.mesh import InteriorAdjacencyGroup
             adj_grps = [
                 adj for adj in vol_mesh.facial_adjacency_groups[i_tgt_grp]
-                if adj.ineighbor_group == i_src_grp]
+                if isinstance(adj, InteriorAdjacencyGroup)
+                and adj.ineighbor_group == i_src_grp]
 
             for adj in adj_grps:
                 for i_face_tgt in range(vol_mesh.groups[i_tgt_grp].nfaces):
@@ -580,7 +582,7 @@ def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
 
             i_remote_vol_elems = rem_ipag.elements[indices]
             i_remote_faces = rem_ipag.element_faces[indices]
-            i_local_vol_elems = rem_ipag.partition_neighbors[indices]
+            i_local_vol_elems = rem_ipag.neighbors[indices]
             i_local_faces = rem_ipag.neighbor_faces[indices]
 
             del indices

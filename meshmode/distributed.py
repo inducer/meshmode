@@ -27,7 +27,10 @@ from dataclasses import dataclass
 import numpy as np
 from typing import List
 
-from meshmode.mesh import InterPartitionAdjacencyGroup
+from meshmode.mesh import (
+    InteriorAdjacencyGroup,
+    InterPartitionAdjacencyGroup
+)
 
 # This file needs to be importable without mpi4py. So don't be tempted to add
 # that import here--push it into individual functions instead.
@@ -293,7 +296,7 @@ def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs
                     + mesh.groups[fagrp.ineighbor_group].element_nr_base])
                 for fagrp_list in mesh.facial_adjacency_groups
                 for fagrp in fagrp_list
-                if fagrp.ineighbor_group is not None
+                if isinstance(fagrp, InteriorAdjacencyGroup)
                 ])
         sorted_neighbor_el_pairs = neighbor_el_pairs[
                 :, np.argsort(neighbor_el_pairs[0])]
