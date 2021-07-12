@@ -201,8 +201,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             regions = np.zeros(ngroup_elements, np.int32)
             i = 0
 
-            for el_vertices, el_nodes, el_type in zip(
-                    self.element_vertices, self.element_nodes, self.element_types):
+            for element, (el_vertices, el_nodes, el_type) in enumerate(zip(
+                    self.element_vertices, self.element_nodes, self.element_types)):
                 if el_type is not group_el_type:
                     continue
 
