@@ -23,7 +23,8 @@ THE SOFTWARE.
 import numpy as np
 import pyopencl as cl
 
-from arraycontext import PyOpenCLArrayContext, thaw
+from meshmode.array_context import PyOpenCLArrayContext
+from arraycontext import thaw
 
 from pytools import memoize_in, keyed_memoize_in
 from pytools.obj_array import make_obj_array
@@ -50,7 +51,7 @@ def reconstruct_discr_from_nodes(actx, discr, x):
     @memoize_in(actx, (reconstruct_discr_from_nodes, "resample_by_mat_prg"))
     def resample_by_mat_prg():
         from arraycontext import make_loopy_program
-        return make_loopy_program(
+        t_unit = make_loopy_program(
             """
             {[iel, idof, j]:
                 0 <= iel < nelements
@@ -61,6 +62,13 @@ def reconstruct_discr_from_nodes(actx, discr, x):
             result[iel, idof] = sum(j, resampling_mat[idof, j] * nodes[iel, j])
             """,
             name="resample_by_mat_prg")
+
+        import loopy as lp
+        from meshmode.transform_metadata import (
+                ConcurrentElementInameTag, ConcurrentDOFInameTag)
+        return lp.tag_inames(t_unit, {
+            "iel": ConcurrentElementInameTag(),
+            "idof": ConcurrentDOFInameTag()})
 
     @keyed_memoize_in(actx,
             (reconstruct_discr_from_nodes, "to_mesh_interp_matrix"),

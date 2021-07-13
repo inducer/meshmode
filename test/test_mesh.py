@@ -25,10 +25,10 @@ import numpy as np
 import numpy.linalg as la
 import pytest
 
-from arraycontext import _acf       # noqa: F401
-from arraycontext import (          # noqa: F401
-        pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests)
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from arraycontext import pytest_generate_tests_for_array_contexts
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 from meshmode.mesh import Mesh, SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
@@ -348,7 +348,7 @@ def test_mesh_to_tikz():
     order = 1
 
     mesh = generate_gmsh(
-            FileSource("../test/blob-2d.step"), 2, order=order,
+            FileSource("blob-2d.step"), 2, order=order,
             force_ambient_dim=2,
             other_options=[
                 "-string", "Mesh.CharacteristicLengthMax = %s;" % h],

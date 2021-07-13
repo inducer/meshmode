@@ -1,7 +1,8 @@
 import numpy as np  # noqa
 import pyopencl as cl
 
-from arraycontext import PyOpenCLArrayContext, thaw
+from meshmode.array_context import PyOpenCLArrayContext
+from arraycontext import thaw
 
 order = 4
 

@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 import pyopencl as cl
 
-from arraycontext import PyOpenCLArrayContext
+from meshmode.array_context import PyOpenCLArrayContext
 
 
 # This example provides a brief template for bringing information in
