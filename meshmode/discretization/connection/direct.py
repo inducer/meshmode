@@ -484,7 +484,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         @memoize_in(actx, (DirectDiscretizationConnection,
             "resample_by_mat_knl_inplace"))
-        def mat_knl(n_to_nodes, n_from_nodes):
+        def mat_knl(nelements_vec, nelements_result, n_to_nodes, n_from_nodes, n_from_el_ind, n_to_el_ind, fp_format, index_dtype):
             knl = make_loopy_program(
                 """{[iel, idof, j]:
                     0<=iel<nelements and
@@ -494,20 +494,30 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     = sum(j, resample_mat[idof, j] \
                     * ary[from_element_indices[iel], j])",
                 [
-                    lp.GlobalArg("result", None,
-                        shape="nelements_result, n_to_nodes",
+                    lp.GlobalArg("result", fp_format,
+                        #shape="nelements_result, n_to_nodes",
+                        shape=(nelements_result, n_to_nodes),
                         offset=lp.auto, tags=IsDOFArray()),
-                    lp.GlobalArg("resample_mat", None,
-                        shape="n_to_nodes, n_from_nodes",
+                    lp.GlobalArg("resample_mat", fp_format,
+                        #shape="n_to_nodes, n_from_nodes",
+                        shape=(n_to_nodes, n_from_nodes),
                         offset=lp.auto, tags=IsOpArray()),
-                    lp.GlobalArg("ary", None,
-                        shape="nelements_vec, n_from_nodes",
+                    lp.GlobalArg("ary", fp_format,
+                        #shape="nelements_vec, n_from_nodes",
+                        shape=(nelements_vec, n_from_nodes),
                         offset=lp.auto, tags=IsDOFArray()),
+                    lp.GlobalArg("from_element_indices", index_dtype, 
+                        shape=(n_from_el_ind,),
+                        offset=lp.auto),
+                    lp.GlobalArg("to_element_indices", index_dtype, 
+                        shape=(n_to_el_ind,),
+                        offset=lp.auto),
                     lp.ValueArg("n_to_nodes", tags=ParameterValue(n_to_nodes)),
                     # Specifying this breaks order 4 for some reason
-                    #lp.ValueArg("n_from_nodes", tags=ParameterValue(n_from_nodes)),
-                    lp.ValueArg("nelements_result", np.int32),
-                    lp.ValueArg("nelements_vec", np.int32),
+                    lp.ValueArg("n_from_nodes", tags=ParameterValue(n_from_nodes)),
+                    lp.ValueArg("nelements", np.int32, tags=ParameterValue(n_from_nodes)), # I'm guessing
+                    lp.ValueArg("nelements_result", np.int32, tags=ParameterValue(nelements_result)),
+                    lp.ValueArg("nelements_vec", np.int32, tags=ParameterValue(nelements_vec)),
                     "...",
                     ],
                 name="resample_by_mat_inplace")
@@ -556,8 +566,22 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 if point_pick_indices is None:
                     resample_mat = self._resample_matrix(actx, i_tgrp, i_batch)
                     n_to_nodes, n_from_nodes = resample_mat.shape
+                    nelements_result,_ = result[i_tgrp].shape
+                    nelements_vec, _ = ary[batch.from_group_index].shape
+                    n_from_el_ind = batch.from_element_indices.shape[0]
+                    n_to_el_ind = batch.to_element_indices.shape[0]
+                    index_dtype = batch.from_element_indices.dtype
+                    fp_format = resample_mat.dtype
 
-                    actx.call_loopy(mat_knl(n_to_nodes, n_from_nodes),
+                    #print(resample_mat.shape)
+                    #print(result[i_tgrp].shape)
+                    #print(ary[batch.from_group_index].shape)
+                    #print(batch.from_element_indices.shape)
+                    #print(batch.to_element_indices.shape)
+                    #exit()
+
+                    actx.call_loopy(mat_knl(nelements_vec, nelements_result, n_to_nodes, 
+                            n_from_nodes, n_from_el_ind, n_to_el_ind, fp_format, index_dtype),
                             resample_mat=resample_mat,
                             result=result[i_tgrp],
                             ary=ary[batch.from_group_index],
