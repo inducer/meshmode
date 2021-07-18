@@ -26,7 +26,7 @@ from functools import partial
 import numpy as np
 
 from meshmode.mesh.refinement.no_adjacency import RefinerWithoutAdjacency
-from meshmode.mesh.refinement.tesselate import \
+from meshmode.mesh.refinement.tessellate import \
         ElementTessellationInfo, GroupRefinementRecord
 
 import logging
@@ -56,12 +56,12 @@ class SimplexResampler:
 
     @staticmethod
     def get_midpoints(group, el_tess_info, elements):
-        import meshmode.mesh.refinement.tesselate as tess
+        import meshmode.mesh.refinement.tessellate as tess
         return tess.get_group_midpoints(group, el_tess_info, elements)
 
     @staticmethod
     def get_tessellated_nodes(group, el_tess_info, elements):
-        import meshmode.mesh.refinement.tesselate as tess
+        import meshmode.mesh.refinement.tessellate as tess
         return tess.get_group_tessellated_nodes(group, el_tess_info, elements)
 
 

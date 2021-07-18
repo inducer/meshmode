@@ -84,7 +84,7 @@ class RefinerWithoutAdjacency:
         if perform_vertex_updates:
             inew_vertex = mesh.nvertices
 
-        from meshmode.mesh.refinement.tesselate import (
+        from meshmode.mesh.refinement.tessellate import (
                 get_group_tessellation_info,
                 get_group_midpoints,
                 get_group_tessellated_nodes)
@@ -114,7 +114,7 @@ class RefinerWithoutAdjacency:
 
             # }}}
 
-            from meshmode.mesh.refinement.tesselate import GroupRefinementRecord
+            from meshmode.mesh.refinement.tessellate import GroupRefinementRecord
             group_refinement_records.append(
                     GroupRefinementRecord(
                         el_tess_info=el_tess_info,
