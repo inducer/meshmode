@@ -554,7 +554,7 @@ def partition_mesh(mesh, part_per_element, part_num):
     global_elem_to_part_elem = _compute_global_elem_to_part_elem(part_per_element,
                 {part_num}, mesh.element_id_dtype)
 
-    # Create new mesh groups that mimick the original mesh's groups but only contain
+    # Create new mesh groups that mimic the original mesh's groups but only contain
     # the local partition's elements
     part_mesh_groups, global_group_to_part_group, required_vertex_indices =\
                 _filter_mesh_groups(mesh.groups, queried_elems, mesh.vertex_id_dtype)

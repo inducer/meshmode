@@ -27,7 +27,7 @@ import numpy as np
 
 from meshmode.mesh.refinement.no_adjacency import RefinerWithoutAdjacency
 from meshmode.mesh.refinement.tesselate import \
-        ElementTesselationInfo, GroupRefinementRecord
+        ElementTessellationInfo, GroupRefinementRecord
 
 import logging
 logger = logging.getLogger(__name__)
@@ -60,12 +60,12 @@ class SimplexResampler:
         return tess.get_group_midpoints(group, el_tess_info, elements)
 
     @staticmethod
-    def get_tesselated_nodes(group, el_tess_info, elements):
+    def get_tessellated_nodes(group, el_tess_info, elements):
         import meshmode.mesh.refinement.tesselate as tess
-        return tess.get_group_tesselated_nodes(group, el_tess_info, elements)
+        return tess.get_group_tessellated_nodes(group, el_tess_info, elements)
 
 
-def tesselate_simplex(dim):
+def tessellate_simplex(dim):
     import modepy as mp
     shape = mp.Simplex(dim)
     space = mp.space_for_shape(shape, 2)
@@ -136,17 +136,17 @@ class Refiner:
         self.lazy = False
         self.seen_tuple = {}
         self.group_refinement_records = []
-        seg_node_tuples, seg_result = tesselate_simplex(1)
-        tri_node_tuples, tri_result = tesselate_simplex(2)
-        tet_node_tuples, tet_result = tesselate_simplex(3)
+        seg_node_tuples, seg_result = tessellate_simplex(1)
+        tri_node_tuples, tri_result = tessellate_simplex(2)
+        tet_node_tuples, tet_result = tessellate_simplex(3)
         #quadrilateral_node_tuples = [
         #print tri_result, tet_result
         self.simplex_node_tuples = [
                 None, seg_node_tuples, tri_node_tuples, tet_node_tuples]
-        # Dimension-parameterized tesselations for refinement
+        # Dimension-parameterized tessellations for refinement
         self.simplex_result = [None, seg_result, tri_result, tet_result]
         #print tri_node_tuples, tri_result
-        #self.simplex_node_tuples, self.simplex_result = tesselatetet()
+        #self.simplex_node_tuples, self.simplex_result = tessellatetet()
         self.last_mesh = mesh
         self.last_split_elements = None
 
@@ -646,7 +646,7 @@ class Refiner:
                         midpoints_to_find.append(iel_grp)
                         if not resampler:
                             resampler = SimplexResampler()
-                            el_tess_info = ElementTesselationInfo(
+                            el_tess_info = ElementTessellationInfo(
                                 children=self.simplex_result[grp.dim],
                                 ref_vertices=self.simplex_node_tuples[grp.dim])
                     else:
@@ -794,7 +794,7 @@ class Refiner:
                 # if simplex
                 if is_simplex:
                     resampler = SimplexResampler()
-                    new_nodes = resampler.get_tesselated_nodes(
+                    new_nodes = resampler.get_tessellated_nodes(
                         prev_group, refinement_record.el_tess_info, to_resample)
                 else:
                     raise NotImplementedError(

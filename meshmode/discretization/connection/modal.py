@@ -347,7 +347,7 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
         actx = ary.array_context
 
         # Evaluates the action of the Vandermonde matrix on the
-        # vector of modal coefficeints to obtain nodal values
+        # vector of modal coefficients to obtain nodal values
         @memoize_in(actx, (ModalToNodalDiscretizationConnection,
                            "evaluation_knl"))
         def keval():
