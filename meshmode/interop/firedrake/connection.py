@@ -759,7 +759,7 @@ def build_connection_to_firedrake(discr, group_nr=None, comm=None):
     by resampling at the nodes.
 
     :param discr: A :class:`~meshmode.discretization.Discretization`
-        to intialize the connection with
+        to initialize the connection with
     :param group_nr: The group number of the discretization to convert.
         If *None* there must be only one group. The selected group
         must be of type
@@ -789,7 +789,7 @@ InterpolatoryQuadratureSimplexElementGroup`.
     # **_cell_node holds the node nrs in shape *(ncells, nunit_nodes)*
     fd_cell_node = fspace.cell_node_list
 
-    # To get the meshmode to firedrake node assocation, we need to handle
+    # To get the meshmode to firedrake node association, we need to handle
     # local vertex reordering and cell reordering.
     from pyop2.datatypes import IntType
     mm2fd_node_mapping = np.ndarray((el_group.nelements, el_group.nunit_dofs),

@@ -632,7 +632,7 @@ def num_reference_derivative(
             isinstance(grp, InterpolatoryElementGroupBase) for grp in discr.groups
             ]):
         raise NoninterpolatoryElementGroupError(
-            "Element groups must be usuable for differentiation and interpolation.")
+            "Element groups must be usable for differentiation and interpolation.")
 
     if not ref_axes:
         return vec
