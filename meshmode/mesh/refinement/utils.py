@@ -42,7 +42,7 @@ def map_unit_nodes_to_children(meg: MeshElementGroup,
     :arg unit_nodes: an :class:`~numpy.ndarray` of unit nodes on the
         element type described by *meg*.
     :arg el_tess_info: a
-        :class:`~meshmode.mesh.refinement.tesselate.ElementTessellationInfo`.
+        :class:`~meshmode.mesh.refinement.tessellate.ElementTessellationInfo`.
     :returns: an :class:`~numpy.ndarray` of mapped unit nodes for each
         child in the tessellation.
     """
