@@ -114,23 +114,18 @@ def _get_face_vertices(mesh, boundary_tag):
     if boundary_tag not in [FACE_RESTR_INTERIOR, FACE_RESTR_ALL]:
         # {{{ boundary faces
 
-        btag_bit = mesh.boundary_tag_bit(boundary_tag)
-
-        for fagrp_list in mesh.facial_adjacency_groups:
+        for igrp, fagrp_list in enumerate(mesh.facial_adjacency_groups):
             from meshmode.mesh import BoundaryAdjacencyGroup
-            bdry_grps = [
+            matching_bdry_grps = [
                 fagrp for fagrp in fagrp_list
-                if isinstance(fagrp, BoundaryAdjacencyGroup)]
-
-            for bdry_grp in bdry_grps:
-                grp = mesh.groups[bdry_grp.igroup]
-
-                face_relevant_flags = (bdry_grp.flags & btag_bit) != 0
-
+                if isinstance(fagrp, BoundaryAdjacencyGroup)
+                and fagrp.boundary_tag == boundary_tag]
+            for bdry_grp in matching_bdry_grps:
+                grp = mesh.groups[igrp]
                 for fvi in grp.face_vertex_indices():
                     bdry_vertex_vol_nrs.update(
                             grp.vertex_indices
-                            [bdry_grp.elements[face_relevant_flags]]
+                            [bdry_grp.elements]
                             [:, np.array(fvi, dtype=np.intp)]
                             .flat)
 
@@ -210,9 +205,6 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
     bdry_mesh_groups = []
     connection_data = {}
 
-    if boundary_tag not in [FACE_RESTR_ALL, FACE_RESTR_INTERIOR]:
-        btag_bit = discr.mesh.boundary_tag_bit(boundary_tag)
-
     for igrp, (grp, fagrp_list) in enumerate(
             zip(discr.groups, discr.mesh.facial_adjacency_groups)):
 
@@ -245,15 +237,15 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
 
         else:
             from meshmode.mesh import BoundaryAdjacencyGroup
-            bdry_grps = [
+            matching_bdry_grps = [
                 fagrp for fagrp in fagrp_list
-                if isinstance(fagrp, BoundaryAdjacencyGroup)]
-            for bdry_grp in bdry_grps:
-                face_relevant_flags = (bdry_grp.flags & btag_bit) != 0
+                if isinstance(fagrp, BoundaryAdjacencyGroup)
+                and fagrp.boundary_tag == boundary_tag]
+            for bdry_grp in matching_bdry_grps:
                 group_boundary_faces.extend(
                             zip(
-                                bdry_grp.elements[face_relevant_flags],
-                                bdry_grp.element_faces[face_relevant_flags]))
+                                bdry_grp.elements,
+                                bdry_grp.element_faces))
 
         # }}}
 

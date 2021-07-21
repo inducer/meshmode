@@ -135,7 +135,7 @@ class RemoteGroupInfo:
     bdry_faces: np.ndarray
 
 
-def make_remote_group_infos(actx, bdry_conn):
+def make_remote_group_infos(actx, i_remote_part, bdry_conn):
     local_vol_mesh = bdry_conn.from_discr.mesh
 
     assert len(local_vol_mesh.groups) == len(bdry_conn.to_discr.groups)
@@ -144,7 +144,8 @@ def make_remote_group_infos(actx, bdry_conn):
             RemoteGroupInfo(
                 inter_partition_adj_groups=[
                     fagrp for fagrp in local_vol_mesh.facial_adjacency_groups[igrp]
-                    if isinstance(fagrp, InterPartitionAdjacencyGroup)],
+                    if isinstance(fagrp, InterPartitionAdjacencyGroup)
+                    and fagrp.ineighbor_partition == i_remote_part],
                 vol_elem_indices=np.concatenate([
                     actx.to_numpy(batch.from_element_indices)
                     for batch in bdry_conn.groups[igrp].batches]),
@@ -202,7 +203,8 @@ class MPIBoundaryCommSetupHelper:
             self._internal_mpi_comm.isend((
                 self.local_bdry_conns[i_remote_part].to_discr.mesh,
                 make_remote_group_infos(
-                    self.array_context, self.local_bdry_conns[i_remote_part])),
+                    self.array_context, i_remote_part,
+                    self.local_bdry_conns[i_remote_part])),
                 dest=i_remote_part)
             for i_remote_part in self.local_bdry_conns.keys()]
 
@@ -325,17 +327,11 @@ def get_connected_partitions(mesh):
     :arg mesh: A :class:`meshmode.mesh.Mesh` instance
     :returns: the set of partition numbers that are connected to `mesh`
     """
-    connected_parts = set()
-    for fagrp_list in mesh.facial_adjacency_groups:
-        grps = [
-            grp for grp in fagrp_list
-            if isinstance(grp, InterPartitionAdjacencyGroup)]
-        for grp in grps:
-            indices = grp.neighbor_partitions >= 0
-            connected_parts = connected_parts.union(
-                    grp.neighbor_partitions[indices])
-
-    return connected_parts
+    return {
+        grp.ineighbor_partition
+        for fagrp_list in mesh.facial_adjacency_groups
+        for grp in fagrp_list
+        if isinstance(grp, InterPartitionAdjacencyGroup)}
 
 
 # vim: foldmethod=marker

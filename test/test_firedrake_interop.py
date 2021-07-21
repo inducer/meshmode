@@ -37,7 +37,7 @@ from meshmode.discretization.poly_element import (
 from meshmode.dof_array import DOFArray
 
 from meshmode.mesh import (
-    BTAG_ALL, BTAG_REALLY_ALL, BTAG_INDUCED_BOUNDARY, check_bc_coverage
+    BTAG_ALL, BTAG_INDUCED_BOUNDARY, check_bc_coverage
     )
 
 from meshmode.interop.firedrake import (
@@ -313,47 +313,24 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
         cells_to_use = _get_cells_to_use(square_or_cube_mesh, "on_boundary")
     mm_mesh, orient = import_firedrake_mesh(square_or_cube_mesh,
                                             cells_to_use=cells_to_use)
-    # Ensure meshmode required boundary tags are there
-    assert {BTAG_ALL, BTAG_REALLY_ALL} <= set(mm_mesh.boundary_tags)
     # Check disjoint coverage of bdy ids and BTAG_ALL
     check_bc_coverage(mm_mesh, [BTAG_ALL])
     check_bc_coverage(mm_mesh, bdy_ids)
 
+    from meshmode.mesh import BoundaryAdjacencyGroup
+    ext_grps = [
+        grp for grp in mm_mesh.facial_adjacency_groups[0]
+        if isinstance(grp, BoundaryAdjacencyGroup)]
+
     # count number of times the boundary tag appears in the meshmode mesh,
     # should be the same as in the firedrake mesh
     bdy_id_to_mm_count = {}
-    # Now make sure we have identified the correct faces
-    face_vertex_indices = mm_mesh.groups[0].face_vertex_indices()
-    ext_grp = mm_mesh.facial_adjacency_groups[0][None]
-    for iel, ifac, bdy_flags in zip(
-            ext_grp.elements, ext_grp.element_faces, ext_grp.neighbors):
-        # try: if mm_mesh has boundaries flagged as not boundaries we need to
-        #      skip them
-        # catch: if mm_mesh does not use BTAG_INDUCED_BOUNDARY flag we get a
-        #        ValueError
-        try:
-            # If this facet is flagged as not really a boundary, skip it
-            if mm_mesh.boundary_tag_bit(BTAG_INDUCED_BOUNDARY) & -bdy_flags:
-                continue
-        except ValueError:
-            pass
-
-        el_vert_indices = mm_mesh.groups[0].vertex_indices[iel]
-        # numpy nb: have to have comma to use advanced indexing
-        face_vert_indices = el_vert_indices[face_vertex_indices[ifac], ]
-        # shape: *(ambient dim, num vertices on face)*
-        face_verts = mm_mesh.vertices[:, face_vert_indices]
-        # Figure out which coordinate should have a fixed value, and what
-        # that value is. Also, count how many times each boundary tag appears
-        coord_index, val = None, None
-        for bdy_id_index, bdy_id in enumerate(bdy_ids):
-            if mm_mesh.boundary_tag_bit(bdy_id) & -bdy_flags:
-                bdy_id_to_mm_count.setdefault(bdy_id, 0)
-                bdy_id_to_mm_count[bdy_id] += 1
-                coord_index = coord_indices[bdy_id_index]
-                val = coord_values[bdy_id_index]
-                break
-        assert np.max(np.abs(face_verts[coord_index, :] - val)) < CLOSE_ATOL
+    for ext_grp in ext_grps:
+        # if mm_mesh has boundaries flagged as not boundaries we need to skip them
+        if ext_grp.boundary_tag == BTAG_INDUCED_BOUNDARY:
+            continue
+        bdy_id_to_mm_count.setdefault(ext_grp.boundary_tag, 0)
+        bdy_id_to_mm_count[ext_grp.boundary_tag] += len(ext_grp.elements)
 
     # Verify that the number of meshes tagged with a boundary tag
     # is the same in meshmode and firedrake for each tag in *bdy_ids*
@@ -362,6 +339,26 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
     assert set(fdrake_bdy_ids) == set(bdy_ids)
     for bdy_id, fdrake_count in zip(fdrake_bdy_ids, fdrake_counts):
         assert fdrake_count == bdy_id_to_mm_count[bdy_id]
+
+    # Now make sure we have identified the correct faces
+    face_vertex_indices = mm_mesh.groups[0].face_vertex_indices()
+    for bdy_id_index, bdy_id in enumerate(bdy_ids):
+        matching_ext_grps = [
+            grp for grp in ext_grps
+            if grp.boundary_tag == bdy_id]
+        assert len(matching_ext_grps) == 1
+        ext_grp = matching_ext_grps[0]
+        for iel, ifac in zip(ext_grp.elements, ext_grp.element_faces):
+            el_vert_indices = mm_mesh.groups[0].vertex_indices[iel]
+            # numpy nb: have to have comma to use advanced indexing
+            face_vert_indices = el_vert_indices[face_vertex_indices[ifac], ]
+            # shape: *(ambient dim, num vertices on face)*
+            face_verts = mm_mesh.vertices[:, face_vert_indices]
+            # Figure out which coordinate should have a fixed value, and what
+            # that value is. Also, count how many times each boundary tag appears
+            coord_index = coord_indices[bdy_id_index]
+            val = coord_values[bdy_id_index]
+            assert np.max(np.abs(face_verts[coord_index, :] - val)) < CLOSE_ATOL
 
 # }}}
 

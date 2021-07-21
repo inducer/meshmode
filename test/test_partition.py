@@ -147,7 +147,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
                     i_local_part=i_local_part,
                     remote_bdry_discr=remote_bdry,
                     remote_group_infos=make_remote_group_infos(
-                        actx, remote_bdry_conn))
+                        actx, i_local_part, remote_bdry_conn))
 
             # Connect from local mesh to remote mesh
             local_to_remote_conn = make_partition_connection(
@@ -156,7 +156,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
                     i_local_part=i_remote_part,
                     remote_bdry_discr=local_bdry,
                     remote_group_infos=make_remote_group_infos(
-                        actx, local_bdry_conn))
+                        actx, i_remote_part, local_bdry_conn))
 
             check_connection(actx, remote_to_local_conn)
             check_connection(actx, local_to_remote_conn)
@@ -275,16 +275,15 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                 if isinstance(fagrp, InterPartitionAdjacencyGroup)]
             ipagrp_count += len(ipagrps)
             for ipagrp in ipagrps:
-                assert np.all(ipagrp.flags >= 0)
+                n_part_num = ipagrp.ineighbor_partition
+                num_tags[n_part_num] += len(ipagrp.elements)
                 elem_base = part.groups[grp_num].element_nr_base
                 for idx in range(len(ipagrp.elements)):
                     elem = ipagrp.elements[idx]
                     meshwide_elem = elem_base + elem
                     face = ipagrp.element_faces[idx]
-                    n_part_num = ipagrp.neighbor_partitions[idx]
                     n_meshwide_elem = ipagrp.neighbors[idx]
                     n_face = ipagrp.neighbor_faces[idx]
-                    num_tags[n_part_num] += 1
                     n_part, n_part_to_global = new_meshes[n_part_num]
                     # Hack: find_igrps expects a numpy.ndarray and returns
                     #       a numpy.ndarray. But if a single integer is fed
@@ -293,7 +292,8 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                         n_part.groups, n_meshwide_elem))
                     n_ipagrps = [
                         fagrp for fagrp in n_part.facial_adjacency_groups[n_grp_num]
-                        if isinstance(fagrp, InterPartitionAdjacencyGroup)]
+                        if isinstance(fagrp, InterPartitionAdjacencyGroup)
+                        and fagrp.ineighbor_partition == part_num]
                     found_reverse_adj = False
                     for n_ipagrp in n_ipagrps:
                         n_elem_base = n_part.groups[n_grp_num].element_nr_base
@@ -301,8 +301,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                         n_idx = index_lookup_table[
                             n_part_num, n_grp_num, n_elem, n_face]
                         found_reverse_adj = found_reverse_adj or (
-                            part_num == n_ipagrp.neighbor_partitions[n_idx]
-                            and meshwide_elem == n_ipagrp.neighbors[n_idx]
+                            meshwide_elem == n_ipagrp.neighbors[n_idx]
                             and face == n_ipagrp.neighbor_faces[n_idx])
                         if found_reverse_adj:
                             _, n_part_to_global = new_meshes[n_part_num]
@@ -347,13 +346,12 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
 def count_tags(mesh, tag):
     num_bnds = 0
     for fagrp_list in mesh.facial_adjacency_groups:
-        bdry_grps = [
+        matching_bdry_grps = [
             fagrp for fagrp in fagrp_list
-            if isinstance(fagrp, BoundaryAdjacencyGroup)]
-        for bdry_grp in bdry_grps:
-            for flags in bdry_grp.flags:
-                if flags & mesh.boundary_tag_bit(tag) != 0:
-                    num_bnds += 1
+            if isinstance(fagrp, BoundaryAdjacencyGroup)
+            and fagrp.boundary_tag == tag]
+        for bdry_grp in matching_bdry_grps:
+            num_bnds += len(bdry_grp.elements)
     return num_bnds
 
 # }}}

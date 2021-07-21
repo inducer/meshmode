@@ -575,19 +575,7 @@ def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
         rem_ipags = rgi.inter_partition_adj_groups
 
         for rem_ipag in rem_ipags:
-            indices = (i_local_part == rem_ipag.neighbor_partitions)
-            if not np.any(indices):
-                # Skip because remote group is not connected to i_local_part.
-                continue
-
-            i_remote_vol_elems = rem_ipag.elements[indices]
-            i_remote_faces = rem_ipag.element_faces[indices]
-            i_local_vol_elems = rem_ipag.neighbors[indices]
-            i_local_faces = rem_ipag.neighbor_faces[indices]
-
-            del indices
-
-            i_local_grps = find_group_indices(local_vol_groups, i_local_vol_elems)
+            i_local_grps = find_group_indices(local_vol_groups, rem_ipag.neighbors)
 
             # {{{ make remote_vol_to_bdry
 
@@ -609,22 +597,20 @@ def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
                             i_local_grp)
 
                 local_indices = np.where(i_local_grps == i_local_grp)[0]
-                if len(local_indices) == 0:
-                    continue
 
                 local_grp_vol_elems = (
-                        i_local_vol_elems[local_indices]
+                        rem_ipag.neighbors[local_indices]
                         - local_vol_groups[i_local_grp].element_nr_base)
                 # These are group-local.
-                remote_grp_vol_elems = i_remote_vol_elems[local_indices]
+                remote_grp_vol_elems = rem_ipag.elements[local_indices]
 
                 matched_local_bdry_el_indices = local_vol_to_bdry[
                         local_grp_vol_elems,
-                        i_local_faces[local_indices]]
+                        rem_ipag.neighbor_faces[local_indices]]
                 assert (matched_local_bdry_el_indices >= 0).all()
                 matched_remote_bdry_el_indices = remote_vol_to_bdry[
                         remote_grp_vol_elems,
-                        i_remote_faces[local_indices]]
+                        rem_ipag.element_faces[local_indices]]
                 assert (matched_remote_bdry_el_indices >= 0).all()
 
                 # }}}
