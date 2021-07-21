@@ -1131,12 +1131,9 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
                         face_vertex_indices_to_tags.setdefault(key, []).append(tag)
 
     if boundary_tags:
-        from meshmode.mesh import (
-                _compute_facial_adjacency_from_vertices, BTAG_ALL, BTAG_REALLY_ALL)
-        boundary_tags.extend([BTAG_ALL, BTAG_REALLY_ALL])
+        from meshmode.mesh import _compute_facial_adjacency_from_vertices
         facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
-                [grp], boundary_tags, np.int32, np.int8,
-                face_vertex_indices_to_tags)
+                [grp], np.int32, np.int8, face_vertex_indices_to_tags)
     else:
         facial_adjacency_groups = None
 
@@ -1145,7 +1142,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     from meshmode.mesh import Mesh
     return Mesh(vertices, [grp],
             facial_adjacency_groups=facial_adjacency_groups,
-            is_conforming=True, boundary_tags=boundary_tags)
+            is_conforming=True)
 
 # }}}
 

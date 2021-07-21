@@ -521,9 +521,6 @@ def test_boundary_tags():
     from meshmode.mesh.io import read_gmsh
     # ensure tags are read in
     mesh = read_gmsh("annulus.msh")
-    if not {"outer_bdy", "inner_bdy"} <= set(mesh.boundary_tags):
-        print("Mesh boundary tags:", mesh.boundary_tags)
-        raise ValueError("Tags not saved by mesh")
 
     # correct answers
     num_on_outer_bdy = 26
@@ -532,18 +529,15 @@ def test_boundary_tags():
     # check how many elements are marked on each boundary
     num_marked_outer_bdy = 0
     num_marked_inner_bdy = 0
-    outer_btag_bit = mesh.boundary_tag_bit("outer_bdy")
-    inner_btag_bit = mesh.boundary_tag_bit("inner_bdy")
     for igrp in range(len(mesh.groups)):
         bdry_fagrps = [
             fagrp for fagrp in mesh.facial_adjacency_groups[igrp]
             if isinstance(fagrp, BoundaryAdjacencyGroup)]
         for bdry_fagrp in bdry_fagrps:
-            for flags in bdry_fagrp.flags:
-                if flags & outer_btag_bit:
-                    num_marked_outer_bdy += 1
-                if flags & inner_btag_bit:
-                    num_marked_inner_bdy += 1
+            if bdry_fagrp.boundary_tag == "outer_bdy":
+                num_marked_outer_bdy += len(bdry_fagrp.elements)
+            if bdry_fagrp.boundary_tag == "inner_bdy":
+                num_marked_inner_bdy += len(bdry_fagrp.elements)
 
     # raise errors if wrong number of elements marked
     if num_marked_inner_bdy != num_on_inner_bdy:
@@ -627,18 +621,15 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
     # check how many elements are marked on each boundary
     num_marked_bdy_1 = 0
     num_marked_bdy_2 = 0
-    btag_1_bit = mesh.boundary_tag_bit("btag_test_1")
-    btag_2_bit = mesh.boundary_tag_bit("btag_test_2")
     for igrp in range(len(mesh.groups)):
         bdry_fagrps = [
             fagrp for fagrp in mesh.facial_adjacency_groups[igrp]
             if isinstance(fagrp, BoundaryAdjacencyGroup)]
         for bdry_fagrp in bdry_fagrps:
-            for flags in bdry_fagrp.flags:
-                if flags & btag_1_bit:
-                    num_marked_bdy_1 += 1
-                if flags & btag_2_bit:
-                    num_marked_bdy_2 += 1
+            if bdry_fagrp.boundary_tag == "btag_test_1":
+                num_marked_bdy_1 += len(bdry_fagrp.elements)
+            if bdry_fagrp.boundary_tag == "btag_test_2":
+                num_marked_bdy_2 += len(bdry_fagrp.elements)
 
     # raise errors if wrong number of elements marked
     if num_marked_bdy_1 != num_on_bdy:
