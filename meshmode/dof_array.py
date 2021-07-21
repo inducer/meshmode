@@ -175,7 +175,7 @@ class DOFArray:
 
     def __bool__(self):
         raise ValueError(
-                "The truth value of a DOFArray is ambiguous. "
+                "The truth value of a DOFArray is not well-defined. "
                 "Use actx.np.any(x) or actx.np.all(x)")
 
     def __len__(self):
