@@ -285,7 +285,7 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
 
 def _create_nonlocal_adjacency_groups(
         mesh, part_per_element, global_elem_to_part_elem, part_mesh_groups,
-        global_group_to_part_group, part_mesh_group_elem_base, all_neighbor_parts):
+        global_group_to_part_group, part_mesh_group_elem_base, connected_parts):
     """
     Create non-local adjacency groups for the partitioned mesh.
 
@@ -301,7 +301,7 @@ def _create_nonlocal_adjacency_groups(
         *part_mesh_groups* (or `None` if the group is not local).
     :arg part_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *part_mesh_groups*.
-    :arg all_neighbor_parts: A :class:`set` containing the partitions connected to
+    :arg connected_parts: A :class:`set` containing the partitions connected to
         the current one.
 
     :returns: A list of lists of `~meshmode.mesh.InterPartitionAdjacencyGroup`
@@ -309,7 +309,7 @@ def _create_nonlocal_adjacency_groups(
         have non-local adjacency.
     """
     global_elem_to_neighbor_elem = _compute_global_elem_to_part_elem(
-        part_per_element, all_neighbor_parts, mesh.element_id_dtype)
+        part_per_element, connected_parts, mesh.element_id_dtype)
 
     nonlocal_adj_groups = [[] for _ in part_mesh_groups]
 
@@ -335,7 +335,7 @@ def _create_nonlocal_adjacency_groups(
 
             neighbor_parts = part_per_element[global_neighbors]
 
-            for i_neighbor_part in all_neighbor_parts:
+            for i_neighbor_part in connected_parts:
                 adj_indices, = np.where(
                     elements_are_local
                     & (neighbor_parts == i_neighbor_part))
@@ -458,7 +458,7 @@ def partition_mesh(mesh, part_per_element, part_num):
         part_mesh_group_elem_base[i_part_grp] = el_nr
         el_nr += grp.nelements
 
-    all_neighbor_parts = _get_connected_partitions(
+    connected_parts = _get_connected_partitions(
         mesh, part_per_element_np, global_elem_to_part_elem)
 
     local_to_local_adj_groups = _create_local_to_local_adjacency_groups(
@@ -468,7 +468,7 @@ def partition_mesh(mesh, part_per_element, part_num):
     nonlocal_adj_groups = _create_nonlocal_adjacency_groups(
                 mesh, part_per_element_np, global_elem_to_part_elem,
                 part_mesh_groups, global_group_to_part_group,
-                part_mesh_group_elem_base, all_neighbor_parts)
+                part_mesh_group_elem_base, connected_parts)
 
     boundary_adj_groups = _create_boundary_groups(
                 mesh, global_elem_to_part_elem, part_mesh_groups,
