@@ -335,6 +335,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
     ("blob", 2, [1e-1, 8e-2, 5e-2]),
     ("warp", 2, [3, 5, 7]),
     ("warp", 3, [5, 7]),
+    ("periodic", 2, [3, 5, 7]),
     ("periodic", 3, [5, 7])
     ])
 def test_opposite_face_interpolation(actx_factory, group_factory,
@@ -398,12 +399,21 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
 
             h = 1/mesh_par
         elif mesh_name == "periodic":
-            assert dim == 3
+            assert dim == 2 or dim == 3
 
-            mesh = mgen.generate_annular_cylinder_slice_mesh(
-                mesh_par, (1, 2, 3), 0.5, 1, periodic=True)
+            if dim == 2:
+                mesh = mgen.generate_regular_rect_mesh(
+                    a=(-np.pi/2,)*dim,
+                    b=((3*np.pi)/2,)*dim,
+                    nelements_per_axis=(mesh_par,)*dim,
+                    periodic=(True, False))
 
-            h = 1/mesh_par
+                h = 1/mesh_par
+            else:
+                mesh = mgen.generate_annular_cylinder_slice_mesh(
+                    mesh_par, (1, 2, 3), 0.5, 1, periodic=True)
+
+                h = 1/mesh_par
         else:
             raise ValueError("mesh_name not recognized")
 
