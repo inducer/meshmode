@@ -223,6 +223,101 @@ def test_partial_affine_map(dim=2):
     assert la.norm(orig_mesh.vertices - mesh.vertices / np.pi) < 1.0e-14
 
 
+def test_affine_map_with_facial_adjacency_maps(visualize=False):
+    orig_mesh = mgen.generate_annular_cylinder_slice_mesh(
+        4, (1, 2, 0), 0.5, 1, periodic=True)
+
+    if visualize:
+        from meshmode.mesh.visualization import write_vertex_vtk_file
+        write_vertex_vtk_file(orig_mesh, "affine_map_facial_adj_original.vtu")
+
+    from meshmode.mesh.processing import affine_map
+
+    tol = 1e-12
+
+    def almost_equal(map1, map2):
+        def component_almost_equal(array1, array2):
+            if isinstance(array1, np.ndarray) and isinstance(array2, np.ndarray):
+                return la.norm(array1 - array2) < tol
+            else:
+                return array1 == array2
+
+        return (
+            component_almost_equal(map1.matrix, map2.matrix)
+            and component_almost_equal(map1.offset, map2.offset))
+
+    # Matrix only
+    mesh = affine_map(orig_mesh, A=_get_rotation(np.pi/2, axis=np.array([0, 0, 1])))
+
+    if visualize:
+        write_vertex_vtk_file(mesh, "affine_map_facial_adj_matrix.vtu")
+
+    int_grps = [
+        fagrp for fagrp in mesh.facial_adjacency_groups[0]
+        if isinstance(fagrp, InteriorAdjacencyGroup)]
+    assert len(int_grps) == 3
+
+    lower_grp = int_grps[1]
+    upper_grp = int_grps[2]
+
+    assert almost_equal(
+        lower_grp.aff_map,
+        _get_rotation(
+            np.pi/2, axis=np.array([0, 0, 1]), center=np.array([-2, 1, 0])))
+    assert almost_equal(
+        upper_grp.aff_map,
+        _get_rotation(
+            -np.pi/2, axis=np.array([0, 0, 1]), center=np.array([-2, 1, 0])))
+
+    # Offset only
+    mesh = affine_map(orig_mesh, b=np.array([0, -2, 0]))
+
+    if visualize:
+        write_vertex_vtk_file(mesh, "affine_map_facial_adj_offset.vtu")
+
+    int_grps = [
+        fagrp for fagrp in mesh.facial_adjacency_groups[0]
+        if isinstance(fagrp, InteriorAdjacencyGroup)]
+    assert len(int_grps) == 3
+
+    lower_grp = int_grps[1]
+    upper_grp = int_grps[2]
+
+    assert almost_equal(
+        lower_grp.aff_map,
+        _get_rotation(
+            np.pi/2, axis=np.array([0, 0, 1]), center=np.array([1, 0, 0])))
+    assert almost_equal(
+        upper_grp.aff_map,
+        _get_rotation(
+            -np.pi/2, axis=np.array([0, 0, 1]), center=np.array([1, 0, 0])))
+
+    # Matrix and offset
+    aff_map = _get_rotation(
+        np.pi/2, axis=np.array([0, 0, 1]), center=np.array([1, 1, 0]))
+    mesh = affine_map(orig_mesh, A=aff_map.matrix, b=aff_map.offset)
+
+    if visualize:
+        write_vertex_vtk_file(mesh, "affine_map_facial_adj_matrix_and_offset.vtu")
+
+    int_grps = [
+        fagrp for fagrp in mesh.facial_adjacency_groups[0]
+        if isinstance(fagrp, InteriorAdjacencyGroup)]
+    assert len(int_grps) == 3
+
+    lower_grp = int_grps[1]
+    upper_grp = int_grps[2]
+
+    assert almost_equal(
+        lower_grp.aff_map,
+        _get_rotation(
+            np.pi/2, axis=np.array([0, 0, 1]), center=np.array([0, 1, 0])))
+    assert almost_equal(
+        upper_grp.aff_map,
+        _get_rotation(
+            -np.pi/2, axis=np.array([0, 0, 1]), center=np.array([0, 1, 0])))
+
+
 @pytest.mark.parametrize("ambient_dim", [2, 3])
 def test_mesh_rotation(ambient_dim, visualize=False):
     order = 3

@@ -1201,7 +1201,72 @@ def affine_map(mesh,
         raise ValueError(f"b has shape '{b.shape}' for a {mesh.ambient_dim}d mesh")
 
     from meshmode.mesh.tools import AffineMap
-    return map_mesh(mesh, AffineMap(A, b))
+    f = AffineMap(A, b)
+
+    vertices = f(mesh.vertices)
+    if not vertices.flags.c_contiguous:
+        vertices = np.copy(vertices, order="C")
+
+    # {{{ assemble new groups list
+
+    new_groups = []
+
+    for group in mesh.groups:
+        mapped_nodes = f(group.nodes.reshape(mesh.ambient_dim, -1))
+        if not mapped_nodes.flags.c_contiguous:
+            mapped_nodes = np.copy(mapped_nodes, order="C")
+
+        new_groups.append(group.copy(
+            nodes=mapped_nodes.reshape(*group.nodes.shape)))
+
+    # }}}
+
+    # {{{ assemble new facial adjacency groups
+
+    if mesh._facial_adjacency_groups is not None:
+        # For a facial adjacency transform T(x) = Gx + h in the original mesh,
+        # its corresponding transform in the new mesh will be (T')(x) = G'x + h',
+        # where:
+        # G' = G
+        # h' = Ah + (I - G)b
+        def compute_new_map(old_map):
+            if old_map.matrix is not None:
+                matrix = old_map.matrix.copy()
+            else:
+                matrix = None
+            if old_map.offset is not None:
+                if A is not None:
+                    offset = A @ old_map.offset
+                else:
+                    offset = old_map.offset.copy()
+                if matrix is not None and b is not None:
+                    offset += b - matrix @ b
+            else:
+                offset = None
+            return AffineMap(matrix, offset)
+
+        facial_adjacency_groups = []
+        for old_fagrp_list in mesh.facial_adjacency_groups:
+            fagrp_list = []
+            for old_fagrp in old_fagrp_list:
+                if hasattr(old_fagrp, "aff_map"):
+                    aff_map = compute_new_map(old_fagrp.aff_map)
+                    fagrp_list.append(
+                        old_fagrp.copy(
+                            aff_map=aff_map))
+                else:
+                    fagrp_list.append(old_fagrp.copy())
+            facial_adjacency_groups.append(fagrp_list)
+
+    else:
+        facial_adjacency_groups = None
+
+    # }}}
+
+    return mesh.copy(
+            vertices=vertices, groups=new_groups,
+            facial_adjacency_groups=facial_adjacency_groups,
+            is_conforming=mesh.is_conforming)
 
 
 def _get_rotation_matrix_from_angle_and_axis(theta, axis):
