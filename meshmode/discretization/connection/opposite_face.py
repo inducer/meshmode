@@ -62,13 +62,11 @@ def _make_cross_face_batches(actx,
     def transform(aff_transform, x):
         mat, vec = aff_transform
         if mat is not None:
-            result = mat @ x
+            result = np.einsum("di,ien->den", mat, x)
         else:
             result = x
         if vec is not None:
             result = result + vec[:, np.newaxis, np.newaxis]
-        else:
-            result = x
         return result
 
     tgt_bdry_nodes = transform(tgt_aff_transform, np.array([
