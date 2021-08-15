@@ -441,14 +441,28 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     )["result"]
 
                 else:
-                    batch_result = actx.call_loopy(
-                        batch_pick_knl(),
-                        pick_list=point_pick_indices,
-                        ary=ary[batch.from_group_index],
-                        from_element_indices=batch._global_from_element_indices(
-                            actx, self.to_discr.groups[i_tgrp]),
-                        n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
-                    )["result"]
+                    from_vec = ary[batch.from_group_index]
+                    from_element_indices = actx.thaw(
+                        batch._global_from_element_indices(
+                            actx, self.to_discr.groups[i_tgrp])
+                        )
+                    pick_list = actx.thaw(point_pick_indices)
+
+                    if actx.permits_advanced_indexing:
+                        batch_result = actx.np.where(
+                            actx.np.not_equal(from_element_indices.reshape((-1, 1)),
+                                              -1),
+                            from_vec[from_element_indices.reshape((-1, 1)),
+                                     pick_list],
+                            0)
+                    else:
+                        batch_result = actx.call_loopy(
+                            batch_pick_knl(),
+                            pick_list=pick_list,
+                            ary=from_vec,
+                            from_element_indices=from_element_indices,
+                            n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
+                        )["result"]
 
                 batched_data.append(batch_result)
 
