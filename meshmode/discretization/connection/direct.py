@@ -148,12 +148,21 @@ class InterpolationBatch:
                 "iel_init": ConcurrentElementInameTag(),
                 "iel": ConcurrentElementInameTag()})
 
-        result = actx.freeze(actx.call_loopy(
-            compose_index_maps_kernel(),
-            from_element_indices=self.from_element_indices,
-            to_element_indices=self.to_element_indices,
-            nelements_result=to_group.nelements,
-        )["global_from_element_indices"])
+        # This produces incorrect results on certain machines (details:
+        # https://github.com/pocl/pocl/issues/979)
+#         result = actx.freeze(actx.call_loopy(
+#             compose_index_maps_kernel(),
+#             from_element_indices=self.from_element_indices,
+#             to_element_indices=self.to_element_indices,
+#             nelements_result=to_group.nelements,
+#         )["global_from_element_indices"])
+
+        # Compute on the CPU instead for now
+        from_element_indices = actx.to_numpy(self.from_element_indices)
+        to_element_indices = actx.to_numpy(self.to_element_indices)
+        numpy_result = np.full(to_group.nelements, -1)
+        numpy_result[to_element_indices] = from_element_indices
+        result = actx.freeze(actx.from_numpy(numpy_result))
 
         self._global_from_element_indices_cache = result
         return result
