@@ -347,7 +347,7 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     from arraycontext import PyOpenCLArrayContext
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = PyOpenCLArrayContext(queue, force_device_scalars=True)
 
     from meshmode.discretization import Discretization
     vol_discr = Discretization(actx, local_mesh, group_factory)
