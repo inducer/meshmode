@@ -122,42 +122,9 @@ class InterpolationBatch:
         if self._global_from_element_indices_cache is not None:
             return self._global_from_element_indices_cache
 
-        @memoize_in(actx, (InterpolationBatch._global_from_element_indices,
-            "compose_index_maps_kernel"))
-        def compose_index_maps_kernel():
-            t_unit = make_loopy_program(
-                [
-                    "{[iel_init]: 0 <= iel_init < nelements_result}",
-                    "{[iel]: 0 <= iel < nelements}",
-                ],
-                """
-                    global_from_element_indices[iel_init] = -1 {id=init}
-                    ... gbarrier {id=barrier, dep=init}
-                    global_from_element_indices[to_element_indices[iel]] =  \
-                        from_element_indices[iel] {dep=barrier}
-                """,
-                [
-                    lp.GlobalArg("global_from_element_indices", None,
-                        shape="nelements_result",
-                        offset=lp.auto),
-                    "...",
-                ],
-                name="compose_index_maps",
-            )
-            return lp.tag_inames(t_unit, {
-                "iel_init": ConcurrentElementInameTag(),
-                "iel": ConcurrentElementInameTag()})
-
-        # This produces incorrect results on certain machines (details:
-        # https://github.com/pocl/pocl/issues/979)
-#         result = actx.freeze(actx.call_loopy(
-#             compose_index_maps_kernel(),
-#             from_element_indices=self.from_element_indices,
-#             to_element_indices=self.to_element_indices,
-#             nelements_result=to_group.nelements,
-#         )["global_from_element_indices"])
-
-        # Compute on the CPU instead for now
+        # FIXME: This is a workaround for a loopy kernel that was producing
+        # incorrect results on some machines (details:
+        # https://github.com/inducer/meshmode/pull/255).
         from_element_indices = actx.to_numpy(self.from_element_indices)
         to_element_indices = actx.to_numpy(self.to_element_indices)
         numpy_result = np.full(to_group.nelements, -1)
