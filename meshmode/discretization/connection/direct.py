@@ -25,6 +25,8 @@ import numpy as np
 import numpy.linalg as la
 
 import loopy as lp
+from meshmode.transform_metadata import (
+        ConcurrentElementInameTag, ConcurrentDOFInameTag)
 from pytools import memoize_in, keyed_memoize_method
 from pytools.obj_array import obj_array_vectorized_n_args
 from meshmode.array_context import IsOpArray, IsDOFArray, ParameterValue
@@ -122,42 +124,14 @@ class InterpolationBatch:
         if self._global_from_element_indices_cache is not None:
             return self._global_from_element_indices_cache
 
-        @memoize_in(actx, (InterpolationBatch._global_from_element_indices,
-            "compose_index_maps_kernel"))
-        def compose_index_maps_kernel():
-            # FIXME: Current arraycontext (2021-06-17, 9e5fb5d) does not map
-            # the iel_init iname to a GPU axis, leading this kernel to likely
-            # be very slow. Fortunately, this should only run during
-            # problem setup.
-            #
-            # cf. https://github.com/inducer/arraycontext/pull/29
-            # for a strategy that could/should be used instead.
-            return make_loopy_program(
-                [
-                    "{[iel_init]: 0 <= iel_init < nelements_result}",
-                    "{[iel]: 0 <= iel < nelements}",
-                ],
-                """
-                    global_from_element_indices[iel_init] = -1 {id=init}
-                    ... gbarrier {id=barrier, dep=init}
-                    global_from_element_indices[to_element_indices[iel]] =  \
-                        from_element_indices[iel] {dep=barrier}
-                """,
-                [
-                    lp.GlobalArg("global_from_element_indices", None,
-                        shape="nelements_result",
-                        offset=lp.auto),
-                    "...",
-                ],
-                name="compose_index_maps",
-            )
-
-        result = actx.freeze(actx.call_loopy(
-            compose_index_maps_kernel(),
-            from_element_indices=self.from_element_indices,
-            to_element_indices=self.to_element_indices,
-            nelements_result=to_group.nelements,
-        )["global_from_element_indices"])
+        # FIXME: This is a workaround for a loopy kernel that was producing
+        # incorrect results on some machines (details:
+        # https://github.com/inducer/meshmode/pull/255).
+        from_element_indices = actx.to_numpy(self.from_element_indices)
+        to_element_indices = actx.to_numpy(self.to_element_indices)
+        numpy_result = np.full(to_group.nelements, -1)
+        numpy_result[to_element_indices] = from_element_indices
+        result = actx.freeze(actx.from_numpy(numpy_result))
 
         self._global_from_element_indices_cache = result
         return result
@@ -392,7 +366,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_mat_knl"))
         def batch_mat_knl(n_to_nodes, n_from_nodes):
-            return make_loopy_program(
+            t_unit = make_loopy_program(
                 [
                     "{[iel]: 0 <= iel < nelements}",
                     "{[idof]: 0 <= idof < n_to_nodes}",
@@ -415,11 +389,14 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 ],
                 name="resample_by_mat",
             )
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_picking_knl"))
         def batch_pick_knl():
-            return make_loopy_program(
+            t_unit = make_loopy_program(
                 [
                     "{[iel]: 0 <= iel < nelements}",
                     "{[idof]: 0 <= idof < n_to_nodes}"
@@ -439,6 +416,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 ],
                 name="resample_by_picking",
             )
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         group_data = []
         for i_tgrp, cgrp in enumerate(self.groups):
@@ -503,7 +483,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx, (DirectDiscretizationConnection,
             "resample_by_mat_knl_inplace"))
         def mat_knl(nelements_vec, nelements_result, n_to_nodes, n_from_nodes, n_from_el_ind, n_to_el_ind, fp_format, index_dtype):
-            knl = make_loopy_program(
+            t_unit = make_loopy_program(
                 """{[iel, idof, j]:
                     0<=iel<nelements and
                     0<=idof<n_to_nodes and
@@ -540,13 +520,14 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     ],
                 name="resample_by_mat_inplace")
 
-            return knl
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_picking_knl_inplace"))
         def pick_knl(n_to_nodes):
-
-            knl = make_loopy_program(
+            t_unit = make_loopy_program(
                 """{[iel, idof]:
                     0<=iel<nelements and
                     0<=idof<n_to_nodes}""",
@@ -597,7 +578,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     ],
                 name="resample_by_picking_inplace_rhs")
 
-            return knl
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         if self.is_surjective:
             result = self.to_discr.empty(actx, dtype=ary.entry_dtype)

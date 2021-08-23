@@ -24,6 +24,7 @@ dependencies:
 - pybind11
 
 # for MPI-based tests
+- openmpi
 - mpi4py
 
 # for xdmf/hdf5 visualizer

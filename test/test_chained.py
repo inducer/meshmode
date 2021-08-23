@@ -23,9 +23,10 @@ THE SOFTWARE.
 import numpy as np
 
 import pytest
-from arraycontext import (  # noqa
-        pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests)
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from arraycontext import pytest_generate_tests_for_array_contexts
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 from arraycontext import thaw
 from meshmode.dof_array import flatten_to_numpy, flat_norm
@@ -392,7 +393,7 @@ def test_reversed_chained_connection(actx_factory, ndim, mesh_name):
 
     for n in mesh_sizes:
         h, error = run(n, order)
-        eoc.add_data_point(h, error)
+        eoc.add_data_point(h, actx.to_numpy(error))
 
     print(eoc)
 

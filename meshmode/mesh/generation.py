@@ -825,7 +825,7 @@ def generate_urchin(
 @deprecate_keyword("group_factory", "group_cls")
 def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
         group_cls=None, boundary_tag_to_face=None,
-        mesh_type=None):
+        mesh_type=None, unit_nodes=None):
     r"""Create a semi-structured mesh.
 
     :param axis_coords: a tuple with a number of entries corresponding
@@ -1019,7 +1019,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 
     grp = make_group_from_vertices(
             vertices.reshape(dim, -1), el_vertices, order,
-            group_cls=group_cls)
+            group_cls=group_cls, unit_nodes=unit_nodes)
 
     # {{{ compute facial adjacency for mesh if there is tag information
 

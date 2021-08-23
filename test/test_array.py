@@ -24,10 +24,11 @@ from dataclasses import dataclass
 import pytest
 import numpy as np
 
-from arraycontext import _acf           # noqa: F401
-from arraycontext import (              # noqa: F401
-        pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests)
+from meshmode import _acf  # noqa: F401
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from arraycontext import pytest_generate_tests_for_array_contexts
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 from arraycontext import (
         thaw,
@@ -36,7 +37,7 @@ from arraycontext import (
 
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import default_simplex_group_factory
-from meshmode.dof_array import DOFArray, flat_norm
+from meshmode.dof_array import DOFArray, flat_norm, array_context_for_pickling
 
 from pytools.obj_array import make_obj_array
 
@@ -131,6 +132,21 @@ def test_container_norm(actx_factory, ord):
 
     assert abs(n1 - n2) < 1e-12
     assert abs(flat_norm(ary_dof, ord) - actx.np.linalg.norm(ary_dof, ord)) < 1e-12
+
+
+def test_dof_array_pickling(actx_factory):
+    actx = actx_factory()
+    ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs = _get_test_containers(actx)
+
+    from pickle import loads, dumps
+    with array_context_for_pickling(actx):
+        pkl = dumps((mat_of_dofs, dc_of_dofs))
+
+    with array_context_for_pickling(actx):
+        mat2_of_dofs, dc2_of_dofs = loads(pkl)
+
+    assert flat_norm(mat_of_dofs - mat2_of_dofs, np.inf) == 0
+    assert flat_norm(dc_of_dofs - dc2_of_dofs, np.inf) == 0
 
 
 if __name__ == "__main__":

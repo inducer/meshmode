@@ -28,10 +28,11 @@ import pyopencl as cl
 
 from meshmode.dof_array import flatten, unflatten, flat_norm
 
-from arraycontext import thaw, _acf         # noqa: F401
-from arraycontext import (                  # noqa: F401
-        pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests)
+from arraycontext import thaw
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from arraycontext import pytest_generate_tests_for_array_contexts
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 from meshmode.discretization.poly_element import default_simplex_group_factory
 from meshmode.mesh import BTAG_ALL
@@ -346,7 +347,7 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     from arraycontext import PyOpenCLArrayContext
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = PyOpenCLArrayContext(queue, force_device_scalars=True)
 
     from meshmode.discretization import Discretization
     vol_discr = Discretization(actx, local_mesh, group_factory)

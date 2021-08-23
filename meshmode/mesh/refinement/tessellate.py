@@ -41,7 +41,7 @@ from typing import List, Tuple, Optional
 # {{{ interface
 
 @dataclass(frozen=True)
-class ElementTesselationInfo:
+class ElementTessellationInfo:
     """Describes how one element is split into multiple child elements.
 
     .. attribute:: children
@@ -84,15 +84,15 @@ class GroupRefinementRecord:
     """
     .. attribute:: el_tess_info
 
-        An instance of :class:`ElementTesselationInfo` that describes the
-        tesselation of a single element into multiple child elements.
+        An instance of :class:`ElementTessellationInfo` that describes the
+        tessellation of a single element into multiple child elements.
 
     .. attribute:: element_mapping
 
         A mapping from the original elements to the refined child elements.
     """
 
-    el_tess_info: ElementTesselationInfo
+    el_tess_info: ElementTessellationInfo
     # FIXME: This should really be a CSR data structure.
     element_mapping: List[List[int]]
 
@@ -102,23 +102,23 @@ def get_group_midpoints(meg: MeshElementGroup, el_tess_info, elements):
     """Compute the midpoints of the vertices of the specified elements.
 
     :arg group: an instance of :class:`meshmode.mesh.MeshElementGroup`.
-    :arg el_tess_info: a :class:`ElementTesselationInfo`.
+    :arg el_tess_info: a :class:`ElementTessellationInfo`.
     :arg elements: a list of (group-relative) element numbers.
 
     :return: A :class:`dict` mapping element numbers to midpoint
         coordinates, with each value in the map having shape
         ``(ambient_dim, nmidpoints)``. The ordering of the midpoints
-        follows their ordering in the tesselation.
+        follows their ordering in the tessellation.
     """
     raise NotImplementedError(type(meg).__name__)
 
 
 @singledispatch
-def get_group_tesselated_nodes(meg: MeshElementGroup, el_tess_info, elements):
-    """Compute the nodes of the child elements according to the tesselation.
+def get_group_tessellated_nodes(meg: MeshElementGroup, el_tess_info, elements):
+    """Compute the nodes of the child elements according to the tessellation.
 
     :arg group: An instance of :class:`meshmode.mesh.MeshElementGroup`.
-    :arg el_tess_info: a :class:`ElementTesselationInfo`.
+    :arg el_tess_info: a :class:`ElementTessellationInfo`.
     :arg elements: A list of (group-relative) element numbers.
 
     :return: A :class:`dict` mapping element numbers to node
@@ -131,9 +131,9 @@ def get_group_tesselated_nodes(meg: MeshElementGroup, el_tess_info, elements):
 
 
 @singledispatch
-def get_group_tesselation_info(meg: MeshElementGroup):
+def get_group_tessellation_info(meg: MeshElementGroup):
     """
-    :returns: a :class:`ElementTesselationInfo` for the element group *meg*.
+    :returns: a :class:`ElementTessellationInfo` for the element group *meg*.
     """
     raise NotImplementedError(type(meg).__name__)
 
@@ -181,7 +181,7 @@ def _get_ref_midpoints(shape, ref_vertices):
 # }}}
 
 
-# {{{ modepy.shape tesselation and resampling
+# {{{ modepy.shape tessellation and resampling
 
 @get_group_midpoints.register(_ModepyElementGroup)
 def _(meg: _ModepyElementGroup, el_tess_info, elements):
@@ -203,7 +203,7 @@ def _(meg: _ModepyElementGroup, el_tess_info, elements):
     return dict(zip(elements, resampled_midpoints))
 
 
-@get_group_tesselated_nodes.register(_ModepyElementGroup)
+@get_group_tessellated_nodes.register(_ModepyElementGroup)
 def _(meg: _ModepyElementGroup, el_tess_info, elements):
     shape = meg._modepy_shape
     space = meg._modepy_space
@@ -232,7 +232,7 @@ def _(meg: _ModepyElementGroup, el_tess_info, elements):
             }
 
 
-@get_group_tesselation_info.register(_ModepyElementGroup)
+@get_group_tessellation_info.register(_ModepyElementGroup)
 def _(meg: _ModepyElementGroup):
     shape = meg._modepy_shape
     space = type(meg._modepy_space)(meg.dim, 2)
@@ -260,7 +260,7 @@ def _(meg: _ModepyElementGroup):
     # ensure order matches the one in midpoint_indices
     midpoint_vertex_pairs = [midpoint_to_vertex_pairs[m] for m in midpoints]
 
-    return ElementTesselationInfo(
+    return ElementTessellationInfo(
             ref_vertices=ref_vertices,
             children=np.array(mp.submesh_for_shape(shape, ref_vertices)),
             orig_vertex_indices=np.array(orig_vertex_indices),

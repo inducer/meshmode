@@ -84,13 +84,13 @@ class RefinerWithoutAdjacency:
         if perform_vertex_updates:
             inew_vertex = mesh.nvertices
 
-        from meshmode.mesh.refinement.tesselate import (
-                get_group_tesselation_info,
+        from meshmode.mesh.refinement.tessellate import (
+                get_group_tessellation_info,
                 get_group_midpoints,
-                get_group_tesselated_nodes)
+                get_group_tessellated_nodes)
 
         for group in mesh.groups:
-            el_tess_info = get_group_tesselation_info(group)
+            el_tess_info = get_group_tessellation_info(group)
 
             # {{{ compute counts and index arrays
 
@@ -114,7 +114,7 @@ class RefinerWithoutAdjacency:
 
             # }}}
 
-            from meshmode.mesh.refinement.tesselate import GroupRefinementRecord
+            from meshmode.mesh.refinement.tessellate import GroupRefinementRecord
             group_refinement_records.append(
                     GroupRefinementRecord(
                         el_tess_info=el_tess_info,
@@ -195,13 +195,13 @@ class RefinerWithoutAdjacency:
             # copy over unchanged nodes
             new_nodes[:, unrefined_el_new_indices] = group.nodes[:, ~grp_flags]
 
-            tesselated_nodes = get_group_tesselated_nodes(
+            tessellated_nodes = get_group_tessellated_nodes(
                     group, el_tess_info, refining_el_old_indices)
 
             for old_iel in refining_el_old_indices:
                 new_iel_base = child_el_indices[old_iel]
                 new_nodes[:, new_iel_base:new_iel_base+nchildren, :] = \
-                        tesselated_nodes[old_iel]
+                        tessellated_nodes[old_iel]
 
             assert (~np.isnan(new_nodes)).all()
 

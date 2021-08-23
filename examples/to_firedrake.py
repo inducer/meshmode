@@ -24,7 +24,8 @@ THE SOFTWARE.
 import numpy as np
 import pyopencl as cl
 
-from arraycontext import PyOpenCLArrayContext, thaw
+from meshmode.array_context import PyOpenCLArrayContext
+from arraycontext import thaw
 
 
 # Nb: Some of the initial setup was adapted from meshmode/examplse/simple-dg.py

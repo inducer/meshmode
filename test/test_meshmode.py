@@ -26,12 +26,12 @@ import numpy as np
 import numpy.linalg as la
 
 import meshmode         # noqa: F401
-from arraycontext import (  # noqa
-        pytest_generate_tests_for_pyopencl_array_context
-        as pytest_generate_tests,
-        thaw)
+from arraycontext import thaw
 
-from arraycontext import _acf  # noqa: F401
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from arraycontext import pytest_generate_tests_for_array_contexts
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
@@ -187,7 +187,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
             assert mat_error < 1e-14, mat_error
 
         err = flat_norm(bdry_f-bdry_f_2, np.inf)
-        eoc_rec.add_data_point(h, err)
+        eoc_rec.add_data_point(h, actx.to_numpy(err))
 
     order_slack = 0.75 if mesh_name == "blob" else 0.5
     print(eoc_rec)
@@ -313,7 +313,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
             all_face_f_2 = all_face_f_2 + all_face_embedding(bdry_f)
 
         err = flat_norm(all_face_f-all_face_f_2, np.inf)
-        eoc_rec.add_data_point(h, err)
+        eoc_rec.add_data_point(h, actx.to_numpy(err))
 
     print(eoc_rec)
     assert (
@@ -422,7 +422,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
         assert flat_norm(bdry_f_2-bdry_f_2_no_inp, np.inf) < 1e-14
 
         err = flat_norm(bdry_f-bdry_f_2, np.inf)
-        eoc_rec.add_data_point(h, err)
+        eoc_rec.add_data_point(h, actx.to_numpy(err))
 
     print(eoc_rec)
     assert (
@@ -688,7 +688,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
         vol_one = vol_x[0]*0 + 1
         from pytential import norm, integral  # noqa
 
-        comp_vol = integral(vol_discr, vol_one)
+        comp_vol = actx.to_numpy(integral(vol_discr, vol_one))
         rel_vol_err = abs(true_vol - comp_vol) / true_vol
         vol_eoc_rec.add_data_point(h, rel_vol_err)
         print("VOL", true_vol, comp_vol)
@@ -701,7 +701,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
         intp_err = norm(bdry_discr, bdry_one-bdry_one_exact)
         assert intp_err < 1e-14
 
-        comp_surf = integral(bdry_discr, bdry_one)
+        comp_surf = actx.to_numpy(integral(bdry_discr, bdry_one))
         rel_surf_err = abs(true_surf - comp_surf) / true_surf
         surf_eoc_rec.add_data_point(h, rel_surf_err)
         print("SURF", true_surf, comp_surf)

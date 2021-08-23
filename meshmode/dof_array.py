@@ -38,6 +38,8 @@ import loopy as lp
 from pytools import MovedFunctionDeprecationWrapper
 from pytools import single_valued, memoize_in
 
+from meshmode.transform_metadata import (
+            ConcurrentElementInameTag, ConcurrentDOFInameTag)
 from arraycontext import (
         ArrayContext, make_loopy_program,
         ArrayContainer, with_container_arithmetic,
@@ -143,11 +145,12 @@ class DOFArray:
     n_cum_alloc = 0
 
     def __init__(self, actx: Optional[ArrayContext], data: Tuple[Any]):
-        if not (actx is None or isinstance(actx, ArrayContext)):
-            raise TypeError("actx must be of type ArrayContext")
+        if __debug__:
+            if not (actx is None or isinstance(actx, ArrayContext)):
+                raise TypeError("actx must be of type ArrayContext")
 
-        if not isinstance(data, tuple):
-            raise TypeError("'data' argument must be a tuple")
+            if not isinstance(data, tuple):
+                raise TypeError("'data' argument must be a tuple")
 
         alloc_size = sum(d.size for d in data)
 
@@ -235,12 +238,17 @@ class DOFArray:
         return cls(actx, tuple(res_list))
 
     def __str__(self):
-        return str(self._data)
+        return f"DOFArray({str(self._data)})"
 
     def __repr__(self):
         return f"DOFArray({repr(self._data)})"
 
     # {{{ sequence protocol
+
+    def __bool__(self):
+        raise ValueError(
+                "The truth value of a DOFArray is not well-defined. "
+                "Use actx.np.any(x) or actx.np.all(x)")
 
     def __len__(self):
         return len(self._data)
@@ -352,7 +360,7 @@ class DOFArray:
             raise RuntimeError("DOFArray instances can only be unpickled while "
                     "array_context_for_pickling is active.")
 
-        self.array_context = actx
+        self._array_context = actx
         self._data = tuple([actx.from_numpy(ary_i) for ary_i in state])
 
     # }}}
@@ -472,7 +480,7 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
 
     @memoize_in(actx, (_flatten_dof_array, "flatten_grp_ary_prg"))
     def prg():
-        return make_loopy_program(
+        t_unit = make_loopy_program(
             [
                 "{[iel]: 0 <= iel < nelements}",
                 "{[idof]: 0 <= idof < ndofs_per_element}"
@@ -491,13 +499,16 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
             ],
             name="flatten_grp_ary"
         )
+        return lp.tag_inames(t_unit, {
+            "iel": ConcurrentElementInameTag(),
+            "idof": ConcurrentDOFInameTag()})
 
     def _flatten(grp_ary):
         # If array has two axes, assume they are elements/dofs. If C-contiguous
         # in those, "flat" and "unflat" memory layout agree.
-        if len(grp_ary.shape) == 2 and grp_ary.flags.c_contiguous:
-            return grp_ary.reshape(-1, order="C")
-        else:
+        try:
+            return actx.np.ravel(grp_ary, order="C")
+        except ValueError:
             # NOTE: array has unsupported strides
             return actx.call_loopy(
                 prg(),
@@ -547,7 +558,7 @@ def _unflatten_dof_array(actx: ArrayContext, ary: Any,
 
     @memoize_in(actx, (_unflatten_dof_array, "unflatten_prg"))
     def prg():
-        return make_loopy_program(
+        t_unit = make_loopy_program(
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
             "result[iel, idof] = ary[grp_start + iel*ndofs_per_element + idof]",
             kernel_data=[
@@ -555,6 +566,9 @@ def _unflatten_dof_array(actx: ArrayContext, ary: Any,
                 ...
             ],
             name="unflatten")
+        return lp.tag_inames(t_unit, {
+            "iel": ConcurrentElementInameTag(),
+            "idof": ConcurrentDOFInameTag()})
 
     return DOFArray(actx, tuple(
         actx.call_loopy(
@@ -722,7 +736,7 @@ def unflatten_from_numpy(
 
 # {{{ flat_norm
 
-def flat_norm(ary, ord=None) -> float:
+def flat_norm(ary, ord=None) -> Any:
     r"""Return an element-wise :math:`\ell^{\text{ord}}` norm of *ary*.
 
     :arg ary: may be a :class:`DOFArray` or a
@@ -738,17 +752,17 @@ def flat_norm(ary, ord=None) -> float:
 
     from arraycontext import is_array_container
 
-    import numpy.linalg as la
+    from arraycontext.fake_numpy import _scalar_list_norm
     if isinstance(ary, DOFArray):
         actx = ary.array_context
-        return la.norm(
+        return _scalar_list_norm(
                 [
                     actx.np.linalg.norm(actx.np.ravel(subary, order="A"), ord=ord)
                     for _, subary in serialize_container(ary)],
                 ord=ord)
 
     elif is_array_container(ary):
-        return la.norm(
+        return _scalar_list_norm(
                 [flat_norm(subary, ord=ord)
                     for _, subary in serialize_container(ary)],
                 ord=ord)

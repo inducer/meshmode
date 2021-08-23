@@ -33,6 +33,10 @@ from meshmode.array_context import IsDOFArray, ParameterValue, IsOpArray
 from loopy import GlobalArg, ValueArg, auto
 from arraycontext import ArrayContext, make_loopy_program
 
+import loopy as lp
+from meshmode.transform_metadata import (
+        ConcurrentElementInameTag, ConcurrentDOFInameTag)
+
 from warnings import warn
 
 # underscored because it shouldn't be imported from here.
@@ -531,7 +535,7 @@ class Discretization:
 
         @memoize_in(actx, (Discretization, "quad_weights_prg"))
         def prg():
-            return make_loopy_program(
+            t_unit = make_loopy_program(
                 "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
                 "result[iel,idof] = weights[idof]",
                 kernel_data=[
@@ -539,6 +543,9 @@ class Discretization:
                     ...
                 ],
                 name="quad_weights")
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         return _DOFArray(None, tuple(
                 actx.freeze(
@@ -572,9 +579,10 @@ class Discretization:
             raise ElementGroupTypeError("Element groups must be nodal.")
 
         @memoize_in(actx, (Discretization, "nodes_prg"))
+
         #def prg():
         def prg(nelements, ndiscr_nodes, nmesh_nodes, fp_format):
-            result = make_loopy_program(
+            t_unit = make_loopy_program(
                 """{[iel,idof,j]:
                     0<=iel<nelements and
                     0<=idof<ndiscr_nodes and
@@ -582,7 +590,7 @@ class Discretization:
                 """
                     result[iel, idof] = \
                         sum(j, resampling_mat[idof, j] * nodes[iel, j])
-                    """,
+                """,
                 kernel_data=[
                     GlobalArg("result", fp_format, shape=(nelements, ndiscr_nodes), tags=IsDOFArray()),
                     GlobalArg("nodes", fp_format, shape=auto, tags=None),
@@ -592,8 +600,11 @@ class Discretization:
                     ValueArg("nmesh_nodes", tags=ParameterValue(nmesh_nodes)),
                     ...
                 ],
-                name="nodes")
-            return result
+                name="lp_nodes")
+
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
         def resample_mesh_nodes(grp, iaxis):
             # TODO: would be nice to have the mesh use an array context already
@@ -647,7 +658,7 @@ def num_reference_derivative(
             isinstance(grp, InterpolatoryElementGroupBase) for grp in discr.groups
             ]):
         raise NoninterpolatoryElementGroupError(
-            "Element groups must be usuable for differentiation and interpolation.")
+            "Element groups must be usable for differentiation and interpolation.")
 
     if not ref_axes:
         return vec
@@ -661,7 +672,7 @@ def num_reference_derivative(
 
     @memoize_in(actx, (num_reference_derivative, "reference_derivative_prg"))
     def prg():
-        return make_loopy_program(
+        t_unit = make_loopy_program(
             "{[iel,idof,j]: 0 <= iel < nelements and 0 <= idof, j < nunit_dofs}",
             "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
             kernel_data=[
@@ -669,6 +680,10 @@ def num_reference_derivative(
                 ...
             ],
             name="diff")
+
+        return lp.tag_inames(t_unit, {
+            "iel": ConcurrentElementInameTag(),
+            "idof": ConcurrentDOFInameTag()})
 
     @keyed_memoize_in(actx,
             (num_reference_derivative, "num_reference_derivative_matrix"),
