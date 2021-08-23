@@ -178,6 +178,24 @@ class DiscretizationConnectionElementGroup:
 
 # }}}
 
+# Creates the inverse mapping of an indirection array
+def Pinv(p):
+    p2 = np.empty_like(p)
+    p2[p] = np.arange(0,len(p), dtype=np.int32)
+    return p2
+
+# Combine two indirection arrays p_l and p_r into a new
+# indirection array p_c so that
+# if B[p_l[i]] = A[p_r[i]] then B[i] = A[p_c[i]]
+# or, alternatively, B[p_c[i]] = A[i] if lhs=True.
+# Alternatively, flipping the order of the input arguments
+# will do the same thing. 
+def combine_indirection_arrays(p_l, p_r, lhs=False):
+    if lhs:
+        return p_l[Pinv(p_r)]
+    else:
+        return p_r[Pinv(p_l)]
+
 
 # {{{ connection classes
 
@@ -527,6 +545,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_picking_knl_inplace"))
         def pick_knl(n_to_nodes):
+
             knl = make_loopy_program(
                 """{[iel, idof]:
                     0<=iel<nelements and
@@ -547,6 +566,36 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     "...",
                     ],
                 name="resample_by_picking_inplace")
+                
+            return knl
+
+        @memoize_in(actx,
+                (DirectDiscretizationConnection, "resample_by_picking_knl_inplace_rhs"))
+        def pick_knl_rhs(n_to_nodes, offset):
+            from pymbolic import parse
+            oset = parse(str(offset))
+
+            knl = make_loopy_program(
+                """{[iel, idof]:
+                    0<=iel<nelements and
+                    0<=idof<n_to_nodes}""",
+                "result[iel, idof] \
+                    = ary[from_element_indices[iel], pick_list[idof]]",
+                [
+                    lp.GlobalArg("result", None,
+                        shape="nelements_result, n_to_nodes",
+                        offset=lp.auto, tags=IsDOFArray()),
+                    lp.GlobalArg("ary", None,
+                        shape="nelements_vec, n_from_nodes",
+                        offset=lp.auto, tags=IsDOFArray()),
+                    lp.ValueArg("nelements_result", np.int32),
+                    lp.ValueArg("nelements_vec", np.int32),
+                    lp.ValueArg("n_from_nodes", np.int32),
+                    lp.ValueArg("n_to_nodes", np.int32, tags=ParameterValue(n_to_nodes)),
+                    lp.ValueArg("offset", tags=ParameterValue(offset)),
+                    "..."
+                    ],
+                name="resample_by_picking_inplace_rhs")
 
             return knl
 
@@ -590,12 +639,48 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
                 else:
                     nelements, n_to_nodes = result[i_tgrp].shape
-                    actx.call_loopy(pick_knl(n_to_nodes),
-                            pick_list=point_pick_indices,
-                            result=result[i_tgrp],
-                            ary=ary[batch.from_group_index],
-                            from_element_indices=batch.from_element_indices,
-                            to_element_indices=batch.to_element_indices)
+
+                    # Cases:
+                    # lhs is some constant offset into result array -> just use offset
+                    # lhs is some zero based indexing
+
+                    to_element_indices = batch.to_element_indices.get(queue=actx.queue)
+                    from_element_indices = batch.from_element_indices.get(queue=actx.queue)
+                    #print(to_element_indices)
+                    #print(from_element_indices)
+                    #print(to_element_indices.shape)
+                    #print(from_element_indices.shape)
+                    #offset = to_element_indices[0]
+                    #compare_to = np.arange(offset, len(to_element_indices) + offset, dtype=np.int64)
+                    indirection = "both"
+                    #compare = "rhs" if np.allclose(compare_to, to_element_indices) else "both"  
+                    #if compare == "both":
+                    #    print(np.array(sorted(to_element_indices)))
+                    #    print(np.array(sorted(from_element_indices)))
+                    #    exit()
+                    
+
+                    if True:#indirection == "both":
+                        actx.call_loopy(pick_knl(n_to_nodes),
+                                pick_list=point_pick_indices,
+                                result=result[i_tgrp],
+                                ary=ary[batch.from_group_index],
+                                from_element_indices=batch.from_element_indices,
+                                to_element_indices=batch.to_element_indices)
+                    elif indirection == "rhs":
+                        # This also doesn't work due to the offset on the receiving side
+                        #from pyopencl.array import to_device
+                        #indirection_array = to_device(actx.queue, indirection_array)
+                        #print(indirection_array.get())
+
+                        actx.call_loopy(pick_knl_rhs(n_to_nodes, offset),
+                                pick_list=point_pick_indices,
+                                result=result[i_tgrp],
+                                ary=ary[batch.from_group_index],
+                                from_element_indices=from_element_indices)
+
+                    else:
+                        raise ValueError("value must be 'both', 'rhs'")
 
         return result
 
