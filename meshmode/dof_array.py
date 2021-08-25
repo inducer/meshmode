@@ -492,7 +492,7 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
                 lp.GlobalArg("result", None,
                              shape="nelements * ndofs_per_element"),
                 lp.GlobalArg("grp_ary", None,
-                             shape=("nelements", "ndofs_per_element"), tags=IsDOFArray()),
+                             shape=("nelements", "ndofs_per_element"), tags=[IsDOFArray()]),
                 lp.ValueArg("nelements", np.int32),
                 lp.ValueArg("ndofs_per_element", np.int32),
                 "..."
@@ -562,7 +562,7 @@ def _unflatten_dof_array(actx: ArrayContext, ary: Any,
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
             "result[iel, idof] = ary[grp_start + iel*ndofs_per_element + idof]",
             kernel_data=[
-                GlobalArg("result", None, shape=auto, tags=IsDOFArray()),
+                GlobalArg("result", None, shape=auto, tags=[IsDOFArray()]),
                 ...
             ],
             name="unflatten")

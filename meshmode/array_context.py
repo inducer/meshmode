@@ -30,7 +30,7 @@ from pytools.tag import Tag, UniqueTag
 from arraycontext import (  # noqa: F401
         ArrayContext,
         CommonSubexpressionTag, FirstAxisIsElementsTag,
-        ParameterValue, IsDOFArray,
+        ParameterValue, IsDOFArray, IsOpArray,
         ArrayContainer,
         is_array_container, is_array_container_type,
         serialize_container, deserialize_container,

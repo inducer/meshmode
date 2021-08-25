@@ -159,7 +159,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                                  shape=("n_from_elements", "n_from_nodes")),
                     lp.GlobalArg("result", None,
                                  shape=("n_to_elements", "n_to_nodes"),
-                                 is_input=False, tags=IsDOFArray()),
+                                 is_input=False, tags=[IsDOFArray()]),
                     lp.GlobalArg("basis_tabulation", None,
                                  shape=("n_to_nodes", "n_to_nodes")),
                     lp.GlobalArg("weights", None,
