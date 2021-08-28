@@ -21,6 +21,9 @@ THE SOFTWARE.
 """
 
 
+import logging
+from typing import Any
+
 import numpy as np
 import numpy.linalg as la
 
@@ -31,6 +34,10 @@ from pytools import memoize_in, keyed_memoize_method
 from arraycontext import (
         ArrayContext, make_loopy_program,
         is_array_container, map_array_container)
+
+from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 # {{{ interpolation batch
@@ -137,6 +144,51 @@ class InterpolationBatch:
 # }}}
 
 
+# {{{ _FromGroupPickData
+
+@dataclass
+class _FromGroupPickData:
+    """Represents information needed to pick DOFs from one source element
+    group to a target element group. Note that the connection between these
+    groups must be such that the information transfer can occur by indirect
+    access, no interpolation can occur. Each target element's DOFs can be read
+    from the source element via a different "pick list", however, chosen from
+    :attr:`dof_pick_lists` via :attr:`dof_pick_list_index`. The information
+    typically summarizes multiple :class:`InterpolationBatch`es.
+
+    .. attribute:: from_group_index
+
+        The element group index in the
+        :attr:`DirectDiscretizationConnection.from_discr` from which information
+        is retrieved.
+
+    .. attribute:: dof_pick_lists
+
+        A frozen array of shape ``(npick_lists, ntgt_dofs)`` of a type controlled
+        by the array context.
+
+    .. attribute:: dof_pick_list_index
+        A frozen array of shape ``(nelements_tgt)`` of a type controlled
+        by the array context, indicating which pick list each element should use.
+
+    .. attribute:: from_element_indices
+
+        An frozen array of shape ``(nelements_tgt)`` of a type controlled
+        by the array context, indicating from which source element each target
+        element should gather its data.
+
+    .. attribute:: is_surjective
+    """
+
+    from_group_index: int
+    dof_pick_lists: Any
+    dof_pick_list_index: Any
+    from_element_indices: Any
+    is_surjective: bool
+
+# }}}
+
+
 # {{{ connection element group
 
 class DiscretizationConnectionElementGroup:
@@ -151,7 +203,7 @@ class DiscretizationConnectionElementGroup:
 # }}}
 
 
-# {{{ connection classes
+# {{{ connection base class
 
 class DiscretizationConnection:
     """Abstract interface for transporting a DOF vector from one
@@ -197,6 +249,10 @@ class DiscretizationConnection:
         """
         raise NotImplementedError()
 
+# }}}
+
+
+# {{{ identity connection
 
 class IdentityDiscretizationConnection(DiscretizationConnection):
     """A no-op connection from a :class:`~meshmode.discretization.Discretization`
@@ -208,6 +264,10 @@ class IdentityDiscretizationConnection(DiscretizationConnection):
     def __call__(self, ary):
         return ary
 
+# }}}
+
+
+# {{{ direct connection
 
 class DirectDiscretizationConnection(DiscretizationConnection):
     """A concrete :class:`DiscretizationConnection` supported by interpolation
@@ -237,6 +297,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 from_discr, to_discr, is_surjective)
 
         self.groups = groups
+        self._global_point_pick_info_cache = None
+
+    # {{{ _resample_matrix
 
     @keyed_memoize_method(key=lambda actx, to_group_index, ibatch_index:
             (to_group_index, ibatch_index))
@@ -267,6 +330,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     ibatch.result_unit_nodes, from_grp.unit_nodes)
 
         return actx.freeze(actx.from_numpy(result))
+
+    # }}}
+
+    # {{{ _resample_point_pick_indices
 
     @keyed_memoize_method(lambda actx, to_group_index, ibatch_index,
             tol_multiplier=None: (to_group_index, ibatch_index, tol_multiplier))
@@ -310,12 +377,16 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         return actx.freeze(actx.from_numpy(result))
 
+    # }}}
+
     def full_resample_matrix(self, actx):
         from warnings import warn
         warn("This method is deprecated. Use 'make_direct_full_resample_matrix' "
                 "instead.", DeprecationWarning, stacklevel=2)
 
         return make_direct_full_resample_matrix(actx, self)
+
+    # {{{ __call__
 
     def __call__(self, ary, _force_no_inplace_updates=False):
         # _force_no_inplace_updates: Only used to ensure test coverage
@@ -337,11 +408,112 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         else:
             return self._apply_without_inplace_updates(ary)
 
+    # }}}
+
+    # {{{ _global_point_pick_info_cache
+
+    def _per_target_group_pick_info(self, actx, i_tgrp):
+        """Returns a list of :class:`_FromGroupPickData`, one per source group
+        from which data ist to be transferred, or *None*, if conditions for
+        this representation are not met.
+        """
+        cgrp = self.groups[i_tgrp]
+        tgrp = self.to_discr.groups[i_tgrp]
+
+        batch_dof_pick_lists = [
+                self._resample_point_pick_indices(actx, i_tgrp, i_batch)
+                for i_batch in range(len(cgrp.batches))]
+
+        all_batches_pickable = all(
+                bpi is not None for bpi in batch_dof_pick_lists)
+        if not all_batches_pickable:
+            return None
+
+        batch_dof_pick_lists = [
+                actx.to_numpy(pick_list) for pick_list in batch_dof_pick_lists]
+
+        batch_source_groups = sorted({
+            batch.from_group_index for batch in cgrp.batches})
+
+        # no source data ta
+        if not batch_source_groups:
+            return None
+
+        result = []
+        for source_group_index in batch_source_groups:
+            batch_indices_for_this_source_group = [
+                    i for i, batch in enumerate(cgrp.batches)
+                    if batch.from_group_index == source_group_index]
+
+            # {{{ find and weed out duplicate dof pick lists
+
+            dof_pick_lists = list({tuple(batch_dof_pick_lists[bi])
+                    for bi in batch_indices_for_this_source_group})
+            dof_pick_list_to_index = {
+                    p_ind: i for i, p_ind in enumerate(dof_pick_lists)}
+            # shape: (number of pick lists, nunit_dofs_tgt)
+            dof_pick_lists = np.array(dof_pick_lists)
+
+            # }}}
+
+            from_el_indices = np.empty(
+                    tgrp.nelements, dtype=self.from_discr.mesh.element_id_dtype)
+            from_el_indices.fill(-1)
+            dof_pick_list_index = np.zeros(tgrp.nelements, dtype=np.int8)
+            assert len(dof_pick_lists)-1 <= np.iinfo(dof_pick_list_index.dtype).max
+
+            for source_batch_index in batch_indices_for_this_source_group:
+                source_batch = cgrp.batches[source_batch_index]
+
+                to_el_ind = actx.to_numpy(actx.thaw(source_batch.to_element_indices))
+                if (from_el_indices[to_el_ind] != -1).any():
+                    from warnings import warn
+                    warn("per-batch target elements not disjoint during "
+                            "attempted merge")
+                    return None
+
+                from_el_indices[to_el_ind] = \
+                        actx.to_numpy(actx.thaw(source_batch.from_element_indices))
+                dof_pick_list_index[to_el_ind] = \
+                        dof_pick_list_to_index[
+                                tuple(batch_dof_pick_lists[source_batch_index])]
+
+            result.append(
+                    _FromGroupPickData(
+                        from_group_index=source_group_index,
+                        from_element_indices=actx.freeze(actx.from_numpy(
+                            from_el_indices)),
+                        dof_pick_lists=actx.freeze(actx.from_numpy(
+                            dof_pick_lists)),
+                        dof_pick_list_index=actx.freeze(actx.from_numpy(
+                            dof_pick_list_index)),
+                        is_surjective=(from_el_indices != -1).all()
+                        ))
+
+        return result
+
+    def _global_point_pick_info(self, actx):
+        """Return a list (of length matching the number of target groups)
+        containing *None* or a list of :class:`_FromGroupPickData` instances.
+        """
+
+        if self._global_point_pick_info_cache is not None:
+            return self._global_point_pick_info_cache
+
+        self._global_point_pick_info_cache = [
+                self._per_target_group_pick_info(actx, i_tgrp)
+                for i_tgrp in range(len(self.groups))]
+        return self._global_point_pick_info_cache
+
+    # }}}
+
     # {{{ _apply_without_inplace_updates
 
     def _apply_without_inplace_updates(self, ary):
         from meshmode.dof_array import DOFArray
         actx = ary.array_context
+
+        # {{{ kernels
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_mat_knl"))
@@ -349,8 +521,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             t_unit = make_loopy_program(
                 [
                     "{[iel]: 0 <= iel < nelements}",
-                    "{[idof]: 0 <= idof < n_to_nodes}",
-                    "{[jdof]: 0 <= jdof < n_from_nodes}"
+                    "{[idof]: 0 <= idof < nunit_dofs_tgt}",
+                    "{[jdof]: 0 <= jdof < nunit_dofs_src}"
                 ],
                 """
                 # https://github.com/inducer/loopy/issues/427
@@ -362,7 +534,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 """,
                 [
                     lp.GlobalArg("ary", None,
-                        shape="nelements_vec, n_from_nodes",
+                        shape="nelements_vec, nunit_dofs_src",
                         offset=lp.auto),
                     lp.ValueArg("nelements_vec", np.int32),
                     "...",
@@ -374,12 +546,12 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 "idof": ConcurrentDOFInameTag()})
 
         @memoize_in(actx,
-                (DirectDiscretizationConnection, "resample_by_picking_knl"))
+                (DirectDiscretizationConnection, "resample_by_picking_batch_knl"))
         def batch_pick_knl():
             t_unit = make_loopy_program(
                 [
                     "{[iel]: 0 <= iel < nelements}",
-                    "{[idof]: 0 <= idof < n_to_nodes}"
+                    "{[idof]: 0 <= idof < nunit_dofs_tgt}"
                 ],
                 """
                     result[iel, idof] = (
@@ -388,70 +560,124 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 """,
                 [
                     lp.GlobalArg("ary", None,
-                        shape="nelements_vec, n_from_nodes",
+                        shape="nelements_vec, nunit_dofs_src",
                         offset=lp.auto),
                     lp.ValueArg("nelements_vec", np.int32),
-                    lp.ValueArg("n_from_nodes", np.int32),
+                    lp.ValueArg("nunit_dofs_src", np.int32),
                     "...",
                 ],
-                name="resample_by_picking",
+                name="resample_by_picking_batch",
             )
             return lp.tag_inames(t_unit, {
                 "iel": ConcurrentElementInameTag(),
                 "idof": ConcurrentDOFInameTag()})
 
-        group_data = []
-        for i_tgrp, cgrp in enumerate(self.groups):
-            # Loop over each batch in a group and evaluate the
-            # batch-contribution
-            batched_data = []
-            for i_batch, batch in enumerate(cgrp.batches):
-                if not len(batch.from_element_indices):
-                    continue
+        @memoize_in(actx,
+                (DirectDiscretizationConnection, "resample_by_picking_group_knl"))
+        def group_pick_knl():
+            t_unit = make_loopy_program(
+                [
+                    "{[iel]: 0 <= iel < nelements}",
+                    "{[idof]: 0 <= idof < nunit_dofs_tgt}"
+                ],
+                """
+                    result[iel, idof] = (
+                        ary[
+                                from_element_indices[iel],
+                                dof_pick_lists[dof_pick_list_index[iel], idof]
+                            ]
+                        if from_element_indices[iel] != -1 else 0)
+                """,
+                [
+                    lp.GlobalArg("ary", None,
+                        shape="nelements_src, nunit_dofs_src",
+                        offset=lp.auto),
+                    lp.GlobalArg("dof_pick_lists", None,
+                        shape="nelements_tgt, nunit_dofs_tgt",
+                        offset=lp.auto),
+                    lp.ValueArg("nelements_tgt", np.int32),
+                    lp.ValueArg("nelements_src", np.int32),
+                    lp.ValueArg("nunit_dofs_src", np.int32),
+                    "...",
+                ],
+                name="resample_by_picking_group",
+            )
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
 
-                point_pick_indices = self._resample_point_pick_indices(
-                        actx, i_tgrp, i_batch)
+        # }}}
 
-                if point_pick_indices is None:
-                    batch_result = actx.call_loopy(
-                        batch_mat_knl(),
-                        resample_mat=self._resample_matrix(
-                            actx, i_tgrp, i_batch
-                        ),
-                        ary=ary[batch.from_group_index],
-                        from_element_indices=batch._global_from_element_indices(
-                            actx, self.to_discr.groups[i_tgrp]),
-                        n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
+        point_pick_info = self._global_point_pick_info(actx)
+
+        group_arrays = []
+        for i_tgrp, (cgrp, group_point_pick_info) in enumerate(
+                zip(self.groups, point_pick_info)):
+
+            if group_point_pick_info is not None:
+                group_array_2_contributions = [
+                    actx.call_loopy(
+                        group_pick_knl(),
+                        dof_pick_lists=fgpd.dof_pick_lists,
+                        dof_pick_list_index=fgpd.dof_pick_list_index,
+                        ary=ary[fgpd.from_group_index],
+                        from_element_indices=fgpd.from_element_indices,
+                        nunit_dofs_tgt=self.to_discr.groups[i_tgrp].nunit_dofs
                     )["result"]
+                    for fgpd in group_point_pick_info]
 
-                else:
-                    batch_result = actx.call_loopy(
-                        batch_pick_knl(),
-                        pick_list=point_pick_indices,
-                        ary=ary[batch.from_group_index],
-                        from_element_indices=batch._global_from_element_indices(
-                            actx, self.to_discr.groups[i_tgrp]),
-                        n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
-                    )["result"]
+                assert group_array_2_contributions
+                group_array = sum(group_array_2_contributions)
 
-                batched_data.append(batch_result)
+            elif cgrp.batches:
+                # Loop over each batch in a group and evaluate the
+                # batch-contribution
+                batched_data = []
+                for i_batch, batch in enumerate(cgrp.batches):
+                    if not len(batch.from_element_indices):
+                        continue
 
-            # After computing each batched result, take the sum
-            # to get the entire contribution over the group
-            if batched_data:
-                group_data.append(sum(batched_data))
+                    point_pick_indices = self._resample_point_pick_indices(
+                            actx, i_tgrp, i_batch)
+
+                    if point_pick_indices is None:
+                        batch_result = actx.call_loopy(
+                            batch_mat_knl(),
+                            resample_mat=self._resample_matrix(
+                                actx, i_tgrp, i_batch
+                            ),
+                            ary=ary[batch.from_group_index],
+                            from_element_indices=batch._global_from_element_indices(
+                                actx, self.to_discr.groups[i_tgrp]),
+                            nunit_dofs_tgt=self.to_discr.groups[i_tgrp].nunit_dofs
+                        )["result"]
+
+                    else:
+                        batch_result = actx.call_loopy(
+                            batch_pick_knl(),
+                            pick_list=point_pick_indices,
+                            ary=ary[batch.from_group_index],
+                            from_element_indices=batch._global_from_element_indices(
+                                actx, self.to_discr.groups[i_tgrp]),
+                            nunit_dofs_tgt=self.to_discr.groups[i_tgrp].nunit_dofs
+                        )["result"]
+
+                    batched_data.append(batch_result)
+                # After computing each batched result, take the sum
+                # to get the entire contribution over the group
+                group_array = sum(batched_data)
+
             else:
                 # If no batched data at all, return zeros for this
                 # particular group array
-                group_data.append(
-                    actx.zeros(
+                group_array = actx.zeros(
                         shape=(self.to_discr.groups[i_tgrp].nelements,
                                self.to_discr.groups[i_tgrp].nunit_dofs),
-                        dtype=ary.entry_dtype
-                    )
-                )
+                        dtype=ary.entry_dtype)
 
-        return DOFArray(actx, data=tuple(group_data))
+            group_arrays.append(group_array)
+
+        return DOFArray(actx, data=tuple(group_arrays))
 
     # }}}
 
@@ -466,17 +692,17 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             t_unit = make_loopy_program(
                 """{[iel, idof, j]:
                     0<=iel<nelements and
-                    0<=idof<n_to_nodes and
-                    0<=j<n_from_nodes}""",
+                    0<=idof<nunit_dofs_tgt and
+                    0<=j<nunit_dofs_src}""",
                 "result[to_element_indices[iel], idof] \
                     = sum(j, resample_mat[idof, j] \
                     * ary[from_element_indices[iel], j])",
                 [
                     lp.GlobalArg("result", None,
-                        shape="nelements_result, n_to_nodes",
+                        shape="nelements_result, nunit_dofs_tgt",
                         offset=lp.auto),
                     lp.GlobalArg("ary", None,
-                        shape="nelements_vec, n_from_nodes",
+                        shape="nelements_vec, nunit_dofs_src",
                         offset=lp.auto),
                     lp.ValueArg("nelements_result", np.int32),
                     lp.ValueArg("nelements_vec", np.int32),
@@ -494,19 +720,19 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             t_unit = make_loopy_program(
                 """{[iel, idof]:
                     0<=iel<nelements and
-                    0<=idof<n_to_nodes}""",
+                    0<=idof<nunit_dofs_tgt}""",
                 "result[to_element_indices[iel], idof] \
                     = ary[from_element_indices[iel], pick_list[idof]]",
                 [
                     lp.GlobalArg("result", None,
-                        shape="nelements_result, n_to_nodes",
+                        shape="nelements_result, nunit_dofs_tgt",
                         offset=lp.auto),
                     lp.GlobalArg("ary", None,
-                        shape="nelements_vec, n_from_nodes",
+                        shape="nelements_vec, nunit_dofs_src",
                         offset=lp.auto),
                     lp.ValueArg("nelements_result", np.int32),
                     lp.ValueArg("nelements_vec", np.int32),
-                    lp.ValueArg("n_from_nodes", np.int32),
+                    lp.ValueArg("nunit_dofs_src", np.int32),
                     "...",
                     ],
                 name="resample_by_picking_inplace")
@@ -581,25 +807,26 @@ def make_direct_full_resample_matrix(actx, conn):
     def knl():
         return make_loopy_program(
             [
-                "{[idof_init]: 0 <= idof_init < nnodes_tgt}",
-                "{[jdof_init]: 0 <= jdof_init < nnodes_src}",
+                "{[idof_init]: 0 <= idof_init < ndofs_tgt}",
+                "{[jdof_init]: 0 <= jdof_init < ndofs_src}",
                 "{[iel]: 0 <= iel < nelements}",
-                "{[idof]: 0 <= idof < n_to_nodes}",
-                "{[jdof]: 0 <= jdof < n_from_nodes}"
+                "{[idof]: 0 <= idof < nunit_dofs_tgt}",
+                "{[jdof]: 0 <= jdof < nunit_dofs_src}"
             ],
             """
                 result[idof_init, jdof_init] = 0 {id=init}
                 ... gbarrier {id=barrier, dep=init}
-                result[itgt_base + to_element_indices[iel]*n_to_nodes + idof,      \
-                       isrc_base + from_element_indices[iel]*n_from_nodes + jdof]  \
+                result[
+                    itgt_base + to_element_indices[iel]*nunit_dofs_tgt + idof,
+                    isrc_base + from_element_indices[iel]*nunit_dofs_src + jdof] \
                            = resample_mat[idof, jdof] {dep=barrier}
             """,
             [
                 lp.GlobalArg("result", None,
-                    shape="nnodes_tgt, nnodes_src",
+                    shape="ndofs_tgt, ndofs_src",
                     offset=lp.auto),
                 lp.ValueArg("itgt_base, isrc_base", np.int32),
-                lp.ValueArg("nnodes_tgt, nnodes_src", np.int32),
+                lp.ValueArg("ndofs_tgt, ndofs_src", np.int32),
                 "...",
             ],
             name="oversample_mat"
@@ -631,8 +858,8 @@ def make_direct_full_resample_matrix(actx, conn):
                     isrc_base=from_group_starts[batch.from_group_index],
                     from_element_indices=batch.from_element_indices,
                     to_element_indices=batch.to_element_indices,
-                    nnodes_tgt=to_discr_ndofs,
-                    nnodes_src=from_discr_ndofs,
+                    ndofs_tgt=to_discr_ndofs,
+                    ndofs_src=from_discr_ndofs,
                 )["result"]
             )
 
