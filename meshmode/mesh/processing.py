@@ -944,20 +944,8 @@ def affine_map(mesh,
     if b is not None and b.shape != (mesh.ambient_dim,):
         raise ValueError(f"b has shape '{b.shape}' for a {mesh.ambient_dim}d mesh")
 
-    if b is not None:
-        b = b.reshape(-1, 1)
-
-    def f(x):
-        z = x
-        if A is not None:
-            z = A @ z
-
-        if b is not None:
-            z = z + b
-
-        return z
-
-    return map_mesh(mesh, f)
+    from meshmode.mesh.tools import AffineMap
+    return map_mesh(mesh, AffineMap(A, b))
 
 
 def _get_rotation_matrix_from_angle_and_axis(theta, axis):
