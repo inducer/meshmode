@@ -503,7 +503,7 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
         ``face_id_t [nfagrp_elements]``. ``neighbor_faces[i]`` gives the
         face index of the opposite face in element ``neighbors[i]``
 
-    .. attribute:: aff_transform
+    .. attribute:: aff_map
 
         An :class:`~meshmode.mesh.tools.AffineMap` representing the mapping from
         the group's faces to their corresponding neighbor faces.
@@ -516,10 +516,10 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
             ineighbor_group,
             elements, element_faces,
             neighbors, neighbor_faces,
-            aff_transform=None,
+            aff_map=None,
             **kwargs):
-        if aff_transform is None:
-            aff_transform = AffineMap()
+        if aff_map is None:
+            aff_map = AffineMap()
 
         super().__init__(
             # FacialAdjacencyGroup
@@ -528,7 +528,7 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
             ineighbor_group=ineighbor_group,
             elements=elements, element_faces=element_faces,
             neighbors=neighbors, neighbor_faces=neighbor_faces,
-            aff_transform=aff_transform,
+            aff_map=aff_map,
             **kwargs)
 
     def __eq__(self, other):
@@ -539,7 +539,7 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
             and np.array_equal(self.element_faces, other.element_faces)
             and np.array_equal(self.neighbors, other.neighbors)
             and np.array_equal(self.neighbor_faces, other.neighbor_faces)
-            and self.aff_transform == other.aff_transform)
+            and self.aff_map == other.aff_map)
 
     def as_python(self):
         if type(self) != InteriorAdjacencyGroup:
@@ -551,7 +551,7 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
             element_faces=_numpy_array_as_python(self.element_faces),
             neighbors=_numpy_array_as_python(self.neighbors),
             neighbor_faces=_numpy_array_as_python(self.neighbor_faces),
-            aff_transform=_affine_map_as_python(self.aff_transform))
+            aff_map=_affine_map_as_python(self.aff_map))
 
 # }}}
 
@@ -647,7 +647,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
         neighboring partition of the face connected to
         ``element_id_dtype elements[i]``
 
-    .. attribute:: aff_transform
+    .. attribute:: aff_map
 
         An :class:`~meshmode.mesh.tools.AffineMap` representing the mapping from
         the group's faces to their corresponding neighbor faces.
@@ -659,10 +659,10 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
             elements, element_faces,
             ineighbor_partition,
             neighbors, neighbor_faces,
-            aff_transform=None,
+            aff_map=None,
             **kwargs):
-        if aff_transform is None:
-            aff_transform = AffineMap()
+        if aff_map is None:
+            aff_map = AffineMap()
 
         super().__init__(
             # FacialAdjacencyGroup
@@ -673,7 +673,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
             # InterPartitionAdjacencyGroup
             ineighbor_partition=ineighbor_partition,
             neighbors=neighbors, neighbor_faces=neighbor_faces,
-            aff_transform=aff_transform,
+            aff_map=aff_map,
             **kwargs)
 
     def __eq__(self, other):
@@ -682,7 +682,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
             and self.ineighbor_partition == other.ineighbor_partition
             and np.array_equal(self.neighbors, other.neighbors)
             and np.array_equal(self.neighbor_faces, other.neighbor_faces)
-            and self.aff_transform == other.aff_transform)
+            and self.aff_map == other.aff_map)
 
     def as_python(self):
         if type(self) != InterPartitionAdjacencyGroup:
@@ -695,7 +695,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
             ineighbor_partition=self.ineighbor_partition,
             neighbors=_numpy_array_as_python(self.neighbors),
             neighbor_faces=_numpy_array_as_python(self.neighbor_faces),
-            aff_transform=_affine_map_as_python(self.aff_transform))
+            aff_map=_affine_map_as_python(self.aff_map))
 
 # }}}
 

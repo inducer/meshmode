@@ -278,7 +278,7 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
                         element_faces=element_faces,
                         neighbors=neighbors,
                         neighbor_faces=neighbor_faces,
-                        aff_transform=facial_adj.aff_transform))
+                        aff_map=facial_adj.aff_map))
 
     return local_to_local_adjacency_groups
 
@@ -358,7 +358,7 @@ def _create_nonlocal_adjacency_groups(
                             element_faces=element_faces,
                             neighbors=neighbors,
                             neighbor_faces=neighbor_faces,
-                            aff_transform=facial_adj.aff_transform))
+                            aff_map=facial_adj.aff_map))
 
     return nonlocal_adj_groups
 

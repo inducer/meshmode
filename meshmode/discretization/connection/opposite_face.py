@@ -43,7 +43,7 @@ def _make_cross_face_batches(actx,
         tgt_bdry_discr, src_bdry_discr,
         i_tgt_grp, i_src_grp,
         tgt_bdry_element_indices, src_bdry_element_indices,
-        tgt_aff_transform=None, src_aff_transform=None):
+        tgt_aff_map=None, src_aff_map=None):
 
     if tgt_bdry_discr.dim == 0:
         return [InterpolationBatch(
@@ -55,18 +55,18 @@ def _make_cross_face_batches(actx,
 
     from meshmode.mesh.tools import AffineMap
 
-    if tgt_aff_transform is None:
-        tgt_aff_transform = AffineMap()
+    if tgt_aff_map is None:
+        tgt_aff_map = AffineMap()
 
-    if src_aff_transform is None:
-        src_aff_transform = AffineMap()
+    if src_aff_map is None:
+        src_aff_map = AffineMap()
 
-    tgt_bdry_nodes = tgt_aff_transform(np.array([
+    tgt_bdry_nodes = tgt_aff_map(np.array([
         thaw_to_numpy(actx, ary[i_tgt_grp])[tgt_bdry_element_indices]
         for ary in tgt_bdry_discr.nodes(cached=False)
         ]))
 
-    src_bdry_nodes = src_aff_transform(np.array([
+    src_bdry_nodes = src_aff_map(np.array([
         thaw_to_numpy(actx, ary[i_src_grp])[src_bdry_element_indices]
         for ary in src_bdry_discr.nodes(cached=False)
         ]))
@@ -503,7 +503,7 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
                             i_tgt_grp, i_src_grp,
                             tgt_bdry_element_indices,
                             src_bdry_element_indices,
-                            tgt_aff_transform=adj.aff_transform)
+                            tgt_aff_map=adj.aff_map)
                     groups[i_tgt_grp].extend(batches)
 
     from meshmode.discretization.connection import (
@@ -612,7 +612,7 @@ def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
                             i_local_grp, rem_ipag.igroup,
                             matched_local_bdry_el_indices,
                             matched_remote_bdry_el_indices,
-                            src_aff_transform=rem_ipag.aff_transform)
+                            src_aff_map=rem_ipag.aff_map)
 
                 part_batches[i_local_grp].extend(grp_batches)
 
