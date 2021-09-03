@@ -767,7 +767,7 @@ def test_quad_mesh_3d(mesh_name, order=3, visualize=False):
 
 @pytest.mark.parametrize("order", [2, 3])
 def test_cube_icosphere(actx_factory, order, visualize=True):
-    mesh = mgen.generate_icosphere(
+    mesh = mgen.generate_sphere(
             r=1.0, order=order,
             group_cls=TensorProductElementGroup,
             uniform_refinement_rounds=2,

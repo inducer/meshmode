@@ -59,6 +59,7 @@ Surfaces
 .. autofunction:: generate_icosahedron
 .. autofunction:: generate_cube_surface
 .. autofunction:: generate_icosphere
+.. autofunction:: generate_sphere
 .. autofunction:: generate_torus
 .. autofunction:: refine_mesh_and_get_urchin_warper
 .. autofunction:: generate_urchin
@@ -495,6 +496,22 @@ def generate_cube_surface(r: float, order: int, *,
 # {{{ generate_icosphere
 
 def generate_icosphere(r: float, order: int, *,
+        uniform_refinement_rounds: int = 0,
+        node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
+        unit_nodes: Optional[np.ndarray] = None):
+    from warnings import warn
+    warn("'generate_icosphere' is deprecated and will be removed in 2023. "
+            "Use 'generate_sphere' instead.")
+
+    from meshmode.mesh import SimplexElementGroup
+    return generate_sphere(r, order,
+            uniform_refinement_rounds=uniform_refinement_rounds,
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+            unit_nodes=unit_nodes,
+            group_cls=SimplexElementGroup)
+
+
+def generate_sphere(r: float, order: int, *,
         uniform_refinement_rounds: int = 0,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
         unit_nodes: Optional[np.ndarray] = None,
