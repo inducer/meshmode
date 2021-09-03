@@ -465,6 +465,29 @@ def generate_icosahedron(
             node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
             is_conforming=True)
 
+
+def generate_cube(r: float, order: int, *,
+        node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
+        unit_nodes: Optional[np.ndarray] = None):
+    shape = mp.Hypercube(3)
+    vertices = mp.unit_vertices_for_shape(shape)
+    vertices *= r / la.norm(vertices, ord=2, axis=0)
+    vertex_indices = np.array([
+            face.volume_vertex_indices for face in mp.faces_for_shape(shape)
+            ], dtype=np.int32)
+
+    from meshmode.mesh import TensorProductElementGroup
+    grp = make_group_from_vertices(
+            vertices, vertex_indices, order,
+            group_cls=TensorProductElementGroup,
+            unit_nodes=unit_nodes)
+
+    from meshmode.mesh import Mesh
+    return Mesh(
+            vertices, [grp],
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+            is_conforming=True)
+
 # }}}
 
 
@@ -473,7 +496,8 @@ def generate_icosahedron(
 def generate_icosphere(r: float, order: int, *,
         uniform_refinement_rounds: int = 0,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
-        unit_nodes: Optional[np.ndarray] = None):
+        unit_nodes: Optional[np.ndarray] = None,
+        group_cls: Optional[type] = None):
     """
     :param r: radius of the sphere.
     :param order: order of the (simplex) elements. If *unit_nodes* is also
@@ -486,9 +510,20 @@ def generate_icosphere(r: float, order: int, *,
     :param unit_nodes: if given, the unit nodes to use. Must have shape
         ``(3, nnodes)``.
     """
-    mesh = generate_icosahedron(r, order,
-            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
-            unit_nodes=unit_nodes)
+    from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+    if group_cls is None:
+        group_cls = SimplexElementGroup
+
+    if issubclass(group_cls, SimplexElementGroup):
+        mesh = generate_icosahedron(r, order,
+                node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+                unit_nodes=unit_nodes)
+    elif issubclass(group_cls, TensorProductElementGroup):
+        mesh = generate_cube(r, order,
+                node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+                unit_nodes=unit_nodes)
+    else:
+        raise TypeError(f"unsupported 'group_cls': {group_cls}")
 
     if uniform_refinement_rounds:
         from meshmode.mesh.refinement import refine_uniformly
