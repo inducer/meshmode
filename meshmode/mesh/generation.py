@@ -57,6 +57,7 @@ Surfaces
 --------
 
 .. autofunction:: generate_icosahedron
+.. autofunction:: generate_cube_surface
 .. autofunction:: generate_icosphere
 .. autofunction:: generate_torus
 .. autofunction:: refine_mesh_and_get_urchin_warper
@@ -466,7 +467,7 @@ def generate_icosahedron(
             is_conforming=True)
 
 
-def generate_cube(r: float, order: int, *,
+def generate_cube_surface(r: float, order: int, *,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
         unit_nodes: Optional[np.ndarray] = None):
     shape = mp.Hypercube(3)
@@ -519,7 +520,7 @@ def generate_icosphere(r: float, order: int, *,
                 node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
                 unit_nodes=unit_nodes)
     elif issubclass(group_cls, TensorProductElementGroup):
-        mesh = generate_cube(r, order,
+        mesh = generate_cube_surface(r, order,
                 node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
                 unit_nodes=unit_nodes)
     else:
