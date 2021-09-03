@@ -451,7 +451,7 @@ def test_is_affine_group_check(mesh_name):
                 np.linspace(0.0, 1.0, nelements + 1), order=order)
     elif mesh_name == "sphere":
         is_affine = False
-        mesh = mgen.generate_icosphere(r=1.0, order=order)
+        mesh = mgen.generate_sphere(r=1.0, order=order)
     elif mesh_name == "torus":
         is_affine = False
         mesh = mgen.generate_torus(10.0, 2.0, order=order)

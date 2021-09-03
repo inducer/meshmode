@@ -820,7 +820,7 @@ def refine_mesh_and_get_urchin_warper(
                 is_conforming=mesh.is_conforming,
                 )
 
-    unwarped_mesh = generate_icosphere(1, order=order)
+    unwarped_mesh = generate_sphere(1, order=order)
 
     from meshmode.mesh.refinement import RefinerWithoutAdjacency
 

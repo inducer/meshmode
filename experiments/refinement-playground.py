@@ -207,10 +207,10 @@ def refine_and_generate_chart_function(mesh, filename, function):
 
 def main2():
     from meshmode.mesh.generation import (  # noqa
-            generate_icosphere, generate_icosahedron,
+            generate_sphere, generate_icosahedron,
             generate_torus, generate_regular_rect_mesh,
             generate_box_mesh)
-#    mesh = generate_icosphere(1, order=order)
+    #mesh = generate_sphere(1, order=order)
     #mesh = generate_icosahedron(1, order=order)
     #mesh = generate_torus(3, 1, order=order)
     #mesh = generate_regular_rect_mesh()
@@ -222,7 +222,7 @@ def main2():
 
 def all_refine(num_mesh, depth, fname):
     from meshmode.mesh.generation import (  # noqa
-            generate_icosphere, generate_icosahedron,
+            generate_sphere, generate_icosahedron,
             generate_torus, generate_regular_rect_mesh,
             generate_box_mesh)
     import timeit
@@ -251,7 +251,7 @@ def all_refine(num_mesh, depth, fname):
 
 def uniform_refine(num_mesh, fract, depth, fname):
     from meshmode.mesh.generation import (  # noqa
-            generate_icosphere, generate_icosahedron,
+            generate_sphere, generate_icosahedron,
             generate_torus, generate_regular_rect_mesh,
             generate_box_mesh)
     import timeit

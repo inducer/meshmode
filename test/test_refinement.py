@@ -337,7 +337,7 @@ def test_uniform_refinement(group_cls, with_adjacency):
 
 @pytest.mark.parametrize("refinement_rounds", [0, 1, 2])
 def test_conformity_of_uniform_mesh(refinement_rounds):
-    mesh = mgen.generate_icosphere(r=1.0, order=4,
+    mesh = mgen.generate_sphere(r=1.0, order=4,
             uniform_refinement_rounds=refinement_rounds)
 
     assert mesh.is_conforming
@@ -351,7 +351,7 @@ def test_refine_surfaces(actx_factory, mesh_name, visualize=False):
     if mesh_name == "torus":
         mesh = mgen.generate_torus(10, 1, 40, 4, order=4)
     elif mesh_name == "icosphere":
-        mesh = mgen.generate_icosphere(1, order=4)
+        mesh = mgen.generate_sphere(1, order=4)
     elif mesh_name == "cylinder":
         mesh = mgen.generate_surface_of_revolution(
             lambda x, y: np.ones(x.shape),

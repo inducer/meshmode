@@ -12,10 +12,10 @@ def main():
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(queue)
 
-    from meshmode.mesh.generation import (  # noqa
-            generate_icosphere, generate_icosahedron,
+    from meshmode.mesh.generation import (  # noqa: F401
+            generate_sphere, generate_icosahedron,
             generate_torus)
-    #mesh = generate_icosphere(1, order=order)
+    #mesh = generate_sphere(1, order=order)
     mesh = generate_icosahedron(1, order=order)
     #mesh = generate_torus(3, 1, order=order)
 
