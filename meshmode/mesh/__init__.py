@@ -1446,6 +1446,10 @@ def is_affine_simplex_group(group, abs_tol=None):
         raise TypeError("expected a 'SimplexElementGroup' not '%s'" %
                 type(group).__name__)
 
+    if group.nelements == 0:
+        # All zero of them are affine! :)
+        return True
+
     # get matrices
     basis = mp.basis_for_space(group._modepy_space, group._modepy_shape)
     vinv = la.inv(mp.vandermonde(basis.functions, group.unit_nodes))
