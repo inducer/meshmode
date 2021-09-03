@@ -518,7 +518,7 @@ def generate_sphere(r: float, order: int, *,
         group_cls: Optional[type] = None):
     """
     :param r: radius of the sphere.
-    :param order: order of the (simplex) elements. If *unit_nodes* is also
+    :param order: order of the group elements. If *unit_nodes* is also
         provided, the orders should match.
     :param uniform_refinement_rounds: number of uniform refinement rounds to
         perform after the initial mesh was created.
@@ -527,6 +527,10 @@ def generate_sphere(r: float, order: int, *,
         performed.
     :param unit_nodes: if given, the unit nodes to use. Must have shape
         ``(3, nnodes)``.
+    :param group_cls: a :class:`~meshmode.mesh.MeshElementGroup` subclass.
+        Based on the class, a different polyhedron is used to construct the
+        sphere: simplices use :func:`generate_icosahedron` and tensor
+        products use a :func:`generate_cube_surface`.
     """
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
     if group_cls is None:
