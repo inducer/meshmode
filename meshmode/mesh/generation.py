@@ -58,7 +58,6 @@ Surfaces
 
 .. autofunction:: generate_icosahedron
 .. autofunction:: generate_cube_surface
-.. autofunction:: generate_icosphere
 .. autofunction:: generate_sphere
 .. autofunction:: generate_torus
 .. autofunction:: refine_mesh_and_get_urchin_warper
