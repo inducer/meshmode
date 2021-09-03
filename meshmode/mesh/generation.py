@@ -501,7 +501,8 @@ def generate_icosphere(r: float, order: int, *,
         unit_nodes: Optional[np.ndarray] = None):
     from warnings import warn
     warn("'generate_icosphere' is deprecated and will be removed in 2023. "
-            "Use 'generate_sphere' instead.")
+            "Use 'generate_sphere' instead.",
+            DeprecationWarning, stacklevel=2)
 
     from meshmode.mesh import SimplexElementGroup
     return generate_sphere(r, order,
