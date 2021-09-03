@@ -214,7 +214,7 @@ def test_copy_visualizer(actx_factory, ambient_dim, visualize=True):
                 np.linspace(0.0, 1.0, nelements + 1),
                 target_order)
     elif ambient_dim == 3:
-        mesh = mgen.generate_icosphere(1.0, target_order,
+        mesh = mgen.generate_sphere(1.0, target_order,
                 uniform_refinement_rounds=2)
     else:
         raise ValueError(f"unsupported dimension: {ambient_dim}")
