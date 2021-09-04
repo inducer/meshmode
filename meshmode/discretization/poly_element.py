@@ -72,7 +72,7 @@ Group factories
 ^^^^^^^^^^^^^^^
 
 .. autoclass:: ElementGroupFactory
-.. autoclass:: OrderAndTypeBasedGroupFactory
+.. autoclass:: HeterogeneousOrderBasedGroupFactory
 
 Simplicial group factories
 --------------------------
@@ -94,6 +94,16 @@ Tensor product group factories
 
 .. autoclass:: GaussLegendreTensorProductGroupFactory
 .. autoclass:: LegendreGaussLobattoTensorProductGroupFactory
+.. autoclass:: EquidistantTensorProductGroupFactory
+
+Heterogeneous group factories
+-----------------------------
+
+.. autoclass:: InterpolatoryEdgeClusteredGroupFactory
+.. autoclass:: InterpolatoryQuadratureGroupFactory
+.. autoclass:: InterpolatoryEquidistantGroupFactory
+.. autoclass:: QuadratureGroupFactory
+.. autoclass:: ModalGroupFactory
 """
 
 
@@ -643,24 +653,52 @@ class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
         return self.group_class(mesh_el_group, self.order, index)
 
 
-class OrderAndTypeBasedGroupFactory(ElementGroupFactory):
-    def __init__(self, order, simplex_group_class, tensor_product_group_class):
+class HeterogeneousOrderBasedGroupFactory(ElementGroupFactory):
+    """
+    .. automethod:: __init__
+    .. automethod:: __call__
+    """
+
+    def __init__(self, order, mesh_group_class_to_factory):
+        """
+        :param mesh_group_class_to_factory: a :class:`dict` from
+            :class:`~meshmode.mesh.MeshElementGroup` subclasses to
+            :class:`~meshmode.discretization.ElementGroupBase` subclasses or
+            :class:`~meshmode.discretization.poly_element.ElementGroupFactory`
+            instances.
+        """
+        super().__init__()
+
         self.order = order
-        self.simplex_group_class = simplex_group_class
-        self.tensor_product_group_class = tensor_product_group_class
+        self.mesh_group_class_to_factory = mesh_group_class_to_factory
 
     def __call__(self, mesh_el_group, index):
-        if isinstance(mesh_el_group, _MeshSimplexElementGroup):
-            group_class = self.simplex_group_class
-        elif isinstance(mesh_el_group, _MeshTensorProductElementGroup):
-            group_class = self.tensor_product_group_class
-        else:
-            raise TypeError("only mesh element groups of type '%s' and '%s' "
-                    "are supported" % (
-                        _MeshSimplexElementGroup.__name__,
-                        _MeshTensorProductElementGroup.__name__))
+        cls = self.mesh_group_class_to_factory.get(type(mesh_el_group), None)
 
-        return group_class(mesh_el_group, self.order, index)
+        if cls is None:
+            raise TypeError(
+                    f"mesh group of type '{type(mesh_el_group).__name__}' is "
+                    "not supported; available types are: {}".format(
+                        {k.__name__ for k in self.mesh_group_class_to_factory}
+                        ))
+
+        if isinstance(cls, ElementGroupFactory):
+            return cls(mesh_el_group, index)
+        else:
+            return cls(mesh_el_group, self.order, index)
+
+
+class OrderAndTypeBasedGroupFactory(HeterogeneousOrderBasedGroupFactory):
+    def __init__(self, order, simplex_group_class, tensor_product_group_class):
+        from warnings import warn
+        warn("OrderAndTypeBasedGroupFactory is deprecated and will go away in 2023. "
+                "Use HeterogeneousOrderBasedGroupFactory instead.",
+                DeprecationWarning, stacklevel=2)
+
+        super().__init__(order, {
+            _MeshSimplexElementGroup: simplex_group_class,
+            _MeshTensorProductElementGroup: tensor_product_group_class,
+            })
 
 
 # {{{ group factories for simplices
@@ -766,6 +804,65 @@ class LegendreGaussLobattoTensorProductGroupFactory(
         HomogeneousOrderBasedGroupFactory):
     mesh_group_class = _MeshTensorProductElementGroup
     group_class = LegendreGaussLobattoTensorProductElementGroup
+
+
+class EquidistantTensorProductGroupFactory(HomogeneousOrderBasedGroupFactory):
+    mesh_group_class = _MeshTensorProductElementGroup
+    group_class = EquidistantTensorProductElementGroup
+
+# }}}
+
+
+# {{{ heterogeneous group factories
+
+class _DefaultPolynomialSimplexGroupFactory(ElementGroupFactory):
+    def __init__(self, order):
+        self.order = order
+
+    def __call__(self, mesh_el_group, index):
+        factory = default_simplex_group_factory(mesh_el_group.dim, self.order)
+        return factory(mesh_el_group, index)
+
+
+class InterpolatoryEdgeClusteredGroupFactory(HeterogeneousOrderBasedGroupFactory):
+    def __init__(self, order):
+        super().__init__(order, {
+            _MeshSimplexElementGroup: _DefaultPolynomialSimplexGroupFactory(order),
+            _MeshTensorProductElementGroup:
+                LegendreGaussLobattoTensorProductElementGroup,
+            })
+
+
+class InterpolatoryQuadratureGroupFactory(HeterogeneousOrderBasedGroupFactory):
+    def __init__(self, order):
+        super().__init__(order, {
+            _MeshSimplexElementGroup: InterpolatoryQuadratureSimplexElementGroup,
+            _MeshTensorProductElementGroup: GaussLegendreTensorProductElementGroup,
+            })
+
+
+class InterpolatoryEquidistantGroupFactory(HeterogeneousOrderBasedGroupFactory):
+    def __init__(self, order):
+        super().__init__(order, {
+            _MeshSimplexElementGroup: PolynomialEquidistantSimplexElementGroup,
+            _MeshTensorProductElementGroup: EquidistantTensorProductElementGroup,
+            })
+
+
+class QuadratureGroupFactory(HeterogeneousOrderBasedGroupFactory):
+    def __init__(self, order):
+        super().__init__(order, {
+            _MeshSimplexElementGroup: QuadratureSimplexElementGroup,
+            _MeshTensorProductElementGroup: GaussLegendreTensorProductElementGroup,
+            })
+
+
+class ModalGroupFactory(HeterogeneousOrderBasedGroupFactory):
+    def __init__(self, order):
+        super().__init__(order, {
+            _MeshSimplexElementGroup: ModalSimplexElementGroup,
+            _MeshTensorProductElementGroup: ModalTensorProductElementGroup,
+            })
 
 # }}}
 
