@@ -440,7 +440,7 @@ class FacialAdjacencyGroup(Record):
     """
 
     def __init__(self, igroup, **kwargs):
-        Record.__init__(self, igroup=igroup, **kwargs)
+        super().__init__(igroup=igroup, **kwargs)
 
     def __eq__(self, other):
         return (
@@ -521,7 +521,7 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
         if aff_transform is None:
             aff_transform = (None, None)
 
-        FacialAdjacencyGroup.__init__(self,
+        super().__init__(
             # FacialAdjacencyGroup
             igroup=igroup,
             # InteriorAdjacencyGroup
@@ -683,7 +683,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
         if aff_transform is None:
             aff_transform = (None, None)
 
-        BoundaryAdjacencyGroup.__init__(self,
+        super().__init__(
             # FacialAdjacencyGroup
             igroup=igroup,
             # BoundaryAdjacencyGroup
