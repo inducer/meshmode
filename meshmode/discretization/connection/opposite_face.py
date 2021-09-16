@@ -53,28 +53,20 @@ def _make_cross_face_batches(actx,
             result_unit_nodes=src_bdry_discr.groups[i_src_grp].unit_nodes,
             to_element_face=None)]
 
+    from meshmode.mesh.tools import AffineMap
+
     if tgt_aff_transform is None:
-        tgt_aff_transform = (None, None)
+        tgt_aff_transform = AffineMap()
 
     if src_aff_transform is None:
-        src_aff_transform = (None, None)
+        src_aff_transform = AffineMap()
 
-    def transform(aff_transform, x):
-        mat, vec = aff_transform
-        if mat is not None:
-            result = np.einsum("di,ien->den", mat, x)
-        else:
-            result = x
-        if vec is not None:
-            result = result + vec[:, np.newaxis, np.newaxis]
-        return result
-
-    tgt_bdry_nodes = transform(tgt_aff_transform, np.array([
+    tgt_bdry_nodes = tgt_aff_transform(np.array([
         thaw_to_numpy(actx, ary[i_tgt_grp])[tgt_bdry_element_indices]
         for ary in tgt_bdry_discr.nodes(cached=False)
         ]))
 
-    src_bdry_nodes = transform(src_aff_transform, np.array([
+    src_bdry_nodes = src_aff_transform(np.array([
         thaw_to_numpy(actx, ary[i_src_grp])[src_bdry_element_indices]
         for ary in src_bdry_discr.nodes(cached=False)
         ]))

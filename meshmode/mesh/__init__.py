@@ -26,6 +26,8 @@ import numpy.linalg as la
 import modepy as mp
 from pytools import Record, memoize_method
 
+from meshmode.mesh.tools import AffineMap
+
 __doc__ = """
 
 .. autoclass:: MeshElementGroup
@@ -503,10 +505,8 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
 
     .. attribute:: aff_transform
 
-        ``(np.float64 [ambient_dim, ambient_dim], np.float64 [ambient_dim])`` or
-        (None, None). ``aff_transform[0]`` and ``aff_transform[1]`` give the
-        respective matrix and vector parts of the affine mapping from a face to its
-        corresponding neighbor face.
+        An :class:`~meshmode.mesh.tools.AffineMap` representing the mapping from
+        the group's faces to their corresponding neighbor faces.
 
     .. automethod:: __eq__
     .. automethod:: __ne__
@@ -519,7 +519,7 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
             aff_transform=None,
             **kwargs):
         if aff_transform is None:
-            aff_transform = (None, None)
+            aff_transform = AffineMap()
 
         super().__init__(
             # FacialAdjacencyGroup
@@ -539,18 +539,7 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
             and np.array_equal(self.element_faces, other.element_faces)
             and np.array_equal(self.neighbors, other.neighbors)
             and np.array_equal(self.neighbor_faces, other.neighbor_faces)
-            and (
-                np.array_equal(self.aff_transform[0], other.aff_transform[0])
-                if (
-                    self.aff_transform[0] is not None
-                    and other.aff_transform[0] is not None)
-                else self.aff_transform[0] == other.aff_transform[0])
-            and (
-                np.array_equal(self.aff_transform[1], other.aff_transform[1])
-                if (
-                    self.aff_transform[1] is not None
-                    and other.aff_transform[1] is not None)
-                else self.aff_transform[1] == other.aff_transform[1]))
+            and self.aff_transform == other.aff_transform)
 
     def as_python(self):
         if type(self) != InteriorAdjacencyGroup:
@@ -562,13 +551,7 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
             element_faces=_numpy_array_as_python(self.element_faces),
             neighbors=_numpy_array_as_python(self.neighbors),
             neighbor_faces=_numpy_array_as_python(self.neighbor_faces),
-            aff_transform=(
-                _numpy_array_as_python(self.aff_transform[0])
-                if self.aff_transform[0] is not None
-                else None,
-                _numpy_array_as_python(self.aff_transform[1])
-                if self.aff_transform[1] is not None
-                else None))
+            aff_transform=_affine_map_as_python(self.aff_transform))
 
 # }}}
 
@@ -666,10 +649,8 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
 
     .. attribute:: aff_transform
 
-        ``(np.float64 [ambient_dim, ambient_dim], np.float64 [ambient_dim])`` or
-        (None, None). ``aff_transform[0]`` and ``aff_transform[1]`` give the
-        respective matrix and vector parts of the affine mapping from a face to its
-        corresponding neighbor face.
+        An :class:`~meshmode.mesh.tools.AffineMap` representing the mapping from
+        the group's faces to their corresponding neighbor faces.
 
     .. versionadded:: 2017.1
     """
@@ -681,7 +662,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
             aff_transform=None,
             **kwargs):
         if aff_transform is None:
-            aff_transform = (None, None)
+            aff_transform = AffineMap()
 
         super().__init__(
             # FacialAdjacencyGroup
@@ -701,18 +682,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
             and self.ineighbor_partition == other.ineighbor_partition
             and np.array_equal(self.neighbors, other.neighbors)
             and np.array_equal(self.neighbor_faces, other.neighbor_faces)
-            and (
-                np.array_equal(self.aff_transform[0], other.aff_transform[0])
-                if (
-                    self.aff_transform[0] is not None
-                    and other.aff_transform[0] is not None)
-                else self.aff_transform[0] == other.aff_transform[0])
-            and (
-                np.array_equal(self.aff_transform[1], other.aff_transform[1])
-                if (
-                    self.aff_transform[1] is not None
-                    and other.aff_transform[1] is not None)
-                else self.aff_transform[1] == other.aff_transform[1]))
+            and self.aff_transform == other.aff_transform)
 
     def as_python(self):
         if type(self) != InterPartitionAdjacencyGroup:
@@ -725,13 +695,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
             ineighbor_partition=self.ineighbor_partition,
             neighbors=_numpy_array_as_python(self.neighbors),
             neighbor_faces=_numpy_array_as_python(self.neighbor_faces),
-            aff_transform=(
-                _numpy_array_as_python(self.aff_transform[0])
-                if self.aff_transform[0] is not None
-                else None,
-                _numpy_array_as_python(self.aff_transform[1])
-                if self.aff_transform[1] is not None
-                else None))
+            aff_transform=_affine_map_as_python(self.aff_transform))
 
 # }}}
 
@@ -1452,9 +1416,18 @@ def _boundary_tag_as_python(boundary_tag):
 
 
 def _numpy_array_as_python(array):
-    return "np.array({}, dtype=np.{})".format(
-            repr(array.tolist()),
-            array.dtype.name)
+    if array is not None:
+        return "np.array({}, dtype=np.{})".format(
+                repr(array.tolist()),
+                array.dtype.name)
+    else:
+        return "None"
+
+
+def _affine_map_as_python(aff_map):
+    return ("AffineMap("
+        + _numpy_array_as_python(aff_map.matrix) + ", "
+        + _numpy_array_as_python(aff_map.offset) + ")")
 
 
 def as_python(mesh, function_name="make_mesh"):
@@ -1478,6 +1451,7 @@ def as_python(mesh, function_name="make_mesh"):
             BTAG_NONE,
             BTAG_ALL,
             BTAG_REALLY_ALL)
+        from meshmode.mesh.tools import AffineMap
 
         """)
 
