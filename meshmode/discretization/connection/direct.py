@@ -122,38 +122,14 @@ class InterpolationBatch:
         if self._global_from_element_indices_cache is not None:
             return self._global_from_element_indices_cache
 
-        @memoize_in(actx, (InterpolationBatch._global_from_element_indices,
-            "compose_index_maps_kernel"))
-        def compose_index_maps_kernel():
-            t_unit = make_loopy_program(
-                [
-                    "{[iel_init]: 0 <= iel_init < nelements_result}",
-                    "{[iel]: 0 <= iel < nelements}",
-                ],
-                """
-                    global_from_element_indices[iel_init] = -1 {id=init}
-                    ... gbarrier {id=barrier, dep=init}
-                    global_from_element_indices[to_element_indices[iel]] =  \
-                        from_element_indices[iel] {dep=barrier}
-                """,
-                [
-                    lp.GlobalArg("global_from_element_indices", None,
-                        shape="nelements_result",
-                        offset=lp.auto),
-                    "...",
-                ],
-                name="compose_index_maps",
-            )
-            return lp.tag_inames(t_unit, {
-                "iel_init": ConcurrentElementInameTag(),
-                "iel": ConcurrentElementInameTag()})
-
-        result = actx.freeze(actx.call_loopy(
-            compose_index_maps_kernel(),
-            from_element_indices=self.from_element_indices,
-            to_element_indices=self.to_element_indices,
-            nelements_result=to_group.nelements,
-        )["global_from_element_indices"])
+        # FIXME: This is a workaround for a loopy kernel that was producing
+        # incorrect results on some machines (details:
+        # https://github.com/inducer/meshmode/pull/255).
+        from_element_indices = actx.to_numpy(self.from_element_indices)
+        to_element_indices = actx.to_numpy(self.to_element_indices)
+        numpy_result = np.full(to_group.nelements, -1)
+        numpy_result[to_element_indices] = from_element_indices
+        result = actx.freeze(actx.from_numpy(numpy_result))
 
         self._global_from_element_indices_cache = result
         return result
@@ -349,11 +325,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         if is_array_container(ary) and not isinstance(ary, DOFArray):
             return map_array_container(self, ary)
 
-        if not isinstance(ary, DOFArray):
-            raise TypeError("non-array passed to discretization connection")
-
-        if ary.shape != (len(self.from_discr.groups),):
-            raise ValueError("invalid shape of incoming resampling data")
+        if __debug__:
+            from meshmode.dof_array import check_dofarray_against_discr
+            check_dofarray_against_discr(self.from_discr, ary)
 
         if (ary.array_context.permits_inplace_modification
                 and not _force_no_inplace_updates):

@@ -545,6 +545,10 @@ class FiredrakeConnection:
             out_data = out_data.reshape(shape)
 
         def resample_and_reorder(fd_data, dof_array):
+            if __debug__:
+                from meshmode.dof_array import check_dofarray_against_discr
+                check_dofarray_against_discr(self.discr, dof_array)
+
             # pull data into numpy
             dof_np = dof_array.array_context.to_numpy(dof_array[self.group_nr])
             # resample the data and store in firedrake ordering

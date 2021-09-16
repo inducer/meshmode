@@ -756,7 +756,7 @@ def test_mesh_without_vertices(actx_factory):
     actx = actx_factory()
 
     # create a mesh
-    mesh = mgen.generate_icosphere(r=1.0, order=4)
+    mesh = mgen.generate_sphere(r=1.0, order=4)
 
     # create one without the vertices
     grp, = mesh.groups
@@ -909,7 +909,7 @@ def test_mesh_with_interior_unit_nodes(actx_factory, ambient_dim):
                 n_major=2*n_minor, n_minor=n_minor,
                 order=order, unit_nodes=unit_nodes)
 
-        mesh = mgen.generate_icosphere(1.0,
+        mesh = mgen.generate_sphere(1.0,
                 uniform_refinement_rounds=uniform_refinement_rounds,
                 order=order, unit_nodes=unit_nodes)
     else:

@@ -304,19 +304,33 @@ def mesh_to_tikz(mesh):
 
 # {{{ visualize_mesh
 
-def vtk_visualize_mesh(actx, mesh, filename, vtk_high_order=True):
-    order = max(mgrp.order for mgrp in mesh.groups)
+def vtk_visualize_mesh(actx, mesh, filename,
+        vtk_high_order=True,
+        overwrite=False):
+    order = vis_order = max(mgrp.order for mgrp in mesh.groups)
+    if not vtk_high_order:
+        vis_order = None
 
-    from meshmode.discretization.poly_element import \
-            default_simplex_group_factory
+    from meshmode.discretization.poly_element import (
+            PolynomialWarpAndBlendElementGroup,
+            LegendreGaussLobattoTensorProductElementGroup,
+            OrderAndTypeBasedGroupFactory
+            )
     from meshmode.discretization import Discretization
-    discr = Discretization(actx, mesh, default_simplex_group_factory(
-        mesh.dim, order))
+    discr = Discretization(actx, mesh, OrderAndTypeBasedGroupFactory(
+        order,
+        simplex_group_class=PolynomialWarpAndBlendElementGroup,
+        tensor_product_group_class=LegendreGaussLobattoTensorProductElementGroup
+        ))
 
     from meshmode.discretization.visualization import make_visualizer
-    vis = make_visualizer(actx, discr, order, force_equidistant=vtk_high_order)
+    vis = make_visualizer(actx, discr,
+            vis_order=vis_order,
+            force_equidistant=vtk_high_order)
 
-    vis.write_vtk_file(filename, [], use_high_order=vtk_high_order)
+    vis.write_vtk_file(filename, [],
+            use_high_order=vtk_high_order,
+            overwrite=overwrite)
 
 # }}}
 
