@@ -27,11 +27,13 @@ from typing import Iterable
 import numpy as np
 
 from abc import ABCMeta, abstractproperty, abstractmethod
-from pytools import memoize_method, keyed_memoize_in
+from pytools import memoize_in, memoize_method, keyed_memoize_in
 from pytools.obj_array import make_obj_array
-from arraycontext import ArrayContext
+from arraycontext import ArrayContext, make_loopy_program
 
-from meshmode.transform_metadata import FirstAxisIsElementsTag
+import loopy as lp
+from meshmode.transform_metadata import (
+        ConcurrentElementInameTag, ConcurrentDOFInameTag, FirstAxisIsElementsTag)
 
 from warnings import warn
 
@@ -529,12 +531,23 @@ class Discretization:
         if not self.is_nodal:
             raise ElementGroupTypeError("Element groups must be nodal.")
 
+        @memoize_in(actx, (Discretization, "quad_weights_prg"))
+        def prg():
+            t_unit = make_loopy_program(
+                "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
+                "result[iel,idof] = weights[idof]",
+                name="quad_weights")
+            return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
+
         return _DOFArray(None, tuple(
                 actx.freeze(
-                    actx.einsum("i->ei",
-                                actx.from_numpy(grp.quadrature_rule().weights),
-                                tagged=(FirstAxisIsElementsTag(),)
-                                ))
+                    actx.call_loopy(
+                        prg(),
+                        weights=actx.from_numpy(grp.quadrature_rule().weights),
+                        nelements=grp.nelements,
+                        )["result"])
                 for grp in self.groups))
 
     def nodes(self, cached=True):
