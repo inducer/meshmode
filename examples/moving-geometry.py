@@ -24,9 +24,10 @@ import numpy as np
 import pyopencl as cl
 
 from meshmode.array_context import PyOpenCLArrayContext
+from meshmode.transform_metadata import FirstAxisIsElementsTag
 from arraycontext import thaw
 
-from pytools import memoize_in, keyed_memoize_in
+from pytools import keyed_memoize_in
 from pytools.obj_array import make_obj_array
 
 import logging
@@ -48,28 +49,6 @@ def plot_solution(actx, vis, filename, discr, t, x):
 
 
 def reconstruct_discr_from_nodes(actx, discr, x):
-    @memoize_in(actx, (reconstruct_discr_from_nodes, "resample_by_mat_prg"))
-    def resample_by_mat_prg():
-        from arraycontext import make_loopy_program
-        t_unit = make_loopy_program(
-            """
-            {[iel, idof, j]:
-                0 <= iel < nelements
-                and 0 <= idof < nmesh_nodes
-                and 0 <= j < ndiscr_nodes}
-            """,
-            """
-            result[iel, idof] = sum(j, resampling_mat[idof, j] * nodes[iel, j])
-            """,
-            name="resample_by_mat_prg")
-
-        import loopy as lp
-        from meshmode.transform_metadata import (
-                ConcurrentElementInameTag, ConcurrentDOFInameTag)
-        return lp.tag_inames(t_unit, {
-            "iel": ConcurrentElementInameTag(),
-            "idof": ConcurrentDOFInameTag()})
-
     @keyed_memoize_in(actx,
             (reconstruct_discr_from_nodes, "to_mesh_interp_matrix"),
             lambda grp: grp.discretization_key())
@@ -93,11 +72,10 @@ def reconstruct_discr_from_nodes(actx, discr, x):
                 and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
             return discr_nodes
 
-        return actx.call_loopy(
-                resample_by_mat_prg(),
-                nodes=discr_nodes,
-                resampling_mat=to_mesh_interp_matrix(grp),
-                )["result"]
+        return actx.einsum("ij,ej->ei",
+                           to_mesh_interp_matrix(grp),
+                           discr_nodes,
+                           tagged=(FirstAxisIsElementsTag(),))
 
     megs = []
     for igrp, grp in enumerate(discr.groups):
