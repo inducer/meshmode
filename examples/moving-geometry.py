@@ -176,7 +176,7 @@ def run(actx, *,
                 unit_nodes=unit_nodes)
     else:
         nrounds = 4 if resolution is None else resolution
-        mesh = gen.generate_icosphere(radius,
+        mesh = gen.generate_sphere(radius,
                 uniform_refinement_rounds=nrounds,
                 order=mesh_order,
                 unit_nodes=unit_nodes)

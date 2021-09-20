@@ -1,5 +1,6 @@
 """
 .. autoclass:: PyOpenCLArrayContext
+.. autoclass:: PytatoPyOpenCLArrayContext
 """
 
 __copyright__ = "Copyright (C) 2020 Andreas Kloeckner"
@@ -354,6 +355,16 @@ class PyOpenCLArrayContext(PyOpenCLArrayContextBase):
 # }}}
 
 
+# {{{ pytato pyopencl array context subclass
+
+class PytatoPyOpenCLArrayContext(PytatoPyOpenCLArrayContextBase):
+    def transform_loopy_program(self, t_unit):
+        # FIXME: Do not parallelize for now.
+        return t_unit
+
+# }}}
+
+
 # {{{ pytest actx factory
 
 class PytestPyOpenCLArrayContextFactory(
@@ -427,10 +438,5 @@ else:
 
 # }}}
 
-
-class PytatoPyOpenCLArrayContext(PytatoPyOpenCLArrayContextBase):
-    def transform_loopy_program(self, t_unit):
-        # FIXME: Do not parallelize for now.
-        return t_unit
 
 # vim: foldmethod=marker

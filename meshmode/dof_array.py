@@ -64,6 +64,9 @@ __doc__ = """
 .. autofunction:: flat_norm
 
 .. autofunction:: array_context_for_pickling
+
+.. autoexception:: InconsistentDOFArray
+.. autofunction:: check_dofarray_against_discr
 """
 
 # {{{ DOFArray
@@ -804,6 +807,39 @@ def array_context_for_pickling(actx: ArrayContext):
 # }}}
 
 
+# {{{ checking
+
+class InconsistentDOFArray(ValueError):
+    pass
+
+
+def check_dofarray_against_discr(discr, dof_ary: DOFArray):
+    """Verify that the :class:`DOFArray` *dof_ary* is consistent with
+    the discretization *discr*, in terms of things like group count,
+    number of elements, and number of DOFs per element. If a discrepancy is
+    detected, :exc:`InconsistentDOFArray` is raised.
+
+    :arg discr: a :class:`~meshmode.discretization.Discretization`
+        against which *dof_ary* is to be checked.
+    """
+    if not isinstance(dof_ary, DOFArray):
+        raise TypeError("non-array passed to check_dofarray_against_discr")
+
+    if len(dof_ary) != len(discr.groups):
+        raise InconsistentDOFArray(
+                "DOFArray has unexpected number of groups "
+                f"({len(dof_ary)}, expected: {len(discr.groups)})")
+
+    for i, (grp, grp_ary) in enumerate(zip(discr.groups, dof_ary)):
+        expected_shape = (grp.nelements, grp.nunit_dofs)
+        if grp_ary.shape != expected_shape:
+            raise InconsistentDOFArray(
+                    f"DOFArray group {i} array has unexpected shape. "
+                    f"(observed: {grp_ary.shape}, expected: {expected_shape})")
+
+# }}}
+
+
 # {{{ deprecated
 
 obj_or_dof_array_vectorize = MovedFunctionDeprecationWrapper(
@@ -830,5 +866,6 @@ def thaw(actx, ary):
 freeze = MovedFunctionDeprecationWrapper(_freeze, deadline="2022")
 
 # }}}
+
 
 # vim: foldmethod=marker

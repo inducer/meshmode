@@ -345,11 +345,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         if is_array_container(ary) and not isinstance(ary, DOFArray):
             return map_array_container(self, ary)
 
-        if not isinstance(ary, DOFArray):
-            raise TypeError("non-array passed to discretization connection")
-
-        if ary.shape != (len(self.from_discr.groups),):
-            raise ValueError("invalid shape of incoming resampling data")
+        if __debug__:
+            from meshmode.dof_array import check_dofarray_against_discr
+            check_dofarray_against_discr(self.from_discr, ary)
 
         if (ary.array_context.permits_inplace_modification
                 and not _force_no_inplace_updates):

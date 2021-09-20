@@ -125,11 +125,9 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         if is_array_container(ary) and not isinstance(ary, DOFArray):
             return map_array_container(self, ary)
 
-        if not isinstance(ary, DOFArray):
-            raise TypeError("non-array passed to discretization connection")
-
-        if ary.shape != (len(self.from_discr.groups),):
-            raise ValueError("invalid shape of incoming resampling data")
+        if __debug__:
+            from meshmode.dof_array import check_dofarray_against_discr
+            check_dofarray_against_discr(self.from_discr, ary)
 
         actx = ary.array_context
 

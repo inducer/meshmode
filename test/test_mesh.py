@@ -25,6 +25,7 @@ import numpy as np
 import numpy.linalg as la
 import pytest
 
+from meshmode import _acf       # noqa: F401
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from arraycontext import pytest_generate_tests_for_array_contexts
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
@@ -450,7 +451,7 @@ def test_is_affine_group_check(mesh_name):
                 np.linspace(0.0, 1.0, nelements + 1), order=order)
     elif mesh_name == "sphere":
         is_affine = False
-        mesh = mgen.generate_icosphere(r=1.0, order=order)
+        mesh = mgen.generate_sphere(r=1.0, order=order)
     elif mesh_name == "torus":
         is_affine = False
         mesh = mgen.generate_torus(10.0, 2.0, order=order)
@@ -758,6 +759,28 @@ def test_quad_mesh_3d(mesh_name, order=3, visualize=False):
     if visualize:
         from meshmode.mesh.visualization import write_vertex_vtk_file
         write_vertex_vtk_file(mesh, f"quad_mesh_3d_{mesh_name}.vtu", overwrite=True)
+
+# }}}
+
+
+# {{{ test_cube_icosahedron
+
+@pytest.mark.parametrize("order", [2, 3])
+def test_cube_icosphere(actx_factory, order, visualize=True):
+    mesh = mgen.generate_sphere(
+            r=1.0, order=order,
+            group_cls=TensorProductElementGroup,
+            uniform_refinement_rounds=2,
+            )
+
+    if not visualize:
+        return
+
+    from meshmode.mesh.visualization import vtk_visualize_mesh
+    actx = actx_factory()
+    vtk_visualize_mesh(actx, mesh,
+            f"quad_icosphere_order_{order:03d}.vtu",
+            vtk_high_order=False, overwrite=True)
 
 # }}}
 
