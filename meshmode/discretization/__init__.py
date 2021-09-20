@@ -671,12 +671,16 @@ def num_reference_derivative(
                 f"got {ref_axes} for dimension {discr.dim}")
 
     @memoize_in(actx, (num_reference_derivative, "reference_derivative_prg"))
-    def prg():
+    def prg(nelments, nunit_dofs, fp_format):
         t_unit = make_loopy_program(
             "{[iel,idof,j]: 0 <= iel < nelements and 0 <= idof, j < nunit_dofs}",
             "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
             kernel_data=[
-                GlobalArg("vec", None, shape=auto, tags=[IsDOFArray()]),
+                GlobalArg("vec", fp_format, shape=(nelements,nunit_dofs), tags=[IsDOFArray()]),
+                GlobalArg("result", fp_format, shape=(nelements,nunit_dofs), tags=[IsDOFArray()]),
+                GlobalArg("diff_mat", fp_format, shape=(nunit_dofs,nunit_dofs), tags=[IsOpArray()]),
+                ValueArg("nelements", tags=[ParameterValue(nelements)]),
+                ValueArg("nunit_dofs", tags=[ParameterValue(nunit_dofs)]),
                 ...
             ],
             name="diff")
@@ -702,11 +706,21 @@ def num_reference_derivative(
 
         return actx.from_numpy(mat)
 
-    return _DOFArray(actx, tuple(
-            actx.call_loopy(
-                prg(), diff_mat=get_mat(grp, ref_axes), vec=vec[grp.index]
-                )[1]["result"]
-            for grp in discr.groups))
+    results = []    
+    for grp in discr.groups:
+        nelements, nunit_dofs = vec[grp.index].shape
+        fp_format = vec[grp.index].dtype
+        output = actx.call_loopy(prg(nelements, nunit_dofs, fp_format), 
+                diff_mat=get_mat(grp, ref_axes), vec=vec[grp.index])
+        results.append(output[1]["result"])
+
+    return _DOFArray(actx, tuple(results))
+
+    #return _DOFArray(actx, tuple(
+    #        actx.call_loopy(
+    #            prg(), diff_mat=get_mat(grp, ref_axes), vec=vec[grp.index]
+    #            )[1]["result"]
+    #        for grp in discr.groups))
 
 # }}}
 

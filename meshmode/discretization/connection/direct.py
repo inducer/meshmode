@@ -546,7 +546,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     ],
                 name="resample_by_picking_inplace")
                 
-            return knl
+            return t_unit
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_picking_knl_inplace_rhs"))
@@ -554,7 +554,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             from pymbolic import parse
             oset = parse(str(offset))
 
-            knl = make_loopy_program(
+            t_unit = make_loopy_program(
                 """{[iel, idof]:
                     0<=iel<nelements and
                     0<=idof<n_to_nodes}""",
