@@ -27,7 +27,7 @@ import numpy.linalg as la  # noqa
 import pyopencl as cl
 import pyopencl.array as cla  # noqa
 
-from pytools import memoize_method, memoize_in, log_process
+from pytools import memoize_method, log_process
 from pytools.obj_array import flat_obj_array, make_obj_array
 
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
@@ -36,7 +36,6 @@ from meshmode.array_context import (PyOpenCLArrayContext,
                                     PytatoPyOpenCLArrayContext)
 from arraycontext import (
         freeze, thaw,
-        make_loopy_program,
         ArrayContainer,
         map_array_container,
         with_container_arithmetic,
@@ -297,25 +296,6 @@ class DGDiscretization:
         actx = vec.array_context
         dtype = vec.entry_dtype
 
-        @memoize_in(self, "face_mass_knl")
-        def knl():
-            t_unit = make_loopy_program(
-                """{[iel,idof,f,j]:
-                    0<=iel<nelements and
-                    0<=f<nfaces and
-                    0<=idof<nvol_nodes and
-                    0<=j<nface_nodes}""",
-                "result[iel,idof] = "
-                "sum(f, sum(j, mat[idof, f, j] * vec[f, iel, j]))",
-                name="face_mass")
-
-            import loopy as lp
-            from meshmode.transform_metadata import (
-                    ConcurrentElementInameTag, ConcurrentDOFInameTag)
-            return lp.tag_inames(t_unit, {
-                "iel": ConcurrentElementInameTag(),
-                "idof": ConcurrentDOFInameTag()})
-
         all_faces_conn = self.get_connection("vol", "all_faces")
         all_faces_discr = all_faces_conn.to_discr
         vol_discr = all_faces_conn.from_discr
@@ -328,15 +308,14 @@ class DGDiscretization:
         return DOFArray(
             actx,
             data=tuple(
-                actx.call_loopy(
-                    knl(),
-                    mat=self.get_local_face_mass_matrix(afgrp, volgrp, dtype),
-                    vec=vec_i.reshape(
-                        volgrp.mesh_el_group.nfaces,
-                        volgrp.nelements,
-                        afgrp.nunit_dofs
-                    )
-                )["result"]
+                actx.einsum("ifj,fej->ei",
+                            self.get_local_face_mass_matrix(afgrp, volgrp, dtype),
+                            vec_i.reshape(
+                                volgrp.mesh_el_group.nfaces,
+                                volgrp.nelements,
+                                afgrp.nunit_dofs
+                            ),
+                            tagged=(FirstAxisIsElementsTag(),))
                 for afgrp, volgrp, vec_i in zip(all_faces_discr.groups,
                                                 vol_discr.groups, vec)
             )
