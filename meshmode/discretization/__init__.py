@@ -539,7 +539,7 @@ class Discretization:
                 "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
                 "result[iel,idof] = weights[idof]",
                 kernel_data=[
-                    GlobalArg("result", None, shape=auto, tags=IsDOFArray()),
+                    GlobalArg("result", None, shape=auto, tags=[IsDOFArray()]),
                     ...
                 ],
                 name="quad_weights")
@@ -592,12 +592,12 @@ class Discretization:
                         sum(j, resampling_mat[idof, j] * nodes[iel, j])
                 """,
                 kernel_data=[
-                    GlobalArg("result", fp_format, shape=(nelements, ndiscr_nodes), tags=IsDOFArray()),
+                    GlobalArg("result", fp_format, shape=(nelements, ndiscr_nodes), tags=[IsDOFArray()]),
                     GlobalArg("nodes", fp_format, shape=auto, tags=None),
-                    GlobalArg("resampling_mat", fp_format, shape=(ndiscr_nodes, nmesh_nodes), tags=IsOpArray()),
-                    ValueArg("nelements", tags=ParameterValue(nelements)),
-                    ValueArg("ndiscr_nodes", tags=ParameterValue(ndiscr_nodes)),
-                    ValueArg("nmesh_nodes", tags=ParameterValue(nmesh_nodes)),
+                    GlobalArg("resampling_mat", fp_format, shape=(ndiscr_nodes, nmesh_nodes), tags=[IsOpArray()]),
+                    ValueArg("nelements", tags=[ParameterValue(nelements)]),
+                    ValueArg("ndiscr_nodes", tags=[ParameterValue(ndiscr_nodes)]),
+                    ValueArg("nmesh_nodes", tags=[ParameterValue(nmesh_nodes)]),
                     ...
                 ],
                 name="lp_nodes")
@@ -676,7 +676,7 @@ def num_reference_derivative(
             "{[iel,idof,j]: 0 <= iel < nelements and 0 <= idof, j < nunit_dofs}",
             "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
             kernel_data=[
-                GlobalArg("vec", None, shape=auto, tags=IsDOFArray()),
+                GlobalArg("vec", None, shape=auto, tags=[IsDOFArray()]),
                 ...
             ],
             name="diff")
