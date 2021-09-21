@@ -1567,12 +1567,10 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
         else:
             all_btag = BTAG_REALLY_ALL
 
-        all_bdry_grps = [
+        all_bdry_grp, = [
             fagrp for fagrp in fagrp_list
             if isinstance(fagrp, BoundaryAdjacencyGroup)
             and fagrp.boundary_tag == all_btag]
-        assert len(all_bdry_grps) == 1
-        all_bdry_grp = all_bdry_grps[0]
 
         matching_bdry_grps = [
             fagrp for fagrp in fagrp_list
