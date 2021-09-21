@@ -437,12 +437,10 @@ def partition_mesh(mesh, part_per_element, part_num):
     assert len(part_per_element) == mesh.nelements, (
         "part_per_element must have shape (mesh.nelements,)")
 
-    part_per_element_np = np.array(part_per_element)
-
     # Contains the indices of the elements requested.
-    queried_elems, = np.where(part_per_element_np == part_num)
+    queried_elems, = np.where(part_per_element == part_num)
 
-    global_elem_to_part_elem = _compute_global_elem_to_part_elem(part_per_element_np,
+    global_elem_to_part_elem = _compute_global_elem_to_part_elem(part_per_element,
                 {part_num}, mesh.element_id_dtype)
 
     # Create new mesh groups that mimic the original mesh's groups but only contain
@@ -461,14 +459,14 @@ def partition_mesh(mesh, part_per_element, part_num):
         el_nr += grp.nelements
 
     connected_parts = _get_connected_partitions(
-        mesh, part_per_element_np, global_elem_to_part_elem)
+        mesh, part_per_element, global_elem_to_part_elem)
 
     local_to_local_adj_groups = _create_local_to_local_adjacency_groups(
                 mesh, global_elem_to_part_elem, part_mesh_groups,
                 global_group_to_part_group, part_mesh_group_elem_base)
 
     nonlocal_adj_groups = _create_nonlocal_adjacency_groups(
-                mesh, part_per_element_np, global_elem_to_part_elem,
+                mesh, part_per_element, global_elem_to_part_elem,
                 part_mesh_groups, global_group_to_part_group,
                 part_mesh_group_elem_base, connected_parts)
 
