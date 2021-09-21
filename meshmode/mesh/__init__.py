@@ -1335,6 +1335,11 @@ def _compute_facial_adjacency_from_vertices(
 
 def _merge_boundary_adjacency_groups(
         igrp, bdry_grps, merged_btag, element_id_dtype, face_id_dtype):
+    """
+    Create a new :class:`~meshmode.mesh.BoundaryAdjacencyGroup` containing all of
+    the entries from a list of existing boundary adjacency groups.
+    """
+
     if len(bdry_grps) == 0:
         return BoundaryAdjacencyGroup(
             igroup=igrp,
@@ -1367,6 +1372,13 @@ def _merge_boundary_adjacency_groups(
 
 def _complete_facial_adjacency_groups(
         facial_adjacency_groups, element_id_dtype, face_id_dtype):
+    """
+    Add :class:`~meshmode.mesh.BoundaryAdjacencyGroup` instances for
+    :class:`~meshmode.mesh.BTAG_NONE`, :class:`~meshmode.mesh.BTAG_ALL`, and
+    :class:`~meshmode.mesh.BTAG_REALLY_ALL` to a facial adjacency group list if
+    they are not present.
+    """
+
     completed_facial_adjacency_groups = facial_adjacency_groups.copy()
 
     for igrp, fagrp_list in enumerate(facial_adjacency_groups):
