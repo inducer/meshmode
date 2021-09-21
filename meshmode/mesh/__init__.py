@@ -1202,12 +1202,14 @@ def _compute_facial_adjacency_from_vertices(
     if not groups:
         return None
 
-    boundary_tags = set()
     if face_vertex_indices_to_tags is not None:
-        for tags in face_vertex_indices_to_tags.values():
-            if tags is not None:
-                for tag in tags:
-                    boundary_tags.add(tag)
+        boundary_tags = {
+            tag
+            for tags in face_vertex_indices_to_tags.values()
+            for tag in tags
+            if tags is not None}
+    else:
+        boundary_tags = set()
 
     boundary_tag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
 
