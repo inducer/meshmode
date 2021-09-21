@@ -202,10 +202,12 @@ def _get_connected_partitions(
                         + elem_base_i] >= 0
             neighbors_are_nonlocal = global_elem_to_part_elem[facial_adj.neighbors
                         + elem_base_j] < 0
-            adj_indices, = np.where(elements_are_local & neighbors_are_nonlocal)
 
             connected_parts.update(
-                part_per_element[facial_adj.neighbors[adj_indices] + elem_base_j])
+                part_per_element[
+                    facial_adj.neighbors[
+                        elements_are_local & neighbors_are_nonlocal]
+                    + elem_base_j])
 
     return connected_parts
 
