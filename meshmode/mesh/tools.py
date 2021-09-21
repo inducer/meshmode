@@ -28,6 +28,7 @@ from pytools.spatial_btree import SpatialBinaryTreeBucket
 from pytools import MovedFunctionDeprecationWrapper
 
 __doc__ = """
+.. currentmodule:: meshmode
 
 .. autoclass:: AffineMap
 """

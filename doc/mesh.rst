@@ -2,6 +2,7 @@ Common infrastructure
 =====================
 
 .. automodule:: meshmode
+.. automodule:: meshmode.mesh.tools
 
 Mesh management
 ===============
@@ -70,10 +71,5 @@ Mesh visualization
 ------------------
 
 .. automodule:: meshmode.mesh.visualization
-
-Mesh tools
-----------
-
-.. automodule:: meshmode.mesh.tools
 
 .. vim: sw=4

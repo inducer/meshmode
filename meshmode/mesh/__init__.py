@@ -505,8 +505,8 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
 
     .. attribute:: aff_map
 
-        An :class:`~meshmode.mesh.tools.AffineMap` representing the mapping from
-        the group's faces to their corresponding neighbor faces.
+        An :class:`~meshmode.AffineMap` representing the mapping from the group's
+        faces to their corresponding neighbor faces.
 
     .. automethod:: __eq__
     .. automethod:: __ne__
@@ -649,8 +649,8 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
 
     .. attribute:: aff_map
 
-        An :class:`~meshmode.mesh.tools.AffineMap` representing the mapping from
-        the group's faces to their corresponding neighbor faces.
+        An :class:`~meshmode.AffineMap` representing the mapping from the group's
+        faces to their corresponding neighbor faces.
 
     .. versionadded:: 2017.1
     """
