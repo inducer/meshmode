@@ -429,16 +429,28 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         actx, i_tgrp, i_batch)
 
                 if point_pick_indices is None:
-                    batch_result = actx.call_loopy(
-                        batch_mat_knl(),
-                        resample_mat=self._resample_matrix(
-                            actx, i_tgrp, i_batch
-                        ),
-                        ary=ary[batch.from_group_index],
-                        from_element_indices=batch._global_from_element_indices(
-                            actx, self.to_discr.groups[i_tgrp]),
-                        n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
-                    )["result"]
+                    from_element = actx.thaw(batch._global_from_element_indices(
+                        actx,
+                        self.to_discr.groups[i_tgrp]))
+                    grp_ary = ary[batch.from_group_index]
+                    mat = self._resample_matrix(actx, i_tgrp, i_batch)
+                    if actx.permits_advanced_indexing:
+                        batch_result = actx.np.where(
+                                            actx.np.not_equal(from_element
+                                                              .reshape(-1, 1),
+                                                              -1),
+                                            actx.einsum("ij,ej->ei",
+                                                        mat,
+                                                        grp_ary[from_element]),
+                                            0)
+                    else:
+                        batch_result = actx.call_loopy(
+                            batch_mat_knl(),
+                            resample_mat=mat,
+                            ary=grp_ary,
+                            from_element_indices=from_element,
+                            n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
+                        )["result"]
 
                 else:
                     from_vec = ary[batch.from_group_index]
