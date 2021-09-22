@@ -1313,7 +1313,7 @@ def _compute_facial_adjacency_from_vertices(
                             element_faces=element_faces))
 
             is_untagged = ~np.any(belongs_to_bdry, axis=0)
-            if len(is_untagged) > 0:
+            if np.any(is_untagged):
                 grp_list.append(
                     BoundaryAdjacencyGroup(
                         igroup=igrp,
