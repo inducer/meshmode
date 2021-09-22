@@ -244,26 +244,17 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         else:
             is_conforming = mesh_bulk_dim < 3
 
-        # construct boundary tags for mesh
-        from meshmode.mesh import BTAG_ALL, BTAG_REALLY_ALL
-        boundary_tags = [BTAG_ALL, BTAG_REALLY_ALL]
-        if self.tags:
-            boundary_tags += [tag for tag, dim in self.tags if
-                              dim == mesh_bulk_dim-1]
-
         # compute facial adjacency for Mesh if there is tag information
         facial_adjacency_groups = None
         if is_conforming and self.tags:
             from meshmode.mesh import _compute_facial_adjacency_from_vertices
             facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
-                    groups, boundary_tags, np.int32, np.int8,
-                    face_vertex_indices_to_tags)
+                    groups, np.int32, np.int8, face_vertex_indices_to_tags)
 
         return Mesh(
                 vertices, groups,
                 is_conforming=is_conforming,
                 facial_adjacency_groups=facial_adjacency_groups,
-                boundary_tags=boundary_tags,
                 **self.mesh_construction_kwargs)
 
 # }}}
@@ -410,12 +401,6 @@ def to_json(mesh):
     """Return a JSON-able Python data structure for *mesh*. The structure directly
     reflects the :class:`meshmode.mesh.Mesh` data structure."""
 
-    def btag_to_json(btag):
-        if isinstance(btag, str):
-            return btag
-        else:
-            return btag.__name__
-
     def group_to_json(group):
         return {
             "type": type(group).__name__,
@@ -454,11 +439,6 @@ def to_json(mesh):
         "nodal_adjacency": nodal_adjacency_to_json(mesh),
         # not yet implemented
         "facial_adjacency_groups": None,
-        "boundary_tags": [btag_to_json(btag) for btag in mesh.boundary_tags],
-        "btag_to_index": {
-            btag_to_json(btag): value
-
-            for btag, value in mesh.btag_to_index.items()},
         "is_conforming": mesh.is_conforming,
         }
 
