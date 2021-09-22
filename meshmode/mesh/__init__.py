@@ -885,18 +885,14 @@ class Mesh(Record):
                 assert len(facial_adjacency_groups) == len(self.groups)
                 for fagrp_list in facial_adjacency_groups:
                     for fagrp in fagrp_list:
+                        nfagrp_elements, = fagrp.elements.shape
+                        assert fagrp.element_faces.dtype == self.face_id_dtype
+                        assert fagrp.element_faces.shape == (nfagrp_elements,)
                         if isinstance(fagrp, InteriorAdjacencyGroup):
-                            nfagrp_elements, = fagrp.elements.shape
-                            assert fagrp.element_faces.dtype == self.face_id_dtype
-                            assert fagrp.element_faces.shape == (nfagrp_elements,)
                             assert fagrp.neighbors.dtype == self.element_id_dtype
                             assert fagrp.neighbors.shape == (nfagrp_elements,)
                             assert fagrp.neighbor_faces.dtype == self.face_id_dtype
                             assert fagrp.neighbor_faces.shape == (nfagrp_elements,)
-                        else:
-                            nfagrp_elements, = fagrp.elements.shape
-                            assert fagrp.element_faces.dtype == self.face_id_dtype
-                            assert fagrp.element_faces.shape == (nfagrp_elements,)
 
             from meshmode.mesh.processing import \
                     test_volume_mesh_element_orientations
