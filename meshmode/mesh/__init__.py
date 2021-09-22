@@ -1284,9 +1284,9 @@ def _compute_facial_adjacency_from_vertices(
 
         has_bdry = not np.all(face_has_neighbor)
         if has_bdry:
-            bdry_indices = np.where(~face_has_neighbor)
-            bdry_element_faces = bdry_indices[0].astype(face_id_dtype)
-            bdry_elements = bdry_indices[1].astype(element_id_dtype)
+            bdry_element_faces, bdry_elements = np.where(~face_has_neighbor)
+            bdry_element_faces = bdry_element_faces.astype(face_id_dtype)
+            bdry_elements = bdry_elements.astype(element_id_dtype)
             belongs_to_bdry = np.full(
                 (len(boundary_tags), len(bdry_elements)), False)
 
