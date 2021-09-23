@@ -72,7 +72,7 @@ Group factories
 ^^^^^^^^^^^^^^^
 
 .. autoclass:: ElementGroupFactory
-.. autoclass:: HeterogeneousOrderBasedGroupFactory
+.. autoclass:: TypeMappingGroupFactory
 
 Simplicial group factories
 --------------------------
@@ -96,8 +96,8 @@ Tensor product group factories
 .. autoclass:: LegendreGaussLobattoTensorProductGroupFactory
 .. autoclass:: EquidistantTensorProductGroupFactory
 
-Heterogeneous group factories
------------------------------
+Type-based group factories
+--------------------------
 
 .. autoclass:: InterpolatoryEdgeClusteredGroupFactory
 .. autoclass:: InterpolatoryQuadratureGroupFactory
@@ -653,7 +653,7 @@ class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
         return self.group_class(mesh_el_group, self.order, index)
 
 
-class HeterogeneousOrderBasedGroupFactory(ElementGroupFactory):
+class TypeMappingGroupFactory(ElementGroupFactory):
     """
     .. automethod:: __init__
     .. automethod:: __call__
@@ -688,11 +688,11 @@ class HeterogeneousOrderBasedGroupFactory(ElementGroupFactory):
             return cls(mesh_el_group, self.order, index)
 
 
-class OrderAndTypeBasedGroupFactory(HeterogeneousOrderBasedGroupFactory):
+class OrderAndTypeBasedGroupFactory(TypeMappingGroupFactory):
     def __init__(self, order, simplex_group_class, tensor_product_group_class):
         from warnings import warn
         warn("OrderAndTypeBasedGroupFactory is deprecated and will go away in 2023. "
-                "Use HeterogeneousOrderBasedGroupFactory instead.",
+                "Use TypeMappingGroupFactory instead.",
                 DeprecationWarning, stacklevel=2)
 
         super().__init__(order, {
@@ -824,7 +824,7 @@ class _DefaultPolynomialSimplexGroupFactory(ElementGroupFactory):
         return factory(mesh_el_group, index)
 
 
-class InterpolatoryEdgeClusteredGroupFactory(HeterogeneousOrderBasedGroupFactory):
+class InterpolatoryEdgeClusteredGroupFactory(TypeMappingGroupFactory):
     def __init__(self, order):
         super().__init__(order, {
             _MeshSimplexElementGroup: _DefaultPolynomialSimplexGroupFactory(order),
@@ -833,7 +833,7 @@ class InterpolatoryEdgeClusteredGroupFactory(HeterogeneousOrderBasedGroupFactory
             })
 
 
-class InterpolatoryQuadratureGroupFactory(HeterogeneousOrderBasedGroupFactory):
+class InterpolatoryQuadratureGroupFactory(TypeMappingGroupFactory):
     def __init__(self, order):
         super().__init__(order, {
             _MeshSimplexElementGroup: InterpolatoryQuadratureSimplexElementGroup,
@@ -841,7 +841,7 @@ class InterpolatoryQuadratureGroupFactory(HeterogeneousOrderBasedGroupFactory):
             })
 
 
-class InterpolatoryEquidistantGroupFactory(HeterogeneousOrderBasedGroupFactory):
+class InterpolatoryEquidistantGroupFactory(TypeMappingGroupFactory):
     def __init__(self, order):
         super().__init__(order, {
             _MeshSimplexElementGroup: PolynomialEquidistantSimplexElementGroup,
@@ -849,7 +849,7 @@ class InterpolatoryEquidistantGroupFactory(HeterogeneousOrderBasedGroupFactory):
             })
 
 
-class QuadratureGroupFactory(HeterogeneousOrderBasedGroupFactory):
+class QuadratureGroupFactory(TypeMappingGroupFactory):
     def __init__(self, order):
         super().__init__(order, {
             _MeshSimplexElementGroup: QuadratureSimplexElementGroup,
@@ -857,7 +857,7 @@ class QuadratureGroupFactory(HeterogeneousOrderBasedGroupFactory):
             })
 
 
-class ModalGroupFactory(HeterogeneousOrderBasedGroupFactory):
+class ModalGroupFactory(TypeMappingGroupFactory):
     def __init__(self, order):
         super().__init__(order, {
             _MeshSimplexElementGroup: ModalSimplexElementGroup,
