@@ -30,10 +30,12 @@ from warnings import warn
 import numpy as np
 from pytools import memoize_method, memoize_on_first_arg
 from meshmode.mesh import (
+        MeshElementGroup as _MeshElementGroup,
         SimplexElementGroup as _MeshSimplexElementGroup,
         TensorProductElementGroup as _MeshTensorProductElementGroup)
 from meshmode.discretization import (
         NoninterpolatoryElementGroupError,
+        ElementGroupBase,
         NodalElementGroupBase, ModalElementGroupBase,
         InterpolatoryElementGroupBase)
 
@@ -72,6 +74,7 @@ Group factories
 ^^^^^^^^^^^^^^^
 
 .. autoclass:: ElementGroupFactory
+.. autoclass:: HomogeneousOrderBasedGroupFactory
 .. autoclass:: TypeMappingGroupFactory
 
 Simplicial group factories
@@ -634,18 +637,52 @@ class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
 
 class ElementGroupFactory:
     """
-    .. function:: __call__(mesh_ele_group, dof_nr_base)
+    .. automethod:: __call__
     """
+
+    def __call__(self,
+            mesh_el_group: _MeshElementGroup,
+            index: int) -> ElementGroupBase:
+        """Create a new :class:`~meshmode.discretization.ElementGroupBase` for
+        the given *mesh_el_group*.
+
+        :arg index: integer index of *mesh_el_group* in the associated
+            :class:`~meshmode.mesh.Mesh`, see
+            :attr:`meshmode.discretization.ElementGroupBase.index`.
+        """
+        raise NotImplementedError
 
 
 class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
-    mesh_group_class: ClassVar[type]
-    group_class: ClassVar[type]
+    """Element group factory for a single type of
+    :class:`meshmode.mesh.MeshElementGroup` and fixed order.
 
-    def __init__(self, order):
+    .. attribute:: mesh_group_class
+    .. attribute:: group_class
+    .. attribute:: order
+
+    .. automethod:: __init__
+    .. automethod:: __call__
+    """
+
+    mesh_group_class: ClassVar[_MeshElementGroup]
+    group_class: ClassVar[ElementGroupBase]
+
+    def __init__(self, order: int) -> None:
+        """
+        :arg order: integer denoting the order of the
+            :class:`~meshmode.discretization.ElementGroupBase`. The exact
+            interpretation of the order is left to each individual class,
+            as given by :attr:`group_class`.
+        """
+
         self.order = order
 
     def __call__(self, mesh_el_group, index):
+        """
+        :returns: an element group of type :attr:`group_class` and order
+            :attr:`order`.
+        """
         if not isinstance(mesh_el_group, self.mesh_group_class):
             raise TypeError("only mesh element groups of type '%s' "
                     "are supported" % self.mesh_group_class.__name__)
@@ -654,14 +691,25 @@ class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
 
 
 class TypeMappingGroupFactory(ElementGroupFactory):
-    """
+    r"""Element group factory that supports multiple types of
+    :class:`~meshmode.mesh.MeshElementGroup`\ s, defined through the mapping
+    :attr:`mesh_group_class_to_factory`.
+
+    .. attribute:: order
+    .. attribute:: mesh_group_class_to_factory
+
+        A :class:`dict` from :class:`~meshmode.mesh.MeshElementGroup`\ s to
+        factory callables that return a corresponding
+        :class:`~meshmode.discretization.ElementGroupBase` of order
+        :attr:`order`.
+
     .. automethod:: __init__
     .. automethod:: __call__
     """
 
     def __init__(self, order, mesh_group_class_to_factory):
         """
-        :param mesh_group_class_to_factory: a :class:`dict` from
+        :arg mesh_group_class_to_factory: a :class:`dict` from
             :class:`~meshmode.mesh.MeshElementGroup` subclasses to
             :class:`~meshmode.discretization.ElementGroupBase` subclasses or
             :class:`~meshmode.discretization.poly_element.ElementGroupFactory`
@@ -813,7 +861,7 @@ class EquidistantTensorProductGroupFactory(HomogeneousOrderBasedGroupFactory):
 # }}}
 
 
-# {{{ heterogeneous group factories
+# {{{ mesh element group type-based group factories
 
 class _DefaultPolynomialSimplexGroupFactory(ElementGroupFactory):
     def __init__(self, order):
@@ -825,6 +873,11 @@ class _DefaultPolynomialSimplexGroupFactory(ElementGroupFactory):
 
 
 class InterpolatoryEdgeClusteredGroupFactory(TypeMappingGroupFactory):
+    r"""Element group factory for all supported
+    :class:`~meshmode.mesh.MeshElementGroup`\ s that constructs (recommended)
+    element groups with edge-clustered nodes that can be used for interpolation.
+    """
+
     def __init__(self, order):
         super().__init__(order, {
             _MeshSimplexElementGroup: _DefaultPolynomialSimplexGroupFactory(order),
@@ -834,6 +887,12 @@ class InterpolatoryEdgeClusteredGroupFactory(TypeMappingGroupFactory):
 
 
 class InterpolatoryQuadratureGroupFactory(TypeMappingGroupFactory):
+    r"""Element group factory for all supported
+    :class:`~meshmode.mesh.MeshElementGroup`\ s that constructs (recommended)
+    element groups with nodes that can be used for interpolation and high-order
+    quadrature.
+    """
+
     def __init__(self, order):
         super().__init__(order, {
             _MeshSimplexElementGroup: InterpolatoryQuadratureSimplexElementGroup,
@@ -842,6 +901,11 @@ class InterpolatoryQuadratureGroupFactory(TypeMappingGroupFactory):
 
 
 class InterpolatoryEquidistantGroupFactory(TypeMappingGroupFactory):
+    r"""Element group factory for all supported
+    :class:`~meshmode.mesh.MeshElementGroup`\ s that constructs (recommended)
+    element groups with equidistant nodes that can be used for interpolation.
+    """
+
     def __init__(self, order):
         super().__init__(order, {
             _MeshSimplexElementGroup: PolynomialEquidistantSimplexElementGroup,
@@ -850,6 +914,11 @@ class InterpolatoryEquidistantGroupFactory(TypeMappingGroupFactory):
 
 
 class QuadratureGroupFactory(TypeMappingGroupFactory):
+    r"""Element group factory for all supported
+    :class:`~meshmode.mesh.MeshElementGroup`\ s that constructs (recommended)
+    element groups with nodes that can be used for high-order quadrature,
+    but (not necessarily) for interpolation.
+    """
     def __init__(self, order):
         super().__init__(order, {
             _MeshSimplexElementGroup: QuadratureSimplexElementGroup,
@@ -858,6 +927,10 @@ class QuadratureGroupFactory(TypeMappingGroupFactory):
 
 
 class ModalGroupFactory(TypeMappingGroupFactory):
+    r"""Element group factory for all supported
+    :class:`~meshmode.mesh.MeshElementGroup`\ s that constructs (recommended)
+    element groups with modal degrees of freedom.
+    """
     def __init__(self, order):
         super().__init__(order, {
             _MeshSimplexElementGroup: ModalSimplexElementGroup,

@@ -97,13 +97,14 @@ class ElementGroupBase(metaclass=ABCMeta):
     .. autoattribute:: shape
     .. autoattribute:: space
 
+    .. automethod:: __init__
     .. automethod:: discretization_key
     """
 
     def __init__(self, mesh_el_group, order, index):
         """
         :arg mesh_el_group: an instance of
-            :class:`meshmode.mesh.MeshElementGroup`
+            :class:`~meshmode.mesh.MeshElementGroup`.
         """
         self.mesh_el_group = mesh_el_group
         self.order = order
