@@ -497,7 +497,7 @@ class Visualizer:
         should have the same group types, number of elements, degrees of
         freedom, etc.
 
-        :param skip_tests: If *True*, no checks in the group structure of the
+        :arg skip_tests: If *True*, no checks in the group structure of the
             discretizations are performed.
         """
 

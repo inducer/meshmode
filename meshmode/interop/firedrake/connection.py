@@ -134,14 +134,14 @@ class FiredrakeConnection:
     """
     def __init__(self, discr, fdrake_fspace, mm2fd_node_mapping, group_nr=None):
         """
-        :param discr: A :class:`meshmode.discretization.Discretization`
-        :param fdrake_fspace: A
+        :arg discr: A :class:`meshmode.discretization.Discretization`
+        :arg fdrake_fspace: A
             :class:`firedrake.functionspaceimpl.WithGeometry`.
             Must use ufl family ``"Discontinuous Lagrange"``.
-        :param mm2fd_node_mapping: Used as attribute :attr:`mm2fd_node_mapping`.
+        :arg mm2fd_node_mapping: Used as attribute :attr:`mm2fd_node_mapping`.
             A 2-D numpy integer array with the same dtype as
             ``fdrake_fspace.cell_node_list.dtype``
-        :param group_nr: The index of the group in *discr* which is
+        :arg group_nr: The index of the group in *discr* which is
             being connected to *fdrake_fspace*. The group must be a
             :class:`~meshmode.discretization.InterpolatoryElementGroupBase`
             of the same topological dimension as *fdrake_fspace*.
@@ -587,9 +587,9 @@ def _get_cells_to_use(fdrake_mesh, bdy_id):
 
     Separated into a function for testing purposes
 
-    :param fdrake_mesh: A mesh as in
+    :arg fdrake_mesh: A mesh as in
         :func:`~meshmode.interop.firedrake.mesh.import_firedrake_mesh`
-    :param bdy_id: As the argument 'restrict_to_boundary' in
+    :arg bdy_id: As the argument 'restrict_to_boundary' in
         :func:`build_connection_from_firedrake`
     """
     if bdy_id is None:
@@ -762,15 +762,15 @@ def build_connection_to_firedrake(discr, group_nr=None, comm=None):
     space and allow for conversion back and forth
     by resampling at the nodes.
 
-    :param discr: A :class:`~meshmode.discretization.Discretization`
+    :arg discr: A :class:`~meshmode.discretization.Discretization`
         to initialize the connection with
-    :param group_nr: The group number of the discretization to convert.
+    :arg group_nr: The group number of the discretization to convert.
         If *None* there must be only one group. The selected group
         must be of type
         :class:`~meshmode.discretization.poly_element.\
 InterpolatoryQuadratureSimplexElementGroup`.
 
-    :param comm: Communicator to build a dmplex object on for the created
+    :arg comm: Communicator to build a dmplex object on for the created
         firedrake mesh
     """
     if group_nr is None:

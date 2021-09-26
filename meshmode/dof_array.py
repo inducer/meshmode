@@ -465,7 +465,7 @@ def flatten(ary: ArrayContainer, *, strict: bool = True) -> ArrayContainer:
     Recurses into the :class:`~arraycontext.ArrayContainer` for all
     :class:`DOFArray`\ s.
 
-    :param strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
+    :arg strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
         in the container *ary*. If *False*, any non-:class:`DOFArray` are
         left as is.
     """
@@ -542,7 +542,7 @@ def unflatten(
         provided by the element groups in *discr*. May be used (for example)
         to handle :class:`DOFArray`\ s that have only one DOF per element,
         representing some per-element quantity.
-    :param strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
+    :arg strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
         in the container *ary*. If *False*, any non-:class:`DOFArray` are
         left as is.
     """
@@ -572,10 +572,10 @@ def unflatten_like(
     :class:`~meshmode.discretization.Discretization`\ s within the same
     container.
 
-    :param prototype: an array container with the same structure as *ary*,
+    :arg prototype: an array container with the same structure as *ary*,
         whose :class:`DOFArray` leaves are used to get the sizes to
         unflatten *ary*.
-    :param strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
+    :arg strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
         in the container *ary*. If *False*, any non-:class:`DOFArray` are
         left as is.
     """

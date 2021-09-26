@@ -747,17 +747,17 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     :class:`~meshmode.mesh.Mesh`'s
     :class:`~meshmode.mesh.SimplexElementGroup`.
 
-    :param mesh: A :class:`~meshmode.mesh.Mesh` to convert with
+    :arg mesh: A :class:`~meshmode.mesh.Mesh` to convert with
         at least one :class:`~meshmode.mesh.SimplexElementGroup`.
         'mesh.is_conforming' must evaluate to *True*.
         'mesh' must have vertices supplied, i.e.
         'mesh.vertices' must not be *None*.
-    :param group_nr: The group number to be converted into a firedrake
+    :arg group_nr: The group number to be converted into a firedrake
         mesh. The corresponding group must be of type
         :class:`~meshmode.mesh.SimplexElementGroup`. If *None* and
         *mesh* has only one group, that group is used. Otherwise,
         a *ValueError* is raised.
-    :param comm: The communicator to build the dmplex mesh on
+    :arg comm: The communicator to build the dmplex mesh on
 
     :return: A tuple *(fdrake_mesh, fdrake_cell_ordering, perm2cell)*
         where

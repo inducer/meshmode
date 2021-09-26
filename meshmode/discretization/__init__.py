@@ -398,12 +398,12 @@ class Discretization:
     def __init__(self, actx: ArrayContext, mesh, group_factory,
             real_dtype=np.float64):
         """
-        :param actx: A :class:`ArrayContext` used to perform computation needed
+        :arg actx: A :class:`ArrayContext` used to perform computation needed
             during initial set-up of the mesh.
-        :param mesh: A :class:`meshmode.mesh.Mesh` over which the discretization is
+        :arg mesh: A :class:`meshmode.mesh.Mesh` over which the discretization is
             built.
-        :param group_factory: An :class:`ElementGroupFactory`.
-        :param real_dtype: The :mod:`numpy` data type used for representing real
+        :arg group_factory: An :class:`ElementGroupFactory`.
+        :arg real_dtype: The :mod:`numpy` data type used for representing real
             data, either :class:`numpy.float32` or :class:`numpy.float64`.
         """
 
@@ -605,7 +605,7 @@ def num_reference_derivative(
         ref_axes: Iterable[int],
         vec: _DOFArray) -> _DOFArray:
     """
-    :param ref_axes: an :class:`~collections.abc.Iterable` of indices
+    :arg ref_axes: an :class:`~collections.abc.Iterable` of indices
         that define the sequence of derivatives to *vec*. For example,
         ``(0, 1, 1)`` would take a third partial derivative, one in the first
         axis and two in the second axis.
