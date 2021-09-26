@@ -601,20 +601,17 @@ def get_simplex_element_flip_matrix(order, unit_nodes, permutation=None):
     The default permutation is to swap the
     first two barycentric coordinates.
 
-    :param order: The order of the function space on the simplex,
-                 (see second argument in
-                  :fun:`modepy.simplex_best_available_basis`)
-    :param unit_nodes: A np array of unit nodes with shape
-                       *(dim, nunit_nodes)*
-    :param permutation: Either *None*, or a tuple of shape
-                        storing a permutation:
-                        the *i*th barycentric coordinate gets mapped to
-                        the *permutation[i]*th coordinate.
+    :arg order: The order of the function space on the simplex,
+        (see second argument in :fun:`modepy.simplex_best_available_basis`).
+    :arg unit_nodes: A np array of unit nodes with shape *(dim, nunit_nodes)*.
+    :arg permutation: Either *None*, or a tuple of shape storing a permutation:
+        the *i*th barycentric coordinate gets mapped to the *permutation[i]*th
+        coordinate.
 
     :return: A numpy array of shape *(nunit_nodes, nunit_nodes)*
-             which, when its transpose is right-applied
-             to the matrix of nodes (shaped *(dim, nunit_nodes)*),
-             corresponds to the permutation being applied
+        which, when its transpose is right-applied to the matrix of nodes
+        (shaped *(dim, nunit_nodes)*), corresponds to the permutation being
+        applied.
     """
     from modepy.tools import barycentric_to_unit, unit_to_barycentric
 
@@ -974,7 +971,7 @@ def rotate_mesh_around_axis(mesh, *,
         axis: Optional[np.ndarray] = None):
     """Rotate the mesh by *theta* radians around the axis *axis*.
 
-    :param axis: a (not necessarily unit) vector. By default, the rotation is
+    :arg axis: a (not necessarily unit) vector. By default, the rotation is
         performed around the :math:`z` axis.
     """
     if mesh.ambient_dim == 1:

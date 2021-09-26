@@ -82,7 +82,7 @@ Tools for Iterative Refinement
 
 def circle(t: np.ndarray):
     """
-    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1)`.
     :return: an array of shape ``(2, t.size)``.
     """
     return ellipse(1.0, t)
@@ -90,7 +90,7 @@ def circle(t: np.ndarray):
 
 def ellipse(aspect_ratio: float, t: np.ndarray):
     """
-    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1)`.
     :return: an array of shape ``(2, t.size)``.
     """
 
@@ -104,7 +104,7 @@ def ellipse(aspect_ratio: float, t: np.ndarray):
 
 def cloverleaf(t: np.ndarray):
     """
-    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1)`.
     :return: an array of shape ``(2, t.size)``.
     """
 
@@ -122,7 +122,7 @@ def cloverleaf(t: np.ndarray):
 
 def drop(t: np.ndarray):
     """
-    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1)`.
     :return: an array of shape ``(2, t.size)``.
     """
 
@@ -137,7 +137,7 @@ def drop(t: np.ndarray):
 
 def n_gon(n_corners, t):
     """
-    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1)`.
     :return: an array of shape ``(2, t.size)``.
     """
 
@@ -165,7 +165,7 @@ def n_gon(n_corners, t):
 
 def qbx_peanut(t: np.ndarray):
     """
-    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1)`.
     :return: an array of shape ``(2, t.size)``.
     """
     ilength = 2*np.pi
@@ -179,9 +179,9 @@ def qbx_peanut(t: np.ndarray):
 
 def apple(a: float, t: np.ndarray):
     """
-    :param a: roundness parameter in :math:`[0, 1/2]`, where :math:`0` gives
+    :arg a: roundness parameter in :math:`[0, 1/2]`, where :math:`0` gives
         a circle and :math:`1/2` gives a cardioid.
-    :param t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1)`.
     :return: an array of shape ``(2, t.size)``.
     """
     ilength = 2*np.pi
@@ -215,7 +215,7 @@ class WobblyCircle:
 
     def __call__(self, t: np.ndarray):
         """
-        :param t: the parametrization, runs from :math:`[0, 1)`.
+        :arg t: the parametrization, runs from :math:`[0, 1)`.
         :return: an array of shape ``(2, t.size)``.
         """
 
@@ -258,21 +258,21 @@ def make_curve_mesh(
         closed: bool = True,
         return_parametrization_points: bool = False):
     """
-    :param curve_f: parametrization for a curve, accepting a vector of
+    :arg curve_f: parametrization for a curve, accepting a vector of
         point locations and returning an array of shape ``(2, npoints)``.
-    :param element_boundaries: a vector of element boundary locations in
+    :arg element_boundaries: a vector of element boundary locations in
         :math:`[0, 1]`, in order. :math:`0` must be the first entry, :math:`1`
         the last one.
-    :param order: order of the (simplex) elements. If *unit_nodes* is also
+    :arg order: order of the (simplex) elements. If *unit_nodes* is also
         provided, the orders should match.
-    :param unit_nodes: if given, the unit nodes to use. Must have shape
+    :arg unit_nodes: if given, the unit nodes to use. Must have shape
         ``(2, nnodes)``.
-    :param node_vertex_consistency_tolerance: passed to the
+    :arg node_vertex_consistency_tolerance: passed to the
         :class:`~meshmode.mesh.Mesh` constructor. If *False*, no checks are
         performed.
-    :param closed: if *True*, the curve is assumed closed and the first and
+    :arg closed: if *True*, the curve is assumed closed and the first and
         last of the *element_boundaries* must match.
-    :param return_parametrization_points: if *True*, the parametrization points
+    :arg return_parametrization_points: if *True*, the parametrization points
         at which all the nodes in the mesh were evaluated are also returned.
     :returns: a :class:`~meshmode.mesh.Mesh`, or if *return_parametrization_points*
         is *True*, a tuple ``(mesh, par_points)``, where *par_points* is an array of
@@ -517,17 +517,17 @@ def generate_sphere(r: float, order: int, *,
         unit_nodes: Optional[np.ndarray] = None,
         group_cls: Optional[type] = None):
     """
-    :param r: radius of the sphere.
-    :param order: order of the group elements. If *unit_nodes* is also
+    :arg r: radius of the sphere.
+    :arg order: order of the group elements. If *unit_nodes* is also
         provided, the orders should match.
-    :param uniform_refinement_rounds: number of uniform refinement rounds to
+    :arg uniform_refinement_rounds: number of uniform refinement rounds to
         perform after the initial mesh was created.
-    :param node_vertex_consistency_tolerance: passed to the
+    :arg node_vertex_consistency_tolerance: passed to the
         :class:`~meshmode.mesh.Mesh` constructor. If *False*, no checks are
         performed.
-    :param unit_nodes: if given, the unit nodes to use. Must have shape
+    :arg unit_nodes: if given, the unit nodes to use. Must have shape
         ``(3, nnodes)``.
-    :param group_cls: a :class:`~meshmode.mesh.MeshElementGroup` subclass.
+    :arg group_cls: a :class:`~meshmode.mesh.MeshElementGroup` subclass.
         Based on the class, a different polyhedron is used to construct the
         sphere: simplices use :func:`generate_icosahedron` and tensor
         products use a :func:`generate_cube_surface`.
@@ -577,16 +577,16 @@ def generate_surface_of_revolution(
         unit_nodes: Optional[np.ndarray] = None):
     """Return a cylinder aligned with the "height" axis aligned with the Z axis.
 
-    :param get_radius: A callable function that takes in a 1D array of heights
+    :arg get_radius: A callable function that takes in a 1D array of heights
         and a 1D array of angles and returns a 1D array of radii.
-    :param height_discr: A discretization of ``[0, 2*pi)``.
-    :param angle_discr: A discretization of ``[0, 2*pi)``.
-    :param order: order of the (simplex) elements. If *unit_nodes* is also
+    :arg height_discr: A discretization of ``[0, 2*pi)``.
+    :arg angle_discr: A discretization of ``[0, 2*pi)``.
+    :arg order: order of the (simplex) elements. If *unit_nodes* is also
         provided, the orders should match.
-    :param node_vertex_consistency_tolerance: passed to the
+    :arg node_vertex_consistency_tolerance: passed to the
         :class:`~meshmode.mesh.Mesh` constructor. If *False*, no checks are
         performed.
-    :param unit_nodes: if given, the unit nodes to use. Must have shape
+    :arg unit_nodes: if given, the unit nodes to use. Must have shape
         ``(3, nnodes)``.
     """
     n = len(angle_discr)
@@ -740,16 +740,16 @@ def generate_torus(
     :math:`n_\text{major} \times n_\text{minor}` contiguous rectangles, and then
     each rectangle is subdivided into two triangles.
 
-    :param r_major: radius of the major circle.
-    :param r_minor: radius of the minor circle.
-    :param n_major: number of rectangles along major circle.
-    :param n_minor: number of rectangles along minor circle.
-    :param order: order of the (simplex) elements. If *unit_nodes* is also
+    :arg r_major: radius of the major circle.
+    :arg r_minor: radius of the minor circle.
+    :arg n_major: number of rectangles along major circle.
+    :arg n_minor: number of rectangles along minor circle.
+    :arg order: order of the (simplex) elements. If *unit_nodes* is also
         provided, the orders should match.
-    :param node_vertex_consistency_tolerance: passed to the
+    :arg node_vertex_consistency_tolerance: passed to the
         :class:`~meshmode.mesh.Mesh` constructor. If *False*, no checks are
         performed.
-    :param unit_nodes: if given, the unit nodes to use. Must have shape
+    :arg unit_nodes: if given, the unit nodes to use. Must have shape
         ``(3, nnodes)``.
     :returns: a :class:`~meshmode.mesh.Mesh` of a torus.
 
@@ -769,10 +769,10 @@ def refine_mesh_and_get_urchin_warper(
         min_rad: float = 0.2,
         uniform_refinement_rounds: int = 0):
     """
-    :param order: order of the (simplex) elements.
-    :param m: order of the spherical harmonic :math:`Y^m_n`.
-    :param n: order of the spherical harmonic :math:`Y^m_n`.
-    :param est_rel_interp_tolerance: a tolerance for the relative
+    :arg order: order of the (simplex) elements.
+    :arg m: order of the spherical harmonic :math:`Y^m_n`.
+    :arg n: order of the spherical harmonic :math:`Y^m_n`.
+    :arg est_rel_interp_tolerance: a tolerance for the relative
         interpolation error estimates on the warped version of the mesh.
 
     :returns: a tuple ``(refiner, warp_mesh)``, where *refiner* is
@@ -854,11 +854,11 @@ def generate_urchin(
         est_rel_interp_tolerance: float,
         min_rad: float = 0.2):
     """
-    :param order: order of the (simplex) elements. If *unit_nodes* is also
+    :arg order: order of the (simplex) elements. If *unit_nodes* is also
         provided, the orders should match.
-    :param m: order of the spherical harmonic :math:`Y^m_n`.
-    :param n: order of the spherical harmonic :math:`Y^m_n`.
-    :param est_rel_interp_tolerance: a tolerance for the relative
+    :arg m: order of the spherical harmonic :math:`Y^m_n`.
+    :arg n: order of the spherical harmonic :math:`Y^m_n`.
+    :arg est_rel_interp_tolerance: a tolerance for the relative
         interpolation error estimates on the warped version of the mesh.
 
     :returns: a refined :class:`~meshmode.mesh.Mesh` of a smooth shape covered
@@ -885,12 +885,12 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
         mesh_type=None, unit_nodes=None):
     r"""Create a semi-structured mesh.
 
-    :param axis_coords: a tuple with a number of entries corresponding
+    :arg axis_coords: a tuple with a number of entries corresponding
         to the number of dimensions, with each entry a numpy array
         specifying the coordinates to be used along that axis.
-    :param group_cls: One of :class:`meshmode.mesh.SimplexElementGroup`
+    :arg group_cls: One of :class:`meshmode.mesh.SimplexElementGroup`
         or :class:`meshmode.mesh.TensorProductElementGroup`.
-    :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
+    :arg boundary_tag_to_face: an optional dictionary for tagging boundaries.
         The keys correspond to custom boundary tags, with the values giving
         a list of the faces on which they should be applied in terms of coordinate
         directions (``+x``, ``-x``, ``+y``, ``-y``, ``+z``, ``-z``, ``+w``, ``-w``).
@@ -898,7 +898,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
         For example::
 
             boundary_tag_to_face={"bdry_1": ["+x", "+y"], "bdry_2": ["-x"]}
-    :param mesh_type: In two dimensions with non-tensor-product elements,
+    :arg mesh_type: In two dimensions with non-tensor-product elements,
         *mesh_type* may be set to ``"X"`` to generate this type
         of mesh::
 
@@ -1160,17 +1160,17 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
                                ):
     """Create a semi-structured rectangular mesh with equispaced elements.
 
-    :param a: the lower left hand point of the rectangle.
-    :param b: the upper right hand point of the rectangle.
-    :param nelements_per_axis: an optional tuple of integers indicating the
+    :arg a: the lower left hand point of the rectangle.
+    :arg b: the upper right hand point of the rectangle.
+    :arg nelements_per_axis: an optional tuple of integers indicating the
         number of elements along each axis.
-    :param npoints_per_axis: an optional tuple of integers indicating the
+    :arg npoints_per_axis: an optional tuple of integers indicating the
         number of points along each axis.
-    :param order: the mesh element order.
-    :param boundary_tag_to_face: an optional dictionary for tagging boundaries.
+    :arg order: the mesh element order.
+    :arg boundary_tag_to_face: an optional dictionary for tagging boundaries.
         See :func:`generate_box_mesh`.
-    :param group_cls: see :func:`generate_box_mesh`.
-    :param mesh_type: see :func:`generate_box_mesh`.
+    :arg group_cls: see :func:`generate_box_mesh`.
+    :arg mesh_type: see :func:`generate_box_mesh`.
 
     .. note::
 
