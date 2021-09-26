@@ -311,17 +311,10 @@ def vtk_visualize_mesh(actx, mesh, filename,
     if not vtk_high_order:
         vis_order = None
 
-    from meshmode.discretization.poly_element import (
-            PolynomialWarpAndBlendElementGroup,
-            LegendreGaussLobattoTensorProductElementGroup,
-            OrderAndTypeBasedGroupFactory
-            )
+    from meshmode.discretization.poly_element import \
+            InterpolatoryEdgeClusteredGroupFactory
     from meshmode.discretization import Discretization
-    discr = Discretization(actx, mesh, OrderAndTypeBasedGroupFactory(
-        order,
-        simplex_group_class=PolynomialWarpAndBlendElementGroup,
-        tensor_product_group_class=LegendreGaussLobattoTensorProductElementGroup
-        ))
+    discr = Discretization(actx, mesh, InterpolatoryEdgeClusteredGroupFactory(order))
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr,
