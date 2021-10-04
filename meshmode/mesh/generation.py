@@ -890,7 +890,8 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
         to the number of dimensions, with each entry a numpy array
         specifying the coordinates to be used along that axis.
     :arg periodic: an optional tuple of :class:`bool` indicating whether
-        the mesh is periodic along each axis.
+        the mesh is periodic along each axis. Acts as a shortcut for calling
+        :func:`meshmode.mesh.processing.glue_mesh_boundaries`.
     :arg group_cls: One of :class:`meshmode.mesh.SimplexElementGroup`
         or :class:`meshmode.mesh.TensorProductElementGroup`.
     :arg boundary_tag_to_face: an optional dictionary for tagging boundaries.
@@ -1204,7 +1205,8 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
     :arg npoints_per_axis: an optional tuple of integers indicating the
         number of points along each axis.
     :arg periodic: an optional tuple of :class:`bool` indicating whether
-        the mesh is periodic along each axis.
+        the mesh is periodic along each axis. Acts as a shortcut for calling
+        :func:`meshmode.mesh.processing.glue_mesh_boundaries`.
     :arg order: the mesh element order.
     :arg boundary_tag_to_face: an optional dictionary for tagging boundaries.
         See :func:`generate_box_mesh`.
