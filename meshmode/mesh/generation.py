@@ -881,7 +881,7 @@ def generate_urchin(
 # {{{ generate_box_mesh
 
 @deprecate_keyword("group_factory", "group_cls")
-def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
+def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
         periodic=None, group_cls=None, boundary_tag_to_face=None,
         mesh_type=None, unit_nodes=None):
     r"""Create a semi-structured mesh.
