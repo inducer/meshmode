@@ -1010,12 +1010,17 @@ def _match_boundary_faces(mesh, btag_m, btag_n, aff_map, tol):
 
     unmatched_bdry_m_vertex_indices = bdry_m_vertex_indices[
         np.where(matched_bdry_n_vertex_indices < 0)[0]]
-    if len(unmatched_bdry_m_vertex_indices) > 0:
-        # TODO: What's the best way to log these?
-        # for vertex_index in unmatched_bdry_m_vertex_indices:
-        #     ...
-        raise RuntimeError("unable to match vertices between boundaries"
-            f" {btag_m} and {btag_n}")
+    nunmatched = len(unmatched_bdry_m_vertex_indices)
+    if nunmatched > 0:
+        vertices = mesh.vertices[:, unmatched_bdry_m_vertex_indices]
+        mapped_vertices = aff_map(vertices)
+        raise RuntimeError(
+            f"unable to match vertices between boundaries {btag_m} and {btag_n}.\n"
+            + "Unmatched vertices (original -> mapped):\n"
+            + "\n".join([
+                f"{vertices[:, i]} -> {mapped_vertices[:, i]}"
+                for i in range(min(nunmatched, 10))])
+            + f"\n...\n({nunmatched-10} more omitted.)" if nunmatched > 10 else "")
 
     from meshmode.mesh import _concatenate_face_ids
     face_ids = _concatenate_face_ids([bdry_m_face_ids, bdry_n_face_ids])
