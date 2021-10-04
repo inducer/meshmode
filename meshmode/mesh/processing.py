@@ -1076,11 +1076,10 @@ def glue_mesh_boundaries(mesh, glued_boundary_mappings):
     :arg glued_boundary_mappings: a :class:`list` of tuples
         *(btag_m, btag_n, aff_map, tol)* which each specify a mapping between two
         boundaries in *mesh* that should be glued together. *aff_map* is a
-        :class:`~meshmode.mesh.tools.AffineMap` that represents the affine mapping
-        from the vertices of boundary *btag_m* into the vertices of boundary
-        *btag_n*. *tol* is the tolerance allowed between the vertex coordinates of
-        *btag_n* and the transformed vertex coordinates of *btag_m* when attempting
-        to match the two.
+        :class:`~meshmode.AffineMap` that represents the affine mapping from the
+        vertices of boundary *btag_m* into the vertices of boundary *btag_n*. *tol*
+        is the tolerance allowed between the vertex coordinates of *btag_n* and the
+        transformed vertex coordinates of *btag_m* when attempting to match the two.
     """
     glued_boundary_mappings = _complete_glued_boundary_mappings(
         glued_boundary_mappings)
