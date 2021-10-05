@@ -1160,22 +1160,23 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
             is_conforming=True)
 
     if any(periodic):
-        from meshmode.mesh.tools import AffineMap
-        glued_boundary_mappings = []
+        from meshmode.mesh.processing import (
+            glue_mesh_boundaries, BoundaryPairMapping)
+
+        from meshmode import AffineMap
+        bdry_pair_mappings_and_tols = []
         for idim in range(dim):
             if periodic[idim]:
-                lower_face = "-" + axes[idim]
-                upper_face = "+" + axes[idim]
                 offset = np.zeros(dim, dtype=np.float64)
                 offset[idim] = axis_coords[idim][-1] - axis_coords[idim][0]
-                glued_boundary_mappings.append((
-                    "periodic_" + lower_face,
-                    "periodic_" + upper_face,
-                    AffineMap(offset=offset),
+                bdry_pair_mappings_and_tols.append((
+                    BoundaryPairMapping(
+                        "periodic_-" + axes[idim],
+                        "periodic_+" + axes[idim],
+                        AffineMap(offset=offset)),
                     1e-12*offset[idim]))
 
-        from meshmode.mesh.processing import glue_mesh_boundaries
-        periodic_mesh = glue_mesh_boundaries(mesh, glued_boundary_mappings)
+        periodic_mesh = glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols)
 
         return periodic_mesh
     else:
@@ -1350,9 +1351,11 @@ def generate_annular_cylinder_slice_mesh(
         from meshmode.mesh.tools import AffineMap
         aff_map = AffineMap(matrix, center - matrix @ center)
 
-        from meshmode.mesh.processing import glue_mesh_boundaries
-        periodic_mesh = glue_mesh_boundaries(mesh,
-            glued_boundary_mappings=[("-theta", "+theta", aff_map, 1e-12)])
+        from meshmode.mesh.processing import (
+            glue_mesh_boundaries, BoundaryPairMapping)
+        periodic_mesh = glue_mesh_boundaries(
+            mesh, bdry_pair_mappings_and_tols=[
+                (BoundaryPairMapping("-theta", "+theta", aff_map), 1e-12)])
 
         return periodic_mesh
     else:

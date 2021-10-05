@@ -24,6 +24,8 @@ from functools import reduce
 from numbers import Real
 from typing import Optional, Union
 
+from dataclasses import dataclass
+
 import numpy as np
 import numpy.linalg as la
 
@@ -35,8 +37,12 @@ from meshmode.mesh import (
     InterPartitionAdjacencyGroup
 )
 
+from meshmode.mesh.tools import AffineMap
+
 
 __doc__ = """
+.. autoclass:: BoundaryPairMapping
+
 .. autofunction:: find_group_indices
 .. autofunction:: partition_mesh
 .. autofunction:: find_volume_mesh_element_orientations
@@ -895,7 +901,6 @@ def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
 # something like this using numpy constructs
 def _match_vertices(
         mesh, src_vertex_indices, tgt_vertex_indices, aff_map=None, tol=1e-12):
-    from meshmode.mesh.tools import AffineMap
     if aff_map is None:
         aff_map = AffineMap()
 
@@ -941,6 +946,35 @@ def _match_vertices(
 
 # {{{ boundary face matching
 
+@dataclass(frozen=True)
+class BoundaryPairMapping:
+    """
+    Represents an affine mapping from one boundary to another.
+
+    .. attribute:: from_btag
+
+        The tag of one boundary.
+
+    .. attribute:: to_btag
+
+        The tag of the other boundary.
+
+    .. attribute:: aff_map
+
+        An :class:`meshmode.AffineMap` that maps points on boundary *from_btag* into
+        points on boundary *to_btag*.
+    """
+    from_btag: int
+    to_btag: int
+    aff_map: AffineMap
+
+    def inverted(self):
+        return BoundaryPairMapping(
+            self.to_btag,
+            self.from_btag,
+            self.aff_map.inverted())
+
+
 def _get_boundary_face_ids(mesh, btag):
     from meshmode.mesh import _FaceIDs
     face_ids_per_boundary_group = []
@@ -983,7 +1017,10 @@ def _get_face_vertex_indices(mesh, face_ids):
     return np.stack(face_vertex_indices_per_group)
 
 
-def _match_boundary_faces(mesh, btag_m, btag_n, aff_map, tol):
+def _match_boundary_faces(mesh, bdry_pair_mapping, tol):
+    btag_m = bdry_pair_mapping.from_btag
+    btag_n = bdry_pair_mapping.to_btag
+
     bdry_m_face_ids = _get_boundary_face_ids(mesh, btag_m)
     bdry_n_face_ids = _get_boundary_face_ids(mesh, btag_n)
 
@@ -1006,14 +1043,14 @@ def _match_boundary_faces(mesh, btag_m, btag_n, aff_map, tol):
 
     matched_bdry_n_vertex_indices = _match_vertices(
         mesh, bdry_m_vertex_indices, bdry_n_vertex_indices,
-        aff_map=aff_map, tol=tol)
+        aff_map=bdry_pair_mapping.aff_map, tol=tol)
 
     unmatched_bdry_m_vertex_indices = bdry_m_vertex_indices[
         np.where(matched_bdry_n_vertex_indices < 0)[0]]
     nunmatched = len(unmatched_bdry_m_vertex_indices)
     if nunmatched > 0:
         vertices = mesh.vertices[:, unmatched_bdry_m_vertex_indices]
-        mapped_vertices = aff_map(vertices)
+        mapped_vertices = bdry_pair_mapping.aff_map(vertices)
         raise RuntimeError(
             f"unable to match vertices between boundaries {btag_m} and {btag_n}.\n"
             + "Unmatched vertices (original -> mapped):\n"
@@ -1054,22 +1091,21 @@ def _match_boundary_faces(mesh, btag_m, btag_n, aff_map, tol):
 
 # {{{ boundary gluing
 
-def _complete_glued_boundary_mappings(partial_glued_boundary_mappings):
+def _complete_boundary_pairs(partial_bdry_pair_mappings_and_tols):
     partial_btag_pairs = {
-        (btag_m, btag_n)
-        for btag_m, btag_n, _, _ in partial_glued_boundary_mappings}
+        (mapping.from_btag, mapping.to_btag)
+        for mapping, _ in partial_bdry_pair_mappings_and_tols}
 
-    glued_boundary_mappings = []
-    for btag_m, btag_n, aff_map, tol in partial_glued_boundary_mappings:
-        glued_boundary_mappings.append((btag_m, btag_n, aff_map, tol))
-        if (btag_n, btag_m) not in partial_btag_pairs:
-            inv_aff_map = aff_map.inverted()
-            glued_boundary_mappings.append((btag_n, btag_m, inv_aff_map, tol))
+    bdry_pair_mappings_and_tols = []
+    for mapping, tol in partial_bdry_pair_mappings_and_tols:
+        bdry_pair_mappings_and_tols.append((mapping, tol))
+        if (mapping.to_btag, mapping.from_btag) not in partial_btag_pairs:
+            bdry_pair_mappings_and_tols.append((mapping.inverted(), tol))
 
-    return glued_boundary_mappings
+    return bdry_pair_mappings_and_tols
 
 
-def glue_mesh_boundaries(mesh, glued_boundary_mappings):
+def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols):
     """
     Create a new mesh from *mesh* in which one or more pairs of boundaries are
     "glued" together such that the boundary surfaces become part of the interior
@@ -1080,25 +1116,24 @@ def glue_mesh_boundaries(mesh, glued_boundary_mappings):
     operates only on facial adjacency; any existing nodal adjacency in *mesh* is
     ignored/invalidated.
 
-    :arg glued_boundary_mappings: a :class:`list` of tuples
-        *(btag_m, btag_n, aff_map, tol)* which each specify a mapping between two
-        boundaries in *mesh* that should be glued together. *aff_map* is a
-        :class:`~meshmode.AffineMap` that represents the affine mapping from the
-        vertices of boundary *btag_m* into the vertices of boundary *btag_n*. *tol*
-        is the tolerance allowed between the vertex coordinates of *btag_n* and the
-        transformed vertex coordinates of *btag_m* when attempting to match the two.
+    :arg bdry_pair_mappings_and_tols: a :class:`list` of tuples *(mapping, tol)*,
+        where *mapping* is a :class:`BoundaryPairMapping` instance that specifies
+        a mapping between two boundaries in *mesh* that should be glued together,
+        and *tol* is the allowed tolerance between the transformed vertex
+        coordinates of the first boundary and the vertex coordinates of the second
+        boundary when attempting to match the two.
     """
-    glued_boundary_mappings = _complete_glued_boundary_mappings(
-        glued_boundary_mappings)
+    bdry_pair_mappings_and_tols = _complete_boundary_pairs(
+        bdry_pair_mappings_and_tols)
 
     glued_btags = {
         btag
-        for btag_m, btag_n, _, _ in glued_boundary_mappings
-        for btag in (btag_m, btag_n)}
+        for mapping, _ in bdry_pair_mappings_and_tols
+        for btag in (mapping.from_btag, mapping.to_btag)}
 
     face_id_pairs_for_mapping = [
-        _match_boundary_faces(mesh, btag_m, btag_n, aff_map, tol)
-        for btag_m, btag_n, aff_map, tol in glued_boundary_mappings]
+        _match_boundary_faces(mesh, mapping, tol)
+        for mapping, tol in bdry_pair_mappings_and_tols]
 
     from meshmode.mesh import InteriorAdjacencyGroup, BoundaryAdjacencyGroup
 
@@ -1110,7 +1145,7 @@ def glue_mesh_boundaries(mesh, glued_boundary_mappings):
             if not isinstance(fagrp, BoundaryAdjacencyGroup)
             or fagrp.boundary_tag not in glued_btags]
 
-        for imap, (_, _, aff_map, _) in enumerate(glued_boundary_mappings):
+        for imap, (mapping, _) in enumerate(bdry_pair_mappings_and_tols):
             mapping_face_id_pairs = face_id_pairs_for_mapping[imap]
             belongs_to_group = mapping_face_id_pairs[0].groups == igrp
             for ineighbor_grp in range(len(mesh.groups)):
@@ -1129,7 +1164,7 @@ def glue_mesh_boundaries(mesh, glued_boundary_mappings):
                         element_faces=element_faces,
                         neighbors=neighbors,
                         neighbor_faces=neighbor_faces,
-                        aff_map=aff_map))
+                        aff_map=mapping.aff_map))
 
         facial_adjacency_groups.append(fagrp_list)
 
@@ -1205,7 +1240,6 @@ def affine_map(mesh,
     if b is not None and b.shape != (mesh.ambient_dim,):
         raise ValueError(f"b has shape '{b.shape}' for a {mesh.ambient_dim}d mesh")
 
-    from meshmode.mesh.tools import AffineMap
     f = AffineMap(A, b)
 
     vertices = f(mesh.vertices)

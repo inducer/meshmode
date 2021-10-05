@@ -902,10 +902,11 @@ def test_glued_mesh():
     map_lower_to_upper = _get_rotation(np.pi/2, np.array([0, 0, 1]), center)
     map_upper_to_lower = _get_rotation(-np.pi/2, np.array([0, 0, 1]), center)
 
-    from meshmode.mesh.processing import glue_mesh_boundaries
-    mesh = glue_mesh_boundaries(orig_mesh,
-        glued_boundary_mappings=[
-            ("-theta", "+theta", map_lower_to_upper, 1e-12)
+    from meshmode.mesh.processing import (
+        glue_mesh_boundaries, BoundaryPairMapping)
+    mesh = glue_mesh_boundaries(
+        orig_mesh, bdry_pair_mappings_and_tols=[
+            (BoundaryPairMapping("-theta", "+theta", map_lower_to_upper), 1e-12)
         ])
 
     int_grps = [
@@ -970,10 +971,14 @@ def test_glued_mesh_matrix_only():
     matrix_lower_to_upper = _get_rotation(np.pi/2, np.array([0, 0, 1]))
     matrix_upper_to_lower = _get_rotation(-np.pi/2, np.array([0, 0, 1]))
 
-    from meshmode.mesh.processing import glue_mesh_boundaries
-    mesh = glue_mesh_boundaries(orig_mesh,
-        glued_boundary_mappings=[
-            ("-theta", "+theta", AffineMap(matrix=matrix_lower_to_upper), 1e-12)
+    map_lower_to_upper = AffineMap(matrix=matrix_lower_to_upper)
+    map_upper_to_lower = AffineMap(matrix=matrix_upper_to_lower)
+
+    from meshmode.mesh.processing import (
+        glue_mesh_boundaries, BoundaryPairMapping)
+    mesh = glue_mesh_boundaries(
+        orig_mesh, bdry_pair_mappings_and_tols=[
+            (BoundaryPairMapping("-theta", "+theta", map_lower_to_upper), 1e-12)
         ])
 
     int_grps = [
@@ -983,8 +988,8 @@ def test_glued_mesh_matrix_only():
     lower_grp = int_grps[1]
     upper_grp = int_grps[2]
 
-    assert lower_grp.aff_map == AffineMap(matrix=matrix_lower_to_upper)
-    assert upper_grp.aff_map == AffineMap(matrix=matrix_upper_to_lower)
+    assert lower_grp.aff_map == map_lower_to_upper
+    assert upper_grp.aff_map == map_upper_to_lower
 
 
 def test_glued_mesh_offset_only():
@@ -994,10 +999,14 @@ def test_glued_mesh_offset_only():
     offset_lower_to_upper = np.array([0, 0, 1])
     offset_upper_to_lower = np.array([0, 0, -1])
 
-    from meshmode.mesh.processing import glue_mesh_boundaries
-    mesh = glue_mesh_boundaries(orig_mesh,
-        glued_boundary_mappings=[
-            ("-z", "+z", AffineMap(offset=offset_lower_to_upper), 1e-12)
+    map_lower_to_upper = AffineMap(offset=offset_lower_to_upper)
+    map_upper_to_lower = AffineMap(offset=offset_upper_to_lower)
+
+    from meshmode.mesh.processing import (
+        glue_mesh_boundaries, BoundaryPairMapping)
+    mesh = glue_mesh_boundaries(
+        orig_mesh, bdry_pair_mappings_and_tols=[
+            (BoundaryPairMapping("-z", "+z", map_lower_to_upper), 1e-12)
         ])
 
     int_grps = [
@@ -1007,8 +1016,8 @@ def test_glued_mesh_offset_only():
     lower_grp = int_grps[1]
     upper_grp = int_grps[2]
 
-    assert lower_grp.aff_map == AffineMap(offset=offset_lower_to_upper)
-    assert upper_grp.aff_map == AffineMap(offset=offset_upper_to_lower)
+    assert lower_grp.aff_map == map_lower_to_upper
+    assert upper_grp.aff_map == map_upper_to_lower
 
 # }}}
 
