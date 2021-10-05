@@ -1055,9 +1055,9 @@ def _match_boundary_faces(mesh, btag_m, btag_n, aff_map, tol):
 # {{{ boundary gluing
 
 def _complete_glued_boundary_mappings(partial_glued_boundary_mappings):
-    partial_btag_pairs = set(
+    partial_btag_pairs = {
         (btag_m, btag_n)
-        for btag_m, btag_n, _, _ in partial_glued_boundary_mappings)
+        for btag_m, btag_n, _, _ in partial_glued_boundary_mappings}
 
     glued_boundary_mappings = []
     for btag_m, btag_n, aff_map, tol in partial_glued_boundary_mappings:
@@ -1091,14 +1091,14 @@ def glue_mesh_boundaries(mesh, glued_boundary_mappings):
     glued_boundary_mappings = _complete_glued_boundary_mappings(
         glued_boundary_mappings)
 
-    glued_btags = (
-        set(btag_m for btag_m, _, _, _ in glued_boundary_mappings)
-        | set(btag_n for _, btag_n, _, _ in glued_boundary_mappings))
+    glued_btags = {
+        btag
+        for btag_m, btag_n, _, _ in glued_boundary_mappings
+        for btag in (btag_m, btag_n)}
 
-    face_id_pairs_for_mapping = []
-    for btag_m, btag_n, aff_map, tol in glued_boundary_mappings:
-        face_id_pairs_for_mapping.append(_match_boundary_faces(mesh,
-            btag_m, btag_n, aff_map, tol))
+    face_id_pairs_for_mapping = [
+        _match_boundary_faces(mesh, btag_m, btag_n, aff_map, tol)
+        for btag_m, btag_n, aff_map, tol in glued_boundary_mappings]
 
     from meshmode.mesh import InteriorAdjacencyGroup, BoundaryAdjacencyGroup
 
