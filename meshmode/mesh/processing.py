@@ -1076,7 +1076,9 @@ def glue_mesh_boundaries(mesh, glued_boundary_mappings):
     of the mesh. This can be used to construct, e.g., periodic boundaries.
 
     Corresponding boundaries' vertices must map into each other via an affine
-    transformation (though the vertex ordering need not be the same).
+    transformation (though the vertex ordering need not be the same). Currently
+    operates only on facial adjacency; any existing nodal adjacency in *mesh* is
+    ignored/invalidated.
 
     :arg glued_boundary_mappings: a :class:`list` of tuples
         *(btag_m, btag_n, aff_map, tol)* which each specify a mapping between two
@@ -1131,7 +1133,9 @@ def glue_mesh_boundaries(mesh, glued_boundary_mappings):
 
         facial_adjacency_groups.append(fagrp_list)
 
-    return mesh.copy(facial_adjacency_groups=facial_adjacency_groups)
+    return mesh.copy(
+        nodal_adjacency=False,
+        facial_adjacency_groups=facial_adjacency_groups)
 
 # }}}
 
