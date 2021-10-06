@@ -1146,17 +1146,17 @@ def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols):
             or fagrp.boundary_tag not in glued_btags]
 
         for imap, (mapping, _) in enumerate(bdry_pair_mappings_and_tols):
-            mapping_face_id_pairs = face_id_pairs_for_mapping[imap]
-            belongs_to_group = mapping_face_id_pairs[0].groups == igrp
+            face_ids, neighbor_face_ids = face_id_pairs_for_mapping[imap]
+            belongs_to_group = face_ids.groups == igrp
             for ineighbor_grp in range(len(mesh.groups)):
                 indices, = np.where(
                     belongs_to_group
-                    & (mapping_face_id_pairs[1].groups == ineighbor_grp))
+                    & (neighbor_face_ids.groups == ineighbor_grp))
                 if len(indices) > 0:
-                    elements = mapping_face_id_pairs[0].elements[indices]
-                    element_faces = mapping_face_id_pairs[0].faces[indices]
-                    neighbors = mapping_face_id_pairs[1].elements[indices]
-                    neighbor_faces = mapping_face_id_pairs[1].faces[indices]
+                    elements = face_ids.elements[indices]
+                    element_faces = face_ids.faces[indices]
+                    neighbors = neighbor_face_ids.elements[indices]
+                    neighbor_faces = neighbor_face_ids.faces[indices]
                     fagrp_list.append(InteriorAdjacencyGroup(
                         igroup=igrp,
                         ineighbor_group=ineighbor_grp,
