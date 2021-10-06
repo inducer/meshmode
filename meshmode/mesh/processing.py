@@ -1073,18 +1073,16 @@ def _match_boundary_faces(mesh, bdry_pair_mapping, tol):
 
     assert face_index_pairs.shape[1] == nfaces
 
-    order = np.argsort(face_index_pairs[0, :])
-
     from meshmode.mesh import _FaceIDs
     return (
         _FaceIDs(
-            groups=face_ids.groups[face_index_pairs[0, order]],
-            elements=face_ids.elements[face_index_pairs[0, order]],
-            faces=face_ids.faces[face_index_pairs[0, order]]),
+            groups=face_ids.groups[face_index_pairs[0, :]],
+            elements=face_ids.elements[face_index_pairs[0, :]],
+            faces=face_ids.faces[face_index_pairs[0, :]]),
         _FaceIDs(
-            groups=face_ids.groups[face_index_pairs[1, order]],
-            elements=face_ids.elements[face_index_pairs[1, order]],
-            faces=face_ids.faces[face_index_pairs[1, order]]))
+            groups=face_ids.groups[face_index_pairs[1, :]],
+            elements=face_ids.elements[face_index_pairs[1, :]],
+            faces=face_ids.faces[face_index_pairs[1, :]]))
 
 # }}}
 
