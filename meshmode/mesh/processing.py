@@ -968,12 +968,6 @@ class BoundaryPairMapping:
     to_btag: int
     aff_map: AffineMap
 
-    def inverted(self):
-        return BoundaryPairMapping(
-            self.to_btag,
-            self.from_btag,
-            self.aff_map.inverted())
-
 
 def _get_boundary_face_ids(mesh, btag):
     from meshmode.mesh import _FaceIDs
@@ -1109,20 +1103,6 @@ def _match_boundary_faces(mesh, bdry_pair_mapping, tol):
 
 # {{{ boundary gluing
 
-def _complete_boundary_pairs(partial_bdry_pair_mappings_and_tols):
-    partial_btag_pairs = {
-        (mapping.from_btag, mapping.to_btag)
-        for mapping, _ in partial_bdry_pair_mappings_and_tols}
-
-    bdry_pair_mappings_and_tols = []
-    for mapping, tol in partial_bdry_pair_mappings_and_tols:
-        bdry_pair_mappings_and_tols.append((mapping, tol))
-        if (mapping.to_btag, mapping.from_btag) not in partial_btag_pairs:
-            bdry_pair_mappings_and_tols.append((mapping.inverted(), tol))
-
-    return bdry_pair_mappings_and_tols
-
-
 def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols):
     """
     Create a new mesh from *mesh* in which one or more pairs of boundaries are
@@ -1139,15 +1119,27 @@ def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols):
         a mapping between two boundaries in *mesh* that should be glued together,
         and *tol* is the allowed tolerance between the transformed vertex
         coordinates of the first boundary and the vertex coordinates of the second
-        boundary when attempting to match the two.
+        boundary when attempting to match the two. Pass at most one mapping for each
+        unique (order-independent) pair of boundaries.
     """
-    bdry_pair_mappings_and_tols = _complete_boundary_pairs(
-        bdry_pair_mappings_and_tols)
-
     glued_btags = {
         btag
         for mapping, _ in bdry_pair_mappings_and_tols
         for btag in (mapping.from_btag, mapping.to_btag)}
+
+    btag_to_index = {btag: i for i, btag in enumerate(glued_btags)}
+
+    glued_btag_pairs = set()
+    for mapping, _ in bdry_pair_mappings_and_tols:
+        if btag_to_index[mapping.from_btag] < btag_to_index[mapping.to_btag]:
+            btag_pair = (mapping.from_btag, mapping.to_btag)
+        else:
+            btag_pair = (mapping.to_btag, mapping.from_btag)
+        if btag_pair in glued_btag_pairs:
+            raise ValueError(
+                "multiple mappings detected for boundaries "
+                f"{btag_pair[0]} and {btag_pair[1]}.")
+        glued_btag_pairs.add(btag_pair)
 
     face_id_pairs_for_mapping = [
         _match_boundary_faces(mesh, mapping, tol)
@@ -1164,17 +1156,21 @@ def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols):
             or fagrp.boundary_tag not in glued_btags]
 
         for imap, (mapping, _) in enumerate(bdry_pair_mappings_and_tols):
-            face_ids, neighbor_face_ids = face_id_pairs_for_mapping[imap]
-            belongs_to_group = face_ids.groups == igrp
+            bdry_m_face_ids, bdry_n_face_ids = face_id_pairs_for_mapping[imap]
+            bdry_m_belongs_to_group = bdry_m_face_ids.groups == igrp
+            bdry_n_belongs_to_group = bdry_n_face_ids.groups == igrp
             for ineighbor_grp in range(len(mesh.groups)):
-                indices, = np.where(
-                    belongs_to_group
-                    & (neighbor_face_ids.groups == ineighbor_grp))
-                if len(indices) > 0:
-                    elements = face_ids.elements[indices]
-                    element_faces = face_ids.faces[indices]
-                    neighbors = neighbor_face_ids.elements[indices]
-                    neighbor_faces = neighbor_face_ids.faces[indices]
+                bdry_m_indices, = np.where(
+                    bdry_m_belongs_to_group
+                    & (bdry_n_face_ids.groups == ineighbor_grp))
+                bdry_n_indices, = np.where(
+                    bdry_n_belongs_to_group
+                    & (bdry_m_face_ids.groups == ineighbor_grp))
+                if len(bdry_m_indices) > 0:
+                    elements = bdry_m_face_ids.elements[bdry_m_indices]
+                    element_faces = bdry_m_face_ids.faces[bdry_m_indices]
+                    neighbors = bdry_n_face_ids.elements[bdry_m_indices]
+                    neighbor_faces = bdry_n_face_ids.faces[bdry_m_indices]
                     fagrp_list.append(InteriorAdjacencyGroup(
                         igroup=igrp,
                         ineighbor_group=ineighbor_grp,
@@ -1183,6 +1179,19 @@ def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols):
                         neighbors=neighbors,
                         neighbor_faces=neighbor_faces,
                         aff_map=mapping.aff_map))
+                if len(bdry_n_indices) > 0:
+                    elements = bdry_n_face_ids.elements[bdry_n_indices]
+                    element_faces = bdry_n_face_ids.faces[bdry_n_indices]
+                    neighbors = bdry_m_face_ids.elements[bdry_n_indices]
+                    neighbor_faces = bdry_m_face_ids.faces[bdry_n_indices]
+                    fagrp_list.append(InteriorAdjacencyGroup(
+                        igroup=igrp,
+                        ineighbor_group=ineighbor_grp,
+                        elements=elements,
+                        element_faces=element_faces,
+                        neighbors=neighbors,
+                        neighbor_faces=neighbor_faces,
+                        aff_map=mapping.aff_map.inverted()))
 
         facial_adjacency_groups.append(fagrp_list)
 
