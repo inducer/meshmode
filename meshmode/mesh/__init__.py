@@ -23,6 +23,8 @@ THE SOFTWARE.
 import numpy as np
 import numpy.linalg as la
 
+from dataclasses import dataclass
+
 import modepy as mp
 from pytools import Record, memoize_method
 
@@ -1113,6 +1115,7 @@ def _compute_nodal_adjacency_from_vertices(mesh):
 
 # {{{ vertex-based facial adjacency
 
+@dataclass(frozen=True)
 class _FaceIDs:
     """
     Data structure for storage of a list of face identifiers (group, element, face).
@@ -1130,10 +1133,9 @@ class _FaceIDs:
 
         The element-relative index of face.
     """
-    def __init__(self, groups, elements, faces):
-        self.groups = groups
-        self.elements = elements
-        self.faces = faces
+    groups: np.ndarray
+    elements: np.ndarray
+    faces: np.ndarray
 
 
 def _concatenate_face_ids(face_ids_list):
