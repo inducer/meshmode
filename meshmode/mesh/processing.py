@@ -1018,6 +1018,23 @@ def _get_face_vertex_indices(mesh, face_ids):
 
 
 def _match_boundary_faces(mesh, bdry_pair_mapping, tol):
+    """
+    Given a :class:`BoundaryPairMapping` *bdry_pair_mapping*, return the
+    correspondence between faces of the two boundaries (expressed as a pair of
+    :class:`meshmode.mesh._FaceIDs`).
+
+    :arg mesh: The mesh containing the boundaries.
+    :arg bdry_pair_mapping: A :class:`BoundaryPairMapping` specifying the boundaries
+        whose faces are to be matched.
+    :arg tol: The allowed tolerance between the transformed vertex coordinates of
+        the first boundary and the vertex coordinates of the second boundary.
+    :returns: A pair of :class:`meshmode.mesh._FaceIDs`, each having a number of
+        entries equal to the number of faces in the boundary, that represents the
+        correspondence between the two boundaries' faces. The first element in the
+        pair contains faces from boundary *bdry_pair_mapping.from_btag*, and the
+        second contains faces from boundary *bdry_pair_mapping.to_btag*. The order
+        of the faces is unspecified.
+    """
     btag_m = bdry_pair_mapping.from_btag
     btag_n = bdry_pair_mapping.to_btag
 
@@ -1073,6 +1090,9 @@ def _match_boundary_faces(mesh, bdry_pair_mapping, tol):
 
     assert face_index_pairs.shape[1] == nfaces
 
+    # Since the first boundary's faces come before the second boundary's in
+    # face_ids, the first boundary's faces should all be in the first row of the
+    # result of _match_faces_by_vertices
     from meshmode.mesh import _FaceIDs
     return (
         _FaceIDs(
