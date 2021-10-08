@@ -893,7 +893,8 @@ def test_cube_icosphere(actx_factory, order, visualize=True):
 
 # {{{ mesh boundary gluing
 
-def test_glued_mesh():
+@pytest.mark.parametrize("use_tree", [False, True])
+def test_glued_mesh(use_tree):
     n = 4
     center = (1, 2, 3)
 
@@ -907,7 +908,7 @@ def test_glued_mesh():
     mesh = glue_mesh_boundaries(
         orig_mesh, bdry_pair_mappings_and_tols=[
             (BoundaryPairMapping("-theta", "+theta", map_lower_to_upper), 1e-12)
-        ])
+        ], use_tree=use_tree)
 
     int_grps = [
         fagrp for fagrp in mesh.facial_adjacency_groups[0]

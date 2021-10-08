@@ -897,47 +897,66 @@ def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
 
 # {{{ vertex matching
 
-# FIXME: This tree-based approach is probably slow; see if there's a way to do
-# something like this using numpy constructs
 def _match_vertices(
-        mesh, src_vertex_indices, tgt_vertex_indices, aff_map=None, tol=1e-12):
+        mesh, src_vertex_indices, tgt_vertex_indices, *, aff_map=None, tol=1e-12,
+        use_tree=None):
     if aff_map is None:
         aff_map = AffineMap()
+
+    if use_tree is None:
+        # Rough empirical guess for when the tree version becomes faster
+        use_tree = len(tgt_vertex_indices) >= 2**13
 
     src_vertices = mesh.vertices[:, src_vertex_indices]
     tgt_vertices = mesh.vertices[:, tgt_vertex_indices]
 
-    tgt_vertex_bboxes = np.stack((
-        tgt_vertices - tol,
-        tgt_vertices + tol))
-
-    from pytools.spatial_btree import SpatialBinaryTreeBucket
-    tree = SpatialBinaryTreeBucket(
-        np.min(tgt_vertex_bboxes[0], axis=1),
-        np.max(tgt_vertex_bboxes[1], axis=1))
-    for ivertex in range(len(tgt_vertex_indices)):
-        tree.insert(ivertex, tgt_vertex_bboxes[:, :, ivertex])
-
     mapped_src_vertices = aff_map(src_vertices)
 
-    matched_tgt_vertices = np.full(len(src_vertex_indices), -1)
-    for ivertex in range(len(src_vertex_indices)):
-        mapped_src_vertex = mapped_src_vertices[:, ivertex]
-        matches = np.array(list(tree.generate_matches(mapped_src_vertex)))
-        match_bboxes = tgt_vertex_bboxes[:, :, matches]
-        in_bbox = np.all(
-            (mapped_src_vertex[:, np.newaxis] >= match_bboxes[0, :, :])
-            & (mapped_src_vertex[:, np.newaxis] <= match_bboxes[1, :, :]),
-            axis=0)
-        candidate_indices = matches[in_bbox]
-        if len(candidate_indices) == 0:
-            continue
-        displacement = (
-            mapped_src_vertex.reshape(-1, 1)
-            - tgt_vertices[:, candidate_indices])
-        distance_sq = np.sum(displacement**2, axis=0)
-        matched_tgt_vertices[ivertex] = (
-            tgt_vertex_indices[candidate_indices[np.argmin(distance_sq)]])
+    if use_tree:
+        tgt_vertex_bboxes = np.stack((
+            tgt_vertices - tol,
+            tgt_vertices + tol))
+
+        from pytools.spatial_btree import SpatialBinaryTreeBucket
+        tree = SpatialBinaryTreeBucket(
+            np.min(tgt_vertex_bboxes[0], axis=1),
+            np.max(tgt_vertex_bboxes[1], axis=1))
+        for ivertex in range(len(tgt_vertex_indices)):
+            tree.insert(ivertex, tgt_vertex_bboxes[:, :, ivertex])
+
+        matched_tgt_vertices = np.full(len(src_vertex_indices), -1)
+        for ivertex in range(len(src_vertex_indices)):
+            mapped_src_vertex = mapped_src_vertices[:, ivertex]
+            matches = np.array(list(tree.generate_matches(mapped_src_vertex)))
+            match_bboxes = tgt_vertex_bboxes[:, :, matches]
+            in_bbox = np.all(
+                (mapped_src_vertex[:, np.newaxis] >= match_bboxes[0, :, :])
+                & (mapped_src_vertex[:, np.newaxis] <= match_bboxes[1, :, :]),
+                axis=0)
+            candidate_indices = matches[in_bbox]
+            if len(candidate_indices) == 0:
+                continue
+            displacements = (
+                mapped_src_vertex.reshape(-1, 1)
+                - tgt_vertices[:, candidate_indices])
+            distances_sq = np.sum(displacements**2, axis=0)
+            matched_tgt_vertices[ivertex] = (
+                tgt_vertex_indices[candidate_indices[np.argmin(distances_sq)]])
+
+    else:
+        displacements = (
+            mapped_src_vertices.reshape(mesh.dim, -1, 1)
+            - tgt_vertices.reshape(mesh.dim, 1, -1))
+        distances_sq = np.sum(displacements**2, axis=0)
+
+        vertex_indices, = np.indices((len(src_vertex_indices),))
+        min_distance_sq_indices = np.argmin(distances_sq, axis=1)
+        min_distances_sq = distances_sq[vertex_indices, min_distance_sq_indices]
+
+        matched_tgt_vertices = np.where(
+            min_distances_sq < tol**2,
+            tgt_vertex_indices[min_distance_sq_indices],
+            -1)
 
     return matched_tgt_vertices
 
@@ -1011,7 +1030,7 @@ def _get_face_vertex_indices(mesh, face_ids):
     return np.stack(face_vertex_indices_per_group)
 
 
-def _match_boundary_faces(mesh, bdry_pair_mapping, tol):
+def _match_boundary_faces(mesh, bdry_pair_mapping, tol, *, use_tree=None):
     """
     Given a :class:`BoundaryPairMapping` *bdry_pair_mapping*, return the
     correspondence between faces of the two boundaries (expressed as a pair of
@@ -1022,6 +1041,8 @@ def _match_boundary_faces(mesh, bdry_pair_mapping, tol):
         whose faces are to be matched.
     :arg tol: The allowed tolerance between the transformed vertex coordinates of
         the first boundary and the vertex coordinates of the second boundary.
+    :arg use_tree: Optional argument indicating whether to use a spatial binary
+        search tree or a (quadratic) numpy algorithm when matching vertices.
     :returns: A pair of :class:`meshmode.mesh._FaceIDs`, each having a number of
         entries equal to the number of faces in the boundary, that represents the
         correspondence between the two boundaries' faces. The first element in the
@@ -1054,7 +1075,7 @@ def _match_boundary_faces(mesh, bdry_pair_mapping, tol):
 
     matched_bdry_n_vertex_indices = _match_vertices(
         mesh, bdry_m_vertex_indices, bdry_n_vertex_indices,
-        aff_map=bdry_pair_mapping.aff_map, tol=tol)
+        aff_map=bdry_pair_mapping.aff_map, tol=tol, use_tree=use_tree)
 
     unmatched_bdry_m_vertex_indices = bdry_m_vertex_indices[
         np.where(matched_bdry_n_vertex_indices < 0)[0]]
@@ -1103,7 +1124,7 @@ def _match_boundary_faces(mesh, bdry_pair_mapping, tol):
 
 # {{{ boundary gluing
 
-def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols):
+def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols, *, use_tree=None):
     """
     Create a new mesh from *mesh* in which one or more pairs of boundaries are
     "glued" together such that the boundary surfaces become part of the interior
@@ -1121,6 +1142,8 @@ def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols):
         coordinates of the first boundary and the vertex coordinates of the second
         boundary when attempting to match the two. Pass at most one mapping for each
         unique (order-independent) pair of boundaries.
+    :arg use_tree: Optional argument indicating whether to use a spatial binary
+        search tree or a (quadratic) numpy algorithm when matching vertices.
     """
     glued_btags = {
         btag
@@ -1142,7 +1165,7 @@ def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols):
         glued_btag_pairs.add(btag_pair)
 
     face_id_pairs_for_mapping = [
-        _match_boundary_faces(mesh, mapping, tol)
+        _match_boundary_faces(mesh, mapping, tol, use_tree=use_tree)
         for mapping, tol in bdry_pair_mappings_and_tols]
 
     from meshmode.mesh import InteriorAdjacencyGroup, BoundaryAdjacencyGroup
