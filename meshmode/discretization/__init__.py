@@ -629,7 +629,7 @@ class Discretization:
                     prog,
                     resampling_mat=actx.from_numpy(grp.from_mesh_interp_matrix()),
                     nodes=nodes,
-                    )[1]["result"]
+                    )["result"]
             return result
             
 
@@ -712,7 +712,7 @@ def num_reference_derivative(
         fp_format = vec[grp.index].dtype
         output = actx.call_loopy(prg(nelements, nunit_dofs, fp_format), 
                 diff_mat=get_mat(grp, ref_axes), vec=vec[grp.index])
-        results.append(output[1]["result"])
+        results.append(output["result"])
 
     return _DOFArray(actx, tuple(results))
 
