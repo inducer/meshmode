@@ -46,6 +46,7 @@ __doc__ = """
 
 .. autofunction:: as_python
 .. autofunction:: is_true_boundary
+.. autofunction:: mesh_has_boundary
 .. autofunction:: check_bc_coverage
 .. autofunction:: is_boundary_tag_empty
 
@@ -1541,6 +1542,21 @@ def is_true_boundary(boundary_tag):
 # }}}
 
 
+# {{{ mesh_has_boundary
+
+def mesh_has_boundary(mesh, boundary_tag):
+    for fagrp_list in mesh.facial_adjacency_groups:
+        matching_bdry_grps = [
+            fagrp for fagrp in fagrp_list
+            if isinstance(fagrp, BoundaryAdjacencyGroup)
+            and fagrp.boundary_tag == boundary_tag]
+        if len(matching_bdry_grps) > 0:
+            return True
+    return False
+
+# }}}
+
+
 # {{{ check_bc_coverage
 
 def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
@@ -1558,6 +1574,11 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
     :arg true_boundary_only: only verify for faces whose tags do not
         inherit from `BTAG_NO_BOUNDARY`.
     """
+
+    for boundary_tag in boundary_tags:
+        if not mesh_has_boundary(mesh, boundary_tag):
+            raise ValueError(f"invalid boundary tag {boundary_tag}.")
+
     for igrp, grp in enumerate(mesh.groups):
         fagrp_list = mesh.facial_adjacency_groups[igrp]
         if true_boundary_only:
@@ -1607,6 +1628,9 @@ def is_boundary_tag_empty(mesh, boundary_tag):
     """Return *True* if the corresponding boundary tag does not occur as part of
     *mesh*.
     """
+    if not mesh_has_boundary(mesh, boundary_tag):
+        raise ValueError(f"invalid boundary tag {boundary_tag}.")
+
     for igrp in range(len(mesh.groups)):
         nfaces = sum([
             len(grp.elements) for grp in mesh.facial_adjacency_groups[igrp]
