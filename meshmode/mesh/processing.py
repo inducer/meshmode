@@ -411,17 +411,19 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, part_mesh_groups,
 
             if len(adj_indices) > 0:
                 part_elem_base = part_mesh_group_elem_base[i_part_grp]
-
                 elements = global_elem_to_part_elem[bdry_grp.elements[adj_indices]
                             + elem_base] - part_elem_base
                 element_faces = bdry_grp.element_faces[adj_indices]
+            else:
+                elements = np.empty(0, dtype=mesh.element_id_dtype)
+                element_faces = np.empty(0, dtype=mesh.face_id_dtype)
 
-                bdry_adj_groups[i_part_grp].append(
-                    BoundaryAdjacencyGroup(
-                        igroup=i_part_grp,
-                        boundary_tag=bdry_grp.boundary_tag,
-                        elements=elements,
-                        element_faces=element_faces))
+            bdry_adj_groups[i_part_grp].append(
+                BoundaryAdjacencyGroup(
+                    igroup=i_part_grp,
+                    boundary_tag=bdry_grp.boundary_tag,
+                    elements=elements,
+                    element_faces=element_faces))
 
     return bdry_adj_groups
 
