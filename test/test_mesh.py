@@ -684,8 +684,10 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
     if group_cls is TensorProductElementGroup and mesh_type is not None:
         pytest.skip("mesh type not supported on tensor product elements")
 
-    from meshmode.mesh import is_boundary_tag_empty
-    from meshmode.mesh import check_bc_coverage
+    from meshmode.mesh import (
+        mesh_has_boundary,
+        check_bc_coverage,
+        is_boundary_tag_empty)
 
     if dim == 1:
         a = (0,)
@@ -726,6 +728,11 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
         num_on_bdy = dim * (dim-1) * nelem**(dim-1)
     else:
         raise AssertionError()
+
+    assert mesh_has_boundary(mesh, "btag_test_1")
+    assert mesh_has_boundary(mesh, "btag_test_2")
+    # Make sure mesh_has_boundary is working
+    assert not mesh_has_boundary(mesh, "btag_test_3")
 
     assert not is_boundary_tag_empty(mesh, "btag_test_1")
     assert not is_boundary_tag_empty(mesh, "btag_test_2")
