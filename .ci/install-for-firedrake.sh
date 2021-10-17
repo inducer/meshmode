@@ -1,4 +1,6 @@
 sudo chown -R $(whoami) /github/home || true
+sudo chown -R $(whoami) /__w || true
+
 sudo apt update
 sudo apt upgrade -y
 sudo apt install time
