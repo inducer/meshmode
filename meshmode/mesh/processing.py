@@ -904,8 +904,11 @@ def _match_vertices(
         aff_map = AffineMap()
 
     if use_tree is None:
-        # Rough empirical guess for when the tree version becomes faster
-        use_tree = len(tgt_vertex_indices) >= 2**13
+        # Empirically, the tree version becomes faster at 2**13.
+        # The temporary (displacements) below at that size requires
+        # 1.6GB, which seems like a lot. Capping at 2**11 instead,
+        # which requires a more reasonable 100M.
+        use_tree = len(tgt_vertex_indices) >= 2**11
 
     src_vertices = mesh.vertices[:, src_vertex_indices]
     tgt_vertices = mesh.vertices[:, tgt_vertex_indices]
