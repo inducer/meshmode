@@ -70,6 +70,7 @@ Volumes
 .. autofunction:: generate_box_mesh
 .. autofunction:: generate_regular_rect_mesh
 .. autofunction:: generate_warped_rect_mesh
+.. autofunction:: generate_annular_cylinder_slice_mesh
 
 Tools for Iterative Refinement
 ------------------------------
@@ -880,14 +881,17 @@ def generate_urchin(
 # {{{ generate_box_mesh
 
 @deprecate_keyword("group_factory", "group_cls")
-def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
-        group_cls=None, boundary_tag_to_face=None,
+def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
+        periodic=None, group_cls=None, boundary_tag_to_face=None,
         mesh_type=None, unit_nodes=None):
     r"""Create a semi-structured mesh.
 
     :arg axis_coords: a tuple with a number of entries corresponding
         to the number of dimensions, with each entry a numpy array
         specifying the coordinates to be used along that axis.
+    :arg periodic: an optional tuple of :class:`bool` indicating whether
+        the mesh is periodic along each axis. Acts as a shortcut for calling
+        :func:`meshmode.mesh.processing.glue_mesh_boundaries`.
     :arg group_cls: One of :class:`meshmode.mesh.SimplexElementGroup`
         or :class:`meshmode.mesh.TensorProductElementGroup`.
     :arg boundary_tag_to_face: an optional dictionary for tagging boundaries.
@@ -945,6 +949,9 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
                     % (iaxis+1))
 
     dim = len(axis_coords)
+
+    if periodic is None:
+        periodic = (False,)*dim
 
     shape = tuple(len(axc) for axc in axis_coords)
 
@@ -1078,12 +1085,20 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
             vertices.reshape(dim, -1), el_vertices, order,
             group_cls=group_cls, unit_nodes=unit_nodes)
 
+    axes = ["x", "y", "z", "w"]
+
+    for idim in range(dim):
+        if periodic[idim]:
+            lower_face = "-" + axes[idim]
+            upper_face = "+" + axes[idim]
+            boundary_tag_to_face["periodic_" + lower_face] = [lower_face]
+            boundary_tag_to_face["periodic_" + upper_face] = [upper_face]
+
     # {{{ compute facial adjacency for mesh if there is tag information
 
     facial_adjacency_groups = None
     face_vertex_indices_to_tags = {}
     boundary_tags = list(boundary_tag_to_face.keys())
-    axes = ["x", "y", "z", "w"]
 
     if boundary_tags:
         vert_index_to_tuple = {
@@ -1140,9 +1155,32 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
     # }}}
 
     from meshmode.mesh import Mesh
-    return Mesh(vertices, [grp],
+    mesh = Mesh(vertices, [grp],
             facial_adjacency_groups=facial_adjacency_groups,
             is_conforming=True)
+
+    if any(periodic):
+        from meshmode.mesh.processing import (
+            glue_mesh_boundaries, BoundaryPairMapping)
+
+        from meshmode import AffineMap
+        bdry_pair_mappings_and_tols = []
+        for idim in range(dim):
+            if periodic[idim]:
+                offset = np.zeros(dim, dtype=np.float64)
+                offset[idim] = axis_coords[idim][-1] - axis_coords[idim][0]
+                bdry_pair_mappings_and_tols.append((
+                    BoundaryPairMapping(
+                        "periodic_-" + axes[idim],
+                        "periodic_+" + axes[idim],
+                        AffineMap(offset=offset)),
+                    1e-12*offset[idim]))
+
+        periodic_mesh = glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols)
+
+        return periodic_mesh
+    else:
+        return mesh
 
 # }}}
 
@@ -1152,6 +1190,7 @@ def generate_box_mesh(axis_coords, order=1, coord_dtype=np.float64,
 @deprecate_keyword("group_factory", "group_cls")
 def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
                                npoints_per_axis=None,
+                               periodic=None,
                                order=1,
                                boundary_tag_to_face=None,
                                group_cls=None,
@@ -1166,6 +1205,9 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
         number of elements along each axis.
     :arg npoints_per_axis: an optional tuple of integers indicating the
         number of points along each axis.
+    :arg periodic: an optional tuple of :class:`bool` indicating whether
+        the mesh is periodic along each axis. Acts as a shortcut for calling
+        :func:`meshmode.mesh.processing.glue_mesh_boundaries`.
     :arg order: the mesh element order.
     :arg boundary_tag_to_face: an optional dictionary for tagging boundaries.
         See :func:`generate_box_mesh`.
@@ -1205,6 +1247,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
             for a_i, b_i, npoints_i in zip(a, b, npoints_per_axis)]
 
     return generate_box_mesh(axis_coords, order=order,
+                             periodic=periodic,
                              boundary_tag_to_face=boundary_tag_to_face,
                              group_cls=group_cls,
                              mesh_type=mesh_type)
@@ -1263,6 +1306,60 @@ def generate_warped_rect_mesh(dim, order, *, nelements_side=None,
 
     from meshmode.mesh.processing import map_mesh
     return map_mesh(mesh, m)
+
+# }}}
+
+
+# {{{ generate_annular_cylinder_slice_mesh
+
+def generate_annular_cylinder_slice_mesh(
+        n, center, inner_radius, outer_radius, periodic=False):
+    r"""
+    Generate a slice of a 3D annular cylinder for
+    :math:`\theta \in [-\frac{\pi}{4}, \frac{\pi}{4}]`. Optionally periodic in
+    $\theta$.
+    """
+    unit_mesh = generate_regular_rect_mesh(
+        a=(0,)*3,
+        b=(1,)*3,
+        nelements_per_axis=(n,)*3,
+        boundary_tag_to_face={
+            "-r": ["-x"],
+            "+r": ["+x"],
+            "-theta": ["-y"],
+            "+theta": ["+y"],
+            "-z": ["-z"],
+            "+z": ["+z"],
+            })
+
+    def transform(x):
+        r = inner_radius*(1 - x[0]) + outer_radius*x[0]
+        theta = -np.pi/4*(1 - x[1]) + np.pi/4*x[1]
+        z = -0.5*(1 - x[2]) + 0.5*x[2]
+        return (
+            center[0] + r*np.cos(theta),
+            center[1] + r*np.sin(theta),
+            center[2] + z)
+
+    from meshmode.mesh.processing import map_mesh
+    mesh = map_mesh(unit_mesh, lambda x: np.stack(transform(x)))
+
+    if periodic:
+        from meshmode.mesh.processing import _get_rotation_matrix_from_angle_and_axis
+        matrix = _get_rotation_matrix_from_angle_and_axis(
+            np.pi/2, np.array([0, 0, 1]))
+        from meshmode.mesh.tools import AffineMap
+        aff_map = AffineMap(matrix, center - matrix @ center)
+
+        from meshmode.mesh.processing import (
+            glue_mesh_boundaries, BoundaryPairMapping)
+        periodic_mesh = glue_mesh_boundaries(
+            mesh, bdry_pair_mappings_and_tols=[
+                (BoundaryPairMapping("-theta", "+theta", aff_map), 1e-12)])
+
+        return periodic_mesh
+    else:
+        return mesh
 
 # }}}
 

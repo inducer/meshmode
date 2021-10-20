@@ -1160,7 +1160,9 @@ def _match_faces_by_vertices(groups, face_ids, vertex_index_map_func=None):
         indices. Must accept multidimensional arrays as input and return an array
         of the same shape.
     :returns: A :class:`numpy.ndarray` of shape ``(2, nmatches)`` of indices into
-        *face_ids*.
+        *face_ids*. The ordering of the matches returned is unspecified. For a given
+        match, however, the first index will correspond to the face that occurs first
+        in *face_ids*.
     """
     if vertex_index_map_func is None:
         def vertex_index_map_func(vertices):

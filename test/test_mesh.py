@@ -35,16 +35,35 @@ from meshmode.mesh import (
     Mesh,
     SimplexElementGroup,
     TensorProductElementGroup,
+    InteriorAdjacencyGroup,
     BoundaryAdjacencyGroup)
 from meshmode.discretization.poly_element import (
         default_simplex_group_factory,
         LegendreGaussLobattoTensorProductGroupFactory,
         )
 import meshmode.mesh.generation as mgen
+from meshmode.mesh.tools import AffineMap
 
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+def _get_rotation(amount, axis, center=None):
+    """
+    Return a matrix (if *center* is ``None``) or
+    :class:`~meshmode.mesh.tools.AffineMap` (if *center* is not ``None``)
+    corresponding to a rotation by *amount* (in radians) through a vector *axis*
+    centered at *center*. *center* defaults to the origin if not specified.
+    """
+    from meshmode.mesh.processing import _get_rotation_matrix_from_angle_and_axis
+    matrix = _get_rotation_matrix_from_angle_and_axis(amount, axis)
+    if center is None:
+        return matrix
+    else:
+        # x0 + matrix @ (x - x0) = matrix @ x + (I - matrix) @ x0
+        offset = (np.eye(3) - matrix) @ center
+        return AffineMap(matrix, offset)
 
 
 # {{{ test_nonequal_rect_mesh_generation
@@ -170,7 +189,6 @@ def test_mesh_as_python():
 # {{{ test_affine_map
 
 def test_affine_map():
-    from meshmode.mesh.tools import AffineMap
     for d in range(1, 5):
         for _ in range(100):
             a = np.random.randn(d, d)+10*np.eye(d)
@@ -203,6 +221,101 @@ def test_partial_affine_map(dim=2):
 
     mesh = affine_map(orig_mesh, A=np.pi * np.eye(dim))
     assert la.norm(orig_mesh.vertices - mesh.vertices / np.pi) < 1.0e-14
+
+
+def test_affine_map_with_facial_adjacency_maps(visualize=False):
+    orig_mesh = mgen.generate_annular_cylinder_slice_mesh(
+        4, (1, 2, 0), 0.5, 1, periodic=True)
+
+    if visualize:
+        from meshmode.mesh.visualization import write_vertex_vtk_file
+        write_vertex_vtk_file(orig_mesh, "affine_map_facial_adj_original.vtu")
+
+    from meshmode.mesh.processing import affine_map
+
+    tol = 1e-12
+
+    def almost_equal(map1, map2):
+        def component_almost_equal(array1, array2):
+            if isinstance(array1, np.ndarray) and isinstance(array2, np.ndarray):
+                return la.norm(array1 - array2) < tol
+            else:
+                return array1 == array2
+
+        return (
+            component_almost_equal(map1.matrix, map2.matrix)
+            and component_almost_equal(map1.offset, map2.offset))
+
+    # Matrix only
+    mesh = affine_map(orig_mesh, A=_get_rotation(np.pi/2, axis=np.array([0, 0, 1])))
+
+    if visualize:
+        write_vertex_vtk_file(mesh, "affine_map_facial_adj_matrix.vtu")
+
+    int_grps = [
+        fagrp for fagrp in mesh.facial_adjacency_groups[0]
+        if isinstance(fagrp, InteriorAdjacencyGroup)]
+    assert len(int_grps) == 3
+
+    lower_grp = int_grps[1]
+    upper_grp = int_grps[2]
+
+    assert almost_equal(
+        lower_grp.aff_map,
+        _get_rotation(
+            np.pi/2, axis=np.array([0, 0, 1]), center=np.array([-2, 1, 0])))
+    assert almost_equal(
+        upper_grp.aff_map,
+        _get_rotation(
+            -np.pi/2, axis=np.array([0, 0, 1]), center=np.array([-2, 1, 0])))
+
+    # Offset only
+    mesh = affine_map(orig_mesh, b=np.array([0, -2, 0]))
+
+    if visualize:
+        write_vertex_vtk_file(mesh, "affine_map_facial_adj_offset.vtu")
+
+    int_grps = [
+        fagrp for fagrp in mesh.facial_adjacency_groups[0]
+        if isinstance(fagrp, InteriorAdjacencyGroup)]
+    assert len(int_grps) == 3
+
+    lower_grp = int_grps[1]
+    upper_grp = int_grps[2]
+
+    assert almost_equal(
+        lower_grp.aff_map,
+        _get_rotation(
+            np.pi/2, axis=np.array([0, 0, 1]), center=np.array([1, 0, 0])))
+    assert almost_equal(
+        upper_grp.aff_map,
+        _get_rotation(
+            -np.pi/2, axis=np.array([0, 0, 1]), center=np.array([1, 0, 0])))
+
+    # Matrix and offset
+    aff_map = _get_rotation(
+        np.pi/2, axis=np.array([0, 0, 1]), center=np.array([1, 1, 0]))
+    mesh = affine_map(orig_mesh, A=aff_map.matrix, b=aff_map.offset)
+
+    if visualize:
+        write_vertex_vtk_file(mesh, "affine_map_facial_adj_matrix_and_offset.vtu")
+
+    int_grps = [
+        fagrp for fagrp in mesh.facial_adjacency_groups[0]
+        if isinstance(fagrp, InteriorAdjacencyGroup)]
+    assert len(int_grps) == 3
+
+    lower_grp = int_grps[1]
+    upper_grp = int_grps[2]
+
+    assert almost_equal(
+        lower_grp.aff_map,
+        _get_rotation(
+            np.pi/2, axis=np.array([0, 0, 1]), center=np.array([0, 1, 0])))
+    assert almost_equal(
+        upper_grp.aff_map,
+        _get_rotation(
+            -np.pi/2, axis=np.array([0, 0, 1]), center=np.array([0, 1, 0])))
 
 
 @pytest.mark.parametrize("ambient_dim", [2, 3])
@@ -781,6 +894,138 @@ def test_cube_icosphere(actx_factory, order, visualize=True):
     vtk_visualize_mesh(actx, mesh,
             f"quad_icosphere_order_{order:03d}.vtu",
             vtk_high_order=False, overwrite=True)
+
+# }}}
+
+
+# {{{ mesh boundary gluing
+
+@pytest.mark.parametrize("use_tree", [False, True])
+def test_glued_mesh(use_tree):
+    n = 4
+    center = (1, 2, 3)
+
+    orig_mesh = mgen.generate_annular_cylinder_slice_mesh(n, center, 0.5, 1)
+
+    map_lower_to_upper = _get_rotation(np.pi/2, np.array([0, 0, 1]), center)
+    map_upper_to_lower = _get_rotation(-np.pi/2, np.array([0, 0, 1]), center)
+
+    from meshmode.mesh.processing import (
+        glue_mesh_boundaries, BoundaryPairMapping)
+    mesh = glue_mesh_boundaries(
+        orig_mesh, bdry_pair_mappings_and_tols=[
+            (BoundaryPairMapping("-theta", "+theta", map_lower_to_upper), 1e-12)
+        ], use_tree=use_tree)
+
+    int_grps = [
+        fagrp for fagrp in mesh.facial_adjacency_groups[0]
+        if isinstance(fagrp, InteriorAdjacencyGroup)]
+    assert len(int_grps) == 3
+
+    bdry_grps = [
+        fagrp for fagrp in mesh.facial_adjacency_groups[0]
+        if isinstance(fagrp, BoundaryAdjacencyGroup)]
+    assert len(bdry_grps) == (
+        4  # +/-r and +/-z
+        + 3  # BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL
+        )
+
+    lower_grp = int_grps[1]
+    upper_grp = int_grps[2]
+
+    from pytools import single_valued
+
+    n_lower_faces = single_valued((
+        len(lower_grp.elements),
+        len(lower_grp.element_faces),
+        len(lower_grp.neighbors),
+        len(lower_grp.neighbor_faces)))
+    assert n_lower_faces == 2*n**2
+    assert lower_grp.aff_map == map_lower_to_upper
+
+    n_upper_faces = single_valued((
+        len(upper_grp.elements),
+        len(upper_grp.element_faces),
+        len(upper_grp.neighbors),
+        len(upper_grp.neighbor_faces)))
+    assert n_upper_faces == 2*n**2
+    assert upper_grp.aff_map == map_upper_to_lower
+
+    lower_face_indices = np.full(
+        (orig_mesh.groups[0].nfaces, orig_mesh.groups[0].nelements), -1)
+    upper_face_indices = np.full(
+        (orig_mesh.groups[0].nfaces, orig_mesh.groups[0].nelements), -1)
+
+    lower_face_indices[lower_grp.element_faces, lower_grp.elements] = (
+        np.indices((n_lower_faces,)))
+    upper_face_indices[upper_grp.element_faces, upper_grp.elements] = (
+        np.indices((n_upper_faces,)))
+
+    indices = upper_face_indices[lower_grp.neighbor_faces, lower_grp.neighbors]
+    assert np.all(indices >= 0)
+    assert np.all(upper_grp.neighbors[indices] == lower_grp.elements)
+    assert np.all(upper_grp.neighbor_faces[indices] == lower_grp.element_faces)
+
+    indices = lower_face_indices[upper_grp.neighbor_faces, upper_grp.neighbors]
+    assert np.all(indices >= 0)
+    assert np.all(lower_grp.neighbors[indices] == upper_grp.elements)
+    assert np.all(lower_grp.neighbor_faces[indices] == upper_grp.element_faces)
+
+
+def test_glued_mesh_matrix_only():
+    n = 4
+    orig_mesh = mgen.generate_annular_cylinder_slice_mesh(n, (0, 0, 0), 0.5, 1)
+
+    matrix_lower_to_upper = _get_rotation(np.pi/2, np.array([0, 0, 1]))
+    matrix_upper_to_lower = _get_rotation(-np.pi/2, np.array([0, 0, 1]))
+
+    map_lower_to_upper = AffineMap(matrix=matrix_lower_to_upper)
+    map_upper_to_lower = AffineMap(matrix=matrix_upper_to_lower)
+
+    from meshmode.mesh.processing import (
+        glue_mesh_boundaries, BoundaryPairMapping)
+    mesh = glue_mesh_boundaries(
+        orig_mesh, bdry_pair_mappings_and_tols=[
+            (BoundaryPairMapping("-theta", "+theta", map_lower_to_upper), 1e-12)
+        ])
+
+    int_grps = [
+        fagrp for fagrp in mesh.facial_adjacency_groups[0]
+        if isinstance(fagrp, InteriorAdjacencyGroup)]
+
+    lower_grp = int_grps[1]
+    upper_grp = int_grps[2]
+
+    assert lower_grp.aff_map == map_lower_to_upper
+    assert upper_grp.aff_map == map_upper_to_lower
+
+
+def test_glued_mesh_offset_only():
+    n = 4
+    orig_mesh = mgen.generate_annular_cylinder_slice_mesh(n, (0, 0, 0), 0.5, 1)
+
+    offset_lower_to_upper = np.array([0, 0, 1])
+    offset_upper_to_lower = np.array([0, 0, -1])
+
+    map_lower_to_upper = AffineMap(offset=offset_lower_to_upper)
+    map_upper_to_lower = AffineMap(offset=offset_upper_to_lower)
+
+    from meshmode.mesh.processing import (
+        glue_mesh_boundaries, BoundaryPairMapping)
+    mesh = glue_mesh_boundaries(
+        orig_mesh, bdry_pair_mappings_and_tols=[
+            (BoundaryPairMapping("-z", "+z", map_lower_to_upper), 1e-12)
+        ])
+
+    int_grps = [
+        fagrp for fagrp in mesh.facial_adjacency_groups[0]
+        if isinstance(fagrp, InteriorAdjacencyGroup)]
+
+    lower_grp = int_grps[1]
+    upper_grp = int_grps[2]
+
+    assert lower_grp.aff_map == map_lower_to_upper
+    assert upper_grp.aff_map == map_upper_to_lower
 
 # }}}
 
