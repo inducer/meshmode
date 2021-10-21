@@ -26,9 +26,9 @@ THE SOFTWARE.
 import numpy as np
 import pyopencl as cl
 
-from meshmode.dof_array import flatten, unflatten, flat_norm
+from meshmode.dof_array import flat_norm
 
-from arraycontext import thaw
+from arraycontext import thaw, flatten, unflatten
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from arraycontext import pytest_generate_tests_for_array_contexts
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
@@ -488,9 +488,10 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
         remote_f = conn(true_local_f)
 
         # 2.
-        send_reqs.append(mpi_comm.isend(actx.to_numpy(flatten(remote_f)),
-                                        dest=i_remote_part,
-                                        tag=TAG_SEND_REMOTE_NODES))
+        send_reqs.append(mpi_comm.isend(
+            actx.to_numpy(flatten(remote_f, actx)),
+            dest=i_remote_part,
+            tag=TAG_SEND_REMOTE_NODES))
 
     # 3.
     buffers = {}
@@ -518,9 +519,12 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
     send_reqs = []
     for i_remote_part in connected_parts:
         conn = remote_to_local_bdry_conns[i_remote_part]
-        local_f = unflatten(actx, conn.from_discr,
-                actx.from_numpy(remote_to_local_f_data[i_remote_part]))
-        remote_f = actx.to_numpy(flatten(conn(local_f)))
+
+        local_f = unflatten(
+                thaw(conn.from_discr.nodes()[0], actx),
+                actx.from_numpy(remote_to_local_f_data[i_remote_part]),
+                actx)
+        remote_f = actx.to_numpy(flatten(conn(local_f), actx))
 
         # 5.
         send_reqs.append(mpi_comm.isend(remote_f,
@@ -554,7 +558,7 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
         bdry_discr = local_bdry_conns[i_remote_part].to_discr
         bdry_x = thaw(bdry_discr.nodes()[0], actx)
 
-        true_local_f = actx.to_numpy(flatten(f(bdry_x)))
+        true_local_f = actx.to_numpy(flatten(f(bdry_x), actx))
         local_f = local_f_data[i_remote_part]
 
         from numpy.linalg import norm
