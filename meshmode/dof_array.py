@@ -22,6 +22,7 @@ THE SOFTWARE.
 
 import threading
 import operator as op
+from warnings import warn
 from numbers import Number
 from contextlib import contextmanager
 from functools import partial, update_wrapper
@@ -395,7 +396,7 @@ def multimapped_over_dof_arrays(f):
 # }}}
 
 
-# {{{ flatten / unflatten
+# {{{ flatten / unflatten       /!\ deprecated
 
 def _flatten_dof_array(ary: Any, strict: bool = True):
     if not isinstance(ary, DOFArray):
@@ -472,6 +473,9 @@ def flatten(ary: ArrayOrContainerT, *, strict: bool = True) -> ArrayOrContainerT
         in the container *ary*. If *False*, any non-:class:`DOFArray` are
         left as is.
     """
+    warn("meshmode.dof_array.flatten is deprecated and should be replaced "
+            "by using arraycontext.flatten. It will be removed in 2022.",
+            DeprecationWarning, stacklevel=2)
 
     def _flatten(subary):
         return _flatten_dof_array(subary, strict=strict)
@@ -552,6 +556,10 @@ def unflatten(
         in the container *ary*. If *False*, any non-:class:`DOFArray` are
         left as is.
     """
+    warn("meshmode.dof_array.unflatten is deprecated and should be replaced "
+            "by using arraycontext.unflatten. It will be removed in 2022.",
+            DeprecationWarning, stacklevel=2)
+
     group_shapes, group_starts = _unflatten_group_sizes(
             discr, ndofs_per_element_per_group)
 
@@ -587,6 +595,10 @@ def unflatten_like(
         in the container *ary*. If *False*, any non-:class:`DOFArray` are
         left as is.
     """
+    warn("meshmode.dof_array.unflatten_like is deprecated and should be replaced "
+            "by using arraycontext.unflatten. It will be removed in 2022.",
+            DeprecationWarning, stacklevel=2)
+
     from arraycontext import is_array_container
 
     def _same_key(key1, key2):
@@ -628,6 +640,11 @@ def flatten_to_numpy(actx: ArrayContext, ary: ArrayOrContainerT, *,
     r"""Converts all :class:`DOFArray`\ s into "flat" :class:`numpy.ndarray`\ s
     using :func:`flatten` and :meth:`arraycontext.ArrayContext.to_numpy`.
     """
+    warn("meshmode.dof_array.flatten_to_numpy is deprecated and should be "
+            "replaced by using arraycontext.flatten and ArrayContext.to_numpy. "
+            "It will be removed in 2022.",
+            DeprecationWarning, stacklevel=2)
+
     def _flatten_to_numpy(subary):
         if isinstance(subary, DOFArray) and subary.array_context is None:
             subary = _thaw(subary, actx)
@@ -646,6 +663,11 @@ def unflatten_from_numpy(
     reconstructs the corresponding :class:`DOFArray`\ s using :func:`unflatten`
     and :meth:`arraycontext.ArrayContext.from_numpy`.
     """
+    warn("meshmode.dof_array.unflatten_from_numpy is deprecated and should be "
+            "replaced by using arraycontext.unflatten and ArrayContext.from_numpy. "
+            "It will be removed in 2022.",
+            DeprecationWarning, stacklevel=2)
+
     group_shapes, group_starts = _unflatten_group_sizes(
             discr, ndofs_per_element_per_group)
 
@@ -815,7 +837,6 @@ obj_or_dof_array_vectorized_n_args = MovedFunctionDeprecationWrapper(
 
 
 def thaw(actx, ary):
-    from warnings import warn
     warn("meshmode.dof_array.thaw is deprecated. Use arraycontext.thaw instead. "
             "WARNING: The argument order is reversed between these two functions. "
             "meshmode.dof_array.thaw will continue to work until 2022.",
