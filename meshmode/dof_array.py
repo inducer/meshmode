@@ -37,7 +37,8 @@ from pytools import single_valued, memoize_in
 from meshmode.transform_metadata import (
             ConcurrentElementInameTag, ConcurrentDOFInameTag)
 from arraycontext import (
-        ArrayContext, make_loopy_program, with_container_arithmetic,
+        ArrayContext, ArrayContainerTypeError,
+        make_loopy_program, with_container_arithmetic,
         serialize_container, deserialize_container,
         thaw as _thaw, freeze as _freeze,
         rec_map_array_container, rec_multimap_array_container,
@@ -594,8 +595,6 @@ def unflatten_like(
             "by using arraycontext.unflatten. It will be removed in 2022.",
             DeprecationWarning, stacklevel=2)
 
-    from arraycontext import is_array_container
-
     def _same_key(key1, key2):
         assert key1 == key2
         return key1
@@ -609,16 +608,12 @@ def unflatten_like(
             return _unflatten_dof_array(
                     actx, _ary, group_shapes, group_starts,
                     strict=True)
-        elif is_array_container(_prototype):
-            assert type(_ary) is type(_prototype)
 
-            return deserialize_container(_prototype, [
-                (_same_key(key1, key2), _unflatten_like(subary, subprototype))
-                for (key1, subary), (key2, subprototype) in zip(
+        try:
+            iterable = zip(
                     serialize_container(_ary),
                     serialize_container(_prototype))
-                ])
-        else:
+        except ArrayContainerTypeError:
             if strict:
                 raise ValueError("cannot unflatten array "
                         f"with prototype '{type(_prototype).__name__}'; "
@@ -626,6 +621,11 @@ def unflatten_like(
 
             assert type(_ary) is type(_prototype)
             return _ary
+        else:
+            return deserialize_container(_prototype, [
+                (_same_key(key1, key2), _unflatten_like(subary, subprototype))
+                for (key1, subary), (key2, subprototype) in iterable
+                ])
 
     return _unflatten_like(ary, prototype)
 
@@ -667,22 +667,11 @@ def unflatten_from_numpy(
             discr, ndofs_per_element_per_group)
 
     def _unflatten_from_numpy(subary):
-        if isinstance(subary, np.ndarray) and subary.dtype.char != "O":
-            subary = actx.from_numpy(subary)
+        return _unflatten_dof_array(
+            actx, actx.from_numpy(subary), group_shapes, group_starts,
+            strict=strict)
 
-        # FIXME: this is doing the recursion itself instead of just using
-        # `rec_map_dof_array_container` like `flatten_to_numpy` to catch
-        # non-object ndarrays, which `is_array_container` considers as as
-        # containers and tries to serialize.
-        from arraycontext import map_array_container, is_array_container
-        if is_array_container(subary):
-            return map_array_container(_unflatten_from_numpy, subary)
-        else:
-            return _unflatten_dof_array(
-                    actx, subary, group_shapes, group_starts,
-                    strict=strict)
-
-    return _unflatten_from_numpy(ary)
+    return rec_map_dof_array_container(_unflatten_from_numpy, ary)
 
 # }}}
 
@@ -725,7 +714,6 @@ def flat_norm(ary, ord=None) -> Any:
     if ord is None:
         ord = 2
 
-    from arraycontext import is_array_container
     actx = None
 
     def _rec(_ary):
@@ -744,11 +732,13 @@ def flat_norm(ary, ord=None) -> Any:
                 for _, subary in serialize_container(_ary)
                 ], ord=ord)
 
-        elif is_array_container(_ary):
-            arys = [_rec(subary) for _, subary in serialize_container(_ary)]
+        try:
+            iterable = serialize_container(_ary)
+        except ArrayContainerTypeError:
+            raise TypeError(f"unsupported array type: '{type(_ary).__name__}'")
+        else:
+            arys = [_rec(subary) for _, subary in iterable]
             return _reduce_norm(actx, arys, ord=ord)
-
-        raise TypeError(f"unsupported array type: '{type(_ary).__name__}'")
 
     return _rec(ary)
 

@@ -27,7 +27,7 @@ from pytools import keyed_memoize_method, keyed_memoize_in, memoize_in
 import loopy as lp
 
 from arraycontext import (
-        make_loopy_program, is_array_container, map_array_container)
+        make_loopy_program, is_array_container_type, map_array_container)
 from meshmode.transform_metadata import FirstAxisIsElementsTag
 from meshmode.discretization.connection.direct import (
         DiscretizationConnection,
@@ -120,7 +120,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
 
     def __call__(self, ary):
         from meshmode.dof_array import DOFArray
-        if is_array_container(ary) and not isinstance(ary, DOFArray):
+        if is_array_container_type(ary) and not isinstance(ary, DOFArray):
             return map_array_container(self, ary)
 
         if __debug__:

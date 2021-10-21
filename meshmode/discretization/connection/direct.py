@@ -30,7 +30,7 @@ from meshmode.transform_metadata import (
 from pytools import memoize_in, keyed_memoize_method
 from arraycontext import (
         ArrayContext, make_loopy_program,
-        is_array_container, map_array_container)
+        is_array_container_type, map_array_container)
 
 
 # {{{ interpolation batch
@@ -322,7 +322,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         # of both code paths.
 
         from meshmode.dof_array import DOFArray
-        if is_array_container(ary) and not isinstance(ary, DOFArray):
+        if is_array_container_type(ary) and not isinstance(ary, DOFArray):
             return map_array_container(self, ary)
 
         if __debug__:
