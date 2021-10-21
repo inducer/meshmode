@@ -28,7 +28,7 @@ import numpy.linalg as la
 import modepy as mp
 
 from meshmode.transform_metadata import FirstAxisIsElementsTag
-from arraycontext import is_array_container, map_array_container
+from arraycontext import is_array_container_type, map_array_container
 from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
@@ -174,7 +174,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             nodal coefficient data.
         """
         from meshmode.dof_array import DOFArray
-        if is_array_container(ary) and not isinstance(ary, DOFArray):
+        if is_array_container_type(ary) and not isinstance(ary, DOFArray):
             return map_array_container(self, ary)
 
         if not isinstance(ary, DOFArray):
@@ -295,7 +295,7 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
             modal coefficient data.
         """
         from meshmode.dof_array import DOFArray
-        if is_array_container(ary) and not isinstance(ary, DOFArray):
+        if is_array_container_type(ary) and not isinstance(ary, DOFArray):
             return map_array_container(self, ary)
 
         if not isinstance(ary, DOFArray):
