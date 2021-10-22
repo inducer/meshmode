@@ -29,8 +29,8 @@ from meshmode.transform_metadata import (
         ConcurrentElementInameTag, ConcurrentDOFInameTag)
 from pytools import memoize_in, keyed_memoize_method
 from arraycontext import (
-        ArrayContext, make_loopy_program,
-        is_array_container_type, map_array_container)
+        ArrayContext, NotAnArrayContainerError,
+        serialize_container, deserialize_container, make_loopy_program)
 
 
 # {{{ interpolation batch
@@ -318,12 +318,30 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         return make_direct_full_resample_matrix(actx, self)
 
     def __call__(self, ary, _force_no_inplace_updates=False):
-        # _force_no_inplace_updates: Only used to ensure test coverage
-        # of both code paths.
+        """
+        :arg ary: a :class:`~meshmode.dof_array.DOFArray`, or an
+            :class:`arraycontext.ArrayContainer` of them, containing nodal
+            coefficient data on :attr:`from_discr`.
+
+        :arg _force_no_inplace_updates: private argument only used to ensure
+            test coverge of all code paths.
+        """
+
+        # {{{ recurse into array containers
 
         from meshmode.dof_array import DOFArray
-        if is_array_container_type(ary) and not isinstance(ary, DOFArray):
-            return map_array_container(self, ary)
+        if not isinstance(ary, DOFArray):
+            try:
+                iterable = serialize_container(ary)
+            except NotAnArrayContainerError:
+                pass
+            else:
+                return deserialize_container(ary, [
+                    (key, self(subary, _force_no_inplace_updates))
+                    for key, subary in iterable
+                    ])
+
+        # }}}
 
         if __debug__:
             from meshmode.dof_array import check_dofarray_against_discr

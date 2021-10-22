@@ -37,7 +37,7 @@ from pytools import single_valued, memoize_in
 from meshmode.transform_metadata import (
             ConcurrentElementInameTag, ConcurrentDOFInameTag)
 from arraycontext import (
-        ArrayContext, ArrayContainerTypeError,
+        ArrayContext, NotAnArrayContainerError,
         make_loopy_program, with_container_arithmetic,
         serialize_container, deserialize_container,
         thaw as _thaw, freeze as _freeze,
@@ -361,8 +361,20 @@ def rec_map_dof_array_container(f: Callable[[Any], Any], ary):
     Similar to :func:`~arraycontext.map_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    from arraycontext.container.traversal import _map_array_container_impl
-    return _map_array_container_impl(f, ary, leaf_cls=DOFArray, recursive=True)
+    def rec(_ary):
+        if isinstance(_ary, DOFArray):
+            return f(_ary)
+
+        try:
+            iterable = serialize_container(_ary)
+        except NotAnArrayContainerError:
+            return f(_ary)
+        else:
+            return deserialize_container(_ary, [
+                (key, rec(subary)) for key, subary in iterable
+                ])
+
+    return rec(ary)
 
 
 def mapped_over_dof_arrays(f):
@@ -613,7 +625,7 @@ def unflatten_like(
             iterable = zip(
                     serialize_container(_ary),
                     serialize_container(_prototype))
-        except ArrayContainerTypeError:
+        except NotAnArrayContainerError:
             if strict:
                 raise ValueError("cannot unflatten array "
                         f"with prototype '{type(_prototype).__name__}'; "
@@ -734,7 +746,7 @@ def flat_norm(ary, ord=None) -> Any:
 
         try:
             iterable = serialize_container(_ary)
-        except ArrayContainerTypeError:
+        except NotAnArrayContainerError:
             raise TypeError(f"unsupported array type: '{type(_ary).__name__}'")
         else:
             arys = [_rec(subary) for _, subary in iterable]
