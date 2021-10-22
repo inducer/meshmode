@@ -52,11 +52,6 @@ __doc__ = """
 .. autofunction:: rec_multimap_dof_array_container
 .. autofunction:: multimapped_over_dof_arrays
 
-.. autofunction:: flatten
-.. autofunction:: unflatten
-.. autofunction:: unflatten_like
-.. autofunction:: flatten_to_numpy
-.. autofunction:: unflatten_from_numpy
 .. autofunction:: flat_norm
 
 .. autofunction:: array_context_for_pickling
@@ -716,8 +711,8 @@ def flat_norm(ary, ord=None) -> Any:
 
     Unlike :attr:`arraycontext.ArrayContext.np`, this function handles
     :class:`DOFArray`\ s by taking a norm of their flattened values
-    (in the sense of :func:`flatten`) regardless of how the group arrays
-    are stored.
+    (in the sense of :func:`arraycontext.flatten`) regardless of how the
+    group arrays are stored.
 
     :arg ary: may be a :class:`DOFArray` or an
         :class:`~arraycontext.ArrayContainer` containing them.
