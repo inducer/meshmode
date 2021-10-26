@@ -27,8 +27,9 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
+from arraycontext import (
+        NotAnArrayContainerError, serialize_container, deserialize_container)
 from meshmode.transform_metadata import FirstAxisIsElementsTag
-from arraycontext import is_array_container, map_array_container
 from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
@@ -170,12 +171,24 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
         """Computes modal coefficients data from a functions
         nodal coefficients.
 
-        :arg ary: a :class:`meshmode.dof_array.DOFArray` containing
-            nodal coefficient data.
+        :arg ary: a :class:`~meshmode.dof_array.DOFArray`, or an
+            :class:`arraycontext.ArrayContainer` of them, containing nodal
+            coefficient data.
         """
+        # {{{ recurse into array containers
+
         from meshmode.dof_array import DOFArray
-        if is_array_container(ary) and not isinstance(ary, DOFArray):
-            return map_array_container(self, ary)
+        if not isinstance(ary, DOFArray):
+            try:
+                iterable = serialize_container(ary)
+            except NotAnArrayContainerError:
+                pass
+            else:
+                return deserialize_container(ary, [
+                    (key, self(subary)) for key, subary in iterable
+                    ])
+
+        # }}}
 
         if not isinstance(ary, DOFArray):
             raise TypeError("Non-array passed to discretization connection")
@@ -291,12 +304,24 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
     def __call__(self, ary):
         """Computes nodal coefficients from modal data.
 
-        :arg ary: a :class:`meshmode.dof_array.DOFArray` containing
-            modal coefficient data.
+        :arg ary: a :class:`~meshmode.dof_array.DOFArray`, or an
+            :class:`arraycontext.ArrayContainer` of them, containing modal
+            coefficient data.
         """
+        # {{{ recurse into array containers
+
         from meshmode.dof_array import DOFArray
-        if is_array_container(ary) and not isinstance(ary, DOFArray):
-            return map_array_container(self, ary)
+        if not isinstance(ary, DOFArray):
+            try:
+                iterable = serialize_container(ary)
+            except NotAnArrayContainerError:
+                pass
+            else:
+                return deserialize_container(ary, [
+                    (key, self(subary)) for key, subary in iterable
+                    ])
+
+        # }}}
 
         if not isinstance(ary, DOFArray):
             raise TypeError("Non-array passed to discretization connection")

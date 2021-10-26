@@ -114,6 +114,10 @@ def _get_face_vertices(mesh, boundary_tag):
     if boundary_tag not in [FACE_RESTR_INTERIOR, FACE_RESTR_ALL]:
         # {{{ boundary faces
 
+        from meshmode.mesh import mesh_has_boundary
+        if not mesh_has_boundary(mesh, boundary_tag):
+            raise ValueError(f"invalid boundary tag {boundary_tag}.")
+
         for igrp, fagrp_list in enumerate(mesh.facial_adjacency_groups):
             from meshmode.mesh import BoundaryAdjacencyGroup
             matching_bdry_grps = [
@@ -183,6 +187,11 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
         warn("passing *None* for boundary_tag is deprecated--pass "
                 "FACE_RESTR_INTERIOR instead",
                 DeprecationWarning, stacklevel=2)
+
+    if boundary_tag not in [FACE_RESTR_INTERIOR, FACE_RESTR_ALL]:
+        from meshmode.mesh import mesh_has_boundary
+        if not mesh_has_boundary(discr.mesh, boundary_tag):
+            raise ValueError(f"invalid boundary tag {boundary_tag}.")
 
     logger.info("building face restriction: start")
 

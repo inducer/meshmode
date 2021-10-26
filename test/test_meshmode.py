@@ -26,7 +26,7 @@ import numpy as np
 import numpy.linalg as la
 
 import meshmode         # noqa: F401
-from arraycontext import thaw
+from arraycontext import thaw, flatten
 
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from arraycontext import pytest_generate_tests_for_array_contexts
@@ -44,7 +44,7 @@ from meshmode.discretization.poly_element import (
         LegendreGaussLobattoTensorProductGroupFactory
         )
 from meshmode.mesh import Mesh, BTAG_ALL
-from meshmode.dof_array import flatten_to_numpy, flat_norm
+from meshmode.dof_array import flat_norm
 from meshmode.discretization.connection import \
         FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 import meshmode.mesh.generation as mgen
@@ -181,9 +181,10 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
                     make_direct_full_resample_matrix
             mat = actx.to_numpy(
                     make_direct_full_resample_matrix(actx, bdry_connection))
-            bdry_f_2_by_mat = mat.dot(flatten_to_numpy(actx, vol_f))
+            bdry_f_2_by_mat = mat.dot(actx.to_numpy(flatten(vol_f, actx)))
 
-            mat_error = la.norm(flatten_to_numpy(actx, bdry_f_2) - bdry_f_2_by_mat)
+            mat_error = la.norm(
+                    actx.to_numpy(flatten(bdry_f_2, actx)) - bdry_f_2_by_mat)
             assert mat_error < 1e-14, mat_error
 
         err = flat_norm(bdry_f-bdry_f_2, np.inf)
@@ -334,13 +335,15 @@ def test_all_faces_interpolation(actx_factory, group_factory,
     ("segment", 1, [8, 16, 32]),
     ("blob", 2, [1e-1, 8e-2, 5e-2]),
     ("warp", 2, [3, 5, 7]),
-    ("warp", 3, [5, 7])
+    ("warp", 3, [5, 7]),
+    ("periodic", 2, [3, 5, 7]),
+    ("periodic", 3, [5, 7])
     ])
 def test_opposite_face_interpolation(actx_factory, group_factory,
         mesh_name, dim, mesh_pars):
     if (group_factory is LegendreGaussLobattoTensorProductGroupFactory
-            and mesh_name in ["segment", "blob"]):
-        pytest.skip("tensor products not implemented on blobs")
+            and mesh_name in ["segment", "blob", "periodic"]):
+        pytest.skip(f"tensor products not implemented on {mesh_name}")
 
     logging.basicConfig(level=logging.INFO)
     actx = actx_factory()
@@ -396,6 +399,22 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
                     nelements_side=mesh_par, group_cls=group_cls)
 
             h = 1/mesh_par
+        elif mesh_name == "periodic":
+            assert dim == 2 or dim == 3
+
+            if dim == 2:
+                mesh = mgen.generate_regular_rect_mesh(
+                    a=(-np.pi/2,)*dim,
+                    b=((3*np.pi)/2,)*dim,
+                    nelements_per_axis=(mesh_par,)*dim,
+                    periodic=(True, False))
+
+                h = 1/mesh_par
+            else:
+                mesh = mgen.generate_annular_cylinder_slice_mesh(
+                    mesh_par, (1, 2, 3), 0.5, 1, periodic=True)
+
+                h = 1/mesh_par
         else:
             raise ValueError("mesh_name not recognized")
 
@@ -471,8 +490,9 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
         normal_outward_expr = (
                 sym.normal(mesh.ambient_dim) | sym.nodes(mesh.ambient_dim))
 
-    normal_outward_check = flatten_to_numpy(actx,
-            bind(discr, normal_outward_expr)(actx).as_scalar()) > 0
+    normal_outward_check = actx.to_numpy(flatten(
+            bind(discr, normal_outward_expr)(actx).as_scalar(),
+            actx)) > 0
 
     assert normal_outward_check.all(), normal_outward_check
 
@@ -575,7 +595,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
             | (sym.nodes(dim) + 0.5*sym.ones_vec(dim)),
             )(actx).as_scalar()
 
-    normal_outward_check = flatten_to_numpy(actx, normal_outward_check > 0)
+    normal_outward_check = actx.to_numpy(flatten(normal_outward_check > 0, actx))
     assert normal_outward_check.all(), normal_outward_check
 
 # }}}
@@ -730,7 +750,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
                 sym.normal(mesh.ambient_dim) | sym.nodes(mesh.ambient_dim),
                 )(actx).as_scalar()
 
-        normal_outward_check = flatten_to_numpy(actx, normal_outward_check > 0)
+        normal_outward_check = actx.to_numpy(flatten(normal_outward_check > 0, actx))
         assert normal_outward_check.all(), normal_outward_check
 
         # }}}

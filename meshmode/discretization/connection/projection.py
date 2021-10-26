@@ -27,7 +27,8 @@ from pytools import keyed_memoize_method, keyed_memoize_in, memoize_in
 import loopy as lp
 
 from arraycontext import (
-        make_loopy_program, is_array_container, map_array_container)
+        NotAnArrayContainerError,
+        make_loopy_program, serialize_container, deserialize_container)
 from meshmode.transform_metadata import FirstAxisIsElementsTag
 from meshmode.discretization.connection.direct import (
         DiscretizationConnection,
@@ -119,9 +120,26 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         return weights
 
     def __call__(self, ary):
+        """
+        :arg ary: a :class:`~meshmode.dof_array.DOFArray`, or an
+            :class:`arraycontext.ArrayContainer` of them, containing nodal
+            coefficient data on :attr:`from_discr`.
+        """
+
+        # {{{ recurse into array containers
+
         from meshmode.dof_array import DOFArray
-        if is_array_container(ary) and not isinstance(ary, DOFArray):
-            return map_array_container(self, ary)
+        if not isinstance(ary, DOFArray):
+            try:
+                iterable = serialize_container(ary)
+            except NotAnArrayContainerError:
+                pass
+            else:
+                return deserialize_container(ary, [
+                    (key, self(subary)) for key, subary in iterable
+                    ])
+
+        # }}}
 
         if __debug__:
             from meshmode.dof_array import check_dofarray_against_discr
