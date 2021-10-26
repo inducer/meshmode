@@ -71,6 +71,7 @@ __doc__ = """
         bcast_obj_array=True,
         bcast_numpy_array=True,
         rel_comparison=True,
+        bitwise=True,
         _cls_has_array_context_attr=True)
 class DOFArray:
     r"""This array type holds degree-of-freedom arrays for use with
