@@ -694,13 +694,20 @@ def _reduce_norm(actx, arys, ord):
     from numbers import Number
     from functools import reduce
 
+    # NOTE: actx can be None if there are no DOFArrays in the container, in
+    # which case all the entries should be Numbers and using numpy is ok
+    if actx is None:
+        anp = np
+    else:
+        anp = actx.np
+
     # NOTE: these are ordered by an expected usage frequency
     if ord == 2:
-        return actx.np.sqrt(sum(subary*subary for subary in arys))
+        return anp.sqrt(sum(subary*subary for subary in arys))
     elif ord == np.inf:
-        return reduce(actx.np.maximum, arys)
+        return reduce(anp.maximum, arys)
     elif ord == -np.inf:
-        return reduce(actx.np.minimum, arys)
+        return reduce(anp.minimum, arys)
     elif isinstance(ord, Number) and ord > 0:
         return sum(subary**ord for subary in arys)**(1/ord)
     else:
@@ -719,10 +726,6 @@ def flat_norm(ary, ord=None) -> Any:
         :class:`~arraycontext.ArrayContainer` containing them.
     """
 
-    from numbers import Number
-    if isinstance(ary, Number):
-        return abs(ary)
-
     if ord is None:
         ord = 2
 
@@ -731,13 +734,18 @@ def flat_norm(ary, ord=None) -> Any:
     def _rec(_ary):
         nonlocal actx
 
+        from numbers import Number
+        if isinstance(_ary, Number):
+            return abs(_ary)
+
         if isinstance(_ary, DOFArray):
+            if _ary.array_context is None:
+                raise ValueError("cannot compute the norm of frozen DOFArrays")
+
             if actx is None:
                 actx = _ary.array_context
             else:
                 assert actx is _ary.array_context
-
-            assert actx is not None
 
             return _reduce_norm(actx, [
                 actx.np.linalg.norm(actx.np.ravel(subary, order="A"), ord=ord)
