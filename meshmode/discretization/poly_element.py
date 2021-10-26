@@ -254,7 +254,7 @@ class InterpolatoryQuadratureSimplexElementGroup(PolynomialSimplexElementGroupBa
         if dims == 0:
             return mp.ZeroDimensionalQuadrature()
         elif dims == 1:
-            return mp.LegendreGaussQuadrature(self.order)
+            return mp.LegendreGaussQuadrature(self.order, force_dim_axis=True)
         else:
             return mp.VioreanuRokhlinSimplexQuadrature(self.order, dims)
 
