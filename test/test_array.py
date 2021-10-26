@@ -45,6 +45,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# {{{ test_flatten_unflatten
+
 @with_container_arithmetic(bcast_obj_array=False, rel_comparison=True)
 @dataclass_array_container
 @dataclass(frozen=True)
@@ -94,6 +96,11 @@ def test_flatten_unflatten(actx_factory):
     assert flat_norm(c - c_round_trip) < 1.0e-8
 
 
+# }}}
+
+
+# {{{ test_container_norm
+
 def _get_test_containers(actx, ambient_dim=2):
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(
@@ -123,16 +130,38 @@ def _get_test_containers(actx, ambient_dim=2):
 def test_container_norm(actx_factory, ord):
     actx = actx_factory()
 
-    ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs = _get_test_containers(actx)
+    c_test = _get_test_containers(actx)
+
+    # {{{ actx.np.linalg.norm
 
     from pytools.obj_array import make_obj_array
     c = MyContainer(name="hey", mass=1, momentum=make_obj_array([2, 3]), enthalpy=5)
-    n1 = actx.np.linalg.norm(make_obj_array([c, c]), ord)
+    c_obj_ary = make_obj_array([c, c])
+
+    n1 = actx.np.linalg.norm(c_obj_ary, ord)
     n2 = np.linalg.norm([1, 2, 3, 5]*2, ord)
-
     assert abs(n1 - n2) < 1e-12
-    assert abs(flat_norm(ary_dof, ord) - actx.np.linalg.norm(ary_dof, ord)) < 1e-12
 
+    # }}}
+
+    # {{{ flat_norm
+
+    # check nested vs actx.np.linalg.norm
+    assert abs(
+            flat_norm(c_test[1], ord=ord)
+            - actx.np.linalg.norm(c_test[1], ord=ord)) < 1e-12
+
+    # check nested container with only Numbers (and no actx)
+    assert abs(flat_norm(c_obj_ary, ord=ord) - n2) < 1.0e-12
+    assert abs(
+            flat_norm(np.array([1, 1], dtype=object), ord=ord)
+            - np.linalg.norm([1, 1], ord=ord)) < 1.0e-12
+    # }}}
+
+# }}}
+
+
+# {{{ test_dof_array_pickling
 
 def test_dof_array_pickling(actx_factory):
     actx = actx_factory()
@@ -147,6 +176,8 @@ def test_dof_array_pickling(actx_factory):
 
     assert flat_norm(mat_of_dofs - mat2_of_dofs, np.inf) == 0
     assert flat_norm(dc_of_dofs - dc2_of_dofs, np.inf) == 0
+
+# }}}
 
 
 if __name__ == "__main__":
