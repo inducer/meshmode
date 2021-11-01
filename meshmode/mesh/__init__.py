@@ -131,7 +131,7 @@ class BTAG_PARTITION(BTAG_NO_BOUNDARY):  # noqa: N801
         return "<{}({})>".format(type(self).__name__, repr(self.part_nr))
 
     def as_python(self):
-        return f"BTAG_PARTITION({self.part_nr})"
+        return f"{self.__class__.__name__}({self.part_nr})"
 
 
 class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801
@@ -432,7 +432,8 @@ class TensorProductElementGroup(_ModepyElementGroup):
 
 # {{{ nodal adjacency
 
-class NodalAdjacency(Record):
+@dataclass(frozen=True)
+class NodalAdjacency:
     """Describes nodal element adjacency information, i.e. information about
     elements that touch in at least one point.
 
@@ -454,6 +455,18 @@ class NodalAdjacency(Record):
     .. automethod:: __ne__
     """
 
+    neighbors_starts: np.ndarray
+    neighbors: np.ndarray
+
+    def copy(self, **kwargs: Any) -> "NodalAdjacency":
+        from warnings import warn
+        warn("NodalAdjacency.copy is deprecated and will be removed in 2022. "
+                "NodalAdjacency is now a dataclass, so standard functions "
+                "such as dataclasses.replace should be used instead.",
+                DeprecationWarning, stacklevel=2)
+
+        return replace(self, **kwargs)
+
     def __eq__(self, other):
         return (
                 type(self) == type(other)
@@ -468,7 +481,8 @@ class NodalAdjacency(Record):
 
 # {{{ facial adjacency
 
-class FacialAdjacencyGroup(Record):
+@dataclass(frozen=True)
+class FacialAdjacencyGroup:
     """
     Describes facial element adjacency information for one
     :class:`MeshElementGroup`, i.e. information about elements that share (part
@@ -484,10 +498,20 @@ class FacialAdjacencyGroup(Record):
     necessarily contiguous like the figure may suggest.)
 
     .. attribute:: igroup
+
+    .. automethod:: as_python
     """
 
-    def __init__(self, igroup, **kwargs):
-        super().__init__(igroup=igroup, **kwargs)
+    igroup: int
+
+    def copy(self, **kwargs: Any) -> "FacialAdjacencyGroup":
+        from warnings import warn
+        warn("FacialAdjacencyGroup.copy is deprecated and will be removed in 2022. "
+                "FacialAdjacencyGroup is now a dataclass, so standard functions "
+                "such as dataclasses.replace should be used instead.",
+                DeprecationWarning, stacklevel=2)
+
+        return replace(self, **kwargs)
 
     def __eq__(self, other):
         return (
@@ -498,14 +522,20 @@ class FacialAdjacencyGroup(Record):
         return not self.__eq__(other)
 
     def _as_python(self, **kwargs):
-        return (
-            f"{self.__class__.__name__}("
-            + ",\n    ".join(f"{k}={v}" for k, v in kwargs.items())
-            + ")")
+        return "{cls}({args})".format(
+                cls=self.__class__.__name__,
+                args=",\n    ".join(f"{k}={v}" for k, v in kwargs.items())
+                )
 
-    def as_python(self):
+    def as_python(self) -> str:
+        """
+        :returns: a string that can be evaluated to reconstruct the class.
+        """
+
         if type(self) != FacialAdjacencyGroup:
-            raise NotImplementedError(f"Not implemented for {type(self)}.")
+            raise NotImplementedError(
+                    f"Not implemented for '{type(self).__name__}'.")
+
         return self._as_python(igroup=self.igroup)
 
 # }}}
@@ -513,6 +543,7 @@ class FacialAdjacencyGroup(Record):
 
 # {{{ interior adjacency
 
+@dataclass(frozen=True)
 class InteriorAdjacencyGroup(FacialAdjacencyGroup):
     """Describes interior facial element adjacency information for one
     :class:`MeshElementGroup`.
@@ -557,24 +588,12 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
     .. automethod:: __ne__
     """
 
-    def __init__(self, igroup, *,
-            ineighbor_group,
-            elements, element_faces,
-            neighbors, neighbor_faces,
-            aff_map=None,
-            **kwargs):
-        if aff_map is None:
-            aff_map = AffineMap()
-
-        super().__init__(
-            # FacialAdjacencyGroup
-            igroup=igroup,
-            # InteriorAdjacencyGroup
-            ineighbor_group=ineighbor_group,
-            elements=elements, element_faces=element_faces,
-            neighbors=neighbors, neighbor_faces=neighbor_faces,
-            aff_map=aff_map,
-            **kwargs)
+    ineighbor_group: int
+    elements: np.ndarray
+    element_faces: np.ndarray
+    neighbors: np.ndarray
+    neighbor_faces: np.ndarray
+    aff_map: AffineMap
 
     def __eq__(self, other):
         return (
@@ -589,6 +608,7 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
     def as_python(self):
         if type(self) != InteriorAdjacencyGroup:
             raise NotImplementedError(f"Not implemented for {type(self)}.")
+
         return self._as_python(
             igroup=self.igroup,
             ineighbor_group=self.ineighbor_group,
@@ -603,6 +623,7 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
 
 # {{{ boundary adjacency
 
+@dataclass(frozen=True)
 class BoundaryAdjacencyGroup(FacialAdjacencyGroup):
     """Describes boundary adjacency information for one :class:`MeshElementGroup`.
 
@@ -625,6 +646,10 @@ class BoundaryAdjacencyGroup(FacialAdjacencyGroup):
         index of the boundary face in element ``elements[i]``.
     """
 
+    boundary_tag: Hashable
+    elements: np.ndarray
+    element_faces: np.ndarray
+
     def __eq__(self, other):
         return (
             super().__eq__(other)
@@ -635,6 +660,7 @@ class BoundaryAdjacencyGroup(FacialAdjacencyGroup):
     def as_python(self):
         if type(self) != BoundaryAdjacencyGroup:
             raise NotImplementedError(f"Not implemented for {type(self)}.")
+
         return self._as_python(
             igroup=self.igroup,
             boundary_tag=_boundary_tag_as_python(self.boundary_tag),
@@ -646,6 +672,7 @@ class BoundaryAdjacencyGroup(FacialAdjacencyGroup):
 
 # {{{ partition adjacency
 
+@dataclass(frozen=True)
 class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
     """
     Describes inter-partition adjacency information for one
@@ -700,26 +727,10 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
     .. versionadded:: 2017.1
     """
 
-    def __init__(self, igroup, *,
-            elements, element_faces,
-            ineighbor_partition,
-            neighbors, neighbor_faces,
-            aff_map=None,
-            **kwargs):
-        if aff_map is None:
-            aff_map = AffineMap()
-
-        super().__init__(
-            # FacialAdjacencyGroup
-            igroup=igroup,
-            # BoundaryAdjacencyGroup
-            boundary_tag=BTAG_PARTITION(ineighbor_partition),
-            elements=elements, element_faces=element_faces,
-            # InterPartitionAdjacencyGroup
-            ineighbor_partition=ineighbor_partition,
-            neighbors=neighbors, neighbor_faces=neighbor_faces,
-            aff_map=aff_map,
-            **kwargs)
+    ineighbor_partition: BTAG_PARTITION
+    neighbors: np.ndarray
+    neighbor_faces: np.ndarray
+    aff_map: AffineMap
 
     def __eq__(self, other):
         return (
@@ -732,9 +743,10 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
     def as_python(self):
         if type(self) != InterPartitionAdjacencyGroup:
             raise NotImplementedError(f"Not implemented for {type(self)}.")
+
         return self._as_python(
             igroup=self.igroup,
-            boundary_tag=self._boundary_tag_as_python(),
+            boundary_tag=_boundary_tag_as_python(),
             elements=_numpy_array_as_python(self.elements),
             element_faces=_numpy_array_as_python(self.element_faces),
             ineighbor_partition=self.ineighbor_partition,
@@ -1063,7 +1075,7 @@ def _test_node_vertex_consistency_resampling(mesh, mgrp, tol):
         return True
 
     if isinstance(mgrp, _ModepyElementGroup):
-        basis = mp.basis_for_space(mgrp._modepy_space, mgrp._modepy_shape).functions
+        basis = mp.basis_for_space(mgrp.space, mgrp.shape).functions
     else:
         raise TypeError(f"unsupported group type: {type(mgrp).__name__}")
 
@@ -1320,7 +1332,9 @@ def _compute_facial_adjacency_from_vertices(
                     elements=face_id_pairs[0].elements[is_neighbor_adj],
                     element_faces=face_id_pairs[0].faces[is_neighbor_adj],
                     neighbors=face_id_pairs[1].elements[is_neighbor_adj],
-                    neighbor_faces=face_id_pairs[1].faces[is_neighbor_adj]))
+                    neighbor_faces=face_id_pairs[1].faces[is_neighbor_adj],
+                    aff_map=AffineMap(),
+                    ))
             face_has_neighbor[
                 face_id_pairs[0].faces[is_neighbor_adj],
                 face_id_pairs[0].elements[is_neighbor_adj]] = True
@@ -1703,7 +1717,7 @@ def is_affine_simplex_group(group, abs_tol=None):
         return True
 
     # get matrices
-    basis = mp.basis_for_space(group._modepy_space, group._modepy_shape)
+    basis = mp.basis_for_space(group.space, group.shape)
     vinv = la.inv(mp.vandermonde(basis.functions, group.unit_nodes))
     diff = mp.differentiation_matrices(
             basis.functions, basis.gradients, group.unit_nodes)
