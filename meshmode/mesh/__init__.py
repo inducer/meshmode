@@ -20,10 +20,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from dataclasses import dataclass, replace, field, InitVar
+from typing import Any, ClassVar, Hashable, Optional, Tuple, Type
+
 import numpy as np
 import numpy.linalg as la
-
-from dataclasses import dataclass
 
 import modepy as mp
 from pytools import Record, memoize_method
@@ -155,32 +156,15 @@ SYSTEM_TAGS = {BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
 
 # {{{ base class
 
-class MeshElementGroup(Record):
+@dataclass(frozen=True)
+class MeshElementGroup:
     """A group of elements sharing a common reference element.
 
     .. attribute:: order
 
-    .. attribute:: vertex_indices
-
-        An array *(nelements, ref_element.nvertices)* of (mesh-wide)
-        vertex indices.
-
-    .. attribute:: nodes
-
-        An array of node coordinates with shape
-        *(mesh.ambient_dim, nelements, nunit_nodes)*.
-
-    .. attribute:: unit_nodes
-
-        *(dim, nunit_nodes)*
-
-    .. attribute:: element_nr_base
-
-        Lowest element number in this element group.
-
-    .. attribute:: node_nr_base
-
-        Lowest node number in this element group.
+        The maximum degree used for interpolation. The exact meaning depends
+        on the element type, e.g. for :class:`SimplexElementGroup` this is
+        the total degree.
 
     .. attribute:: dim
 
@@ -188,64 +172,56 @@ class MeshElementGroup(Record):
         *Not* the ambient dimension, see :attr:`Mesh.ambient_dim`
         for that.
 
+    .. attribute:: vertex_indices
+
+        An array of shape ``(nelements, unit_nvertices)`` of (mesh-wide)
+        vertex indices.
+
+    .. attribute:: nodes
+
+        An array of node coordinates with shape
+        ``(mesh.ambient_dim, nelements, nunit_nodes)``.
+
+    .. attribute:: unit_nodes
+
+        An array with shape ``(dim, nunit_nodes)`` of nodes on the reference
+        element. The coordinates :attr:`nodes` are a mapped version
+        of these reference nodes.
+
+    .. attribute:: nfaces
+
+        Number of faces of the reference element.
+
     .. attribute:: is_affine
 
         A :class:`bool` flag that is *True* if the local-to-global
         parametrization of all the elements in the group is affine.
 
+    .. automethod:: __init__
+    .. automethod:: join_mesh
+
     .. automethod:: face_vertex_indices
     .. automethod:: vertex_unit_coordinates
 
-    .. attribute:: nfaces
+    Element groups can also be compared for equality using the following
+    methods. Note that these are *very* expensive, as they compare all
+    the :attr:`nodes`.
 
     .. automethod:: __eq__
     .. automethod:: __ne__
     """
 
-    def __init__(self, order, vertex_indices, nodes,
-            element_nr_base=None, node_nr_base=None,
-            unit_nodes=None, dim=None, **kwargs):
-        """
-        :arg order: the maximum total degree used for interpolation.
-        :arg nodes: ``(ambient_dim, nelements, nunit_nodes)``
-            The nodes are assumed to be mapped versions of *unit_nodes*.
-        :arg unit_nodes: ``(dim, nunit_nodes)`` The unit nodes of which *nodes*
-            is a mapped version.
+    order: int
+    vertex_indices: Optional[np.ndarray]
+    nodes: np.ndarray
 
-        Do not supply *element_nr_base* and *node_nr_base*, they will be
-        automatically assigned.
-        """
-
-        super().__init__(
-            order=order,
-            vertex_indices=vertex_indices,
-            nodes=nodes,
-            unit_nodes=unit_nodes,
-            element_nr_base=element_nr_base, node_nr_base=node_nr_base,
-            **kwargs)
-
-    def get_copy_kwargs(self, **kwargs):
-        if "element_nr_base" not in kwargs:
-            kwargs["element_nr_base"] = None
-        if "node_nr_base" not in kwargs:
-            kwargs["node_nr_base"] = None
-
-        return super().get_copy_kwargs(**kwargs)
+    unit_nodes: Optional[np.ndarray] = None
+    element_nr_base: Optional[int] = None
+    node_nr_base: Optional[int] = None
 
     @property
     def dim(self):
         return self.unit_nodes.shape[0]
-
-    def join_mesh(self, element_nr_base, node_nr_base):
-        if self.element_nr_base is not None:
-            raise RuntimeError("this element group has already joined a mesh, "
-                    "cannot join another (The element group's element_nr_base "
-                    "is already assigned, and that typically happens when a "
-                    "group joins a Mesh instance.)")
-
-        return self.copy(
-                element_nr_base=element_nr_base,
-                node_nr_base=node_nr_base)
 
     @property
     def nelements(self):
@@ -260,25 +236,35 @@ class MeshElementGroup(Record):
         return self.unit_nodes.shape[-1]
 
     @property
-    def is_affine(self):
-        raise NotImplementedError
-
-    def face_vertex_indices(self):
-        """Return a tuple of tuples indicating which vertices
-        (in mathematically positive ordering) make up each face
-        of an element in this group.
-        """
-        raise NotImplementedError
-
-    def vertex_unit_coordinates(self):
-        """Return an array of shape ``(nfaces, dim)`` with the unit
-        coordinates of each vertex.
-        """
-        raise NotImplementedError
-
-    @property
     def nfaces(self):
         return len(self.face_vertex_indices())
+
+    def copy(self, **kwargs: Any) -> "MeshElementGroup":
+        from warnings import warn
+        warn("MeshElementGroup.copy is deprecated and will be removed in 2022. "
+                "MeshElementGroup is now a dataclass, so standard functions "
+                "such as dataclasses.replace should be used instead.",
+                DeprecationWarning, stacklevel=2)
+
+        if "element_nr_base" not in kwargs:
+            kwargs["element_nr_base"] = None
+        if "node_nr_base" not in kwargs:
+            kwargs["node_nr_base"] = None
+
+        return replace(self, **kwargs)
+
+    def join_mesh(self,
+            element_nr_base: int,
+            node_nr_base: int) -> "MeshElementGroup":
+        if self.element_nr_base is not None:
+            raise RuntimeError("this element group has already joined a mesh, "
+                    "cannot join another (The element group's element_nr_base "
+                    "is already assigned, and that typically happens when a "
+                    "group joins a Mesh instance.)")
+
+        return replace(self,
+                element_nr_base=element_nr_base,
+                node_nr_base=node_nr_base)
 
     def __eq__(self, other):
         return (
@@ -293,88 +279,127 @@ class MeshElementGroup(Record):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    @property
+    def is_affine(self):
+        raise NotImplementedError
+
+    def face_vertex_indices(self) -> Tuple[Tuple[int, ...], ...]:
+        """
+        :returns: a :class:`tuple` of tuples indicating which vertices
+            (in mathematically positive ordering) make up each face
+            of an element in this group.
+        """
+        raise NotImplementedError
+
+    def vertex_unit_coordinates(self) -> np.ndarray:
+        """
+        :returns: an array of shape ``(nfaces, dim)`` with the unit
+            coordinates of each vertex.
+        """
+        raise NotImplementedError
+
 # }}}
 
 
 # {{{ modepy-based element group
 
+@dataclass(frozen=True)
 class _ModepyElementGroup(MeshElementGroup):
-    def __init__(self, order, vertex_indices, nodes,
-            element_nr_base=None, node_nr_base=None,
-            unit_nodes=None, dim=None, **kwargs):
-        """
-        :arg order: the maximum total degree used for interpolation.
-        :arg nodes: ``(ambient_dim, nelements, nunit_nodes)``
-            The nodes are assumed to be mapped versions of *unit_nodes*.
-        :arg unit_nodes: ``(dim, nunit_nodes)`` The unit nodes of which
-            *nodes* is a mapped version. If unspecified, the nodes from
-            :func:`modepy.edge_clustered_nodes_for_space` are assumed.
-            These must be in unit coordinates as defined in :mod:`modepy`.
-        :arg dim: only used if *unit_nodes* is *None*, to get
-            the default unit nodes.
+    shape_cls: ClassVar[Type[mp.Shape]] = mp.Shape
+    shape_dim: InitVar[Optional[int]] = None
 
-        Do not supply *element_nr_base* and *node_nr_base*, they will be
-        automatically assigned.
-        """
+    shape: mp.Shape = field(default=None, init=False, repr=False)
+    space: mp.FunctionSpace = field(default=None, init=False, repr=False)
 
-        if unit_nodes is not None:
-            if dim is None:
-                dim = unit_nodes.shape[0]
+    def __post_init__(self, shape_dim: Optional[int]):
+        if self.unit_nodes is not None:
+            if shape_dim is None:
+                shape_dim = self.unit_nodes.shape[0]
 
-            if unit_nodes.shape[0] != dim:
+            if self.unit_nodes.shape[0] != shape_dim:
                 raise ValueError("'dim' does not match 'unit_nodes' dimension")
         else:
-            if dim is None:
+            if shape_dim is None:
                 raise TypeError("'dim' must be passed if 'unit_nodes' is not passed")
 
         # dim is now usable
-        shape = self._modepy_shape_cls(dim)
-        space = mp.space_for_shape(shape, order)
+        object.__setattr__(self, "shape", self.shape_cls(shape_dim))
+        object.__setattr__(self, "space", mp.space_for_shape(self.shape, self.order))
 
-        if unit_nodes is None:
-            unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
+        if self.unit_nodes is None:
+            object.__setattr__(self, "unit_nodes",
+                    mp.edge_clustered_nodes_for_space(self.space, self.shape))
 
-        if nodes is not None:
-            if unit_nodes.shape[-1] != nodes.shape[-1]:
+        if self.nodes is not None:
+            if self.unit_nodes.shape[-1] != self.nodes.shape[-1]:
                 raise ValueError(
                         "'nodes' has wrong number of unit nodes per element."
-                        f" expected {unit_nodes.shape[-1]}, "
-                        f" but got {nodes.shape[-1]}.")
+                        f" expected {self.unit_nodes.shape[-1]}, "
+                        f" but got {self.nodes.shape[-1]}.")
 
-        if vertex_indices is not None:
-            if not issubclass(vertex_indices.dtype.type, np.integer):
+        if self.vertex_indices is not None:
+            if not issubclass(self.vertex_indices.dtype.type, np.integer):
                 raise TypeError("'vertex_indices' must be integral")
 
-            if vertex_indices.shape[-1] != shape.nvertices:
+            if self.vertex_indices.shape[-1] != self.shape.nvertices:
                 raise ValueError(
                         "'vertex_indices' has wrong number of vertices per element."
-                        f" expected {shape.nvertices},"
-                        f" got {vertex_indices.shape[-1]}")
+                        f" expected {self.shape.nvertices},"
+                        f" got {self.vertex_indices.shape[-1]}")
 
-        super().__init__(order, vertex_indices, nodes,
-                element_nr_base=element_nr_base,
-                node_nr_base=node_nr_base,
-                unit_nodes=unit_nodes,
-                dim=dim,
-                _modepy_shape=shape,
-                _modepy_space=space)
+    # {{{ backwards compatibility
+
+    @property
+    def _modepy_shape_cls(self):
+        return self.shape_cls
+
+    @property
+    def _modepy_shape(self):
+        return self.shape
+
+    @property
+    def _modepy_space(self):
+        return self.space
+
+    @property
+    def _modepy_faces(self):
+        return self.faces
+
+    # }}}
 
     @property
     @memoize_method
-    def _modepy_faces(self):
-        return mp.faces_for_shape(self._modepy_shape)
+    def faces(self):
+        return mp.faces_for_shape(self.shape)
 
     def face_vertex_indices(self):
-        return tuple(face.volume_vertex_indices for face in self._modepy_faces)
+        return tuple(face.volume_vertex_indices for face in self.faces)
 
     def vertex_unit_coordinates(self):
-        return mp.unit_vertices_for_shape(self._modepy_shape).T
+        return mp.unit_vertices_for_shape(self.shape).T
 
 # }}}
 
 
+@dataclass(frozen=True)
 class SimplexElementGroup(_ModepyElementGroup):
-    _modepy_shape_cls = mp.Simplex
+    r"""Inherits from :class:`MeshElementGroup`.
+
+    .. attribute:: shape
+
+        An instance of :class:`modepy.Simplex`.
+
+    .. attribute:: space
+
+        An instance of :class:`modepy.PN` of total degree
+        :attr:`MeshElementGroup.order`.
+
+    .. attribute:: faces
+
+        A :class:`tuple` of :class:`modepy.Face`\ s of the simplex.
+    """
+
+    shape_cls: ClassVar[Type[mp.Shape]] = mp.Simplex
 
     @property
     @memoize_method
@@ -382,8 +407,25 @@ class SimplexElementGroup(_ModepyElementGroup):
         return is_affine_simplex_group(self)
 
 
+@dataclass(frozen=True)
 class TensorProductElementGroup(_ModepyElementGroup):
-    _modepy_shape_cls = mp.Hypercube
+    r"""Inherits from :class:`MeshElementGroup`.
+
+    .. attribute:: shape
+
+        An instance of :class:`modepy.Hypercube`.
+
+    .. attribute:: space
+
+        An instance of :class:`modepy.QN` of maximum degree
+        :attr:`MeshElementGroup.order`.
+
+    .. attribute:: faces
+
+        A :class:`tuple` of :class:`modepy.Face`\ s of the hypercube.
+    """
+
+    shape_cls: ClassVar[Type[mp.Shape]] = mp.Hypercube
 
 # }}}
 
