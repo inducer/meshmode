@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools import Record
+from dataclasses import dataclass
 
 import numpy as np
 import modepy as mp
@@ -52,8 +52,11 @@ FRESTR_INTERIOR_FACES = FACE_RESTR_INTERIOR
 
 # {{{ boundary connection
 
-class _ConnectionBatchData(Record):
-    pass
+@dataclass(frozen=True)
+class _ConnectionBatchData:
+    group_source_element_indices: np.ndarray
+    group_target_element_indices: np.ndarray
+    face: mp.Face
 
 
 def _build_boundary_connection(actx, vol_discr, bdry_discr, connection_data,
