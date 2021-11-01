@@ -32,6 +32,7 @@ import numpy.linalg as la
 import modepy as mp
 
 from meshmode.mesh import (
+    BTAG_PARTITION,
     InteriorAdjacencyGroup,
     BoundaryAdjacencyGroup,
     InterPartitionAdjacencyGroup
@@ -362,6 +363,7 @@ def _create_nonlocal_adjacency_groups(
                     nonlocal_adj_groups[i_part_grp].append(
                         InterPartitionAdjacencyGroup(
                             igroup=i_part_grp,
+                            boundary_tag=BTAG_PARTITION(i_neighbor_part),
                             ineighbor_partition=i_neighbor_part,
                             elements=elements,
                             element_faces=element_faces,

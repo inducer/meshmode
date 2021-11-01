@@ -222,6 +222,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         by a :mod:`meshmode` :class:`Mesh`.
     """
     top = fdrake_mesh_topology.topology
+
     # We only need one group
     # for interconnectivity and one for boundary connectivity.
     # The tricky part is moving from firedrake local facet numbering
@@ -230,11 +231,13 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     #  a reference on this...
     # https://spiral.imperial.ac.uk/bitstream/10044/1/28819/2/mlange-firedrake-dmplex-accepted.pdf  # noqa : E501
     # )
-    # and meshmode's facet ordering: obtained from a simplex element
-    # group
-    mm_simp_group = SimplexElementGroup(1, None, None,
-                                        dim=top.cell_dimension())
-    mm_face_vertex_indices = mm_simp_group.face_vertex_indices()
+    # and meshmode's facet ordering: obtained from a simplex element group
+    import modepy as mp
+    mm_face_vertex_indices = tuple([
+        face.volume_vertex_indices
+        for face in mp.faces_for_shape(mp.Simplex(top.cell_dimension()))
+        ])
+
     # map firedrake local face number to meshmode local face number
     fd_loc_fac_nr_to_mm = {}
     # Figure out which vertex is excluded to get the corresponding
@@ -307,11 +310,14 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         int_neighbors = int_neighbors[remaining_int_facs]
         int_neighbor_faces = int_neighbor_faces[remaining_int_facs]
 
-    interconnectivity_grp = InteriorAdjacencyGroup(igroup=0, ineighbor_group=0,
-                                                 elements=int_elements,
-                                                 neighbors=int_neighbors,
-                                                 element_faces=int_element_faces,
-                                                 neighbor_faces=int_neighbor_faces)
+    from meshmode.mesh.tools import AffineMap
+    interconnectivity_grp = InteriorAdjacencyGroup(
+            igroup=0, ineighbor_group=0,
+            elements=int_elements,
+            neighbors=int_neighbors,
+            element_faces=int_element_faces,
+            neighbor_faces=int_neighbor_faces,
+            aff_map=AffineMap())
 
     # }}}
 
@@ -618,11 +624,11 @@ build_connection_from_firedrake`.
         nodes = np.transpose(nodes, (2, 0, 1))
 
         # make a group (possibly with some elements that need to be flipped)
-        unflipped_group = SimplexElementGroup(coord_finat_elt.degree,
-                                              vertex_indices,
-                                              nodes,
-                                              dim=cell_dim,
-                                              unit_nodes=finat_unit_nodes)
+        unflipped_group = SimplexElementGroup(
+                order=coord_finat_elt.degree,
+                vertex_indices=vertex_indices,
+                nodes=nodes,
+                unit_nodes=finat_unit_nodes)
 
     # Next get the vertices (we'll need these for the orientations)
     with ProcessLogger(logger, "Obtaining vertex coordinates"):
@@ -713,6 +719,8 @@ build_connection_from_firedrake`.
                         fagrp.element_faces, fagrp.elements)
                     new_neighbor_faces = flip_local_face_indices(
                         fagrp.neighbor_faces, fagrp.neighbors)
+
+                    from meshmode.mesh.tools import AffineMap
                     facial_adjacency_groups[igroup].append(
                         InteriorAdjacencyGroup(
                             igroup=igroup,
@@ -720,7 +728,8 @@ build_connection_from_firedrake`.
                             elements=fagrp.elements,
                             element_faces=new_element_faces,
                             neighbors=fagrp.neighbors,
-                            neighbor_faces=new_neighbor_faces))
+                            neighbor_faces=new_neighbor_faces,
+                            aff_map=AffineMap()))
                 else:
                     new_element_faces = flip_local_face_indices(
                         fagrp.element_faces, fagrp.elements)
