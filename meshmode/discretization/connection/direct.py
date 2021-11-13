@@ -447,6 +447,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
                 point_pick_indices = self._resample_point_pick_indices(
                         actx, i_tgrp, i_batch)
+                resample_mat = self._resample_matrix(actx, i_tgrp, i_batch)
                 n_to_nodes, n_from_nodes = resample_mat.shape
 
                 if point_pick_indices is None:
