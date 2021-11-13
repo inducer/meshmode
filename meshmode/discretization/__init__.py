@@ -35,7 +35,7 @@ from arraycontext import ArrayContext, make_loopy_program
 
 import loopy as lp
 from meshmode.transform_metadata import (
-        ConcurrentElementInameTag, ConcurrentDOFInameTag)
+        ConcurrentElementInameTag, ConcurrentDOFInameTag, FirstAxisIsElementsTag)
 
 from warnings import warn
 
@@ -99,13 +99,14 @@ class ElementGroupBase(metaclass=ABCMeta):
     .. autoattribute:: shape
     .. autoattribute:: space
 
+    .. automethod:: __init__
     .. automethod:: discretization_key
     """
 
     def __init__(self, mesh_el_group, order, index):
         """
         :arg mesh_el_group: an instance of
-            :class:`meshmode.mesh.MeshElementGroup`
+            :class:`~meshmode.mesh.MeshElementGroup`.
         """
         self.mesh_el_group = mesh_el_group
         self.order = order
@@ -399,12 +400,12 @@ class Discretization:
     def __init__(self, actx: ArrayContext, mesh, group_factory,
             real_dtype=np.float64):
         """
-        :param actx: A :class:`ArrayContext` used to perform computation needed
+        :arg actx: A :class:`ArrayContext` used to perform computation needed
             during initial set-up of the mesh.
-        :param mesh: A :class:`meshmode.mesh.Mesh` over which the discretization is
+        :arg mesh: A :class:`meshmode.mesh.Mesh` over which the discretization is
             built.
-        :param group_factory: An :class:`ElementGroupFactory`.
-        :param real_dtype: The :mod:`numpy` data type used for representing real
+        :arg group_factory: An :class:`ElementGroupFactory`.
+        :arg real_dtype: The :mod:`numpy` data type used for representing real
             data, either :class:`numpy.float32` or :class:`numpy.float64`.
         """
 
@@ -578,34 +579,6 @@ class Discretization:
         if not self.is_nodal:
             raise ElementGroupTypeError("Element groups must be nodal.")
 
-        @memoize_in(actx, (Discretization, "nodes_prg"))
-
-        #def prg():
-        def prg(nelements, ndiscr_nodes, nmesh_nodes, fp_format):
-            t_unit = make_loopy_program(
-                """{[iel,idof,j]:
-                    0<=iel<nelements and
-                    0<=idof<ndiscr_nodes and
-                    0<=j<nmesh_nodes}""",
-                """
-                    result[iel, idof] = \
-                        sum(j, resampling_mat[idof, j] * nodes[iel, j])
-                """,
-                kernel_data=[
-                    GlobalArg("result", fp_format, shape=(nelements, ndiscr_nodes), tags=[IsDOFArray()]),
-                    GlobalArg("nodes", fp_format, shape=auto, tags=None),
-                    GlobalArg("resampling_mat", fp_format, shape=(ndiscr_nodes, nmesh_nodes), tags=[IsOpArray()]),
-                    ValueArg("nelements", tags=[ParameterValue(nelements)]),
-                    ValueArg("ndiscr_nodes", tags=[ParameterValue(ndiscr_nodes)]),
-                    ValueArg("nmesh_nodes", tags=[ParameterValue(nmesh_nodes)]),
-                    ...
-                ],
-                name="lp_nodes")
-
-            return lp.tag_inames(t_unit, {
-                "iel": ConcurrentElementInameTag(),
-                "idof": ConcurrentDOFInameTag()})
-
         def resample_mesh_nodes(grp, iaxis):
             # TODO: would be nice to have the mesh use an array context already
             nodes = actx.from_numpy(grp.mesh_el_group.nodes[iaxis])
@@ -618,20 +591,10 @@ class Discretization:
                     and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
                 return nodes
 
-            fp_format = nodes.dtype
-            resampling_mat = actx.from_numpy(grp.from_mesh_interp_matrix())
-            ndiscr_nodes, nmesh_nodes = resampling_mat.shape
-            nelements = nodes.shape[0]
-
-            prog  = prg(nelements, ndiscr_nodes, nmesh_nodes, fp_format)
-            
-            result = actx.call_loopy(
-                    prog,
-                    resampling_mat=actx.from_numpy(grp.from_mesh_interp_matrix()),
-                    nodes=nodes,
-                    )["result"]
-            return result
-            
+            return actx.einsum("ij,ej->ei",
+                               actx.from_numpy(grp.from_mesh_interp_matrix()),
+                               nodes,
+                               tagged=(FirstAxisIsElementsTag(),))
 
         result = make_obj_array([
             _DOFArray(None, tuple([
@@ -648,7 +611,7 @@ def num_reference_derivative(
         ref_axes: Iterable[int],
         vec: _DOFArray) -> _DOFArray:
     """
-    :param ref_axes: an :class:`~collections.abc.Iterable` of indices
+    :arg ref_axes: an :class:`~collections.abc.Iterable` of indices
         that define the sequence of derivatives to *vec*. For example,
         ``(0, 1, 1)`` would take a third partial derivative, one in the first
         axis and two in the second axis.
@@ -670,25 +633,6 @@ def num_reference_derivative(
         raise ValueError("'ref_axes' exceeds discretization dimensions: "
                 f"got {ref_axes} for dimension {discr.dim}")
 
-    @memoize_in(actx, (num_reference_derivative, "reference_derivative_prg"))
-    def prg(nelments, nunit_dofs, fp_format):
-        t_unit = make_loopy_program(
-            "{[iel,idof,j]: 0 <= iel < nelements and 0 <= idof, j < nunit_dofs}",
-            "result[iel,idof] = sum(j, diff_mat[idof, j] * vec[iel, j])",
-            kernel_data=[
-                GlobalArg("vec", fp_format, shape=(nelements,nunit_dofs), tags=[IsDOFArray()]),
-                GlobalArg("result", fp_format, shape=(nelements,nunit_dofs), tags=[IsDOFArray()]),
-                GlobalArg("diff_mat", fp_format, shape=(nunit_dofs,nunit_dofs), tags=[IsOpArray()]),
-                ValueArg("nelements", tags=[ParameterValue(nelements)]),
-                ValueArg("nunit_dofs", tags=[ParameterValue(nunit_dofs)]),
-                ...
-            ],
-            name="diff")
-
-        return lp.tag_inames(t_unit, {
-            "iel": ConcurrentElementInameTag(),
-            "idof": ConcurrentDOFInameTag()})
-
     @keyed_memoize_in(actx,
             (num_reference_derivative, "num_reference_derivative_matrix"),
             lambda grp, gref_axes: grp.discretization_key() + gref_axes)
@@ -706,21 +650,12 @@ def num_reference_derivative(
 
         return actx.from_numpy(mat)
 
-    results = []    
-    for grp in discr.groups:
-        nelements, nunit_dofs = vec[grp.index].shape
-        fp_format = vec[grp.index].dtype
-        output = actx.call_loopy(prg(nelements, nunit_dofs, fp_format), 
-                diff_mat=get_mat(grp, ref_axes), vec=vec[grp.index])
-        results.append(output["result"])
-
-    return _DOFArray(actx, tuple(results))
-
-    #return _DOFArray(actx, tuple(
-    #        actx.call_loopy(
-    #            prg(), diff_mat=get_mat(grp, ref_axes), vec=vec[grp.index]
-    #            )[1]["result"]
-    #        for grp in discr.groups))
+    return _DOFArray(actx, tuple(
+            actx.einsum("ij,ej->ei",
+                        get_mat(grp, ref_axes),
+                        vec[grp.index],
+                        tagged=(FirstAxisIsElementsTag(),))
+            for grp in discr.groups))
 
 # }}}
 

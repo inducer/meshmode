@@ -27,6 +27,12 @@ from modepy.tools import hypercube_submesh
 from pytools.spatial_btree import SpatialBinaryTreeBucket
 from pytools import MovedFunctionDeprecationWrapper
 
+__doc__ = """
+.. currentmodule:: meshmode
+
+.. autoclass:: AffineMap
+"""
+
 
 # {{{ make_element_lookup_tree
 
@@ -113,32 +119,83 @@ def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None):
 # {{{ AffineMap
 
 class AffineMap:
-    """An affine map ``A@x+b``represented by a matrix *A* and an offset vector *b*.
+    """An affine map ``A@x+b`` represented by a matrix *A* and an offset vector *b*.
 
     .. attribute:: matrix
 
-        A :class:`numpy.ndarray` representing the matrix *A*.
+        A :class:`numpy.ndarray` representing the matrix *A*, or *None*.
 
     .. attribute:: offset
 
-        A :class:`numpy.ndarray` representing the vector *b*.
+        A :class:`numpy.ndarray` representing the vector *b*, or *None*.
 
-    .. autofunction:: inverted
-    .. autofunction:: __call__
+    .. automethod:: __init__
+    .. automethod:: inverted
+    .. automethod:: __call__
+    .. automethod:: __eq__
+    .. automethod:: __ne__
     """
 
-    def __init__(self, matrix, offset):
-        self.matrix = matrix
-        self.offset = offset
+    def __init__(self, matrix=None, offset=None):
+        """
+        :arg matrix: A :class:`numpy.ndarray` (or something convertible to one),
+            or *None*.
+        :arg offset: A :class:`numpy.ndarray` (or something convertible to one),
+            or *None*.
+        """
+        def promote_to_numpy(array):
+            if array is not None:
+                if isinstance(array, np.ndarray):
+                    return array
+                else:
+                    return np.array(array)
+            else:
+                return None
+
+        self.matrix = promote_to_numpy(matrix)
+        self.offset = promote_to_numpy(offset)
 
     def inverted(self):
-        return AffineMap(la.inv(self.matrix), -la.solve(self.matrix, self.offset))
+        """Return the inverse affine map."""
+        if self.matrix is not None:
+            inv_matrix = la.inv(self.matrix)
+            if self.offset is not None:
+                inv_offset = -inv_matrix @ self.offset
+            else:
+                inv_offset = None
+        else:
+            inv_matrix = None
+            if self.offset is not None:
+                inv_offset = -self.offset  # pylint: disable=E1130
+            else:
+                inv_offset = None
+        return AffineMap(inv_matrix, inv_offset)
 
     def __call__(self, vecs):
         """Apply the affine map to an array *vecs* whose first axis
         length matches ``matrix.shape[1]``.
         """
-        return (np.dot(self.matrix, vecs).T + self.offset).T
+        if self.matrix is not None:
+            result = np.einsum("ij,j...->i...", self.matrix, vecs)
+        else:
+            result = vecs.copy()
+        if self.offset is not None:
+            result += self.offset.reshape(-1, *((1,) * (vecs.ndim-1)))
+        return result
+
+    def __eq__(self, other):
+        def component_equal(array1, array2):
+            if isinstance(array1, np.ndarray) and isinstance(array2, np.ndarray):
+                return np.array_equal(array1, array2)
+            else:
+                return array1 == array2
+
+        return (
+            component_equal(self.matrix, other.matrix)
+            and component_equal(self.offset, other.offset))
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 # }}}
 

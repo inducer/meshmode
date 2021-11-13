@@ -2,6 +2,7 @@ Common infrastructure
 =====================
 
 .. automodule:: meshmode
+.. automodule:: meshmode.mesh.tools
 
 Mesh management
 ===============

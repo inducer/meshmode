@@ -29,8 +29,8 @@ import numpy as np
 
 from pytools import memoize_method, Record
 from pytools.obj_array import make_obj_array
-from arraycontext import thaw
-from meshmode.dof_array import DOFArray, flatten
+from arraycontext import thaw, flatten
+from meshmode.dof_array import DOFArray
 
 from modepy.shapes import Shape, Simplex, Hypercube
 
@@ -139,7 +139,7 @@ def _resample_to_numpy(conn, vis_discr, vec, *, stack=False, by_group=False):
                 from meshmode.dof_array import check_dofarray_against_discr
                 check_dofarray_against_discr(vis_discr, vec)
 
-            return actx.to_numpy(flatten(vec))
+            return actx.to_numpy(flatten(vec, actx))
         else:
             raise TypeError(f"unsupported array type: {type(vec).__name__}")
 
@@ -497,7 +497,7 @@ class Visualizer:
         should have the same group types, number of elements, degrees of
         freedom, etc.
 
-        :param skip_tests: If *True*, no checks in the group structure of the
+        :arg skip_tests: If *True*, no checks in the group structure of the
             discretizations are performed.
         """
 
@@ -523,7 +523,7 @@ class Visualizer:
     def _vis_nodes_numpy(self):
         actx = self.vis_discr._setup_actx
         return np.array([
-            actx.to_numpy(flatten(thaw(ary, actx)))
+            actx.to_numpy(flatten(thaw(ary, actx), actx))
             for ary in self.vis_discr.nodes()
             ])
 
@@ -1083,8 +1083,6 @@ def make_visualizer(actx, discr, vis_order=None,
         equidistant nodes. If plotting high-order Lagrange VTK elements, this
         needs to be set to *True*.
     """
-    from meshmode.discretization.poly_element import OrderAndTypeBasedGroupFactory
-
     vis_discr = None
     if (element_shrink_factor is None
             and not force_equidistant
@@ -1092,21 +1090,13 @@ def make_visualizer(actx, discr, vis_order=None,
         vis_discr = discr
     else:
         if force_equidistant:
-            from meshmode.discretization.poly_element import (
-                PolynomialEquidistantSimplexElementGroup as SimplexElementGroup,
-                EquidistantTensorProductElementGroup as TensorElementGroup)
+            from meshmode.discretization.poly_element import \
+                InterpolatoryEquidistantGroupFactory as VisGroupFactory
         else:
-            from meshmode.discretization.poly_element import (
-                PolynomialWarpAndBlendElementGroup as SimplexElementGroup,
-                LegendreGaussLobattoTensorProductElementGroup as TensorElementGroup)
+            from meshmode.discretization.poly_element import \
+                InterpolatoryEdgeClusteredGroupFactory as VisGroupFactory
 
-        vis_discr = discr.copy(
-                actx=actx,
-                group_factory=OrderAndTypeBasedGroupFactory(
-                    vis_order,
-                    simplex_group_class=SimplexElementGroup,
-                    tensor_product_group_class=TensorElementGroup),
-                )
+        vis_discr = discr.copy(actx=actx, group_factory=VisGroupFactory(vis_order))
 
         if all(grp.discretization_key() == vgrp.discretization_key()
                 for grp, vgrp in zip(discr.groups, vis_discr.groups)):

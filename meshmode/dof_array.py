@@ -23,6 +23,7 @@ THE SOFTWARE.
 import threading
 import operator as op
 from loopy import GlobalArg, ValueArg, auto
+from warnings import warn
 from numbers import Number
 from contextlib import contextmanager
 from functools import partial, update_wrapper
@@ -41,12 +42,13 @@ from pytools import single_valued, memoize_in
 from meshmode.transform_metadata import (
             ConcurrentElementInameTag, ConcurrentDOFInameTag)
 from arraycontext import (
-        ArrayContext, make_loopy_program,
-        ArrayContainer, with_container_arithmetic,
+        ArrayContext, NotAnArrayContainerError,
+        make_loopy_program, with_container_arithmetic,
         serialize_container, deserialize_container,
         thaw as _thaw, freeze as _freeze,
         rec_map_array_container, rec_multimap_array_container,
         mapped_over_array_containers, multimapped_over_array_containers)
+from arraycontext.container import ArrayOrContainerT
 
 __doc__ = """
 .. autoclass:: DOFArray
@@ -56,11 +58,6 @@ __doc__ = """
 .. autofunction:: rec_multimap_dof_array_container
 .. autofunction:: multimapped_over_dof_arrays
 
-.. autofunction:: flatten
-.. autofunction:: unflatten
-.. autofunction:: unflatten_like
-.. autofunction:: flatten_to_numpy
-.. autofunction:: unflatten_from_numpy
 .. autofunction:: flat_norm
 
 .. autofunction:: array_context_for_pickling
@@ -84,6 +81,7 @@ class MyFrameSummary:
         bcast_obj_array=True,
         bcast_numpy_array=True,
         rel_comparison=True,
+        bitwise=True,
         _cls_has_array_context_attr=True)
 class DOFArray:
     r"""This array type holds degree-of-freedom arrays for use with
@@ -436,8 +434,20 @@ def rec_map_dof_array_container(f: Callable[[Any], Any], ary):
     Similar to :func:`~arraycontext.map_array_container`, but
     does not further recurse on :class:`DOFArray`\ s.
     """
-    from arraycontext.container.traversal import _map_array_container_impl
-    return _map_array_container_impl(f, ary, leaf_cls=DOFArray, recursive=True)
+    def rec(_ary):
+        if isinstance(_ary, DOFArray):
+            return f(_ary)
+
+        try:
+            iterable = serialize_container(_ary)
+        except NotAnArrayContainerError:
+            return f(_ary)
+        else:
+            return deserialize_container(_ary, [
+                (key, rec(subary)) for key, subary in iterable
+                ])
+
+    return rec(ary)
 
 
 def mapped_over_dof_arrays(f):
@@ -467,7 +477,7 @@ def multimapped_over_dof_arrays(f):
 # }}}
 
 
-# {{{ flatten / unflatten
+# {{{ flatten / unflatten       /!\ deprecated
 
 def _flatten_dof_array(ary: Any, strict: bool = True):
     if not isinstance(ary, DOFArray):
@@ -525,7 +535,7 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
         return actx.np.concatenate([_flatten(grp_ary) for grp_ary in ary])
 
 
-def flatten(ary: ArrayContainer, *, strict: bool = True) -> ArrayContainer:
+def flatten(ary: ArrayOrContainerT, *, strict: bool = True) -> ArrayOrContainerT:
     r"""Convert all :class:`DOFArray`\ s into a "flat" array of degrees of
     freedom, where the resulting type of the array is given by the
     :attr:`DOFArray.array_context`.
@@ -535,12 +545,18 @@ def flatten(ary: ArrayContainer, *, strict: bool = True) -> ArrayContainer:
     index fastest.
 
     Recurses into the :class:`~arraycontext.ArrayContainer` for all
-    :class:`DOFArray`\ s.
+    :class:`DOFArray`\ s and flattens them, but retains the
+    remaining structure of the container as is. For a more general method,
+    that produces a one-dimensional "flat" array of the entire container see
+    :func:`arraycontext.flatten`.
 
-    :param strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
+    :arg strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
         in the container *ary*. If *False*, any non-:class:`DOFArray` are
         left as is.
     """
+    warn("meshmode.dof_array.flatten is deprecated and should be replaced "
+            "by using arraycontext.flatten. It will be removed in 2022.",
+            DeprecationWarning, stacklevel=2)
 
     def _flatten(subary):
         return _flatten_dof_array(subary, strict=strict)
@@ -600,10 +616,10 @@ def _unflatten_group_sizes(discr, ndofs_per_element_per_group):
 
 
 def unflatten(
-        actx: ArrayContext, discr, ary: ArrayContainer,
+        actx: ArrayContext, discr, ary: ArrayOrContainerT,
         ndofs_per_element_per_group: Optional[Iterable[int]] = None, *,
         strict: bool = True,
-        ) -> ArrayContainer:
+        ) -> ArrayOrContainerT:
     r"""Convert all "flat" arrays returned by :func:`flatten` back to
     :class:`DOFArray`\ s.
 
@@ -613,15 +629,22 @@ def unflatten(
     of degrees of freedom, as given by `ndofs_per_element_per_group`
     (or via *discr*).
 
+    Note that this method only restores flattened :class:`DOFArray`\ s. For
+    a more general version see :func:`arraycontext.unflatten`.
+
     :arg ndofs_per_element: if given, an iterable of numbers representing
         the number of degrees of freedom per element, overriding the numbers
         provided by the element groups in *discr*. May be used (for example)
         to handle :class:`DOFArray`\ s that have only one DOF per element,
         representing some per-element quantity.
-    :param strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
+    :arg strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
         in the container *ary*. If *False*, any non-:class:`DOFArray` are
         left as is.
     """
+    warn("meshmode.dof_array.unflatten is deprecated and should be replaced "
+            "by using arraycontext.unflatten. It will be removed in 2022.",
+            DeprecationWarning, stacklevel=2)
+
     group_shapes, group_starts = _unflatten_group_sizes(
             discr, ndofs_per_element_per_group)
 
@@ -634,9 +657,9 @@ def unflatten(
 
 
 def unflatten_like(
-        actx: ArrayContext, ary: ArrayContainer, prototype: ArrayContainer, *,
+        actx: ArrayContext, ary: ArrayOrContainerT, prototype: ArrayOrContainerT, *,
         strict: bool = True,
-        ) -> ArrayContainer:
+        ) -> ArrayOrContainerT:
     r"""Convert all "flat" arrays returned by :func:`flatten` back to
     :class:`DOFArray`\ s based on a *prototype* container.
 
@@ -648,14 +671,18 @@ def unflatten_like(
     :class:`~meshmode.discretization.Discretization`\ s within the same
     container.
 
-    :param prototype: an array container with the same structure as *ary*,
+    For a more general version, see :func:`arraycontext.unflatten`.
+
+    :arg prototype: an array container with the same structure as *ary*,
         whose :class:`DOFArray` leaves are used to get the sizes to
         unflatten *ary*.
-    :param strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
+    :arg strict: if *True*, only :class:`DOFArray`\ s are allowed as leaves
         in the container *ary*. If *False*, any non-:class:`DOFArray` are
         left as is.
     """
-    from arraycontext import is_array_container
+    warn("meshmode.dof_array.unflatten_like is deprecated and should be replaced "
+            "by using arraycontext.unflatten. It will be removed in 2022.",
+            DeprecationWarning, stacklevel=2)
 
     def _same_key(key1, key2):
         assert key1 == key2
@@ -670,16 +697,12 @@ def unflatten_like(
             return _unflatten_dof_array(
                     actx, _ary, group_shapes, group_starts,
                     strict=True)
-        elif is_array_container(_prototype):
-            assert type(_ary) is type(_prototype)
 
-            return deserialize_container(_prototype, [
-                (_same_key(key1, key2), _unflatten_like(subary, subprototype))
-                for (key1, subary), (key2, subprototype) in zip(
+        try:
+            iterable = zip(
                     serialize_container(_ary),
                     serialize_container(_prototype))
-                ])
-        else:
+        except NotAnArrayContainerError:
             if strict:
                 raise ValueError("cannot unflatten array "
                         f"with prototype '{type(_prototype).__name__}'; "
@@ -687,15 +710,25 @@ def unflatten_like(
 
             assert type(_ary) is type(_prototype)
             return _ary
+        else:
+            return deserialize_container(_prototype, [
+                (_same_key(key1, key2), _unflatten_like(subary, subprototype))
+                for (key1, subary), (key2, subprototype) in iterable
+                ])
 
     return _unflatten_like(ary, prototype)
 
 
-def flatten_to_numpy(actx: ArrayContext, ary: ArrayContainer, *,
-        strict: bool = True) -> ArrayContainer:
+def flatten_to_numpy(actx: ArrayContext, ary: ArrayOrContainerT, *,
+        strict: bool = True) -> ArrayOrContainerT:
     r"""Converts all :class:`DOFArray`\ s into "flat" :class:`numpy.ndarray`\ s
-    using :func:`flatten`.
+    using :func:`flatten` and :meth:`arraycontext.ArrayContext.to_numpy`.
     """
+    warn("meshmode.dof_array.flatten_to_numpy is deprecated and should be "
+            "replaced by using arraycontext.flatten and ArrayContext.to_numpy. "
+            "It will be removed in 2022.",
+            DeprecationWarning, stacklevel=2)
+
     def _flatten_to_numpy(subary):
         if isinstance(subary, DOFArray) and subary.array_context is None:
             subary = _thaw(subary, actx)
@@ -706,72 +739,105 @@ def flatten_to_numpy(actx: ArrayContext, ary: ArrayContainer, *,
 
 
 def unflatten_from_numpy(
-        actx: ArrayContext, discr, ary: ArrayContainer,
+        actx: ArrayContext, discr, ary: ArrayOrContainerT,
         ndofs_per_element_per_group: Optional[Iterable[int]] = None, *,
         strict: bool = True,
-        ) -> ArrayContainer:
+        ) -> ArrayOrContainerT:
     r"""Takes "flat" arrays returned by :func:`flatten_to_numpy` and
-    reconstructs the corresponding :class:`DOFArray`\ s using :func:`unflatten`.
+    reconstructs the corresponding :class:`DOFArray`\ s using :func:`unflatten`
+    and :meth:`arraycontext.ArrayContext.from_numpy`.
     """
+    warn("meshmode.dof_array.unflatten_from_numpy is deprecated and should be "
+            "replaced by using arraycontext.unflatten and ArrayContext.from_numpy. "
+            "It will be removed in 2022.",
+            DeprecationWarning, stacklevel=2)
+
     group_shapes, group_starts = _unflatten_group_sizes(
             discr, ndofs_per_element_per_group)
 
     def _unflatten_from_numpy(subary):
-        if isinstance(subary, np.ndarray) and subary.dtype.char != "O":
-            subary = actx.from_numpy(subary)
+        return _unflatten_dof_array(
+            actx, actx.from_numpy(subary), group_shapes, group_starts,
+            strict=strict)
 
-        # FIXME: this is doing the recursion itself instead of just using
-        # `rec_map_dof_array_container` like `flatten_to_numpy` to catch
-        # non-object ndarrays, which `is_array_container` considers as as
-        # containers and tries to serialize.
-        from arraycontext import map_array_container, is_array_container
-        if is_array_container(subary):
-            return map_array_container(_unflatten_from_numpy, subary)
-        else:
-            return _unflatten_dof_array(
-                    actx, subary, group_shapes, group_starts,
-                    strict=strict)
-
-    return _unflatten_from_numpy(ary)
+    return rec_map_dof_array_container(_unflatten_from_numpy, ary)
 
 # }}}
 
 
 # {{{ flat_norm
 
+def _reduce_norm(actx, arys, ord):
+    from numbers import Number
+    from functools import reduce
+
+    # NOTE: actx can be None if there are no DOFArrays in the container, in
+    # which case all the entries should be Numbers and using numpy is ok
+    if actx is None:
+        anp = np
+    else:
+        anp = actx.np
+
+    # NOTE: these are ordered by an expected usage frequency
+    if ord == 2:
+        return anp.sqrt(sum(subary*subary for subary in arys))
+    elif ord == np.inf:
+        return reduce(anp.maximum, arys)
+    elif ord == -np.inf:
+        return reduce(anp.minimum, arys)
+    elif isinstance(ord, Number) and ord > 0:
+        return sum(subary**ord for subary in arys)**(1/ord)
+    else:
+        raise NotImplementedError(f"unsupported value of 'ord': {ord}")
+
+
 def flat_norm(ary, ord=None) -> Any:
     r"""Return an element-wise :math:`\ell^{\text{ord}}` norm of *ary*.
 
-    :arg ary: may be a :class:`DOFArray` or a
+    Unlike :attr:`arraycontext.ArrayContext.np`, this function handles
+    :class:`DOFArray`\ s by taking a norm of their flattened values
+    (in the sense of :func:`arraycontext.flatten`) regardless of how the
+    group arrays are stored.
+
+    :arg ary: may be a :class:`DOFArray` or an
         :class:`~arraycontext.ArrayContainer` containing them.
     """
-
-    from numbers import Number
-    if isinstance(ary, Number):
-        return abs(ary)
 
     if ord is None:
         ord = 2
 
-    from arraycontext import is_array_container
+    actx = None
 
-    from arraycontext.fake_numpy import _scalar_list_norm
-    if isinstance(ary, DOFArray):
-        actx = ary.array_context
-        return _scalar_list_norm(
-                [
-                    actx.np.linalg.norm(actx.np.ravel(subary, order="A"), ord=ord)
-                    for _, subary in serialize_container(ary)],
-                ord=ord)
+    def _rec(_ary):
+        nonlocal actx
 
-    elif is_array_container(ary):
-        return _scalar_list_norm(
-                [flat_norm(subary, ord=ord)
-                    for _, subary in serialize_container(ary)],
-                ord=ord)
+        from numbers import Number
+        if isinstance(_ary, Number):
+            return abs(_ary)
 
-    raise TypeError(
-            f"unsupported array type passed to flat_norm: '{type(ary).__name__}'")
+        if isinstance(_ary, DOFArray):
+            if _ary.array_context is None:
+                raise ValueError("cannot compute the norm of frozen DOFArrays")
+
+            if actx is None:
+                actx = _ary.array_context
+            else:
+                assert actx is _ary.array_context
+
+            return _reduce_norm(actx, [
+                actx.np.linalg.norm(actx.np.ravel(subary, order="A"), ord=ord)
+                for _, subary in serialize_container(_ary)
+                ], ord=ord)
+
+        try:
+            iterable = serialize_container(_ary)
+        except NotAnArrayContainerError:
+            raise TypeError(f"unsupported array type: '{type(_ary).__name__}'")
+        else:
+            arys = [_rec(subary) for _, subary in iterable]
+            return _reduce_norm(actx, arys, ord=ord)
+
+    return _rec(ary)
 
 # }}}
 
@@ -853,7 +919,6 @@ obj_or_dof_array_vectorized_n_args = MovedFunctionDeprecationWrapper(
 
 
 def thaw(actx, ary):
-    from warnings import warn
     warn("meshmode.dof_array.thaw is deprecated. Use arraycontext.thaw instead. "
             "WARNING: The argument order is reversed between these two functions. "
             "meshmode.dof_array.thaw will continue to work until 2022.",

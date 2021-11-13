@@ -27,16 +27,14 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
-import loopy as lp
-from meshmode.transform_metadata import (
-        ConcurrentElementInameTag, ConcurrentDOFInameTag)
 from arraycontext import (
-        make_loopy_program, is_array_container, map_array_container)
+        NotAnArrayContainerError, serialize_container, deserialize_container)
+from meshmode.transform_metadata import FirstAxisIsElementsTag
 from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
 
-from pytools import memoize_in, keyed_memoize_in
+from pytools import keyed_memoize_in
 
 
 class NodalToModalDiscretizationConnection(DiscretizationConnection):
@@ -132,23 +130,6 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
     def _project_via_quadrature(self, actx, ary, grp, mgrp):
         # Handle the case with non-interpolatory element groups or
         # quadrature-based element groups
-        @memoize_in(actx, (NodalToModalDiscretizationConnection,
-                           "apply_quadrature_proj_knl"))
-        def quad_proj_keval():
-            t_unit = make_loopy_program([
-                "{[iel]: 0 <= iel < nelements}",
-                "{[idof]: 0 <= idof < n_to_dofs}",
-                "{[ibasis]: 0 <= ibasis < n_from_dofs}"
-                ],
-                """
-                    result[iel, idof] = sum(ibasis,
-                                            vtw[idof, ibasis]
-                                            * nodal_coeffs[iel, ibasis])
-                """,
-                name="apply_quadrature_proj_knl")
-            return lp.tag_inames(t_unit, {
-                "iel": ConcurrentElementInameTag(),
-                "idof": ConcurrentDOFInameTag()})
 
         @keyed_memoize_in(actx, (NodalToModalDiscretizationConnection,
                                  "quadrature_matrix"),
@@ -163,34 +144,15 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             vtw = np.dot(vdm.T, w_diag)
             return actx.from_numpy(vtw)
 
-        output = actx.call_loopy(quad_proj_keval(),
-                                 nodal_coeffs=ary[grp.index],
-                                 vtw=quadrature_matrix(grp, mgrp))
-
-        return output
+        return actx.einsum("ib,eb->ei",
+                           quadrature_matrix(grp, mgrp),
+                           ary[grp.index],
+                           tagged=(FirstAxisIsElementsTag(),))
 
     def _compute_coeffs_via_inv_vandermonde(self, actx, ary, grp):
 
         # Simple mat-mul kernel to apply the inverse of the
         # Vandermonde matrix
-        @memoize_in(actx, (NodalToModalDiscretizationConnection,
-                           "apply_inv_vandermonde_knl"))
-        def vinv_keval():
-            t_unit = make_loopy_program([
-                "{[iel]: 0 <= iel < nelements}",
-                "{[idof]: 0 <= idof < n_from_dofs}",
-                "{[jdof]: 0 <= jdof < n_from_dofs}"
-                ],
-                """
-                    result[iel, idof] = sum(jdof,
-                                            vdm_inv[idof, jdof]
-                                            * nodal_coeffs[iel, jdof])
-                """,
-                name="apply_inv_vandermonde_knl")
-            return lp.tag_inames(t_unit, {
-                "iel": ConcurrentElementInameTag(),
-                "idof": ConcurrentDOFInameTag()})
-
         @keyed_memoize_in(actx, (NodalToModalDiscretizationConnection,
                                  "vandermonde_inverse"),
                           lambda grp: grp.discretization_key())
@@ -200,22 +162,33 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             vdm_inv = la.inv(vdm)
             return actx.from_numpy(vdm_inv)
 
-        output = actx.call_loopy(vinv_keval(),
-                                 vdm_inv=vandermonde_inverse(grp),
-                                 nodal_coeffs=ary[grp.index])
-
-        return output
+        return actx.einsum("ij,ej->ei",
+                           vandermonde_inverse(grp),
+                           ary[grp.index],
+                           tagged=(FirstAxisIsElementsTag(),))
 
     def __call__(self, ary):
         """Computes modal coefficients data from a functions
         nodal coefficients.
 
-        :arg ary: a :class:`meshmode.dof_array.DOFArray` containing
-            nodal coefficient data.
+        :arg ary: a :class:`~meshmode.dof_array.DOFArray`, or an
+            :class:`arraycontext.ArrayContainer` of them, containing nodal
+            coefficient data.
         """
+        # {{{ recurse into array containers
+
         from meshmode.dof_array import DOFArray
-        if is_array_container(ary) and not isinstance(ary, DOFArray):
-            return map_array_container(self, ary)
+        if not isinstance(ary, DOFArray):
+            try:
+                iterable = serialize_container(ary)
+            except NotAnArrayContainerError:
+                pass
+            else:
+                return deserialize_container(ary, [
+                    (key, self(subary)) for key, subary in iterable
+                    ])
+
+        # }}}
 
         if not isinstance(ary, DOFArray):
             raise TypeError("Non-array passed to discretization connection")
@@ -256,7 +229,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
                                   mgrp.__class__.__name__)
                     )
 
-            result_data.append(output["result"])
+            result_data.append(output)
 
         return DOFArray(actx, data=tuple(result_data))
 
@@ -331,12 +304,24 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
     def __call__(self, ary):
         """Computes nodal coefficients from modal data.
 
-        :arg ary: a :class:`meshmode.dof_array.DOFArray` containing
-            modal coefficient data.
+        :arg ary: a :class:`~meshmode.dof_array.DOFArray`, or an
+            :class:`arraycontext.ArrayContainer` of them, containing modal
+            coefficient data.
         """
+        # {{{ recurse into array containers
+
         from meshmode.dof_array import DOFArray
-        if is_array_container(ary) and not isinstance(ary, DOFArray):
-            return map_array_container(self, ary)
+        if not isinstance(ary, DOFArray):
+            try:
+                iterable = serialize_container(ary)
+            except NotAnArrayContainerError:
+                pass
+            else:
+                return deserialize_container(ary, [
+                    (key, self(subary)) for key, subary in iterable
+                    ])
+
+        # }}}
 
         if not isinstance(ary, DOFArray):
             raise TypeError("Non-array passed to discretization connection")
@@ -345,26 +330,6 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
             raise ValueError("Invalid shape of incoming modal data")
 
         actx = ary.array_context
-
-        # Evaluates the action of the Vandermonde matrix on the
-        # vector of modal coefficients to obtain nodal values
-        @memoize_in(actx, (ModalToNodalDiscretizationConnection,
-                           "evaluation_knl"))
-        def keval():
-            t_unit = make_loopy_program([
-                "{[iel]: 0 <= iel < nelements}",
-                "{[idof]: 0 <= idof < n_to_dofs}",
-                "{[ibasis]: 0 <= ibasis < n_from_dofs}"
-                ],
-                """
-                    result[iel, idof] = sum(ibasis,
-                                            vdm[idof, ibasis]
-                                            * coefficients[iel, ibasis])
-                """,
-                name="modal_to_nodal_evaluation_knl")
-            return lp.tag_inames(t_unit, {
-                "iel": ConcurrentElementInameTag(),
-                "idof": ConcurrentDOFInameTag()})
 
         @keyed_memoize_in(actx, (ModalToNodalDiscretizationConnection, "matrix"),
                            lambda to_grp, from_grp: (
@@ -377,9 +342,10 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
             return actx.from_numpy(vdm)
 
         result_data = tuple(
-            actx.call_loopy(keval(),
-                            vdm=matrix(grp, self.from_discr.groups[igrp]),
-                            coefficients=ary[grp.index])["result"]
+            actx.einsum("ib,eb->ei",
+                        matrix(grp, self.from_discr.groups[igrp]),
+                        ary[grp.index],
+                        tagged=(FirstAxisIsElementsTag(),))
             for igrp, grp in enumerate(self.to_discr.groups)
         )
         return DOFArray(actx, data=result_data)

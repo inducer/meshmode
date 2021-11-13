@@ -14,7 +14,7 @@ cd "$DOWNSTREAM_PROJECT"
 echo "*** $DOWNSTREAM_PROJECT version: $(git rev-parse --short HEAD)"
 
 transfer_requirements_git_urls ../requirements.txt ./requirements.txt
-sed -i "/egg=meshmode/ c git+file://$(readlink -f ..)#egg=meshmode" requirements.txt
+edit_requirements_txt_for_downstream_in_subdir
 
 export CONDA_ENVIRONMENT=.test-conda-env-py3.yml
 
