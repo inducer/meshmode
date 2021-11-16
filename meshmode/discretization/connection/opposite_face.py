@@ -45,6 +45,8 @@ def _make_cross_face_batches(actx,
         tgt_bdry_element_indices, src_bdry_element_indices,
         tgt_aff_map=None, src_aff_map=None):
 
+    assert len(tgt_bdry_element_indices) == len(src_bdry_element_indices)
+
     if tgt_bdry_discr.dim == 0:
         return [InterpolationBatch(
             from_group_index=i_src_grp,
@@ -431,30 +433,28 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
                     # there will be separate adjacency groups for intra- and
                     # inter-group connections.
 
-                    adj_tgt_flags = adj.element_faces == i_face_tgt
-                    adj_els = adj.elements[adj_tgt_flags]
-                    if adj_els.size == 0:
+                    adj_el_indices, = np.where(adj.element_faces == i_face_tgt)
+                    if adj_el_indices.size == 0:
                         # NOTE: this case can happen for inter-group boundaries
                         # when all elements are adjacent on the same face
                         # index, so all other ones will be empty
                         continue
 
+                    adj_els = adj.elements[adj_el_indices]
                     vbc_els = thaw_to_numpy(actx,
                             vbc_tgt_grp_face_batch.from_element_indices)
 
                     if len(adj_els) == len(vbc_els):
-                        # Same length: assert (below) that the two use the same
-                        # ordering.
                         vbc_used_els = slice(None)
-
-                    else:
+                        adj_used_els = slice(None)
+                        assert np.array_equal(vbc_els, adj_els)
+                    elif len(vbc_els) > 0:
                         # Genuine subset: figure out an index mapping.
-                        vbc_els_sort_idx = np.argsort(vbc_els)
-                        vbc_used_els = vbc_els_sort_idx[np.searchsorted(
-                            vbc_els, adj_els, sorter=vbc_els_sort_idx
-                            )]
-
-                    assert np.array_equal(vbc_els[vbc_used_els], adj_els)
+                        adj_used_els, = np.where(np.in1d(adj_els, vbc_els))
+                        vbc_used_els, = np.where(np.in1d(vbc_els, adj_els))
+                    else:
+                        # TODO: Figure out if this is actually needed
+                        continue
 
                     # find tgt_bdry_element_indices
 
@@ -465,8 +465,10 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
 
                     # find src_bdry_element_indices
 
-                    src_vol_element_indices = adj.neighbors[adj_tgt_flags]
-                    src_element_faces = adj.neighbor_faces[adj_tgt_flags]
+                    src_vol_element_indices = adj.neighbors[
+                        adj_el_indices[adj_used_els]]
+                    src_element_faces = adj.neighbor_faces[
+                        adj_el_indices[adj_used_els]]
 
                     src_bdry_element_indices = src_grp_el_lookup[
                             src_vol_element_indices, src_element_faces]
@@ -476,7 +478,8 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
                     # {{{ visualization (for debugging)
 
                     if 0:
-                        print("TVE", adj.elements[adj_tgt_flags])
+                        print("TVE", adj.elements[
+                            adj_el_indices[adj_used_els]])
                         print("TBE", tgt_bdry_element_indices)
                         print("FVE", src_vol_element_indices)
                         from meshmode.mesh.visualization import draw_2d_mesh
