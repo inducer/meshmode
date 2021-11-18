@@ -21,6 +21,7 @@ THE SOFTWARE.
 """
 
 import numpy as np
+from meshmode.transform_metadata import DiscretizationElementAxisTag
 
 
 # {{{ same-mesh constructor
@@ -42,10 +43,12 @@ def make_same_mesh_connection(actx, to_discr, from_discr):
     groups = []
     for igrp, (fgrp, tgrp) in enumerate(zip(from_discr.groups, to_discr.groups)):
         all_elements = actx.freeze(
-                actx.from_numpy(
-                    np.arange(
-                        fgrp.nelements,
-                        dtype=np.intp)))
+                actx.tag_axis(0,
+                              DiscretizationElementAxisTag(),
+                              actx.from_numpy(
+                                  np.arange(
+                                      fgrp.nelements,
+                                      dtype=np.intp))))
         ibatch = InterpolationBatch(
                 from_group_index=igrp,
                 from_element_indices=all_elements,
