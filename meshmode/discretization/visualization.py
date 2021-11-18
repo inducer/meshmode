@@ -1016,6 +1016,10 @@ class Visualizer:
 
         nodes = self._vis_nodes_numpy()
         field = _resample_to_numpy(self.connection, self.vis_discr, field)
+        if not np.can_cast(field.dtype, float, "same_kind"):
+            raise ValueError(
+                    f"fields of dtype {field.dtype} are not supported: "
+                    "cannot be converted to float")
 
         assert nodes.shape[0] == self.vis_discr.ambient_dim
 
