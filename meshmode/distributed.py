@@ -25,8 +25,12 @@ THE SOFTWARE.
 
 from dataclasses import dataclass
 import numpy as np
+from typing import List
 
-from meshmode.mesh import InterPartitionAdjacencyGroup
+from meshmode.mesh import (
+    InteriorAdjacencyGroup,
+    InterPartitionAdjacencyGroup
+)
 
 # This file needs to be importable without mpi4py. So don't be tempted to add
 # that import here--push it into individual functions instead.
@@ -125,21 +129,23 @@ class MPIMeshDistributor:
 
 @dataclass
 class RemoteGroupInfo:
-    inter_partition_adj_group: InterPartitionAdjacencyGroup
+    inter_partition_adj_groups: List[InterPartitionAdjacencyGroup]
     vol_elem_indices: np.ndarray
     bdry_elem_indices: np.ndarray
     bdry_faces: np.ndarray
 
 
-def make_remote_group_infos(actx, bdry_conn):
+def make_remote_group_infos(actx, i_remote_part, bdry_conn):
     local_vol_mesh = bdry_conn.from_discr.mesh
 
     assert len(local_vol_mesh.groups) == len(bdry_conn.to_discr.groups)
 
     return [
             RemoteGroupInfo(
-                inter_partition_adj_group=(
-                    local_vol_mesh.facial_adjacency_groups[igrp][None]),
+                inter_partition_adj_groups=[
+                    fagrp for fagrp in local_vol_mesh.facial_adjacency_groups[igrp]
+                    if isinstance(fagrp, InterPartitionAdjacencyGroup)
+                    and fagrp.ineighbor_partition == i_remote_part],
                 vol_elem_indices=np.concatenate([
                     actx.to_numpy(batch.from_element_indices)
                     for batch in bdry_conn.groups[igrp].batches]),
@@ -197,7 +203,8 @@ class MPIBoundaryCommSetupHelper:
             self._internal_mpi_comm.isend((
                 self.local_bdry_conns[i_remote_part].to_discr.mesh,
                 make_remote_group_infos(
-                    self.array_context, self.local_bdry_conns[i_remote_part])),
+                    self.array_context, i_remote_part,
+                    self.local_bdry_conns[i_remote_part])),
                 dest=i_remote_part)
             for i_remote_part in self.local_bdry_conns.keys()]
 
@@ -289,9 +296,9 @@ def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs
                     + mesh.groups[fagrp.igroup].element_nr_base,
                     fagrp.neighbors
                     + mesh.groups[fagrp.ineighbor_group].element_nr_base])
-                for fadj in mesh.facial_adjacency_groups
-                for to_grp, fagrp in fadj.items()
-                if fagrp.ineighbor_group is not None
+                for fagrp_list in mesh.facial_adjacency_groups
+                for fagrp in fagrp_list
+                if isinstance(fagrp, InteriorAdjacencyGroup)
                 ])
         sorted_neighbor_el_pairs = neighbor_el_pairs[
                 :, np.argsort(neighbor_el_pairs[0])]
@@ -320,15 +327,11 @@ def get_connected_partitions(mesh):
     :arg mesh: A :class:`meshmode.mesh.Mesh` instance
     :returns: the set of partition numbers that are connected to `mesh`
     """
-    connected_parts = set()
-    for adj in mesh.facial_adjacency_groups:
-        grp = adj.get(None, None)
-        if isinstance(grp, InterPartitionAdjacencyGroup):
-            indices = grp.neighbor_partitions >= 0
-            connected_parts = connected_parts.union(
-                    grp.neighbor_partitions[indices])
-
-    return connected_parts
+    return {
+        grp.ineighbor_partition
+        for fagrp_list in mesh.facial_adjacency_groups
+        for grp in fagrp_list
+        if isinstance(grp, InterPartitionAdjacencyGroup)}
 
 
 # vim: foldmethod=marker

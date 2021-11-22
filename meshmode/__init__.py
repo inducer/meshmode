@@ -28,6 +28,7 @@ __doc__ = """
 """
 
 from builtins import FileExistsError  # noqa: F401
+from meshmode.mesh.tools import AffineMap  # noqa: F401
 
 
 class Error(RuntimeError):

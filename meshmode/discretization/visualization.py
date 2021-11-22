@@ -29,8 +29,8 @@ import numpy as np
 
 from pytools import memoize_method, Record
 from pytools.obj_array import make_obj_array
-from arraycontext import thaw
-from meshmode.dof_array import DOFArray, flatten
+from arraycontext import thaw, flatten
+from meshmode.dof_array import DOFArray
 
 from modepy.shapes import Shape, Simplex, Hypercube
 
@@ -49,7 +49,7 @@ __doc__ = """
 def separate_by_real_and_imag(names_and_fields, real_only):
     """
     :arg names_and_fields: input data array must be already flattened into a
-        single :mod:`numpy` array using :func:`resample_to_numpy`.
+        single :mod:`numpy` array using :func:`_resample_to_numpy`.
     """
 
     for name, field in names_and_fields:
@@ -91,7 +91,7 @@ def _stack_object_array(vec, *, by_group=False):
         ])
 
 
-def resample_to_numpy(conn, vec, *, stack=False, by_group=False):
+def _resample_to_numpy(conn, vis_discr, vec, *, stack=False, by_group=False):
     """
     :arg stack: if *True* object arrays are stacked into a single
         :class:`~numpy.ndarray`.
@@ -105,7 +105,7 @@ def resample_to_numpy(conn, vec, *, stack=False, by_group=False):
     if isinstance(vec, np.ndarray) and vec.dtype.char == "O":
         from pytools.obj_array import obj_array_vectorize
         r = obj_array_vectorize(
-                lambda x: resample_to_numpy(conn, x, by_group=by_group),
+                lambda x: _resample_to_numpy(conn, vis_discr, x, by_group=by_group),
                 vec)
 
         return _stack_object_array(r, by_group=by_group) if stack else r
@@ -121,6 +121,10 @@ def resample_to_numpy(conn, vec, *, stack=False, by_group=False):
                 np.full(grp.ndofs, vec) for grp in conn.to_discr.groups
                 ])
         elif isinstance(vec, DOFArray):
+            if __debug__:
+                from meshmode.dof_array import check_dofarray_against_discr
+                check_dofarray_against_discr(vis_discr, vec)
+
             return make_obj_array([
                 actx.to_numpy(ivec).reshape(-1) for ivec in vec
                 ])
@@ -131,7 +135,11 @@ def resample_to_numpy(conn, vec, *, stack=False, by_group=False):
             nnodes = sum(grp.ndofs for grp in conn.to_discr.groups)
             return np.full(nnodes, vec)
         elif isinstance(vec, DOFArray):
-            return actx.to_numpy(flatten(vec))
+            if __debug__:
+                from meshmode.dof_array import check_dofarray_against_discr
+                check_dofarray_against_discr(vis_discr, vec)
+
+            return actx.to_numpy(flatten(vec, actx))
         else:
             raise TypeError(f"unsupported array type: {type(vec).__name__}")
 
@@ -489,7 +497,7 @@ class Visualizer:
         should have the same group types, number of elements, degrees of
         freedom, etc.
 
-        :param skip_tests: If *True*, no checks in the group structure of the
+        :arg skip_tests: If *True*, no checks in the group structure of the
             discretizations are performed.
         """
 
@@ -515,7 +523,7 @@ class Visualizer:
     def _vis_nodes_numpy(self):
         actx = self.vis_discr._setup_actx
         return np.array([
-            actx.to_numpy(flatten(thaw(ary, actx)))
+            actx.to_numpy(flatten(thaw(ary, actx), actx))
             for ary in self.vis_discr.nodes()
             ])
 
@@ -528,7 +536,7 @@ class Visualizer:
         do_show = kwargs.pop("do_show", True)
 
         nodes = self._vis_nodes_numpy()
-        field = resample_to_numpy(self.connection, field)
+        field = _resample_to_numpy(self.connection, self.vis_discr, field)
 
         assert nodes.shape[0] == self.vis_discr.ambient_dim
         vis_connectivity = self._vtk_connectivity.groups[0].vis_connectivity
@@ -707,7 +715,8 @@ class Visualizer:
 
         names_and_fields = preprocess_fields(names_and_fields)
         names_and_fields = [
-                (name, resample_to_numpy(self.connection, fld))
+                (name, _resample_to_numpy(
+                    self.connection, self.vis_discr, fld))
                 for name, fld in names_and_fields
                 ]
 
@@ -822,8 +831,8 @@ class Visualizer:
     @memoize_method
     def _xdmf_nodes_numpy(self):
         actx = self.vis_discr._setup_actx
-        return resample_to_numpy(
-                lambda x: x,
+        return _resample_to_numpy(
+                lambda x: x, self.vis_discr,
                 thaw(self.vis_discr.nodes(), actx),
                 stack=True, by_group=True)
 
@@ -886,8 +895,8 @@ class Visualizer:
 
         names_and_fields = preprocess_fields(names_and_fields)
         names_and_fields = [
-                (name, resample_to_numpy(
-                    self.connection, field,
+                (name, _resample_to_numpy(
+                    self.connection, self.vis_discr, field,
                     stack=True, by_group=True))
                 for name, field in names_and_fields
                 ]
@@ -1006,7 +1015,11 @@ class Visualizer:
         norm = kwargs.pop("norm", None)
 
         nodes = self._vis_nodes_numpy()
-        field = resample_to_numpy(self.connection, field)
+        field = _resample_to_numpy(self.connection, self.vis_discr, field)
+        if not np.can_cast(field.dtype, float, "same_kind"):
+            raise ValueError(
+                    f"fields of dtype {field.dtype} are not supported: "
+                    "cannot be converted to float")
 
         assert nodes.shape[0] == self.vis_discr.ambient_dim
 
@@ -1060,6 +1073,10 @@ class Visualizer:
 
     # }}}
 
+# }}}
+
+
+# {{{ make_visualizer
 
 def make_visualizer(actx, discr, vis_order=None,
         element_shrink_factor=None, force_equidistant=False):
@@ -1070,8 +1087,6 @@ def make_visualizer(actx, discr, vis_order=None,
         equidistant nodes. If plotting high-order Lagrange VTK elements, this
         needs to be set to *True*.
     """
-    from meshmode.discretization.poly_element import OrderAndTypeBasedGroupFactory
-
     vis_discr = None
     if (element_shrink_factor is None
             and not force_equidistant
@@ -1079,21 +1094,13 @@ def make_visualizer(actx, discr, vis_order=None,
         vis_discr = discr
     else:
         if force_equidistant:
-            from meshmode.discretization.poly_element import (
-                PolynomialEquidistantSimplexElementGroup as SimplexElementGroup,
-                EquidistantTensorProductElementGroup as TensorElementGroup)
+            from meshmode.discretization.poly_element import \
+                InterpolatoryEquidistantGroupFactory as VisGroupFactory
         else:
-            from meshmode.discretization.poly_element import (
-                PolynomialWarpAndBlendElementGroup as SimplexElementGroup,
-                LegendreGaussLobattoTensorProductElementGroup as TensorElementGroup)
+            from meshmode.discretization.poly_element import \
+                InterpolatoryEdgeClusteredGroupFactory as VisGroupFactory
 
-        vis_discr = discr.copy(
-                actx=actx,
-                group_factory=OrderAndTypeBasedGroupFactory(
-                    vis_order,
-                    simplex_group_class=SimplexElementGroup,
-                    tensor_product_group_class=TensorElementGroup),
-                )
+        vis_discr = discr.copy(actx=actx, group_factory=VisGroupFactory(vis_order))
 
         if all(grp.discretization_key() == vgrp.discretization_key()
                 for grp, vgrp in zip(discr.groups, vis_discr.groups)):

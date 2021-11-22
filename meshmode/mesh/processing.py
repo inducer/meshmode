@@ -20,18 +20,29 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from dataclasses import dataclass
 from functools import reduce
 from numbers import Real
 from typing import Optional, Union
+
+from dataclasses import dataclass
 
 import numpy as np
 import numpy.linalg as la
 
 import modepy as mp
 
+from meshmode.mesh import (
+    InteriorAdjacencyGroup,
+    BoundaryAdjacencyGroup,
+    InterPartitionAdjacencyGroup
+)
+
+from meshmode.mesh.tools import AffineMap
+
 
 __doc__ = """
+.. autoclass:: BoundaryPairMapping
+
 .. autofunction:: find_group_indices
 .. autofunction:: partition_mesh
 .. autofunction:: find_volume_mesh_element_orientations
@@ -40,6 +51,7 @@ __doc__ = """
 .. autofunction:: find_bounding_box
 .. autofunction:: merge_disjoint_meshes
 .. autofunction:: split_mesh_groups
+.. autofunction:: glue_mesh_boundaries
 
 .. autofunction:: map_mesh
 .. autofunction:: affine_map
@@ -167,6 +179,46 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
     return new_groups, group_to_new_group, required_vertex_indices
 
 
+def _get_connected_partitions(
+        mesh, part_per_element, global_elem_to_part_elem):
+    """
+    Find the partitions that are connected to the current partition.
+
+    :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
+    :arg part_per_element: A :class:`numpy.ndarray` mapping element indices to
+        partition numbers.
+    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` mapping from global
+        element index to local partition-wide element index for local elements (and
+        -1 otherwise).
+
+    :returns: A :class:`set` of indices of the neighboring partitions.
+    """
+    connected_parts = set()
+
+    for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
+        int_grps = [
+            grp for grp in facial_adj_list
+            if isinstance(grp, InteriorAdjacencyGroup)]
+        for facial_adj in int_grps:
+            jgrp = facial_adj.ineighbor_group
+
+            elem_base_i = mesh.groups[igrp].element_nr_base
+            elem_base_j = mesh.groups[jgrp].element_nr_base
+
+            elements_are_local = global_elem_to_part_elem[facial_adj.elements
+                        + elem_base_i] >= 0
+            neighbors_are_nonlocal = global_elem_to_part_elem[facial_adj.neighbors
+                        + elem_base_j] < 0
+
+            connected_parts.update(
+                part_per_element[
+                    facial_adj.neighbors[
+                        elements_are_local & neighbors_are_nonlocal]
+                    + elem_base_j])
+
+    return connected_parts
+
+
 def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
             part_mesh_groups, global_group_to_part_group,
             part_mesh_group_elem_base):
@@ -184,21 +236,23 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
     :arg part_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *part_mesh_groups*.
 
-    :returns: A list of :class:`dict`\ s, `local_to_local_adjacency_groups`, that
-        maps pairs of partitioned group indices to
-        :clas:`~meshmode.mesh.FacialAdjacencyGroup` instances if they have
-        local-to-local adjacency.
+    :returns: A list of lists of `~meshmode.mesh.InteriorAdjacencyGroup` instances
+        corresponding to the entries in *mesh.facial_adjacency_groups* that
+        have local-to-local adjacency.
     """
-    local_to_local_adjacency_groups = [{} for _ in part_mesh_groups]
+    local_to_local_adjacency_groups = [[] for _ in part_mesh_groups]
 
-    for igrp, facial_adj_dict in enumerate(mesh.facial_adjacency_groups):
+    for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
         i_part_grp = global_group_to_part_group[igrp]
         if i_part_grp is None:
             continue
 
-        for jgrp, facial_adj in facial_adj_dict.items():
-            if jgrp is None:
-                continue
+        int_grps = [
+            grp for grp in facial_adj_list
+            if isinstance(grp, InteriorAdjacencyGroup)]
+
+        for facial_adj in int_grps:
+            jgrp = facial_adj.ineighbor_group
 
             j_part_grp = global_group_to_part_group[jgrp]
             if j_part_grp is None:
@@ -212,7 +266,7 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
             neighbors_are_local = global_elem_to_part_elem[facial_adj.neighbors
                         + elem_base_j] >= 0
 
-            adj_indices = np.where(elements_are_local & neighbors_are_local)[0]
+            adj_indices, = np.where(elements_are_local & neighbors_are_local)
 
             if len(adj_indices) > 0:
                 part_elem_base_i = part_mesh_group_elem_base[i_part_grp]
@@ -225,59 +279,24 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
                             adj_indices] + elem_base_j] - part_elem_base_j
                 neighbor_faces = facial_adj.neighbor_faces[adj_indices]
 
-                from meshmode.mesh import FacialAdjacencyGroup
-                local_to_local_adjacency_groups[i_part_grp][j_part_grp] =\
-                            FacialAdjacencyGroup(igroup=i_part_grp,
-                                        ineighbor_group=j_part_grp,
-                                        elements=elements,
-                                        element_faces=element_faces,
-                                        neighbors=neighbors,
-                                        neighbor_faces=neighbor_faces)
+                local_to_local_adjacency_groups[i_part_grp].append(
+                    InteriorAdjacencyGroup(
+                        igroup=i_part_grp,
+                        ineighbor_group=j_part_grp,
+                        elements=elements,
+                        element_faces=element_faces,
+                        neighbors=neighbors,
+                        neighbor_faces=neighbor_faces,
+                        aff_map=facial_adj.aff_map))
 
     return local_to_local_adjacency_groups
 
 
-@dataclass
-class _NonLocalAdjacencyData:
+def _create_nonlocal_adjacency_groups(
+        mesh, part_per_element, global_elem_to_part_elem, part_mesh_groups,
+        global_group_to_part_group, part_mesh_group_elem_base, connected_parts):
     """
-    Data structure for intermediate storage of non-local adjacency data. Each
-    attribute is a :class:`numpy.ndarray` and contains an entry for every local
-    element face that is shared with a remote element.
-
-    .. attribute:: elements
-
-        The group-relative element index.
-
-    .. attribute:: element_faces
-
-        The index of the shared face inside the local element.
-
-    .. attribute:: neighbor_parts
-
-       The partition containing the remote element.
-
-    .. attribute:: global_neighbors
-
-       The global element index of the remote element.
-
-    .. attribute:: neighbor_faces
-
-       The index of the shared face inside the remote element.
-    """
-    elements: np.ndarray
-    element_faces: np.ndarray
-    neighbor_parts: np.ndarray
-    global_neighbors: np.ndarray
-    neighbor_faces: np.ndarray
-
-
-def _collect_nonlocal_adjacency_data(mesh, part_per_elem, global_elem_to_part_elem,
-            part_mesh_groups, global_group_to_part_group,
-            part_mesh_group_elem_base):
-    """
-    Collect non-local adjacency data for the partitioned mesh, and store it in an
-    intermediate data structure to use when constructing inter-partition adjacency
-    groups.
+    Create non-local adjacency groups for the partitioned mesh.
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
     :arg part_per_element: A :class:`numpy.ndarray` mapping element indices to
@@ -291,86 +310,72 @@ def _collect_nonlocal_adjacency_data(mesh, part_per_elem, global_elem_to_part_el
         *part_mesh_groups* (or `None` if the group is not local).
     :arg part_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *part_mesh_groups*.
+    :arg connected_parts: A :class:`set` containing the partitions connected to
+        the current one.
 
-    :returns: A list of :class:`_NonLocalAdjacencyData` instances, one for each
-        group in *part_mesh_groups*, containing non-local adjacency data.
+    :returns: A list of lists of `~meshmode.mesh.InterPartitionAdjacencyGroup`
+        instances corresponding to the entries in *mesh.facial_adjacency_groups* that
+        have non-local adjacency.
     """
-    nonlocal_adj_data = [None for _ in part_mesh_groups]
+    global_elem_to_neighbor_elem = _compute_global_elem_to_part_elem(
+        part_per_element, connected_parts, mesh.element_id_dtype)
 
-    for igrp, facial_adj_dict in enumerate(mesh.facial_adjacency_groups):
+    nonlocal_adj_groups = [[] for _ in part_mesh_groups]
+
+    for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
         i_part_grp = global_group_to_part_group[igrp]
         if i_part_grp is None:
             continue
 
-        pairwise_adj = []
+        int_grps = [
+            grp for grp in facial_adj_list
+            if isinstance(grp, InteriorAdjacencyGroup)]
 
-        for jgrp, facial_adj in facial_adj_dict.items():
-            if jgrp is None:
-                continue
+        for facial_adj in int_grps:
+            jgrp = facial_adj.ineighbor_group
 
             elem_base_i = mesh.groups[igrp].element_nr_base
             elem_base_j = mesh.groups[jgrp].element_nr_base
 
-            elements_are_local = global_elem_to_part_elem[facial_adj.elements
-                        + elem_base_i] >= 0
-            neighbors_are_nonlocal = global_elem_to_part_elem[facial_adj.neighbors
-                        + elem_base_j] < 0
-            adj_indices = np.where(elements_are_local & neighbors_are_nonlocal)[0]
+            global_elements = facial_adj.elements + elem_base_i
+            global_neighbors = facial_adj.neighbors + elem_base_j
 
-            if len(adj_indices) > 0:
-                part_elem_base_i = part_mesh_group_elem_base[i_part_grp]
+            elements_are_local = global_elem_to_part_elem[global_elements] >= 0
 
-                elements = global_elem_to_part_elem[facial_adj.elements[
-                            adj_indices] + elem_base_i] - part_elem_base_i
-                element_faces = facial_adj.element_faces[adj_indices]
-                global_neighbors = facial_adj.neighbors[adj_indices] + elem_base_j
-                neighbor_parts = part_per_elem[global_neighbors]
-                neighbor_faces = facial_adj.neighbor_faces[adj_indices]
+            neighbor_parts = part_per_element[global_neighbors]
 
-                pairwise_adj.append(_NonLocalAdjacencyData(elements, element_faces,
-                            neighbor_parts, global_neighbors, neighbor_faces))
+            for i_neighbor_part in connected_parts:
+                adj_indices, = np.where(
+                    elements_are_local
+                    & (neighbor_parts == i_neighbor_part))
 
-        if pairwise_adj:
-            nonlocal_adj_data[i_part_grp] = _NonLocalAdjacencyData(
-                np.concatenate([adj.elements for adj in pairwise_adj]),
-                np.concatenate([adj.element_faces for adj in pairwise_adj]),
-                np.concatenate([adj.neighbor_parts for adj in pairwise_adj]),
-                np.concatenate([adj.global_neighbors for adj in pairwise_adj]),
-                np.concatenate([adj.neighbor_faces for adj in pairwise_adj]))
+                if len(adj_indices) > 0:
+                    part_elem_base_i = part_mesh_group_elem_base[i_part_grp]
 
-    return nonlocal_adj_data
+                    elements = global_elem_to_part_elem[facial_adj.elements[
+                                adj_indices] + elem_base_i] - part_elem_base_i
+                    element_faces = facial_adj.element_faces[adj_indices]
+                    neighbors = global_elem_to_neighbor_elem[
+                        global_neighbors[adj_indices]]
+                    neighbor_faces = facial_adj.neighbor_faces[adj_indices]
 
+                    nonlocal_adj_groups[i_part_grp].append(
+                        InterPartitionAdjacencyGroup(
+                            igroup=i_part_grp,
+                            ineighbor_partition=i_neighbor_part,
+                            elements=elements,
+                            element_faces=element_faces,
+                            neighbors=neighbors,
+                            neighbor_faces=neighbor_faces,
+                            aff_map=facial_adj.aff_map))
 
-@dataclass
-class _BoundaryData:
-    """
-    Data structure for intermediate storage of boundary data. Each attribute is a
-    :class:`numpy.ndarray` and contains an entry for every local element face that
-    is a boundary.
-
-    .. attribute:: elements
-
-        The group-relative element index.
-
-    .. attribute:: element_faces
-
-        The index of the shared face inside the local element.
-
-    .. attribute:: neighbors
-
-        Boundary tag data.
-
-    """
-    elements: np.ndarray
-    element_faces: np.ndarray
-    neighbors: np.ndarray
+    return nonlocal_adj_groups
 
 
-def _collect_bdry_data(mesh, global_elem_to_part_elem, part_mesh_groups,
+def _create_boundary_groups(mesh, global_elem_to_part_elem, part_mesh_groups,
             global_group_to_part_group, part_mesh_group_elem_base):
     """
-    Collect boundary data for partitioned mesh, and store it in an intermediate
-    data structure to use when constructing inter-partition adjacency groups.
+    Create boundary groups for partitioned mesh.
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
     :arg global_elem_to_part_elem: A :class:`numpy.ndarray` mapping from global
@@ -383,151 +388,44 @@ def _collect_bdry_data(mesh, global_elem_to_part_elem, part_mesh_groups,
     :arg part_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *part_mesh_groups*.
 
-    :returns: A list of :class:`_BoundaryData` instances, one for each
-        group in *part_mesh_groups*, containing boundary data.
+    :returns: A list of lists of `~meshmode.mesh.BoundaryAdjacencyGroup` instances
+        corresponding to the entries in *mesh.facial_adjacency_groups* that have
+        boundary faces.
     """
-    bdry_data = [None for _ in part_mesh_groups]
+    bdry_adj_groups = [[] for _ in part_mesh_groups]
 
-    for igrp, facial_adj_dict in enumerate(mesh.facial_adjacency_groups):
+    for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
         i_part_grp = global_group_to_part_group[igrp]
         if i_part_grp is None:
             continue
 
-        facial_adj = facial_adj_dict[None]
+        bdry_grps = [
+            grp for grp in facial_adj_list
+            if isinstance(grp, BoundaryAdjacencyGroup)]
 
-        elem_base = mesh.groups[igrp].element_nr_base
+        for bdry_grp in bdry_grps:
+            elem_base = mesh.groups[igrp].element_nr_base
 
-        adj_indices = np.where(global_elem_to_part_elem[facial_adj.elements
-                    + elem_base] >= 0)[0]
+            adj_indices, = np.where(global_elem_to_part_elem[bdry_grp.elements
+                        + elem_base] >= 0)
 
-        if len(adj_indices) > 0:
-            part_elem_base = part_mesh_group_elem_base[i_part_grp]
+            if len(adj_indices) > 0:
+                part_elem_base = part_mesh_group_elem_base[i_part_grp]
+                elements = global_elem_to_part_elem[bdry_grp.elements[adj_indices]
+                            + elem_base] - part_elem_base
+                element_faces = bdry_grp.element_faces[adj_indices]
+            else:
+                elements = np.empty(0, dtype=mesh.element_id_dtype)
+                element_faces = np.empty(0, dtype=mesh.face_id_dtype)
 
-            elements = global_elem_to_part_elem[facial_adj.elements[adj_indices]
-                        + elem_base] - part_elem_base
-            element_faces = facial_adj.element_faces[adj_indices]
-            neighbors = facial_adj.neighbors[adj_indices]
+            bdry_adj_groups[i_part_grp].append(
+                BoundaryAdjacencyGroup(
+                    igroup=i_part_grp,
+                    boundary_tag=bdry_grp.boundary_tag,
+                    elements=elements,
+                    element_faces=element_faces))
 
-            bdry_data[i_part_grp] = _BoundaryData(elements, element_faces, neighbors)
-
-    return bdry_data
-
-
-def _create_inter_partition_adjacency_groups(mesh, part_per_element,
-            part_mesh_groups, all_neighbor_parts, nonlocal_adj_data, bdry_data,
-            boundary_tag_bit):
-    """
-    Combine non-local adjacency data and boundary data into inter-partition
-    adjacency groups.
-
-    :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
-    :arg part_per_element: A :class:`numpy.ndarray` mapping element indices to
-        partition numbers.
-    :arg part_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
-        representing the partitioned mesh groups.
-    :arg all_neighbor_parts: A `set` containing all partition numbers that neighbor
-        the current one.
-    :arg nonlocal_adj_data: A list of :class:`_NonLocalAdjacencyData` instances, one
-        for each group in *part_mesh_groups*, containing non-local adjacency data.
-    :arg bdry_data: A list of :class:`_BoundaryData` instances, one for each group
-        in *part_mesh_groups*, containing boundary data.
-
-    :returns: A list of `~meshmode.mesh.InterPartitionAdjacencyGroup` instances, one
-        for each group in *part_mesh_groups*, containing the aggregated non-local
-        adjacency and boundary information from *nonlocal_adj_data* and *bdry_data*.
-    """
-    global_elem_to_neighbor_elem = _compute_global_elem_to_part_elem(
-                part_per_element, all_neighbor_parts, mesh.element_id_dtype)
-
-    inter_partition_adj_groups = []
-
-    for i_part_grp in range(len(part_mesh_groups)):
-        nl = nonlocal_adj_data[i_part_grp]
-        bdry = bdry_data[i_part_grp]
-        if nl is None and bdry is None:
-            # Neither non-local adjacency nor boundary
-            elements = np.empty(0, dtype=mesh.element_id_dtype)
-            element_faces = np.empty(0, dtype=mesh.face_id_dtype)
-            neighbor_parts = np.empty(0, dtype=np.int32)
-            neighbors = np.empty(0, dtype=mesh.element_id_dtype)
-            neighbor_elements = np.empty(0, dtype=mesh.element_id_dtype)
-            neighbor_faces = np.empty(0, dtype=mesh.face_id_dtype)
-
-        elif bdry is None:
-            # Non-local adjacency only
-            elements = nl.elements
-            element_faces = nl.element_faces
-            neighbor_parts = nl.neighbor_parts
-            from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
-            flags = np.full_like(elements, boundary_tag_bit(BTAG_REALLY_ALL))
-            for i_neighbor_part in all_neighbor_parts:
-                flags[neighbor_parts == i_neighbor_part] |= (
-                    boundary_tag_bit(BTAG_PARTITION(i_neighbor_part)))
-            neighbors = -flags
-            neighbor_elements = global_elem_to_neighbor_elem[nl.global_neighbors]
-            neighbor_faces = nl.neighbor_faces
-
-        elif nl is None:
-            # Boundary only
-            nfaces = len(bdry.elements)
-            elements = bdry.elements
-            element_faces = bdry.element_faces
-            neighbor_parts = np.full(nfaces, -1, dtype=np.int32)
-            neighbors = bdry.neighbors
-            neighbor_elements = np.full(nfaces, -1, dtype=mesh.element_id_dtype)
-            neighbor_faces = np.zeros(nfaces, dtype=mesh.face_id_dtype)
-
-        else:
-            # Both; need to merge together
-            nnonlocal = len(nl.elements)
-            nbdry = len(bdry.elements)
-            nfaces = nnonlocal + nbdry
-            elements = np.empty(nfaces, dtype=mesh.element_id_dtype)
-            element_faces = np.empty(nfaces, dtype=mesh.face_id_dtype)
-            neighbor_parts = np.empty(nfaces, dtype=np.int32)
-            neighbors = np.empty(nfaces, dtype=mesh.element_id_dtype)
-            neighbor_elements = np.empty(nfaces, dtype=mesh.element_id_dtype)
-            neighbor_faces = np.empty(nfaces, dtype=mesh.face_id_dtype)
-
-            # Combine lists of elements/faces and sort to assist in merging
-            combined_elements = np.concatenate((nl.elements, bdry.elements))
-            combined_element_faces = np.concatenate((nl.element_faces,
-                        bdry.element_faces))
-            perm = np.lexsort([combined_element_faces, combined_elements])
-
-            # Merge non-local part
-            nonlocal_indices = np.where(perm < nnonlocal)[0]
-            elements[nonlocal_indices] = nl.elements
-            element_faces[nonlocal_indices] = nl.element_faces
-            neighbor_parts[nonlocal_indices] = nl.neighbor_parts
-            for imerged in nonlocal_indices:
-                i_neighbor_part = neighbor_parts[imerged]
-                from meshmode.mesh import BTAG_REALLY_ALL, BTAG_PARTITION
-                neighbors[imerged] = -(
-                            boundary_tag_bit(BTAG_REALLY_ALL)
-                            | boundary_tag_bit(BTAG_PARTITION(i_neighbor_part)))
-            neighbor_elements[nonlocal_indices] = global_elem_to_neighbor_elem[
-                        nl.global_neighbors]
-            neighbor_faces[nonlocal_indices] = nl.neighbor_faces
-
-            # Merge boundary part
-            bdry_indices = np.where(perm >= nnonlocal)[0]
-            elements[bdry_indices] = bdry.elements
-            element_faces[bdry_indices] = bdry.element_faces
-            neighbors[bdry_indices] = bdry.neighbors
-            neighbor_parts[bdry_indices] = -1
-            neighbor_elements[bdry_indices] = -1
-            neighbor_faces[bdry_indices] = 0
-
-        from meshmode.mesh import InterPartitionAdjacencyGroup
-        inter_partition_adj_groups.append(InterPartitionAdjacencyGroup(
-                    igroup=i_part_grp, ineighbor_group=None, elements=elements,
-                    element_faces=element_faces, neighbors=neighbors,
-                    neighbor_partitions=neighbor_parts,
-                    partition_neighbors=neighbor_elements,
-                    neighbor_faces=neighbor_faces))
-
-    return inter_partition_adj_groups
+    return bdry_adj_groups
 
 
 def partition_mesh(mesh, part_per_element, part_num):
@@ -549,7 +447,7 @@ def partition_mesh(mesh, part_per_element, part_num):
         "part_per_element must have shape (mesh.nelements,)")
 
     # Contains the indices of the elements requested.
-    queried_elems = np.where(np.array(part_per_element) == part_num)[0]
+    queried_elems, = np.where(part_per_element == part_num)
 
     global_elem_to_part_elem = _compute_global_elem_to_part_elem(part_per_element,
                 {part_num}, mesh.element_id_dtype)
@@ -569,51 +467,34 @@ def partition_mesh(mesh, part_per_element, part_num):
         part_mesh_group_elem_base[i_part_grp] = el_nr
         el_nr += grp.nelements
 
-    local_to_local_adj_groups = _create_local_to_local_adjacency_groups(mesh,
-                global_elem_to_part_elem, part_mesh_groups,
+    connected_parts = _get_connected_partitions(
+        mesh, part_per_element, global_elem_to_part_elem)
+
+    local_to_local_adj_groups = _create_local_to_local_adjacency_groups(
+                mesh, global_elem_to_part_elem, part_mesh_groups,
                 global_group_to_part_group, part_mesh_group_elem_base)
 
-    nonlocal_adj_data = _collect_nonlocal_adjacency_data(mesh,
-                np.array(part_per_element), global_elem_to_part_elem,
+    nonlocal_adj_groups = _create_nonlocal_adjacency_groups(
+                mesh, part_per_element, global_elem_to_part_elem,
                 part_mesh_groups, global_group_to_part_group,
-                part_mesh_group_elem_base)
+                part_mesh_group_elem_base, connected_parts)
 
-    bdry_data = _collect_bdry_data(mesh, global_elem_to_part_elem, part_mesh_groups,
+    boundary_adj_groups = _create_boundary_groups(
+                mesh, global_elem_to_part_elem, part_mesh_groups,
                 global_group_to_part_group, part_mesh_group_elem_base)
 
-    group_neighbor_parts = [adj.neighbor_parts for adj in nonlocal_adj_data if
-                adj is not None]
-    all_neighbor_parts = set(np.unique(np.concatenate(group_neighbor_parts))) if\
-                group_neighbor_parts else set()
-
-    boundary_tags = mesh.boundary_tags[:]
-    btag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
-
-    def boundary_tag_bit(boundary_tag):
-        from meshmode.mesh import _boundary_tag_bit
-        return _boundary_tag_bit(boundary_tags, btag_to_index, boundary_tag)
-
-    from meshmode.mesh import BTAG_PARTITION
-    for i_neighbor_part in all_neighbor_parts:
-        part_tag = BTAG_PARTITION(i_neighbor_part)
-        boundary_tags.append(part_tag)
-        btag_to_index[part_tag] = len(boundary_tags)-1
-
-    inter_partition_adj_groups = _create_inter_partition_adjacency_groups(mesh,
-                part_per_element, part_mesh_groups, all_neighbor_parts,
-                nonlocal_adj_data, bdry_data, boundary_tag_bit)
-
-    # Combine local and inter-partition/boundary adjacency groups
-    part_facial_adj_groups = local_to_local_adj_groups
-    for igrp, facial_adj in enumerate(inter_partition_adj_groups):
-        part_facial_adj_groups[igrp][None] = facial_adj
+    # Combine local/nonlocal/boundary adjacency groups
+    part_facial_adj_groups = [
+        local_to_local_adj_groups[i_part_grp]
+        + nonlocal_adj_groups[i_part_grp]
+        + boundary_adj_groups[i_part_grp]
+        for i_part_grp in range(len(part_mesh_groups))]
 
     from meshmode.mesh import Mesh
     part_mesh = Mesh(
             part_vertices,
             part_mesh_groups,
             facial_adjacency_groups=part_facial_adj_groups,
-            boundary_tags=boundary_tags,
             is_conforming=mesh.is_conforming)
 
     return part_mesh, queried_elems
@@ -729,20 +610,17 @@ def get_simplex_element_flip_matrix(order, unit_nodes, permutation=None):
     The default permutation is to swap the
     first two barycentric coordinates.
 
-    :param order: The order of the function space on the simplex,
-                 (see second argument in
-                  :fun:`modepy.simplex_best_available_basis`)
-    :param unit_nodes: A np array of unit nodes with shape
-                       *(dim, nunit_nodes)*
-    :param permutation: Either *None*, or a tuple of shape
-                        storing a permutation:
-                        the *i*th barycentric coordinate gets mapped to
-                        the *permutation[i]*th coordinate.
+    :arg order: The order of the function space on the simplex,
+        (see second argument in :fun:`modepy.simplex_best_available_basis`).
+    :arg unit_nodes: A np array of unit nodes with shape *(dim, nunit_nodes)*.
+    :arg permutation: Either *None*, or a tuple of shape storing a permutation:
+        the *i*th barycentric coordinate gets mapped to the *permutation[i]*th
+        coordinate.
 
     :return: A numpy array of shape *(nunit_nodes, nunit_nodes)*
-             which, when its transpose is right-applied
-             to the matrix of nodes (shaped *(dim, nunit_nodes)*),
-             corresponds to the permutation being applied
+        which, when its transpose is right-applied to the matrix of nodes
+        (shaped *(dim, nunit_nodes)*), corresponds to the permutation being
+        applied.
     """
     from modepy.tools import barycentric_to_unit, unit_to_barycentric
 
@@ -1019,11 +897,356 @@ def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
 # }}}
 
 
+# {{{ vertex matching
+
+def _match_vertices(
+        mesh, src_vertex_indices, tgt_vertex_indices, *, aff_map=None, tol=1e-12,
+        use_tree=None):
+    if aff_map is None:
+        aff_map = AffineMap()
+
+    if use_tree is None:
+        # Empirically, the tree version becomes faster at 2**13.
+        # The temporary (displacements) below at that size requires
+        # 1.6GB, which seems like a lot. Capping at 2**11 instead,
+        # which requires a more reasonable 100M.
+        use_tree = len(tgt_vertex_indices) >= 2**11
+
+    src_vertices = mesh.vertices[:, src_vertex_indices]
+    tgt_vertices = mesh.vertices[:, tgt_vertex_indices]
+
+    mapped_src_vertices = aff_map(src_vertices)
+
+    if use_tree:
+        tgt_vertex_bboxes = np.stack((
+            tgt_vertices - tol,
+            tgt_vertices + tol))
+
+        from pytools.spatial_btree import SpatialBinaryTreeBucket
+        tree = SpatialBinaryTreeBucket(
+            np.min(tgt_vertex_bboxes[0], axis=1),
+            np.max(tgt_vertex_bboxes[1], axis=1))
+        for ivertex in range(len(tgt_vertex_indices)):
+            tree.insert(ivertex, tgt_vertex_bboxes[:, :, ivertex])
+
+        matched_tgt_vertices = np.full(len(src_vertex_indices), -1)
+        for ivertex in range(len(src_vertex_indices)):
+            mapped_src_vertex = mapped_src_vertices[:, ivertex]
+            matches = np.array(list(tree.generate_matches(mapped_src_vertex)))
+            match_bboxes = tgt_vertex_bboxes[:, :, matches]
+            in_bbox = np.all(
+                (mapped_src_vertex[:, np.newaxis] >= match_bboxes[0, :, :])
+                & (mapped_src_vertex[:, np.newaxis] <= match_bboxes[1, :, :]),
+                axis=0)
+            candidate_indices = matches[in_bbox]
+            if len(candidate_indices) == 0:
+                continue
+            displacements = (
+                mapped_src_vertex.reshape(-1, 1)
+                - tgt_vertices[:, candidate_indices])
+            distances_sq = np.sum(displacements**2, axis=0)
+            matched_tgt_vertices[ivertex] = (
+                tgt_vertex_indices[candidate_indices[np.argmin(distances_sq)]])
+
+    else:
+        displacements = (
+            mapped_src_vertices.reshape(mesh.dim, -1, 1)
+            - tgt_vertices.reshape(mesh.dim, 1, -1))
+        distances_sq = np.sum(displacements**2, axis=0)
+
+        vertex_indices, = np.indices((len(src_vertex_indices),))
+        min_distance_sq_indices = np.argmin(distances_sq, axis=1)
+        min_distances_sq = distances_sq[vertex_indices, min_distance_sq_indices]
+
+        matched_tgt_vertices = np.where(
+            min_distances_sq < tol**2,
+            tgt_vertex_indices[min_distance_sq_indices],
+            -1)
+
+    return matched_tgt_vertices
+
+# }}}
+
+
+# {{{ boundary face matching
+
+@dataclass(frozen=True)
+class BoundaryPairMapping:
+    """
+    Represents an affine mapping from one boundary to another.
+
+    .. attribute:: from_btag
+
+        The tag of one boundary.
+
+    .. attribute:: to_btag
+
+        The tag of the other boundary.
+
+    .. attribute:: aff_map
+
+        An :class:`meshmode.AffineMap` that maps points on boundary *from_btag* into
+        points on boundary *to_btag*.
+    """
+    from_btag: int
+    to_btag: int
+    aff_map: AffineMap
+
+
+def _get_boundary_face_ids(mesh, btag):
+    from meshmode.mesh import _FaceIDs
+    face_ids_per_boundary_group = []
+    for igrp, fagrp_list in enumerate(mesh.facial_adjacency_groups):
+        matching_bdry_grps = [
+            fagrp for fagrp in fagrp_list
+            if isinstance(fagrp, BoundaryAdjacencyGroup)
+            and fagrp.boundary_tag == btag]
+        for bdry_grp in matching_bdry_grps:
+            face_ids = _FaceIDs(
+                groups=np.full(len(bdry_grp.elements), igrp),
+                elements=bdry_grp.elements,
+                faces=bdry_grp.element_faces)
+            face_ids_per_boundary_group.append(face_ids)
+
+    from meshmode.mesh import _concatenate_face_ids
+    return _concatenate_face_ids(face_ids_per_boundary_group)
+
+
+def _get_face_vertex_indices(mesh, face_ids):
+    max_face_vertices = max(
+        len(ref_fvi)
+        for grp in mesh.groups
+        for ref_fvi in grp.face_vertex_indices())
+
+    face_vertex_indices_per_group = []
+    for igrp, grp in enumerate(mesh.groups):
+        belongs_to_group = face_ids.groups == igrp
+        faces = face_ids.faces[belongs_to_group]
+        elements = face_ids.elements[belongs_to_group]
+        face_vertex_indices = np.full(
+            (len(faces), max_face_vertices), -1,
+            dtype=mesh.vertex_id_dtype)
+        for fid, ref_fvi in enumerate(grp.face_vertex_indices()):
+            is_face = faces == fid
+            face_vertex_indices[is_face, :len(ref_fvi)] = (
+                grp.vertex_indices[elements[is_face], :][:, ref_fvi])
+        face_vertex_indices_per_group.append(face_vertex_indices)
+
+    return np.stack(face_vertex_indices_per_group)
+
+
+def _match_boundary_faces(mesh, bdry_pair_mapping, tol, *, use_tree=None):
+    """
+    Given a :class:`BoundaryPairMapping` *bdry_pair_mapping*, return the
+    correspondence between faces of the two boundaries (expressed as a pair of
+    :class:`meshmode.mesh._FaceIDs`).
+
+    :arg mesh: The mesh containing the boundaries.
+    :arg bdry_pair_mapping: A :class:`BoundaryPairMapping` specifying the boundaries
+        whose faces are to be matched.
+    :arg tol: The allowed tolerance between the transformed vertex coordinates of
+        the first boundary and the vertex coordinates of the second boundary.
+    :arg use_tree: Optional argument indicating whether to use a spatial binary
+        search tree or a (quadratic) numpy algorithm when matching vertices.
+    :returns: A pair of :class:`meshmode.mesh._FaceIDs`, each having a number of
+        entries equal to the number of faces in the boundary, that represents the
+        correspondence between the two boundaries' faces. The first element in the
+        pair contains faces from boundary *bdry_pair_mapping.from_btag*, and the
+        second contains faces from boundary *bdry_pair_mapping.to_btag*. The order
+        of the faces is unspecified.
+    """
+    btag_m = bdry_pair_mapping.from_btag
+    btag_n = bdry_pair_mapping.to_btag
+
+    bdry_m_face_ids = _get_boundary_face_ids(mesh, btag_m)
+    bdry_n_face_ids = _get_boundary_face_ids(mesh, btag_n)
+
+    from pytools import single_valued
+    nfaces = single_valued((
+        len(bdry_m_face_ids.groups),
+        len(bdry_m_face_ids.elements),
+        len(bdry_m_face_ids.faces),
+        len(bdry_n_face_ids.groups),
+        len(bdry_n_face_ids.elements),
+        len(bdry_n_face_ids.faces)))
+
+    bdry_m_face_vertex_indices = _get_face_vertex_indices(mesh, bdry_m_face_ids)
+    bdry_n_face_vertex_indices = _get_face_vertex_indices(mesh, bdry_n_face_ids)
+
+    bdry_m_vertex_indices = np.unique(bdry_m_face_vertex_indices)
+    bdry_m_vertex_indices = bdry_m_vertex_indices[bdry_m_vertex_indices >= 0]
+    bdry_n_vertex_indices = np.unique(bdry_n_face_vertex_indices)
+    bdry_n_vertex_indices = bdry_n_vertex_indices[bdry_n_vertex_indices >= 0]
+
+    matched_bdry_n_vertex_indices = _match_vertices(
+        mesh, bdry_m_vertex_indices, bdry_n_vertex_indices,
+        aff_map=bdry_pair_mapping.aff_map, tol=tol, use_tree=use_tree)
+
+    unmatched_bdry_m_vertex_indices = bdry_m_vertex_indices[
+        np.where(matched_bdry_n_vertex_indices < 0)[0]]
+    nunmatched = len(unmatched_bdry_m_vertex_indices)
+    if nunmatched > 0:
+        vertices = mesh.vertices[:, unmatched_bdry_m_vertex_indices]
+        mapped_vertices = bdry_pair_mapping.aff_map(vertices)
+        raise RuntimeError(
+            f"unable to match vertices between boundaries {btag_m} and {btag_n}.\n"
+            + "Unmatched vertices (original -> mapped):\n"
+            + "\n".join([
+                f"{vertices[:, i]} -> {mapped_vertices[:, i]}"
+                for i in range(min(nunmatched, 10))])
+            + f"\n...\n({nunmatched-10} more omitted.)" if nunmatched > 10 else "")
+
+    from meshmode.mesh import _concatenate_face_ids
+    face_ids = _concatenate_face_ids([bdry_m_face_ids, bdry_n_face_ids])
+
+    max_vertex_index = max([np.max(grp.vertex_indices) for grp in mesh.groups])
+    vertex_index_map, = np.indices((max_vertex_index+1,),
+        dtype=mesh.element_id_dtype)
+    vertex_index_map[bdry_m_vertex_indices] = matched_bdry_n_vertex_indices
+
+    from meshmode.mesh import _match_faces_by_vertices
+    face_index_pairs = _match_faces_by_vertices(mesh.groups, face_ids,
+        vertex_index_map_func=lambda vs: vertex_index_map[vs])
+
+    assert face_index_pairs.shape[1] == nfaces
+
+    # Since the first boundary's faces come before the second boundary's in
+    # face_ids, the first boundary's faces should all be in the first row of the
+    # result of _match_faces_by_vertices
+    from meshmode.mesh import _FaceIDs
+    return (
+        _FaceIDs(
+            groups=face_ids.groups[face_index_pairs[0, :]],
+            elements=face_ids.elements[face_index_pairs[0, :]],
+            faces=face_ids.faces[face_index_pairs[0, :]]),
+        _FaceIDs(
+            groups=face_ids.groups[face_index_pairs[1, :]],
+            elements=face_ids.elements[face_index_pairs[1, :]],
+            faces=face_ids.faces[face_index_pairs[1, :]]))
+
+# }}}
+
+
+# {{{ boundary gluing
+
+def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols, *, use_tree=None):
+    """
+    Create a new mesh from *mesh* in which one or more pairs of boundaries are
+    "glued" together such that the boundary surfaces become part of the interior
+    of the mesh. This can be used to construct, e.g., periodic boundaries.
+
+    Corresponding boundaries' vertices must map into each other via an affine
+    transformation (though the vertex ordering need not be the same). Currently
+    operates only on facial adjacency; any existing nodal adjacency in *mesh* is
+    ignored/invalidated.
+
+    :arg bdry_pair_mappings_and_tols: a :class:`list` of tuples *(mapping, tol)*,
+        where *mapping* is a :class:`BoundaryPairMapping` instance that specifies
+        a mapping between two boundaries in *mesh* that should be glued together,
+        and *tol* is the allowed tolerance between the transformed vertex
+        coordinates of the first boundary and the vertex coordinates of the second
+        boundary when attempting to match the two. Pass at most one mapping for each
+        unique (order-independent) pair of boundaries.
+    :arg use_tree: Optional argument indicating whether to use a spatial binary
+        search tree or a (quadratic) numpy algorithm when matching vertices.
+    """
+    glued_btags = {
+        btag
+        for mapping, _ in bdry_pair_mappings_and_tols
+        for btag in (mapping.from_btag, mapping.to_btag)}
+
+    btag_to_index = {btag: i for i, btag in enumerate(glued_btags)}
+
+    glued_btag_pairs = set()
+    for mapping, _ in bdry_pair_mappings_and_tols:
+        if btag_to_index[mapping.from_btag] < btag_to_index[mapping.to_btag]:
+            btag_pair = (mapping.from_btag, mapping.to_btag)
+        else:
+            btag_pair = (mapping.to_btag, mapping.from_btag)
+        if btag_pair in glued_btag_pairs:
+            raise ValueError(
+                "multiple mappings detected for boundaries "
+                f"{btag_pair[0]} and {btag_pair[1]}.")
+        glued_btag_pairs.add(btag_pair)
+
+    face_id_pairs_for_mapping = [
+        _match_boundary_faces(mesh, mapping, tol, use_tree=use_tree)
+        for mapping, tol in bdry_pair_mappings_and_tols]
+
+    from meshmode.mesh import InteriorAdjacencyGroup, BoundaryAdjacencyGroup
+
+    facial_adjacency_groups = []
+
+    for igrp, old_fagrp_list in enumerate(mesh.facial_adjacency_groups):
+        fagrp_list = [
+            fagrp for fagrp in old_fagrp_list
+            if not isinstance(fagrp, BoundaryAdjacencyGroup)
+            or fagrp.boundary_tag not in glued_btags]
+
+        for imap, (mapping, _) in enumerate(bdry_pair_mappings_and_tols):
+            bdry_m_face_ids, bdry_n_face_ids = face_id_pairs_for_mapping[imap]
+            bdry_m_belongs_to_group = bdry_m_face_ids.groups == igrp
+            bdry_n_belongs_to_group = bdry_n_face_ids.groups == igrp
+            for ineighbor_grp in range(len(mesh.groups)):
+                bdry_m_indices, = np.where(
+                    bdry_m_belongs_to_group
+                    & (bdry_n_face_ids.groups == ineighbor_grp))
+                bdry_n_indices, = np.where(
+                    bdry_n_belongs_to_group
+                    & (bdry_m_face_ids.groups == ineighbor_grp))
+                if len(bdry_m_indices) > 0:
+                    elements = bdry_m_face_ids.elements[bdry_m_indices]
+                    element_faces = bdry_m_face_ids.faces[bdry_m_indices]
+                    neighbors = bdry_n_face_ids.elements[bdry_m_indices]
+                    neighbor_faces = bdry_n_face_ids.faces[bdry_m_indices]
+                    fagrp_list.append(InteriorAdjacencyGroup(
+                        igroup=igrp,
+                        ineighbor_group=ineighbor_grp,
+                        elements=elements,
+                        element_faces=element_faces,
+                        neighbors=neighbors,
+                        neighbor_faces=neighbor_faces,
+                        aff_map=mapping.aff_map))
+                if len(bdry_n_indices) > 0:
+                    elements = bdry_n_face_ids.elements[bdry_n_indices]
+                    element_faces = bdry_n_face_ids.faces[bdry_n_indices]
+                    neighbors = bdry_m_face_ids.elements[bdry_n_indices]
+                    neighbor_faces = bdry_m_face_ids.faces[bdry_n_indices]
+                    fagrp_list.append(InteriorAdjacencyGroup(
+                        igroup=igrp,
+                        ineighbor_group=ineighbor_grp,
+                        elements=elements,
+                        element_faces=element_faces,
+                        neighbors=neighbors,
+                        neighbor_faces=neighbor_faces,
+                        aff_map=mapping.aff_map.inverted()))
+
+        facial_adjacency_groups.append(fagrp_list)
+
+    return mesh.copy(
+        nodal_adjacency=False,
+        facial_adjacency_groups=facial_adjacency_groups)
+
+# }}}
+
+
 # {{{ map
 
 def map_mesh(mesh, f):  # noqa
     """Apply the map *f* to the mesh. *f* needs to accept and return arrays of
     shape ``(ambient_dim, npoints)``."""
+
+    if mesh._facial_adjacency_groups is not None:
+        has_adj_maps = any([
+            hasattr(fagrp, "aff_map")
+            and (fagrp.aff_map.matrix is not None
+                or fagrp.aff_map.offset is not None)
+            for fagrp_list in mesh.facial_adjacency_groups
+            for fagrp in fagrp_list])
+        if has_adj_maps:
+            raise ValueError("cannot apply a general map to a mesh that has "
+                "affine mappings in its facial adjacency. If the map is affine, "
+                "use affine_map instead")
 
     vertices = f(mesh.vertices)
     if not vertices.flags.c_contiguous:
@@ -1072,20 +1295,72 @@ def affine_map(mesh,
     if b is not None and b.shape != (mesh.ambient_dim,):
         raise ValueError(f"b has shape '{b.shape}' for a {mesh.ambient_dim}d mesh")
 
-    if b is not None:
-        b = b.reshape(-1, 1)
+    f = AffineMap(A, b)
 
-    def f(x):
-        z = x
-        if A is not None:
-            z = A @ z
+    vertices = f(mesh.vertices)
+    if not vertices.flags.c_contiguous:
+        vertices = np.copy(vertices, order="C")
 
-        if b is not None:
-            z = z + b
+    # {{{ assemble new groups list
 
-        return z
+    new_groups = []
 
-    return map_mesh(mesh, f)
+    for group in mesh.groups:
+        mapped_nodes = f(group.nodes.reshape(mesh.ambient_dim, -1))
+        if not mapped_nodes.flags.c_contiguous:
+            mapped_nodes = np.copy(mapped_nodes, order="C")
+
+        new_groups.append(group.copy(
+            nodes=mapped_nodes.reshape(*group.nodes.shape)))
+
+    # }}}
+
+    # {{{ assemble new facial adjacency groups
+
+    if mesh._facial_adjacency_groups is not None:
+        # For a facial adjacency transform T(x) = Gx + h in the original mesh,
+        # its corresponding transform in the new mesh will be (T')(x) = G'x + h',
+        # where:
+        # G' = G
+        # h' = Ah + (I - G)b
+        def compute_new_map(old_map):
+            if old_map.matrix is not None:
+                matrix = old_map.matrix.copy()
+            else:
+                matrix = None
+            if old_map.offset is not None:
+                if A is not None:
+                    offset = A @ old_map.offset
+                else:
+                    offset = old_map.offset.copy()
+                if matrix is not None and b is not None:
+                    offset += b - matrix @ b
+            else:
+                offset = None
+            return AffineMap(matrix, offset)
+
+        facial_adjacency_groups = []
+        for old_fagrp_list in mesh.facial_adjacency_groups:
+            fagrp_list = []
+            for old_fagrp in old_fagrp_list:
+                if hasattr(old_fagrp, "aff_map"):
+                    aff_map = compute_new_map(old_fagrp.aff_map)
+                    fagrp_list.append(
+                        old_fagrp.copy(
+                            aff_map=aff_map))
+                else:
+                    fagrp_list.append(old_fagrp.copy())
+            facial_adjacency_groups.append(fagrp_list)
+
+    else:
+        facial_adjacency_groups = None
+
+    # }}}
+
+    return mesh.copy(
+            vertices=vertices, groups=new_groups,
+            facial_adjacency_groups=facial_adjacency_groups,
+            is_conforming=mesh.is_conforming)
 
 
 def _get_rotation_matrix_from_angle_and_axis(theta, axis):
@@ -1114,7 +1389,7 @@ def rotate_mesh_around_axis(mesh, *,
         axis: Optional[np.ndarray] = None):
     """Rotate the mesh by *theta* radians around the axis *axis*.
 
-    :param axis: a (not necessarily unit) vector. By default, the rotation is
+    :arg axis: a (not necessarily unit) vector. By default, the rotation is
         performed around the :math:`z` axis.
     """
     if mesh.ambient_dim == 1:
