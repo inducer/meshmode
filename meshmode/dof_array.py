@@ -526,7 +526,7 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
             return actx.call_loopy(
                 prg(),
                 grp_ary=grp_ary
-            )[1]["result"]
+            )["result"]
 
     if len(ary) == 1:
         # can avoid a copy if reshape succeeds
@@ -779,9 +779,10 @@ def _reduce_norm(actx, arys, ord):
         anp = actx.np
 
     # NOTE: these are ordered by an expected usage frequency
-    if ord == 2:
-        return anp.sqrt(sum(subary*subary for subary in arys))
-    elif ord == np.inf:
+    #if ord == 2:
+        #return anp.sqrt(sum(subary*subary for subary in arys))
+    #    return sum(subary*subary for subary in arys)
+    if ord == np.inf:
         return reduce(anp.maximum, arys)
     elif ord == -np.inf:
         return reduce(anp.minimum, arys)

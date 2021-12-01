@@ -561,7 +561,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     "...",
                     ],
                 name="resample_by_picking_inplace")
-                
+
+               
             return t_unit
 
         @memoize_in(actx,
