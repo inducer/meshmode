@@ -184,7 +184,8 @@ def test_visualizers(actx_factory, dim, group_cls):
 
     if mesh.dim == 2 and is_simplex:
         try:
-            vis.show_scalar_in_matplotlib_3d(f, do_show=False)
+            # NOTE: matplotlib only supports real fields
+            vis.show_scalar_in_matplotlib_3d(actx.np.real(f), do_show=False)
         except ImportError:
             logger.info("matplotlib not available")
 
