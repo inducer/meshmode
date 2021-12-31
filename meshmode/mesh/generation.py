@@ -389,7 +389,8 @@ def make_group_from_vertices(
         unit_nodes_01 = 0.5 + 0.5*unit_nodes
         _, nnodes = unit_nodes.shape
 
-        vertex_tuples = mp.node_tuples_for_space(type(space)(dim, 1))
+        vertex_space = mp.space_for_shape(shape, 1)
+        vertex_tuples = mp.node_tuples_for_space(vertex_space)
         assert len(vertex_tuples) == nvertices
 
         vdm = np.empty((nvertices, nvertices))
