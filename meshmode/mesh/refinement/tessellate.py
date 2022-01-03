@@ -184,7 +184,8 @@ def _get_ref_midpoints(shape, ref_vertices):
 # {{{ modepy.shape tessellation and resampling
 
 @get_group_midpoints.register(_ModepyElementGroup)
-def _(meg: _ModepyElementGroup, el_tess_info, elements):
+def _get_group_midpoints_modepy(
+        meg: _ModepyElementGroup, el_tess_info, elements):
     shape = meg._modepy_shape
     space = meg._modepy_space
 
@@ -204,7 +205,8 @@ def _(meg: _ModepyElementGroup, el_tess_info, elements):
 
 
 @get_group_tessellated_nodes.register(_ModepyElementGroup)
-def _(meg: _ModepyElementGroup, el_tess_info, elements):
+def _get_group_tessellated_nodes_modepy(
+        meg: _ModepyElementGroup, el_tess_info, elements):
     shape = meg._modepy_shape
     space = meg._modepy_space
 
@@ -233,15 +235,16 @@ def _(meg: _ModepyElementGroup, el_tess_info, elements):
 
 
 @get_group_tessellation_info.register(_ModepyElementGroup)
-def _(meg: _ModepyElementGroup):
+def _get_group_tessellation_info_modepy(meg: _ModepyElementGroup):
     shape = meg._modepy_shape
-    space = type(meg._modepy_space)(meg.dim, 2)
+    space = mp.space_for_shape(shape, 2)
+    assert type(space) == type(meg._modepy_space)       # noqa: E721
 
     ref_vertices = mp.node_tuples_for_space(space)
     ref_vertices_to_index = {rv: i for i, rv in enumerate(ref_vertices)}
 
     from pytools import add_tuples
-    space = type(meg._modepy_space)(meg.dim, 1)
+    space = mp.space_for_shape(shape, 1)
     orig_vertices = tuple([
         add_tuples(vt, vt) for vt in mp.node_tuples_for_space(space)
         ])
