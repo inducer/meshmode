@@ -451,25 +451,63 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 n_to_nodes, n_from_nodes = resample_mat.shape
 
                 if point_pick_indices is None:
-                    resample_mat = self._resample_matrix(actx, i_tgrp, i_batch)
-                    batch_result = actx.call_loopy(
-                        batch_mat_knl(n_to_nodes, n_from_nodes),
-                        resample_mat=resample_mat,
-                        ary=ary[batch.from_group_index],
-                        from_element_indices=batch._global_from_element_indices(
-                            actx, self.to_discr.groups[i_tgrp]),
-                        n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
-                    )["result"]
+                    #resample_mat = self._resample_matrix(actx, i_tgrp, i_batch)
+                    #batch_result = actx.call_loopy(
+                    #    batch_mat_knl(n_to_nodes, n_from_nodes),
+                    #    resample_mat=resample_mat,
+                    #    ary=ary[batch.from_group_index],
+                    #    from_element_indices=batch._global_from_element_indices(
+                    #        actx, self.to_discr.groups[i_tgrp]),
+                    #    n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
+                    #)["result"]
+                    
+                    from_element = actx.thaw(batch._global_from_element_indices(
+                        actx,
+                        self.to_discr.groups[i_tgrp]))
+                    grp_ary = ary[batch.from_group_index]
+                    mat = self._resample_matrix(actx, i_tgrp, i_batch)
+                    if actx.permits_advanced_indexing:
+                        batch_result = actx.np.where(
+                                            actx.np.not_equal(from_element
+                                                              .reshape(-1, 1),
+                                                              -1),
+                                            #This will probably need kernel data tags
+                                            actx.einsum("ij,ej->ei",
+                                                        mat,
+                                                        grp_ary[from_element]),
+                                            0)
+                    else:
+                        batch_result = actx.call_loopy(
+                            batch_mat_knl(n_to_nodes, n_from_nodes),
+                            resample_mat=mat,
+                            ary=grp_ary,
+                            from_element_indices=from_element,
+                            n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
+                        )["result"]
 
                 else:
-                    batch_result = actx.call_loopy(
-                        batch_pick_knl(),
-                        pick_list=point_pick_indices,
-                        ary=ary[batch.from_group_index],
-                        from_element_indices=batch._global_from_element_indices(
-                            actx, self.to_discr.groups[i_tgrp]),
-                        n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
-                    )["result"]
+                    from_vec = ary[batch.from_group_index]
+                    from_element_indices = actx.thaw(
+                        batch._global_from_element_indices(
+                            actx, self.to_discr.groups[i_tgrp])
+                        )
+                    pick_list = actx.thaw(point_pick_indices)
+
+                    if actx.permits_advanced_indexing:
+                        batch_result = actx.np.where(
+                            actx.np.not_equal(from_element_indices.reshape((-1, 1)),
+                                              -1),
+                            from_vec[from_element_indices.reshape((-1, 1)),
+                                     pick_list],
+                            0)
+                    else:
+                        batch_result = actx.call_loopy(
+                            batch_pick_knl(),
+                            pick_list=pick_list,
+                            ary=from_vec,
+                            from_element_indices=from_element_indices,
+                            n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
+                        )["result"]
 
                 batched_data.append(batch_result)
 

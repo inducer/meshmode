@@ -389,7 +389,8 @@ def make_group_from_vertices(
         unit_nodes_01 = 0.5 + 0.5*unit_nodes
         _, nnodes = unit_nodes.shape
 
-        vertex_tuples = mp.node_tuples_for_space(type(space)(dim, 1))
+        vertex_space = mp.space_for_shape(shape, 1)
+        vertex_tuples = mp.node_tuples_for_space(vertex_space)
         assert len(vertex_tuples) == nvertices
 
         vdm = np.empty((nvertices, nvertices))
@@ -646,28 +647,61 @@ def generate_torus_and_cycle_vertices(
         r_major: float, r_minor: float,
         n_major: int = 20, n_minor: int = 10, order: int = 1,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
-        unit_nodes: Optional[np.ndarray] = None):
+        unit_nodes: Optional[np.ndarray] = None,
+        group_cls: Optional[type] = None,
+        ):
+    from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+    if group_cls is None:
+        group_cls = SimplexElementGroup
+
     a = r_major
     b = r_minor
     u, v = np.mgrid[0:2*np.pi:2*np.pi/n_major, 0:2*np.pi:2*np.pi/n_minor]
 
     # https://web.archive.org/web/20160410151837/https://www.math.hmc.edu/~gu/curves_and_surfaces/surfaces/torus.html  # noqa
-    x = np.cos(u)*(a+b*np.cos(v))
-    y = np.sin(u)*(a+b*np.cos(v))
-    z = b*np.sin(v)
-    vertices = (np.vstack((x[np.newaxis], y[np.newaxis], z[np.newaxis]))
+    x = np.cos(u) * (a + b*np.cos(v))
+    y = np.sin(u) * (a + b*np.cos(v))
+    z = b * np.sin(v)
+
+    vertices = (
+            np.vstack((x[np.newaxis], y[np.newaxis], z[np.newaxis]))
             .transpose(0, 2, 1).copy().reshape(3, -1))
 
     def idx(i, j):
         return (i % n_major) + (j % n_minor) * n_major
-    vertex_indices = ([(idx(i, j), idx(i+1, j), idx(i, j+1))
-            for i in range(n_major) for j in range(n_minor)]
-            + [(idx(i+1, j), idx(i+1, j+1), idx(i, j+1))
-            for i in range(n_major) for j in range(n_minor)])
+
+    if issubclass(group_cls, SimplexElementGroup):
+        # NOTE: this makes two triangles from a the square like
+        #   (i, j+1)    (i+1, j+1)
+        #       o---------o
+        #       | \       |
+        #       |   \     |
+        #       |     \   |
+        #       |       \ |
+        #       o---------o
+        #   (i, j)      (i+1, j)
+
+        vertex_indices = ([
+            (idx(i, j), idx(i+1, j), idx(i, j+1))
+            for i in range(n_major) for j in range(n_minor)
+            ] + [
+            (idx(i+1, j), idx(i+1, j+1), idx(i, j+1))
+            for i in range(n_major) for j in range(n_minor)
+            ])
+    elif issubclass(group_cls, TensorProductElementGroup):
+        # NOTE: this should match the order of the points in modepy
+        vertex_indices = [
+            (idx(i, j), idx(i+1, j), idx(i, j+1), idx(i+1, j+1))
+            for i in range(n_major) for j in range(n_minor)
+            ]
+    else:
+        raise TypeError(f"unsupported 'group_cls': {group_cls}")
 
     vertex_indices = np.array(vertex_indices, dtype=np.int32)
-    grp = make_group_from_vertices(vertices, vertex_indices, order,
-            unit_nodes=unit_nodes)
+    grp = make_group_from_vertices(
+            vertices, vertex_indices, order,
+            unit_nodes=unit_nodes,
+            group_cls=group_cls)
 
     # ambient_dim, nelements, nunit_nodes
     nodes = grp.nodes.copy()
@@ -693,12 +727,9 @@ def generate_torus_and_cycle_vertices(
     x = np.sum(nodes*rvec, axis=0) - a
 
     minor_theta = np.arctan2(nodes[2], x)
-
-    nodes[0] = np.cos(major_theta)*(a+b*np.cos(
-        minor_theta))
-    nodes[1] = np.sin(major_theta)*(a+b*np.cos(
-        minor_theta))
-    nodes[2] = b*np.sin(minor_theta)
+    nodes[0] = np.cos(major_theta) * (a + b*np.cos(minor_theta))
+    nodes[1] = np.sin(major_theta) * (a + b*np.cos(minor_theta))
+    nodes[2] = b * np.sin(minor_theta)
 
     from meshmode.mesh import Mesh
     return (
@@ -716,7 +747,8 @@ def generate_torus(
         r_major: float, r_minor: float,
         n_major: int = 20, n_minor: int = 10, order: int = 1,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
-        unit_nodes: Optional[np.ndarray] = None):
+        unit_nodes: Optional[np.ndarray] = None,
+        group_cls: Optional[type] = None):
     r"""Generate a torus.
 
     .. figure:: images/torus.png
@@ -755,10 +787,12 @@ def generate_torus(
     :returns: a :class:`~meshmode.mesh.Mesh` of a torus.
 
     """
+
     mesh, _, _ = generate_torus_and_cycle_vertices(
             r_major, r_minor, n_major, n_minor, order,
             node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
-            unit_nodes=unit_nodes)
+            unit_nodes=unit_nodes,
+            group_cls=group_cls)
 
     return mesh
 

@@ -879,7 +879,7 @@ def test_quad_mesh_3d(mesh_name, order=3, visualize=False):
 # {{{ test_cube_icosahedron
 
 @pytest.mark.parametrize("order", [2, 3])
-def test_cube_icosphere(actx_factory, order, visualize=True):
+def test_cube_icosphere(actx_factory, order, visualize=False):
     mesh = mgen.generate_sphere(
             r=1.0, order=order,
             group_cls=TensorProductElementGroup,
@@ -893,6 +893,29 @@ def test_cube_icosphere(actx_factory, order, visualize=True):
     actx = actx_factory()
     vtk_visualize_mesh(actx, mesh,
             f"quad_icosphere_order_{order:03d}.vtu",
+            vtk_high_order=False, overwrite=True)
+
+# }}}
+
+
+# {{{ test_tensor_torus
+
+@pytest.mark.parametrize("order", [3, 4])
+def test_tensor_torus(actx_factory, order, visualize=False):
+    mesh = mgen.generate_torus(
+            r_major=10.0, r_minor=5,
+            n_major=24, n_minor=12,
+            order=order,
+            group_cls=TensorProductElementGroup,
+            )
+
+    if not visualize:
+        return
+
+    from meshmode.mesh.visualization import vtk_visualize_mesh
+    actx = actx_factory()
+    vtk_visualize_mesh(actx, mesh,
+            f"quad_torus_order_{order:03d}.vtu",
             vtk_high_order=False, overwrite=True)
 
 # }}}

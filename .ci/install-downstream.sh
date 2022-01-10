@@ -23,10 +23,9 @@ export PYTEST_ADDOPTS="-k 'not (slowtest or octave or mpi)'"
 
 if [[ "$DOWNSTREAM_PROJECT" = "mirgecom" ]]; then
     # can't turn off MPI in mirgecom
-    sudo apt-get update
-    sudo apt-get install openmpi-bin libopenmpi-dev
     export CONDA_ENVIRONMENT=conda-env.yml
     export CISUPPORT_PARALLEL_PYTEST=no
+    echo "- mpi4py" >> "$CONDA_ENVIRONMENT"
 else
     sed -i "/mpi4py/ d" requirements.txt
 fi
