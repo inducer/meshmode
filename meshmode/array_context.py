@@ -31,7 +31,7 @@ from pytools.tag import Tag, UniqueTag
 from arraycontext import (  # noqa: F401
         ArrayContext,
         CommonSubexpressionTag, FirstAxisIsElementsTag,
-        ParameterValue, IsDOFArray, IsOpArray, KernelDataTag,
+        ParameterValue, IsDOFArray,# IsOpArray, KernelDataTag,
         ArrayContainer,
         is_array_container, is_array_container_type,
         serialize_container, deserialize_container,
@@ -51,7 +51,7 @@ from arraycontext import (  # noqa: F401
         # point.
         #pytest_generate_tests_for_pyopencl_array_context
         )
-
+from meshmode.transform_metadata import IsOpArray, KernelDataTag
 # {{{ Tags
 
 

@@ -57,3 +57,19 @@ class ConcurrentDOFInameTag(Tag):
     computations for all DOFs within each element may be performed
     concurrently.
     """
+
+
+class IsOpArray(Tag):
+    """A tag that is applicable to arrays indicating the array is an
+    operator (as opposed, for instance, to a DOF array)."""
+    pass
+
+
+class KernelDataTag(Tag):
+    """A tag that applies to :class:`loopy.LoopKernel`. Kernel data provided
+    with this tag can be later applied to the kernel. This is used, for
+    instance, to specify kernel data in einsum kernels."""
+
+    def __init__(self, kernel_data):
+        self.kernel_data = kernel_data
+
