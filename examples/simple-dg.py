@@ -32,7 +32,6 @@ from pytools.obj_array import flat_obj_array, make_obj_array
 
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
 from loopy import GlobalArg, auto
-from meshmode.array_context import IsDOFArray
 from meshmode.dof_array import DOFArray, flat_norm
 from meshmode.array_context import (PyOpenCLArrayContext,
                                     PytatoPyOpenCLArrayContext)

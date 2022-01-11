@@ -29,7 +29,7 @@ THE SOFTWARE.
 """
 
 from pytools.tag import Tag
-
+from arraycontext import IsDOFArray, ParameterValue
 
 class FirstAxisIsElementsTag(Tag):
     """A tag that is applicable to array outputs indicating that the first
