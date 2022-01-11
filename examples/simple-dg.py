@@ -31,7 +31,6 @@ from pytools import memoize_method, log_process
 from pytools.obj_array import flat_obj_array, make_obj_array
 
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
-from loopy import GlobalArg, auto
 from meshmode.dof_array import DOFArray, flat_norm
 from meshmode.array_context import (PyOpenCLArrayContext,
                                     PytatoPyOpenCLArrayContext)
@@ -296,6 +295,7 @@ class DGDiscretization:
 
         actx = vec.array_context
         dtype = vec.entry_dtype
+
         all_faces_conn = self.get_connection("vol", "all_faces")
         all_faces_discr = all_faces_conn.to_discr
         vol_discr = all_faces_conn.from_discr
