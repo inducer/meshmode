@@ -72,4 +72,3 @@ class KernelDataTag(Tag):
 
     def __init__(self, kernel_data):
         self.kernel_data = kernel_data
-
