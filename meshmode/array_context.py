@@ -99,6 +99,7 @@ from arraycontext import PyOpenCLArrayContext as PyOpenCLArrayContextBase
 from arraycontext import PytatoPyOpenCLArrayContext as PytatoPyOpenCLArrayContextBase
 from arraycontext.pytest import (
         _PytestPyOpenCLArrayContextFactoryWithClass,
+        _PytestPytatoPyOpenCLArrayContextFactory,
         register_pytest_array_context_factory)
 
 def generate_pytest_generate_tests(array_context_type):
@@ -379,10 +380,20 @@ class PytestPyOpenCLArrayContextFactoryWithHostScalars(
     force_device_scalars = False
 
 
+class PytestPytatoPyOpenCLArrayContextFactory(
+        _PytestPytatoPyOpenCLArrayContextFactory):
+
+    @property
+    def actx_class(self):
+        return PytatoPyOpenCLArrayContext
+
+
 register_pytest_array_context_factory("meshmode.pyopencl",
         PytestPyOpenCLArrayContextFactory)
 register_pytest_array_context_factory("meshmode.pyopencl-deprecated",
         PytestPyOpenCLArrayContextFactoryWithHostScalars)
+register_pytest_array_context_factory("meshmode.pytato_cl",
+        PytestPytatoPyOpenCLArrayContextFactory)
 
 # }}}
 

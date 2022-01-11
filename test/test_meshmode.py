@@ -28,10 +28,13 @@ import numpy.linalg as la
 import meshmode         # noqa: F401
 from arraycontext import thaw, flatten
 
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.array_context import (PytestPyOpenCLArrayContextFactory,
+                                    PytestPytatoPyOpenCLArrayContextFactory)
 from arraycontext import pytest_generate_tests_for_array_contexts
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
+        [PytestPytatoPyOpenCLArrayContextFactory,
+         PytestPyOpenCLArrayContextFactory,
+         ])
 
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.discretization.poly_element import (
@@ -438,7 +441,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
 
         # Ensure test coverage for non-in-place kernels in DirectConnection
         bdry_f_2_no_inp = opp_face(bdry_f, _force_no_inplace_updates=True)
-        assert flat_norm(bdry_f_2-bdry_f_2_no_inp, np.inf) < 1e-14
+        assert actx.to_numpy(flat_norm(bdry_f_2-bdry_f_2_no_inp, np.inf)) < 1e-14
 
         err = flat_norm(bdry_f-bdry_f_2, np.inf)
         eoc_rec.add_data_point(h, actx.to_numpy(err))
@@ -459,10 +462,14 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
     ("torus", lambda: mgen.generate_torus(5, 1)),
     ])
 def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
+    from arraycontext import PyOpenCLArrayContext
     pytest.importorskip("pytential")
 
     logging.basicConfig(level=logging.INFO)
     actx = actx_factory()
+
+    if not isinstance(actx, PyOpenCLArrayContext):
+        pytest.skip(f"{actx}: not supported by pytential")
 
     mesh = mesh_gen_func()
 
@@ -521,8 +528,12 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
     ])
 def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
         visualize=False):
+    from arraycontext import PyOpenCLArrayContext
     pytest.importorskip("pytential")
     actx = actx_factory()
+
+    if not isinstance(actx, PyOpenCLArrayContext):
+        pytest.skip(f"{actx}: not supported by pytential")
 
     if group_cls is SimplexElementGroup:
         group_factory = default_simplex_group_factory(dim, order=mesh_order + 3)
@@ -645,7 +656,7 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
             / flat_norm(f_high_ref, np.inf))
 
     print(err)
-    assert err < 1e-2
+    assert actx.to_numpy(err) < 1e-2
 
 # }}}
 
@@ -659,10 +670,14 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
     ])
 @pytest.mark.parametrize("mesh_order", [1, 2])
 def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
+    from arraycontext import PyOpenCLArrayContext
     pytest.importorskip("pytential")
 
     logging.basicConfig(level=logging.INFO)
     actx = actx_factory()
+
+    if not isinstance(actx, PyOpenCLArrayContext):
+        pytest.skip(f"{actx}: not supported by pytential")
 
     from pytools.convergence import EOCRecorder
     vol_eoc_rec = EOCRecorder()
@@ -876,10 +891,11 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
 
             # Ensure test coverage for non-in-place kernels in DirectConnection
             op_bdry_f_no_inplace = opposite(bdry_f, _force_no_inplace_updates=True)
-            assert flat_norm(op_bdry_f - op_bdry_f_no_inplace, np.inf) < 1e-15
+            error = flat_norm(op_bdry_f - op_bdry_f_no_inplace, np.inf)
+            assert actx.to_numpy(error) < 1e-15
 
             error = flat_norm(bdry_f - op_bdry_f, np.inf)
-            assert error < 1.0e-11, error
+            assert actx.to_numpy(error) < 1.0e-11, error
 
         if boundary_tag == FACE_RESTR_ALL:
             embedding = make_face_to_all_faces_embedding(actx, conn, conn.to_discr)
@@ -887,7 +903,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
 
             em_bdry_f = embedding(bdry_f)
             error = flat_norm(bdry_f - em_bdry_f)
-            assert error < 1.0e-11, error
+            assert actx.to_numpy(error) < 1.0e-11, error
 
     # check some derivatives (nb: flatten is a generator)
     import pytools
