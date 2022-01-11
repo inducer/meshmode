@@ -27,8 +27,10 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
-from arraycontext import (KernelDataTag, IsDOFArray, IsOpArray, ParameterValue,
-        NotAnArrayContainerError, serialize_container, deserialize_container,)
+from meshmode.array_context import (KernelDataTag, IsDOFArray,
+    IsOpArray, ParameterValue)
+from arraycontext import (NotAnArrayContainerError,
+    serialize_container, deserialize_container,)
 from meshmode.transform_metadata import FirstAxisIsElementsTag
 from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
@@ -169,9 +171,12 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
         import loopy as lp
         kernel_data = [
-            lp.GlobalArg("arg1", fp_format, shape=(Ne, Nj), offset=lp.auto, tags=[IsDOFArray()]),
-            lp.GlobalArg("arg0", fp_format, shape=(Ni, Nj), offset=lp.auto, tags=[IsOpArray()]),
-            lp.GlobalArg("out",  fp_format, shape=(Ne, Ni), offset=lp.auto, tags=[IsDOFArray()], is_output=True),
+            lp.GlobalArg("arg1", fp_format, shape=(Ne, Nj), offset=lp.auto,
+                tags=[IsDOFArray()]),
+            lp.GlobalArg("arg0", fp_format, shape=(Ni, Nj), offset=lp.auto,
+                tags=[IsOpArray()]),
+            lp.GlobalArg("out",  fp_format, shape=(Ne, Ni), offset=lp.auto,
+                tags=[IsDOFArray()], is_output=True),
             lp.ValueArg("Ni", tags=[ParameterValue(Ni)]),
             lp.ValueArg("Nj", tags=[ParameterValue(Nj)]),
             lp.ValueArg("Ne", tags=[ParameterValue(Ne)]),
@@ -182,7 +187,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
         return actx.einsum("ij,ej->ei",
                            vi_mat,
                            ary[grp.index],
-                           tagged=(FirstAxisIsElementsTag(),kd_tag,))
+                           tagged=(FirstAxisIsElementsTag(), kd_tag,))
 
     def __call__(self, ary):
         """Computes modal coefficients data from a functions
