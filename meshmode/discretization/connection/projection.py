@@ -27,7 +27,6 @@ from pytools import keyed_memoize_method, keyed_memoize_in, memoize_in
 import loopy as lp
 
 from meshmode.array_context import IsDOFArray
-from meshmode.dof_array import DOFArray # Is this still needed?
 from arraycontext import (
         NotAnArrayContainerError,
         make_loopy_program, serialize_container, deserialize_container)
