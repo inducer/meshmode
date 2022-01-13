@@ -245,6 +245,7 @@ def _get_group_tessellation_info_modepy(meg: _ModepyElementGroup):
 
     from pytools import add_tuples
     space = mp.space_for_shape(shape, 1)
+    assert type(space) == type(meg._modepy_space)  # noqa: E721
     orig_vertices = tuple([
         add_tuples(vt, vt) for vt in mp.node_tuples_for_space(space)
         ])
