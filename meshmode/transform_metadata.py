@@ -28,8 +28,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools.tag import Tag
-from arraycontext import IsDOFArray, ParameterValue
+from pytools.tag import Tag, UniqueTag
+#from arraycontext import IsDOFArray, ParameterValue
 
 class FirstAxisIsElementsTag(Tag):
     """A tag that is applicable to array outputs indicating that the first
@@ -57,6 +57,28 @@ class ConcurrentDOFInameTag(Tag):
     computations for all DOFs within each element may be performed
     concurrently.
     """
+
+
+class ParameterValue(UniqueTag):
+    """A tag that applies to :class:`loopy.ValueArg`. Instances of this tag
+    are initialized with the value of the parameter and this value may be
+    later retrieved
+    for use with `loopy.fix_parameter` in `transform_loopy_program`. This allows
+    the fixing of parameters whose values cannot be set during the creation of the
+    program/kernel. This is useful for fixing the loop parameters of einsum kernels
+    for instance.
+    """
+
+    def __init__(self, value):
+        self.value = value
+
+
+class IsDOFArray(Tag):
+    """A tag that is applicable to :class:`loopy.ArrayArg` indicating the content of the
+    array comprises element DOFs.
+    """
+    pass
+
 
 
 class IsOpArray(Tag):
