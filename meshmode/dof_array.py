@@ -22,17 +22,13 @@ THE SOFTWARE.
 
 import threading
 import operator as op
-from loopy import GlobalArg, ValueArg, auto
+from loopy import GlobalArg, auto
 from warnings import warn
 from numbers import Number
 from contextlib import contextmanager
 from functools import partial, update_wrapper
-from typing import Any, Callable, Iterable, Optional, Tuple, Union
+from typing import Any, Callable, Iterable, Optional, Tuple
 
-# Is this one still needed?
-from pytools.obj_array import obj_array_vectorize, obj_array_vectorize_n_args
-
-from meshmode.array_context import IsDOFArray, ParameterValue
 import numpy as np
 import loopy as lp
 
@@ -40,7 +36,8 @@ from pytools import MovedFunctionDeprecationWrapper
 from pytools import single_valued, memoize_in
 
 from meshmode.transform_metadata import (
-            ConcurrentElementInameTag, ConcurrentDOFInameTag)
+            ConcurrentElementInameTag, ConcurrentDOFInameTag,
+            IsDOFArray)
 from arraycontext import (
         ArrayContext, NotAnArrayContainerError,
         make_loopy_program, with_container_arithmetic,
@@ -76,6 +73,7 @@ class MyFrameSummary:
     filename: str
     lineno: int
     func_name: str
+
 
 @with_container_arithmetic(
         bcast_obj_array=True,
@@ -207,8 +205,6 @@ class DOFArray:
             print(f"FREE {alloc_size} -> {DOFArray.total_alloc} "
                     f"({sum(DOFArray.alloc_frames.values())})")
     """
-
-
 
     # Tell numpy that we would like to do our own array math, thank you very much.
     # (numpy arrays have priority 0.)
@@ -503,9 +499,9 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
             """,
             [
                 lp.GlobalArg("result", None,
-                             shape="nelements * ndofs_per_element"),
+                    shape="nelements * ndofs_per_element"),
                 lp.GlobalArg("grp_ary", None,
-                             shape=("nelements", "ndofs_per_element"), tags=[IsDOFArray()]),
+                    shape=("nelements", "ndofs_per_element"), tags=[IsDOFArray()]),
                 lp.ValueArg("nelements", np.int32),
                 lp.ValueArg("ndofs_per_element", np.int32),
                 "..."
