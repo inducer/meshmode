@@ -22,7 +22,6 @@ THE SOFTWARE.
 
 import threading
 import operator as op
-from loopy import GlobalArg, auto
 from warnings import warn
 from numbers import Number
 from contextlib import contextmanager
@@ -511,7 +510,7 @@ def _unflatten_dof_array(actx: ArrayContext, ary: Any,
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
             "result[iel, idof] = ary[grp_start + iel*ndofs_per_element + idof]",
             kernel_data=[
-                GlobalArg("result", None, shape=auto, tags=[IsDOFArray()]),
+                lp.GlobalArg("result", None, shape=lp.auto, tags=[IsDOFArray()]),
                 ...
             ],
             name="unflatten")
