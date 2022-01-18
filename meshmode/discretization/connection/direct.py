@@ -26,10 +26,9 @@ import numpy.linalg as la
 
 import loopy as lp
 from meshmode.transform_metadata import (
-        ConcurrentElementInameTag, ConcurrentDOFInameTag)
+        ConcurrentElementInameTag, ConcurrentDOFInameTag,
+        IsOpArray, IsDOFArray, ParameterValue)
 from pytools import memoize_in, keyed_memoize_method
-from pytools.obj_array import obj_array_vectorized_n_args
-from meshmode.array_context import IsOpArray, IsDOFArray, ParameterValue
 from arraycontext import (
         ArrayContext, NotAnArrayContainerError,
         serialize_container, deserialize_container, make_loopy_program)
