@@ -29,7 +29,7 @@ THE SOFTWARE.
 """
 
 from pytools.tag import Tag, UniqueTag
-#from arraycontext import IsDOFArray, ParameterValue
+
 
 class FirstAxisIsElementsTag(Tag):
     """A tag that is applicable to array outputs indicating that the first
@@ -78,7 +78,6 @@ class IsDOFArray(Tag):
     array comprises element DOFs.
     """
     pass
-
 
 
 class IsOpArray(Tag):
