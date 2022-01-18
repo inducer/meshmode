@@ -29,13 +29,12 @@ import numpy as np
 from abc import ABCMeta, abstractproperty, abstractmethod
 from pytools import memoize_in, memoize_method, keyed_memoize_in
 from pytools.obj_array import make_obj_array
-from meshmode.array_context import IsDOFArray, ParameterValue, IsOpArray, KernelDataTag
-from loopy import GlobalArg, ValueArg, auto
 from arraycontext import ArrayContext, make_loopy_program
 
 import loopy as lp
 from meshmode.transform_metadata import (
-        ConcurrentElementInameTag, ConcurrentDOFInameTag, FirstAxisIsElementsTag)
+        ConcurrentElementInameTag, ConcurrentDOFInameTag, FirstAxisIsElementsTag,
+        IsDOFArray, ParameterValue, IsOpArray, KernelDataTag)
 
 from warnings import warn
 
@@ -540,7 +539,7 @@ class Discretization:
                 "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
                 "result[iel,idof] = weights[idof]",
                 kernel_data=[
-                    GlobalArg("result", None, shape=auto, tags=[IsDOFArray()]),
+                    lp.GlobalArg("result", None, shape=lp.auto, tags=[IsDOFArray()]),
                     ...
                 ],
                 name="quad_weights")
