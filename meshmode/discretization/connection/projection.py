@@ -26,11 +26,10 @@ from pytools import keyed_memoize_method, keyed_memoize_in, memoize_in
 
 import loopy as lp
 
-from meshmode.array_context import IsDOFArray
 from arraycontext import (
         NotAnArrayContainerError,
         make_loopy_program, serialize_container, deserialize_container)
-from meshmode.transform_metadata import FirstAxisIsElementsTag
+from meshmode.transform_metadata import FirstAxisIsElementsTag, IsDOFArray
 from meshmode.discretization.connection.direct import (
         DiscretizationConnection,
         DirectDiscretizationConnection)
@@ -168,7 +167,6 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                                     * basis_tabulation[ibasis, i_quad]      \
                                     * weights[i_quad]) {dep=barrier}
                 """,
-                # Are any more of these DOF arrays?
                 [
                     lp.GlobalArg("ary", None,
                                  shape=("n_from_elements", "n_from_nodes")),
