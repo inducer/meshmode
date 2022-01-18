@@ -553,7 +553,7 @@ class Discretization:
                         prg(),
                         weights=actx.from_numpy(grp.quadrature_rule().weights),
                         nelements=grp.nelements,
-                        )[1]["result"])
+                        )["result"])
                 for grp in self.groups))
 
     def nodes(self, cached=True):
