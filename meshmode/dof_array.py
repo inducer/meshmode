@@ -591,7 +591,7 @@ def _unflatten_dof_array(actx: ArrayContext, ary: Any,
             grp_start=grp_start, ary=ary,
             nelements=nel,
             ndofs_per_element=ndof,
-            )[1]["result"]
+            )["result"]
         for grp_start, (nel, ndof) in zip(group_starts, group_shapes)))
 
 
