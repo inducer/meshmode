@@ -596,9 +596,12 @@ class Discretization:
             Ni, Nj = mat.shape
 
             kernel_data = [
-                lp.GlobalArg("arg1", fp_format, shape=(Ne, Nj), offset=lp.auto), # In default data layout apparently
-                lp.GlobalArg("arg0", fp_format, shape=(Ni, Nj), offset=lp.auto, tags=[IsOpArray()]),
-                lp.GlobalArg("out",  fp_format, shape=(Ne, Ni), offset=lp.auto, tags=[IsDOFArray()], is_output=True),
+                lp.GlobalArg("arg1", fp_format, shape=(Ne, Nj),
+                    offset=lp.auto),  # In default data layout apparently
+                lp.GlobalArg("arg0", fp_format, shape=(Ni, Nj), offset=lp.auto,
+                    tags=[IsOpArray()]),
+                lp.GlobalArg("out",  fp_format, shape=(Ne, Ni), offset=lp.auto,
+                    tags=[IsDOFArray()], is_output=True),
                 lp.ValueArg("Ni", tags=[ParameterValue(Ni)]),
                 lp.ValueArg("Nj", tags=[ParameterValue(Nj)]),
                 lp.ValueArg("Ne", tags=[ParameterValue(Ne)]),
@@ -607,10 +610,10 @@ class Discretization:
 
             kd_tag = KernelDataTag(kernel_data)
 
-            return actx.einsum("ij,ej->ei", 
+            return actx.einsum("ij,ej->ei",
                                mat,
                                nodes,
-                               tagged=(FirstAxisIsElementsTag(),kd_tag,))
+                               tagged=(FirstAxisIsElementsTag(), kd_tag,))
 
         result = make_obj_array([
             _DOFArray(None, tuple([
@@ -675,9 +678,12 @@ def num_reference_derivative(
         Ni, Nj = mat.shape
 
         kernel_data = [
-            lp.GlobalArg("arg1", fp_format, shape=(Ne, Nj), offset=lp.auto, tags=[IsDOFArray()]),
-            lp.GlobalArg("arg0", fp_format, shape=(Ni, Nj), offset=lp.auto, tags=[IsOpArray()]),
-            lp.GlobalArg("out",  fp_format, shape=(Ne, Ni), offset=lp.auto, tags=[IsDOFArray()], is_output=True),
+            lp.GlobalArg("arg1", fp_format, shape=(Ne, Nj), offset=lp.auto,
+                tags=[IsDOFArray()]),
+            lp.GlobalArg("arg0", fp_format, shape=(Ni, Nj), offset=lp.auto,
+                tags=[IsOpArray()]),
+            lp.GlobalArg("out",  fp_format, shape=(Ne, Ni), offset=lp.auto,
+                tags=[IsDOFArray()], is_output=True),
             lp.ValueArg("Ni", tags=[ParameterValue(Ni)]),
             lp.ValueArg("Nj", tags=[ParameterValue(Nj)]),
             lp.ValueArg("Ne", tags=[ParameterValue(Ne)]),
@@ -689,7 +695,7 @@ def num_reference_derivative(
         data.append(actx.einsum("ij,ej->ei",
                         mat,
                         vec[grp.index],
-                        tagged=(FirstAxisIsElementsTag(),kd_tag,)))
+                        tagged=(FirstAxisIsElementsTag(), kd_tag,)))
 
     return _DOFArray(actx, tuple(data))
 
