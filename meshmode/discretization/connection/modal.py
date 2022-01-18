@@ -27,11 +27,10 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
-from meshmode.array_context import (KernelDataTag, IsDOFArray,
-    IsOpArray, ParameterValue)
 from arraycontext import (NotAnArrayContainerError,
     serialize_container, deserialize_container,)
-from meshmode.transform_metadata import FirstAxisIsElementsTag
+from meshmode.transform_metadata import (FirstAxisIsElementsTag,
+    KernelDataTag, IsDOFArray, IsOpArray, ParameterValue)
 from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
