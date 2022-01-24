@@ -32,6 +32,7 @@ import numpy.linalg as la
 import modepy as mp
 
 from meshmode.mesh import (
+    VolumeGroup,
     BTAG_PARTITION,
     InteriorAdjacencyGroup,
     BoundaryAdjacencyGroup,
@@ -220,6 +221,52 @@ def _get_connected_partitions(
                     + elem_base_j])
 
     return connected_parts
+
+
+def _create_local_volume_groups(mesh, global_elem_to_part_elem,
+            part_mesh_groups, global_group_to_part_group,
+            part_mesh_group_elem_base):
+    r"""
+    Create local volume groups for a partitioned mesh.
+
+    :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
+    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` mapping from global
+        element index to local partition-wide element index for local elements (and
+        -1 otherwise).
+    :arg global_group_to_part_group: An array mapping groups in *mesh* to groups in
+        *part_mesh_groups* (or `None` if the group is not local).
+    :arg part_mesh_group_elem_base: An array containing the starting partition-wide
+        element index for each group in *part_mesh_groups*.
+
+    :returns: A list of lists of `~meshmode.mesh.VolumeGroup` instances
+        containing the entries in *mesh.volume_groups* that are local.
+    """
+    local_volume_groups = [[] for _ in part_mesh_groups]
+
+    for igrp, vgrp_list in enumerate(mesh.volume_groups):
+        i_part_grp = global_group_to_part_group[igrp]
+        if i_part_grp is None:
+            continue
+        for vgrp in vgrp_list:
+            elem_base = mesh.groups[igrp].element_nr_base
+
+            elements_are_local = global_elem_to_part_elem[
+                vgrp.elements + elem_base] >= 0
+
+            adj_indices, = np.where(elements_are_local)
+
+            if len(adj_indices) > 0:
+                part_elem_base = part_mesh_group_elem_base[i_part_grp]
+                elements = (
+                    global_elem_to_part_elem[vgrp.elements[adj_indices] + elem_base]
+                    - part_elem_base)
+                local_volume_groups[i_part_grp].append(
+                    VolumeGroup(
+                        igroup=i_part_grp,
+                        volume_tag=vgrp.volume_tag,
+                        elements=elements))
+
+    return local_volume_groups
 
 
 def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
@@ -474,6 +521,10 @@ def partition_mesh(mesh, part_per_element, part_num):
     connected_parts = _get_connected_partitions(
         mesh, part_per_element, global_elem_to_part_elem)
 
+    local_volume_groups = _create_local_volume_groups(
+                mesh, global_elem_to_part_elem, part_mesh_groups,
+                global_group_to_part_group, part_mesh_group_elem_base)
+
     local_to_local_adj_groups = _create_local_to_local_adjacency_groups(
                 mesh, global_elem_to_part_elem, part_mesh_groups,
                 global_group_to_part_group, part_mesh_group_elem_base)
@@ -498,6 +549,7 @@ def partition_mesh(mesh, part_per_element, part_num):
     part_mesh = Mesh(
             part_vertices,
             part_mesh_groups,
+            volume_groups=local_volume_groups,
             facial_adjacency_groups=part_facial_adj_groups,
             is_conforming=mesh.is_conforming)
 

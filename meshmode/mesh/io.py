@@ -51,7 +51,6 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         # Use data fields similar to meshpy.triangle.MeshInfo and
         # meshpy.tet.MeshInfo
         self.points = None
-        self.elements = None
         self.element_vertices = None
         self.element_nodes = None
         self.element_types = None
@@ -130,6 +129,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         mesh_bulk_dim = max(el_type.dimensions for el_type in el_type_hist)
 
+        volume_groups = []
+
         # {{{ build vertex numbering
 
         # map set of face vertex indices to list of tags associated to face
@@ -141,8 +142,10 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     vertex_gmsh_index_to_mine[gmsh_vertex_nr] = \
                             len(vertex_gmsh_index_to_mine)
             if self.tags:
-                el_tag_indexes = [self.gmsh_tag_index_to_mine[t] for t in
-                                  self.element_markers[element]]
+                el_markers = self.element_markers[element]
+                el_tag_indexes = (
+                    [self.gmsh_tag_index_to_mine[t] for t in el_markers]
+                    if el_markers is not None else [])
                 # record tags of boundary dimension
                 el_tags = [self.tags[i][0] for i in el_tag_indexes if
                            self.tags[i][1] == mesh_bulk_dim - 1]
@@ -166,7 +169,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         # }}}
 
         from meshmode.mesh import (Mesh,
-                SimplexElementGroup, TensorProductElementGroup)
+                SimplexElementGroup, TensorProductElementGroup, VolumeGroup)
 
         bulk_el_types = set()
 
@@ -183,10 +186,11 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             vertex_indices = np.empty(
                     (ngroup_elements, el_vertex_count),
                     np.int32)
+            volume_group_elements = {}
             i = 0
 
-            for el_vertices, el_nodes, el_type in zip(
-                    self.element_vertices, self.element_nodes, self.element_types):
+            for element, (el_vertices, el_nodes, el_type) in enumerate(zip(
+                    self.element_vertices, self.element_nodes, self.element_types)):
                 if el_type is not group_el_type:
                     continue
 
@@ -194,6 +198,14 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 vertex_indices[i] = [
                         vertex_gmsh_index_to_mine[v_nr] for v_nr in el_vertices
                         ]
+
+                el_markers = self.element_markers[element]
+                if el_markers is not None:
+                    for t in el_markers:
+                        volume_tag = self.tags[self.gmsh_tag_index_to_mine[t]][0]
+                        if volume_tag not in volume_group_elements:
+                            volume_group_elements[volume_tag] = []
+                        volume_group_elements[volume_tag].append(i)
 
                 i += 1
 
@@ -238,6 +250,13 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
             groups.append(group)
 
+            volume_groups.append([
+                VolumeGroup(
+                    igroup=len(groups)-1,
+                    volume_tag=tag,
+                    elements=np.array(elements, dtype=np.int32))
+                for tag, elements in volume_group_elements.items()])
+
         # FIXME: This is heuristic.
         if len(bulk_el_types) == 1:
             is_conforming = True
@@ -254,6 +273,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         return Mesh(
                 vertices, groups,
                 is_conforming=is_conforming,
+                volume_groups=volume_groups,
                 facial_adjacency_groups=facial_adjacency_groups,
                 **self.mesh_construction_kwargs)
 
