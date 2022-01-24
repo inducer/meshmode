@@ -450,16 +450,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 n_to_nodes, n_from_nodes = resample_mat.shape
 
                 if point_pick_indices is None:
-                    #resample_mat = self._resample_matrix(actx, i_tgrp, i_batch)
-                    #batch_result = actx.call_loopy(
-                    #    batch_mat_knl(n_to_nodes, n_from_nodes),
-                    #    resample_mat=resample_mat,
-                    #    ary=ary[batch.from_group_index],
-                    #    from_element_indices=batch._global_from_element_indices(
-                    #        actx, self.to_discr.groups[i_tgrp]),
-                    #    n_to_nodes=self.to_discr.groups[i_tgrp].nunit_dofs
-                    #)["result"]
-                    
                     from_element = actx.thaw(batch._global_from_element_indices(
                         actx,
                         self.to_discr.groups[i_tgrp]))
