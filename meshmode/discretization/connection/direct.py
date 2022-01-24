@@ -151,24 +151,6 @@ class DiscretizationConnectionElementGroup:
 
 # }}}
 
-# Creates the inverse mapping of an indirection array
-def Pinv(p):
-    p2 = np.empty_like(p)
-    p2[p] = np.arange(0,len(p), dtype=np.int32)
-    return p2
-
-# Combine two indirection arrays p_l and p_r into a new
-# indirection array p_c so that
-# if B[p_l[i]] = A[p_r[i]] then B[i] = A[p_c[i]]
-# or, alternatively, B[p_c[i]] = A[i] if lhs=True.
-# Alternatively, flipping the order of the input arguments
-# will do the same thing. 
-def combine_indirection_arrays(p_l, p_r, lhs=False):
-    if lhs:
-        return p_l[Pinv(p_r)]
-    else:
-        return p_r[Pinv(p_l)]
-
 
 # {{{ connection classes
 
