@@ -534,9 +534,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         shape=(n_to_el_ind,),
                         offset=lp.auto),
                     lp.ValueArg("n_to_nodes", tags=[ParameterValue(n_to_nodes)]),
-                    # Specifying this breaks order 4 for some reason
                     lp.ValueArg("n_from_nodes", tags=[ParameterValue(n_from_nodes)]),
-                    lp.ValueArg("nelements", np.int32, tags=[ParameterValue(n_from_nodes)]), # I'm guessing
+                    lp.ValueArg("nelements", np.int32, tags=[ParameterValue(n_from_nodes)]),
                     lp.ValueArg("nelements_result", np.int32, tags=[ParameterValue(nelements_result)]),
                     lp.ValueArg("nelements_vec", np.int32, tags=[ParameterValue(nelements_vec)]),
                     "...",
@@ -628,13 +627,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     n_to_el_ind = batch.to_element_indices.shape[0]
                     index_dtype = batch.from_element_indices.dtype
                     fp_format = resample_mat.dtype
-
-                    #print(resample_mat.shape)
-                    #print(result[i_tgrp].shape)
-                    #print(ary[batch.from_group_index].shape)
-                    #print(batch.from_element_indices.shape)
-                    #print(batch.to_element_indices.shape)
-                    #exit()
 
                     actx.call_loopy(mat_knl(nelements_vec, nelements_result, n_to_nodes, 
                             n_from_nodes, n_from_el_ind, n_to_el_ind, fp_format, index_dtype),
