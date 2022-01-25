@@ -427,6 +427,16 @@ class Discretization:
                 }[self.real_dtype.type])
 
         if _force_actx_clone:
+            # We're cloning the array context here to make the setup actx
+            # distinct from the "ambient" actx. This allows us to catch
+            # errors where arrays from both are inadvertently mixed.
+            # See https://github.com/inducer/arraycontext/pull/22/files
+            # for context.
+            # _force_actx clone exists to disable cloning of the array
+            # context when copying a discretization, to allow
+            # preserving caches.
+            # See https://github.com/inducer/meshmode/pull/293
+            # for context.
             actx = actx.clone()
 
         self._setup_actx = actx
