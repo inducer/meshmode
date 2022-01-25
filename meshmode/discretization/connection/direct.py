@@ -362,7 +362,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_mat_knl"))
-        def batch_mat_knl(n_to_nodes, n_from_nodes):
+        def batch_mat_knl():
             t_unit = make_loopy_program(
                 [
                     "{[iel]: 0 <= iel < nelements}",
@@ -428,8 +428,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
                 point_pick_indices = self._resample_point_pick_indices(
                         actx, i_tgrp, i_batch)
-                resample_mat = self._resample_matrix(actx, i_tgrp, i_batch)
-                n_to_nodes, n_from_nodes = resample_mat.shape
 
                 if point_pick_indices is None:
                     from_element = actx.thaw(batch._global_from_element_indices(
@@ -442,14 +440,13 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                                             actx.np.not_equal(from_element
                                                               .reshape(-1, 1),
                                                               -1),
-                                            #This will probably need kernel data tags
                                             actx.einsum("ij,ej->ei",
                                                         mat,
                                                         grp_ary[from_element]),
                                             0)
                     else:
                         batch_result = actx.call_loopy(
-                            batch_mat_knl(n_to_nodes, n_from_nodes),
+                            batch_mat_knl(),
                             resample_mat=mat,
                             ary=grp_ary,
                             from_element_indices=from_element,
@@ -509,6 +506,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx, (DirectDiscretizationConnection,
             "resample_by_mat_knl_inplace"))
         def mat_knl(nelements_vec, nelements_result, n_to_nodes, n_from_nodes, n_from_el_ind, n_to_el_ind, fp_format, index_dtype):
+            # Need to find a test code that uses this.
             t_unit = make_loopy_program(
                 """{[iel, idof, j]:
                     0<=iel<nelements and
@@ -519,22 +517,24 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     * ary[from_element_indices[iel], j])",
                 [
                     lp.GlobalArg("result", fp_format,
-                        shape=(nelements_result, n_to_nodes),
+                        shape="nelements_result, n_to_nodes",
                         offset=lp.auto, tags=[IsDOFArray()]),
                     lp.GlobalArg("resample_mat", fp_format,
-                        shape=(n_to_nodes, n_from_nodes),
+                        shape="n_to_nodes, n_from_nodes",
                         offset=lp.auto, tags=[IsOpArray()]),
                     lp.GlobalArg("ary", fp_format,
-                        shape=(nelements_vec, n_from_nodes),
+                        shape="nelements_vec, n_from_nodes",
                         offset=lp.auto, tags=[IsDOFArray()]),
                     lp.GlobalArg("from_element_indices", index_dtype, 
-                        shape=(n_from_el_ind,),
+                        shape=("n_from_el_ind",),
                         offset=lp.auto),
                     lp.GlobalArg("to_element_indices", index_dtype, 
-                        shape=(n_to_el_ind,),
+                        shape=("n_to_el_ind",),
                         offset=lp.auto),
                     lp.ValueArg("n_to_nodes", tags=[ParameterValue(n_to_nodes)]),
                     lp.ValueArg("n_from_nodes", tags=[ParameterValue(n_from_nodes)]),
+                    lp.ValueArg("n_to_el_ind", tags=[ParameterValue(n_to_el_ind)]),
+                    lp.ValueArg("n_from_el_ind", tags=[ParameterValue(n_from_el_ind)]),
                     lp.ValueArg("nelements", np.int32, tags=[ParameterValue(n_from_nodes)]),
                     lp.ValueArg("nelements_result", np.int32, tags=[ParameterValue(nelements_result)]),
                     lp.ValueArg("nelements_vec", np.int32, tags=[ParameterValue(nelements_vec)]),
@@ -573,7 +573,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             return lp.tag_inames(t_unit, {
                 "iel": ConcurrentElementInameTag(),
                 "idof": ConcurrentDOFInameTag()})
-
 
         if self.is_surjective:
             result = self.to_discr.empty(actx, dtype=ary.entry_dtype)
