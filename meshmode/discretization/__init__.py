@@ -395,8 +395,10 @@ class Discretization:
     .. automethod:: quad_weights
     """
 
-    def __init__(self, actx: ArrayContext, mesh, group_factory,
-            real_dtype=np.float64):
+    def __init__(self,
+            actx: ArrayContext, mesh, group_factory,
+            real_dtype=np.float64,
+            _force_actx_clone=True):
         """
         :arg actx: A :class:`ArrayContext` used to perform computation needed
             during initial set-up of the mesh.
@@ -424,7 +426,20 @@ class Discretization:
                 np.float64: np.complex128
                 }[self.real_dtype.type])
 
-        self._setup_actx = actx.clone()
+        if _force_actx_clone:
+            # We're cloning the array context here to make the setup actx
+            # distinct from the "ambient" actx. This allows us to catch
+            # errors where arrays from both are inadvertently mixed.
+            # See https://github.com/inducer/arraycontext/pull/22/files
+            # for context.
+            # _force_actx clone exists to disable cloning of the array
+            # context when copying a discretization, to allow
+            # preserving caches.
+            # See https://github.com/inducer/meshmode/pull/293
+            # for context.
+            actx = actx.clone()
+
+        self._setup_actx = actx
         self._group_factory = group_factory
         self._cached_nodes = None
 
@@ -435,10 +450,11 @@ class Discretization:
         """
 
         return type(self)(
-                self._setup_actx if actx is None else actx,
+                self._setup_actx if actx is None else actx.clone(),
                 self.mesh if mesh is None else mesh,
                 self._group_factory if group_factory is None else group_factory,
                 self.real_dtype if real_dtype is None else real_dtype,
+                _force_actx_clone=False,
                 )
 
     @property
