@@ -638,48 +638,12 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
                 else:
                     nelements, n_to_nodes = result[i_tgrp].shape
-
-                    # Cases:
-                    # lhs is some constant offset into result array -> just use offset
-                    # lhs is some zero based indexing
-
-                    to_element_indices = batch.to_element_indices.get(queue=actx.queue)
-                    from_element_indices = batch.from_element_indices.get(queue=actx.queue)
-                    #print(to_element_indices)
-                    #print(from_element_indices)
-                    #print(to_element_indices.shape)
-                    #print(from_element_indices.shape)
-                    #offset = to_element_indices[0]
-                    #compare_to = np.arange(offset, len(to_element_indices) + offset, dtype=np.int64)
-                    indirection = "both"
-                    #compare = "rhs" if np.allclose(compare_to, to_element_indices) else "both"  
-                    #if compare == "both":
-                    #    print(np.array(sorted(to_element_indices)))
-                    #    print(np.array(sorted(from_element_indices)))
-                    #    exit()
-                    
-
-                    if True:#indirection == "both":
-                        actx.call_loopy(pick_knl(n_to_nodes),
-                                pick_list=point_pick_indices,
-                                result=result[i_tgrp],
-                                ary=ary[batch.from_group_index],
-                                from_element_indices=batch.from_element_indices,
-                                to_element_indices=batch.to_element_indices)
-                    elif indirection == "rhs":
-                        # This also doesn't work due to the offset on the receiving side
-                        #from pyopencl.array import to_device
-                        #indirection_array = to_device(actx.queue, indirection_array)
-                        #print(indirection_array.get())
-
-                        actx.call_loopy(pick_knl_rhs(n_to_nodes, offset),
-                                pick_list=point_pick_indices,
-                                result=result[i_tgrp],
-                                ary=ary[batch.from_group_index],
-                                from_element_indices=from_element_indices)
-
-                    else:
-                        raise ValueError("value must be 'both', 'rhs'")
+                    actx.call_loopy(pick_knl(n_to_nodes),
+                            pick_list=point_pick_indices,
+                            result=result[i_tgrp],
+                            ary=ary[batch.from_group_index],
+                            from_element_indices=batch.from_element_indices,
+                            to_element_indices=batch.to_element_indices)
 
         return result
 
