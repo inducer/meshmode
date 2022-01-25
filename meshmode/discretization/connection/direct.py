@@ -591,11 +591,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     index_dtype = batch.from_element_indices.dtype
                     fp_format = resample_mat.dtype
 
-                    print(mat_knl(nelements_vec, nelements_result,
-                                n_to_nodes, n_from_nodes,
-                                fp_format, index_dtype))
-                    #exit()
-
                     actx.call_loopy(mat_knl(nelements_vec, nelements_result,
                                 n_to_nodes, n_from_nodes,
                                 fp_format, index_dtype),
