@@ -592,19 +592,19 @@ class Discretization:
 
             mat = actx.from_numpy(grp.from_mesh_interp_matrix())
             fp_format = nodes.dtype
-            Ne, Nj = nodes.shape
-            Ni, Nj = mat.shape
+            ne, nj = nodes.shape
+            ni, nj = mat.shape
 
             kernel_data = [
-                lp.GlobalArg("arg1", fp_format, shape=(Ne, Nj),
+                lp.GlobalArg("arg1", fp_format, shape=(ne, nj),
                     offset=lp.auto),  # In default data layout apparently
-                lp.GlobalArg("arg0", fp_format, shape=(Ni, Nj), offset=lp.auto,
+                lp.GlobalArg("arg0", fp_format, shape=(ni, nj), offset=lp.auto,
                     tags=[IsOpArray()]),
-                lp.GlobalArg("out",  fp_format, shape=(Ne, Ni), offset=lp.auto,
+                lp.GlobalArg("out",  fp_format, shape=(ne, ni), offset=lp.auto,
                     tags=[IsDOFArray()], is_output=True),
-                lp.ValueArg("Ni", tags=[ParameterValue(Ni)]),
-                lp.ValueArg("Nj", tags=[ParameterValue(Nj)]),
-                lp.ValueArg("Ne", tags=[ParameterValue(Ne)]),
+                lp.ValueArg("Ni", tags=[ParameterValue(ni)]),
+                lp.ValueArg("Nj", tags=[ParameterValue(nj)]),
+                lp.ValueArg("Ne", tags=[ParameterValue(ne)]),
                 ...
             ]
 
@@ -674,19 +674,19 @@ def num_reference_derivative(
 
         mat = get_mat(grp, ref_axes)
         fp_format = vec[grp.index].dtype
-        Ne, Nj = vec[grp.index].shape
-        Ni, Nj = mat.shape
+        ne, nj = vec[grp.index].shape
+        ni, nj = mat.shape
 
         kernel_data = [
-            lp.GlobalArg("arg1", fp_format, shape=(Ne, Nj), offset=lp.auto,
+            lp.GlobalArg("arg1", fp_format, shape=(ne, nj), offset=lp.auto,
                 tags=[IsDOFArray()]),
-            lp.GlobalArg("arg0", fp_format, shape=(Ni, Nj), offset=lp.auto,
+            lp.GlobalArg("arg0", fp_format, shape=(ni, nj), offset=lp.auto,
                 tags=[IsOpArray()]),
-            lp.GlobalArg("out",  fp_format, shape=(Ne, Ni), offset=lp.auto,
+            lp.GlobalArg("out",  fp_format, shape=(ne, ni), offset=lp.auto,
                 tags=[IsDOFArray()], is_output=True),
-            lp.ValueArg("Ni", tags=[ParameterValue(Ni)]),
-            lp.ValueArg("Nj", tags=[ParameterValue(Nj)]),
-            lp.ValueArg("Ne", tags=[ParameterValue(Ne)]),
+            lp.ValueArg("Ni", tags=[ParameterValue(ni)]),
+            lp.ValueArg("Nj", tags=[ParameterValue(nj)]),
+            lp.ValueArg("Ne", tags=[ParameterValue(ne)]),
             ...
         ]
 

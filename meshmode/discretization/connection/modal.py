@@ -165,20 +165,20 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
         fp_format = ary[grp.index].dtype
         vi_mat = vandermonde_inverse(grp)
-        Ne, Nj = ary[grp.index].shape
-        Ni, Nj = vi_mat.shape
+        ne, nj = ary[grp.index].shape
+        ni, nj = vi_mat.shape
 
         import loopy as lp
         kernel_data = [
-            lp.GlobalArg("arg1", fp_format, shape=(Ne, Nj), offset=lp.auto,
+            lp.GlobalArg("arg1", fp_format, shape=(ne, nj), offset=lp.auto,
                 tags=[IsDOFArray()]),
-            lp.GlobalArg("arg0", fp_format, shape=(Ni, Nj), offset=lp.auto,
+            lp.GlobalArg("arg0", fp_format, shape=(ni, nj), offset=lp.auto,
                 tags=[IsOpArray()]),
-            lp.GlobalArg("out",  fp_format, shape=(Ne, Ni), offset=lp.auto,
+            lp.GlobalArg("out",  fp_format, shape=(ne, ni), offset=lp.auto,
                 tags=[IsDOFArray()], is_output=True),
-            lp.ValueArg("Ni", tags=[ParameterValue(Ni)]),
-            lp.ValueArg("Nj", tags=[ParameterValue(Nj)]),
-            lp.ValueArg("Ne", tags=[ParameterValue(Ne)]),
+            lp.ValueArg("Ni", tags=[ParameterValue(ni)]),
+            lp.ValueArg("Nj", tags=[ParameterValue(nj)]),
+            lp.ValueArg("Ne", tags=[ParameterValue(ne)]),
             ...
         ]
         kd_tag = KernelDataTag(kernel_data)
