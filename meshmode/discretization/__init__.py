@@ -699,13 +699,6 @@ def num_reference_derivative(
 
     return _DOFArray(actx, tuple(data))
 
-    return _DOFArray(actx, tuple(
-            actx.einsum("ij,ej->ei",
-                        get_mat(grp, ref_axes),
-                        vec[grp.index],
-                        tagged=(FirstAxisIsElementsTag(),))
-            for grp in discr.groups))
-
 # }}}
 
 # vim: fdm=marker
