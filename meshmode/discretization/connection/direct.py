@@ -506,7 +506,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx, (DirectDiscretizationConnection,
             "resample_by_mat_knl_inplace"))
         def mat_knl(nelements_vec, nelements_result, n_to_nodes, n_from_nodes, n_from_el_ind, n_to_el_ind, fp_format, index_dtype):
-            # Need to find a test code that uses this.
             t_unit = make_loopy_program(
                 """{[iel, idof, j]:
                     0<=iel<nelements and
