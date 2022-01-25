@@ -506,7 +506,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx, (DirectDiscretizationConnection,
             "resample_by_mat_knl_inplace"))
         def mat_knl(nelements_vec, nelements_result, n_to_nodes, n_from_nodes,
-                fp_format, index_dtype):
+                result_dtype, rmat_dtype, ary_dtype, index_dtype):
             t_unit = make_loopy_program(
                 """{[iel, idof, j]:
                     0<=iel<nelements and
@@ -516,13 +516,13 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     = sum(j, resample_mat[idof, j] \
                     * ary[from_element_indices[iel], j])",
                 [
-                    lp.GlobalArg("result", fp_format,
+                    lp.GlobalArg("result", result_dtype,
                         shape="nelements_result, n_to_nodes",
                         offset=lp.auto, tags=[IsDOFArray()]),
-                    lp.GlobalArg("resample_mat", fp_format,
+                    lp.GlobalArg("resample_mat", rmat_dtype,
                         shape="n_to_nodes, n_from_nodes",
                         offset=lp.auto, tags=[IsOpArray()]),
-                    lp.GlobalArg("ary", fp_format,
+                    lp.GlobalArg("ary", ary_dtype,
                         shape="nelements_vec, n_from_nodes",
                         offset=lp.auto, tags=[IsDOFArray()]),
                     lp.ValueArg("n_to_nodes", np.int32,
@@ -589,11 +589,13 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     nelements_result, _ = result[i_tgrp].shape
                     nelements_vec, _ = ary[batch.from_group_index].shape
                     index_dtype = batch.from_element_indices.dtype
-                    fp_format = resample_mat.dtype
+                    result_dtype = result[i_tgrp].dtype
+                    rmat_dtype = resample_mat.dtype
+                    ary_dtype = ary[batch.from_group_index].dtype
 
                     actx.call_loopy(mat_knl(nelements_vec, nelements_result,
                                 n_to_nodes, n_from_nodes,
-                                fp_format, index_dtype),
+                                result_dtype, rmat_dtype, ary_dtype, index_dtype),
                             resample_mat=resample_mat,
                             result=result[i_tgrp],
                             ary=ary[batch.from_group_index],
