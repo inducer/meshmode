@@ -570,40 +570,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     ],
                 name="resample_by_picking_inplace")
 
-               
-            return t_unit
-
-        @memoize_in(actx,
-                (DirectDiscretizationConnection, "resample_by_picking_knl_inplace_rhs"))
-        def pick_knl_rhs(n_to_nodes, offset):
-            from pymbolic import parse
-            oset = parse(str(offset))
-
-            t_unit = make_loopy_program(
-                """{[iel, idof]:
-                    0<=iel<nelements and
-                    0<=idof<n_to_nodes}""",
-                "result[iel, idof] \
-                    = ary[from_element_indices[iel], pick_list[idof]]",
-                [
-                    lp.GlobalArg("result", None,
-                        shape="nelements_result, n_to_nodes",
-                        offset=lp.auto, tags=[IsDOFArray()]),
-                    lp.GlobalArg("ary", None,
-                        shape="nelements_vec, n_from_nodes",
-                        offset=lp.auto, tags=[IsDOFArray()]),
-                    lp.ValueArg("nelements_result", np.int32),
-                    lp.ValueArg("nelements_vec", np.int32),
-                    lp.ValueArg("n_from_nodes", np.int32),
-                    lp.ValueArg("n_to_nodes", np.int32, tags=[ParameterValue(n_to_nodes)]),
-                    lp.ValueArg("offset", tags=[ParameterValue(offset)]),
-                    "..."
-                    ],
-                name="resample_by_picking_inplace_rhs")
-
             return lp.tag_inames(t_unit, {
                 "iel": ConcurrentElementInameTag(),
                 "idof": ConcurrentDOFInameTag()})
+
 
         if self.is_surjective:
             result = self.to_discr.empty(actx, dtype=ary.entry_dtype)
