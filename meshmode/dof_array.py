@@ -709,7 +709,6 @@ def _reduce_norm(actx, arys, ord):
 
     # NOTE: these are ordered by an expected usage frequency
     if ord == 2:
-        # Check with force_device_scalars
         return anp.sqrt(sum(subary*subary for subary in arys))
     elif ord == np.inf:
         return reduce(anp.maximum, arys)
