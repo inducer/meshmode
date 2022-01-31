@@ -669,7 +669,6 @@ def num_reference_derivative(
 
         return actx.from_numpy(mat)
 
-    data = []
     kd_tag = EinsumArgsTags(frozendict({"arg0": [IsOpArray()],
                 "arg1": [IsDOFArray()], "out": [IsDOFArray()]}))
 
