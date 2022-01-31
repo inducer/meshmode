@@ -2,6 +2,10 @@
 .. autoclass:: FirstAxisIsElementsTag
 .. autoclass:: ConcurrentElementInameTag
 .. autoclass:: ConcurrentDOFInameTag
+.. autoclass:: ParameterValue
+.. autoclass:: IsDOFArray
+.. autoclass:: IsOpArray
+.. autoclass:: EinsumArgsTags
 """
 
 __copyright__ = """
