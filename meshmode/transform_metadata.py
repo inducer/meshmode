@@ -62,11 +62,9 @@ class ConcurrentDOFInameTag(Tag):
 class ParameterValue(UniqueTag):
     """A tag that applies to :class:`loopy.ValueArg`. Instances of this tag
     are initialized with the value of the parameter and this value may be
-    later retrieved
-    for use with `loopy.fix_parameter` in `transform_loopy_program`. This allows
-    the fixing of parameters whose values cannot be set during the creation of the
-    program/kernel. This is useful for fixing the loop parameters of einsum kernels
-    for instance.
+    later retrieved to fix the value of the parameter. This allows moving
+    calls to `loopy.fix_parameter` to `transform_loopy_program` so that all
+    kernel transformations may occur there.
     """
 
     def __init__(self, value):

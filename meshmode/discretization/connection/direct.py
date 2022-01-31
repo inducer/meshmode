@@ -506,7 +506,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         @memoize_in(actx, (DirectDiscretizationConnection,
             "resample_by_mat_knl_inplace"))
         def mat_knl(nelements_vec, nelements_result, n_to_nodes, n_from_nodes,
-                result_dtype, rmat_dtype, ary_dtype, index_dtype):
+                result_dtype, rmat_dtype, ary_dtype):
             t_unit = make_loopy_program(
                 """{[iel, idof, j]:
                     0<=iel<nelements and
@@ -588,14 +588,13 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     n_to_nodes, n_from_nodes = resample_mat.shape
                     nelements_result, _ = result[i_tgrp].shape
                     nelements_vec, _ = ary[batch.from_group_index].shape
-                    index_dtype = batch.from_element_indices.dtype
                     result_dtype = result[i_tgrp].dtype
                     rmat_dtype = resample_mat.dtype
                     ary_dtype = ary[batch.from_group_index].dtype
 
                     actx.call_loopy(mat_knl(nelements_vec, nelements_result,
                                 n_to_nodes, n_from_nodes,
-                                result_dtype, rmat_dtype, ary_dtype, index_dtype),
+                                result_dtype, rmat_dtype, ary_dtype),
                             resample_mat=resample_mat,
                             result=result[i_tgrp],
                             ary=ary[batch.from_group_index],
