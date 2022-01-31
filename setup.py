@@ -54,6 +54,7 @@ def main():
 
               "arraycontext",
 
+              "frozendict",
               "recursivenodes",
               "dataclasses; python_version<='3.6'",
               ],

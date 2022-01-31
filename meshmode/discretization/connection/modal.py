@@ -30,10 +30,11 @@ import modepy as mp
 from arraycontext import (NotAnArrayContainerError,
     serialize_container, deserialize_container,)
 from meshmode.transform_metadata import (FirstAxisIsElementsTag,
-    KernelDataTag, IsDOFArray, IsOpArray, ParameterValue)
+    IsDOFArray, IsOpArray, EinsumArgsTags)
 from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
+from frozendict import frozendict
 
 from pytools import keyed_memoize_in
 
@@ -163,28 +164,11 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             vdm_inv = la.inv(vdm)
             return actx.from_numpy(vdm_inv)
 
-        fp_format = ary[grp.index].dtype
-        vi_mat = vandermonde_inverse(grp)
-        ne, nj = ary[grp.index].shape
-        ni, nj = vi_mat.shape
-
-        import loopy as lp
-        kernel_data = [
-            lp.GlobalArg("arg1", fp_format, shape=(ne, nj), offset=lp.auto,
-                tags=[IsDOFArray()]),
-            lp.GlobalArg("arg0", fp_format, shape=(ni, nj), offset=lp.auto,
-                tags=[IsOpArray()]),
-            lp.GlobalArg("out",  fp_format, shape=(ne, ni), offset=lp.auto,
-                tags=[IsDOFArray()], is_output=True),
-            lp.ValueArg("Ni", tags=[ParameterValue(ni)]),
-            lp.ValueArg("Nj", tags=[ParameterValue(nj)]),
-            lp.ValueArg("Ne", tags=[ParameterValue(ne)]),
-            ...
-        ]
-        kd_tag = KernelDataTag(kernel_data)
+        kd_tag = EinsumArgsTags(frozendict({"arg0": [IsOpArray()],
+                    "arg1": [IsDOFArray()], "out": [IsDOFArray()]}))
 
         return actx.einsum("ij,ej->ei",
-                           vi_mat,
+                           vandermonde_inverse(grp),
                            ary[grp.index],
                            tagged=(FirstAxisIsElementsTag(), kd_tag,))
 

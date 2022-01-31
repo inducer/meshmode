@@ -30,11 +30,12 @@ from abc import ABCMeta, abstractproperty, abstractmethod
 from pytools import memoize_in, memoize_method, keyed_memoize_in
 from pytools.obj_array import make_obj_array
 from arraycontext import ArrayContext, make_loopy_program
+from frozendict import frozendict
 
 import loopy as lp
 from meshmode.transform_metadata import (
         ConcurrentElementInameTag, ConcurrentDOFInameTag, FirstAxisIsElementsTag,
-        IsDOFArray, ParameterValue, IsOpArray, KernelDataTag)
+        IsDOFArray, IsOpArray, EinsumArgsTags)
 
 from warnings import warn
 
@@ -606,30 +607,13 @@ class Discretization:
                     and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
                 return nodes
 
-            mat = actx.from_numpy(grp.from_mesh_interp_matrix())
-            fp_format = nodes.dtype
-            ne, nj = nodes.shape
-            ni, nj = mat.shape
-
-            kernel_data = [
-                lp.GlobalArg("arg1", fp_format, shape=(ne, nj),
-                    offset=lp.auto),  # In default data layout apparently
-                lp.GlobalArg("arg0", fp_format, shape=(ni, nj), offset=lp.auto,
-                    tags=[IsOpArray()]),
-                lp.GlobalArg("out",  fp_format, shape=(ne, ni), offset=lp.auto,
-                    tags=[IsDOFArray()], is_output=True),
-                lp.ValueArg("Ni", tags=[ParameterValue(ni)]),
-                lp.ValueArg("Nj", tags=[ParameterValue(nj)]),
-                lp.ValueArg("Ne", tags=[ParameterValue(ne)]),
-                ...
-            ]
-
-            kd_tag = KernelDataTag(kernel_data)
+            kd_tag = EinsumArgsTags(frozendict({"out": [IsDOFArray()],
+                        "arg0": [IsOpArray()]}))
 
             return actx.einsum("ij,ej->ei",
-                               mat,
+                               actx.from_numpy(grp.from_mesh_interp_matrix()),
                                nodes,
-                               tagged=(FirstAxisIsElementsTag(), kd_tag,))
+                               tagged=(FirstAxisIsElementsTag(), kd_tag))
 
         result = make_obj_array([
             _DOFArray(None, tuple([
@@ -688,28 +672,11 @@ def num_reference_derivative(
     data = []
     for grp in discr.groups:
 
-        mat = get_mat(grp, ref_axes)
-        fp_format = vec[grp.index].dtype
-        ne, nj = vec[grp.index].shape
-        ni, nj = mat.shape
-
-        kernel_data = [
-            lp.GlobalArg("arg1", fp_format, shape=(ne, nj), offset=lp.auto,
-                tags=[IsDOFArray()]),
-            lp.GlobalArg("arg0", fp_format, shape=(ni, nj), offset=lp.auto,
-                tags=[IsOpArray()]),
-            lp.GlobalArg("out",  fp_format, shape=(ne, ni), offset=lp.auto,
-                tags=[IsDOFArray()], is_output=True),
-            lp.ValueArg("Ni", tags=[ParameterValue(ni)]),
-            lp.ValueArg("Nj", tags=[ParameterValue(nj)]),
-            lp.ValueArg("Ne", tags=[ParameterValue(ne)]),
-            ...
-        ]
-
-        kd_tag = KernelDataTag(kernel_data)
+        kd_tag = EinsumArgsTags(frozendict({"arg0": [IsOpArray()],
+                    "arg1": [IsDOFArray()], "out": [IsDOFArray()]}))
 
         data.append(actx.einsum("ij,ej->ei",
-                        mat,
+                        get_mat(grp, ref_axes),
                         vec[grp.index],
                         tagged=(FirstAxisIsElementsTag(), kd_tag,)))
 

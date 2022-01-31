@@ -86,10 +86,10 @@ class IsOpArray(Tag):
     pass
 
 
-class KernelDataTag(Tag):
-    """A tag that applies to :class:`loopy.LoopKernel`. Kernel data provided
-    with this tag can be later applied to the kernel. This is used, for
-    instance, to specify kernel data in einsum kernels."""
+class EinsumArgsTags(Tag):
+    """A tag containing a frozendict of lists of tags indexed by argument name."""
 
-    def __init__(self, kernel_data):
-        self.kernel_data = kernel_data
+    def __init__(self, tags_list):
+        from frozendict import frozendict
+        assert isinstance(tags_list, frozendict)
+        self.tags_dict = tags_list
