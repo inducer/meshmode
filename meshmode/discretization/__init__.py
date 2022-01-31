@@ -670,15 +670,14 @@ def num_reference_derivative(
         return actx.from_numpy(mat)
 
     data = []
-    for grp in discr.groups:
+    kd_tag = EinsumArgsTags(frozendict({"arg0": [IsOpArray()],
+                "arg1": [IsDOFArray()], "out": [IsDOFArray()]}))
 
-        kd_tag = EinsumArgsTags(frozendict({"arg0": [IsOpArray()],
-                    "arg1": [IsDOFArray()], "out": [IsDOFArray()]}))
-
-        data.append(actx.einsum("ij,ej->ei",
+    data = tuple((actx.einsum("ij,ej->ei",
                         get_mat(grp, ref_axes),
                         vec[grp.index],
-                        tagged=(FirstAxisIsElementsTag(), kd_tag,)))
+                        tagged=(FirstAxisIsElementsTag(), kd_tag,))
+                for grp in discr.groups))
 
     return _DOFArray(actx, tuple(data))
 
