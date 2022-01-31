@@ -677,9 +677,9 @@ def num_reference_derivative(
                         get_mat(grp, ref_axes),
                         vec[grp.index],
                         tagged=(FirstAxisIsElementsTag(), kd_tag,))
-                for grp in discr.groups))
+            for grp in discr.groups))
 
-    return _DOFArray(actx, tuple(data))
+    return _DOFArray(actx, data)
 
 # }}}
 
