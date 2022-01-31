@@ -29,6 +29,7 @@ THE SOFTWARE.
 """
 
 from pytools.tag import Tag, UniqueTag
+from frozendict import frozendict
 
 
 class FirstAxisIsElementsTag(Tag):
@@ -87,7 +88,5 @@ class IsOpArray(Tag):
 class EinsumArgsTags(Tag):
     """A tag containing a frozendict of lists of tags indexed by argument name."""
 
-    def __init__(self, tags_list):
-        from frozendict import frozendict
-        assert isinstance(tags_list, frozendict)
-        self.tags_dict = tags_list
+    def __init__(self, tags_dict: frozendict):
+        self.tags_dict = tags_dict
