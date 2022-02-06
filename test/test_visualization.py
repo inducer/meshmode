@@ -168,6 +168,8 @@ def test_visualizers(actx_factory, dim, group_cls):
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order)
 
+    # {{{ vtk
+
     eltype = "simplex" if is_simplex else "box"
     basename = f"visualizer_vtk_{eltype}_{dim}d"
     vis.write_vtk_file(f"{basename}_linear.vtu", names_and_fields, overwrite=True)
@@ -176,11 +178,26 @@ def test_visualizers(actx_factory, dim, group_cls):
         vis.write_vtk_file(f"{basename}_lagrange.vtu",
                 names_and_fields, overwrite=True, use_high_order=True)
 
+    # }}}
+
+    # {{{ vtkhdf
+
+    basename = f"visualizer_vtkhdf_{eltype}_{dim}d"
+    vis.write_vtkhdf_file(f"{basename}_linear.hdf", names_and_fields, overwrite=True)
+
+    # }}}
+
+    # {{{ xdmf
+
     try:
         basename = f"visualizer_xdmf_{eltype}_{dim}d"
         vis.write_xdmf_file(f"{basename}.xmf", names_and_fields, overwrite=True)
     except ImportError:
         logger.info("h5py not available")
+
+    # }}}
+
+    # {{{ matplotlib
 
     if mesh.dim == 2 and is_simplex:
         try:
@@ -188,6 +205,9 @@ def test_visualizers(actx_factory, dim, group_cls):
             vis.show_scalar_in_matplotlib_3d(actx.np.real(f), do_show=False)
         except ImportError:
             logger.info("matplotlib not available")
+    # }}}
+
+    # {{{ mayavi
 
     if mesh.dim <= 2 and is_simplex:
         try:
@@ -195,12 +215,18 @@ def test_visualizers(actx_factory, dim, group_cls):
         except ImportError:
             logger.info("mayavi not available")
 
+    # }}}
+
+    # {{{ vtkLagrange
+
     vis = make_visualizer(actx, discr, target_order,
             force_equidistant=True)
 
     basename = f"visualizer_vtk_{eltype}_{dim}d"
     vis.write_vtk_file(f"{basename}_lagrange.vtu",
             names_and_fields, overwrite=True, use_high_order=True)
+
+    # }}}
 
 
 @pytest.mark.parametrize("ambient_dim", [2, 3])
