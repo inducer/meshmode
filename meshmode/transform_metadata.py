@@ -33,7 +33,7 @@ THE SOFTWARE.
 """
 
 from pytools.tag import Tag, UniqueTag
-from frozendict import frozendict
+from immutables import Map
 
 
 class FirstAxisIsElementsTag(Tag):
@@ -90,7 +90,7 @@ class IsOpArray(Tag):
 
 
 class EinsumArgsTags(Tag):
-    """A tag containing a frozendict of lists of tags indexed by argument name."""
+    """A tag containing a FrozenMap of lists of tags indexed by argument name."""
 
-    def __init__(self, tags_dict: frozendict):
-        self.tags_dict = tags_dict
+    def __init__(self, tags_map: Map):
+        self.tags_map = tags_map

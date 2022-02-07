@@ -1,6 +1,6 @@
 numpy
 recursivenodes
-frozendict
+immutables
 git+https://github.com/inducer/pytools.git#egg=pytools
 git+https://github.com/inducer/gmsh_interop.git#egg=gmsh_interop
 git+https://github.com/inducer/pyvisfile.git#egg=pyvisfile

@@ -30,7 +30,7 @@ from abc import ABCMeta, abstractproperty, abstractmethod
 from pytools import memoize_in, memoize_method, keyed_memoize_in
 from pytools.obj_array import make_obj_array
 from arraycontext import ArrayContext, make_loopy_program
-from frozendict import frozendict
+from immutables import Map
 
 import loopy as lp
 from meshmode.transform_metadata import (
@@ -607,7 +607,7 @@ class Discretization:
                     and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
                 return nodes
 
-            kd_tag = EinsumArgsTags(frozendict({"out": [IsDOFArray()],
+            kd_tag = EinsumArgsTags(Map({"out": [IsDOFArray()],
                         "arg0": [IsOpArray()]}))
 
             return actx.einsum("ij,ej->ei",
@@ -669,7 +669,7 @@ def num_reference_derivative(
 
         return actx.from_numpy(mat)
 
-    kd_tag = EinsumArgsTags(frozendict({"arg0": [IsOpArray()],
+    kd_tag = EinsumArgsTags(Map({"arg0": [IsOpArray()],
                 "arg1": [IsDOFArray()], "out": [IsDOFArray()]}))
 
     data = tuple((actx.einsum("ij,ej->ei",
