@@ -28,6 +28,7 @@ __doc__ = """
 .. autofunction:: write_vertex_vtk_file
 .. autofunction:: mesh_to_tikz
 .. autofunction:: vtk_visualize_mesh
+.. autofunction:: write_stl_file
 """
 
 
@@ -324,6 +325,43 @@ def vtk_visualize_mesh(actx, mesh, filename,
     vis.write_vtk_file(filename, [],
             use_high_order=vtk_high_order,
             overwrite=overwrite)
+
+# }}}
+
+
+# {{{ write_stl_file
+
+def write_stl_file(mesh, stl_name):
+    """Writes a `STL <https://en.wikipedia.org/wiki/STL_(file_format)>`__ file
+    from a triangular mesh in 3D. Requires the
+    `numpy-stl <https://pypi.org/project/numpy-stl/>`__ package.
+    """
+
+    import stl.mesh
+
+    if len(mesh.groups) != 1:
+        raise NotImplementedError("meshes with more than one group are "
+                "not yet supported")
+    if mesh.ambient_dim != 3:
+        raise ValueError("STL export requires a mesh in 3D ambient space")
+
+    grp, = mesh.groups
+
+    from meshmode.mesh import SimplexElementGroup
+    if not isinstance(grp, SimplexElementGroup) or grp.dim != 2:
+        raise ValueError("STL export requires the mesh to consist of "
+                "triangular elements")
+
+    faces = mesh.vertices[:, grp.vertex_indices]
+
+    stl_mesh = stl.mesh.Mesh(
+            np.zeros(mesh.nelements, dtype=stl.mesh.Mesh.dtype))
+    for iface in range(mesh.nelements):
+        for ivertex in range(3):
+            stl_mesh.vectors[iface][ivertex] = faces[:, iface, ivertex]
+
+    # Write the mesh to file "cube.stl"
+    stl_mesh.save("tp-lagrange.stl")
 
 # }}}
 
