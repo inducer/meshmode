@@ -28,7 +28,7 @@ dependencies:
 - mpi4py
 
 # for xdmf/hdf5 visualizer
-- h5py
+- h5py=*=mpi_openmpi*
 
 # Only needed to make pylint succeed
 - matplotlib-base
