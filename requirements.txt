@@ -24,3 +24,6 @@ git+https://github.com/inducer/pytential.git#egg=pytential
 
 # requires pymetis for tests for partition_mesh
 git+https://github.com/inducer/pymetis.git#egg=pymetis
+
+# for examples/tp-lagrange-stl.py
+numpy-stl
