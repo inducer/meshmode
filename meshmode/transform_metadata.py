@@ -90,7 +90,7 @@ class IsOpArray(Tag):
 
 
 class EinsumArgsTags(Tag):
-    """A tag containing a FrozenMap of lists of tags indexed by argument name."""
+    """A tag containing an `immutables.Map` of tuples of tags indexed by argument name."""
 
     def __init__(self, tags_map: Map):
         self.tags_map = tags_map
