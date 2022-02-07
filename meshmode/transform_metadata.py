@@ -92,5 +92,6 @@ class IsOpArray(Tag):
 class EinsumArgsTags(Tag):
     """A tag containing an `immutables.Map` of tuples of tags indexed by argument name."""
 
-    def __init__(self, tags_map: Map):
+    def __init__(self, tags_map):
+        assert isinstance(tags_map, Map)
         self.tags_map = tags_map
