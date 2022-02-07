@@ -258,15 +258,15 @@ def test_copy_visualizer(actx_factory, ambient_dim, visualize=True):
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order, force_equidistant=True)
-    assert vis._vtk_connectivity
+    assert vis._vtk_linear_connectivity
     assert vis._vtk_lagrange_connectivity
 
     translated_vis = vis.copy_with_same_connectivity(actx, translated_discr)
-    assert translated_vis._cached_vtk_connectivity is not None
+    assert translated_vis._cached_vtk_linear_connectivity is not None
     assert translated_vis._cached_vtk_lagrange_connectivity is not None
 
-    assert translated_vis._vtk_connectivity \
-            is vis._vtk_connectivity
+    assert translated_vis._vtk_linear_connectivity \
+            is vis._vtk_linear_connectivity
     assert translated_vis._vtk_lagrange_connectivity \
             is vis._vtk_lagrange_connectivity
 

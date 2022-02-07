@@ -35,6 +35,9 @@ from meshmode.dof_array import DOFArray
 
 from modepy.shapes import Shape, Simplex, Hypercube
 
+import logging
+logger = logging.getLogger(__name__)
+
 __doc__ = """
 
 .. autofunction:: make_visualizer
@@ -486,7 +489,7 @@ class Visualizer:
     def __init__(self, connection,
             element_shrink_factor=None,
             is_equidistant=False,
-            _vtk_connectivity=None,
+            _vtk_linear_connectivity=None,
             _vtk_lagrange_connectivity=None):
 
         self.connection = connection
@@ -498,7 +501,7 @@ class Visualizer:
         self.element_shrink_factor = element_shrink_factor
         self.is_equidistant = is_equidistant
 
-        self._cached_vtk_connectivity = _vtk_connectivity
+        self._cached_vtk_linear_connectivity = _vtk_linear_connectivity
         self._cached_vtk_lagrange_connectivity = _vtk_lagrange_connectivity
 
     def copy_with_same_connectivity(self, actx, discr, skip_tests=False):
@@ -530,7 +533,7 @@ class Visualizer:
                 conn,
                 element_shrink_factor=self.element_shrink_factor,
                 is_equidistant=self.is_equidistant,
-                _vtk_connectivity=self._cached_vtk_connectivity,
+                _vtk_linear_connectivity=self._cached_vtk_linear_connectivity,
                 _vtk_lagrange_connectivity=self._cached_vtk_lagrange_connectivity,
                 )
 
@@ -554,7 +557,8 @@ class Visualizer:
         field = _resample_to_numpy(self.connection, self.vis_discr, field)
 
         assert nodes.shape[0] == self.vis_discr.ambient_dim
-        vis_connectivity = self._vtk_connectivity.groups[0].vis_connectivity
+        connectivity = self._vtk_connectivity()
+        vis_connectivity = connectivity.groups[0].vis_connectivity
 
         if self.vis_discr.dim == 1:
             nodes = list(nodes)
@@ -596,10 +600,10 @@ class Visualizer:
 
     @property
     def _vtk_linear_connectivity(self):
-        if self._cached_vtk_connectivity is None:
-            self._cached_vtk_connectivity = VTKConnectivity(self.connection)
+        if self._cached_vtk_linear_connectivity is None:
+            self._cached_vtk_linear_connectivity = VTKConnectivity(self.connection)
 
-        return self._cached_vtk_connectivity
+        return self._cached_vtk_linear_connectivity
 
     @property
     def _vtk_lagrange_connectivity(self):
@@ -611,7 +615,7 @@ class Visualizer:
 
         return self._cached_vtk_lagrange_connectivity
 
-    def _vtk_connectivity(self, use_high_order: bool) -> VTKConnectivity:
+    def _vtk_connectivity(self, use_high_order: bool = False) -> VTKConnectivity:
         if use_high_order:
             if not self.is_equidistant:
                 raise RuntimeError("Cannot visualize high-order Lagrange elements "
@@ -849,13 +853,24 @@ class Visualizer:
         try:
             import h5py
         except ImportError as exc:
-            raise ImportError("'write_xdmf_file' requires 'h5py'") from exc
+            raise ImportError("'write_vtkhdf_file' requires 'h5py'") from exc
 
         if h5_file_options is None:
             h5_file_options = {}
 
         if comm is not None:
             h5_file_options["comm"] = comm
+            if "driver" not in h5_file_options:
+                h5_file_options["driver"] = "mpio"
+            else:
+                if h5_file_options["driver"] != "mpio":
+                    raise ValueError(
+                        "parallel HDF5 requires the 'mpio' driver: "
+                        f"driver is '{h5_file_options['driver']}'")
+
+        import os
+        if os.path.splitext(file_name)[-1] != ".hdf":
+            raise ValueError(f"'file_name' extension must be '.hdf': {file_name}")
 
         if dset_options is None:
             dset_options = {}
@@ -867,6 +882,13 @@ class Visualizer:
                 for name, fld in names_and_fields
                 ]
 
+        if comm is None:
+            mpisize = 1
+            mpirank = 0
+        else:
+            mpisize = comm.Get_size()
+            mpirank = comm.Get_rank()
+
         # }}}
 
         # {{{ write
@@ -874,40 +896,82 @@ class Visualizer:
         # https://gitlab.kitware.com/vtk/vtk/-/merge_requests/7552/diffs?commit_id=ff63361e1e625bf5f8ff82a4063a9bc5b9f35818#92f6af7573e5302296e4d465fea1d411d4a2611d
         # https://vtk.org/doc/nightly/html/VTKHDFFileFormat.html
 
+        def create_dataset(grp, name, data, *, shape, offset):
+            dset = grp.create_dataset(name, shape, dtype=data.dtype, **dset_options)
+            dset[offset:offset + data.shape[0]] = data
+
+            return dset
+
         with h5py.File(file_name, "w", **h5_file_options) as h5:
             root = h5.create_group("VTKHDF")
             root.attrs.create("Version", [1, 0])
 
             nodes = np.stack(self._vis_nodes_numpy()).T
-            connectivity = self._vtk_connectivity(use_high_order)
 
+            # {{{ local connectivity
+
+            connectivity = self._vtk_connectivity(use_high_order)
             cell_types = connectivity.cell_types
+
             try:
                 cell_count, cell_connectivity, cell_offsets = connectivity.cells
             except ValueError:
                 from pyvisfile.vtk import CELL_NODE_COUNT
-                cell_count = self.vis_discr.mesh.nelements
+                cell_count = cell_types.size
                 cell_connectivity = connectivity.cells
-                cell_offsets = np.cumsum(
-                        np.vectorize(CELL_NODE_COUNT.get)(cell_types),
+                cell_offsets = np.cumsum(np.append([0],
+                        np.vectorize(CELL_NODE_COUNT.get)(cell_types)),
                         dtype=cell_connectivity.dtype)
 
-            # FIXME: these needs to be update for MPI
-            root.create_dataset("NumberOfCells",
-                data=np.array([cell_count]), **dset_options)
-            root.create_dataset("NumberOfPoints",
-                data=np.array([nodes.shape[0]]), **dset_options)
-            root.create_dataset("NumberOfConnectivityIds",
-                data=np.array([cell_connectivity.size]), **dset_options)
+            # }}}
 
-            root.create_dataset("Points",
-                data=nodes, **dset_options)
-            root.create_dataset("Connectivity",
-                data=cell_connectivity, **dset_options)
-            root.create_dataset("Offsets",
-                data=cell_offsets, **dset_options)
-            root.create_dataset("Types",
-                data=cell_types, **dset_options)
+            # {{{ determine partitions
+
+            node_count = nodes.shape[0]
+            conn_count = cell_connectivity.size
+
+            if comm is None:
+                global_cell_offset = 0
+                global_node_offset = 0
+                global_conn_offset = 0
+                global_cell_count = cell_count
+                global_node_count = node_count
+                global_conn_count = conn_count
+            else:
+                from mpi4py import MPI
+                # FIXME: should be able to do all these in one go
+                global_cell_offset = comm.scan(cell_count) - cell_count
+                global_node_offset = comm.scan(node_count) - node_count
+                global_conn_offset = comm.scan(conn_count) - conn_count
+                global_cell_count = comm.allreduce(cell_count, op=MPI.SUM)
+                global_node_count = comm.allreduce(node_count, op=MPI.SUM)
+                global_conn_count = comm.allreduce(conn_count, op=MPI.SUM)
+
+            # }}}
+
+            # {{{ write mesh
+
+            create_dataset(root, "NumberOfCells", np.array([cell_count]),
+                           shape=(mpisize,), offset=mpirank)
+            create_dataset(root, "NumberOfPoints", np.array([node_count]),
+                           shape=(mpisize,), offset=mpirank)
+            create_dataset(root, "NumberOfConnectivityIds", np.array([conn_count]),
+                           shape=(mpisize,), offset=mpirank)
+
+            create_dataset(root, "Points", nodes,
+                           shape=(global_node_count, nodes.shape[1]),
+                           offset=global_node_offset)
+            create_dataset(root, "Connectivity", cell_connectivity,
+                           shape=(global_conn_count,), offset=global_conn_offset)
+            create_dataset(root, "Offsets", cell_offsets,
+                           shape=(global_cell_count + mpisize,),
+                           offset=global_cell_offset + mpirank)
+            create_dataset(root, "Types", cell_types,
+                           shape=(global_cell_count,), offset=global_cell_offset)
+
+            # }}}
+
+            # {{{ write point data
 
             point_data = root.create_group("PointData")
             for name, field in separate_by_real_and_imag(
@@ -915,7 +979,11 @@ class Visualizer:
                 if field.dtype.char == "O":
                     field = np.stack(field).T
 
-                point_data.create_dataset(name, data=field, **dset_options)
+                create_dataset(point_data, name, field,
+                               shape=(global_node_count,) + field.shape[1:],
+                               offset=global_node_offset)
+
+            # }}}
 
         # }}}
 
@@ -1036,7 +1104,7 @@ class Visualizer:
             # {{{ create grids
 
             nodes = self._xdmf_nodes_numpy()
-            connectivity = self._vtk_connectivity(False)
+            connectivity = self._vtk_connectivity()
 
             # global nodes
             h5grid = h5.create_group("Grid")
@@ -1114,7 +1182,7 @@ class Visualizer:
 
         assert nodes.shape[0] == self.vis_discr.ambient_dim
 
-        vis_connectivity, = self._vtk_connectivity(False).groups
+        vis_connectivity, = self._vtk_connectivity().groups
 
         fig = plt.gcf()
         ax = fig.gca(projection="3d")
