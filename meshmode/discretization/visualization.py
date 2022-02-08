@@ -481,6 +481,7 @@ class Visualizer:
     .. automethod:: show_scalar_in_matplotlib_3d
     .. automethod:: write_vtk_file
     .. automethod:: write_parallel_vtk_file
+    .. automethod:: write_vtkhdf_file
     .. automethod:: write_xdmf_file
 
     .. automethod:: copy_with_same_connectivity
@@ -847,7 +848,22 @@ class Visualizer:
             real_only: bool = False,
             overwrite: bool = False,
             h5_file_options: Optional[Dict[str, Any]] = None,
-            dset_options: Optional[Dict[str, Any]] = None):
+            dset_options: Optional[Dict[str, Any]] = None) -> None:
+        """Write a VTK HDF5 file (typical extension ``'.hdf'``) containing
+        the visualization fields in *names_and_fields*.
+
+        This function requires ``h5py`` and has support for parallel writes
+        through ``mpi4py``.
+
+        :arg comm: an ``mpi4py.Comm``-like interface that supports
+            ``Get_rank``, ``Get_size``, ``scan`` and ``reduce``. The last two
+            are required to gather global information about the points and
+            cells in the discretizations.
+        :arg h5_file_options: a :class:`dict` passed directly to
+            :class:`h5py.File` that allows controlling chunking, compatibility, etc.
+        :arg dataset_options: a :class:`dict` passed directly to
+            :meth:`h5py.Group.create_dataset`.
+        """
         # {{{ setup
 
         try:
