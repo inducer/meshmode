@@ -182,8 +182,12 @@ def test_visualizers(actx_factory, dim, group_cls):
 
     # {{{ vtkhdf
 
-    basename = f"visualizer_vtkhdf_{eltype}_{dim}d"
-    vis.write_vtkhdf_file(f"{basename}_linear.hdf", names_and_fields, overwrite=True)
+    try:
+        basename = f"visualizer_vtkhdf_{eltype}_{dim}d"
+        vis.write_vtkhdf_file(f"{basename}_linear.hdf",
+                              names_and_fields, overwrite=True)
+    except ImportError:
+        logger.info("h5py not available")
 
     # }}}
 
@@ -226,9 +230,12 @@ def test_visualizers(actx_factory, dim, group_cls):
     vis.write_vtk_file(f"{basename}_lagrange.vtu",
             names_and_fields, overwrite=True, use_high_order=True)
 
-    basename = f"visualizer_vtkhdf_{eltype}_{dim}d"
-    vis.write_vtkhdf_file(f"{basename}_lagrange.hdf",
-            names_and_fields, overwrite=True, use_high_order=True)
+    try:
+        basename = f"visualizer_vtkhdf_{eltype}_{dim}d"
+        vis.write_vtkhdf_file(f"{basename}_lagrange.hdf",
+                names_and_fields, overwrite=True, use_high_order=True)
+    except ImportError:
+        logger.info("h5py not available")
 
     # }}}
 

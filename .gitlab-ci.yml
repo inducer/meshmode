@@ -3,7 +3,7 @@ Python 3 POCL:
     export PY_EXE=python3
     export PYOPENCL_TEST=portable:pthread
     # cython is here because pytential (for now, for TS) depends on it
-    export EXTRA_INSTALL="pybind11 cython numpy mako mpi4py oct2py"
+    export EXTRA_INSTALL="pybind11 cython numpy mako mpi4py h5py oct2py"
     curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/build-and-test-py-project.sh
     . ./build-and-test-py-project.sh
   tags:
@@ -104,7 +104,7 @@ Flake8:
 Pylint:
   script: |
     export PY_EXE=python3
-    EXTRA_INSTALL="Cython pybind11 numpy mako matplotlib scipy mpi4py oct2py"
+    EXTRA_INSTALL="Cython pybind11 numpy mako matplotlib scipy mpi4py h5py oct2py"
     curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
     . ./prepare-and-run-pylint.sh "$CI_PROJECT_NAME" examples/*.py test/test_*.py
   tags:
