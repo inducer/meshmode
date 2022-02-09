@@ -767,8 +767,8 @@ class Visualizer:
         cells = connectivity.cells
         if isinstance(cells, tuple):
             cells = (cells[0],
-                     DataArray("Connectivity", cells[1]),
-                     DataArray("Offsets", cells[1]))
+                     DataArray("connectivity", cells[1]),
+                     DataArray("offsets", cells[2]))
 
         nodes = nodes.reshape(self.vis_discr.ambient_dim, -1)
         points = DataArray("points", nodes, vector_format=VF_LIST_OF_COMPONENTS)
@@ -938,6 +938,7 @@ class Visualizer:
 
             try:
                 cell_count, cell_connectivity, cell_offsets = connectivity.cells
+                cell_offsets = np.append([0], cell_offsets)
             except ValueError:
                 from pyvisfile.vtk import CELL_NODE_COUNT
                 cell_count = cell_types.size
