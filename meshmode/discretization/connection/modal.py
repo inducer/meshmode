@@ -34,7 +34,6 @@ from meshmode.transform_metadata import (FirstAxisIsElementsTag,
 from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
-from immutables import Map
 
 from pytools import keyed_memoize_in
 
@@ -164,8 +163,8 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             vdm_inv = la.inv(vdm)
             return actx.from_numpy(vdm_inv)
 
-        kd_tag = EinsumArgsTags(Map({"arg0": [IsOpArray()],
-                    "arg1": [IsDOFArray()], "out": [IsDOFArray()]}))
+        kd_tag = EinsumArgsTags({"arg0": [IsOpArray()],
+                    "arg1": [IsDOFArray()], "out": [IsDOFArray()]})
 
         return actx.einsum("ij,ej->ei",
                            vandermonde_inverse(grp),
