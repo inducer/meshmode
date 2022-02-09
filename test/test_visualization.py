@@ -168,6 +168,8 @@ def test_visualizers(actx_factory, dim, group_cls):
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order)
 
+    # {{{ vtk
+
     eltype = "simplex" if is_simplex else "box"
     basename = f"visualizer_vtk_{eltype}_{dim}d"
     vis.write_vtk_file(f"{basename}_linear.vtu", names_and_fields, overwrite=True)
@@ -176,11 +178,30 @@ def test_visualizers(actx_factory, dim, group_cls):
         vis.write_vtk_file(f"{basename}_lagrange.vtu",
                 names_and_fields, overwrite=True, use_high_order=True)
 
+    # }}}
+
+    # {{{ vtkhdf
+
+    try:
+        basename = f"visualizer_vtkhdf_{eltype}_{dim}d"
+        vis.write_vtkhdf_file(f"{basename}_linear.hdf",
+                              names_and_fields, overwrite=True)
+    except ImportError:
+        logger.info("h5py not available")
+
+    # }}}
+
+    # {{{ xdmf
+
     try:
         basename = f"visualizer_xdmf_{eltype}_{dim}d"
         vis.write_xdmf_file(f"{basename}.xmf", names_and_fields, overwrite=True)
     except ImportError:
         logger.info("h5py not available")
+
+    # }}}
+
+    # {{{ matplotlib
 
     if mesh.dim == 2 and is_simplex:
         try:
@@ -188,6 +209,9 @@ def test_visualizers(actx_factory, dim, group_cls):
             vis.show_scalar_in_matplotlib_3d(actx.np.real(f), do_show=False)
         except ImportError:
             logger.info("matplotlib not available")
+    # }}}
+
+    # {{{ mayavi
 
     if mesh.dim <= 2 and is_simplex:
         try:
@@ -195,12 +219,25 @@ def test_visualizers(actx_factory, dim, group_cls):
         except ImportError:
             logger.info("mayavi not available")
 
+    # }}}
+
+    # {{{ vtkLagrange
+
     vis = make_visualizer(actx, discr, target_order,
             force_equidistant=True)
 
     basename = f"visualizer_vtk_{eltype}_{dim}d"
     vis.write_vtk_file(f"{basename}_lagrange.vtu",
             names_and_fields, overwrite=True, use_high_order=True)
+
+    try:
+        basename = f"visualizer_vtkhdf_{eltype}_{dim}d"
+        vis.write_vtkhdf_file(f"{basename}_lagrange.hdf",
+                names_and_fields, overwrite=True, use_high_order=True)
+    except ImportError:
+        logger.info("h5py not available")
+
+    # }}}
 
 
 @pytest.mark.parametrize("ambient_dim", [2, 3])
@@ -232,15 +269,15 @@ def test_copy_visualizer(actx_factory, ambient_dim, visualize=True):
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, target_order, force_equidistant=True)
-    assert vis._vtk_connectivity
+    assert vis._vtk_linear_connectivity
     assert vis._vtk_lagrange_connectivity
 
     translated_vis = vis.copy_with_same_connectivity(actx, translated_discr)
-    assert translated_vis._cached_vtk_connectivity is not None
+    assert translated_vis._cached_vtk_linear_connectivity is not None
     assert translated_vis._cached_vtk_lagrange_connectivity is not None
 
-    assert translated_vis._vtk_connectivity \
-            is vis._vtk_connectivity
+    assert translated_vis._vtk_linear_connectivity \
+            is vis._vtk_linear_connectivity
     assert translated_vis._vtk_lagrange_connectivity \
             is vis._vtk_lagrange_connectivity
 

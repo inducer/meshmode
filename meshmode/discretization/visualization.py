@@ -23,6 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from typing import Any, Dict, List, Optional, Tuple
 from functools import singledispatch
 
 import numpy as np
@@ -33,6 +34,9 @@ from arraycontext import thaw, flatten
 from meshmode.dof_array import DOFArray
 
 from modepy.shapes import Shape, Simplex, Hypercube
+
+import logging
+logger = logging.getLogger(__name__)
 
 __doc__ = """
 
@@ -364,6 +368,23 @@ class VTKConnectivity:
 
         return result
 
+    @property
+    @memoize_method
+    def cell_types(self):
+        nsubelements = sum(vgrp.nsubelements for vgrp in self.groups)
+        cell_types = np.empty(nsubelements, dtype=np.uint8)
+        cell_types.fill(255)
+
+        for vgrp in self.groups:
+            isubelements = np.s_[
+                    vgrp.subelement_nr_base:
+                    vgrp.subelement_nr_base + vgrp.nsubelements]
+            cell_types[isubelements] = vgrp.vtk_cell_type
+
+        assert (cell_types < 255).all()
+
+        return cell_types
+
 
 class VTKLagrangeConnectivity(VTKConnectivity):
     """Connectivity for high-order Lagrange elements."""
@@ -447,12 +468,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                 for grp_offset, grp in zip(grp_offsets, self.vis_discr.groups)
                 ])
 
-        from pyvisfile.vtk import DataArray
-        return (
-                self.vis_discr.mesh.nelements,
-                DataArray("connectivity", connectivity),
-                DataArray("offsets", offsets)
-                )
+        return self.vis_discr.mesh.nelements, connectivity, offsets
 
 # }}}
 
@@ -465,6 +481,7 @@ class Visualizer:
     .. automethod:: show_scalar_in_matplotlib_3d
     .. automethod:: write_vtk_file
     .. automethod:: write_parallel_vtk_file
+    .. automethod:: write_vtkhdf_file
     .. automethod:: write_xdmf_file
 
     .. automethod:: copy_with_same_connectivity
@@ -473,7 +490,7 @@ class Visualizer:
     def __init__(self, connection,
             element_shrink_factor=None,
             is_equidistant=False,
-            _vtk_connectivity=None,
+            _vtk_linear_connectivity=None,
             _vtk_lagrange_connectivity=None):
 
         self.connection = connection
@@ -485,7 +502,7 @@ class Visualizer:
         self.element_shrink_factor = element_shrink_factor
         self.is_equidistant = is_equidistant
 
-        self._cached_vtk_connectivity = _vtk_connectivity
+        self._cached_vtk_linear_connectivity = _vtk_linear_connectivity
         self._cached_vtk_lagrange_connectivity = _vtk_lagrange_connectivity
 
     def copy_with_same_connectivity(self, actx, discr, skip_tests=False):
@@ -517,7 +534,7 @@ class Visualizer:
                 conn,
                 element_shrink_factor=self.element_shrink_factor,
                 is_equidistant=self.is_equidistant,
-                _vtk_connectivity=self._cached_vtk_connectivity,
+                _vtk_linear_connectivity=self._cached_vtk_linear_connectivity,
                 _vtk_lagrange_connectivity=self._cached_vtk_lagrange_connectivity,
                 )
 
@@ -541,7 +558,8 @@ class Visualizer:
         field = _resample_to_numpy(self.connection, self.vis_discr, field)
 
         assert nodes.shape[0] == self.vis_discr.ambient_dim
-        vis_connectivity = self._vtk_connectivity.groups[0].vis_connectivity
+        connectivity = self._vtk_connectivity()
+        vis_connectivity = connectivity.groups[0].vis_connectivity
 
         if self.vis_discr.dim == 1:
             nodes = list(nodes)
@@ -582,11 +600,11 @@ class Visualizer:
     # {{{ vtk
 
     @property
-    def _vtk_connectivity(self):
-        if self._cached_vtk_connectivity is None:
-            self._cached_vtk_connectivity = VTKConnectivity(self.connection)
+    def _vtk_linear_connectivity(self):
+        if self._cached_vtk_linear_connectivity is None:
+            self._cached_vtk_linear_connectivity = VTKConnectivity(self.connection)
 
-        return self._cached_vtk_connectivity
+        return self._cached_vtk_linear_connectivity
 
     @property
     def _vtk_lagrange_connectivity(self):
@@ -597,6 +615,17 @@ class Visualizer:
                     VTKLagrangeConnectivity(self.connection)
 
         return self._cached_vtk_lagrange_connectivity
+
+    def _vtk_connectivity(self, use_high_order: bool = False) -> VTKConnectivity:
+        if use_high_order:
+            if not self.is_equidistant:
+                raise RuntimeError("Cannot visualize high-order Lagrange elements "
+                        "using a non-equidistant visualizer. "
+                        "Call 'make_visualizer' with 'force_equidistant=True'.")
+
+            return self._vtk_lagrange_connectivity
+        else:
+            return self._vtk_linear_connectivity
 
     def write_parallel_vtk_file(self, mpi_comm, file_name_pattern, names_and_fields,
                 compressor=None, real_only=False,
@@ -697,15 +726,6 @@ class Visualizer:
 
         if use_high_order is None:
             use_high_order = False
-        if use_high_order:
-            if not self.is_equidistant:
-                raise RuntimeError("Cannot visualize high-order Lagrange elements "
-                        "using a non-equidistant visualizer. "
-                        "Call 'make_visualizer' with 'force_equidistant=True'.")
-
-            connectivity = self._vtk_lagrange_connectivity
-        else:
-            connectivity = self._vtk_connectivity
 
         from pyvisfile.vtk import (
                 UnstructuredGrid, DataArray,
@@ -721,22 +741,6 @@ class Visualizer:
                     self.connection, self.vis_discr, fld))
                 for name, fld in names_and_fields
                 ]
-
-        # {{{ create cell_types
-
-        nsubelements = sum(vgrp.nsubelements for vgrp in connectivity.groups)
-        cell_types = np.empty(nsubelements, dtype=np.uint8)
-        cell_types.fill(255)
-
-        for vgrp in connectivity.groups:
-            isubelements = np.s_[
-                    vgrp.subelement_nr_base:
-                    vgrp.subelement_nr_base + vgrp.nsubelements]
-            cell_types[isubelements] = vgrp.vtk_cell_type
-
-        assert (cell_types < 255).all()
-
-        # }}}
 
         # {{{ shrink elements
 
@@ -759,13 +763,20 @@ class Visualizer:
 
         # {{{ create grid
 
+        connectivity = self._vtk_connectivity(use_high_order)
+        cells = connectivity.cells
+        if isinstance(cells, tuple):
+            cells = (cells[0],
+                     DataArray("connectivity", cells[1]),
+                     DataArray("offsets", cells[2]))
+
         nodes = nodes.reshape(self.vis_discr.ambient_dim, -1)
         points = DataArray("points", nodes, vector_format=VF_LIST_OF_COMPONENTS)
 
         grid = UnstructuredGrid(
                 (nodes.shape[1], points),
-                cells=connectivity.cells,
-                cell_types=cell_types)
+                cells=cells,
+                cell_types=connectivity.cell_types)
 
         for name, field in separate_by_real_and_imag(names_and_fields, real_only):
             grid.add_pointdata(
@@ -828,6 +839,180 @@ class Visualizer:
 
     # }}}
 
+    # {{{ vtkhdf
+
+    def write_vtkhdf_file(self,
+            file_name: str, names_and_fields: List[Tuple[str, Any]], *,
+            comm=None,
+            use_high_order: bool = False,
+            real_only: bool = False,
+            overwrite: bool = False,
+            h5_file_options: Optional[Dict[str, Any]] = None,
+            dset_options: Optional[Dict[str, Any]] = None) -> None:
+        """Write a VTK HDF5 file (typical extension ``'.hdf'``) containing
+        the visualization fields in *names_and_fields*.
+
+        This function requires ``h5py`` and has support for parallel writes
+        through ``mpi4py``.
+
+        :arg comm: an ``mpi4py.Comm``-like interface that supports
+            ``Get_rank``, ``Get_size``, ``scan`` and ``reduce``. The last two
+            are required to gather global information about the points and
+            cells in the discretizations.
+        :arg h5_file_options: a :class:`dict` passed directly to
+            :class:`h5py.File` that allows controlling chunking, compatibility, etc.
+        :arg dataset_options: a :class:`dict` passed directly to
+            :meth:`h5py.Group.create_dataset`.
+        """
+        # {{{ setup
+
+        try:
+            import h5py
+        except ImportError as exc:
+            raise ImportError("'write_vtkhdf_file' requires 'h5py'") from exc
+
+        if h5_file_options is None:
+            h5_file_options = {}
+
+        if comm is not None:
+            h5_file_options["comm"] = comm
+            if "driver" not in h5_file_options:
+                h5_file_options["driver"] = "mpio"
+            else:
+                if h5_file_options["driver"] != "mpio":
+                    raise ValueError(
+                        "parallel HDF5 requires the 'mpio' driver: "
+                        f"driver is '{h5_file_options['driver']}'")
+
+        import os
+        if os.path.splitext(file_name)[-1] != ".hdf":
+            raise ValueError(f"'file_name' extension must be '.hdf': {file_name}")
+
+        if dset_options is None:
+            dset_options = {}
+
+        names_and_fields = preprocess_fields(names_and_fields)
+        names_and_fields = [
+                (name, _resample_to_numpy(
+                    self.connection, self.vis_discr, fld))
+                for name, fld in names_and_fields
+                ]
+
+        if comm is None:
+            mpisize = 1
+            mpirank = 0
+        else:
+            mpisize = comm.Get_size()
+            mpirank = comm.Get_rank()
+
+        # }}}
+
+        # {{{ write
+
+        # https://gitlab.kitware.com/vtk/vtk/-/merge_requests/7552/diffs?commit_id=ff63361e1e625bf5f8ff82a4063a9bc5b9f35818#92f6af7573e5302296e4d465fea1d411d4a2611d
+        # https://vtk.org/doc/nightly/html/VTKHDFFileFormat.html
+
+        def create_dataset(grp, name, data, *, shape, offset):
+            if data.ndim == 2 and data.shape[1] < 3:
+                # NOTE: Paraview 5.10 (with bundled VTK 9.0.20210922) seems to
+                # be hardcoded to 3D somewhere for the VTKHDF format, so we
+                # pad the point arrays as well.
+                data = np.pad(data, ((0, 0), (0, 3 - shape[1])))
+                shape = (shape[0], 3)
+
+            dset = grp.create_dataset(name, shape, dtype=data.dtype, **dset_options)
+            dset[offset:offset + data.shape[0]] = data
+
+            return dset
+
+        with h5py.File(file_name, "w", **h5_file_options) as h5:
+            root = h5.create_group("VTKHDF")
+            root.attrs.create("Version", [1, 0])
+
+            nodes = np.stack(self._vis_nodes_numpy()).T
+
+            # {{{ local connectivity
+
+            connectivity = self._vtk_connectivity(use_high_order)
+            cell_types = connectivity.cell_types
+
+            try:
+                cell_count, cell_connectivity, cell_offsets = connectivity.cells
+                cell_offsets = np.append([0], cell_offsets)
+            except ValueError:
+                from pyvisfile.vtk import CELL_NODE_COUNT
+                cell_count = cell_types.size
+                cell_connectivity = connectivity.cells
+                cell_offsets = np.cumsum(np.append([0],
+                        np.vectorize(CELL_NODE_COUNT.get)(cell_types)),
+                        dtype=cell_connectivity.dtype)
+
+            # }}}
+
+            # {{{ determine partitions
+
+            node_count = nodes.shape[0]
+            conn_count = cell_connectivity.size
+
+            if comm is None:
+                global_cell_offset = 0
+                global_node_offset = 0
+                global_conn_offset = 0
+                global_cell_count = cell_count
+                global_node_count = node_count
+                global_conn_count = conn_count
+            else:
+                from mpi4py import MPI
+                # FIXME: should be able to do all these in one go
+                global_cell_offset = comm.scan(cell_count) - cell_count
+                global_node_offset = comm.scan(node_count) - node_count
+                global_conn_offset = comm.scan(conn_count) - conn_count
+                global_cell_count = comm.allreduce(cell_count, op=MPI.SUM)
+                global_node_count = comm.allreduce(node_count, op=MPI.SUM)
+                global_conn_count = comm.allreduce(conn_count, op=MPI.SUM)
+
+            # }}}
+
+            # {{{ write mesh
+
+            create_dataset(root, "NumberOfCells", np.array([cell_count]),
+                           shape=(mpisize,), offset=mpirank)
+            create_dataset(root, "NumberOfPoints", np.array([node_count]),
+                           shape=(mpisize,), offset=mpirank)
+            create_dataset(root, "NumberOfConnectivityIds", np.array([conn_count]),
+                           shape=(mpisize,), offset=mpirank)
+
+            create_dataset(root, "Points", nodes,
+                           shape=(global_node_count, nodes.shape[1]),
+                           offset=global_node_offset)
+            create_dataset(root, "Connectivity", cell_connectivity,
+                           shape=(global_conn_count,), offset=global_conn_offset)
+            create_dataset(root, "Offsets", cell_offsets,
+                           shape=(global_cell_count + mpisize,),
+                           offset=global_cell_offset + mpirank)
+            create_dataset(root, "Types", cell_types,
+                           shape=(global_cell_count,), offset=global_cell_offset)
+
+            # }}}
+
+            # {{{ write point data
+
+            point_data = root.create_group("PointData")
+            for name, field in separate_by_real_and_imag(
+                    names_and_fields, real_only):
+                if field.dtype.char == "O":
+                    field = np.stack(field).T
+
+                create_dataset(point_data, name, field,
+                               shape=(global_node_count,) + field.shape[1:],
+                               offset=global_node_offset)
+
+            # }}}
+
+        # }}}
+
+    # }}}
+
     # {{{ xdmf
 
     @memoize_method
@@ -866,6 +1051,11 @@ class Visualizer:
         :arg dataset_options: a :class:`dict` passed directly to
             :meth:`h5py.Group.create_dataset`.
         """
+        try:
+            import h5py
+        except ImportError as exc:
+            raise ImportError("'write_xdmf_file' requires 'h5py'") from exc
+
         if attrs is None:
             attrs = {}
 
@@ -881,17 +1071,8 @@ class Visualizer:
                 or h5_file_options.get("driver", None) == "mpio":
             raise NotImplementedError("distributed memory visualization")
 
-        # {{{ hdf5
-
-        try:
-            import h5py
-        except ImportError as exc:
-            raise ImportError("'write_xdmf_file' requires 'h5py'") from exc
-
         import os
         h5_file_name = "{}.h5".format(os.path.splitext(file_name)[0])
-
-        # }}}
 
         # {{{ expand -> filter -> resample -> to_numpy fields
 
@@ -947,7 +1128,7 @@ class Visualizer:
             # {{{ create grids
 
             nodes = self._xdmf_nodes_numpy()
-            connectivity = self._vtk_connectivity
+            connectivity = self._vtk_connectivity()
 
             # global nodes
             h5grid = h5.create_group("Grid")
@@ -1025,7 +1206,7 @@ class Visualizer:
 
         assert nodes.shape[0] == self.vis_discr.ambient_dim
 
-        vis_connectivity, = self._vtk_connectivity.groups
+        vis_connectivity, = self._vtk_connectivity().groups
 
         fig = plt.gcf()
         ax = fig.gca(projection="3d")

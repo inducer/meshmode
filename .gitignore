@@ -16,6 +16,7 @@ a.out
 *.pvtu
 *.h5
 *.xmf
+*.hdf
 
 .cache
 .pytest_cache
