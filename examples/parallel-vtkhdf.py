@@ -84,5 +84,8 @@ def main(*, ambient_dim: int) -> None:
 
 
 if __name__ == "__main__":
-    main(ambient_dim=2)
-    main(ambient_dim=3)
+    try:
+        main(ambient_dim=2)
+        main(ambient_dim=3)
+    except ImportError as exc:
+        logger.info(exc)
