@@ -913,6 +913,13 @@ class Visualizer:
         # https://vtk.org/doc/nightly/html/VTKHDFFileFormat.html
 
         def create_dataset(grp, name, data, *, shape, offset):
+            if data.ndim == 2 and data.shape[1] < 3:
+                # NOTE: Paraview 5.10 (with bundled VTK 9.0.20210922) seems to
+                # be hardcoded to 3D somewhere for the VTKHDF format, so we
+                # pad the point arrays as well.
+                data = np.pad(data, ((0, 0), (0, 3 - shape[1])))
+                shape = (shape[0], 3)
+
             dset = grp.create_dataset(name, shape, dtype=data.dtype, **dset_options)
             dset[offset:offset + data.shape[0]] = data
 
