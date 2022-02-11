@@ -208,7 +208,7 @@ class RefinerWithoutAdjacency:
             # }}}
 
             new_el_groups.append(
-                type(group)(
+                group.make_group(
                     order=group.order,
                     vertex_indices=new_vertex_indices,
                     nodes=new_nodes,

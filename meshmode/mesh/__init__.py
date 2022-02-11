@@ -221,9 +221,10 @@ class MeshElementGroup(ABC):
     # NOTE: the mesh supports not having vertices if no facial or nodal
     # adjacency is required, so we can mark this as optional
     vertex_indices: Optional[np.ndarray]
-
     nodes: np.ndarray
-    unit_nodes: np.ndarray
+
+    # TODO: Remove ` = None` when everything is constructed through the factory
+    unit_nodes: np.ndarray = None
 
     # FIXME: these should be removed!
     # https://github.com/inducer/meshmode/issues/224
@@ -237,7 +238,7 @@ class MeshElementGroup(ABC):
         if not self._factory_constructed:
             from warnings import warn
             warn(f"Calling the constructor of '{type(self).__name__}' is "
-                 "deprecated. Use '{type(self).__name__}.make_group' instead",
+                 f"deprecated. Use '{type(self).__name__}.make_group' instead",
                  DeprecationWarning, stacklevel=2)
 
     @property
@@ -1010,7 +1011,9 @@ class Mesh(Record):
 
         set_if_not_present("vertices")
         if "groups" not in kwargs:
-            kwargs["groups"] = [group.copy() for group in self.groups]
+            kwargs["groups"] = [
+                replace(group, element_nr_base=None, node_nr_base=None)
+                for group in self.groups]
         set_if_not_present("nodal_adjacency", "_nodal_adjacency")
         set_if_not_present("facial_adjacency_groups", "_facial_adjacency_groups")
         set_if_not_present("vertex_id_dtype")
@@ -1576,7 +1579,7 @@ def as_python(mesh, function_name="make_mesh"):
         cg("")
         for group in mesh.groups:
             cg("import %s" % type(group).__module__)
-            cg("groups.append({}.{}(".format(
+            cg("groups.append({}.{}.make_group(".format(
                 type(group).__module__,
                 type(group).__name__))
             cg("    order=%s," % group.order)

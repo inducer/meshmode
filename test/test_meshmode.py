@@ -794,8 +794,12 @@ def test_mesh_without_vertices(actx_factory):
     mesh = mgen.generate_sphere(r=1.0, order=4)
 
     # create one without the vertices
+    from dataclasses import replace
     grp, = mesh.groups
-    groups = [grp.copy(nodes=grp.nodes, vertex_indices=None) for grp in mesh.groups]
+    groups = [
+        replace(grp, nodes=grp.nodes, vertex_indices=None,
+                element_nr_base=None, node_nr_base=None)
+        for grp in mesh.groups]
     mesh = Mesh(None, groups, is_conforming=False)
 
     # try refining it

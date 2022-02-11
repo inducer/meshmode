@@ -337,7 +337,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
             is_last_face = face.face_index + 1 == mgrp.nfaces
 
             if per_face_groups or is_last_face:
-                bdry_mesh_group = type(mgrp)(
+                bdry_mesh_group = mgrp.make_group(
                         mgrp.order, vertex_indices, nodes,
                         unit_nodes=bdry_unit_nodes)
                 bdry_mesh_groups.append(bdry_mesh_group)
