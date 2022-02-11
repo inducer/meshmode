@@ -147,7 +147,7 @@ class NodalDGContext:
 
         from meshmode.mesh import Mesh, SimplexElementGroup
         order = int(self.octave.pull("N"))
-        egroup = SimplexElementGroup(
+        egroup = SimplexElementGroup.make_group(
                 order,
                 vertex_indices=vertex_indices,
                 nodes=nodes,

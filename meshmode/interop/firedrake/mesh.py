@@ -624,7 +624,7 @@ build_connection_from_firedrake`.
         nodes = np.transpose(nodes, (2, 0, 1))
 
         # make a group (possibly with some elements that need to be flipped)
-        unflipped_group = SimplexElementGroup(
+        unflipped_group = SimplexElementGroup.make_group(
                 order=coord_finat_elt.degree,
                 vertex_indices=vertex_indices,
                 nodes=nodes,

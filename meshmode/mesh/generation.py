@@ -314,7 +314,7 @@ def make_curve_mesh(
     nodes = curve_f(t).reshape(vertices.shape[0], nelements, -1)
 
     from meshmode.mesh import Mesh, SimplexElementGroup
-    egroup = SimplexElementGroup(
+    egroup = SimplexElementGroup.make_group(
             order,
             vertex_indices=vertex_indices,
             nodes=nodes,
@@ -417,7 +417,7 @@ def make_group_from_vertices(
     # make contiguous
     nodes = nodes.copy()
 
-    return group_cls(
+    return group_cls.make_group(
             order, vertex_indices, nodes,
             unit_nodes=unit_nodes)
 

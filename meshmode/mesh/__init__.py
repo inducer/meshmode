@@ -221,16 +221,24 @@ class MeshElementGroup(ABC):
     # NOTE: the mesh supports not having vertices if no facial or nodal
     # adjacency is required, so we can mark this as optional
     vertex_indices: Optional[np.ndarray]
-    nodes: np.ndarray
 
-    # NOTE: unit_nodes are "optional" because subclasses may generate default
-    # unit nodes from the order and other parameters
-    unit_nodes: Optional[np.ndarray] = None
+    nodes: np.ndarray
+    unit_nodes: np.ndarray
 
     # FIXME: these should be removed!
     # https://github.com/inducer/meshmode/issues/224
     element_nr_base: Optional[int] = None
     node_nr_base: Optional[int] = None
+
+    # TODO: remove when everything has been constructed through the factory
+    _factory_constructed: bool = False
+
+    def __post_init__(self):
+        if not self._factory_constructed:
+            from warnings import warn
+            warn(f"Calling the constructor of '{type(self).__name__}' is "
+                 "deprecated. Use '{type(self).__name__}.make_group' instead",
+                 DeprecationWarning, stacklevel=2)
 
     @property
     def dim(self):
@@ -316,6 +324,11 @@ class MeshElementGroup(ABC):
             coordinates of each vertex.
         """
 
+    @classmethod
+    @abstractmethod
+    def make_group(cls, **kwargs: Any) -> "MeshElementGroup":
+        pass
+
 # }}}
 
 
@@ -333,14 +346,18 @@ class _ModepyElementGroup(MeshElementGroup):
     .. attribute:: _modepy_space
     """
 
+    # TODO: remove once `make_group` is used everywhere
     dim: Optional[int] = None
-    unit_nodes: Optional[np.ndarray] = None
 
     _modepy_shape_cls: ClassVar[Type[mp.Shape]] = mp.Shape
-    _modepy_shape: mp.Shape = field(default=None, init=False, repr=False)
-    _modepy_space: mp.FunctionSpace = field(default=None, init=False, repr=False)
+    _modepy_shape: mp.Shape = field(default=None, repr=False)
+    _modepy_space: mp.FunctionSpace = field(default=None, repr=False)
 
     def __post_init__(self):
+        super().__post_init__()
+        if self._factory_constructed:
+            return
+
         if self.unit_nodes is None:
             if self.dim is None:
                 raise TypeError("either 'dim' or 'unit_nodes' must be provided")
@@ -397,6 +414,39 @@ class _ModepyElementGroup(MeshElementGroup):
     @memoize_method
     def vertex_unit_coordinates(self):
         return mp.unit_vertices_for_shape(self._modepy_shape).T
+
+    @classmethod
+    def make_group(cls, order: int,
+                   vertex_indices: Optional[np.ndarray],
+                   nodes: np.ndarray,
+                   unit_nodes: Optional[np.ndarray] = None,
+                   dim: Optional[int] = None) -> "_ModepyElementGroup":
+        if unit_nodes is None:
+            if dim is None:
+                raise TypeError("either 'dim' or 'unit_nodes' must be provided")
+        else:
+            if dim is None:
+                dim = unit_nodes.shape[0]
+
+            if unit_nodes.shape[0] != dim:
+                raise ValueError("'dim' does not match 'unit_nodes' dimension")
+
+        # pylint: disable=abstract-class-instantiated
+        shape = cls._modepy_shape_cls(dim)
+        space = mp.space_for_shape(shape, order)
+
+        if unit_nodes is None:
+            unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
+
+        if unit_nodes.shape[1] != space.space_dim:
+            raise ValueError("'unit_nodes' size does not match the dimension "
+                             f"of a '{type(space).__name__}' space of order {order}")
+
+        return cls(order=order, vertex_indices=vertex_indices, nodes=nodes,
+                   dim=dim,
+                   unit_nodes=unit_nodes,
+                   _modepy_shape=shape, _modepy_space=space,
+                   _factory_constructed=True)
 
 # }}}
 

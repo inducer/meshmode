@@ -679,7 +679,7 @@ def flip_simplex_element_group(vertices, grp, grp_flip_flags):
             "ij,dej->dei",
             flip_matrix, grp.nodes[:, grp_flip_flags])
 
-    return SimplexElementGroup(
+    return SimplexElementGroup.make_group(
             grp.order, new_vertex_indices, new_nodes,
             unit_nodes=grp.unit_nodes)
 
