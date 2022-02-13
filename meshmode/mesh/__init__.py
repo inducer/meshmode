@@ -559,8 +559,6 @@ class FacialAdjacencyGroup:
     necessarily contiguous like the figure may suggest.)
 
     .. attribute:: igroup
-
-    .. automethod:: as_python
     """
 
     igroup: int
