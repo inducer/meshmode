@@ -553,7 +553,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     center = np.empty(dim, np.float64)
     center.fill(-0.5)
 
-    mg = group_cls(mesh_order, vertex_indices, nodes, dim=dim)
+    mg = group_cls.make_group(mesh_order, vertex_indices, nodes, dim=dim)
     mesh = Mesh(vertices, [mg], is_conforming=True)
 
     from meshmode.discretization import Discretization

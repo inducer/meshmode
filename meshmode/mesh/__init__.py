@@ -202,18 +202,20 @@ class MeshElementGroup(ABC):
         A :class:`bool` flag that is *True* if the local-to-global
         parametrization of all the elements in the group is affine.
 
-    .. automethod:: __init__
-    .. automethod:: join_mesh
-
-    .. automethod:: face_vertex_indices
-    .. automethod:: vertex_unit_coordinates
-
     Element groups can also be compared for equality using the following
     methods. Note that these are *very* expensive, as they compare all
     the :attr:`nodes`.
 
     .. automethod:: __eq__
     .. automethod:: __ne__
+
+    .. automethod:: __init__
+
+    The following abstract methods must be implemented by subclasses.
+
+    .. automethod:: make_group
+    .. automethod:: face_vertex_indices
+    .. automethod:: vertex_unit_coordinates
     """
 
     order: int
@@ -328,7 +330,11 @@ class MeshElementGroup(ABC):
     @classmethod
     @abstractmethod
     def make_group(cls, **kwargs: Any) -> "MeshElementGroup":
-        pass
+        """Instantiate a new group of class *cls*.
+
+        Unlike the constructor, this factory function performs additional
+        consistency checks and should be used instead.
+        """
 
 # }}}
 
