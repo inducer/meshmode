@@ -173,6 +173,27 @@ class MeshElementGroup(ABC):
         *Not* the ambient dimension, see :attr:`Mesh.ambient_dim`
         for that.
 
+    .. attribute:: nvertices
+
+        Number of vertices in the reference element.
+
+    .. attribute:: nfaces
+
+        Number of faces of the reference element.
+
+    .. attribute:: nunit_nodes
+
+        Number of nodes on the reference element.
+
+    .. attribute:: nelements
+
+        Number of elements in the group.
+
+    .. attribute:: nnodes
+
+        Total number of nodes in the group (equivalent to
+        ``nelements * nunit_nodes``).
+
     .. attribute:: vertex_indices
 
         An array of shape ``(nelements, nvertices)`` of (mesh-wide)
@@ -188,14 +209,6 @@ class MeshElementGroup(ABC):
         An array with shape ``(dim, nunit_nodes)`` of nodes on the reference
         element. The coordinates :attr:`nodes` are a mapped version
         of these reference nodes.
-
-    .. attribute:: nvertices
-
-        Number of vertices in the reference element.
-
-    .. attribute:: nfaces
-
-        Number of faces of the reference element.
 
     .. attribute:: is_affine
 
@@ -248,24 +261,24 @@ class MeshElementGroup(ABC):
         return self.unit_nodes.shape[0]
 
     @property
-    def nelements(self):
-        return self.nodes.shape[1]
-
-    @property
-    def nnodes(self):
-        return self.nelements * self.unit_nodes.shape[-1]
-
-    @property
-    def nunit_nodes(self):
-        return self.unit_nodes.shape[-1]
-
-    @property
     def nvertices(self):
         return self.vertex_unit_coordinates().shape[-1]
 
     @property
     def nfaces(self):
         return len(self.face_vertex_indices())
+
+    @property
+    def nunit_nodes(self):
+        return self.unit_nodes.shape[-1]
+
+    @property
+    def nelements(self):
+        return self.nodes.shape[1]
+
+    @property
+    def nnodes(self):
+        return self.nelements * self.unit_nodes.shape[-1]
 
     def copy(self, **kwargs: Any) -> "MeshElementGroup":
         from warnings import warn
