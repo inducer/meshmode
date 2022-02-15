@@ -314,7 +314,7 @@ def make_curve_mesh(
     nodes = curve_f(t).reshape(vertices.shape[0], nelements, -1)
 
     from meshmode.mesh import Mesh, SimplexElementGroup
-    egroup = SimplexElementGroup(
+    egroup = SimplexElementGroup.make_group(
             order,
             vertex_indices=vertex_indices,
             nodes=nodes,
@@ -417,7 +417,7 @@ def make_group_from_vertices(
     # make contiguous
     nodes = nodes.copy()
 
-    return group_cls(
+    return group_cls.make_group(
             order, vertex_indices, nodes,
             unit_nodes=unit_nodes)
 
@@ -554,10 +554,12 @@ def generate_sphere(r: float, order: int, *,
         mesh = refine_uniformly(mesh, uniform_refinement_rounds)
 
     # ensure vertices and nodes are still on the sphere of radius r
+    from dataclasses import replace
     vertices = mesh.vertices * r / np.sqrt(np.sum(mesh.vertices**2, axis=0))
     grp, = mesh.groups
-    grp = grp.copy(
-            nodes=grp.nodes * r / np.sqrt(np.sum(grp.nodes**2, axis=0)))
+    grp = replace(grp,
+            nodes=grp.nodes * r / np.sqrt(np.sum(grp.nodes**2, axis=0)),
+            element_nr_base=None, node_nr_base=None)
 
     from meshmode.mesh import Mesh
     return Mesh(
@@ -628,9 +630,11 @@ def generate_surface_of_revolution(
         res[:2, :] *= r_expected/np.sum(res[:2, :]**2, axis=0)
         return res
 
+    from dataclasses import replace
     vertices = ensure_radius(mesh.vertices)
     grp, = mesh.groups
-    grp = grp.copy(nodes=ensure_radius(grp.nodes))
+    grp = replace(grp, nodes=ensure_radius(grp.nodes),
+                  element_nr_base=None, node_nr_base=None)
 
     from meshmode.mesh import Mesh
     return Mesh(
@@ -734,10 +738,14 @@ def generate_torus_and_cycle_vertices(
 
     # }}}
 
+    from dataclasses import replace
+    grp = replace(grp, vertex_indices=vertex_indices, nodes=nodes,
+                  element_nr_base=None, node_nr_base=None)
+
     from meshmode.mesh import Mesh
     return (
             Mesh(
-                vertices, [grp.copy(vertex_indices=vertex_indices, nodes=nodes)],
+                vertices, [grp],
                 node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
                 is_conforming=True),
             [idx(i, 0) for i in range(n_major)],
@@ -852,7 +860,11 @@ def refine_mesh_and_get_urchin_warper(
         return pts * new_rad / r
 
     def warp_mesh(mesh, node_vertex_consistency_tolerance):
-        groups = [grp.copy(nodes=map_coords(grp.nodes)) for grp in mesh.groups]
+        from dataclasses import replace
+        groups = [
+            replace(grp, nodes=map_coords(grp.nodes),
+                    element_nr_base=None, node_nr_base=None)
+            for grp in mesh.groups]
 
         from meshmode.mesh import Mesh
         return Mesh(

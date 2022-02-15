@@ -23,12 +23,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
 from functools import singledispatch
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from pytools import memoize_method, Record
+from pytools import memoize_method
 from pytools.obj_array import make_obj_array
 from arraycontext import thaw, flatten
 from meshmode.dof_array import DOFArray
@@ -169,16 +170,23 @@ def preprocess_fields(names_and_fields):
     return result
 
 
-class _VisConnectivityGroup(Record):
+@dataclass(frozen=True)
+class _VisConnectivityGroup:
     """
     .. attribute:: vis_connectivity
 
-        an array of shape ``(group.nelements, nsubelements, primitive_element_size)``
+        An array of shape ``(nelements, nsubelements, primitive_element_size)``.
 
     .. attribute:: vtk_cell_type
 
     .. attribute:: subelement_nr_base
+
+        Starting index for subelements in :attr:`vis_connectivity`.
     """
+
+    vis_connectivity: np.ndarray
+    vtk_cell_type: int
+    subelement_nr_base: int
 
     @property
     def nsubelements(self):
