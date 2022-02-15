@@ -331,7 +331,7 @@ def vtk_visualize_mesh(actx, mesh, filename,
 
 # {{{ write_stl_file
 
-def write_stl_file(mesh, stl_name):
+def write_stl_file(mesh, stl_name, overwrite=False):
     """Writes a `STL <https://en.wikipedia.org/wiki/STL_(file_format)>`__ file
     from a triangular mesh in 3D. Requires the
     `numpy-stl <https://pypi.org/project/numpy-stl/>`__ package.
@@ -360,8 +360,14 @@ def write_stl_file(mesh, stl_name):
         for ivertex in range(3):
             stl_mesh.vectors[iface][ivertex] = faces[:, iface, ivertex]
 
-    # Write the mesh to file "cube.stl"
-    stl_mesh.save("tp-lagrange.stl")
+    import os
+    if os.path.exists(stl_name):
+        if overwrite:
+            os.remove(stl_name)
+        else:
+            raise FileExistsError(f"output file '{stl_name}' already exists")
+
+    stl_mesh.save(stl_name)
 
 # }}}
 
