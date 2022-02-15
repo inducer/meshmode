@@ -379,6 +379,8 @@ class _ModepyElementGroup(MeshElementGroup):
         if self._factory_constructed:
             return
 
+        # {{{ duplicates make_group below, keep in sync
+
         if self.unit_nodes is None:
             if self.dim is None:
                 raise TypeError("either 'dim' or 'unit_nodes' must be provided")
@@ -419,6 +421,8 @@ class _ModepyElementGroup(MeshElementGroup):
                         f" expected {self.nvertices},"
                         f" got {self.vertex_indices.shape[-1]}")
 
+        # }}}
+
     @property
     def nvertices(self):
         return self._modepy_shape.nvertices     # pylint: disable=no-member
@@ -442,6 +446,8 @@ class _ModepyElementGroup(MeshElementGroup):
                    nodes: np.ndarray,
                    unit_nodes: Optional[np.ndarray] = None,
                    dim: Optional[int] = None) -> "_ModepyElementGroup":
+        # {{{ duplicates __post_init__ above, keep in sync
+
         if unit_nodes is None:
             if dim is None:
                 raise TypeError("either 'dim' or 'unit_nodes' must be provided")
@@ -468,6 +474,8 @@ class _ModepyElementGroup(MeshElementGroup):
                    unit_nodes=unit_nodes,
                    _modepy_shape=shape, _modepy_space=space,
                    _factory_constructed=True)
+
+        # }}}
 
 # }}}
 
