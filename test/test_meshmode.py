@@ -485,7 +485,7 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
 
     if what == "torus":
         nodes = sym.nodes(mesh.ambient_dim).as_vector()
-        angle = sym.atan2(nodes[1], nodes[0])
+        angle = sym.arctan2(nodes[1], nodes[0])
         center_nodes = sym.make_obj_array([
                 5*sym.cos(angle),
                 5*sym.sin(angle),
