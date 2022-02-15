@@ -902,8 +902,8 @@ class Mesh(Record):
 
             if self.dim == self.ambient_dim and not skip_element_orientation_test:
                 # only for volume meshes, for now
-                assert test_volume_mesh_element_orientations(self), \
-                        "negatively oriented elements found"
+                if not test_volume_mesh_element_orientations(self):
+                    raise ValueError("negatively oriented elements found")
 
     def get_copy_kwargs(self, **kwargs):
         def set_if_not_present(name, from_name=None):
