@@ -606,13 +606,13 @@ class Discretization:
                     and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
                 return nodes
 
-            kd_tag = EinsumArgsTags({"out": [IsDOFArray()],
-                        "arg0": [IsOpArray()]})
+            kd_tag = EinsumArgsTags({"out": (IsDOFArray(),),
+                        "arg0": (IsOpArray(),)})
 
             return actx.einsum("ij,ej->ei",
                                actx.from_numpy(grp.from_mesh_interp_matrix()),
                                nodes,
-                               tagged=(FirstAxisIsElementsTag(), kd_tag))
+                               tagged=(FirstAxisIsElementsTag(), kd_tag,))
 
         result = make_obj_array([
             _DOFArray(None, tuple([
@@ -668,8 +668,8 @@ def num_reference_derivative(
 
         return actx.from_numpy(mat)
 
-    kd_tag = EinsumArgsTags({"arg0": [IsOpArray()],
-                "arg1": [IsDOFArray()], "out": [IsDOFArray()]})
+    kd_tag = EinsumArgsTags({"arg0": (IsOpArray(),),
+                "arg1": (IsDOFArray(),), "out": (IsDOFArray(),)})
 
     data = tuple((actx.einsum("ij,ej->ei",
                         get_mat(grp, ref_axes),

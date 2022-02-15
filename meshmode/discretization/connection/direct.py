@@ -543,7 +543,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_picking_knl_inplace"))
-        def pick_knl(n_to_nodes):
+        def pick_knl(nelements, nelements_result, n_to_nodes, nelements_vec,
+                n_from_nodes, result_dtype, ary_dtype, from_dtype,
+                to_dtype, pick_list_dtype):
             t_unit = make_loopy_program(
                 """{[iel, idof]:
                     0<=iel<nelements and
@@ -551,17 +553,28 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 "result[to_element_indices[iel], idof] \
                     = ary[from_element_indices[iel], pick_list[idof]]",
                 [
-                    lp.GlobalArg("result", None,
+                    lp.GlobalArg("result", result_dtype,
                         shape="nelements_result, n_to_nodes",
                         offset=lp.auto, tags=[IsDOFArray()]),
-                    lp.GlobalArg("ary", None,
+                    lp.GlobalArg("ary", ary_dtype,
                         shape="nelements_vec, n_from_nodes",
                         offset=lp.auto, tags=[IsDOFArray()]),
-                    lp.ValueArg("nelements_result", np.int32),
-                    lp.ValueArg("nelements_vec", np.int32),
-                    lp.ValueArg("n_from_nodes", np.int32),
+                    lp.GlobalArg("to_element_indices", to_dtype,
+                        shape="nelements,", offset=lp.auto),
+                    lp.GlobalArg("from_element_indices", from_dtype,
+                        shape="nelements,", offset=lp.auto),
+                    lp.GlobalArg("pick_list", pick_list_dtype,
+                        shape="n_to_nodes,", offset=lp.auto),
+                    lp.ValueArg("nelements_result", np.int32,
+                        tags=[ParameterValue(nelements_result)]),
+                    lp.ValueArg("nelements_vec", np.int32,
+                        tags=[ParameterValue(nelements_vec)]),
+                    lp.ValueArg("n_from_nodes", np.int32,
+                        tags=[ParameterValue(n_from_nodes)]),
                     lp.ValueArg("n_to_nodes", np.int32,
                         tags=[ParameterValue(n_to_nodes)]),
+                    lp.ValueArg("nelements", np.int32,
+                        tags=[ParameterValue(nelements)]),
                     "...",
                     ],
                 name="resample_by_picking_inplace")
@@ -602,14 +615,25 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                             to_element_indices=batch.to_element_indices)
 
                 else:
-                    nelements, n_to_nodes = result[i_tgrp].shape
-                    actx.call_loopy(pick_knl(n_to_nodes),
+                    nelements_result, n_to_nodes = result[i_tgrp].shape
+                    nelements_vec, n_from_nodes = ary[batch.from_group_index].shape
+                    nelements = batch.from_element_indices.shape[0]
+                    result_dtype = result[i_tgrp].dtype
+                    ary_dtype = ary[batch.from_group_index].dtype
+                    from_dtype = batch.from_element_indices.dtype
+                    to_dtype = batch.to_element_indices.dtype
+                    pick_list_dtype = point_pick_indices.dtype
+
+                    pknl = pick_knl(nelements, nelements_result, n_to_nodes,
+                            nelements_vec, n_from_nodes, result_dtype,
+                            ary_dtype, from_dtype, to_dtype, pick_list_dtype)
+
+                    actx.call_loopy(pknl,
                             pick_list=point_pick_indices,
                             result=result[i_tgrp],
                             ary=ary[batch.from_group_index],
                             from_element_indices=batch.from_element_indices,
                             to_element_indices=batch.to_element_indices)
-
         return result
 
     # }}}

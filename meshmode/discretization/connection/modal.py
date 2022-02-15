@@ -163,8 +163,8 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             vdm_inv = la.inv(vdm)
             return actx.from_numpy(vdm_inv)
 
-        kd_tag = EinsumArgsTags({"arg0": [IsOpArray()],
-                    "arg1": [IsDOFArray()], "out": [IsDOFArray()]})
+        kd_tag = EinsumArgsTags({"arg0": (IsOpArray(),),
+                    "arg1": (IsDOFArray(),), "out": (IsDOFArray(),)})
 
         return actx.einsum("ij,ej->ei",
                            vandermonde_inverse(grp),
