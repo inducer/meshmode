@@ -1216,9 +1216,7 @@ class Visualizer:
 
         vis_connectivity, = self._vtk_connectivity().groups
 
-        fig = plt.gcf()
-        ax = fig.gca(projection="3d")
-
+        ax = plt.axes(projection="3d")
         had_data = ax.has_data()
 
         if self.vis_discr.dim == 2:
