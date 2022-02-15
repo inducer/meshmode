@@ -137,8 +137,9 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                         nearby_vertex = mesh.vertices[:, nearby_vertex_index]
                         transformation[:, inearby_vertex_index] = \
                                 nearby_vertex - nearby_origin_vertex
-                    bary_coord, residual = \
-                            np.linalg.lstsq(transformation, vertex_transformed)[0:2]
+                    bary_coord, residual = np.linalg.lstsq(
+                        transformation, vertex_transformed,
+                        rcond=None)[0:2]
 
                     is_in_element_span = (
                             residual.size == 0
