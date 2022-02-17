@@ -253,8 +253,8 @@ class MeshElementGroup(ABC):
         if not self._factory_constructed:
             from warnings import warn
             warn(f"Calling the constructor of '{type(self).__name__}' is "
-                 f"deprecated and will stop working in July 2022. "
-                 "Use '{type(self).__name__}.make_group' instead",
+                 "deprecated and will stop working in July 2022. "
+                 f"Use '{type(self).__name__}.make_group' instead",
                  DeprecationWarning, stacklevel=2)
 
     @property
