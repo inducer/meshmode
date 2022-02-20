@@ -1148,8 +1148,9 @@ class Visualizer:
                 h5grp = h5grid.create_group(grp_name)
 
                 # offset connectivity back to local numbering
-                visconn = vgrp.vis_connectivity.reshape(vgrp.nsubelements, -1) \
-                        - node_nr_base
+                visconn = (
+                    vgrp.vis_connectivity.reshape(vgrp.nsubelements, -1)
+                    - node_nr_base)
                 node_nr_base += self.vis_discr.groups[igrp].ndofs
 
                 # hdf5 side
@@ -1352,9 +1353,8 @@ def write_nodal_adjacency_vtk_file(file_name, mesh,
             (mesh.ambient_dim, mesh.nelements),
             dtype=mesh.vertices.dtype)
 
-    for grp in mesh.groups:
-        iel_base = grp.element_nr_base
-        centroids[:, iel_base:iel_base+grp.nelements] = (
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
+        centroids[:, base_element_nr:base_element_nr + grp.nelements] = (
                 np.sum(mesh.vertices[:, grp.vertex_indices], axis=-1)
                 / grp.vertex_indices.shape[-1])
 

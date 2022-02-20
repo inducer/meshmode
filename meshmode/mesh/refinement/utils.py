@@ -97,7 +97,7 @@ def is_symmetric(relation, debug=False):
 
 def check_nodal_adj_against_geometry(mesh, tol=1e-12):
     def group_and_iel_to_global_iel(igrp, iel):
-        return mesh.groups[igrp].element_nr_base + iel
+        return mesh.base_element_nrs[igrp] + iel
 
     logger.debug("nodal adj test: tree build")
     from meshmode.mesh.tools import make_element_lookup_tree

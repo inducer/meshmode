@@ -189,7 +189,7 @@ def write_vertex_vtk_file(mesh, file_name,
 
     cell_types = np.empty(mesh.nelements, dtype=np.uint8)
     cell_types.fill(255)
-    for egrp in mesh.groups:
+    for base_element_nr, egrp in zip(mesh.base_element_nrs, mesh.groups):
         if isinstance(egrp, SimplexElementGroup):
             vtk_cell_type = {
                     1: VTK_LINE,
@@ -206,10 +206,7 @@ def write_vertex_vtk_file(mesh, file_name,
             raise NotImplementedError("mesh vtk file writing for "
                     "element group of type '%s'" % type(egrp).__name__)
 
-        cell_types[
-                egrp.element_nr_base:
-                egrp.element_nr_base + egrp.nelements] = \
-                        vtk_cell_type
+        cell_types[base_element_nr:base_element_nr + egrp.nelements] = vtk_cell_type
 
     assert (cell_types != 255).all()
 
@@ -275,9 +272,9 @@ def mesh_to_tikz(mesh):
     drawel_lines = []
     drawel_lines.append(r"\def\drawelements#1{")
 
-    for grp in mesh.groups:
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
         for iel, el in enumerate(grp.vertex_indices):
-            el_nr = grp.element_nr_base+iel+1
+            el_nr = base_element_nr + iel + 1
             elverts = mesh.vertices[:, el]
 
             centroid = np.average(elverts, axis=1)
