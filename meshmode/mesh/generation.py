@@ -1458,7 +1458,8 @@ def warp_and_refine_until_resolved(
                 raise FloatingPointError("Warped mesh contains non-finite nodes "
                                          "(NaN or Inf)")
 
-        for egrp in warped_mesh.groups:
+        for base_element_nr, egrp in zip(
+                warped_mesh.base_element_nrs, warped_mesh.groups):
             dim, _ = egrp.unit_nodes.shape
 
             interp_err_est_mat = simplex_interp_error_coefficient_estimator_matrix(
@@ -1478,10 +1479,8 @@ def warp_and_refine_until_resolved(
             # max over dimensions
             est_rel_interp_error = np.max(interp_error_norm_2/mapping_norm_2, axis=0)
 
-            refine_flags[
-                    egrp.element_nr_base:
-                    egrp.element_nr_base+egrp.nelements] = \
-                            est_rel_interp_error > est_rel_interp_tolerance
+            refine_flags[base_element_nr:base_element_nr + egrp.nelements] = (
+                est_rel_interp_error > est_rel_interp_tolerance)
 
         nrefined_elements = np.sum(refine_flags.astype(np.int32))
         if nrefined_elements == 0:

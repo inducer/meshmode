@@ -546,7 +546,8 @@ def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
     from meshmode.discretization.connection import (
             DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
 
-    local_vol_groups = local_bdry_conn.from_discr.mesh.groups
+    local_vol_mesh = local_bdry_conn.from_discr.mesh
+    local_vol_groups = local_vol_mesh.groups
 
     part_batches = [[] for _ in local_vol_groups]
 
@@ -592,7 +593,7 @@ def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
 
                 local_grp_vol_elems = (
                         rem_ipag.neighbors[local_indices]
-                        - local_vol_groups[i_local_grp].element_nr_base)
+                        - local_vol_mesh.base_element_nrs[i_local_grp])
                 # These are group-local.
                 remote_grp_vol_elems = rem_ipag.elements[local_indices]
 

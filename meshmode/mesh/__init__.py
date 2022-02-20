@@ -257,6 +257,15 @@ class MeshElementGroup(ABC):
                  f"Use '{type(self).__name__}.make_group' instead",
                  DeprecationWarning, stacklevel=2)
 
+    def __getattribute__(self, name):
+        if name in ("element_nr_base", "node_nr_base"):
+            from warnings import warn
+            warn(f"'{type(self).__name__}.{name}' is deprecated and will be "
+                 f"removed in July 2022. Use 'Mesh.{name}' instead",
+                 DeprecationWarning, stacklevel=2)
+
+        return super().__getattribute__(name)
+
     @property
     def dim(self):
         return self.unit_nodes.shape[0]
@@ -848,6 +857,16 @@ class Mesh(Record):
 
     .. attribute:: nelements
 
+    .. attribute:: base_element_nrs
+
+        An array of size ``(len(groups),)`` of starting element indices for
+        each group in the mesh.
+
+    .. attribute:: base_node_nrs
+
+        An array of size ``(len(groups),)`` of starting node indices for
+        each group in the mesh.
+
     .. attribute:: nodal_adjacency
 
         An instance of :class:`NodalAdjacency`.
@@ -1071,6 +1090,16 @@ class Mesh(Record):
         return sum(grp.nelements for grp in self.groups)
 
     @property
+    @memoize_method
+    def base_element_nrs(self):
+        return np.cumsum([0] + [grp.nelements for grp in self.groups[:-1]])
+
+    @property
+    @memoize_method
+    def base_node_nrs(self):
+        return np.cumsum([0] + [grp.nnodes for grp in self.groups[:-1]])
+
+    @property
     def nodal_adjacency(self):
         from meshmode import DataUnavailable
 
@@ -1205,18 +1234,16 @@ def _compute_nodal_adjacency_from_vertices(mesh):
     _, nvertices = mesh.vertices.shape
     vertex_to_element = [[] for i in range(nvertices)]
 
-    for grp in mesh.groups:
-        iel_base = grp.element_nr_base
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
         for iel_grp in range(grp.nelements):
             for ivertex in grp.vertex_indices[iel_grp]:
-                vertex_to_element[ivertex].append(iel_base + iel_grp)
+                vertex_to_element[ivertex].append(base_element_nr + iel_grp)
 
     element_to_element = [set() for i in range(mesh.nelements)]
-    for grp in mesh.groups:
-        iel_base = grp.element_nr_base
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
         for iel_grp in range(grp.nelements):
             for ivertex in grp.vertex_indices[iel_grp]:
-                element_to_element[iel_base + iel_grp].update(
+                element_to_element[base_element_nr + iel_grp].update(
                         vertex_to_element[ivertex])
 
     for iel, neighbors in enumerate(element_to_element):
