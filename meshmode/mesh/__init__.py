@@ -259,9 +259,13 @@ class MeshElementGroup(ABC):
 
     def __getattribute__(self, name):
         if name in ("element_nr_base", "node_nr_base"):
+            new_name = ("base_element_nrs"
+                        if name == "element_nr_base" else
+                        "base_node_nrs")
+
             from warnings import warn
             warn(f"'{type(self).__name__}.{name}' is deprecated and will be "
-                 f"removed in July 2022. Use 'Mesh.{name}' instead",
+                 f"removed in July 2022. Use 'Mesh.{new_name}' instead",
                  DeprecationWarning, stacklevel=2)
 
         return super().__getattribute__(name)
@@ -324,9 +328,7 @@ class MeshElementGroup(ABC):
                 and self.order == other.order
                 and np.array_equal(self.vertex_indices, other.vertex_indices)
                 and np.array_equal(self.nodes, other.nodes)
-                and np.array_equal(self.unit_nodes, other.unit_nodes)
-                and self.element_nr_base == other.element_nr_base
-                and self.node_nr_base == other.node_nr_base)
+                and np.array_equal(self.unit_nodes, other.unit_nodes))
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -968,7 +970,7 @@ class Mesh(Record):
 
         new_groups = []
         for g in groups:
-            ng = g.join_mesh(el_nr, node_nr)
+            ng = replace(g, element_nr_base=el_nr, node_nr_base=node_nr)
             new_groups.append(ng)
             el_nr += ng.nelements
             node_nr += ng.nnodes
