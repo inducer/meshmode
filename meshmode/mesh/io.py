@@ -408,8 +408,6 @@ def to_json(mesh):
             "vertex_indices": group.vertex_indices.tolist(),
             "nodes": group.nodes.tolist(),
             "unit_nodes": group.unit_nodes.tolist(),
-            "element_nr_base": group.element_nr_base,
-            "node_nr_base": group.node_nr_base,
             "dim": group.dim,
             }
 
