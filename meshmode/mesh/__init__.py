@@ -309,19 +309,6 @@ class MeshElementGroup(ABC):
 
         return replace(self, **kwargs)
 
-    def join_mesh(self,
-            element_nr_base: int,
-            node_nr_base: int) -> "MeshElementGroup":
-        if self.element_nr_base is not None:
-            raise RuntimeError("this element group has already joined a mesh, "
-                    "cannot join another (The element group's element_nr_base "
-                    "is already assigned, and that typically happens when a "
-                    "group joins a Mesh instance.)")
-
-        return replace(self,
-                element_nr_base=element_nr_base,
-                node_nr_base=node_nr_base)
-
     def __eq__(self, other):
         return (
                 type(self) == type(other)
