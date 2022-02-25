@@ -465,7 +465,7 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
                     "PolynomialGivenNodesElementGroup do not have expected "
                     "dimensionality")
 
-        if nunit_nodes != len(self.basis()):
+        if nunit_nodes != len(self.basis_obj().functions):
             raise ValueError("unit nodes supplied to "
                     "PolynomialGivenNodesElementGroup do not have expected "
                     "node count for provided order")

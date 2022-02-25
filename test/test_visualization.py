@@ -166,7 +166,7 @@ def test_visualizers(actx_factory, dim, group_cls):
     names_and_fields = [("f", f)]
 
     from meshmode.discretization.visualization import make_visualizer
-    vis = make_visualizer(actx, discr, target_order)
+    vis = make_visualizer(actx, discr)
 
     # {{{ vtk
 
@@ -223,8 +223,7 @@ def test_visualizers(actx_factory, dim, group_cls):
 
     # {{{ vtkLagrange
 
-    vis = make_visualizer(actx, discr, target_order,
-            force_equidistant=True)
+    vis = make_visualizer(actx, discr, target_order, force_equidistant=True)
 
     basename = f"visualizer_vtk_{eltype}_{dim}d"
     vis.write_vtk_file(f"{basename}_lagrange.vtu",

@@ -656,7 +656,7 @@ def make_direct_full_resample_matrix(actx, conn):
     .. note::
 
         This function assumes a flattened DOF array, as produced by
-        :class:`~meshmode.dof_array.flatten`.
+        :class:`~arraycontext.flatten`.
 
     :arg actx: an :class:`~arraycontext.ArrayContext`.
     :arg conn: a :class:`DirectDiscretizationConnection`.
@@ -668,7 +668,7 @@ def make_direct_full_resample_matrix(actx, conn):
 
     @memoize_in(actx, (make_direct_full_resample_matrix, "oversample_mat_knl"))
     def knl():
-        return make_loopy_program(
+        t_unit = make_loopy_program(
             [
                 "{[idof_init]: 0 <= idof_init < nnodes_tgt}",
                 "{[jdof_init]: 0 <= jdof_init < nnodes_src}",
@@ -689,10 +689,18 @@ def make_direct_full_resample_matrix(actx, conn):
                     offset=lp.auto, tags=[IsDOFArray()]),
                 lp.ValueArg("itgt_base, isrc_base", np.int32),
                 lp.ValueArg("nnodes_tgt, nnodes_src", np.int32),
-                "...",
+                ...,
             ],
             name="oversample_mat"
         )
+
+        return lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag(),
+                # FIXME: jdof is also concurrent, but the tranform in
+                # `meshmode.array_context` does not handle two of them right now
+                # "jdof": ConcurrentDOFInameTag(),
+                })
 
     to_discr_ndofs = sum(grp.nelements*grp.nunit_dofs
             for grp in conn.to_discr.groups)

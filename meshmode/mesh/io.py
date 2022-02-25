@@ -210,7 +210,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             unit_nodes = mp.equispaced_nodes_for_space(space, shape)
 
             if isinstance(group_el_type, GmshSimplexElementBase):
-                group = SimplexElementGroup(
+                group = SimplexElementGroup.make_group(
                     group_el_type.order,
                     vertex_indices,
                     nodes,
@@ -226,7 +226,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 vertex_shuffle = type(group_el_type)(
                         order=1).get_lexicographic_gmsh_node_indices()
 
-                group = TensorProductElementGroup(
+                group = TensorProductElementGroup.make_group(
                     group_el_type.order,
                     vertex_indices[:, vertex_shuffle],
                     nodes,
@@ -408,8 +408,6 @@ def to_json(mesh):
             "vertex_indices": group.vertex_indices.tolist(),
             "nodes": group.nodes.tolist(),
             "unit_nodes": group.unit_nodes.tolist(),
-            "element_nr_base": group.element_nr_base,
-            "node_nr_base": group.node_nr_base,
             "dim": group.dim,
             }
 

@@ -69,7 +69,7 @@ def test_flatten_unflatten(actx_factory):
     mesh = generate_regular_rect_mesh(
             a=(-0.5,)*ambient_dim,
             b=(+0.5,)*ambient_dim,
-            n=(3,)*ambient_dim, order=1)
+            nelements_per_axis=(3,)*ambient_dim, order=1)
     discr = Discretization(actx, mesh, default_simplex_group_factory(ambient_dim, 3))
     a = np.random.randn(discr.ndofs)
 
@@ -106,7 +106,7 @@ def _get_test_containers(actx, ambient_dim=2):
     mesh = generate_regular_rect_mesh(
             a=(-0.5,)*ambient_dim,
             b=(+0.5,)*ambient_dim,
-            n=(3,)*ambient_dim, order=1)
+            nelements_per_axis=(3,)*ambient_dim, order=1)
     discr = Discretization(actx, mesh, default_simplex_group_factory(ambient_dim, 3))
     x = thaw(discr.nodes()[0], actx)
 

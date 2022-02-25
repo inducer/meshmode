@@ -23,12 +23,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
 from functools import singledispatch
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from pytools import memoize_method, Record
+from pytools import memoize_method
 from pytools.obj_array import make_obj_array
 from arraycontext import thaw, flatten
 from meshmode.dof_array import DOFArray
@@ -169,16 +170,23 @@ def preprocess_fields(names_and_fields):
     return result
 
 
-class _VisConnectivityGroup(Record):
+@dataclass(frozen=True)
+class _VisConnectivityGroup:
     """
     .. attribute:: vis_connectivity
 
-        an array of shape ``(group.nelements, nsubelements, primitive_element_size)``
+        An array of shape ``(nelements, nsubelements, primitive_element_size)``.
 
     .. attribute:: vtk_cell_type
 
     .. attribute:: subelement_nr_base
+
+        Starting index for subelements in :attr:`vis_connectivity`.
     """
+
+    vis_connectivity: np.ndarray
+    vtk_cell_type: int
+    subelement_nr_base: int
 
     @property
     def nsubelements(self):
@@ -1140,8 +1148,9 @@ class Visualizer:
                 h5grp = h5grid.create_group(grp_name)
 
                 # offset connectivity back to local numbering
-                visconn = vgrp.vis_connectivity.reshape(vgrp.nsubelements, -1) \
-                        - node_nr_base
+                visconn = (
+                    vgrp.vis_connectivity.reshape(vgrp.nsubelements, -1)
+                    - node_nr_base)
                 node_nr_base += self.vis_discr.groups[igrp].ndofs
 
                 # hdf5 side
@@ -1208,9 +1217,7 @@ class Visualizer:
 
         vis_connectivity, = self._vtk_connectivity().groups
 
-        fig = plt.gcf()
-        ax = fig.gca(projection="3d")
-
+        ax = plt.axes(projection="3d")
         had_data = ax.has_data()
 
         if self.vis_discr.dim == 2:
@@ -1346,9 +1353,8 @@ def write_nodal_adjacency_vtk_file(file_name, mesh,
             (mesh.ambient_dim, mesh.nelements),
             dtype=mesh.vertices.dtype)
 
-    for grp in mesh.groups:
-        iel_base = grp.element_nr_base
-        centroids[:, iel_base:iel_base+grp.nelements] = (
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
+        centroids[:, base_element_nr:base_element_nr + grp.nelements] = (
                 np.sum(mesh.vertices[:, grp.vertex_indices], axis=-1)
                 / grp.vertex_indices.shape[-1])
 

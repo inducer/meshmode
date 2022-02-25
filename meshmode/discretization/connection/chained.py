@@ -20,9 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from dataclasses import dataclass
 import numpy as np
-
-from pytools import Record
 
 import modepy as mp
 from meshmode.discretization.connection.direct import \
@@ -72,8 +71,11 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
 
 # {{{ flatten chained connection
 
-class _ConnectionBatchData(Record):
-    pass
+@dataclass(frozen=True)
+class _ConnectionBatchData:
+    result_unit_nodes: np.ndarray
+    from_group_index: int
+    to_element_face: int
 
 
 def _iterbatches(groups):

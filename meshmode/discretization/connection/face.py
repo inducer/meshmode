@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools import Record
+from dataclasses import dataclass
 
 import numpy as np
 import modepy as mp
@@ -52,8 +52,11 @@ FRESTR_INTERIOR_FACES = FACE_RESTR_INTERIOR
 
 # {{{ boundary connection
 
-class _ConnectionBatchData(Record):
-    pass
+@dataclass(frozen=True)
+class _ConnectionBatchData:
+    group_source_element_indices: np.ndarray
+    group_target_element_indices: np.ndarray
+    face: mp.Face
 
 
 def _build_boundary_connection(actx, vol_discr, bdry_discr, connection_data,
@@ -334,7 +337,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
             is_last_face = face.face_index + 1 == mgrp.nfaces
 
             if per_face_groups or is_last_face:
-                bdry_mesh_group = type(mgrp)(
+                bdry_mesh_group = mgrp.make_group(
                         mgrp.order, vertex_indices, nodes,
                         unit_nodes=bdry_unit_nodes)
                 bdry_mesh_groups.append(bdry_mesh_group)
