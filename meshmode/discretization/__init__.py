@@ -26,6 +26,11 @@ THE SOFTWARE.
 from abc import ABCMeta, abstractproperty, abstractmethod
 from warnings import warn
 from typing import Hashable, Iterable, Optional
+try:
+    # NOTE: only available in >=3.8
+    from typing import Protocol, runtime_checkable
+except ImportError:
+    from typing_extensions import Protocol, runtime_checkable
 
 import numpy as np
 
@@ -38,16 +43,24 @@ from meshmode.transform_metadata import (
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
+from meshmode.mesh import (
+        Mesh as _Mesh,
+        MeshElementGroup as _MeshElementGroup)
+
 
 __doc__ = """
 Error handling
 --------------
+
 .. autoexception:: ElementGroupTypeError
 .. autoexception:: NoninterpolatoryElementGroupError
 
 Base classes
 ------------
+
 .. autoclass:: ElementGroupBase
+.. autoclass:: ElementGroupFactory
+
 .. autoclass:: NodalElementGroupBase
 .. autoclass:: ElementGroupWithBasis
 .. autoclass:: InterpolatoryElementGroupBase
@@ -163,7 +176,7 @@ class ElementGroupBase(metaclass=ABCMeta):
         group's reference element.
         """
 
-    def discretization_key(self):
+    def discretization_key(self) -> Hashable:
         """Return a hashable, equality-comparable object that fully describes
         the per-element discretization used by this element group. (This
         should cover all parts of the
@@ -176,6 +189,19 @@ class ElementGroupBase(metaclass=ABCMeta):
         unique to this element group.
         """
         return (type(self), self.dim, self.order)
+
+
+@runtime_checkable
+class ElementGroupFactory(Protocol):
+    """A :class:`typing.Protocol` specifying the interface for group factories.
+
+    .. automethod:: __call__
+    """
+
+    def __call__(self,
+            mesh_el_group: _MeshElementGroup,
+            index: Optional[int] = None) -> ElementGroupBase:
+        """Create a new :class:`ElementGroupBase` for the given *mesh_el_group*."""
 
 # }}}
 
@@ -390,6 +416,7 @@ class Discretization:
     .. autoattribute:: is_nodal
     .. autoattribute:: is_modal
 
+    .. automethod:: __init__
     .. automethod:: copy
     .. automethod:: empty
     .. automethod:: zeros
@@ -401,18 +428,23 @@ class Discretization:
     """
 
     def __init__(self,
-            actx: ArrayContext, mesh, group_factory,
-            real_dtype=np.float64,
-            _force_actx_clone=True):
+                 actx: ArrayContext,
+                 mesh: _Mesh,
+                 group_factory: ElementGroupFactory,
+                 real_dtype: Optional[np.dtype] = None,
+                 _force_actx_clone: bool = True) -> None:
         """
-        :arg actx: A :class:`ArrayContext` used to perform computation needed
-            during initial set-up of the mesh.
-        :arg mesh: A :class:`meshmode.mesh.Mesh` over which the discretization is
-            built.
-        :arg group_factory: An :class:`ElementGroupFactory`.
+        :arg actx: an :class:`arraycontext.ArrayContext` used to perform
+            computation needed during initial set-up of the discretization.
+        :arg mesh: a :class:`~meshmode.mesh.Mesh` over which the discretization
+            is built.
+        :arg group_factory: an
+            :class:`~meshmode.discretization.poly_element.ElementGroupFactory`.
         :arg real_dtype: The :mod:`numpy` data type used for representing real
-            data, either :class:`numpy.float32` or :class:`numpy.float64`.
+            data, either ``numpy.float32`` or ``numpy.float64``.
         """
+        if real_dtype is None:
+            real_dtype = np.float64
 
         if not isinstance(actx, ArrayContext):
             raise TypeError("'actx' must be an ArrayContext")
@@ -449,7 +481,11 @@ class Discretization:
         self._group_factory = group_factory
         self._cached_nodes = None
 
-    def copy(self, actx=None, mesh=None, group_factory=None, real_dtype=None):
+    def copy(self,
+             actx: Optional[ArrayContext] = None,
+             mesh: Optional[_Mesh] = None,
+             group_factory: Optional[ElementGroupFactory] = None,
+             real_dtype: Optional[np.dtype] = None) -> "Discretization":
         """Creates a new object of the same type with all arguments that are not
         *None* replaced. The copy is not recursive (e.g. it does not call
         :meth:`meshmode.mesh.Mesh.copy`).
@@ -505,7 +541,8 @@ class Discretization:
             creation_func(shape=(grp.nelements, grp.nunit_dofs), dtype=dtype)
             for grp in self.groups))
 
-    def empty(self, actx: ArrayContext, dtype=None):
+    def empty(self, actx: ArrayContext,
+              dtype: Optional[np.dtype] = None) -> _DOFArray:
         """Return an empty :class:`~meshmode.dof_array.DOFArray`.
 
         :arg dtype: type special value 'c' will result in a
@@ -518,7 +555,8 @@ class Discretization:
 
         return self._new_array(actx, actx.empty, dtype=dtype)
 
-    def zeros(self, actx: ArrayContext, dtype=None):
+    def zeros(self, actx: ArrayContext,
+              dtype: Optional[np.dtype] = None) -> _DOFArray:
         """Return a zero-initialized :class:`~meshmode.dof_array.DOFArray`.
 
         :arg dtype: type special value 'c' will result in a
@@ -531,13 +569,15 @@ class Discretization:
 
         return self._new_array(actx, actx.zeros, dtype=dtype)
 
-    def empty_like(self, array: _DOFArray):
+    def empty_like(self, array: _DOFArray) -> _DOFArray:
         return self.empty(array.array_context, dtype=array.entry_dtype)
 
-    def zeros_like(self, array: _DOFArray):
+    def zeros_like(self, array: _DOFArray) -> _DOFArray:
         return self.zeros(array.array_context, dtype=array.entry_dtype)
 
-    def num_reference_derivative(self, ref_axes, vec):
+    def num_reference_derivative(self,
+                                 ref_axes: Iterable[int],
+                                 vec: _DOFArray) -> _DOFArray:
         warn(
                 "This method is deprecated and will go away in 2022.x. "
                 "Use 'meshmode.discretization.num_reference_derivative' instead.",
@@ -546,8 +586,9 @@ class Discretization:
         return num_reference_derivative(self, ref_axes, vec)
 
     @memoize_method
-    def quad_weights(self):
-        """:returns: A :class:`~meshmode.dof_array.DOFArray` with quadrature weights.
+    def quad_weights(self) -> _DOFArray:
+        """
+        :returns: a :class:`~meshmode.dof_array.DOFArray` with quadrature weights.
         """
         actx = self._setup_actx
 
@@ -573,7 +614,7 @@ class Discretization:
                         )["result"])
                 for grp in self.groups))
 
-    def nodes(self, cached=True):
+    def nodes(self, cached: bool = True) -> np.ndarray:
         r"""
         :arg cached: A :class:`bool` indicating whether the computed
             nodes should be stored for future use.

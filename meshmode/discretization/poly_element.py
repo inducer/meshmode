@@ -36,6 +36,7 @@ from meshmode.mesh import (
 from meshmode.discretization import (
         NoninterpolatoryElementGroupError,
         ElementGroupBase,
+        ElementGroupFactory,
         NodalElementGroupBase, ModalElementGroupBase,
         InterpolatoryElementGroupBase)
 
@@ -73,7 +74,6 @@ Tensor product group types
 Group factories
 ^^^^^^^^^^^^^^^
 
-.. autoclass:: ElementGroupFactory
 .. autoclass:: HomogeneousOrderBasedGroupFactory
 .. autoclass:: TypeMappingGroupFactory
 
@@ -635,24 +635,6 @@ class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
 
 # {{{ group factories
 
-class ElementGroupFactory:
-    """
-    .. automethod:: __call__
-    """
-
-    def __call__(self,
-            mesh_el_group: _MeshElementGroup,
-            index: int) -> ElementGroupBase:
-        """Create a new :class:`~meshmode.discretization.ElementGroupBase` for
-        the given *mesh_el_group*.
-
-        :arg index: integer index of *mesh_el_group* in the associated
-            :class:`~meshmode.mesh.Mesh`, see
-            :attr:`meshmode.discretization.ElementGroupBase.index`.
-        """
-        raise NotImplementedError
-
-
 class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
     """Element group factory for a single type of
     :class:`meshmode.mesh.MeshElementGroup` and fixed order.
@@ -730,10 +712,12 @@ class TypeMappingGroupFactory(ElementGroupFactory):
                         {k.__name__ for k in self.mesh_group_class_to_factory}
                         ))
 
-        if isinstance(cls, ElementGroupFactory):
+        if isinstance(cls, type) and issubclass(cls, ElementGroupBase):
+            return cls(mesh_el_group, self.order, index=index)
+        elif isinstance(cls, ElementGroupFactory):
             return cls(mesh_el_group, index=index)
         else:
-            return cls(mesh_el_group, self.order, index=index)
+            raise TypeError(f"unknown class: '{cls.__name__}'")
 
 
 class OrderAndTypeBasedGroupFactory(TypeMappingGroupFactory):
