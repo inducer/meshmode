@@ -23,19 +23,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from typing import Iterable
+from abc import ABCMeta, abstractproperty, abstractmethod
+from warnings import warn
+from typing import Hashable, Iterable, Optional
+
 import numpy as np
 
-from abc import ABCMeta, abstractproperty, abstractmethod
+import loopy as lp
+from arraycontext import ArrayContext, make_loopy_program
 from pytools import memoize_in, memoize_method, keyed_memoize_in
 from pytools.obj_array import make_obj_array
-from arraycontext import ArrayContext, make_loopy_program
-
-import loopy as lp
 from meshmode.transform_metadata import (
         ConcurrentElementInameTag, ConcurrentDOFInameTag, FirstAxisIsElementsTag)
-
-from warnings import warn
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
@@ -87,7 +86,6 @@ class ElementGroupBase(metaclass=ABCMeta):
 
     .. attribute :: mesh_el_group
     .. attribute :: order
-    .. attribute :: index
 
     .. autoattribute:: is_affine
     .. autoattribute:: nelements
@@ -101,14 +99,21 @@ class ElementGroupBase(metaclass=ABCMeta):
     .. automethod:: discretization_key
     """
 
-    def __init__(self, mesh_el_group, order, index):
-        """
-        :arg mesh_el_group: an instance of
-            :class:`~meshmode.mesh.MeshElementGroup`.
-        """
+    def __init__(self,
+                 mesh_el_group: _MeshElementGroup,
+                 order: int,
+                 index: Optional[int] = None) -> None:
         self.mesh_el_group = mesh_el_group
         self.order = order
-        self.index = index
+        self._index = index
+
+    @property
+    def index(self):
+        warn("Accessing 'index' is deprecated and will be removed in July 2022. "
+             "The index always matches the index in 'Discretization.groups'.",
+             DeprecationWarning, stacklevel=2)
+
+        return self._index
 
     @property
     def is_affine(self):
@@ -414,8 +419,9 @@ class Discretization:
 
         self.mesh = mesh
         groups = []
-        for mg in mesh.groups:
-            ng = group_factory(mg, len(groups))
+        for igrp, mg in enumerate(mesh.groups):
+            # TODO: setting index is deprecated
+            ng = group_factory(mg, index=igrp)
             groups.append(ng)
 
         self.groups = groups
@@ -663,9 +669,9 @@ def num_reference_derivative(
     return _DOFArray(actx, tuple(
             actx.einsum("ij,ej->ei",
                         get_mat(grp, ref_axes),
-                        vec[grp.index],
+                        vec[igrp],
                         tagged=(FirstAxisIsElementsTag(),))
-            for grp in discr.groups))
+            for igrp, grp in enumerate(discr.groups)))
 
 # }}}
 
