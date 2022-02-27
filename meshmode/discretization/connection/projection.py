@@ -217,7 +217,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 c_batch_data.append(
                     actx.call_loopy(
                         kproj(),
-                        ary=ary[sgrp.index],
+                        ary=ary[batch.from_group_index],
                         basis_tabulation=tabulations,
                         weights=weights[igrp, ibatch],
                         from_element_indices=batch.to_element_indices,
