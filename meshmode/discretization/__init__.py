@@ -23,7 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from abc import ABCMeta, abstractproperty, abstractmethod
+from abc import ABC, abstractmethod
 from warnings import warn
 from typing import Hashable, Iterable, Optional
 try:
@@ -91,7 +91,7 @@ class NoninterpolatoryElementGroupError(ElementGroupTypeError):
 
 # {{{ element group base
 
-class ElementGroupBase(metaclass=ABCMeta):
+class ElementGroupBase(ABC):
     """Defines a discrete function space on a homogeneous
     (in terms of element type and order) subset of a :class:`Discretization`.
     These correspond one-to-one with :class:`meshmode.mesh.MeshElementGroup`.
@@ -143,7 +143,8 @@ class ElementGroupBase(metaclass=ABCMeta):
         """
         return self.mesh_el_group.nelements
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def nunit_dofs(self):
         """The number of degrees of freedom ("DOFs")
         associated with a single element.
@@ -163,13 +164,15 @@ class ElementGroupBase(metaclass=ABCMeta):
         """
         return self.mesh_el_group.dim
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def shape(self):
         """Returns a subclass of :class:`modepy.Shape` representing
         the reference element defining the element group.
         """
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def space(self):
         """Returns a :class:`modepy.FunctionSpace` representing
         the underlying polynomial space defined on the element
