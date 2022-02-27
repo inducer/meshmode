@@ -23,7 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from abc import abstractproperty
+from abc import abstractmethod
 from typing import ClassVar, Tuple
 from warnings import warn
 
@@ -289,7 +289,8 @@ class _MassMatrixQuadratureElementGroup(PolynomialSimplexElementGroupBase):
                          np.ones(len(basis_fcts)))
         return mp.Quadrature(nodes, weights, exact_to=self.order)
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def _interp_nodes(self):
         """Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
         of interpolation nodes on the reference cell.
