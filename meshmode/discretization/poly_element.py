@@ -695,7 +695,7 @@ class TypeMappingGroupFactory(ElementGroupFactory):
         :arg mesh_group_class_to_factory: a :class:`dict` from
             :class:`~meshmode.mesh.MeshElementGroup` subclasses to
             :class:`~meshmode.discretization.ElementGroupBase` subclasses or
-            :class:`~meshmode.discretization.poly_element.ElementGroupFactory`
+            :class:`~meshmode.discretization.ElementGroupFactory`
             instances.
         """
         super().__init__()
