@@ -204,7 +204,9 @@ class ElementGroupFactory(Protocol):
     def __call__(self,
             mesh_el_group: _MeshElementGroup,
             index: Optional[int] = None) -> ElementGroupBase:
-        """Create a new :class:`ElementGroupBase` for the given *mesh_el_group*."""
+        """Create a new :class:`~meshmode.discretization.ElementGroupBase`
+        for the given *mesh_el_group*.
+        """
 
 # }}}
 
@@ -441,8 +443,7 @@ class Discretization:
             computation needed during initial set-up of the discretization.
         :arg mesh: a :class:`~meshmode.mesh.Mesh` over which the discretization
             is built.
-        :arg group_factory: an
-            :class:`~meshmode.discretization.poly_element.ElementGroupFactory`.
+        :arg group_factory: an :class:`~meshmode.discretization.ElementGroupFactory`.
         :arg real_dtype: The :mod:`numpy` data type used for representing real
             data, either ``numpy.float32`` or ``numpy.float64``.
         """
