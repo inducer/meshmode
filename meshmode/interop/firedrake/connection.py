@@ -623,7 +623,7 @@ def build_connection_from_firedrake(actx, fdrake_fspace, grp_factory=None,
         a mesh which is importable by
         :func:`~meshmode.interop.firedrake.mesh.import_firedrake_mesh`.
     :arg grp_factory: (optional) If not *None*, should be
-        a :class:`~meshmode.discretization.poly_element.ElementGroupFactory`
+        a :class:`~meshmode.discretization.ElementGroupFactory`
         whose group class is a subclass of
         :class:`~meshmode.discretization.InterpolatoryElementGroupBase`.
         If *None*, and a default factory is automatically selected.
