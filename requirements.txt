@@ -12,7 +12,7 @@ git+https://github.com/inducer/pytato.git#egg=pytato
 git+https://github.com/inducer/pymbolic.git#egg=pymbolic
 
 # also depends on pymbolic, so should come after it
-git+https://github.com/inducer/loopy.git#egg=loopy
+git+https://github.com/kaushikcfd/loopy.git#egg=loopy
 
 # depends on loopy, so should come after it.
 git+https://github.com/inducer/arraycontext.git#egg=arraycontext
