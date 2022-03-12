@@ -6,7 +6,7 @@ git+https://github.com/inducer/pyvisfile.git#egg=pyvisfile
 git+https://github.com/inducer/modepy.git#egg=modepy
 git+https://github.com/inducer/pyopencl.git#egg=pyopencl
 git+https://github.com/inducer/islpy.git#egg=islpy
-git+https://github.com/inducer/pytato.git#egg=pytato
+git+https://github.com/kaushikcfd/pytato.git#egg=pytato
 
 # required by pytential, which is in turn needed for some tests
 git+https://github.com/inducer/pymbolic.git#egg=pymbolic
@@ -27,3 +27,8 @@ git+https://github.com/inducer/pymetis.git#egg=pymetis
 
 # for examples/tp-lagrange-stl.py
 numpy-stl
+
+
+# for FusionContractorActx transforms
+git+https://github.com/kaushikcfd/feinsum.git#egg=feinsum
+git+https://github.com/pythological/kanren.git#egg=miniKanren
