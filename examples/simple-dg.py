@@ -33,7 +33,7 @@ from pytools.obj_array import flat_obj_array, make_obj_array
 from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
 from meshmode.dof_array import DOFArray, flat_norm
 from meshmode.array_context import (PyOpenCLArrayContext,
-                                    PytatoPyOpenCLArrayContext)
+        SingleGridWorkBalancingPytatoArrayContext as PytatoPyOpenCLArrayContext)
 from arraycontext import (
         freeze, thaw,
         ArrayContainer,
@@ -456,11 +456,10 @@ def main(lazy=False):
 
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    actx_outer = PyOpenCLArrayContext(queue, force_device_scalars=True)
     if lazy:
-        actx_rhs = PytatoPyOpenCLArrayContext(queue)
+        actx = PytatoPyOpenCLArrayContext(queue)
     else:
-        actx_rhs = actx_outer
+        actx = PyOpenCLArrayContext(queue, force_device_scalars=True)
 
     nel_1d = 16
     from meshmode.mesh.generation import generate_regular_rect_mesh
@@ -476,37 +475,34 @@ def main(lazy=False):
 
     logger.info("%d elements", mesh.nelements)
 
-    discr = DGDiscretization(actx_outer, mesh, order=order)
+    discr = DGDiscretization(actx, mesh, order=order)
 
     fields = WaveState(
-            u=bump(actx_outer, discr),
-            v=make_obj_array([discr.zeros(actx_outer) for i in range(discr.dim)]),
+            u=bump(actx, discr),
+            v=make_obj_array([discr.zeros(actx) for i in range(discr.dim)]),
             )
 
     from meshmode.discretization.visualization import make_visualizer
-    vis = make_visualizer(actx_outer, discr.volume_discr)
+    vis = make_visualizer(actx, discr.volume_discr)
 
     def rhs(t, q):
-        return wave_operator(actx_rhs, discr, c=1, q=q)
+        return wave_operator(actx, discr, c=1, q=q)
 
-    compiled_rhs = actx_rhs.compile(rhs)
-
-    def rhs_wrapper(t, q):
-        r = compiled_rhs(t, thaw(freeze(q, actx_outer), actx_rhs))
-        return thaw(freeze(r, actx_rhs), actx_outer)
+    compiled_rhs = actx.compile(rhs)
 
     t = np.float64(0)
     t_final = 3
     istep = 0
     while t < t_final:
-        fields = rk4_step(fields, t, dt, rhs_wrapper)
+        fields = thaw(freeze(fields, actx), actx)
+        fields = rk4_step(fields, t, dt, compiled_rhs)
 
         if istep % 10 == 0:
             # FIXME: Maybe an integral function to go with the
             # DOFArray would be nice?
             assert len(fields.u) == 1
             logger.info("[%05d] t %.5e / %.5e norm %.5e",
-                    istep, t, t_final, actx_outer.to_numpy(flat_norm(fields.u, 2)))
+                    istep, t, t_final, actx.to_numpy(flat_norm(fields.u, 2)))
             vis.write_vtk_file("fld-wave-min-%04d.vtu" % istep, [
                 ("q", fields),
                 ])
@@ -514,7 +510,7 @@ def main(lazy=False):
         t += dt
         istep += 1
 
-    assert flat_norm(fields.u, 2) < 100
+    assert actx.to_numpy(flat_norm(fields.u, 2)) < 100
 
 
 if __name__ == "__main__":
