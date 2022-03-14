@@ -185,11 +185,11 @@ def _check_for_cross_rank_adj(mesh, part_per_element):
             if isinstance(grp, InteriorAdjacencyGroup)]
         for fagrp in int_grps:
             ineighbor_grp = fagrp.ineighbor_group
-            neighbor_grp = mesh.groups[ineighbor_grp]
             for iface in range(len(fagrp.elements)):
-                part = part_per_element[fagrp.elements[iface] + grp.element_nr_base]
+                part = part_per_element[
+                    fagrp.elements[iface] + mesh.base_element_nrs[igrp]]
                 neighbor_part = part_per_element[
-                    fagrp.neighbors[iface] + neighbor_grp.element_nr_base]
+                    fagrp.neighbors[iface] + mesh.base_element_nrs[ineighbor_grp]]
                 if part != neighbor_part:
                     return True
     return False
@@ -277,7 +277,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
             for ipagrp in ipagrps:
                 n_part_num = ipagrp.ineighbor_partition
                 num_tags[n_part_num] += len(ipagrp.elements)
-                elem_base = part.groups[grp_num].element_nr_base
+                elem_base = part.base_element_nrs[grp_num]
                 for idx in range(len(ipagrp.elements)):
                     elem = ipagrp.elements[idx]
                     meshwide_elem = elem_base + elem
@@ -296,7 +296,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                         and fagrp.ineighbor_partition == part_num]
                     found_reverse_adj = False
                     for n_ipagrp in n_ipagrps:
-                        n_elem_base = n_part.groups[n_grp_num].element_nr_base
+                        n_elem_base = n_part.base_element_nrs[n_grp_num]
                         n_elem = n_meshwide_elem - n_elem_base
                         n_idx = index_lookup_table[
                             n_part_num, n_grp_num, n_elem, n_face]
@@ -313,8 +313,8 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                     p_grp_num = find_group_indices(mesh.groups, p_meshwide_elem)
                     p_n_grp_num = find_group_indices(mesh.groups, p_meshwide_n_elem)
 
-                    p_elem_base = mesh.groups[p_grp_num].element_nr_base
-                    p_n_elem_base = mesh.groups[p_n_grp_num].element_nr_base
+                    p_elem_base = mesh.base_element_nrs[p_grp_num]
+                    p_n_elem_base = mesh.base_element_nrs[p_n_grp_num]
                     p_elem = p_meshwide_elem - p_elem_base
                     p_n_elem = p_meshwide_n_elem - p_n_elem_base
 

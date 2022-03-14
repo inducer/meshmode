@@ -485,7 +485,7 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
 
     if what == "torus":
         nodes = sym.nodes(mesh.ambient_dim).as_vector()
-        angle = sym.atan2(nodes[1], nodes[0])
+        angle = sym.arctan2(nodes[1], nodes[0])
         center_nodes = sym.make_obj_array([
                 5*sym.cos(angle),
                 5*sym.sin(angle),
@@ -553,7 +553,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     center = np.empty(dim, np.float64)
     center.fill(-0.5)
 
-    mg = group_cls(mesh_order, vertex_indices, nodes, dim=dim)
+    mg = group_cls.make_group(mesh_order, vertex_indices, nodes, dim=dim)
     mesh = Mesh(vertices, [mg], is_conforming=True)
 
     from meshmode.discretization import Discretization
@@ -794,8 +794,12 @@ def test_mesh_without_vertices(actx_factory):
     mesh = mgen.generate_sphere(r=1.0, order=4)
 
     # create one without the vertices
+    from dataclasses import replace
     grp, = mesh.groups
-    groups = [grp.copy(nodes=grp.nodes, vertex_indices=None) for grp in mesh.groups]
+    groups = [
+        replace(grp, nodes=grp.nodes, vertex_indices=None,
+                element_nr_base=None, node_nr_base=None)
+        for grp in mesh.groups]
     mesh = Mesh(None, groups, is_conforming=False)
 
     # try refining it

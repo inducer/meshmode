@@ -32,8 +32,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools.tag import Tag, UniqueTag
+from pytools.tag import Tag, UniqueTag, tag_dataclass
 from immutables import Map
+from typing import Any
 
 
 class FirstAxisIsElementsTag(Tag):
@@ -64,6 +65,7 @@ class ConcurrentDOFInameTag(Tag):
     """
 
 
+@tag_dataclass
 class ParameterValue(UniqueTag):
     """A tag that applies to :class:`loopy.ValueArg`. Instances of this tag
     are initialized with the value of the parameter and this value may be
@@ -71,9 +73,7 @@ class ParameterValue(UniqueTag):
     calls to `loopy.fix_parameter` to `transform_loopy_program` so that all
     kernel transformations may occur there.
     """
-
-    def __init__(self, value):
-        self.value = value
+    value: Any
 
 
 class IsDOFArray(Tag):
@@ -89,10 +89,12 @@ class IsOpArray(Tag):
     pass
 
 
+@tag_dataclass
 class EinsumArgsTags(Tag):
     """A tag containing an `immutables.Map` of tuples of tags indexed by
     argument name.
     """
+    tags_map: Map
 
     def __init__(self, tags_map):
-        self.tags_map = Map(tags_map)
+        object.__setattr__(self, "tags_map", Map(tags_map))

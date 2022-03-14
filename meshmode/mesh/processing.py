@@ -32,6 +32,7 @@ import numpy.linalg as la
 import modepy as mp
 
 from meshmode.mesh import (
+    BTAG_PARTITION,
     InteriorAdjacencyGroup,
     BoundaryAdjacencyGroup,
     InterPartitionAdjacencyGroup
@@ -64,7 +65,7 @@ def find_group_indices(groups, meshwide_elems):
     :arg groups: A list of :class:`~meshmode.mesh.MeshElementGroup` instances
         that contain *meshwide_elems*.
     :arg meshwide_elems: A :class:`numpy.ndarray` of mesh-wide element numbers.
-        Usually computed by ``elem + element_nr_base``.
+        Usually computed by ``elem + base_element_nr``.
     :returns: A :class:`numpy.ndarray` of group numbers that *meshwide_elem*
         belongs to.
     """
@@ -102,7 +103,7 @@ def _compute_global_elem_to_part_elem(part_per_element, parts, element_id_dtype)
     return global_elem_to_part_elem
 
 
-def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
+def _filter_mesh_groups(mesh, selected_elements, vertex_id_dtype):
     """
     Create new mesh groups containing a selected subset of elements.
 
@@ -119,34 +120,34 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
 
     # {{{ find n_new_groups, group_to_new_group, filtered_group_elements
 
-    group_elem_starts = [np.searchsorted(selected_elements, grp.element_nr_base)
-                for grp in groups] + [len(selected_elements)]
+    group_elem_starts = [
+        np.searchsorted(selected_elements, base_element_nr)
+        for base_element_nr in mesh.base_element_nrs
+        ] + [len(selected_elements)]
 
     new_group_to_old_group = []
     filtered_group_elements = []
-    for igrp, grp in enumerate(groups):
+    for igrp in range(len(mesh.groups)):
         start_idx, end_idx = group_elem_starts[igrp:igrp+2]
         if end_idx == start_idx:
             continue
 
         new_group_to_old_group.append(igrp)
-        filtered_group_elements.append(selected_elements[start_idx:end_idx]
-                    - grp.element_nr_base)
+        filtered_group_elements.append(
+            selected_elements[start_idx:end_idx] - mesh.base_element_nrs[igrp])
 
     n_new_groups = len(new_group_to_old_group)
 
-    group_to_new_group = [None] * len(groups)
+    group_to_new_group = [None] * len(mesh.groups)
     for i_new_grp, i_old_grp in enumerate(new_group_to_old_group):
         group_to_new_group[i_old_grp] = i_new_grp
-
-    del grp
 
     # }}}
 
     # {{{ filter vertex indices
 
     filtered_vertex_indices = [
-            groups[i_old_grp].vertex_indices[
+            mesh.groups[i_old_grp].vertex_indices[
                     filtered_group_elements[i_new_grp], :]
             for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
 
@@ -169,11 +170,13 @@ def _filter_mesh_groups(groups, selected_elements, vertex_id_dtype):
 
     # }}}
 
+    from dataclasses import replace
     new_groups = [
-            groups[i_old_grp].copy(
+            replace(mesh.groups[i_old_grp],
                 vertex_indices=new_vertex_indices[i_new_grp],
-                nodes=groups[i_old_grp].nodes[
-                    :, filtered_group_elements[i_new_grp], :].copy())
+                nodes=mesh.groups[i_old_grp].nodes[
+                    :, filtered_group_elements[i_new_grp], :].copy(),
+                element_nr_base=None, node_nr_base=None)
             for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
 
     return new_groups, group_to_new_group, required_vertex_indices
@@ -202,8 +205,8 @@ def _get_connected_partitions(
         for facial_adj in int_grps:
             jgrp = facial_adj.ineighbor_group
 
-            elem_base_i = mesh.groups[igrp].element_nr_base
-            elem_base_j = mesh.groups[jgrp].element_nr_base
+            elem_base_i = mesh.base_element_nrs[igrp]
+            elem_base_j = mesh.base_element_nrs[jgrp]
 
             elements_are_local = global_elem_to_part_elem[facial_adj.elements
                         + elem_base_i] >= 0
@@ -258,8 +261,8 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
             if j_part_grp is None:
                 continue
 
-            elem_base_i = mesh.groups[igrp].element_nr_base
-            elem_base_j = mesh.groups[jgrp].element_nr_base
+            elem_base_i = mesh.base_element_nrs[igrp]
+            elem_base_j = mesh.base_element_nrs[jgrp]
 
             elements_are_local = global_elem_to_part_elem[facial_adj.elements
                         + elem_base_i] >= 0
@@ -334,8 +337,8 @@ def _create_nonlocal_adjacency_groups(
         for facial_adj in int_grps:
             jgrp = facial_adj.ineighbor_group
 
-            elem_base_i = mesh.groups[igrp].element_nr_base
-            elem_base_j = mesh.groups[jgrp].element_nr_base
+            elem_base_i = mesh.base_element_nrs[igrp]
+            elem_base_j = mesh.base_element_nrs[jgrp]
 
             global_elements = facial_adj.elements + elem_base_i
             global_neighbors = facial_adj.neighbors + elem_base_j
@@ -362,6 +365,7 @@ def _create_nonlocal_adjacency_groups(
                     nonlocal_adj_groups[i_part_grp].append(
                         InterPartitionAdjacencyGroup(
                             igroup=i_part_grp,
+                            boundary_tag=BTAG_PARTITION(i_neighbor_part),
                             ineighbor_partition=i_neighbor_part,
                             elements=elements,
                             element_faces=element_faces,
@@ -404,7 +408,7 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, part_mesh_groups,
             if isinstance(grp, BoundaryAdjacencyGroup)]
 
         for bdry_grp in bdry_grps:
-            elem_base = mesh.groups[igrp].element_nr_base
+            elem_base = mesh.base_element_nrs[igrp]
 
             adj_indices, = np.where(global_elem_to_part_elem[bdry_grp.elements
                         + elem_base] >= 0)
@@ -455,7 +459,7 @@ def partition_mesh(mesh, part_per_element, part_num):
     # Create new mesh groups that mimic the original mesh's groups but only contain
     # the local partition's elements
     part_mesh_groups, global_group_to_part_group, required_vertex_indices =\
-                _filter_mesh_groups(mesh.groups, queried_elems, mesh.vertex_id_dtype)
+                _filter_mesh_groups(mesh, queried_elems, mesh.vertex_id_dtype)
 
     part_vertices = np.zeros((mesh.ambient_dim, len(required_vertex_indices)))
     for dim in range(mesh.ambient_dim):
@@ -565,9 +569,8 @@ def find_volume_mesh_element_orientations(mesh, tolerate_unimplemented_checks=Fa
 
     result = np.empty(mesh.nelements, dtype=np.float64)
 
-    for grp in mesh.groups:
-        result_grp_view = result[
-                grp.element_nr_base:grp.element_nr_base + grp.nelements]
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
+        result_grp_view = result[base_element_nr:base_element_nr + grp.nelements]
 
         if tolerate_unimplemented_checks:
             try:
@@ -677,7 +680,7 @@ def flip_simplex_element_group(vertices, grp, grp_flip_flags):
             "ij,dej->dei",
             flip_matrix, grp.nodes[:, grp_flip_flags])
 
-    return SimplexElementGroup(
+    return SimplexElementGroup.make_group(
             grp.order, new_vertex_indices, new_nodes,
             unit_nodes=grp.unit_nodes)
 
@@ -695,15 +698,15 @@ def perform_flips(mesh, flip_flags, skip_tests=False):
     from meshmode.mesh import Mesh
 
     new_groups = []
-    for grp in mesh.groups:
-        grp_flip_flags = flip_flags[
-                grp.element_nr_base:grp.element_nr_base+grp.nelements]
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
+        grp_flip_flags = flip_flags[base_element_nr:base_element_nr + grp.nelements]
 
         if grp_flip_flags.any():
             new_grp = flip_simplex_element_group(
                     mesh.vertices, grp, grp_flip_flags)
         else:
-            new_grp = grp.copy()
+            from dataclasses import replace
+            new_grp = replace(grp, element_nr_base=None, node_nr_base=None)
 
         new_groups.append(new_grp)
 
@@ -821,9 +824,12 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
             if mesh._facial_adjacency_groups is not None:
                 facial_adjacency_groups = False
 
+            from dataclasses import replace
             for group in mesh.groups:
                 new_vertex_indices = group.vertex_indices + vert_base
-                new_group = group.copy(vertex_indices=new_vertex_indices)
+                new_group = replace(group, vertex_indices=new_vertex_indices,
+                                    element_nr_base=None, node_nr_base=None)
+
                 new_groups.append(new_group)
 
     # }}}
@@ -868,9 +874,11 @@ def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
     new_groups = []
     subgroup_to_group_map = {}
 
-    for igrp, grp in enumerate(mesh.groups):
-        grp_flags = element_flags[
-                grp.element_nr_base:grp.element_nr_base + grp.nelements]
+    from dataclasses import replace
+    for igrp, (base_element_nr, grp) in enumerate(
+            zip(mesh.base_element_nrs, mesh.groups)
+            ):
+        grp_flags = element_flags[base_element_nr:base_element_nr + grp.nelements]
         unique_grp_flags = np.unique(grp_flags)
 
         for flag in unique_grp_flags:
@@ -878,9 +886,10 @@ def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
 
             # NOTE: making copies to maintain contiguity of the arrays
             mask = grp_flags == flag
-            new_groups.append(grp.copy(
+            new_groups.append(replace(grp,
                 vertex_indices=grp.vertex_indices[mask, :].copy(),
-                nodes=grp.nodes[:, mask, :].copy()
+                nodes=grp.nodes[:, mask, :].copy(),
+                element_nr_base=None, node_nr_base=None,
                 ))
 
     from meshmode.mesh import Mesh
@@ -1254,6 +1263,7 @@ def map_mesh(mesh, f):  # noqa
 
     # {{{ assemble new groups list
 
+    from dataclasses import replace
     new_groups = []
 
     for group in mesh.groups:
@@ -1261,8 +1271,9 @@ def map_mesh(mesh, f):  # noqa
         if not mapped_nodes.flags.c_contiguous:
             mapped_nodes = np.copy(mapped_nodes, order="C")
 
-        new_groups.append(group.copy(
-            nodes=mapped_nodes.reshape(*group.nodes.shape)))
+        new_groups.append(replace(group,
+            nodes=mapped_nodes.reshape(*group.nodes.shape),
+            element_nr_base=None, node_nr_base=None))
 
     # }}}
 
@@ -1303,6 +1314,7 @@ def affine_map(mesh,
 
     # {{{ assemble new groups list
 
+    from dataclasses import replace
     new_groups = []
 
     for group in mesh.groups:
@@ -1310,8 +1322,9 @@ def affine_map(mesh,
         if not mapped_nodes.flags.c_contiguous:
             mapped_nodes = np.copy(mapped_nodes, order="C")
 
-        new_groups.append(group.copy(
-            nodes=mapped_nodes.reshape(*group.nodes.shape)))
+        new_groups.append(replace(group,
+            nodes=mapped_nodes.reshape(*group.nodes.shape),
+            element_nr_base=None, node_nr_base=None))
 
     # }}}
 
@@ -1339,17 +1352,16 @@ def affine_map(mesh,
                 offset = None
             return AffineMap(matrix, offset)
 
+        from dataclasses import replace
         facial_adjacency_groups = []
         for old_fagrp_list in mesh.facial_adjacency_groups:
             fagrp_list = []
             for old_fagrp in old_fagrp_list:
                 if hasattr(old_fagrp, "aff_map"):
                     aff_map = compute_new_map(old_fagrp.aff_map)
-                    fagrp_list.append(
-                        old_fagrp.copy(
-                            aff_map=aff_map))
+                    fagrp_list.append(replace(old_fagrp, aff_map=aff_map))
                 else:
-                    fagrp_list.append(old_fagrp.copy())
+                    fagrp_list.append(replace(old_fagrp))
             facial_adjacency_groups.append(fagrp_list)
 
     else:

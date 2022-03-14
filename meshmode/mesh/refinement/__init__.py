@@ -810,7 +810,7 @@ class Refiner:
 
             if is_simplex:
                 new_mesh_el_groups.append(
-                    type(prev_group)(
+                    prev_group.make_group(
                         order=prev_group.order,
                         vertex_indices=group,
                         nodes=nodes,

@@ -43,6 +43,7 @@ from meshmode.discretization.poly_element import (
         )
 import meshmode.mesh.generation as mgen
 from meshmode.mesh.tools import AffineMap
+import modepy as mp
 
 
 import logging
@@ -917,6 +918,38 @@ def test_tensor_torus(actx_factory, order, visualize=False):
     vtk_visualize_mesh(actx, mesh,
             f"quad_torus_order_{order:03d}.vtu",
             vtk_high_order=False, overwrite=True)
+
+# }}}
+
+
+# {{{ test_mesh_element_group_constructor
+
+@pytest.mark.parametrize(("shape_cls", "group_cls"), [
+    (mp.Simplex, SimplexElementGroup),
+    (mp.Hypercube, TensorProductElementGroup)])
+def test_mesh_element_group_constructor(shape_cls, group_cls):
+    order = 7
+    dim = 2
+
+    shape = shape_cls(dim)
+    space = mp.space_for_shape(shape, order)
+
+    unit_nodes = mp.edge_clustered_nodes_for_space(space, shape)
+    nodes = np.stack([unit_nodes] * shape.dim)
+
+    # from unit_nodes
+    meg_from_constructor = group_cls(
+        order, vertex_indices=None, nodes=nodes, unit_nodes=unit_nodes)
+    meg_from_factory = group_cls.make_group(
+        order, vertex_indices=None, nodes=nodes, unit_nodes=unit_nodes)
+    assert meg_from_constructor == meg_from_factory
+
+    # from dim (with default unit nodes)
+    meg_from_constructor = group_cls(
+        order, vertex_indices=None, nodes=nodes, dim=dim)
+    meg_from_factory = group_cls.make_group(
+        order, vertex_indices=None, nodes=nodes, dim=dim)
+    assert meg_from_constructor == meg_from_factory
 
 # }}}
 

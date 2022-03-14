@@ -147,7 +147,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
 
         return actx.einsum("ib,eb->ei",
                            quadrature_matrix(grp, mgrp),
-                           ary[grp.index],
+                           ary,
                            tagged=(FirstAxisIsElementsTag(),))
 
     def _compute_coeffs_via_inv_vandermonde(self, actx, ary, grp):
@@ -163,12 +163,12 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             vdm_inv = la.inv(vdm)
             return actx.from_numpy(vdm_inv)
 
-        kd_tag = EinsumArgsTags({"arg0": [IsOpArray()],
-                    "arg1": [IsDOFArray()], "out": [IsDOFArray()]})
+        kd_tag = EinsumArgsTags({"arg0": (IsOpArray(),),
+                    "arg1": (IsDOFArray(),), "out": (IsDOFArray(),)})
 
         return actx.einsum("ij,ej->ei",
                            vandermonde_inverse(grp),
-                           ary[grp.index],
+                           ary,
                            tagged=(FirstAxisIsElementsTag(), kd_tag,))
 
     def __call__(self, ary):
@@ -218,14 +218,14 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
                                      "set `allow_approximate_quad=True`")
 
                 output = self._project_via_quadrature(
-                    actx, ary, grp, mgrp)
+                    actx, ary[igrp], grp, mgrp)
 
             # Handle all other interpolatory element groups by
             # inverting the Vandermonde matrix to compute the
             # modal coefficients
             elif isinstance(grp, InterpolatoryElementGroupBase):
                 output = self._compute_coeffs_via_inv_vandermonde(
-                    actx, ary, grp)
+                    actx, ary[igrp], grp)
             else:
                 raise NotImplementedError(
                     "Don't know how to project from group types "
@@ -348,7 +348,7 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
         result_data = tuple(
             actx.einsum("ib,eb->ei",
                         matrix(grp, self.from_discr.groups[igrp]),
-                        ary[grp.index],
+                        ary[igrp],
                         tagged=(FirstAxisIsElementsTag(),))
             for igrp, grp in enumerate(self.to_discr.groups)
         )

@@ -122,7 +122,7 @@ def make_refinement_connection(actx, refiner, coarse_discr, group_factory):
         with the mesh given to the refiner
 
     :arg group_factory: An instance of
-        :class:`meshmode.discretization.poly_element.ElementGroupFactory`. Used
+        :class:`meshmode.discretization.ElementGroupFactory`. Used
         for discretizing the fine mesh.
     """
     from meshmode.discretization.connection import (

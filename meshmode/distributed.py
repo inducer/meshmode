@@ -292,10 +292,9 @@ def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs
         # shape: (2, n_el_pairs)
         neighbor_el_pairs = np.hstack([
                 np.array([
-                    fagrp.elements
-                    + mesh.groups[fagrp.igroup].element_nr_base,
-                    fagrp.neighbors
-                    + mesh.groups[fagrp.ineighbor_group].element_nr_base])
+                    fagrp.elements + mesh.base_element_nrs[fagrp.igroup],
+                    fagrp.neighbors + mesh.base_element_nrs[fagrp.ineighbor_group]
+                    ])
                 for fagrp_list in mesh.facial_adjacency_groups
                 for fagrp in fagrp_list
                 if isinstance(fagrp, InteriorAdjacencyGroup)
