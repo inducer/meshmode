@@ -377,7 +377,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 end
                 result[iel, idof] =  rowres if from_element_indices[iel] != -1 else 0
                 """,
-                [
+                kernel_data=[
                     lp.GlobalArg("ary", None,
                         shape="nelements_vec, n_from_nodes",
                         offset=lp.auto),
@@ -403,7 +403,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         ary[from_element_indices[iel], pick_list[idof]]
                         if from_element_indices[iel] != -1 else 0)
                 """,
-                [
+                kernel_data=[
                     lp.GlobalArg("ary", None,
                         shape="nelements_vec, n_from_nodes",
                         offset=lp.auto),
@@ -515,7 +515,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 "result[to_element_indices[iel], idof] \
                     = sum(j, resample_mat[idof, j] \
                     * ary[from_element_indices[iel], j])",
-                [
+                kernel_data=[
                     lp.GlobalArg("result", result_dtype,
                         shape="nelements_result, n_to_nodes",
                         offset=lp.auto, tags=[IsDOFArray()]),
@@ -550,7 +550,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     0<=idof<n_to_nodes}""",
                 "result[to_element_indices[iel], idof] \
                     = ary[from_element_indices[iel], pick_list[idof]]",
-                [
+                kernel_data=[
                     lp.GlobalArg("result", None,
                         shape="nelements_result, n_to_nodes",
                         offset=lp.auto, tags=[IsDOFArray()]),
@@ -561,7 +561,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.ValueArg("nelements_vec", np.int32),
                     lp.ValueArg("n_from_nodes", np.int32),
                     lp.ValueArg("n_to_nodes", np.int32,
-                        tags=[ParameterValue(n_to_nodes)]),
+                            tags=[ParameterValue(n_to_nodes)]),
                     "...",
                     ],
                 name="resample_by_picking_inplace")
@@ -659,7 +659,7 @@ def make_direct_full_resample_matrix(actx, conn):
                        isrc_base + from_element_indices[iel]*n_from_nodes + jdof]  \
                            = resample_mat[idof, jdof] {dep=barrier}
             """,
-            [
+            kernel_data=[
                 lp.GlobalArg("result", None,
                     shape="nnodes_tgt, nnodes_src",
                     offset=lp.auto, tags=[IsDOFArray()]),
