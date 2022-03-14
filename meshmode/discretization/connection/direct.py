@@ -553,7 +553,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 "result[to_element_indices[iel], idof] \
                     = ary[from_element_indices[iel], pick_list[idof]]",
                 kernel_data=[
-                [
                     lp.GlobalArg("result", result_dtype,
                         shape="nelements_result, n_to_nodes",
                         offset=lp.auto, tags=[IsDOFArray()]),
