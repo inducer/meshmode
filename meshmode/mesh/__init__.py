@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace, field
-from typing import Any, ClassVar, Hashable, Optional, Tuple, Type
+from typing import Any, ClassVar, Hashable, Optional, Tuple, Type, Sequence
 
 import numpy as np
 import numpy.linalg as la
@@ -65,6 +65,9 @@ Predefined Boundary tags
 
 
 # {{{ element tags
+
+BoundaryTag = Hashable
+
 
 class BTAG_NONE:  # noqa: N801
     """A boundary tag representing an empty boundary or volume."""
@@ -905,6 +908,8 @@ class Mesh(Record):
     .. automethod:: __eq__
     .. automethod:: __ne__
     """
+
+    groups: Sequence[MeshElementGroup]
 
     face_id_dtype = np.int8
 
