@@ -431,7 +431,7 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, part_mesh_groups,
     return bdry_adj_groups
 
 
-def partition_mesh(mesh, part_per_element, part_num):
+def _get_mesh_part(mesh, part_per_element, part_num):
     """
     :arg mesh: A :class:`~meshmode.mesh.Mesh` to be partitioned.
     :arg part_per_element: A :class:`numpy.ndarray` containing one
@@ -501,6 +501,29 @@ def partition_mesh(mesh, part_per_element, part_num):
             is_conforming=mesh.is_conforming)
 
     return part_mesh, queried_elems
+
+
+def partition_mesh(mesh, part_per_element):
+    """
+    :arg mesh: A :class:`~meshmode.mesh.Mesh` to be partitioned.
+    :arg part_per_element: A :class:`numpy.ndarray` containing one
+        integer per element of *mesh* indicating which part of the
+        partitioned mesh the element is to become a part of.
+
+    :returns: A pair ``(part_meshes, part_to_global_maps)``, where *part_meshes*
+        is a list of :class:`~meshmode.mesh.Mesh` where each is a partition of
+        *mesh*, and *part_to_global_maps* is a list of :class:`numpy.ndarray`
+        mapping element numbers on each mesh partition to ones in *mesh*.
+    """
+    num_parts = np.max(part_per_element) + 1
+    result_pairs = [
+        _get_mesh_part(mesh, part_per_element, i)
+        for i in range(num_parts)]
+
+    return (
+        [part_mesh for part_mesh, _ in result_pairs],
+        [part_to_global for _, part_to_global in result_pairs])
+
 
 # }}}
 

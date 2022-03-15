@@ -106,8 +106,7 @@ class MPIMeshDistributor:
         assert self.is_mananger_rank()
 
         from meshmode.mesh.processing import partition_mesh
-        parts = [partition_mesh(mesh, part_per_element, i)[0]
-                        for i in range(num_parts)]
+        parts = partition_mesh(mesh, part_per_element)[0]
 
         local_part = None
 
