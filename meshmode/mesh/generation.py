@@ -26,6 +26,8 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
+from meshmode.mesh import Mesh, MeshElementGroup
+
 from pytools import log_process, deprecate_keyword
 
 import logging
@@ -257,7 +259,7 @@ def make_curve_mesh(
         unit_nodes: Optional[np.ndarray] = None,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
         closed: bool = True,
-        return_parametrization_points: bool = False):
+        return_parametrization_points: bool = False) -> Mesh:
     """
     :arg curve_f: parametrization for a curve, accepting a vector of
         point locations and returning an array of shape ``(2, npoints)``.
@@ -339,7 +341,7 @@ def make_curve_mesh(
 def make_group_from_vertices(
         vertices: np.ndarray, vertex_indices: np.ndarray, order: int, *,
         group_cls: Optional[type] = None,
-        unit_nodes: Optional[np.ndarray] = None):
+        unit_nodes: Optional[np.ndarray] = None) -> MeshElementGroup:
     # shape: (ambient_dim, nelements, nvertices)
     ambient_dim = vertices.shape[0]
     el_vertices = vertices[:, vertex_indices]
@@ -429,7 +431,7 @@ def make_group_from_vertices(
 def generate_icosahedron(
         r: float, order: int, *,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
-        unit_nodes: Optional[np.ndarray] = None):
+        unit_nodes: Optional[np.ndarray] = None) -> Mesh:
     # https://en.wikipedia.org/w/index.php?title=Icosahedron&oldid=387737307
 
     phi = (1+5**(1/2))/2
@@ -471,7 +473,7 @@ def generate_icosahedron(
 
 def generate_cube_surface(r: float, order: int, *,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
-        unit_nodes: Optional[np.ndarray] = None):
+        unit_nodes: Optional[np.ndarray] = None) -> Mesh:
     shape = mp.Hypercube(3)
     vertices = mp.unit_vertices_for_shape(shape)
     vertices *= r / la.norm(vertices, ord=2, axis=0)
@@ -499,7 +501,7 @@ def generate_cube_surface(r: float, order: int, *,
 def generate_icosphere(r: float, order: int, *,
         uniform_refinement_rounds: int = 0,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
-        unit_nodes: Optional[np.ndarray] = None):
+        unit_nodes: Optional[np.ndarray] = None) -> Mesh:
     from warnings import warn
     warn("'generate_icosphere' is deprecated and will be removed in 2023. "
             "Use 'generate_sphere' instead.",
@@ -578,7 +580,7 @@ def generate_surface_of_revolution(
         angle_discr: np.ndarray,
         order: int, *,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
-        unit_nodes: Optional[np.ndarray] = None):
+        unit_nodes: Optional[np.ndarray] = None) -> Mesh:
     """Return a cylinder aligned with the "height" axis aligned with the Z axis.
 
     :arg get_radius: A callable function that takes in a 1D array of heights
@@ -653,7 +655,7 @@ def generate_torus_and_cycle_vertices(
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
         unit_nodes: Optional[np.ndarray] = None,
         group_cls: Optional[type] = None,
-        ):
+        ) -> Mesh:
     a = r_major
     b = r_minor
 
@@ -759,7 +761,7 @@ def generate_torus(
         n_major: int = 20, n_minor: int = 10, order: int = 1,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
         unit_nodes: Optional[np.ndarray] = None,
-        group_cls: Optional[type] = None):
+        group_cls: Optional[type] = None) -> Mesh:
     r"""Generate a torus.
 
     .. figure:: images/torus.png
@@ -813,7 +815,7 @@ def generate_torus(
 def refine_mesh_and_get_urchin_warper(
         order: int, m: int, n: int, est_rel_interp_tolerance: float,
         min_rad: float = 0.2,
-        uniform_refinement_rounds: int = 0):
+        uniform_refinement_rounds: int = 0) -> Mesh:
     """
     :arg order: order of the (simplex) elements.
     :arg m: order of the spherical harmonic :math:`Y^m_n`.
@@ -902,7 +904,7 @@ def refine_mesh_and_get_urchin_warper(
 def generate_urchin(
         order: int, m: int, n: int,
         est_rel_interp_tolerance: float,
-        min_rad: float = 0.2):
+        min_rad: float = 0.2) -> Mesh:
     """
     :arg order: order of the (simplex) elements. If *unit_nodes* is also
         provided, the orders should match.
@@ -932,7 +934,7 @@ def generate_urchin(
 @deprecate_keyword("group_factory", "group_cls")
 def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
         periodic=None, group_cls=None, boundary_tag_to_face=None,
-        mesh_type=None, unit_nodes=None):
+        mesh_type=None, unit_nodes=None) -> Mesh:
     r"""Create a semi-structured mesh.
 
     :arg axis_coords: a tuple with a number of entries corresponding
@@ -1245,7 +1247,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
                                group_cls=None,
                                mesh_type=None,
                                n=None,
-                               ):
+                               ) -> Mesh:
     """Create a semi-structured rectangular mesh with equispaced elements.
 
     :arg a: the lower left hand point of the rectangle.
@@ -1307,7 +1309,7 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
 # {{{ generate_warped_rect_mesh
 
 def generate_warped_rect_mesh(dim, order, *, nelements_side=None,
-        npoints_side=None, group_cls=None, n=None):
+        npoints_side=None, group_cls=None, n=None) -> Mesh:
     """Generate a mesh of a warped square/cube. Mainly useful for testing
     functionality with curvilinear meshes.
     """
@@ -1362,7 +1364,7 @@ def generate_warped_rect_mesh(dim, order, *, nelements_side=None,
 # {{{ generate_annular_cylinder_slice_mesh
 
 def generate_annular_cylinder_slice_mesh(
-        n, center, inner_radius, outer_radius, periodic=False):
+        n, center, inner_radius, outer_radius, periodic=False) -> Mesh:
     r"""
     Generate a slice of a 3D annular cylinder for
     :math:`\theta \in [-\frac{\pi}{4}, \frac{\pi}{4}]`. Optionally periodic in
@@ -1417,7 +1419,7 @@ def generate_annular_cylinder_slice_mesh(
 
 @log_process(logger)
 def warp_and_refine_until_resolved(
-        unwarped_mesh_or_refiner, warp_callable, est_rel_interp_tolerance):
+        unwarped_mesh_or_refiner, warp_callable, est_rel_interp_tolerance) -> Mesh:
     """Given an original ("unwarped") :class:`meshmode.mesh.Mesh` and a
     warping function *warp_callable* that takes and returns a mesh and a
     tolerance to which the mesh should be resolved by the mapping polynomials,
