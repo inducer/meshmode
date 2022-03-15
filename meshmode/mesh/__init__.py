@@ -765,10 +765,6 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
         The boundary tag identifier of this group. Will be an instance of
         :class:`~meshmode.mesh.BTAG_PARTITION`.
 
-    .. attribute:: ineighbor_partition
-
-        The partition number to which the neighboring faces belong.
-
     .. attribute:: elements
 
         Group-local element numbers.
@@ -805,7 +801,6 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
     .. versionadded:: 2017.1
     """
 
-    ineighbor_partition: BTAG_PARTITION
     neighbors: np.ndarray
     neighbor_faces: np.ndarray
     aff_map: AffineMap
@@ -813,7 +808,6 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
     def __eq__(self, other):
         return (
             super().__eq__(other)
-            and self.ineighbor_partition == other.ineighbor_partition
             and np.array_equal(self.neighbors, other.neighbors)
             and np.array_equal(self.neighbor_faces, other.neighbor_faces)
             and self.aff_map == other.aff_map)
@@ -827,7 +821,6 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
             boundary_tag=_boundary_tag_as_python(self.boundary_tag),
             elements=_numpy_array_as_python(self.elements),
             element_faces=_numpy_array_as_python(self.element_faces),
-            ineighbor_partition=self.ineighbor_partition,
             neighbors=_numpy_array_as_python(self.neighbors),
             neighbor_faces=_numpy_array_as_python(self.neighbor_faces),
             aff_map=_affine_map_as_python(self.aff_map))
