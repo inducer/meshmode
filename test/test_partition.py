@@ -144,7 +144,6 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
             remote_to_local_conn = make_partition_connection(
                     actx,
                     local_bdry_conn=local_bdry_conn,
-                    i_local_part=i_local_part,
                     remote_bdry_discr=remote_bdry,
                     remote_group_infos=make_remote_group_infos(
                         actx, i_local_part, remote_bdry_conn))
@@ -153,7 +152,6 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
             local_to_remote_conn = make_partition_connection(
                     actx,
                     local_bdry_conn=remote_bdry_conn,
-                    i_local_part=i_remote_part,
                     remote_bdry_discr=local_bdry,
                     remote_group_infos=make_remote_group_infos(
                         actx, i_remote_part, local_bdry_conn))
@@ -275,7 +273,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                 if isinstance(fagrp, InterPartitionAdjacencyGroup)]
             ipagrp_count += len(ipagrps)
             for ipagrp in ipagrps:
-                n_part_num = ipagrp.ineighbor_partition
+                n_part_num = ipagrp.boundary_tag.part_nr
                 num_tags[n_part_num] += len(ipagrp.elements)
                 elem_base = part.base_element_nrs[grp_num]
                 for idx in range(len(ipagrp.elements)):
@@ -293,7 +291,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                     n_ipagrps = [
                         fagrp for fagrp in n_part.facial_adjacency_groups[n_grp_num]
                         if isinstance(fagrp, InterPartitionAdjacencyGroup)
-                        and fagrp.ineighbor_partition == part_num]
+                        and fagrp.boundary_tag.part_nr == part_num]
                     found_reverse_adj = False
                     for n_ipagrp in n_ipagrps:
                         n_elem_base = n_part.base_element_nrs[n_grp_num]

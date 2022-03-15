@@ -145,7 +145,7 @@ def make_remote_group_infos(actx, i_remote_part, bdry_conn):
                 inter_partition_adj_groups=[
                     fagrp for fagrp in local_vol_mesh.facial_adjacency_groups[igrp]
                     if isinstance(fagrp, InterPartitionAdjacencyGroup)
-                    and fagrp.ineighbor_partition == i_remote_part],
+                    and fagrp.boundary_tag.part_nr == i_remote_part],
                 vol_elem_indices=np.concatenate([
                     actx.to_numpy(batch.from_element_indices)
                     for batch in bdry_conn.groups[igrp].batches]),
@@ -319,18 +319,39 @@ def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs
     return np.array(p)
 
 
-def get_connected_partitions(mesh):
-    """For a local mesh part in *mesh*, determine the set of numbers
-    of remote partitions to which this mesh piece is connected.
-
-    :arg mesh: A :class:`meshmode.mesh.Mesh` instance
-    :returns: the set of partition numbers that are connected to `mesh`
+def get_connected_partitions(mesh: Mesh) -> "Set[int]":
+    """For a local mesh part in *mesh*, determine the set of boundary
+    tags for connections to other parts, cf.
+    :class:`meshmode.mesh.InterPartitionAdjacencyGroup`.
     """
+    assert mesh.facial_adjacency_groups is not None
+    # internal and deprecated, remove in July 2022
+
+    def _get_neighbor_part_nr(btag):
+        if isinstance(btag, BTAG_PARTITION):
+            return btag.part_nr
+        else:
+            raise ValueError("unexpected inter-partition boundary tag type found")
+
     return {
-        grp.ineighbor_partition
-        for fagrp_list in mesh.facial_adjacency_groups
-        for grp in fagrp_list
-        if isinstance(grp, InterPartitionAdjacencyGroup)}
+            _get_neighbor_part_nr(grp.boundary_tag)
+            for fagrp_list in mesh.facial_adjacency_groups
+            for grp in fagrp_list
+            if isinstance(grp, InterPartitionAdjacencyGroup)}
+
+
+def get_inter_partition_tags(mesh: Mesh) -> "Set[BoundaryTag]":
+    """For a local mesh part in *mesh*, determine the set of boundary
+    tags for connections to other parts, cf.
+    :class:`meshmode.mesh.InterPartitionAdjacencyGroup`.
+    """
+    assert mesh.facial_adjacency_groups is not None
+
+    return {
+            grp.boundary_tag
+            for fagrp_list in mesh.facial_adjacency_groups
+            for grp in fagrp_list
+            if isinstance(grp, InterPartitionAdjacencyGroup)}
 
 
 # vim: foldmethod=marker

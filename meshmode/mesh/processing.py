@@ -367,7 +367,6 @@ def _create_nonlocal_adjacency_groups(
                         InterPartitionAdjacencyGroup(
                             igroup=i_part_grp,
                             boundary_tag=BTAG_PARTITION(i_neighbor_part),
-                            ineighbor_partition=i_neighbor_part,
                             elements=elements,
                             element_faces=element_faces,
                             neighbors=neighbors,
