@@ -35,5 +35,6 @@ intersphinx_mapping = {
     "https://tisaac.gitlab.io/recursivenodes/": None,
     "https://fenics.readthedocs.io/projects/fiat/en/latest/": None,
     "https://finat.github.io/FInAT/": None,
+    "https://mpi4py.readthedocs.io/en/stable": None,
     "h5py": ("https://docs.h5py.org/en/stable", None),
 }

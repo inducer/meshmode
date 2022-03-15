@@ -146,7 +146,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
                     local_bdry_conn=local_bdry_conn,
                     remote_bdry_discr=remote_bdry,
                     remote_group_infos=make_remote_group_infos(
-                        actx, i_local_part, remote_bdry_conn))
+                        actx, BTAG_PARTITION(i_local_part), remote_bdry_conn))
 
             # Connect from local mesh to remote mesh
             local_to_remote_conn = make_partition_connection(
@@ -154,7 +154,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
                     local_bdry_conn=remote_bdry_conn,
                     remote_bdry_discr=local_bdry,
                     remote_group_infos=make_remote_group_infos(
-                        actx, i_remote_part, local_bdry_conn))
+                        actx, BTAG_PARTITION(i_remote_part), local_bdry_conn))
 
             check_connection(actx, remote_to_local_conn)
             check_connection(actx, local_to_remote_conn)

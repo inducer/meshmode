@@ -521,21 +521,20 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
 
 # {{{ make_partition_connection
 
-def make_partition_connection(actx, *, local_bdry_conn, i_local_part,
+def make_partition_connection(actx, *, local_bdry_conn,
         remote_bdry_discr, remote_group_infos):
     """
     Connects ``local_bdry_conn`` to a neighboring partition.
 
     :arg local_bdry_conn: A :class:`DiscretizationConnection` of the local
         partition.
-    :arg i_local_part: The partition number of the local partition.
     :arg remote_bdry_discr: A :class:`~meshmode.discretization.Discretization`
         of the boundary of the remote partition.
     :arg remote_group_infos: An array of
         :class:`meshmode.distributed.RemoteGroupInfo` instances, one per remote
         volume element group.
     :returns: A :class:`DirectDiscretizationConnection` that performs data
-        exchange across faces from the remote partition to partition `i_local_part`.
+        exchange across faces from the remote partition to the local partition.
 
     .. versionadded:: 2017.1
 
