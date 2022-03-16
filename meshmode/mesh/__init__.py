@@ -117,8 +117,23 @@ class BTAG_PARTITION(BTAG_NO_BOUNDARY):  # noqa: N801
 
     .. versionadded:: 2017.1
     """
-    def __init__(self, part_id: PartitionID):
-        self.part_id = part_id
+    def __init__(self, part_id: PartitionID, part_nr=None):
+        if part_nr is not None:
+            from warnings import warn
+            warn("part_nr is deprecated and will stop working in March 2023. "
+                 "Use part_id instead.",
+                 DeprecationWarning, stacklevel=2)
+            self.part_id = int(part_nr)
+        else:
+            self.part_id = part_id
+
+    @property
+    def part_nr(self):
+        from warnings import warn
+        warn("part_nr is deprecated and will stop working in March 2023. "
+             "Use part_id instead.",
+             DeprecationWarning, stacklevel=2)
+        return self.part_id
 
     def __hash__(self):
         return hash((type(self), self.part_id))
