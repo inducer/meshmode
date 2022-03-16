@@ -4,6 +4,7 @@
 .. autoclass:: MPIBoundaryCommSetupHelper
 
 .. autofunction:: get_partition_by_pymetis
+.. autofunction:: get_connected_partitions
 .. autofunction:: get_inter_partition_tags
 
 .. autoclass:: RemoteGroupInfo
