@@ -67,6 +67,7 @@ Predefined Boundary tags
 # {{{ element tags
 
 BoundaryTag = Hashable
+PartitionID = Hashable
 
 
 class BTAG_NONE:  # noqa: N801
@@ -109,22 +110,22 @@ class BTAG_NO_BOUNDARY:  # noqa: N801
 class BTAG_PARTITION(BTAG_NO_BOUNDARY):  # noqa: N801
     """
     A boundary tag indicating that this edge is adjacent to an element of
-    another :class:`Mesh`. The partition number of the adjacent mesh
-    is given by ``part_nr``.
+    another :class:`Mesh`. The partition identifier of the adjacent mesh is given
+    by ``part_id``.
 
-    .. attribute:: part_nr
+    .. attribute:: part_id
 
     .. versionadded:: 2017.1
     """
-    def __init__(self, part_nr):
-        self.part_nr = int(part_nr)
+    def __init__(self, part_id: PartitionID):
+        self.part_id = part_id
 
     def __hash__(self):
-        return hash((type(self), self.part_nr))
+        return hash((type(self), self.part_id))
 
     def __eq__(self, other):
         if isinstance(other, BTAG_PARTITION):
-            return self.part_nr == other.part_nr
+            return self.part_id == other.part_id
         else:
             return False
 
@@ -132,10 +133,10 @@ class BTAG_PARTITION(BTAG_NO_BOUNDARY):  # noqa: N801
         return not self.__eq__(other)
 
     def __repr__(self):
-        return "<{}({})>".format(type(self).__name__, repr(self.part_nr))
+        return "<{}({})>".format(type(self).__name__, repr(self.part_id))
 
     def as_python(self):
-        return f"{self.__class__.__name__}({self.part_nr})"
+        return f"{self.__class__.__name__}({self.part_id})"
 
 
 class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801

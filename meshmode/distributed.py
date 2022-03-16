@@ -4,8 +4,8 @@
 .. autoclass:: MPIBoundaryCommSetupHelper
 
 .. autofunction:: get_partition_by_pymetis
+.. autofunction:: membership_list_to_sets
 .. autofunction:: get_connected_partitions
-.. autofunction:: get_inter_partition_tags
 
 .. autoclass:: RemoteGroupInfo
 .. autoclass:: make_remote_group_infos
@@ -48,8 +48,7 @@ from meshmode.mesh import (
         Mesh,
         InteriorAdjacencyGroup,
         InterPartitionAdjacencyGroup,
-        BoundaryTag,
-        BTAG_PARTITION,
+        PartitionID,
 )
 
 from meshmode.discretization import ElementGroupFactory
@@ -106,13 +105,16 @@ class MPIMeshDistributor:
 
         assert self.is_mananger_rank()
 
+        from meshmode.distributed import membership_list_to_sets
+        part_num_to_elements = membership_list_to_sets(part_per_element)
+
         from meshmode.mesh.processing import partition_mesh
-        parts = partition_mesh(mesh, part_per_element)[0]
+        parts = partition_mesh(mesh, part_num_to_elements)
 
         local_part = None
 
         reqs = []
-        for r, part in enumerate(parts):
+        for r, part in parts.items():
             if r == self.manager_rank:
                 local_part = part
             else:
@@ -156,7 +158,8 @@ class RemoteGroupInfo:
 
 
 def make_remote_group_infos(
-        actx: ArrayContext, local_btag: BoundaryTag,
+        actx: ArrayContext,
+        remote_part_id: PartitionID,
         bdry_conn: DirectDiscretizationConnection
         ) -> Sequence[RemoteGroupInfo]:
     local_vol_mesh = bdry_conn.from_discr.mesh
@@ -168,7 +171,7 @@ def make_remote_group_infos(
                 inter_partition_adj_groups=[
                     fagrp for fagrp in local_vol_mesh.facial_adjacency_groups[igrp]
                     if isinstance(fagrp, InterPartitionAdjacencyGroup)
-                    and fagrp.boundary_tag == local_btag],
+                    and fagrp.boundary_tag.part_id == remote_part_id],
                 vol_elem_indices=np.concatenate([
                     actx.to_numpy(batch.from_element_indices)
                     for batch in bdry_conn.groups[igrp].batches]),
@@ -188,10 +191,6 @@ def make_remote_group_infos(
 @dataclass(init=True, frozen=True)
 class InterRankBoundaryInfo:
     """
-    .. attribute:: local_btag
-
-        A boundary tag for the local boundary towards the remote partition.
-
     .. attribute:: local_part_id
 
         An opaque, hashable, picklable identifier for the local partition.
@@ -207,15 +206,14 @@ class InterRankBoundaryInfo:
     .. attribute:: local_boundary_connection
 
         A :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`
-        from the volume onto the boundary described by :attr:`local_btag`.
+        from the volume onto the boundary described by
+        ``BTAG_PARTITION(remote_part_id)``.
 
     .. automethod:: __init__
     """
 
-    # FIXME better names?
-    local_btag: BoundaryTag
-    local_part_id: Hashable
-    remote_part_id: Hashable
+    local_part_id: PartitionID
+    remote_part_id: PartitionID
     remote_rank: int
     local_boundary_connection: DirectDiscretizationConnection
 
@@ -265,9 +263,8 @@ class MPIBoundaryCommSetupHelper:
 
             inter_rank_bdry_info = [
                     InterRankBoundaryInfo(
-                        local_btag=BTAG_PARTITION(remote_rank),
-                        local_part_id=remote_rank,
-                        remote_part_id=self.i_local_rank,
+                        local_part_id=self.i_local_rank,
+                        remote_part_id=remote_rank,
                         remote_rank=remote_rank,
                         local_boundary_connection=conn
                         )
@@ -292,7 +289,7 @@ class MPIBoundaryCommSetupHelper:
 
         # to know when we're done
         self.pending_recv_identifiers = {
-                (irbi.remote_rank, irbi.remote_part_id)
+                irbi.remote_part_id
                 for irbi in self.inter_rank_bdry_info}
 
         self.send_reqs = [
@@ -302,7 +299,7 @@ class MPIBoundaryCommSetupHelper:
                     irbi.remote_part_id,
                     irbi.local_boundary_connection.to_discr.mesh,
                     make_remote_group_infos(
-                        self.array_context, irbi.local_btag,
+                        self.array_context, irbi.remote_part_id,
                         irbi.local_boundary_connection)),
                 dest=irbi.remote_rank)
             for irbi in self.inter_rank_bdry_info]
@@ -341,36 +338,35 @@ class MPIBoundaryCommSetupHelper:
 
         remote_to_local_bdry_conns = {}
 
-        local_part_id_to_irbi = {
-                irbi.local_part_id: irbi for irbi in self.inter_rank_bdry_info}
-        assert len(local_part_id_to_irbi) == len(self.inter_rank_bdry_info)
+        remote_part_id_to_irbi = {
+                irbi.remote_part_id: irbi for irbi in self.inter_rank_bdry_info}
+        assert len(remote_part_id_to_irbi) == len(self.inter_rank_bdry_info)
 
         for i_src_rank, recvd in zip(
                 source_ranks, data):
-            (recvd_remote_part_id, recvd_local_part_id,
+            (remote_part_id, local_part_id,
                     remote_bdry_mesh, remote_group_infos) = recvd
 
             logger.debug("rank %d: Received part id '%s' data from rank %d",
-                         self.i_local_rank, recvd_local_part_id, i_src_rank)
+                         self.i_local_rank, remote_part_id, i_src_rank)
 
             # Connect local_mesh to remote_mesh
             from meshmode.discretization.connection import make_partition_connection
-            irbi = local_part_id_to_irbi[recvd_local_part_id]
+            irbi = remote_part_id_to_irbi[remote_part_id]
             assert i_src_rank == irbi.remote_rank
-            assert recvd_remote_part_id == irbi.remote_part_id
+            assert local_part_id == irbi.local_part_id
 
-            remote_to_local_bdry_conns[recvd_local_part_id] \
-                    = make_partition_connection(
-                            self.array_context,
-                            local_bdry_conn=irbi.local_boundary_connection,
-                            remote_bdry_discr=(
-                                irbi.local_boundary_connection.to_discr.copy(
-                                    actx=self.array_context,
-                                    mesh=remote_bdry_mesh,
-                                    group_factory=self.bdry_grp_factory)),
-                            remote_group_infos=remote_group_infos)
+            remote_to_local_bdry_conns[remote_part_id] = (
+                make_partition_connection(
+                    self.array_context,
+                    local_bdry_conn=irbi.local_boundary_connection,
+                    remote_bdry_discr=irbi.local_boundary_connection.to_discr.copy(
+                        actx=self.array_context,
+                        mesh=remote_bdry_mesh,
+                        group_factory=self.bdry_grp_factory),
+                    remote_group_infos=remote_group_infos))
 
-            self.pending_recv_identifiers.remove((i_src_rank, recvd_remote_part_id))
+            self.pending_recv_identifiers.remove(remote_part_id)
 
         if not self.pending_recv_identifiers:
             MPI.Request.waitall(self.send_reqs)
@@ -381,7 +377,8 @@ class MPIBoundaryCommSetupHelper:
 # }}}
 
 
-def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs):
+def get_partition_by_pymetis(
+        mesh, num_parts, *, connectivity="facial", return_sets=False, **kwargs):
     """Return a mesh partition created by :mod:`pymetis`.
 
     :arg mesh: A :class:`meshmode.mesh.Mesh` instance
@@ -426,39 +423,24 @@ def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs
     from pymetis import part_graph
     _, p = part_graph(num_parts, xadj=xadj, adjncy=adjncy, **kwargs)
 
-    return np.array(p)
+    if return_sets:
+        return membership_list_to_sets(np.array(p))
+    else:
+        return np.array(p)
 
 
-def get_connected_partitions(mesh: Mesh) -> "Set[int]":
-    """For a local mesh part in *mesh*, determine the set of boundary
-    tags for connections to other parts, cf.
-    :class:`meshmode.mesh.InterPartitionAdjacencyGroup`.
-    """
-    assert mesh.facial_adjacency_groups is not None
-    # internal and deprecated, remove in July 2022
-
-    def _get_neighbor_part_nr(btag):
-        if isinstance(btag, BTAG_PARTITION):
-            return btag.part_nr
-        else:
-            raise ValueError("unexpected inter-partition boundary tag type found")
-
+def membership_list_to_sets(membership_list):
     return {
-            _get_neighbor_part_nr(grp.boundary_tag)
-            for fagrp_list in mesh.facial_adjacency_groups
-            for grp in fagrp_list
-            if isinstance(grp, InterPartitionAdjacencyGroup)}
+        entry: set(np.where(membership_list == entry)[0])
+        for entry in set(membership_list)}
 
 
-def get_inter_partition_tags(mesh: Mesh) -> "Set[BoundaryTag]":
-    """For a local mesh part in *mesh*, determine the set of boundary
-    tags for connections to other parts, cf.
-    :class:`meshmode.mesh.InterPartitionAdjacencyGroup`.
-    """
+def get_connected_partitions(mesh: Mesh) -> "Set[PartitionID]":
+    """For a local mesh part in *mesh*, determine the set of connected partitions."""
     assert mesh.facial_adjacency_groups is not None
 
     return {
-            grp.boundary_tag
+            grp.boundary_tag.part_id
             for fagrp_list in mesh.facial_adjacency_groups
             for grp in fagrp_list
             if isinstance(grp, InterPartitionAdjacencyGroup)}
