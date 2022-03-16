@@ -216,15 +216,15 @@ def _get_connected_partitions(
             elem_base_i = mesh.base_element_nrs[igrp]
             elem_base_j = mesh.base_element_nrs[jgrp]
 
-            elements_are_local = global_elem_to_part_elem[facial_adj.elements
+            elements_are_self = global_elem_to_part_elem[facial_adj.elements
                         + elem_base_i, 0] == self_part_index
-            neighbors_are_nonlocal = global_elem_to_part_elem[facial_adj.neighbors
+            neighbors_are_other = global_elem_to_part_elem[facial_adj.neighbors
                         + elem_base_j, 0] != self_part_index
 
             connected_part_indices.update(
                 global_elem_to_part_elem[
                     facial_adj.neighbors[
-                        elements_are_local & neighbors_are_nonlocal]
+                        elements_are_self & neighbors_are_other]
                     + elem_base_j, 0])
 
     return {
@@ -233,11 +233,11 @@ def _get_connected_partitions(
         if part_index in connected_part_indices}
 
 
-def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
+def _create_self_to_self_adjacency_groups(mesh, global_elem_to_part_elem,
             self_part_index, self_mesh_groups, global_group_to_self_group,
             self_mesh_group_elem_base):
     r"""
-    Create local-to-local facial adjacency groups for a partitioned mesh.
+    Create self-to-self facial adjacency groups for a partitioned mesh.
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
     :arg global_elem_to_part_elem: A :class:`numpy.ndarray` that maps global element
@@ -248,15 +248,16 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
     :arg self_mesh_groups: An array of :class:`~meshmode.mesh.ElementGroup` instances
         representing the partitioned mesh groups.
     :arg global_group_to_self_group: An array mapping groups in *mesh* to groups in
-        *self_mesh_groups* (or `None` if the group is not local).
+        *self_mesh_groups* (or `None` if the group is not part of the current
+        partition).
     :arg self_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *self_mesh_groups*.
 
     :returns: A list of lists of `~meshmode.mesh.InteriorAdjacencyGroup` instances
         corresponding to the entries in *mesh.facial_adjacency_groups* that
-        have local-to-local adjacency.
+        have self-to-self adjacency.
     """
-    local_to_local_adjacency_groups = [[] for _ in self_mesh_groups]
+    self_to_self_adjacency_groups = [[] for _ in self_mesh_groups]
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
         i_self_grp = global_group_to_self_group[igrp]
@@ -277,12 +278,12 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
             elem_base_i = mesh.base_element_nrs[igrp]
             elem_base_j = mesh.base_element_nrs[jgrp]
 
-            elements_are_local = global_elem_to_part_elem[facial_adj.elements
+            elements_are_self = global_elem_to_part_elem[facial_adj.elements
                         + elem_base_i, 0] == self_part_index
-            neighbors_are_local = global_elem_to_part_elem[facial_adj.neighbors
+            neighbors_are_self = global_elem_to_part_elem[facial_adj.neighbors
                         + elem_base_j, 0] == self_part_index
 
-            adj_indices, = np.where(elements_are_local & neighbors_are_local)
+            adj_indices, = np.where(elements_are_self & neighbors_are_self)
 
             if len(adj_indices) > 0:
                 self_elem_base_i = self_mesh_group_elem_base[i_self_grp]
@@ -295,7 +296,7 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
                             adj_indices] + elem_base_j, 1] - self_elem_base_j
                 neighbor_faces = facial_adj.neighbor_faces[adj_indices]
 
-                local_to_local_adjacency_groups[i_self_grp].append(
+                self_to_self_adjacency_groups[i_self_grp].append(
                     InteriorAdjacencyGroup(
                         igroup=i_self_grp,
                         ineighbor_group=j_self_grp,
@@ -305,15 +306,15 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
                         neighbor_faces=neighbor_faces,
                         aff_map=facial_adj.aff_map))
 
-    return local_to_local_adjacency_groups
+    return self_to_self_adjacency_groups
 
 
-def _create_nonlocal_adjacency_groups(
+def _create_self_to_other_adjacency_groups(
         mesh, part_id_to_part_index, global_elem_to_part_elem, self_part_id,
         self_mesh_groups, global_group_to_self_group, self_mesh_group_elem_base,
         connected_parts):
     """
-    Create non-local adjacency groups for the partitioned mesh.
+    Create self-to-other adjacency groups for the partitioned mesh.
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
     :arg part_id_to_part_index: A mapping from partition identifiers to indices in
@@ -325,7 +326,8 @@ def _create_nonlocal_adjacency_groups(
     :arg self_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
         representing the partitioned mesh groups.
     :arg global_group_to_self_group: An array mapping groups in *mesh* to groups in
-        *self_mesh_groups* (or `None` if the group is not local).
+        *self_mesh_groups* (or `None` if the group is not part of the current
+        partition).
     :arg self_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *self_mesh_groups*.
     :arg connected_parts: A :class:`set` containing the partitions connected to
@@ -333,11 +335,11 @@ def _create_nonlocal_adjacency_groups(
 
     :returns: A list of lists of `~meshmode.mesh.InterPartitionAdjacencyGroup`
         instances corresponding to the entries in *mesh.facial_adjacency_groups* that
-        have non-local adjacency.
+        have self-to-other adjacency.
     """
     self_part_index = part_id_to_part_index[self_part_id]
 
-    nonlocal_adj_groups = [[] for _ in self_mesh_groups]
+    self_to_other_adj_groups = [[] for _ in self_mesh_groups]
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
         i_self_grp = global_group_to_self_group[igrp]
@@ -357,7 +359,7 @@ def _create_nonlocal_adjacency_groups(
             global_elements = facial_adj.elements + elem_base_i
             global_neighbors = facial_adj.neighbors + elem_base_j
 
-            elements_are_local = (
+            elements_are_self = (
                 global_elem_to_part_elem[global_elements, 0] == self_part_index)
 
             neighbor_part_indices = global_elem_to_part_elem[global_neighbors, 0]
@@ -365,7 +367,7 @@ def _create_nonlocal_adjacency_groups(
             for neighbor_part_id in connected_parts:
                 neighbor_part_index = part_id_to_part_index[neighbor_part_id]
                 adj_indices, = np.where(
-                    elements_are_local
+                    elements_are_self
                     & (neighbor_part_indices == neighbor_part_index))
 
                 if len(adj_indices) > 0:
@@ -378,7 +380,7 @@ def _create_nonlocal_adjacency_groups(
                         global_neighbors[adj_indices], 1]
                     neighbor_faces = facial_adj.neighbor_faces[adj_indices]
 
-                    nonlocal_adj_groups[i_self_grp].append(
+                    self_to_other_adj_groups[i_self_grp].append(
                         InterPartitionAdjacencyGroup(
                             igroup=i_self_grp,
                             boundary_tag=BTAG_PARTITION(neighbor_part_id),
@@ -388,7 +390,7 @@ def _create_nonlocal_adjacency_groups(
                             neighbor_faces=neighbor_faces,
                             aff_map=facial_adj.aff_map))
 
-    return nonlocal_adj_groups
+    return self_to_other_adj_groups
 
 
 def _create_boundary_groups(mesh, global_elem_to_part_elem, self_part_index,
@@ -405,7 +407,8 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, self_part_index,
     :arg self_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
         representing the partitioned mesh groups.
     :arg global_group_to_self_group: An array mapping groups in *mesh* to groups in
-        *self_mesh_groups* (or `None` if the group is not local).
+        *self_mesh_groups* (or `None` if the group is not part of the current
+        partition).
     :arg self_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *self_mesh_groups*.
 
@@ -476,7 +479,7 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
         mesh.element_id_dtype)
 
     # Create new mesh groups that mimic the original mesh's groups but only contain
-    # the local partition's elements
+    # the current partition's elements
     self_elements_sorted = np.sort(list(part_id_to_elements[self_part_id]))
     self_mesh_groups, global_group_to_self_group, required_vertex_indices =\
                 _filter_mesh_groups(
@@ -499,11 +502,11 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
         mesh, part_id_to_part_index, global_elem_to_part_elem,
         self_part_index)
 
-    local_to_local_adj_groups = _create_local_to_local_adjacency_groups(
+    self_to_self_adj_groups = _create_self_to_self_adjacency_groups(
                 mesh, global_elem_to_part_elem, self_part_index, self_mesh_groups,
                 global_group_to_self_group, self_mesh_group_elem_base)
 
-    nonlocal_adj_groups = _create_nonlocal_adjacency_groups(
+    self_to_other_adj_groups = _create_self_to_other_adjacency_groups(
                 mesh, part_id_to_part_index, global_elem_to_part_elem, self_part_id,
                 self_mesh_groups, global_group_to_self_group,
                 self_mesh_group_elem_base, connected_parts)
@@ -512,10 +515,10 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
                 mesh, global_elem_to_part_elem, self_part_index, self_mesh_groups,
                 global_group_to_self_group, self_mesh_group_elem_base)
 
-    # Combine local/nonlocal/boundary adjacency groups
+    # Combine adjacency groups
     self_facial_adj_groups = [
-        local_to_local_adj_groups[i_self_grp]
-        + nonlocal_adj_groups[i_self_grp]
+        self_to_self_adj_groups[i_self_grp]
+        + self_to_other_adj_groups[i_self_grp]
         + boundary_adj_groups[i_self_grp]
         for i_self_grp in range(len(self_mesh_groups))]
 
