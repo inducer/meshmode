@@ -20,7 +20,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-
 import numpy as np
 import numpy.linalg as la
 from abc import ABC, abstractmethod
@@ -244,6 +243,8 @@ class DiscretizationConnectionElementGroup:
 
         A list of :class:`InterpolationBatch` instances.
     """
+    batches: Sequence[InterpolationBatch]
+
     def __init__(self, batches):
         self.batches = batches
 
@@ -341,6 +342,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
     .. automethod:: __call__
     """
+    groups: Sequence[DiscretizationConnectionElementGroup]
 
     def __init__(self,
             from_discr: Discretization, to_discr: Discretization,
