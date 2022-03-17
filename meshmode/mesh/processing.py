@@ -657,7 +657,7 @@ def get_simplex_element_flip_matrix(order, unit_nodes, permutation=None):
     first two barycentric coordinates.
 
     :arg order: The order of the function space on the simplex,
-        (see second argument in :fun:`modepy.simplex_best_available_basis`).
+        (see second argument in :func:`modepy.simplex_best_available_basis`).
     :arg unit_nodes: A np array of unit nodes with shape *(dim, nunit_nodes)*.
     :arg permutation: Either *None*, or a tuple of shape storing a permutation:
         the *i*th barycentric coordinate gets mapped to the *permutation[i]*th
