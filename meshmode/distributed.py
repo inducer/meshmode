@@ -376,8 +376,7 @@ class MPIBoundaryCommSetupHelper:
 # }}}
 
 
-def get_partition_by_pymetis(
-        mesh, num_parts, *, connectivity="facial", return_sets=False, **kwargs):
+def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs):
     """Return a mesh partition created by :mod:`pymetis`.
 
     :arg mesh: A :class:`meshmode.mesh.Mesh` instance
@@ -422,10 +421,7 @@ def get_partition_by_pymetis(
     from pymetis import part_graph
     _, p = part_graph(num_parts, xadj=xadj, adjncy=adjncy, **kwargs)
 
-    if return_sets:
-        return membership_list_to_map(np.array(p))
-    else:
-        return np.array(p)
+    return np.array(p)
 
 
 def membership_list_to_map(membership_list):
