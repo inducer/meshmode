@@ -105,7 +105,6 @@ class MPIMeshDistributor:
 
         assert self.is_mananger_rank()
 
-        from meshmode.distributed import membership_list_to_sets
         part_num_to_elements = membership_list_to_sets(part_per_element)
 
         from meshmode.mesh.processing import partition_mesh
