@@ -1368,7 +1368,7 @@ def _compute_facial_adjacency_from_vertices(
         groups, element_id_dtype, face_id_dtype, face_vertex_indices_to_tags=None
         ) -> Sequence[Sequence[FacialAdjacencyGroup]]:
     if not groups:
-        return None
+        return []
 
     if face_vertex_indices_to_tags is not None:
         boundary_tags = {
