@@ -197,7 +197,7 @@ def _get_connected_partitions(
         the range ``[0, num_parts)``.
     :arg global_elem_to_part_elem: A :class:`numpy.ndarray` that maps global element
         indices to partition indices and partition-wide element indices. See
-        :fun:`_compute_global_elem_to_part_elem`` for details.
+        :func:`_compute_global_elem_to_part_elem`` for details.
     :arg self_part_id: The identifier of the partition currently being created.
 
     :returns: A :class:`set` of identifiers of the neighboring partitions.
@@ -242,7 +242,7 @@ def _create_self_to_self_adjacency_groups(mesh, global_elem_to_part_elem,
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
     :arg global_elem_to_part_elem: A :class:`numpy.ndarray` that maps global element
         indices to partition indices and partition-wide element indices. See
-        :fun:`_compute_global_elem_to_part_elem`` for details.
+        :func:`_compute_global_elem_to_part_elem`` for details.
     :arg self_part_index: The index of the partition currently being created, in
         the range ``[0, num_parts)``.
     :arg self_mesh_groups: An array of :class:`~meshmode.mesh.ElementGroup` instances
@@ -321,7 +321,7 @@ def _create_self_to_other_adjacency_groups(
         the range ``[0, num_parts)``.
     :arg global_elem_to_part_elem: A :class:`numpy.ndarray` that maps global element
         indices to partition indices and partition-wide element indices. See
-        :fun:`_compute_global_elem_to_part_elem`` for details.
+        :func:`_compute_global_elem_to_part_elem`` for details.
     :arg self_part_id: The identifier of the partition currently being created.
     :arg self_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
         representing the partitioned mesh groups.
@@ -401,7 +401,7 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, self_part_index,
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
     :arg global_elem_to_part_elem: A :class:`numpy.ndarray` that maps global element
         indices to partition indices and partition-wide element indices. See
-        :fun:`_compute_global_elem_to_part_elem`` for details.
+        :func:`_compute_global_elem_to_part_elem`` for details.
     :arg self_part_index: The index of the partition currently being created, in
         the range ``[0, num_parts)``.
     :arg self_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
