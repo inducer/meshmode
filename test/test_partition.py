@@ -98,8 +98,8 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
             part_per_element = get_partition_by_pymetis(mesh, num_parts,
                     connectivity=part_method)
 
-        from meshmode.distributed import membership_list_to_sets
-        part_num_to_elements = membership_list_to_sets(part_per_element)
+        from meshmode.distributed import membership_list_to_map
+        part_num_to_elements = membership_list_to_map(part_per_element)
 
         from meshmode.mesh.processing import partition_mesh
         part_meshes = partition_mesh(mesh, part_num_to_elements)
@@ -229,8 +229,8 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
     # adjacency (e.g., when #groups == #parts)
     has_cross_rank_adj = _check_for_cross_rank_adj(mesh, part_per_element)
 
-    from meshmode.distributed import membership_list_to_sets
-    part_num_to_elements = membership_list_to_sets(part_per_element)
+    from meshmode.distributed import membership_list_to_map
+    part_num_to_elements = membership_list_to_map(part_per_element)
 
     from meshmode.mesh.processing import partition_mesh
     part_meshes = partition_mesh(mesh, part_num_to_elements)

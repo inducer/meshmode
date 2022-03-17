@@ -4,7 +4,7 @@
 .. autoclass:: MPIBoundaryCommSetupHelper
 
 .. autofunction:: get_partition_by_pymetis
-.. autofunction:: membership_list_to_sets
+.. autofunction:: membership_list_to_map
 .. autofunction:: get_connected_partitions
 
 .. autoclass:: RemoteGroupInfo
@@ -105,7 +105,7 @@ class MPIMeshDistributor:
 
         assert self.is_mananger_rank()
 
-        part_num_to_elements = membership_list_to_sets(part_per_element)
+        part_num_to_elements = membership_list_to_map(part_per_element)
 
         from meshmode.mesh.processing import partition_mesh
         parts = partition_mesh(mesh, part_num_to_elements)
@@ -423,14 +423,19 @@ def get_partition_by_pymetis(
     _, p = part_graph(num_parts, xadj=xadj, adjncy=adjncy, **kwargs)
 
     if return_sets:
-        return membership_list_to_sets(np.array(p))
+        return membership_list_to_map(np.array(p))
     else:
         return np.array(p)
 
 
-def membership_list_to_sets(membership_list):
+def membership_list_to_map(membership_list):
+    """
+    Convert a :class:`numpy.ndarray` that maps an index to a key into a
+    :class:`dict` that maps a key to a set of indices (with each set of indices
+    stored as a sorted :class:`numpy.ndarray`).
+    """
     return {
-        entry: set(np.where(membership_list == entry)[0])
+        entry: np.where(membership_list == entry)[0]
         for entry in set(membership_list)}
 
 

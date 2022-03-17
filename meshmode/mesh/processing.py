@@ -100,7 +100,7 @@ def _compute_global_elem_to_part_elem(
     """
     global_elem_to_part_elem = np.empty((nelements, 2), dtype=element_id_dtype)
     for part_id in part_id_to_elements.keys():
-        elements = np.sort(list(part_id_to_elements[part_id]))
+        elements = part_id_to_elements[part_id]
         global_elem_to_part_elem[elements, 0] = part_id_to_part_index[part_id]
         global_elem_to_part_elem[elements, 1] = np.indices(
             (len(elements),), dtype=element_id_dtype)
@@ -480,10 +480,9 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
 
     # Create new mesh groups that mimic the original mesh's groups but only contain
     # the current partition's elements
-    self_elements_sorted = np.sort(list(part_id_to_elements[self_part_id]))
     self_mesh_groups, global_group_to_self_group, required_vertex_indices =\
                 _filter_mesh_groups(
-                    mesh, self_elements_sorted,
+                    mesh, part_id_to_elements[self_part_id],
                     mesh.vertex_id_dtype)
 
     self_part_index = part_id_to_part_index[self_part_id]
