@@ -20,6 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from typing import Sequence
+
 
 import numpy as np
 import numpy.linalg as la
@@ -95,8 +97,10 @@ class InterpolationBatch:
             but that refactoring hasn't happened yet. (Sorry!)
     """
 
-    def __init__(self, from_group_index, from_element_indices,
-            to_element_indices, result_unit_nodes, to_element_face):
+    def __init__(self,
+            from_group_index: np.ndarray, from_element_indices: np.ndarray,
+            to_element_indices: np.ndarray, result_unit_nodes: np.ndarray,
+            to_element_face: np.ndarray):
         self.from_group_index = from_group_index
         self.from_element_indices = from_element_indices
         self.to_element_indices = to_element_indices
@@ -145,6 +149,8 @@ class DiscretizationConnectionElementGroup:
 
         A list of :class:`InterpolationBatch` instances.
     """
+    batches: Sequence[InterpolationBatch]
+
     def __init__(self, batches):
         self.batches = batches
 
@@ -231,6 +237,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
     .. automethod:: __call__
 
     """
+    groups: Sequence[DiscretizationConnectionElementGroup]
 
     def __init__(self, from_discr, to_discr, groups, is_surjective):
         super().__init__(

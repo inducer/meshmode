@@ -1111,7 +1111,7 @@ class Mesh(Record):
         return self._nodal_adjacency
 
     @property
-    def facial_adjacency_groups(self):
+    def facial_adjacency_groups(self) -> Sequence[Sequence[FacialAdjacencyGroup]]:
         from meshmode import DataUnavailable
 
         # pylint: disable=access-member-before-definition
@@ -1338,7 +1338,8 @@ def _match_faces_by_vertices(groups, face_ids, vertex_index_map_func=None):
 
 
 def _compute_facial_adjacency_from_vertices(
-        groups, element_id_dtype, face_id_dtype, face_vertex_indices_to_tags=None):
+        groups, element_id_dtype, face_id_dtype, face_vertex_indices_to_tags=None
+        ) -> Sequence[Sequence[FacialAdjacencyGroup]]:
     if not groups:
         return None
 
