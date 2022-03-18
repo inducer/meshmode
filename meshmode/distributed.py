@@ -38,7 +38,7 @@ THE SOFTWARE.
 
 from dataclasses import dataclass
 import numpy as np
-from typing import List, Set, Union, Mapping, cast, Sequence, TYPE_CHECKING, Hashable
+from typing import List, Set, Union, Mapping, cast, Sequence, TYPE_CHECKING
 
 from arraycontext import ArrayContext
 from meshmode.discretization.connection import (
