@@ -288,7 +288,7 @@ class MPIBoundaryCommSetupHelper:
 
         # to know when we're done
         self.pending_recv_identifiers = {
-                irbi.remote_part_id
+                (irbi.local_part_id, irbi.remote_part_id)
                 for irbi in self.inter_rank_bdry_info}
 
         self.send_reqs = [
@@ -337,9 +337,10 @@ class MPIBoundaryCommSetupHelper:
 
         remote_to_local_bdry_conns = {}
 
-        remote_part_id_to_irbi = {
-                irbi.remote_part_id: irbi for irbi in self.inter_rank_bdry_info}
-        assert len(remote_part_id_to_irbi) == len(self.inter_rank_bdry_info)
+        part_ids_to_irbi = {
+                (irbi.local_part_id, irbi.remote_part_id): irbi
+                for irbi in self.inter_rank_bdry_info}
+        assert len(part_ids_to_irbi) == len(self.inter_rank_bdry_info)
 
         for i_src_rank, recvd in zip(
                 source_ranks, data):
@@ -351,11 +352,15 @@ class MPIBoundaryCommSetupHelper:
 
             # Connect local_mesh to remote_mesh
             from meshmode.discretization.connection import make_partition_connection
-            irbi = remote_part_id_to_irbi[remote_part_id]
+            irbi = part_ids_to_irbi[local_part_id, remote_part_id]
             assert i_src_rank == irbi.remote_rank
-            assert local_part_id == irbi.local_part_id
 
-            remote_to_local_bdry_conns[remote_part_id] = (
+            if self._using_old_timey_interface:
+                key = remote_part_id
+            else:
+                key = (remote_part_id, local_part_id)
+
+            remote_to_local_bdry_conns[key] = (
                 make_partition_connection(
                     self.array_context,
                     local_bdry_conn=irbi.local_boundary_connection,
@@ -365,7 +370,7 @@ class MPIBoundaryCommSetupHelper:
                         group_factory=self.bdry_grp_factory),
                     remote_group_infos=remote_group_infos))
 
-            self.pending_recv_identifiers.remove(remote_part_id)
+            self.pending_recv_identifiers.remove((local_part_id, remote_part_id))
 
         if not self.pending_recv_identifiers:
             MPI.Request.waitall(self.send_reqs)
