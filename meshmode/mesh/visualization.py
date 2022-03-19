@@ -29,6 +29,8 @@ __doc__ = """
 .. autofunction:: mesh_to_tikz
 .. autofunction:: vtk_visualize_mesh
 .. autofunction:: write_stl_file
+
+.. autofunction:: visualize_mesh_vertex_resampling_error
 """
 
 
@@ -368,5 +370,38 @@ def write_stl_file(mesh, stl_name, overwrite=False):
 
 # }}}
 
+
+# {{{ visualize_mesh_vertex_resampling_error
+
+def visualize_mesh_vertex_resampling_error(
+        actx, mesh, filename, overwrite=False):
+    # {{{ comput resampling errors
+
+    from meshmode.mesh import _mesh_group_node_vertex_error
+
+    from meshmode.dof_array import DOFArray
+    error = DOFArray(actx, tuple([
+        actx.from_numpy(
+            np.sqrt(np.sum(_mesh_group_node_vertex_error(mesh, mgrp)**2, axis=0))
+        )
+        for mgrp in mesh.groups
+    ]))
+
+    # }}}
+
+    # {{{ visualize
+
+    from meshmode.discretization.poly_element import \
+            InterpolatoryEdgeClusteredGroupFactory
+    from meshmode.discretization import Discretization
+    discr = Discretization(actx, mesh, InterpolatoryEdgeClusteredGroupFactory(1))
+
+    from meshmode.discretization.visualization import make_visualizer
+    vis = make_visualizer(actx, discr)
+    vis.write_vtk_file(filename, [("error", error)], overwrite=overwrite)
+
+    # }}}
+
+# }}}
 
 # vim: foldmethod=marker
