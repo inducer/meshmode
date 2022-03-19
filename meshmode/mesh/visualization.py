@@ -20,7 +20,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from typing import Any, Dict, Optional
+
 import numpy as np
+
+from arraycontext import ArrayContext
+from meshmode.mesh import Mesh
+
 
 __doc__ = """
 .. autofunction:: draw_2d_mesh
@@ -36,9 +42,20 @@ __doc__ = """
 
 # {{{ draw_2d_mesh
 
-def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
-        draw_nodal_adjacency=False, draw_face_numbers=False,
-        set_bounding_box=False, **kwargs):
+def draw_2d_mesh(
+        mesh: Mesh, *,
+        draw_vertex_numbers: bool = True,
+        draw_element_numbers: bool = True,
+        draw_nodal_adjacency: bool = False,
+        draw_face_numbers: bool = False,
+        set_bounding_box: bool = False, **kwargs: Any) -> None:
+    """Draw the mesh and its connectivity using ``matplotlib``.
+
+    :arg set_bounding_box: if *True*, the plot limits are set to the mesh
+        bounding box. This can help if some of the actors are not visible.
+    :arg kwargs: additional arguments passed to ``PathPatch`` when drawing
+        the mesh group elements.
+    """
     assert mesh.ambient_dim == 2
 
     import matplotlib.pyplot as pt
@@ -79,13 +96,13 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
 
                 pt.text(centroid[0], centroid[1], el_label, fontsize=17,
                         ha="center", va="center",
-                        bbox=dict(facecolor="white", alpha=0.5, lw=0))
+                        bbox={"facecolor": "white", "alpha": 0.5, "lw": 0})
 
     if draw_vertex_numbers:
         for ivert, vert in enumerate(mesh.vertices.T):
             pt.text(vert[0], vert[1], str(ivert), fontsize=15,
                     ha="center", va="center", color="blue",
-                    bbox=dict(facecolor="white", alpha=0.5, lw=0))
+                    bbox={"facecolor": "white", "alpha": 0.5, "lw": 0})
 
     if draw_nodal_adjacency:
         def global_iel_to_group_and_iel(global_iel):
@@ -137,7 +154,7 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
 
                     pt.text(face_center[0], face_center[1], str(iface), fontsize=12,
                             ha="center", va="center", color="purple",
-                            bbox=dict(facecolor="white", alpha=0.5, lw=0))
+                            bbox={"facecolor": "white", "alpha": 0.5, "lw": 0})
 
     if set_bounding_box:
         from meshmode.mesh.processing import find_bounding_box
@@ -150,13 +167,28 @@ def draw_2d_mesh(mesh, draw_vertex_numbers=True, draw_element_numbers=True,
 
 # {{{ draw_curve
 
-def draw_curve(mesh,
-        el_bdry_style="o", el_bdry_kwargs=None,
-        node_style="x-", node_kwargs=None):
+def draw_curve(
+        mesh: Mesh, *,
+        el_bdry_style: str = "o",
+        el_bdry_kwargs: Optional[Dict[str, Any]] = None,
+        node_style: str = "x-",
+        node_kwargs: Optional[Dict[str, Any]] = None) -> None:
+    """Draw a curve mesh.
+
+    :arg el_bdry_kwargs: passed to ``plot`` when drawing elements.
+    :arg node_kwargs: passed to ``plot`` when drawing group nodes.
+    """
+
+    if not (mesh.ambient_dim == 2 and mesh.dim == 1):
+        raise ValueError(
+            f"cannot draw a mesh of ambient dimension {mesh.ambient_dim} "
+            f"and dimension {mesh.dim}")
+
     import matplotlib.pyplot as plt
 
     if el_bdry_kwargs is None:
         el_bdry_kwargs = {}
+
     if node_kwargs is None:
         node_kwargs = {}
 
@@ -173,9 +205,10 @@ def draw_curve(mesh,
 
 # {{{ write_vtk_file
 
-def write_vertex_vtk_file(mesh, file_name,
-                          compressor=None,
-                          overwrite=False):
+def write_vertex_vtk_file(
+        mesh: Mesh, file_name: str, *,
+        compressor: Optional[str] = None,
+        overwrite: bool = False) -> None:
     from pyvisfile.vtk import (
             UnstructuredGrid, DataArray,
             AppendedDataXMLGenerator,
@@ -264,10 +297,10 @@ def write_vertex_vtk_file(mesh, file_name,
 
 # {{{ mesh_to_tikz
 
-def mesh_to_tikz(mesh):
+def mesh_to_tikz(mesh: Mesh) -> str:
     lines = []
 
-    lines.append(r"\def\nelements{%s}" % (sum(grp.nelements for grp in mesh.groups)))
+    lines.append(r"\def\nelements{%s}" % mesh.nelements)
     lines.append(r"\def\nvertices{%s}" % mesh.nvertices)
     lines.append("")
 
@@ -304,9 +337,10 @@ def mesh_to_tikz(mesh):
 
 # {{{ visualize_mesh
 
-def vtk_visualize_mesh(actx, mesh, filename,
-        vtk_high_order=True,
-        overwrite=False):
+def vtk_visualize_mesh(
+        actx: ArrayContext, mesh: Mesh, filename: str, *,
+        vtk_high_order: bool = True,
+        overwrite: bool = False) -> None:
     order = vis_order = max(mgrp.order for mgrp in mesh.groups)
     if not vtk_high_order:
         vis_order = None
@@ -330,7 +364,7 @@ def vtk_visualize_mesh(actx, mesh, filename,
 
 # {{{ write_stl_file
 
-def write_stl_file(mesh, stl_name, overwrite=False):
+def write_stl_file(mesh: Mesh, stl_name: str, *, overwrite: bool = False) -> None:
     """Writes a `STL <https://en.wikipedia.org/wiki/STL_(file_format)>`__ file
     from a triangular mesh in 3D. Requires the
     `numpy-stl <https://pypi.org/project/numpy-stl/>`__ package.
@@ -374,11 +408,11 @@ def write_stl_file(mesh, stl_name, overwrite=False):
 # {{{ visualize_mesh_vertex_resampling_error
 
 def visualize_mesh_vertex_resampling_error(
-        actx, mesh, filename, overwrite=False):
+        actx: ArrayContext, mesh: Mesh, filename: str, *,
+        overwrite: bool = False) -> None:
     # {{{ comput resampling errors
 
     from meshmode.mesh import _mesh_group_node_vertex_error
-
     from meshmode.dof_array import DOFArray
     error = DOFArray(actx, tuple([
         actx.from_numpy(
