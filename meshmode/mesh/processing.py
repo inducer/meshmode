@@ -499,7 +499,7 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
 
     connected_parts = _get_connected_partitions(
         mesh, part_id_to_part_index, global_elem_to_part_elem,
-        self_part_index)
+        self_part_id)
 
     self_to_self_adj_groups = _create_self_to_self_adjacency_groups(
                 mesh, global_elem_to_part_elem, self_part_index, self_mesh_groups,
