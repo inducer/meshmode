@@ -439,9 +439,16 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
         bdry_f = f(bdry_x)
         bdry_f_2 = opp_face(bdry_f)
 
-        # Ensure test coverage for non-in-place kernels in DirectConnection
-        bdry_f_2_no_inp = opp_face(bdry_f, _force_no_inplace_updates=True)
-        assert actx.to_numpy(flat_norm(bdry_f_2-bdry_f_2_no_inp, np.inf)) < 1e-14
+        for force_loopy, force_no_inplace in [
+                (True, False),
+                (False, True),
+                (True, True),
+                ]:
+            # Ensure test coverage for non-in-place kernels in DirectConnection
+            bdry_f_2_alt = opp_face(bdry_f,
+                    _force_no_inplace_updates=force_no_inplace,
+                    _force_use_loopy=force_loopy)
+            assert actx.to_numpy(flat_norm(bdry_f_2 - bdry_f_2_alt, np.inf)) < 1e-14
 
         err = flat_norm(bdry_f-bdry_f_2, np.inf)
         eoc_rec.add_data_point(h, actx.to_numpy(err))
