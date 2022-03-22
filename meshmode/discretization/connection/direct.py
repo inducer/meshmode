@@ -25,7 +25,7 @@ import numpy as np
 import numpy.linalg as la
 from abc import ABC, abstractmethod
 
-from typing import Sequence, Optional, List
+from typing import Sequence, Optional, List, Tuple
 
 import loopy as lp
 from meshmode.transform_metadata import (
@@ -111,18 +111,32 @@ class InterpolationBatch:
     to_element_face: Optional[int]
 
     def __post_init__(self):
-        self._global_from_element_indices_cache: Optional[ArrayT] = None
+        self._global_from_element_indices_cache: \
+                Optional[Tuple[ArrayT, ArrayT]] = None
 
     @property
     def nelements(self) -> int:
         return len(self.from_element_indices)
 
     def _global_from_element_indices(
-            self, actx: ArrayContext, to_group: ElementGroupBase) -> ArrayT:
+            self, actx: ArrayContext, to_group: ElementGroupBase
+            ) -> Tuple[ArrayT, ArrayT]:
         """Returns a version of :attr:`from_element_indices` that is usable
-        without :attr:`to_element_indices`.  Elements for which no 'from'-side
-        data exists (the result will be set to zero) are marked with a
-        "from-element index" of -1.
+        without :attr:`to_element_indices`, consisting of a tuple.
+        The first entry of the tuple is an array of flags indicating
+        whether 'from'-side data exists (0 if not), nonzero otherwise,
+        and the second is an array that works like :attr:`from_element_indices`.
+        In entries where no 'from'-side data exists, the entry in this
+        second array will be zero.
+
+        .. note::
+
+            In a prior version of this code, presence and source index were
+            contained in a single array, with an invalid value (-1) signifying
+            that no data was available on the 'from' side. This turned out
+            to be a bad idea: :mod:`pytato` might decide to evaluate ("materialize")
+            an indirect access like ``source_data[from_element_indices]``, which
+            would lead to out-of-bounds memory accesses.
         """
         if self._global_from_element_indices_cache is not None:
             return self._global_from_element_indices_cache
@@ -132,12 +146,20 @@ class InterpolationBatch:
         # https://github.com/inducer/meshmode/pull/255).
         from_element_indices = actx.to_numpy(self.from_element_indices)
         to_element_indices = actx.to_numpy(self.to_element_indices)
-        numpy_result = np.full(to_group.nelements, -1)
-        numpy_result[to_element_indices] = from_element_indices
-        result = actx.freeze(actx.from_numpy(numpy_result))
 
-        self._global_from_element_indices_cache = result
-        return result
+        np_full_from_element_indices = np.full(to_group.nelements, -1)
+        np_full_from_element_indices[to_element_indices] = from_element_indices
+        np_from_el_present = (np_full_from_element_indices != -1)
+        np_full_from_element_indices[~np_from_el_present] = 0
+
+        from_el_present = actx.freeze(actx.from_numpy(
+            np_from_el_present.astype(np.int8)))
+        full_from_element_indices = actx.freeze(
+                actx.from_numpy(np_full_from_element_indices))
+
+        self._global_from_element_indices_cache = (
+                from_el_present, full_from_element_indices)
+        return self._global_from_element_indices_cache
 
 # }}}
 
@@ -169,11 +191,26 @@ class _FromGroupPickData:
         A frozen array of shape ``(nelements_tgt)`` of a type controlled
         by the array context, indicating which pick list each element should use.
 
+    .. attribute:: from_el_present
+
+        Non-zero if source data for this entry is present. Otherwise zero,
+        in which case the expected output of the connection for DOFs
+        associated with the element is zero.
+
     .. attribute:: from_element_indices
 
         An frozen array of shape ``(nelements_tgt)`` of a type controlled
         by the array context, indicating from which source element each target
         element should gather its data.
+
+        .. note::
+
+            In a prior version of this code, presence and source index were
+            contained in a single array, with an invalid value (-1) signifying
+            that no data was available on the 'from' side. This turned out
+            to be a bad idea: :mod:`pytato` might decide to evaluate ("materialize")
+            an indirect access like ``source_data[from_element_indices]``, which
+            would lead to out-of-bounds memory accesses.
 
     .. attribute:: is_surjective
     """
@@ -181,6 +218,7 @@ class _FromGroupPickData:
     from_group_index: int
     dof_pick_lists: ArrayT
     dof_pick_list_index: ArrayT
+    from_el_present: ArrayT
     from_element_indices: ArrayT
     is_surjective: bool
 
@@ -459,15 +497,20 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         dof_pick_list_to_index[
                                 tuple(batch_dof_pick_lists[source_batch_index])]
 
+            from_el_present = (from_el_indices != -1)
+            from_el_indices[~from_el_present] = 0
+
             result.append(
                     _FromGroupPickData(
                         from_group_index=source_group_index,
-                        from_element_indices=actx.freeze(actx.from_numpy(
-                            from_el_indices)),
                         dof_pick_lists=actx.freeze(actx.from_numpy(
                             dof_pick_lists)),
                         dof_pick_list_index=actx.freeze(actx.from_numpy(
                             dof_pick_list_index)),
+                        from_el_present=actx.freeze(
+                            actx.from_numpy(from_el_present.astype(np.int8))),
+                        from_element_indices=actx.freeze(actx.from_numpy(
+                            from_el_indices)),
                         is_surjective=(from_el_indices != -1).all()
                         ))
 
@@ -489,9 +532,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
     # {{{ __call__
 
     def __call__(
-            self, ary: ArrayOrContainerT,
+            self, ary: ArrayOrContainerT, *,
             _force_no_inplace_updates: bool = False,
             _force_use_loopy: bool = False,
+            _force_no_merged_batches: bool = False,
             ) -> ArrayOrContainerT:
         """
         :arg ary: a :class:`~meshmode.dof_array.DOFArray`, or an
@@ -499,8 +543,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             coefficient data on :attr:`from_discr`.
 
         """
-        # _force_no_inplace_updates and _force_use_loopy: private arguments only
-        # used to ensure test coverge of all code paths.
+        # _force_no_inplace_updates, _force_use_loopy, _force_no_merged_batches:
+        # private arguments only used to ensure test coverge of all code paths.
 
         # {{{ recurse into array containers
 
@@ -513,7 +557,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 return deserialize_container(ary, [
                     (key, self(subary,
                         _force_no_inplace_updates=_force_no_inplace_updates,
-                        _force_use_loopy=_force_use_loopy))
+                        _force_use_loopy=_force_use_loopy,
+                        _force_no_merged_batches=_force_no_merged_batches))
                     for key, subary in iterable
                     ])
 
@@ -530,14 +575,17 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             return self._apply_with_inplace_updates(ary)
         else:
             return self._apply_without_inplace_updates(ary,
-                    _force_use_loopy=_force_use_loopy)
+                    _force_use_loopy=_force_use_loopy,
+                    _force_no_merged_batches=_force_no_merged_batches)
 
     # }}}
 
     # {{{ _apply_without_inplace_updates
 
     def _apply_without_inplace_updates(
-            self, ary: DOFArray, _force_use_loopy: bool) -> DOFArray:
+            self, ary: DOFArray,
+            *, _force_use_loopy: bool,
+            _force_no_merged_batches: bool) -> DOFArray:
         actx = ary.array_context
 
         # {{{ kernels
@@ -552,12 +600,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     "{[jdof]: 0 <= jdof < nunit_dofs_src}"
                 ],
                 """
-                # https://github.com/inducer/loopy/issues/427
-                if from_element_indices[iel] != -1
-                    <> rowres = sum(jdof, resample_mat[idof, jdof]
+                result[iel, idof] = (
+                    sum(jdof, resample_mat[idof, jdof]
                             * ary[from_element_indices[iel], jdof])
-                end
-                result[iel, idof] =  rowres if from_element_indices[iel] != -1 else 0
+                    if from_el_present[iel] else 0)
                 """,
                 [
                     lp.GlobalArg("ary", None,
@@ -583,7 +629,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 """
                     result[iel, idof] = (
                         ary[from_element_indices[iel], pick_list[idof]]
-                        if from_element_indices[iel] != -1 else 0)
+                        if from_el_present[iel] else 0)
                 """,
                 [
                     lp.GlobalArg("ary", None,
@@ -613,7 +659,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                                 from_element_indices[iel],
                                 dof_pick_lists[dof_pick_list_index[iel], idof]
                             ]
-                        if from_element_indices[iel] != -1 else 0)
+                        if from_el_present[iel] else 0)
                 """,
                 [
                     lp.GlobalArg("ary", None,
@@ -641,15 +687,19 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
             group_array_contributions = []
 
+            if _force_no_merged_batches:
+                group_pick_info = None
+
             if group_pick_info is not None:
                 if actx.permits_advanced_indexing and not _force_use_loopy:
                     group_array_contributions = []
                     for fgpd in group_pick_info:
+                        from_el_present = actx.thaw(fgpd.from_el_present)
                         from_element_indices = actx.thaw(fgpd.from_element_indices)
+
                         group_array_contributions.append(
                             actx.np.where(
-                                actx.np.not_equal(
-                                    from_element_indices.reshape((-1, 1)), -1),
+                                from_el_present.reshape((-1, 1)),
                                 ary[fgpd.from_group_index][
                                     from_element_indices.reshape((-1, 1)),
                                     actx.thaw(fgpd.dof_pick_lists)[
@@ -663,6 +713,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                             dof_pick_lists=fgpd.dof_pick_lists,
                             dof_pick_list_index=fgpd.dof_pick_list_index,
                             ary=ary[fgpd.from_group_index],
+                            from_el_present=fgpd.from_el_present,
                             from_element_indices=fgpd.from_element_indices,
                             nunit_dofs_tgt=self.to_discr.groups[i_tgrp].nunit_dofs
                         )["result"]
@@ -678,43 +729,39 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     point_pick_indices = self._resample_point_pick_indices(
                             actx, i_tgrp, i_batch)
 
+                    from_el_present, from_element_indices = \
+                            batch._global_from_element_indices(
+                                    actx, self.to_discr.groups[i_tgrp])
+                    from_el_present = actx.thaw(from_el_present)
+                    from_element_indices = actx.thaw(from_element_indices)
+
                     if point_pick_indices is None:
-                        from_element = actx.thaw(batch._global_from_element_indices(
-                            actx,
-                            self.to_discr.groups[i_tgrp]))
                         grp_ary = ary[batch.from_group_index]
                         mat = self._resample_matrix(actx, i_tgrp, i_batch)
                         if actx.permits_advanced_indexing and not _force_use_loopy:
                             batch_result = actx.np.where(
-                                            actx.np.not_equal(from_element
-                                                              .reshape(-1, 1),
-                                                              -1),
-                                            actx.einsum("ij,ej->ei",
-                                                        mat,
-                                                        grp_ary[from_element]),
-                                            0)
+                                    from_el_present.reshape(-1, 1),
+                                    actx.einsum("ij,ej->ei",
+                                        mat, grp_ary[from_element_indices]),
+                                    0)
                         else:
                             batch_result = actx.call_loopy(
                                 batch_mat_knl(),
                                 resample_mat=mat,
                                 ary=grp_ary,
-                                from_element_indices=from_element,
+                                from_el_present=from_el_present,
+                                from_element_indices=from_element_indices,
                                 nunit_dofs_tgt=(
                                     self.to_discr.groups[i_tgrp].nunit_dofs)
                             )["result"]
 
                     else:
                         from_vec = ary[batch.from_group_index]
-                        from_element_indices = actx.thaw(
-                            batch._global_from_element_indices(
-                                actx, self.to_discr.groups[i_tgrp])
-                            )
                         pick_list = actx.thaw(point_pick_indices)
 
                         if actx.permits_advanced_indexing and not _force_use_loopy:
                             batch_result = actx.np.where(
-                                actx.np.not_equal(
-                                    from_element_indices.reshape((-1, 1)), -1),
+                                from_el_present.reshape(-1, 1),
                                 from_vec[from_element_indices.reshape(
                                     (-1, 1)), pick_list],
                                 0)
@@ -723,6 +770,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                                 batch_pick_knl(),
                                 pick_list=pick_list,
                                 ary=from_vec,
+                                from_el_present=from_el_present,
                                 from_element_indices=from_element_indices,
                                 nunit_dofs_tgt=(
                                     self.to_discr.groups[i_tgrp].nunit_dofs)
