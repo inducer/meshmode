@@ -127,7 +127,7 @@ jobs:
     downstream_tests:
         strategy:
             matrix:
-                downstream_project: [grudge, pytential, mirgecom]
+                downstream_project: [grudge, pytential, mirgecom, mirgecom_examples]
         name: Tests for downstream project ${{ matrix.downstream_project }}
         runs-on: ubuntu-latest
         steps:
@@ -138,23 +138,6 @@ jobs:
             run: |
                 curl -L -O https://tiker.net/ci-support-v0
                 . ./ci-support-v0
-                source .ci/install-downstream.sh
-                build_py_project_in_conda_env
-                test_py_project
-
-    mirgecom_examples:
-        runs-on: ubuntu-latest
-        name: Examples for downstream project mirgecom
-        steps:
-        -   uses: actions/checkout@v2
-        -   name: "Main Script"
-            env:
-                DOWNSTREAM_PROJECT: mirgecom
-            run: |
-                curl -L -O https://tiker.net/ci-support-v0
-                . ./ci-support-v0
-                source .ci/install-downstream.sh
-                build_py_project_in_conda_env
-                examples/run_examples.sh ./examples
+                test_downstream "$DOWNSTREAM_PROJECT"
 
 # vim: sw=4
