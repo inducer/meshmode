@@ -511,7 +511,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                             actx.from_numpy(from_el_present.astype(np.int8))),
                         from_element_indices=actx.freeze(actx.from_numpy(
                             from_el_indices)),
-                        is_surjective=(from_el_indices != -1).all()
+                        is_surjective=from_el_present.all()
                         ))
 
         return result
@@ -647,19 +647,25 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_picking_group_knl"))
-        def group_pick_knl():
+        def group_pick_knl(is_surjective: bool):
+
+            if is_surjective:
+                if_present = ""
+            else:
+                if_present = "if from_el_present[iel] else 0"
+
             t_unit = make_loopy_program(
                 [
                     "{[iel]: 0 <= iel < nelements}",
                     "{[idof]: 0 <= idof < nunit_dofs_tgt}"
                 ],
-                """
+                f"""
                     result[iel, idof] = (
                         ary[
                                 from_element_indices[iel],
                                 dof_pick_lists[dof_pick_list_index[iel], idof]
                             ]
-                        if from_el_present[iel] else 0)
+                        { if_present })
                 """,
                 [
                     lp.GlobalArg("ary", None,
@@ -691,33 +697,43 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 group_pick_info = None
 
             if group_pick_info is not None:
+                group_array_contributions = []
+
                 if actx.permits_advanced_indexing and not _force_use_loopy:
-                    group_array_contributions = []
                     for fgpd in group_pick_info:
-                        from_el_present = actx.thaw(fgpd.from_el_present)
                         from_element_indices = actx.thaw(fgpd.from_element_indices)
 
-                        group_array_contributions.append(
-                            actx.np.where(
-                                from_el_present.reshape((-1, 1)),
-                                ary[fgpd.from_group_index][
+                        grp_ary_contrib = ary[fgpd.from_group_index][
                                     from_element_indices.reshape((-1, 1)),
                                     actx.thaw(fgpd.dof_pick_lists)[
                                         actx.thaw(fgpd.dof_pick_list_index)]
-                                    ],
-                                0))
+                                    ]
+
+                        if not fgpd.is_surjective:
+                            from_el_present = actx.thaw(fgpd.from_el_present)
+                            grp_ary_contrib = actx.np.where(
+                                from_el_present.reshape((-1, 1)),
+                                grp_ary_contrib,
+                                0)
+
+                        group_array_contributions.append(grp_ary_contrib)
                 else:
-                    group_array_contributions = [
-                        actx.call_loopy(
-                            group_pick_knl(),
-                            dof_pick_lists=fgpd.dof_pick_lists,
-                            dof_pick_list_index=fgpd.dof_pick_list_index,
-                            ary=ary[fgpd.from_group_index],
-                            from_el_present=fgpd.from_el_present,
-                            from_element_indices=fgpd.from_element_indices,
-                            nunit_dofs_tgt=self.to_discr.groups[i_tgrp].nunit_dofs
-                        )["result"]
-                        for fgpd in group_pick_info]
+                    for fgpd in group_pick_info:
+                        group_knl_kwargs = {}
+                        if not fgpd.is_surjective:
+                            group_knl_kwargs["from_el_present"] = \
+                                    fgpd.from_el_present
+
+                        group_array_contributions.append(
+                            actx.call_loopy(
+                                group_pick_knl(fgpd.is_surjective),
+                                dof_pick_lists=fgpd.dof_pick_lists,
+                                dof_pick_list_index=fgpd.dof_pick_list_index,
+                                ary=ary[fgpd.from_group_index],
+                                from_element_indices=fgpd.from_element_indices,
+                                nunit_dofs_tgt=(
+                                    self.to_discr.groups[i_tgrp].nunit_dofs),
+                                **group_knl_kwargs)["result"])
 
                 assert group_array_contributions
                 group_array = sum(group_array_contributions)
