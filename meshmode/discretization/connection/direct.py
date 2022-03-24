@@ -533,7 +533,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
     def __call__(
             self, ary: ArrayOrContainerT, *,
-            _force_no_inplace_updates: bool = False,
             _force_use_loopy: bool = False,
             _force_no_merged_batches: bool = False,
             ) -> ArrayOrContainerT:
@@ -543,7 +542,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             coefficient data on :attr:`from_discr`.
 
         """
-        # _force_no_inplace_updates, _force_use_loopy, _force_no_merged_batches:
+        # _force_use_loopy, _force_no_merged_batches:
         # private arguments only used to ensure test coverge of all code paths.
 
         # {{{ recurse into array containers
@@ -556,7 +555,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             else:
                 return deserialize_container(ary, [
                     (key, self(subary,
-                        _force_no_inplace_updates=_force_no_inplace_updates,
                         _force_use_loopy=_force_use_loopy,
                         _force_no_merged_batches=_force_no_merged_batches))
                     for key, subary in iterable
@@ -570,22 +568,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         assert isinstance(ary, DOFArray)
 
-        if (ary.array_context.permits_inplace_modification
-                and not _force_no_inplace_updates):
-            return self._apply_with_inplace_updates(ary)
-        else:
-            return self._apply_without_inplace_updates(ary,
-                    _force_use_loopy=_force_use_loopy,
-                    _force_no_merged_batches=_force_no_merged_batches)
-
-    # }}}
-
-    # {{{ _apply_without_inplace_updates
-
-    def _apply_without_inplace_updates(
-            self, ary: DOFArray,
-            *, _force_use_loopy: bool,
-            _force_no_merged_batches: bool) -> DOFArray:
         actx = ary.array_context
 
         # {{{ kernels
@@ -807,104 +789,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             group_arrays.append(group_array)
 
         return DOFArray(actx, data=tuple(group_arrays))
-
-    # }}}
-
-    # {{{ _apply_with_inplace_updates
-
-    def _apply_with_inplace_updates(self, ary: DOFArray) -> DOFArray:
-        actx = ary.array_context
-
-        # {{{ kernels
-
-        @memoize_in(actx, (DirectDiscretizationConnection,
-            "resample_by_mat_knl_inplace"))
-        def mat_knl():
-            t_unit = make_loopy_program(
-                """{[iel, idof, j]:
-                    0<=iel<nelements and
-                    0<=idof<nunit_dofs_tgt and
-                    0<=j<nunit_dofs_src}""",
-                "result[to_element_indices[iel], idof] \
-                    = sum(j, resample_mat[idof, j] \
-                    * ary[from_element_indices[iel], j])",
-                [
-                    lp.GlobalArg("result", None,
-                        shape="nelements_result, nunit_dofs_tgt",
-                        offset=lp.auto),
-                    lp.GlobalArg("ary", None,
-                        shape="nelements_vec, nunit_dofs_src",
-                        offset=lp.auto),
-                    lp.ValueArg("nelements_result", np.int32),
-                    lp.ValueArg("nelements_vec", np.int32),
-                    "...",
-                    ],
-                name="resample_by_mat_inplace")
-
-            return lp.tag_inames(t_unit, {
-                "iel": ConcurrentElementInameTag(),
-                "idof": ConcurrentDOFInameTag()})
-
-        @memoize_in(actx,
-                (DirectDiscretizationConnection, "resample_by_picking_knl_inplace"))
-        def pick_knl():
-            t_unit = make_loopy_program(
-                """{[iel, idof]:
-                    0<=iel<nelements and
-                    0<=idof<nunit_dofs_tgt}""",
-                "result[to_element_indices[iel], idof] \
-                    = ary[from_element_indices[iel], pick_list[idof]]",
-                [
-                    lp.GlobalArg("result", None,
-                        shape="nelements_result, nunit_dofs_tgt",
-                        offset=lp.auto),
-                    lp.GlobalArg("ary", None,
-                        shape="nelements_vec, nunit_dofs_src",
-                        offset=lp.auto),
-                    lp.ValueArg("nelements_result", np.int32),
-                    lp.ValueArg("nelements_vec", np.int32),
-                    lp.ValueArg("nunit_dofs_src", np.int32),
-                    "...",
-                    ],
-                name="resample_by_picking_inplace")
-
-            return lp.tag_inames(t_unit, {
-                "iel": ConcurrentElementInameTag(),
-                "idof": ConcurrentDOFInameTag()})
-
-        # }}}
-
-        if self.is_surjective:
-            result = self.to_discr.empty(actx, dtype=ary.entry_dtype)
-        else:
-            result = self.to_discr.zeros(actx, dtype=ary.entry_dtype)
-
-        for i_tgrp, cgrp in enumerate(self.groups):
-            for i_batch, batch in enumerate(cgrp.batches):
-                if not len(batch.from_element_indices):
-                    continue
-
-                point_pick_indices = self._resample_point_pick_indices(
-                        actx, i_tgrp, i_batch)
-
-                if point_pick_indices is None:
-                    actx.call_loopy(mat_knl(),
-                            resample_mat=self._resample_matrix(
-                                actx, i_tgrp, i_batch),
-                            result=result[i_tgrp],
-                            ary=ary[batch.from_group_index],
-                            from_element_indices=batch.from_element_indices,
-                            to_element_indices=batch.to_element_indices)
-
-                else:
-                    actx.call_loopy(pick_knl(),
-                            pick_list=point_pick_indices,
-                            result=result[i_tgrp],
-                            ary=ary[batch.from_group_index],
-                            from_element_indices=batch.from_element_indices,
-                            to_element_indices=batch.to_element_indices)
-
-        return result
 
     # }}}
 
