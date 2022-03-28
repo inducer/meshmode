@@ -1233,13 +1233,17 @@ def _test_node_vertex_consistency_resampling(mesh, mgrp, tol):
     if tol is None:
         tol = 1e3 * np.finfo(per_element_vertex_errors.dtype).eps
 
-    from meshmode.mesh.processing import find_bounding_box
+    grp_vertices = mesh.vertices[:, mgrp.vertex_indices]
 
-    bbox_min, bbox_max = find_bounding_box(mesh)
-    size = la.norm(bbox_max-bbox_min)
+    per_element_sizes = la.norm(
+        np.max(grp_vertices, axis=-1)
+        - np.min(grp_vertices, axis=-1),
+        axis=0)
 
-    max_el_vertex_error = np.max(per_element_vertex_errors)
-    assert max_el_vertex_error < tol*size, max_el_vertex_error
+    per_element_tols = tol * np.maximum(per_element_sizes, 1)
+
+    assert np.all(per_element_vertex_errors < per_element_tols), \
+        per_element_vertex_errors[per_element_vertex_errors >= per_element_tols][0]
 
     return True
 
