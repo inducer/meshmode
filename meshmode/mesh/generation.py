@@ -570,7 +570,7 @@ def generate_sphere(r: float, order: int, *,
 # }}}
 
 
-# {{ generate_surface_of_revolution
+# {{{ generate_surface_of_revolution
 
 def generate_surface_of_revolution(
         get_radius: Callable[[np.ndarray, np.ndarray], np.ndarray],
@@ -754,6 +754,8 @@ def generate_torus_and_cycle_vertices(
 # }}}
 
 
+# {{{ generate_torus
+
 def generate_torus(
         r_major: float, r_minor: float,
         n_major: int = 20, n_minor: int = 10, order: int = 1,
@@ -806,6 +808,8 @@ def generate_torus(
             group_cls=group_cls)
 
     return mesh
+
+# }}}
 
 
 # {{{ get_urchin
