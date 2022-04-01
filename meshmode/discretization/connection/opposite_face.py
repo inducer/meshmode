@@ -521,6 +521,7 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
 
 # {{{ make_partition_connection
 
+# FIXME: Consider adjusting terminology from local/remote to self/other.
 def make_partition_connection(actx, *, local_bdry_conn,
         remote_bdry_discr, remote_group_infos):
     """

@@ -148,6 +148,9 @@ class MPIMeshDistributor:
 
 # {{{ remote group info
 
+# FIXME: "Remote" is perhaps not the best naming convention for this. For example,
+# in a multi-volume context it may be used when constructing inter-partition
+# connections between two parts on the same rank.
 @dataclass
 class RemoteGroupInfo:
     inter_partition_adj_groups: List[InterPartitionAdjacencyGroup]
