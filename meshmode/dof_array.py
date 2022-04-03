@@ -277,9 +277,14 @@ class DOFArray:
         if self.array_context is not actx:
             ary = _thaw(actx, _freeze(self))
 
-        return (
-            [actx.to_numpy(ary_i) for ary_i in ary._data],
-            [ary_i.tags for ary_i in ary._data])
+        d = {}
+        d["data"] = [actx.to_numpy(ary_i) for ary_i in ary._data]
+
+        if hasattr(ary._data[0], "tags"):
+            d["tags"] = [ary_i.tags for ary_i in ary._data]
+        d["axes"] = [ary_i.axes for ary_i in ary._data]
+
+        return d
 
     def __setstate__(self, state):
         try:
