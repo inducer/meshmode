@@ -293,8 +293,13 @@ class DOFArray:
 
         self._array_context = actx
 
-        data = state[0]
-        tags = state[1]
+        if isinstance(state, dict):
+            data = state["data"]
+            tags = state["tags"]
+        else:
+            # For backwards compatibility
+            data = state
+            tags = [frozenset() for _ in range(len(state))]
 
         self._data = tuple(
             [actx.tag(tags[idx], actx.from_numpy(ary_i))
