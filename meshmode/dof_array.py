@@ -277,7 +277,9 @@ class DOFArray:
         if self.array_context is not actx:
             ary = _thaw(actx, _freeze(self))
 
-        return [actx.to_numpy(ary_i) for ary_i in ary._data]
+        return (
+            [actx.to_numpy(ary_i) for ary_i in ary._data],
+            [ary_i.tags for ary_i in ary._data])
 
     def __setstate__(self, state):
         try:
@@ -290,7 +292,13 @@ class DOFArray:
                     "array_context_for_pickling is active.")
 
         self._array_context = actx
-        self._data = tuple([actx.from_numpy(ary_i) for ary_i in state])
+
+        data = state[0]
+        tags = state[1]
+
+        self._data = tuple(
+            [actx.tag(tags[idx], actx.from_numpy(ary_i))
+             for idx, ary_i in enumerate(data)])
 
     # }}}
 
