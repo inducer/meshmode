@@ -288,7 +288,8 @@ class DOFArray:
         if hasattr(ary._data[0], "axes"):
             d["axes_tags"] = [[ax.tags for ax in ary_i.axes] for ary_i in ary._data]
         else:
-            d["axes_tags"] = [[] for _ in range(len(ary._data))]
+            d["axes_tags"] = [[frozenset() for _ in range(leaf_ary.ndim)]
+                                         for leaf_ary in ary._data]
 
         return d
 
@@ -311,12 +312,17 @@ class DOFArray:
         else:
             # For backwards compatibility
             data = state
-            tags = [frozenset() for _ in range(len(state))]
-            axes_tags = [frozenset() for _ in range(len(state))]
+            tags = [frozenset() for _ in range(len(data))]
+            axes_tags = [[frozenset() for _ in range(leaf_ary.ndim)]
+                                         for leaf_ary in data]
+
+        assert len(data) == len(tags) == len(axes_tags)
 
         self._data = []
 
         for idx, ary in enumerate(data):
+            assert len(axes_tags[idx]) == ary.ndim
+            assert isinstance(axes_tags[idx], list)
             d = actx.tag(tags[idx], actx.from_numpy(ary))
 
             for ida, ax in enumerate(axes_tags[idx]):
