@@ -31,7 +31,7 @@ pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         [PytestPyOpenCLArrayContextFactory])
 
 from arraycontext import (
-        thaw,
+        thaw, freeze,
         dataclass_array_container,
         with_container_arithmetic)
 
@@ -176,6 +176,43 @@ def test_dof_array_pickling(actx_factory):
 
     assert flat_norm(mat_of_dofs - mat2_of_dofs, np.inf) == 0
     assert flat_norm(dc_of_dofs - dc2_of_dofs, np.inf) == 0
+
+
+def test_dof_array_pickling_tags(actx_factory):
+    actx = actx_factory()
+
+    from pytools.tag import Tag
+    from pickle import loads, dumps
+
+    class FooTag(Tag):
+        pass
+
+    class FooAxisTag(Tag):
+        pass
+
+    class FooAxisTag2(Tag):
+        pass
+
+    state = DOFArray(actx, (actx.zeros((10, 10), "float64"),
+                     actx.zeros((10, 10), "float64"),))
+
+    state = thaw(freeze(actx.tag(FooTag(), state), actx), actx)
+    state = thaw(freeze(actx.tag_axis(0, FooAxisTag(), state), actx), actx)
+    state = thaw(freeze(actx.tag_axis(1, FooAxisTag2(), state), actx), actx)
+
+    with array_context_for_pickling(actx):
+        pkl = dumps((state, ))
+
+    with array_context_for_pickling(actx):
+        loaded_state, = loads(pkl)
+
+    for i in range(len(state._data)):
+        si = state._data[i]
+        li = loaded_state._data[i]
+        assert si.tags == li.tags
+
+        for iax in range(len(si.axes)):
+            assert si.axes[iax].tags == li.axes[iax].tags
 
 # }}}
 
