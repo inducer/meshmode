@@ -284,7 +284,11 @@ class DOFArray:
             d["tags"] = [ary_i.tags for ary_i in ary._data]
         else:
             d["tags"] = [frozenset() for _ in range(len(ary._data))]
-        d["axes_tags"] = [ax.tags for ary_i in ary._data for ax in ary_i.axes]
+
+        if hasattr(ary._data[0], "axes"):
+            d["axes_tags"] = [[ax.tags for ax in ary_i.axes] for ary_i in ary._data]
+        else:
+            d["axes_tags"] = [[] for _ in range(len(ary._data))]
 
         return d
 
