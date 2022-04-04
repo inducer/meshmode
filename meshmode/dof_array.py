@@ -280,12 +280,12 @@ class DOFArray:
         d = {}
         d["data"] = [actx.to_numpy(ary_i) for ary_i in ary._data]
 
-        if hasattr(ary._data[0], "tags"):
+        if len(ary) > 0 and hasattr(ary._data[0], "tags"):
             d["tags"] = [ary_i.tags for ary_i in ary._data]
         else:
             d["tags"] = [frozenset() for _ in range(len(ary._data))]
 
-        if hasattr(ary._data[0], "axes"):
+        if len(ary) > 0 and hasattr(ary._data[0], "axes"):
             d["axes_tags"] = [[ax.tags for ax in ary_i.axes] for ary_i in ary._data]
         else:
             d["axes_tags"] = [[frozenset() for _ in range(leaf_ary.ndim)]
