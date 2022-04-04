@@ -282,6 +282,8 @@ class DOFArray:
 
         if hasattr(ary._data[0], "tags"):
             d["tags"] = [ary_i.tags for ary_i in ary._data]
+        else:
+            d["tags"] = [frozenset() for _ in range(len(ary._data))]
         d["axes_tags"] = [ax.tags for ary_i in ary._data for ax in ary_i.axes]
 
         return d
