@@ -282,7 +282,7 @@ class DOFArray:
 
         if hasattr(ary._data[0], "tags"):
             d["tags"] = [ary_i.tags for ary_i in ary._data]
-        d["axes"] = [ary_i.axes for ary_i in ary._data]
+        d["axes_tags"] = [ax.tags for ary_i in ary._data for ax in ary_i.axes]
 
         return d
 
@@ -301,14 +301,24 @@ class DOFArray:
         if isinstance(state, dict):
             data = state["data"]
             tags = state["tags"]
+            axes_tags = state["axes_tags"]
         else:
             # For backwards compatibility
             data = state
             tags = [frozenset() for _ in range(len(state))]
+            axes_tags = [frozenset() for _ in range(len(state))]
 
-        self._data = tuple(
-            [actx.tag(tags[idx], actx.from_numpy(ary_i))
-             for idx, ary_i in enumerate(data)])
+        self._data = []
+
+        for idx, ary in enumerate(data):
+            d = actx.tag(tags[idx], actx.from_numpy(ary))
+
+            for ida, ax in enumerate(axes_tags[idx]):
+                d = actx.tag_axis(ida, ax, d)
+
+            self._data.append(d)
+
+        self._data = tuple(self._data)
 
     # }}}
 
