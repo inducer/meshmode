@@ -129,7 +129,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         mesh_bulk_dim = max(el_type.dimensions for el_type in el_type_hist)
 
-        volume_groups = []
+        subgroups = []
 
         # {{{ build vertex numbering
 
@@ -169,7 +169,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         # }}}
 
         from meshmode.mesh import (Mesh,
-                SimplexElementGroup, TensorProductElementGroup, VolumeGroup)
+                SimplexElementGroup, TensorProductElementGroup, ElementSubgroup)
 
         bulk_el_types = set()
 
@@ -186,7 +186,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             vertex_indices = np.empty(
                     (ngroup_elements, el_vertex_count),
                     np.int32)
-            volume_group_elements = {}
+            subgroup_elements = {}
             i = 0
 
             for element, (el_vertices, el_nodes, el_type) in enumerate(zip(
@@ -203,9 +203,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 if el_markers is not None:
                     for t in el_markers:
                         volume_tag = self.tags[self.gmsh_tag_index_to_mine[t]][0]
-                        if volume_tag not in volume_group_elements:
-                            volume_group_elements[volume_tag] = []
-                        volume_group_elements[volume_tag].append(i)
+                        if volume_tag not in subgroup_elements:
+                            subgroup_elements[volume_tag] = []
+                        subgroup_elements[volume_tag].append(i)
 
                 i += 1
 
@@ -250,12 +250,12 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
             groups.append(group)
 
-            volume_groups.append([
-                VolumeGroup(
+            subgroups.append([
+                ElementSubgroup(
                     igroup=len(groups)-1,
-                    volume_tag=tag,
+                    tag=tag,
                     elements=np.array(elements, dtype=np.int32))
-                for tag, elements in volume_group_elements.items()])
+                for tag, elements in subgroup_elements.items()])
 
         # FIXME: This is heuristic.
         if len(bulk_el_types) == 1:
@@ -273,7 +273,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         return Mesh(
                 vertices, groups,
                 is_conforming=is_conforming,
-                volume_groups=volume_groups,
+                subgroups=subgroups,
                 facial_adjacency_groups=facial_adjacency_groups,
                 **self.mesh_construction_kwargs)
 

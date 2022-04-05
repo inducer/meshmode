@@ -40,7 +40,7 @@ __doc__ = """
 
 .. autoclass:: Mesh
 
-.. autoclass:: VolumeGroup
+.. autoclass:: ElementSubgroup
 .. autoclass:: NodalAdjacency
 .. autoclass:: FacialAdjacencyGroup
 .. autoclass:: InteriorAdjacencyGroup
@@ -498,21 +498,21 @@ class TensorProductElementGroup(_ModepyElementGroup):
 # }}}
 
 
-# {{{ volume groups
+# {{{ element subgroups
 
 @dataclass(frozen=True)
-class VolumeGroup:
+class ElementSubgroup:
     """
     Describes the subset of elements in a single :class:`MeshElementGroup` that
-    correspond to the tag identifier *volume_tag*.
+    correspond to the tag identifier *tag*.
 
     .. attribute:: igroup
 
         The mesh element group number of this group.
 
-    .. attribute:: volume_tag
+    .. attribute:: tag
 
-        The volume tag identifier of this group.
+        The tag identifier of this group.
 
     .. attribute:: elements
 
@@ -521,7 +521,7 @@ class VolumeGroup:
     """
 
     igroup: int
-    volume_tag: Hashable
+    tag: Hashable
     elements: np.ndarray
 
 # }}}
@@ -893,11 +893,10 @@ class Mesh(Record):
         Referencing this attribute may raise
         :exc:`meshmode.DataUnavailable`.
 
-    .. attribute:: volume_groups
+    .. attribute:: subgroups
 
-        A list of lists of instances of :class:`VolumeGroup`, where
-        ``volume_groups[igrp]`` gives the volume groups for
-        group *igrp*.
+        A list of lists of instances of :class:`ElementSubgroup`, where
+        ``subgroups[igrp]`` gives the subgroups for group *igrp*.
 
     .. attribute:: facial_adjacency_groups
 
@@ -954,7 +953,7 @@ class Mesh(Record):
     def __init__(self, vertices, groups, *, skip_tests=False,
             node_vertex_consistency_tolerance=None,
             skip_element_orientation_test=False,
-            volume_groups=None,
+            subgroups=None,
             nodal_adjacency=None,
             facial_adjacency_groups=None,
             vertex_id_dtype=np.int32,
@@ -969,8 +968,8 @@ class Mesh(Record):
         :arg skip_element_orientation_test: If *False*, check that
             element orientation is positive in volume meshes
             (i.e. ones where ambient and topological dimension match).
-        :arg volume_groups:
-            A data structure as described in :attr:`volume_groups`, or *None*.
+        :arg subgroups:
+            A data structure as described in :attr:`subgroups`, or *None*.
         :arg nodal_adjacency: One of three options:
             *None*, in which case this information
             will be deduced from vertex adjacency. *False*, in which case
@@ -1004,8 +1003,8 @@ class Mesh(Record):
         if vertices is None:
             is_conforming = None
 
-        if volume_groups is None:
-            volume_groups = [[]] * len(groups)
+        if subgroups is None:
+            subgroups = [[]] * len(groups)
 
         if not is_conforming:
             if nodal_adjacency is None:
@@ -1033,7 +1032,7 @@ class Mesh(Record):
 
         Record.__init__(
                 self, vertices=vertices, groups=new_groups,
-                _volume_groups=volume_groups,
+                _subgroups=subgroups,
                 _nodal_adjacency=nodal_adjacency,
                 _facial_adjacency_groups=facial_adjacency_groups,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),
@@ -1050,10 +1049,10 @@ class Mesh(Record):
                 if g.vertex_indices is not None:
                     assert g.vertex_indices.dtype == self.vertex_id_dtype
 
-            assert len(volume_groups) == len(self.groups)
-            for vgrp_list in volume_groups:
-                for vgrp in vgrp_list:
-                    assert vgrp.elements.dtype == self.element_id_dtype
+            assert len(subgroups) == len(self.groups)
+            for sgrp_list in subgroups:
+                for sgrp in sgrp_list:
+                    assert sgrp.elements.dtype == self.element_id_dtype
 
             if nodal_adjacency:
                 assert nodal_adjacency.neighbors_starts.shape == (self.nelements+1,)
@@ -1096,7 +1095,7 @@ class Mesh(Record):
             kwargs["groups"] = [
                 replace(group, element_nr_base=None, node_nr_base=None)
                 for group in self.groups]
-        set_if_not_present("volume_groups", "_volume_groups")
+        set_if_not_present("subgroups", "_subgroups")
         set_if_not_present("nodal_adjacency", "_nodal_adjacency")
         set_if_not_present("facial_adjacency_groups", "_facial_adjacency_groups")
         set_if_not_present("vertex_id_dtype")
@@ -1128,8 +1127,8 @@ class Mesh(Record):
         return sum(grp.nelements for grp in self.groups)
 
     @property
-    def volume_groups(self):
-        return self._volume_groups
+    def subgroups(self):
+        return self._subgroups
 
     @property
     @memoize_method
@@ -1192,7 +1191,7 @@ class Mesh(Record):
                 and self.groups == other.groups
                 and self.vertex_id_dtype == other.vertex_id_dtype
                 and self.element_id_dtype == other.element_id_dtype
-                and self._volume_groups == other._volume_groups
+                and self._subgroups == other._subgroups
                 and self._nodal_adjacency == other._nodal_adjacency
                 and self._facial_adjacency_groups == other._facial_adjacency_groups
                 and self.is_conforming == other.is_conforming)
