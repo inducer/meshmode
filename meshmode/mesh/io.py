@@ -129,8 +129,6 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         mesh_bulk_dim = max(el_type.dimensions for el_type in el_type_hist)
 
-        subgroups = []
-
         # {{{ build vertex numbering
 
         # map set of face vertex indices to list of tags associated to face
@@ -169,7 +167,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         # }}}
 
         from meshmode.mesh import (Mesh,
-                SimplexElementGroup, TensorProductElementGroup, ElementSubgroup)
+                SimplexElementGroup, TensorProductElementGroup)
 
         bulk_el_types = set()
 
@@ -186,7 +184,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             vertex_indices = np.empty(
                     (ngroup_elements, el_vertex_count),
                     np.int32)
-            subgroup_elements = {}
+            subgroups = {}
             i = 0
 
             for element, (el_vertices, el_nodes, el_type) in enumerate(zip(
@@ -202,12 +200,15 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 el_markers = self.element_markers[element]
                 if el_markers is not None:
                     for t in el_markers:
-                        volume_tag = self.tags[self.gmsh_tag_index_to_mine[t]][0]
-                        if volume_tag not in subgroup_elements:
-                            subgroup_elements[volume_tag] = []
-                        subgroup_elements[volume_tag].append(i)
+                        tag = self.tags[self.gmsh_tag_index_to_mine[t]][0]
+                        if tag not in subgroups:
+                            subgroups[tag] = []
+                        subgroups[tag].append(i)
 
                 i += 1
+
+            for tag in subgroups.keys():
+                subgroups[tag] = np.array(subgroups[tag], dtype=np.int32)
 
             import modepy as mp
             if isinstance(group_el_type, GmshSimplexElementBase):
@@ -226,7 +227,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     group_el_type.order,
                     vertex_indices,
                     nodes,
-                    unit_nodes=unit_nodes
+                    unit_nodes=unit_nodes,
+                    subgroups=subgroups
                     )
 
                 if group.dim == 2:
@@ -242,20 +244,14 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     group_el_type.order,
                     vertex_indices[:, vertex_shuffle],
                     nodes,
-                    unit_nodes=unit_nodes
+                    unit_nodes=unit_nodes,
+                    subgroups=subgroups
                     )
             else:
                 # NOTE: already checked above
                 raise AssertionError()
 
             groups.append(group)
-
-            subgroups.append([
-                ElementSubgroup(
-                    igroup=len(groups)-1,
-                    tag=tag,
-                    elements=np.array(elements, dtype=np.int32))
-                for tag, elements in subgroup_elements.items()])
 
         # FIXME: This is heuristic.
         if len(bulk_el_types) == 1:
@@ -273,7 +269,6 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         return Mesh(
                 vertices, groups,
                 is_conforming=is_conforming,
-                subgroups=subgroups,
                 facial_adjacency_groups=facial_adjacency_groups,
                 **self.mesh_construction_kwargs)
 

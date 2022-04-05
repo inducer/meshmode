@@ -32,7 +32,6 @@ import numpy.linalg as la
 import modepy as mp
 
 from meshmode.mesh import (
-    ElementSubgroup,
     BTAG_PARTITION,
     InteriorAdjacencyGroup,
     BoundaryAdjacencyGroup,
@@ -128,14 +127,30 @@ def _filter_mesh_groups(mesh, selected_elements, vertex_id_dtype):
 
     new_group_to_old_group = []
     filtered_group_elements = []
-    for igrp in range(len(mesh.groups)):
+    filtered_subgroups = []
+    for igrp, grp in enumerate(mesh.groups):
         start_idx, end_idx = group_elem_starts[igrp:igrp+2]
         if end_idx == start_idx:
             continue
 
         new_group_to_old_group.append(igrp)
-        filtered_group_elements.append(
+
+        new_elements_in_old_group = (
             selected_elements[start_idx:end_idx] - mesh.base_element_nrs[igrp])
+        filtered_group_elements.append(new_elements_in_old_group)
+
+        old_group_element_to_new_group_element = np.full(
+            grp.nelements, -1, dtype=mesh.element_id_dtype)
+        old_group_element_to_new_group_element[new_elements_in_old_group] = (
+            np.indices((end_idx-start_idx,), dtype=mesh.element_id_dtype))
+
+        new_subgroups = {}
+        for tag, elements in grp.subgroups.items():
+            mapped_elements = old_group_element_to_new_group_element[elements]
+            new_subgroup_element_indices, = np.where(mapped_elements >= 0)
+            if len(new_subgroup_element_indices) > 0:
+                new_subgroups[tag] = mapped_elements[new_subgroup_element_indices]
+        filtered_subgroups.append(new_subgroups)
 
     n_new_groups = len(new_group_to_old_group)
 
@@ -177,6 +192,7 @@ def _filter_mesh_groups(mesh, selected_elements, vertex_id_dtype):
                 vertex_indices=new_vertex_indices[i_new_grp],
                 nodes=mesh.groups[i_old_grp].nodes[
                     :, filtered_group_elements[i_new_grp], :].copy(),
+                subgroups=filtered_subgroups[i_new_grp],
                 element_nr_base=None, node_nr_base=None)
             for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
 
@@ -221,52 +237,6 @@ def _get_connected_partitions(
                     + elem_base_j])
 
     return connected_parts
-
-
-def _create_local_subgroups(mesh, global_elem_to_part_elem,
-            part_mesh_groups, global_group_to_part_group,
-            part_mesh_group_elem_base):
-    r"""
-    Create local subgroups for a partitioned mesh.
-
-    :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
-    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` mapping from global
-        element index to local partition-wide element index for local elements (and
-        -1 otherwise).
-    :arg global_group_to_part_group: An array mapping groups in *mesh* to groups in
-        *part_mesh_groups* (or `None` if the group is not local).
-    :arg part_mesh_group_elem_base: An array containing the starting partition-wide
-        element index for each group in *part_mesh_groups*.
-
-    :returns: A list of lists of `~meshmode.mesh.ElementSubgroup` instances
-        containing the entries in *mesh.subgroups* that are local.
-    """
-    local_subgroups = [[] for _ in part_mesh_groups]
-
-    for igrp, sgrp_list in enumerate(mesh.subgroups):
-        i_part_grp = global_group_to_part_group[igrp]
-        if i_part_grp is None:
-            continue
-        for sgrp in sgrp_list:
-            elem_base = mesh.groups[igrp].element_nr_base
-
-            elements_are_local = global_elem_to_part_elem[
-                sgrp.elements + elem_base] >= 0
-
-            adj_indices, = np.where(elements_are_local)
-
-            if len(adj_indices) > 0:
-                part_elem_base = part_mesh_group_elem_base[i_part_grp]
-                elements = (
-                    global_elem_to_part_elem[sgrp.elements[adj_indices] + elem_base]
-                    - part_elem_base)
-                local_subgroups[i_part_grp].append(
-                    ElementSubgroup(
-                        igroup=i_part_grp,
-                        tag=sgrp.tag,
-                        elements=elements))
-
-    return local_subgroups
 
 
 def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
@@ -521,10 +491,6 @@ def partition_mesh(mesh, part_per_element, part_num):
     connected_parts = _get_connected_partitions(
         mesh, part_per_element, global_elem_to_part_elem)
 
-    local_subgroups = _create_local_subgroups(
-                mesh, global_elem_to_part_elem, part_mesh_groups,
-                global_group_to_part_group, part_mesh_group_elem_base)
-
     local_to_local_adj_groups = _create_local_to_local_adjacency_groups(
                 mesh, global_elem_to_part_elem, part_mesh_groups,
                 global_group_to_part_group, part_mesh_group_elem_base)
@@ -549,7 +515,6 @@ def partition_mesh(mesh, part_per_element, part_num):
     part_mesh = Mesh(
             part_vertices,
             part_mesh_groups,
-            subgroups=local_subgroups,
             facial_adjacency_groups=part_facial_adj_groups,
             is_conforming=mesh.is_conforming)
 
@@ -899,6 +864,7 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
 
 # {{{ split meshes
 
+# FIXME: Potentially confusing to continue using subgroup terminology here
 def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
     """Split all the groups in *mesh* according to the values of
     *element_flags*. The element flags are expected to be integers

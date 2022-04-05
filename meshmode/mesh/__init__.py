@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace, field
-from typing import Any, ClassVar, Hashable, Optional, Tuple, Type
+from typing import Any, ClassVar, Hashable, Optional, Tuple, Type, Dict
 
 import numpy as np
 import numpy.linalg as la
@@ -40,7 +40,6 @@ __doc__ = """
 
 .. autoclass:: Mesh
 
-.. autoclass:: ElementSubgroup
 .. autoclass:: NodalAdjacency
 .. autoclass:: FacialAdjacencyGroup
 .. autoclass:: InteriorAdjacencyGroup
@@ -211,6 +210,11 @@ class MeshElementGroup(ABC):
         element. The coordinates :attr:`nodes` are a mapped version
         of these reference nodes.
 
+    .. attribute:: subgroups
+
+        A :class:`dict` mapping tag identifiers to arrays containing subsets of
+        the (group-local) element indices.
+
     .. attribute:: is_affine
 
         A :class:`bool` flag that is *True* if the local-to-global
@@ -241,6 +245,8 @@ class MeshElementGroup(ABC):
 
     # TODO: Remove ` = None` when everything is constructed through the factory
     unit_nodes: np.ndarray = None
+
+    subgroups: Dict[Hashable, np.ndarray] = field(default_factory=dict)
 
     # FIXME: these should be removed!
     # https://github.com/inducer/meshmode/issues/224
@@ -316,7 +322,8 @@ class MeshElementGroup(ABC):
                 and self.order == other.order
                 and np.array_equal(self.vertex_indices, other.vertex_indices)
                 and np.array_equal(self.nodes, other.nodes)
-                and np.array_equal(self.unit_nodes, other.unit_nodes))
+                and np.array_equal(self.unit_nodes, other.unit_nodes)
+                and np.array_equal(self.subgroups, other.subgroups))
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -444,6 +451,7 @@ class _ModepyElementGroup(MeshElementGroup):
                    vertex_indices: Optional[np.ndarray],
                    nodes: np.ndarray,
                    unit_nodes: Optional[np.ndarray] = None,
+                   subgroups: Optional[Dict[Hashable, np.ndarray]] = None,
                    dim: Optional[int] = None) -> "_ModepyElementGroup":
         # {{{ duplicates __post_init__ above, keep in sync
 
@@ -468,9 +476,13 @@ class _ModepyElementGroup(MeshElementGroup):
             raise ValueError("'unit_nodes' size does not match the dimension "
                              f"of a '{type(space).__name__}' space of order {order}")
 
+        if subgroups is None:
+            subgroups = {}
+
         return cls(order=order, vertex_indices=vertex_indices, nodes=nodes,
                    dim=dim,
                    unit_nodes=unit_nodes,
+                   subgroups=subgroups,
                    _modepy_shape=shape, _modepy_space=space,
                    _factory_constructed=True)
 
@@ -494,35 +506,6 @@ class SimplexElementGroup(_ModepyElementGroup):
 class TensorProductElementGroup(_ModepyElementGroup):
     r"""Inherits from :class:`MeshElementGroup`."""
     _modepy_shape_cls: ClassVar[Type[mp.Shape]] = mp.Hypercube
-
-# }}}
-
-
-# {{{ element subgroups
-
-@dataclass(frozen=True)
-class ElementSubgroup:
-    """
-    Describes the subset of elements in a single :class:`MeshElementGroup` that
-    correspond to the tag identifier *tag*.
-
-    .. attribute:: igroup
-
-        The mesh element group number of this group.
-
-    .. attribute:: tag
-
-        The tag identifier of this group.
-
-    .. attribute:: elements
-
-        ``element_id_t [ngrp_elements]``. ``elements[i]`` gives the
-        element number within :attr:`igroup` of the volume element.
-    """
-
-    igroup: int
-    tag: Hashable
-    elements: np.ndarray
 
 # }}}
 
@@ -893,11 +876,6 @@ class Mesh(Record):
         Referencing this attribute may raise
         :exc:`meshmode.DataUnavailable`.
 
-    .. attribute:: subgroups
-
-        A list of lists of instances of :class:`ElementSubgroup`, where
-        ``subgroups[igrp]`` gives the subgroups for group *igrp*.
-
     .. attribute:: facial_adjacency_groups
 
         A list of lists of instances of :class:`FacialAdjacencyGroup`.
@@ -953,7 +931,6 @@ class Mesh(Record):
     def __init__(self, vertices, groups, *, skip_tests=False,
             node_vertex_consistency_tolerance=None,
             skip_element_orientation_test=False,
-            subgroups=None,
             nodal_adjacency=None,
             facial_adjacency_groups=None,
             vertex_id_dtype=np.int32,
@@ -968,8 +945,6 @@ class Mesh(Record):
         :arg skip_element_orientation_test: If *False*, check that
             element orientation is positive in volume meshes
             (i.e. ones where ambient and topological dimension match).
-        :arg subgroups:
-            A data structure as described in :attr:`subgroups`, or *None*.
         :arg nodal_adjacency: One of three options:
             *None*, in which case this information
             will be deduced from vertex adjacency. *False*, in which case
@@ -1003,9 +978,6 @@ class Mesh(Record):
         if vertices is None:
             is_conforming = None
 
-        if subgroups is None:
-            subgroups = [[]] * len(groups)
-
         if not is_conforming:
             if nodal_adjacency is None:
                 nodal_adjacency = False
@@ -1032,7 +1004,6 @@ class Mesh(Record):
 
         Record.__init__(
                 self, vertices=vertices, groups=new_groups,
-                _subgroups=subgroups,
                 _nodal_adjacency=nodal_adjacency,
                 _facial_adjacency_groups=facial_adjacency_groups,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),
@@ -1048,11 +1019,6 @@ class Mesh(Record):
             for g in self.groups:
                 if g.vertex_indices is not None:
                     assert g.vertex_indices.dtype == self.vertex_id_dtype
-
-            assert len(subgroups) == len(self.groups)
-            for sgrp_list in subgroups:
-                for sgrp in sgrp_list:
-                    assert sgrp.elements.dtype == self.element_id_dtype
 
             if nodal_adjacency:
                 assert nodal_adjacency.neighbors_starts.shape == (self.nelements+1,)
@@ -1095,7 +1061,6 @@ class Mesh(Record):
             kwargs["groups"] = [
                 replace(group, element_nr_base=None, node_nr_base=None)
                 for group in self.groups]
-        set_if_not_present("subgroups", "_subgroups")
         set_if_not_present("nodal_adjacency", "_nodal_adjacency")
         set_if_not_present("facial_adjacency_groups", "_facial_adjacency_groups")
         set_if_not_present("vertex_id_dtype")
@@ -1125,10 +1090,6 @@ class Mesh(Record):
     @property
     def nelements(self):
         return sum(grp.nelements for grp in self.groups)
-
-    @property
-    def subgroups(self):
-        return self._subgroups
 
     @property
     @memoize_method
@@ -1191,7 +1152,6 @@ class Mesh(Record):
                 and self.groups == other.groups
                 and self.vertex_id_dtype == other.vertex_id_dtype
                 and self.element_id_dtype == other.element_id_dtype
-                and self._subgroups == other._subgroups
                 and self._nodal_adjacency == other._nodal_adjacency
                 and self._facial_adjacency_groups == other._facial_adjacency_groups
                 and self.is_conforming == other.is_conforming)
