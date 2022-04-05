@@ -1131,6 +1131,7 @@ class Mesh(Record):
     def volume_groups(self):
         return self._volume_groups
 
+    @property
     @memoize_method
     def base_element_nrs(self):
         return np.cumsum([0] + [grp.nelements for grp in self.groups[:-1]])
