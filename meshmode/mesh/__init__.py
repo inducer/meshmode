@@ -1240,6 +1240,8 @@ def _test_node_vertex_consistency_resampling(mesh, mgrp, tol):
         - np.min(grp_vertices, axis=-1),
         axis=0)
 
+    # Only scale by the element size if the elements are sufficiently large,
+    # to prevent the tolerance from dropping below rounding error
     per_element_tols = tol * np.maximum(per_element_sizes, 1)
 
     assert np.all(per_element_vertex_errors < per_element_tols), \
