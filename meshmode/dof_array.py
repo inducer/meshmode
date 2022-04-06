@@ -273,6 +273,7 @@ class DOFArray:
                     "array_context_for_pickling is active.")
 
         # Make sure metadata inference has been done
+        # https://github.com/inducer/meshmode/pull/318#issuecomment-1088320970
         ary = _thaw(freeze(self, self.array_context), self.array_context)
 
         if self.array_context is not actx:
