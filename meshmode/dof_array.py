@@ -309,6 +309,10 @@ class DOFArray:
             axes_tags = state["axes_tags"]
         else:
             # For backwards compatibility
+            from warnings import warn
+            warn("A DOFArray is being unpickled without (tag) metadata. "
+            "Program transformation may fail as a result.")
+
             data = state
             tags = [frozenset() for _ in range(len(data))]
             axes_tags = [[frozenset() for _ in range(leaf_ary.ndim)]
