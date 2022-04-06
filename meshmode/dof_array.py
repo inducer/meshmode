@@ -272,7 +272,8 @@ class DOFArray:
             raise RuntimeError("DOFArray instances can only be pickled while "
                     "array_context_for_pickling is active.")
 
-        ary = self
+        # Make sure metadata inference has been done
+        ary = _thaw(freeze(self, self.array_context), self.array_context)
 
         if self.array_context is not actx:
             ary = _thaw(actx, _freeze(self))
