@@ -311,7 +311,7 @@ def read_gmsh(
 def generate_gmsh(source, dimensions=None, order=None, other_options=None,
         extension="geo", gmsh_executable="gmsh", force_ambient_dim=None,
         output_file_name="output.msh", mesh_construction_kwargs=None,
-        target_unit=None):
+        target_unit=None, return_tag_to_elements_map=False):
     """Run :command:`gmsh` on the input given by *source*, and return a
     :class:`meshmode.mesh.Mesh` based on the result.
 
@@ -346,9 +346,14 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=None,
         parse_gmsh(recv, runner.output_file,
                 force_dimension=force_ambient_dim)
 
-    mesh = recv.get_mesh()
+    result = recv.get_mesh(return_tag_to_elements_map=return_tag_to_elements_map)
 
     if force_ambient_dim is None:
+        if return_tag_to_elements_map:
+            mesh = result[0]
+        else:
+            mesh = result
+
         AXIS_NAMES = "xyz"  # noqa
 
         dim = mesh.vertices.shape[0]
@@ -361,7 +366,7 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=None,
                             AXIS_NAMES[idim], idim))
                 break
 
-    return mesh
+    return result
 
 # }}}
 
