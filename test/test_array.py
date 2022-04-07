@@ -25,10 +25,13 @@ import pytest
 import numpy as np
 
 from meshmode import _acf  # noqa: F401
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.array_context import (PytestPyOpenCLArrayContextFactory,
+                                    PytestPytatoPyOpenCLArrayContextFactory)
 from arraycontext import pytest_generate_tests_for_array_contexts
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
+        [PytestPytatoPyOpenCLArrayContextFactory,
+         PytestPyOpenCLArrayContextFactory,
+         ])
 
 from arraycontext import (
         thaw, freeze,
@@ -147,9 +150,9 @@ def test_container_norm(actx_factory, ord):
     # {{{ flat_norm
 
     # check nested vs actx.np.linalg.norm
-    assert abs(
+    assert actx.to_numpy(abs(
             flat_norm(c_test[1], ord=ord)
-            - actx.np.linalg.norm(c_test[1], ord=ord)) < 1e-12
+            - actx.np.linalg.norm(c_test[1], ord=ord))) < 1e-12
 
     # check nested container with only Numbers (and no actx)
     assert abs(flat_norm(c_obj_ary, ord=ord) - n2) < 1.0e-12
@@ -174,24 +177,29 @@ def test_dof_array_pickling(actx_factory):
     with array_context_for_pickling(actx):
         mat2_of_dofs, dc2_of_dofs = loads(pkl)
 
-    assert flat_norm(mat_of_dofs - mat2_of_dofs, np.inf) == 0
-    assert flat_norm(dc_of_dofs - dc2_of_dofs, np.inf) == 0
+    assert actx.to_numpy(flat_norm(mat_of_dofs - mat2_of_dofs, np.inf)) == 0
+    assert actx.to_numpy(flat_norm(dc_of_dofs - dc2_of_dofs, np.inf)) == 0
+
+
+from pytools.tag import Tag
+
+
+class FooTag(Tag):
+    pass
+
+
+class FooAxisTag(Tag):
+    pass
+
+
+class FooAxisTag2(Tag):
+    pass
 
 
 def test_dof_array_pickling_tags(actx_factory):
     actx = actx_factory()
 
-    from pytools.tag import Tag
     from pickle import loads, dumps
-
-    class FooTag(Tag):
-        pass
-
-    class FooAxisTag(Tag):
-        pass
-
-    class FooAxisTag2(Tag):
-        pass
 
     state = DOFArray(actx, (actx.zeros((10, 10), "float64"),
                      actx.zeros((10, 10), "float64"),))
