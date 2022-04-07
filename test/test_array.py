@@ -67,6 +67,9 @@ class MyContainer:
 def test_flatten_unflatten(actx_factory):
     actx = actx_factory()
 
+    if isinstance(actx_factory, PytestPytatoPyOpenCLArrayContextFactory):
+        pytest.skip()
+
     ambient_dim = 2
     from meshmode.mesh.generation import generate_regular_rect_mesh
     mesh = generate_regular_rect_mesh(
