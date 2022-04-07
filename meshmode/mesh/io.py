@@ -276,10 +276,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 facial_adjacency_groups=facial_adjacency_groups,
                 **self.mesh_construction_kwargs)
 
-        if return_tag_to_elements_map:
-            return mesh, tag_to_elements
-        else:
-            return mesh
+        return (mesh, tag_to_elements) if return_tag_to_elements_map else mesh
 
 # }}}
 
