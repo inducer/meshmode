@@ -596,6 +596,9 @@ def test_volume_mesh_element_orientations(mesh):
     area_elements = find_volume_mesh_element_orientations(
             mesh, tolerate_unimplemented_checks=True)
 
+    #for entry in area_elements:
+    #    print(entry)
+
     valid = ~np.isnan(area_elements)
 
     return (area_elements[valid] > 0).all()

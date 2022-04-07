@@ -439,9 +439,16 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
         bdry_f = f(bdry_x)
         bdry_f_2 = opp_face(bdry_f)
 
-        # Ensure test coverage for non-in-place kernels in DirectConnection
-        bdry_f_2_no_inp = opp_face(bdry_f, _force_no_inplace_updates=True)
-        assert actx.to_numpy(flat_norm(bdry_f_2-bdry_f_2_no_inp, np.inf)) < 1e-14
+        # Ensure test coverage for alternate modes in DirectConnection
+        for force_loopy, force_no_merged_batches in [
+                (False, True),
+                (True, False),
+                (True, True),
+                ]:
+            bdry_f_2_alt = opp_face(bdry_f,
+                    _force_use_loopy=force_loopy,
+                    _force_no_merged_batches=force_no_merged_batches)
+            assert actx.to_numpy(flat_norm(bdry_f_2 - bdry_f_2_alt, np.inf)) < 1e-14
 
         err = flat_norm(bdry_f-bdry_f_2, np.inf)
         eoc_rec.add_data_point(h, actx.to_numpy(err))
@@ -893,10 +900,17 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
 
             op_bdry_f = opposite(bdry_f)
 
-            # Ensure test coverage for non-in-place kernels in DirectConnection
-            op_bdry_f_no_inplace = opposite(bdry_f, _force_no_inplace_updates=True)
-            error = flat_norm(op_bdry_f - op_bdry_f_no_inplace, np.inf)
-            assert actx.to_numpy(error) < 1e-15
+            # Ensure test coverage for alternate modes in DirectConnection
+            for force_loopy, force_no_merged_batches in [
+                    (False, True),
+                    (True, False),
+                    (True, True),
+                    ]:
+                op_bdry_f_2 = opposite(bdry_f,
+                        _force_use_loopy=force_loopy,
+                        _force_no_merged_batches=force_no_merged_batches)
+                error = flat_norm(op_bdry_f - op_bdry_f_2, np.inf)
+                assert actx.to_numpy(error) < 1e-15
 
             error = flat_norm(bdry_f - op_bdry_f, np.inf)
             assert actx.to_numpy(error) < 1.0e-11, error
