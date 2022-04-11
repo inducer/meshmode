@@ -735,6 +735,26 @@ def test_boundary_tags():
 # }}}
 
 
+# {{{ test volume tags
+
+def test_volume_tags():
+    from meshmode.mesh.io import read_gmsh
+    mesh, tag_to_elements_map = read_gmsh(
+        "testmesh_multivol.msh", return_tag_to_elements_map=True)
+
+    assert len(tag_to_elements_map) == 2
+
+    assert "Vol1" in tag_to_elements_map
+    assert "Vol2" in tag_to_elements_map
+
+    assert isinstance(tag_to_elements_map["Vol1"], np.ndarray)
+
+    assert np.all(tag_to_elements_map["Vol1"] == np.array([0]))
+    assert np.all(tag_to_elements_map["Vol2"] == np.array([1]))
+
+# }}}
+
+
 # {{{ test custom boundary tags on box mesh
 
 @pytest.mark.parametrize(("dim", "nelem", "mesh_type"), [
