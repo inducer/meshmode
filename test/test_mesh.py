@@ -1,4 +1,7 @@
-__copyright__ = "Copyright (C) 2020 Andreas Kloeckner"
+__copyright__ = """
+Copyright (C) 2020 Andreas Kloeckner
+Copyright (C) 2021 University of Illinois Board of Trustees
+"""
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -42,6 +45,7 @@ from meshmode.discretization.poly_element import (
         LegendreGaussLobattoTensorProductGroupFactory,
         )
 import meshmode.mesh.generation as mgen
+import meshmode.mesh.io as mio
 from meshmode.mesh.tools import AffineMap
 import modepy as mp
 
@@ -456,7 +460,7 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
 
 # {{{ element orientation
 
-def test_element_orientation():
+def test_element_orientation_via_flipping():
     from meshmode.mesh.io import generate_gmsh, FileSource
 
     mesh_order = 3
@@ -484,6 +488,68 @@ def test_element_orientation():
     mesh_orient = find_volume_mesh_element_orientations(mesh)
 
     assert ((mesh_orient < 0) == (flippy > 0)).all()
+
+
+@pytest.mark.parametrize("order", [1, 2, 3])
+def test_element_orientation_via_single_elements(order):
+    from meshmode.mesh.processing import find_volume_mesh_element_group_orientation
+
+    def check(vertices, element_indices, tol=1e-14):
+        grp = mgen.make_group_from_vertices(vertices, element_indices, order)
+        orient = find_volume_mesh_element_group_orientation(vertices, grp)
+        return (
+                np.where(orient > tol)[0],
+                np.where(orient < tol)[0],
+                np.where(np.abs(orient) <= tol)[0])
+
+    # References:
+    # https://github.com/inducer/meshmode/pull/314
+    # https://github.com/lukeolson/mesh_orientation/blob/460bb2b634e2abb6aa32c3d02e2c732969bf08bf/check.py
+    # https://math.stackexchange.com/questions/4209203/signed-volume-for-tetrahedra-n-simplices
+
+    # 3D (pos)
+    vertices = np.array([[1, 0, 0],
+                  [0, 1, 0],
+                  [0, 0, 0],
+                  [0, 0, 1]])
+    elements = np.array([[0, 1, 2, 3]])
+    el_ind_pos, el_ind_neg, el_ind_zero = check(vertices.T, elements)
+    assert len(el_ind_pos) == 1
+    assert len(el_ind_neg) == 0
+    assert len(el_ind_zero) == 0
+
+    # (neg)
+    elements = np.array([[1, 0, 2, 3]])
+    el_ind_pos, el_ind_neg, el_ind_zero = check(vertices.T, elements)
+    assert len(el_ind_pos) == 0
+    assert len(el_ind_neg) == 1
+    assert len(el_ind_zero) == 0
+
+    # 2D
+    # CCW (positive)
+    vertices = np.array([[1, 0],
+                  [0, 1],
+                  [0, 0]])
+    elements = np.array([[0, 1, 2]])
+    el_ind_pos, el_ind_neg, el_ind_zero = check(vertices.T, elements)
+    assert len(el_ind_pos) == 1
+    assert len(el_ind_neg) == 0
+    assert len(el_ind_zero) == 0
+
+    # CW (negative)
+    elements = np.array([[0, 2, 1]])
+    el_ind_pos, el_ind_neg, el_ind_zero = check(vertices.T, elements)
+    assert len(el_ind_pos) == 0
+    assert len(el_ind_neg) == 1
+    assert len(el_ind_zero) == 0
+
+    mesh = mio.read_gmsh("testmesh.msh", force_ambient_dim=2,
+            mesh_construction_kwargs=dict(skip_tests=True))
+    mgrp, = mesh.groups
+    el_ind_pos, el_ind_neg, el_ind_zero = check(mesh.vertices, mgrp.vertex_indices)
+    assert len(el_ind_pos) == 1
+    assert len(el_ind_neg) == 1
+    assert len(el_ind_zero) == 0
 
 # }}}
 
@@ -665,6 +731,26 @@ def test_boundary_tags():
     # ensure boundary is covered
     from meshmode.mesh import check_bc_coverage
     check_bc_coverage(mesh, ["inner_bdy", "outer_bdy"])
+
+# }}}
+
+
+# {{{ test volume tags
+
+def test_volume_tags():
+    from meshmode.mesh.io import read_gmsh
+    mesh, tag_to_elements_map = read_gmsh(
+        "testmesh_multivol.msh", return_tag_to_elements_map=True)
+
+    assert len(tag_to_elements_map) == 2
+
+    assert "Vol1" in tag_to_elements_map
+    assert "Vol2" in tag_to_elements_map
+
+    assert isinstance(tag_to_elements_map["Vol1"], np.ndarray)
+
+    assert np.all(tag_to_elements_map["Vol1"] == np.array([0]))
+    assert np.all(tag_to_elements_map["Vol2"] == np.array([1]))
 
 # }}}
 

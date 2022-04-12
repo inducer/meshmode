@@ -1154,13 +1154,7 @@ class Mesh(Record):
 
 # {{{ node-vertex consistency test
 
-def _test_node_vertex_consistency_resampling(mesh, mgrp, tol):
-    if mesh.vertices is None:
-        return True
-
-    if mgrp.nelements == 0:
-        return True
-
+def _mesh_group_node_vertex_error(mesh, mgrp):
     if isinstance(mgrp, _ModepyElementGroup):
         basis = mp.basis_for_space(mgrp._modepy_space, mgrp._modepy_shape).functions
     else:
@@ -1171,15 +1165,25 @@ def _test_node_vertex_consistency_resampling(mesh, mgrp, tol):
             mgrp.vertex_unit_coordinates().T,
             mgrp.unit_nodes)
 
-    # dim, nelments, nnvertices
+    # dim, nelments, nvertices
     map_vertices = np.einsum(
             "ij,dej->dei", resampling_mat, mgrp.nodes)
-
     grp_vertices = mesh.vertices[:, mgrp.vertex_indices]
 
-    per_element_vertex_errors = np.sqrt(np.sum(
-            np.sum((map_vertices - grp_vertices)**2, axis=0),
-            axis=-1))
+    return map_vertices - grp_vertices
+
+
+def _test_node_vertex_consistency_resampling(mesh, mgrp, tol):
+    if mesh.vertices is None:
+        return True
+
+    if mgrp.nelements == 0:
+        return True
+
+    per_vertex_errors = _mesh_group_node_vertex_error(mesh, mgrp)
+    per_element_vertex_errors = np.sqrt(
+        np.sum(np.sum((per_vertex_errors)**2, axis=0), axis=-1)
+    )
 
     if tol is None:
         tol = 1e3 * np.finfo(per_element_vertex_errors.dtype).eps

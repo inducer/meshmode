@@ -337,6 +337,25 @@ def test_vtk_overwrite(actx_factory):
 # }}}
 
 
+# {{{ test_visualize_mesh_resampling_error
+
+def test_visualize_mesh_resampling_error(actx_factory):
+    actx = actx_factory()
+    target_order = 4
+
+    import modepy as mp
+    quad = mp.VioreanuRokhlinSimplexQuadrature(target_order, 2)
+    mesh = mgen.generate_torus(5.0, 2.0, order=target_order,
+                               unit_nodes=quad.nodes,
+                               node_vertex_consistency_tolerance=False)
+
+    from meshmode.mesh.visualization import visualize_mesh_vertex_resampling_error
+    visualize_mesh_vertex_resampling_error(
+        actx, mesh, "visualize_resampling_error.vtu", overwrite=True)
+
+# }}}
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
