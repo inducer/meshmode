@@ -25,13 +25,16 @@ import pytest
 import numpy as np
 
 from meshmode import _acf  # noqa: F401
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.array_context import (PytestPyOpenCLArrayContextFactory,
+                                    PytestPytatoPyOpenCLArrayContextFactory)
 from arraycontext import pytest_generate_tests_for_array_contexts
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
+        [PytestPytatoPyOpenCLArrayContextFactory,
+         PytestPyOpenCLArrayContextFactory,
+         ])
 
 from arraycontext import (
-        thaw,
+        thaw, freeze,
         dataclass_array_container,
         with_container_arithmetic)
 
@@ -63,6 +66,9 @@ class MyContainer:
 
 def test_flatten_unflatten(actx_factory):
     actx = actx_factory()
+
+    if isinstance(actx_factory, PytestPytatoPyOpenCLArrayContextFactory):
+        pytest.skip()
 
     ambient_dim = 2
     from meshmode.mesh.generation import generate_regular_rect_mesh
@@ -147,9 +153,9 @@ def test_container_norm(actx_factory, ord):
     # {{{ flat_norm
 
     # check nested vs actx.np.linalg.norm
-    assert abs(
+    assert actx.to_numpy(abs(
             flat_norm(c_test[1], ord=ord)
-            - actx.np.linalg.norm(c_test[1], ord=ord)) < 1e-12
+            - actx.np.linalg.norm(c_test[1], ord=ord))) < 1e-12
 
     # check nested container with only Numbers (and no actx)
     assert abs(flat_norm(c_obj_ary, ord=ord) - n2) < 1.0e-12
@@ -174,8 +180,50 @@ def test_dof_array_pickling(actx_factory):
     with array_context_for_pickling(actx):
         mat2_of_dofs, dc2_of_dofs = loads(pkl)
 
-    assert flat_norm(mat_of_dofs - mat2_of_dofs, np.inf) == 0
-    assert flat_norm(dc_of_dofs - dc2_of_dofs, np.inf) == 0
+    assert actx.to_numpy(flat_norm(mat_of_dofs - mat2_of_dofs, np.inf)) == 0
+    assert actx.to_numpy(flat_norm(dc_of_dofs - dc2_of_dofs, np.inf)) == 0
+
+
+from pytools.tag import Tag
+
+
+class FooTag(Tag):
+    pass
+
+
+class FooAxisTag(Tag):
+    pass
+
+
+class FooAxisTag2(Tag):
+    pass
+
+
+def test_dof_array_pickling_tags(actx_factory):
+    actx = actx_factory()
+
+    from pickle import loads, dumps
+
+    state = DOFArray(actx, (actx.zeros((10, 10), "float64"),
+                     actx.zeros((10, 10), "float64"),))
+
+    state = thaw(freeze(actx.tag(FooTag(), state), actx), actx)
+    state = thaw(freeze(actx.tag_axis(0, FooAxisTag(), state), actx), actx)
+    state = thaw(freeze(actx.tag_axis(1, FooAxisTag2(), state), actx), actx)
+
+    with array_context_for_pickling(actx):
+        pkl = dumps((state, ))
+
+    with array_context_for_pickling(actx):
+        loaded_state, = loads(pkl)
+
+    for i in range(len(state._data)):
+        si = state._data[i]
+        li = loaded_state._data[i]
+        assert si.tags == li.tags
+
+        for iax in range(len(si.axes)):
+            assert si.axes[iax].tags == li.axes[iax].tags
 
 # }}}
 
