@@ -681,8 +681,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 ],
                 name="resample_by_picking_group",
             )
-            #print(t_unit.default_entrypoint)
-            #exit()
             return lp.tag_inames(t_unit, {
                 "iel": ConcurrentElementInameTag(),
                 "idof": ConcurrentDOFInameTag()})
