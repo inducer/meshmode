@@ -634,7 +634,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 nelements_tgt, nunit_dofs_tgt, result_dtype, ary_dtype,
                 from_el_ind_dtype, pick_lists_dtype, pick_list_ind_dtype,
                 is_surjective: bool):
-            print("CALLING GROUP PICK KNL")
             if is_surjective:
                 if_present = ""
             else:
