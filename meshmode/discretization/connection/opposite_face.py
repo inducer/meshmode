@@ -143,16 +143,8 @@ def _find_src_unit_nodes_via_gauss_newton(
     _, nelements, ntgt_unit_nodes = tgt_bdry_nodes.shape
 
     initial_guess = np.mean(src_mesh_grp.vertex_unit_coordinates(), axis=0)
-    #print("IS NAN?:", np.isnan(initial_guess).any())
     src_unit_nodes = np.empty((dim, nelements, ntgt_unit_nodes))
     src_unit_nodes[:] = initial_guess.reshape(-1, 1, 1)
-    #print("IS NAN2?:", np.isnan(src_unit_nodes).any())
-    #for i, entry in enumerate(initial_guess.flatten()):
-    #    print(i,entry)
-    #    if np.isnan(entry):
-    #        exit()
-
-
 
     import modepy as mp
     src_grp_basis_fcts = src_grp.basis_obj().functions
@@ -172,17 +164,9 @@ def _find_src_unit_nodes_via_gauss_newton(
                     .reshape(nelements, ntgt_unit_nodes))
 
         intp_coeffs = np.einsum("fj,jet->fet", inv_t_vdm, basis_at_unit_nodes)
-        #intp_coeffs_sum = np.sum(intp_coeffs)#np.sum(np.sum(intp_coeffs, axis=0) - 1)
-        #print(tol, intp_coeffs_sum)
-        #for i, entry in enumerate(unit_nodes.flatten()):
-        #    print(i,entry)
-        #    if np.isnan(entry):
-        #        exit()
 
         # If we're interpolating 1, we had better get 1 back.
         one_deviation = np.abs(np.sum(intp_coeffs, axis=0) - 1)
-        print("Max:",np.max(one_deviation))
-
         assert (one_deviation < tol).all(), np.max(one_deviation)
 
         mapped = np.einsum("fet,aef->aet", intp_coeffs, src_bdry_nodes)
@@ -251,8 +235,6 @@ def _find_src_unit_nodes_via_gauss_newton(
 
     niter = 0
     while True:
-
-        print("IS NAN?", np.isnan(src_unit_nodes).any())
         resid = apply_map(src_unit_nodes) - tgt_bdry_nodes
 
         df = get_map_jacobian(src_unit_nodes)
