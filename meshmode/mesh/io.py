@@ -51,7 +51,6 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         # Use data fields similar to meshpy.triangle.MeshInfo and
         # meshpy.tet.MeshInfo
         self.points = None
-        self.elements = None
         self.element_vertices = None
         self.element_nodes = None
         self.element_types = None
@@ -117,7 +116,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
     def finalize_tags(self):
         pass
 
-    def get_mesh(self):
+    def get_mesh(self, return_tag_to_elements_map=False):
         el_type_hist = {}
         for el_type in self.element_types:
             el_type_hist[el_type] = el_type_hist.get(el_type, 0) + 1
@@ -141,8 +140,10 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     vertex_gmsh_index_to_mine[gmsh_vertex_nr] = \
                             len(vertex_gmsh_index_to_mine)
             if self.tags:
-                el_tag_indexes = [self.gmsh_tag_index_to_mine[t] for t in
-                                  self.element_markers[element]]
+                el_markers = self.element_markers[element]
+                el_tag_indexes = (
+                    [self.gmsh_tag_index_to_mine[t] for t in el_markers]
+                    if el_markers is not None else [])
                 # record tags of boundary dimension
                 el_tags = [self.tags[i][0] for i in el_tag_indexes if
                            self.tags[i][1] == mesh_bulk_dim - 1]
@@ -170,6 +171,10 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         bulk_el_types = set()
 
+        group_base_elem_nr = 0
+
+        tag_to_elements = {}
+
         for group_el_type, ngroup_elements in el_type_hist.items():
             if group_el_type.dimensions != mesh_bulk_dim:
                 continue
@@ -185,8 +190,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     np.int32)
             i = 0
 
-            for el_vertices, el_nodes, el_type in zip(
-                    self.element_vertices, self.element_nodes, self.element_types):
+            for el_vertices, el_nodes, el_type, el_markers in zip(
+                    self.element_vertices, self.element_nodes, self.element_types,
+                    self.element_markers):
                 if el_type is not group_el_type:
                     continue
 
@@ -194,6 +200,14 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 vertex_indices[i] = [
                         vertex_gmsh_index_to_mine[v_nr] for v_nr in el_vertices
                         ]
+
+                if el_markers is not None:
+                    for t in el_markers:
+                        tag = self.tags[self.gmsh_tag_index_to_mine[t]][0]
+                        if tag not in tag_to_elements:
+                            tag_to_elements[tag] = [group_base_elem_nr + i]
+                        else:
+                            tag_to_elements[tag].append(group_base_elem_nr + i)
 
                 i += 1
 
@@ -238,6 +252,11 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
             groups.append(group)
 
+            group_base_elem_nr += group.nelements
+
+        for tag in tag_to_elements.keys():
+            tag_to_elements[tag] = np.array(tag_to_elements[tag], dtype=np.int32)
+
         # FIXME: This is heuristic.
         if len(bulk_el_types) == 1:
             is_conforming = True
@@ -251,18 +270,22 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
                     groups, np.int32, np.int8, face_vertex_indices_to_tags)
 
-        return Mesh(
+        mesh = Mesh(
                 vertices, groups,
                 is_conforming=is_conforming,
                 facial_adjacency_groups=facial_adjacency_groups,
                 **self.mesh_construction_kwargs)
+
+        return (mesh, tag_to_elements) if return_tag_to_elements_map else mesh
 
 # }}}
 
 
 # {{{ gmsh
 
-def read_gmsh(filename, force_ambient_dim=None, mesh_construction_kwargs=None):
+def read_gmsh(
+        filename, force_ambient_dim=None, mesh_construction_kwargs=None,
+        return_tag_to_elements_map=False):
     """Read a gmsh mesh file from *filename* and return a
     :class:`meshmode.mesh.Mesh`.
 
@@ -270,18 +293,22 @@ def read_gmsh(filename, force_ambient_dim=None, mesh_construction_kwargs=None):
         this many dimensions.
     :arg mesh_construction_kwargs: *None* or a dictionary of keyword
         arguments passed to the :class:`meshmode.mesh.Mesh` constructor.
+    :arg return_tag_to_elements_map: If *True*, return in addition to the mesh
+        a :class:`dict` that maps each volume tag in the gmsh file to a
+        :class:`numpy.ndarray` containing meshwide indices of the elements that
+        belong to that volume.
     """
     from gmsh_interop.reader import read_gmsh
     recv = GmshMeshReceiver(mesh_construction_kwargs=mesh_construction_kwargs)
     read_gmsh(recv, filename, force_dimension=force_ambient_dim)
 
-    return recv.get_mesh()
+    return recv.get_mesh(return_tag_to_elements_map=return_tag_to_elements_map)
 
 
 def generate_gmsh(source, dimensions=None, order=None, other_options=None,
         extension="geo", gmsh_executable="gmsh", force_ambient_dim=None,
         output_file_name="output.msh", mesh_construction_kwargs=None,
-        target_unit=None):
+        target_unit=None, return_tag_to_elements_map=False):
     """Run :command:`gmsh` on the input given by *source*, and return a
     :class:`meshmode.mesh.Mesh` based on the result.
 
@@ -316,9 +343,14 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=None,
         parse_gmsh(recv, runner.output_file,
                 force_dimension=force_ambient_dim)
 
-    mesh = recv.get_mesh()
+    result = recv.get_mesh(return_tag_to_elements_map=return_tag_to_elements_map)
 
     if force_ambient_dim is None:
+        if return_tag_to_elements_map:
+            mesh = result[0]
+        else:
+            mesh = result
+
         AXIS_NAMES = "xyz"  # noqa
 
         dim = mesh.vertices.shape[0]
@@ -331,7 +363,7 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=None,
                             AXIS_NAMES[idim], idim))
                 break
 
-    return mesh
+    return result
 
 # }}}
 
