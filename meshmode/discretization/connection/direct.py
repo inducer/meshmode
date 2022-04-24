@@ -30,7 +30,7 @@ from typing import Sequence, Optional, List, Tuple
 import loopy as lp
 from meshmode.transform_metadata import (
         ConcurrentElementInameTag, ConcurrentDOFInameTag,
-        IsOpArray, IsDOFArray, ParameterValue)
+        IsDOFArray, ParameterValue)
 from pytools import memoize_in, keyed_memoize_method
 from arraycontext import (
         ArrayContext, NotAnArrayContainerError,
@@ -727,25 +727,27 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                                     fgpd.from_el_present
 
                         nelements = fgpd.from_element_indices.shape[0]
-                        nelements_src, nunit_dofs_src = ary[fgpd.from_group_index].shape
+                        nelements_src, nunit_dofs_src = \
+                            ary[fgpd.from_group_index].shape
                         nelements_tgt = fgpd.dof_pick_lists.shape[0]
                         nunit_dofs_tgt = self.to_discr.groups[i_tgrp].nunit_dofs
                         ary_dtype = ary[fgpd.from_group_index].dtype
-                        result_dtype = ary_dtype # Assume they are the same
+                        result_dtype = ary_dtype  # Assume they are the same
                         from_el_ind_dtype = fgpd.from_element_indices.dtype
                         pick_lists_dtype = fgpd.dof_pick_lists.dtype
                         pick_list_ind_dtype = fgpd.dof_pick_list_index.dtype
 
-                        #print(fgpd.dof_pick_lists.shape)
-                        #print(fgpd.dof_pick_list_index.shape)
-                        #print(fgpd.from_element_indices.shape)
-
                         group_array_contributions.append(
                             actx.call_loopy(
                                 #group_pick_knl(fgpd.is_surjective),
-                                group_pick_knl(nelements, nelements_src, nunit_dofs_src,
-                                nelements_tgt, nunit_dofs_tgt, result_dtype, ary_dtype,
-                                from_el_ind_dtype, pick_lists_dtype, pick_list_ind_dtype,
+                                group_pick_knl(nelements, nelements_src,
+                                    nunit_dofs_src,
+                                    nelements_tgt,
+                                    nunit_dofs_tgt,
+                                    result_dtype,
+                                    ary_dtype,
+                                from_el_ind_dtype, pick_lists_dtype,
+                                pick_list_ind_dtype,
                                 fgpd.is_surjective),
                                 dof_pick_lists=fgpd.dof_pick_lists,
                                 dof_pick_list_index=fgpd.dof_pick_list_index,
