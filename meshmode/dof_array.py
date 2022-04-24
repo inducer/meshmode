@@ -273,12 +273,25 @@ class DOFArray:
             raise RuntimeError("DOFArray instances can only be pickled while "
                     "array_context_for_pickling is active.")
 
-        ary = self
+        # Make sure metadata inference has been done
+        # https://github.com/inducer/meshmode/pull/318#issuecomment-1088320970
+        ary = _thaw(freeze(self, self.array_context), self.array_context)
 
         if self.array_context is not actx:
             ary = _thaw(actx, _freeze(self))
 
-        return [actx.to_numpy(ary_i) for ary_i in ary._data]
+        d = {}
+        d["data"] = [actx.to_numpy(ary_i) for ary_i in ary._data]
+
+        d["tags"] = [getattr(ary_i, "tags", frozenset()) for ary_i in ary]
+
+        if len(ary) > 0 and hasattr(ary._data[0], "axes"):
+            d["axes_tags"] = [[ax.tags for ax in ary_i.axes] for ary_i in ary._data]
+        else:
+            d["axes_tags"] = [[frozenset() for _ in range(leaf_ary.ndim)]
+                                         for leaf_ary in ary._data]
+
+        return d
 
     def __setstate__(self, state):
         try:
@@ -291,7 +304,37 @@ class DOFArray:
                     "array_context_for_pickling is active.")
 
         self._array_context = actx
-        self._data = tuple([actx.from_numpy(ary_i) for ary_i in state])
+
+        if isinstance(state, dict):
+            data = state["data"]
+            tags = state["tags"]
+            axes_tags = state["axes_tags"]
+        else:
+            # For backwards compatibility
+            from warnings import warn
+            warn("A DOFArray is being unpickled without (tag) metadata. "
+            "Program transformation may fail as a result.")
+
+            data = state
+            tags = [frozenset() for _ in range(len(data))]
+            axes_tags = [[frozenset() for _ in range(leaf_ary.ndim)]
+                                         for leaf_ary in data]
+
+        assert len(data) == len(tags) == len(axes_tags)
+
+        self._data = []
+
+        for idx, ary in enumerate(data):
+            assert len(axes_tags[idx]) == ary.ndim
+            assert isinstance(axes_tags[idx], list)
+            d = actx.tag(tags[idx], actx.from_numpy(ary))
+
+            for ida, ax in enumerate(axes_tags[idx]):
+                d = actx.tag_axis(ida, ax, d)
+
+            self._data.append(d)
+
+        self._data = tuple(self._data)
 
     # }}}
 
