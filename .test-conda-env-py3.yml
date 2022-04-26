@@ -24,10 +24,8 @@ dependencies:
 - pybind11
 
 # for MPI-based tests
-# workaround for https://github.com/conda-forge/openmpi-feedstock/issues/94
-- openmpi<4.1.3
+- openmpi
 - mpi4py
-- libgfortran5
 
 # for xdmf/hdf5 visualizer
 - h5py=*=mpi_openmpi*
