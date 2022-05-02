@@ -134,8 +134,8 @@ def _filter_mesh_groups(mesh, selected_elements, vertex_id_dtype):
     filtered_group_elements = []
     for igrp in range(len(mesh.groups)):
         start_idx, end_idx = group_elem_starts[igrp:igrp+2]
-        if end_idx == start_idx:
-            continue
+        # if end_idx == start_idx:
+        #     continue
 
         new_group_to_old_group.append(igrp)
         filtered_group_elements.append(
