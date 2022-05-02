@@ -1095,15 +1095,11 @@ class Mesh(Record):
 
     @property
     def ambient_dim(self):
-        if not self.groups:
-            return None
         from pytools import single_valued
         return single_valued(grp.nodes.shape[0] for grp in self.groups)
 
     @property
     def dim(self):
-        if not self.groups:
-            return None
         from pytools import single_valued
         return single_valued(grp.dim for grp in self.groups)
 
