@@ -32,7 +32,7 @@ python -m pip install --force-reinstall git+https://github.com/inducer/pytools.g
 pip uninstall -y loopy
 pip install "git+https://github.com/inducer/loopy.git#egg=loopy"
 
-# https://github.com/OP2/PyOP2/pull/627
-(cd /home/firedrake/firedrake/src/PyOP2 && git pull https://github.com/OP2/PyOP2.git e56d26f219e962cf9423fc84406a8a0656eb364f)
+# https://github.com/OP2/PyOP2/pull/663
+(cd /home/firedrake/firedrake/src/PyOP2 && git pull https://github.com/OP2/PyOP2.git a33fedfccad017aa0d7b8479fe7c454ebec4265d)
 
 pip install .
