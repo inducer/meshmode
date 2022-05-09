@@ -40,7 +40,7 @@ from arraycontext import (
         ArrayContext, NotAnArrayContainerError,
         make_loopy_program, with_container_arithmetic,
         serialize_container, deserialize_container,
-        thaw as _thaw, freeze as _freeze,
+        thaw as _thaw, freeze as _freeze, with_array_context,
         rec_map_array_container, rec_multimap_array_container,
         mapped_over_array_containers, multimapped_over_array_containers)
 from arraycontext.container import ArrayOrContainerT
@@ -379,25 +379,11 @@ def _deserialize_dof_container(
                 data=tuple([v for _i, v in iterable]))
 
 
-@_freeze.register(DOFArray)
-def _freeze_dofarray(ary, actx=None):
-    if actx is not None:
-        if actx is not ary.array_context:
-            raise ValueError("supplied array context does not agree with the one "
-                    "in the DOFArray in freeze(DOFArray)")
-    return type(ary)(
-        None,
-        tuple(ary.array_context.freeze(subary) for subary in ary._data))
-
-
-@_thaw.register(DOFArray)
-def _thaw_dofarray(ary, actx):
-    if ary.array_context is not None:
-        raise ValueError("cannot thaw DOFArray that already has an array context")
-
-    return type(ary)(
-        actx,
-        tuple(actx.thaw(subary) for subary in ary._data))
+@with_array_context.register(DOFArray)
+def _with_actx_dofarray(ary, actx):
+    assert (actx is None) or all(isinstance(subary, actx.array_types)
+                                 for subary in ary._data)
+    return type(ary)(actx, ary._data)
 
 
 def rec_map_dof_array_container(f: Callable[[Any], Any], ary):
