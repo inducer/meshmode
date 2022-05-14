@@ -764,22 +764,43 @@ def generate_torus(
         group_cls: Optional[type] = None):
     r"""Generate a torus.
 
-    .. figure:: images/torus.png
+    .. tikz:: A torus with major circle (magenta) and minor circle (red).
         :align: center
+        :xscale: 60
 
-        Shown: A torus with major circle (magenta) and minor circle (red).
-        Source: https://commons.wikimedia.org/wiki/File:Torus_cycles.svg
-        (public domain image by Krishnavedala).
+        \pgfmathsetmacro{\a}{1.5};
+        \pgfmathsetmacro{\b}{0.5};
+
+        \begin{axis}[hide axis, axis equal image]
+        \addplot3[
+            mesh,
+            gray!20,
+            samples=20,
+            domain=0:2*pi,y domain=0:2*pi,
+            z buffer=sort] (
+            {(\a + \b*cos(deg(x))) * cos(deg(y+pi/2))},
+            {(\a + \b*cos(deg(x))) * sin(deg(y+pi/2))},
+            {\b*sin(deg(x))});
+        \addplot3 [red, thick, samples=40, domain=0:2*pi] (
+            {(\a + \b*cos(deg(x))) * cos(deg(-pi/6))},
+            {(\a + \b*cos(deg(x))) * sin(deg(-pi/6))},
+            {\b*sin(deg(x))});
+        \addplot3 [magenta, thick, samples=80, domain=0:2*pi] (
+            {(\a + \b*cos(deg(pi/2))) * cos(deg(x))},
+            {(\a + \b*cos(deg(pi/2))) * sin(deg(x))},
+            {\b*sin(deg(pi/2))});
+        \end{axis}
 
     The torus is obtained as the image of the parameter domain
     :math:`(u, v) \in [0, 2\pi) \times [0, 2 \pi)` under the map
 
     .. math::
-        \begin{align}
+
+        \begin{aligned}
         x &= \cos(u) (r_\text{major} + r_\text{minor} \cos(v)) \\
         y &= \sin(u) (r_\text{major} + r_\text{minor} \sin(v)) \\
         z &= r_\text{minor} \sin(v)
-        \end{align}
+        \end{aligned}
 
     where :math:`r_\text{major}` and :math:`r_\text{minor}` are the radii of the
     major and minor circles, respectively. The parameter domain is tiled with

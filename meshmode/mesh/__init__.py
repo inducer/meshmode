@@ -551,14 +551,25 @@ class NodalAdjacency:
 
 @dataclass(frozen=True, eq=False)
 class FacialAdjacencyGroup:
-    """
+    r"""
     Describes facial element adjacency information for one
     :class:`MeshElementGroup`, i.e. information about elements that share (part
     of) a face or elements that lie on a boundary.
 
-    .. image:: images/facial-adjacency-group.png
+    .. tikz:: Facial Adjacency Group
         :align: center
-        :width: 60%
+        :xscale: 40
+
+        \draw [thick] (0, 2) rectangle node {$0$} (3, 4);
+        \draw [thick] (3, 2) rectangle node {$1$} (6, 4);
+        \draw [thick] (0, 0) rectangle node {$2$} (4, 2);
+        \draw [thick] (4, 0) rectangle node {$3$} (6, 2);
+        \draw [line width=3pt, line cap=round, orange]
+            (4, 0) -- (6, 0) -- (6, 2);
+        \draw [line width=3pt, line cap=round, magenta]
+            (4, 0) -- (4, 2);
+        \draw [line width=3pt, line cap=round, green!60!black]
+            (4, 2) -- (6, 2);
 
     Represents (for example) *one* of the (colored) interfaces between
     :class:`MeshElementGroup` instances, or an interface between
@@ -827,7 +838,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
 # {{{ mesh
 
 class Mesh(Record):
-    """
+    r"""
     .. attribute:: ambient_dim
 
     .. attribute:: dim
@@ -873,9 +884,21 @@ class Mesh(Record):
         Referencing this attribute may raise
         :exc:`meshmode.DataUnavailable`.
 
-        .. image:: images/facial-adjacency-group.png
+        .. tikz:: Facial Adjacency Group
             :align: center
-            :width: 60%
+            :xscale: 40
+
+            \draw [thick] (0, 2) rectangle node {$0$} (3, 4);
+            \draw [thick] (3, 2) rectangle node {$1$} (6, 4);
+            \draw [thick] (0, 0) rectangle node {$2$} (4, 2);
+            \draw [thick] (4, 0) rectangle node {$3$} (6, 2);
+            \draw [line width=3pt, line cap=round, orange]
+                (4, 0) -- (6, 0) -- (6, 2);
+            \draw [line width=3pt, line cap=round, magenta]
+                (4, 0) -- (4, 2);
+            \draw [line width=3pt, line cap=round, green!60!black]
+                (4, 2) -- (6, 2);
+
 
         For example for the mesh in the figure, the following data structure
         could be present::

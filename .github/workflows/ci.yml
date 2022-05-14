@@ -109,10 +109,16 @@ jobs:
                 python-version: '3.x'
         -   name: "Main Script"
             run: |
+                # texlive is needed for sphinxcontrib-tikz
+                sudo apt-get update
+                sudo apt-get install -y --no-install-recommends texlive-pictures
+
                 curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/ci-support.sh
                 . ci-support.sh
+
+                export EXTRA_INSTALL="sphinxcontrib-tikz"
                 build_py_project_in_conda_env
-                conda install graphviz
+                conda install graphviz pdf2svg
 
                 # Work around
                 # intersphinx inventory 'https://firedrakeproject.org/objects.inv' not fetchable
