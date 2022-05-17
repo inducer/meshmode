@@ -21,7 +21,7 @@ jobs:
         -   name: "Main Script"
             run: |
                 curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/prepare-and-run-flake8.sh
-                . ./prepare-and-run-flake8.sh "$(basename $GITHUB_REPOSITORY)" test examples
+                . ./prepare-and-run-flake8.sh "$(basename $GITHUB_REPOSITORY)" test examples experiments
 
     pylint:
         name: Pylint
@@ -33,7 +33,7 @@ jobs:
                 echo "- scipy" >> .test-conda-env-py3.yml
                 USE_CONDA_BUILD=1
                 curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
-                . ./prepare-and-run-pylint.sh "$(basename $GITHUB_REPOSITORY)" examples/*.py test/test_*.py
+                . ./prepare-and-run-pylint.sh "$(basename $GITHUB_REPOSITORY)" examples/*.py test/test_*.py experiments/*.py
 
     pytest3:
         name: Pytest Conda Py3
