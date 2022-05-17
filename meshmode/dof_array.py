@@ -326,7 +326,14 @@ class DOFArray:
         for idx, ary in enumerate(data):
             assert len(axes_tags[idx]) == ary.ndim
             assert isinstance(axes_tags[idx], list)
-            d = actx.tag(tags[idx], actx.from_numpy(ary))
+
+            node = actx.from_numpy(ary)
+            from pytools.tag import IgnoredForEqualityTag
+            node.tags = frozenset(
+                tag for tag in node.tags
+                if not isinstance(tag, IgnoredForEqualityTag))
+
+            d = actx.tag(tags[idx], node)
 
             for ida, ax in enumerate(axes_tags[idx]):
                 d = actx.tag_axis(ida, ax, d)
