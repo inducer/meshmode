@@ -113,7 +113,7 @@ def get_random_flags(mesh):
 
 
 def refine_and_generate_chart_function(mesh, filename, function):
-    from time import clock
+    from time import time
 
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
@@ -143,9 +143,9 @@ def refine_and_generate_chart_function(mesh, filename, function):
         print("LKJASLFKJALKASF:", nels)
         num_elements.append(nels)
         # flags = get_corner_flags(mesh)
-        beg = clock()
+        beg = time()
         mesh = r.refine(flags)
-        end = clock()
+        end = time()
         time_taken = end - beg
         time_t.append(time_taken)
         # if nelements == mesh.nelements:
