@@ -142,7 +142,7 @@ def refine_and_generate_chart_function(mesh, filename, function):
         time_taken = end - beg
         time_t.append(time_taken)
         #if nelements == mesh.nelements:
-            #break
+        #    break
         #nelements = mesh.nelements
         #from meshmode.mesh.visualization import draw_2d_mesh
         #draw_2d_mesh(mesh, True, True, True, fill=None)
@@ -156,13 +156,13 @@ def refine_and_generate_chart_function(mesh, filename, function):
         #    poss_flags[i] = 1
 
     import matplotlib.pyplot as pt
-    pt.xlabel('Number of elements being refined')
-    pt.ylabel('Time taken')
+    pt.xlabel("Number of elements being refined")
+    pt.ylabel("Time taken")
     pt.plot(num_elements, time_t, "o")
-    pt.savefig(filename, format='pdf')
+    pt.savefig(filename, format="pdf")
     pt.clf()
-    print('DONE REFINING')
-    '''
+    print("DONE REFINING")
+    """
     flags = np.zeros(len(mesh.groups[0].vertex_indices))
     flags[0] = 1
     flags[1] = 1
@@ -172,7 +172,7 @@ def refine_and_generate_chart_function(mesh, filename, function):
     flags[1] = 1
     flags[2] = 1
     mesh = r.refine(flags)
-    '''
+    """
     #check_nodal_adj_against_geometry(mesh)
     #r.print_rays(70)
     #r.print_rays(117)
@@ -299,7 +299,7 @@ def uniform_refine(num_mesh, fract, depth, fname):
 if __name__ == "__main__":
     logging.basicConfig(level="DEBUG")
     print("HEREERERE")
-    #all_refine(3, 2, 'all_a.pdf')
-    all_refine(3, 3, 'all_b.pdf')
-    #uniform_refine(3, 0.2, 3, 'uniform_a.pdf')
+    #all_refine(3, 2, "all_a.pdf")
+    all_refine(3, 3, "all_b.pdf")
+    #uniform_refine(3, 0.2, 3, "uniform_a.pdf")
     #main2()
