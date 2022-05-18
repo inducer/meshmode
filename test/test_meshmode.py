@@ -557,9 +557,6 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     nodes = mp.edge_clustered_nodes_for_space(space, shape).reshape(dim, 1, -1)
     vertex_indices = np.arange(shape.nvertices, dtype=np.int32).reshape(1, -1)
 
-    center = np.empty(dim, np.float64)
-    center.fill(-0.5)
-
     mg = group_cls.make_group(mesh_order, vertex_indices, nodes, dim=dim)
     mesh = Mesh(vertices, [mg], is_conforming=True)
 
@@ -608,6 +605,77 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
             ("normals", bdry_normals)
             ])
 
+    normal_outward_check = bind(bdry_discr,
+            sym.normal(dim)
+            | (sym.nodes(dim) + 0.5*sym.ones_vec(dim)),
+            )(actx).as_scalar()
+
+    normal_outward_check = actx.to_numpy(flatten(normal_outward_check > 0, actx))
+    assert normal_outward_check.all(), normal_outward_check
+
+# }}}
+
+
+# {{{ sanity checks: no elements
+
+@pytest.mark.parametrize("dim", [2, 3])
+@pytest.mark.parametrize("mesh_order", [1, 3])
+@pytest.mark.parametrize("group_cls", [
+    SimplexElementGroup,
+    TensorProductElementGroup,
+    ])
+def test_sanity_no_elements(actx_factory, dim, mesh_order, group_cls,
+        visualize=False):
+    from arraycontext import PyOpenCLArrayContext
+    pytest.importorskip("pytential")
+    actx = actx_factory()
+
+    if not isinstance(actx, PyOpenCLArrayContext):
+        pytest.skip(f"{actx}: not supported by pytential")
+
+    if group_cls is SimplexElementGroup:
+        group_factory = default_simplex_group_factory(dim, order=mesh_order + 3)
+    elif group_cls is TensorProductElementGroup:
+        group_factory = LegendreGaussLobattoTensorProductGroupFactory(mesh_order + 3)
+    else:
+        raise TypeError
+
+    import modepy as mp
+    shape = group_cls._modepy_shape_cls(dim)
+    space = mp.space_for_shape(shape, mesh_order)
+    nunit_nodes = mp.edge_clustered_nodes_for_space(space, shape).shape[1]
+
+    vertices = np.empty((dim, 0))
+    nodes = np.empty((dim, 0, nunit_nodes))
+    vertex_indices = np.empty((0, shape.nvertices), dtype=np.int32)
+
+    mg = group_cls.make_group(mesh_order, vertex_indices, nodes, dim=dim)
+    mesh = Mesh(vertices, [mg], is_conforming=True)
+
+    from meshmode.discretization import Discretization
+    vol_discr = Discretization(actx, mesh, group_factory)
+
+    # {{{ volume calculation check
+
+    nodes = thaw(vol_discr.nodes(), actx)
+    vol_one = 1 + 0 * nodes[0]
+
+    from pytential import norm, integral  # noqa
+    assert integral(vol_discr, vol_one) == 0.
+
+    # }}}
+
+    # {{{ boundary discretization
+
+    from meshmode.discretization.connection import make_face_restriction
+    bdry_connection = make_face_restriction(
+            actx, vol_discr, group_factory,
+            BTAG_ALL)
+    bdry_discr = bdry_connection.to_discr
+
+    # }}}
+
+    from pytential import bind, sym
     normal_outward_check = bind(bdry_discr,
             sym.normal(dim)
             | (sym.nodes(dim) + 0.5*sym.ones_vec(dim)),

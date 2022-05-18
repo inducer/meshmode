@@ -962,7 +962,9 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
 
     :arg axis_coords: a tuple with a number of entries corresponding
         to the number of dimensions, with each entry a numpy array
-        specifying the coordinates to be used along that axis.
+        specifying the coordinates to be used along that axis. The coordinates
+        for a given axis must define a nonnegative number of subintervals (in other
+        words, the length can be 0 or a number greater than or equal to 2).
     :arg periodic: an optional tuple of :class:`bool` indicating whether
         the mesh is periodic along each axis. Acts as a shortcut for calling
         :func:`meshmode.mesh.processing.glue_mesh_boundaries`.
@@ -1018,9 +1020,10 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
         boundary_tag_to_face = {}
 
     for iaxis, axc in enumerate(axis_coords):
-        if len(axc) < 2:
-            raise ValueError("need at least two points along axis %d"
-                    % (iaxis+1))
+        if len(axc) == 1:
+            raise ValueError(f"cannot have a single point along axis {iaxis+1} "
+                "(1-based), that would be a surface mesh. (If you want one of "
+                "those, make a box mesh of lower topological dimension and map it.)")
 
     dim = len(axis_coords)
 
@@ -1052,24 +1055,33 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
     else:
         raise ValueError(f"unsupported value for 'group_cls': {group_cls}")
 
-    el_vertices = []
+    shape_m1 = tuple(max(si-1, 0) for si in shape)
 
     if dim == 1:
         if mesh_type is not None:
             raise ValueError(f"unsupported mesh type: '{mesh_type}'")
 
-        for i in range(shape[0]-1):
+        nelements = shape_m1[0]
+        nvertices_per_element = 2
+        el_vertices = np.empty((nelements, nvertices_per_element), dtype=np.int32)
+
+        for i in range(shape_m1[0]):
             # a--b
 
             a = vertex_indices[i]
             b = vertex_indices[i+1]
 
-            el_vertices.append((a, b,))
+            el_vertices[i, :] = (a, b)
 
     elif dim == 2:
-        if mesh_type == "X" and not is_tp:
-            shape_m1 = tuple(si-1 for si in shape)
+        if is_tp:
+            if mesh_type is not None:
+                raise ValueError(f"unsupported mesh type: '{mesh_type}'")
 
+            nsubelements = 1
+            nvertices_per_element = 4
+
+        elif mesh_type == "X":
             nmidpoints = product(shape_m1)
             midpoint_indices = (
                     nvertices
@@ -1083,17 +1095,25 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
                 midpoints[idim] = (
                         0.5*(left_axis_coords+right_axis_coords)).reshape(*vshape)
 
-            midpoints = midpoints.reshape((dim, -1), order="F")
+            midpoints = midpoints.reshape((dim, nmidpoints), order="F")
             vertices = np.concatenate((vertices, midpoints), axis=1)
 
+            nsubelements = 4
+            nvertices_per_element = 3
+
         elif mesh_type is None:
-            pass
+            nsubelements = 2
+            nvertices_per_element = 3
 
         else:
             raise ValueError(f"unsupported mesh type: '{mesh_type}'")
 
-        for i in range(shape[0]-1):
-            for j in range(shape[1]-1):
+        nelements = nsubelements * product(shape_m1)
+        el_vertices = np.empty((nelements, nvertices_per_element), dtype=np.int32)
+
+        iel = 0
+        for i in range(shape_m1[0]):
+            for j in range(shape_m1[1]):
 
                 # c--d
                 # |  |
@@ -1105,26 +1125,45 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
                 d = vertex_indices[i+1, j+1]
 
                 if is_tp:
-                    el_vertices.append((a, b, c, d))
+                    el_vertices[iel, :] = (a, b, c, d)
 
                 elif mesh_type == "X":
                     m = midpoint_indices[i, j]
-                    el_vertices.append((a, b, m))
-                    el_vertices.append((b, d, m))
-                    el_vertices.append((d, c, m))
-                    el_vertices.append((c, a, m))
+                    el_vertices[iel:iel+4, :] = [
+                        (a, b, m),
+                        (b, d, m),
+                        (d, c, m),
+                        (c, a, m)]
 
                 else:
-                    el_vertices.append((a, b, c))
-                    el_vertices.append((d, c, b))
+                    el_vertices[iel:iel+2, :] = [
+                        (a, b, c),
+                        (d, c, b)]
+
+                iel += nsubelements
 
     elif dim == 3:
-        if mesh_type is not None:
-            raise ValueError("unsupported mesh_type")
+        if is_tp:
+            if mesh_type is not None:
+                raise ValueError(f"unsupported mesh type: '{mesh_type}'")
 
-        for i in range(shape[0]-1):
-            for j in range(shape[1]-1):
-                for k in range(shape[2]-1):
+            nsubelements = 1
+            nvertices_per_element = 8
+
+        elif mesh_type is None:
+            nsubelements = 6
+            nvertices_per_element = 4
+
+        else:
+            raise ValueError(f"unsupported mesh type: '{mesh_type}'")
+
+        nelements = nsubelements * product(shape_m1)
+        el_vertices = np.empty((nelements, nvertices_per_element), dtype=np.int32)
+
+        iel = 0
+        for i in range(shape_m1[0]):
+            for j in range(shape_m1[1]):
+                for k in range(shape_m1[2]):
 
                     a000 = vertex_indices[i, j, k]
                     a001 = vertex_indices[i, j, k+1]
@@ -1137,26 +1176,26 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
                     a111 = vertex_indices[i+1, j+1, k+1]
 
                     if is_tp:
-                        el_vertices.append(
-                                (a000, a100, a010, a110,
-                                    a001, a101, a011, a111))
+                        el_vertices[iel, :] = (
+                            a000, a100, a010, a110,
+                            a001, a101, a011, a111)
 
                     else:
-                        el_vertices.append((a000, a100, a010, a001))
-                        el_vertices.append((a101, a100, a001, a010))
-                        el_vertices.append((a101, a011, a010, a001))
+                        el_vertices[iel:iel+6, :] = [
+                            (a000, a100, a010, a001),
+                            (a101, a100, a001, a010),
+                            (a101, a011, a010, a001),
+                            (a100, a010, a101, a110),
+                            (a011, a010, a110, a101),
+                            (a011, a111, a101, a110)]
 
-                        el_vertices.append((a100, a010, a101, a110))
-                        el_vertices.append((a011, a010, a110, a101))
-                        el_vertices.append((a011, a111, a101, a110))
+                    iel += nsubelements
 
     else:
         raise NotImplementedError("box meshes of dimension %d" % dim)
 
-    el_vertices = np.array(el_vertices, dtype=np.int32)
-
     grp = make_group_from_vertices(
-            vertices.reshape(dim, -1), el_vertices, order,
+            vertices.reshape(dim, product(vertices.shape[1:])), el_vertices, order,
             group_cls=group_cls, unit_nodes=unit_nodes)
 
     axes = ["x", "y", "z", "w"]
@@ -1309,13 +1348,17 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
                 raise TypeError("cannot specify both nelements_per_axis and "
                     "npoints_per_axis")
         elif nelements_per_axis is not None:
-            npoints_per_axis = tuple(nel_i+1 for nel_i in nelements_per_axis)
+            npoints_per_axis = tuple(
+                nel_i+1 if nel_i > 0 else 0
+                for nel_i in nelements_per_axis)
         else:
             raise TypeError("Must specify nelements_per_axis or "
                 "npoints_per_axis")
 
-    if min(npoints_per_axis) < 2:
-        raise ValueError("need at least two points in each direction")
+    if any(npoints_i == 1 for npoints_i in npoints_per_axis):
+        raise ValueError("cannot have a single point along any axis, that would "
+            "be a surface mesh. (If you want one of those, make a box mesh of "
+            "lower topological dimension and map it.)")
 
     axis_coords = [np.linspace(a_i, b_i, npoints_i)
             for a_i, b_i, npoints_i in zip(a, b, npoints_per_axis)]
