@@ -962,7 +962,9 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
 
     :arg axis_coords: a tuple with a number of entries corresponding
         to the number of dimensions, with each entry a numpy array
-        specifying the coordinates to be used along that axis.
+        specifying the coordinates to be used along that axis. The coordinates
+        for a given axis must define a nonnegative number of subintervals (in other
+        words, the length can be 0 or a number greater than or equal to 2).
     :arg periodic: an optional tuple of :class:`bool` indicating whether
         the mesh is periodic along each axis. Acts as a shortcut for calling
         :func:`meshmode.mesh.processing.glue_mesh_boundaries`.
