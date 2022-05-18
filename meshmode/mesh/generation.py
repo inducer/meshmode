@@ -1019,8 +1019,9 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
 
     for iaxis, axc in enumerate(axis_coords):
         if len(axc) == 1:
-            raise ValueError("cannot have a single point along axis %d"
-                    % (iaxis+1))
+            raise ValueError(f"cannot have a single point along axis {iaxis+1} "
+                "(1-based), that would be a surface mesh. (If you want one of "
+                "those, make a box mesh of lower topological dimension and map it.)")
 
     dim = len(axis_coords)
 
@@ -1353,7 +1354,9 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
                 "npoints_per_axis")
 
     if any(npoints_i == 1 for npoints_i in npoints_per_axis):
-        raise ValueError("cannot have a single point in any direction")
+        raise ValueError("cannot have a single point along any axis, that would "
+            "be a surface mesh. (If you want one of those, make a box mesh of "
+            "lower topological dimension and map it.)")
 
     axis_coords = [np.linspace(a_i, b_i, npoints_i)
             for a_i, b_i, npoints_i in zip(a, b, npoints_per_axis)]
