@@ -331,14 +331,15 @@ class DOFArray:
 
             # {{{ Filter IgnoredForEqualityTags
 
-            # actx.from_numpy() may create tags (such as pytato's CreatedAt tag).
-            # Remove the tags that are purely informational, such that
-            # actx.tag() below will not cause NonUniqueTagErrors.
+            # actx.from_numpy() may create tags, such as pytato's CreatedAt tag.
+            # Remove these tags such that actx.tag() below will not raise
+            # NonUniqueTagErrors.
 
             import sys
             if "pytato" in sys.modules:
                 from pytato.equality import preprocess_tags_for_equality
-                node.tags = preprocess_tags_for_equality(node.tags)
+                node = node.without_tags(node.tags)._with_new_tags(
+                    preprocess_tags_for_equality(node.tags))
 
             # }}}
 
