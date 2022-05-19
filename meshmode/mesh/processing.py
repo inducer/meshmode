@@ -112,9 +112,10 @@ def _filter_mesh_groups(mesh, selected_elements, vertex_id_dtype):
     """
     Create new mesh groups containing a selected subset of elements.
 
-    :arg groups: An array of `~meshmode.mesh.ElementGroup` instances.
+    :arg mesh: A `~meshmode.mesh.Mesh` instance.
     :arg selected_elements: A sorted array of indices of elements to be included in
         the filtered groups.
+    :arg vertex_id_dtype: The vertex index data type.
     :returns: A tuple ``(new_groups, group_to_new_group, required_vertex_indices)``,
         where *new_groups* is made up of groups from *groups* with elements not in
         *selected_elements* removed (Note: empty groups are omitted),
@@ -245,8 +246,8 @@ def _create_self_to_self_adjacency_groups(mesh, global_elem_to_part_elem,
         :func:`_compute_global_elem_to_part_elem`` for details.
     :arg self_part_index: The index of the partition currently being created, in
         the range ``[0, num_parts)``.
-    :arg self_mesh_groups: An array of :class:`~meshmode.mesh.ElementGroup` instances
-        representing the partitioned mesh groups.
+    :arg self_mesh_groups: An array of :class:`~meshmode.mesh.MeshElementGroup`
+        instances representing the partitioned mesh groups.
     :arg global_group_to_self_group: An array mapping groups in *mesh* to groups in
         *self_mesh_groups* (or `None` if the group is not part of the current
         partition).
@@ -323,7 +324,7 @@ def _create_self_to_other_adjacency_groups(
         indices to partition indices and partition-wide element indices. See
         :func:`_compute_global_elem_to_part_elem`` for details.
     :arg self_part_id: The identifier of the partition currently being created.
-    :arg self_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
+    :arg self_mesh_groups: An array of `~meshmode.mesh.MeshElementGroup` instances
         representing the partitioned mesh groups.
     :arg global_group_to_self_group: An array mapping groups in *mesh* to groups in
         *self_mesh_groups* (or `None` if the group is not part of the current
@@ -404,7 +405,7 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, self_part_index,
         :func:`_compute_global_elem_to_part_elem`` for details.
     :arg self_part_index: The index of the partition currently being created, in
         the range ``[0, num_parts)``.
-    :arg self_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
+    :arg self_mesh_groups: An array of `~meshmode.mesh.MeshElementGroup` instances
         representing the partitioned mesh groups.
     :arg global_group_to_self_group: An array mapping groups in *mesh* to groups in
         *self_mesh_groups* (or `None` if the group is not part of the current
