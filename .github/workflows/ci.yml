@@ -21,7 +21,7 @@ jobs:
         -   name: "Main Script"
             run: |
                 curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/prepare-and-run-flake8.sh
-                . ./prepare-and-run-flake8.sh "$(basename $GITHUB_REPOSITORY)" test examples
+                . ./prepare-and-run-flake8.sh "$(basename $GITHUB_REPOSITORY)" test examples experiments
 
     pylint:
         name: Pylint
@@ -33,7 +33,7 @@ jobs:
                 echo "- scipy" >> .test-conda-env-py3.yml
                 USE_CONDA_BUILD=1
                 curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
-                . ./prepare-and-run-pylint.sh "$(basename $GITHUB_REPOSITORY)" examples/*.py test/test_*.py
+                . ./prepare-and-run-pylint.sh "$(basename $GITHUB_REPOSITORY)" examples/*.py test/test_*.py experiments/*.py
 
     pytest3:
         name: Pytest Conda Py3
@@ -109,10 +109,16 @@ jobs:
                 python-version: '3.x'
         -   name: "Main Script"
             run: |
+                # texlive is needed for sphinxcontrib-tikz
+                sudo apt-get update
+                sudo apt-get install -y --no-install-recommends texlive-pictures
+
                 curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/ci-support.sh
                 . ci-support.sh
+
+                export EXTRA_INSTALL="sphinxcontrib-tikz"
                 build_py_project_in_conda_env
-                conda install graphviz
+                conda install graphviz pdf2svg
 
                 # Work around
                 # intersphinx inventory 'https://firedrakeproject.org/objects.inv' not fetchable
@@ -127,7 +133,7 @@ jobs:
     downstream_tests:
         strategy:
             matrix:
-                downstream_project: [grudge, pytential, mirgecom]
+                downstream_project: [grudge, pytential, mirgecom, mirgecom_examples]
         name: Tests for downstream project ${{ matrix.downstream_project }}
         runs-on: ubuntu-latest
         steps:
@@ -138,23 +144,6 @@ jobs:
             run: |
                 curl -L -O https://tiker.net/ci-support-v0
                 . ./ci-support-v0
-                source .ci/install-downstream.sh
-                build_py_project_in_conda_env
-                test_py_project
-
-    mirgecom_examples:
-        runs-on: ubuntu-latest
-        name: Examples for downstream project mirgecom
-        steps:
-        -   uses: actions/checkout@v2
-        -   name: "Main Script"
-            env:
-                DOWNSTREAM_PROJECT: mirgecom
-            run: |
-                curl -L -O https://tiker.net/ci-support-v0
-                . ./ci-support-v0
-                source .ci/install-downstream.sh
-                build_py_project_in_conda_env
-                examples/run_examples.sh ./examples
+                test_downstream "$DOWNSTREAM_PROJECT"
 
 # vim: sw=4

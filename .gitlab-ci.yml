@@ -86,16 +86,16 @@ Python 3 Conda:
 
 Documentation:
   script:
-  - EXTRA_INSTALL="pybind11 cython numpy"
+  - EXTRA_INSTALL="pybind11 cython numpy sphinxcontrib-tikz"
   - curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/build-docs.sh
-  - ". ./build-docs.sh"
+  - . ./build-docs.sh
   tags:
   - python3
 
 Flake8:
   script:
   - curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/prepare-and-run-flake8.sh
-  - . ./prepare-and-run-flake8.sh "$CI_PROJECT_NAME" test examples
+  - . ./prepare-and-run-flake8.sh "$CI_PROJECT_NAME" test examples experiments
   tags:
   - python3
   except:
@@ -106,8 +106,22 @@ Pylint:
     export PY_EXE=python3
     EXTRA_INSTALL="Cython pybind11 numpy mako matplotlib scipy mpi4py h5py oct2py"
     curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
-    . ./prepare-and-run-pylint.sh "$CI_PROJECT_NAME" examples/*.py test/test_*.py
+    . ./prepare-and-run-pylint.sh "$CI_PROJECT_NAME" examples/*.py test/test_*.py experiments/*.py
   tags:
   - python3
   except:
   - tags
+
+Downstream:
+  parallel:
+    matrix:
+    - DOWNSTREAM_PROJECT: [grudge, pytential, mirgecom, mirgecom_examples]
+  tags:
+  - large-node
+  - "docker-runner"
+  script: |
+    curl -L -O https://tiker.net/ci-support-v0
+    . ./ci-support-v0
+    test_downstream "$DOWNSTREAM_PROJECT"
+
+# vim: sw=2
