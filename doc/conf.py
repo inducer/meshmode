@@ -7,7 +7,10 @@ with urlopen(_conf_url) as _inf:
 
 extensions.extend([
     "sphinx.ext.graphviz",
+    "sphinxcontrib.tikz",
 ])
+
+tikz_tikzlibraries = "decorations.markings"
 
 copyright = "2014-21, Meshmode contributors"
 
