@@ -327,23 +327,16 @@ class DOFArray:
             assert len(axes_tags[idx]) == ary.ndim
             assert isinstance(axes_tags[idx], list)
 
-            node = actx.from_numpy(ary)
-
             # {{{ Filter IgnoredForEqualityTags
 
             # actx.from_numpy() may create tags, such as pytato's CreatedAt tag.
             # Remove these tags such that actx.tag() below will not raise
             # NonUniqueTagErrors.
 
-            import sys
-            if "pytato" in sys.modules:
-                from pytato.equality import preprocess_tags_for_equality
-                node = node.without_tags(node.tags)._with_new_tags(
-                    preprocess_tags_for_equality(node.tags))
+            d = actx.from_numpy(ary)
+            d = d.without_tags(d.tags)._with_new_tags(tags[idx])
 
             # }}}
-
-            d = actx.tag(tags[idx], node)
 
             for ida, ax in enumerate(axes_tags[idx]):
                 d = actx.tag_axis(ida, ax, d)
