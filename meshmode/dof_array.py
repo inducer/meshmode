@@ -327,10 +327,7 @@ class DOFArray:
             assert len(axes_tags[idx]) == ary.ndim
             assert isinstance(axes_tags[idx], list)
 
-            # actx.from_numpy() may create tags. Remove these tags before adding
-            # the pickled ones such that we do not raise NonUniqueTagErrors.
-            d = actx.from_numpy(ary)
-            d = d.without_tags(d.tags)._with_new_tags(tags[idx])
+            d = actx.from_numpy(ary)._with_new_tags(tags[idx])
 
             for ida, ax in enumerate(axes_tags[idx]):
                 d = actx.tag_axis(ida, ax, d)
