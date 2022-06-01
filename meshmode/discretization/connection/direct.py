@@ -26,6 +26,7 @@ import numpy.linalg as la
 from abc import ABC, abstractmethod
 
 from typing import Sequence, Optional, List, Tuple
+from pytools import memoize_method
 
 import loopy as lp
 from meshmode.transform_metadata import (
@@ -327,8 +328,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         A :class:`bool` indicating whether every output degree
         of freedom is set by the connection.
 
-    .. automethod:: __call__
+    .. automethod:: is_permutation
 
+    .. automethod:: __call__
     """
 
     def __init__(self,
@@ -377,16 +379,15 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
     # {{{ _resample_point_pick_indices
 
-    @keyed_memoize_method(lambda actx, to_group_index, ibatch_index,
-            tol_multiplier=None: (to_group_index, ibatch_index, tol_multiplier))
-    def _resample_point_pick_indices(self, actx: ArrayContext,
-            to_group_index, ibatch_index,
-            tol_multiplier=None):
+    def _resample_point_pick_indices(self, to_group_index: int, ibatch_index: int,
+            tol_multiplier: Optional[float] = None):
         """If :meth:`_resample_matrix` *R* is a row subset of a permutation matrix *P*,
-        return the index subset I so that, loosely, ``x[I] == R @ x``.
+        return the index subset I so that ``x[I] == R @ x`` up to machine
+        epsilon multiplied by *tol_multiplier* (or an internally specified
+        tolerance if none is given).
 
         Will return *None* if no such index array exists, or a
-        :class:`pyopencl.array.Array` containing the index subset.
+        :class:`numpy.ndarray` containing the index subset.
         """
 
         ibatch = self.groups[to_group_index].batches[ibatch_index]
@@ -400,7 +401,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         dim, ntgt_nodes = ibatch.result_unit_nodes.shape
         if dim == 0:
             assert ntgt_nodes == 1
-            return actx.freeze(actx.from_numpy(np.array([0], dtype=np.int32)))
+            return np.array([0], dtype=np.int32)
 
         dist_vecs = (ibatch.result_unit_nodes.reshape(dim, -1, 1)
                 - from_grp.unit_nodes.reshape(dim, 1, -1))
@@ -417,9 +418,39 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             close_index, = close_indices
             result[irow] = close_index
 
-        return actx.freeze(actx.from_numpy(result))
+        return result
+
+    @keyed_memoize_method(lambda actx, to_group_index, ibatch_index,
+            tol_multiplier=None: (to_group_index, ibatch_index, tol_multiplier))
+    def _frozen_resample_point_pick_indices(self, actx: ArrayContext,
+            to_group_index: int, ibatch_index: int,
+            tol_multiplier: Optional[float] = None):
+        result = self._resample_point_pick_indices(
+                to_group_index=to_group_index,
+                ibatch_index=ibatch_index,
+                tol_multiplier=tol_multiplier)
+        if result is None:
+            return result
+        else:
+            return actx.freeze(actx.from_numpy(result))
 
     # }}}
+
+    @memoize_method
+    def is_permutation(self, tol_multiplier: Optional[float] = None) -> bool:
+        """Return *True* if no interpolation is used in applying this connection,
+        i.e. if the source unit nodes in the connection
+        (cf. :class:`InterpolationBatch.result_unit_nodes`) match up
+        with the unit nodes in the source element, up to machine epsilon
+        multiplied by *tol_multiplier* (or an internally specified tolerance
+        if none is given).
+        """
+
+        return all(
+                self._resample_point_pick_indices(i_tgrp, i_batch,
+                    tol_multiplier=tol_multiplier) is not None
+                for i_tgrp, cgrp in enumerate(self.groups)
+                for i_batch in range(len(cgrp.batches)))
 
     def full_resample_matrix(self, actx: ArrayContext):
         from warnings import warn
@@ -441,16 +472,13 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         tgrp = self.to_discr.groups[i_tgrp]
 
         batch_dof_pick_lists = [
-                self._resample_point_pick_indices(actx, i_tgrp, i_batch)
+                self._resample_point_pick_indices(i_tgrp, i_batch)
                 for i_batch in range(len(cgrp.batches))]
 
         all_batches_pickable = all(
                 bpi is not None for bpi in batch_dof_pick_lists)
         if not all_batches_pickable:
             return None
-
-        batch_dof_pick_lists = [
-                actx.to_numpy(pick_list) for pick_list in batch_dof_pick_lists]
 
         batch_source_groups = sorted({
             batch.from_group_index for batch in cgrp.batches})
@@ -702,20 +730,20 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     for fgpd in group_pick_info:
                         from_element_indices = actx.thaw(fgpd.from_element_indices)
 
-                        grp_ary_contrib = ary[fgpd.from_group_index][
-                                    from_element_indices.reshape((-1, 1)),
-                                    actx.thaw(fgpd.dof_pick_lists)[
-                                        actx.thaw(fgpd.dof_pick_list_index)]
-                                    ]
+                        if ary[fgpd.from_group_index].size:
+                            grp_ary_contrib = ary[fgpd.from_group_index][
+                                        from_element_indices.reshape((-1, 1)),
+                                        actx.thaw(fgpd.dof_pick_lists)[
+                                            actx.thaw(fgpd.dof_pick_list_index)]
+                                        ]
 
-                        if not fgpd.is_surjective:
-                            from_el_present = actx.thaw(fgpd.from_el_present)
-                            grp_ary_contrib = actx.np.where(
-                                from_el_present.reshape((-1, 1)),
-                                grp_ary_contrib,
-                                0)
-
-                        group_array_contributions.append(grp_ary_contrib)
+                            if not fgpd.is_surjective:
+                                from_el_present = actx.thaw(fgpd.from_el_present)
+                                grp_ary_contrib = actx.np.where(
+                                    from_el_present.reshape((-1, 1)),
+                                    grp_ary_contrib,
+                                    0)
+                            group_array_contributions.append(grp_ary_contrib)
                 else:
                     for fgpd in group_pick_info:
                         group_knl_kwargs = {}
@@ -754,14 +782,13 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                                 #    self.to_discr.groups[i_tgrp].nunit_dofs),
                                 **group_knl_kwargs)["result"])
 
-                assert group_array_contributions
                 group_array = sum(group_array_contributions)
             elif cgrp.batches:
                 for i_batch, batch in enumerate(cgrp.batches):
                     if not len(batch.from_element_indices):
                         continue
 
-                    point_pick_indices = self._resample_point_pick_indices(
+                    point_pick_indices = self._frozen_resample_point_pick_indices(
                             actx, i_tgrp, i_batch)
 
                     from_el_present, from_element_indices = \

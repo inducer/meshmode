@@ -128,6 +128,96 @@ def test_box_mesh(actx_factory, visualize=False):
         vis = make_visualizer(actx, discr, 7)
         vis.write_vtk_file("box_mesh.vtu", [])
 
+    # Simplex, 1D
+    mesh = mgen.generate_box_mesh(
+        (np.linspace(0, 1, 3),), group_cls=SimplexElementGroup)
+
+    assert mesh.ambient_dim == 1
+    assert mesh.dim == 1
+    assert mesh.nvertices == 3
+    assert len(mesh.groups) == 1
+    assert mesh.nelements == 2
+
+    # Tensor product, 1D
+    mesh = mgen.generate_box_mesh(
+        (np.linspace(0, 1, 3),), group_cls=TensorProductElementGroup)
+
+    assert mesh.ambient_dim == 1
+    assert mesh.dim == 1
+    assert mesh.nvertices == 3
+    assert len(mesh.groups) == 1
+    assert mesh.nelements == 2
+
+    # Simplex, 2D, non-X
+    mesh = mgen.generate_box_mesh(
+        2*(np.linspace(0, 1, 3),), group_cls=SimplexElementGroup)
+
+    assert mesh.ambient_dim == 2
+    assert mesh.dim == 2
+    assert mesh.nvertices == 9
+    assert len(mesh.groups) == 1
+    assert mesh.nelements == 8
+
+    # Simplex, 2D, X
+    mesh = mgen.generate_box_mesh(
+        2*(np.linspace(0, 1, 3),), group_cls=SimplexElementGroup, mesh_type="X")
+
+    assert mesh.ambient_dim == 2
+    assert mesh.dim == 2
+    assert mesh.nvertices == 13
+    assert len(mesh.groups) == 1
+    assert mesh.nelements == 16
+
+    # Tensor product, 2D
+    mesh = mgen.generate_box_mesh(
+        2*(np.linspace(0, 1, 3),), group_cls=TensorProductElementGroup)
+
+    assert mesh.ambient_dim == 2
+    assert mesh.dim == 2
+    assert mesh.nvertices == 9
+    assert len(mesh.groups) == 1
+    assert mesh.nelements == 4
+
+    # Simplex, 3D
+    mesh = mgen.generate_box_mesh(
+        3*(np.linspace(0, 1, 3),), group_cls=SimplexElementGroup)
+
+    assert mesh.ambient_dim == 3
+    assert mesh.dim == 3
+    assert mesh.nvertices == 27
+    assert len(mesh.groups) == 1
+    assert mesh.nelements == 48
+
+    # Tensor product, 3D
+    mesh = mgen.generate_box_mesh(
+        3*(np.linspace(0, 1, 3),), group_cls=TensorProductElementGroup)
+
+    assert mesh.ambient_dim == 3
+    assert mesh.dim == 3
+    assert mesh.nvertices == 27
+    assert len(mesh.groups) == 1
+    assert mesh.nelements == 8
+
+    # Simplex, empty mesh
+    mesh = mgen.generate_box_mesh(
+        3*(np.empty((0,)),), group_cls=SimplexElementGroup)
+
+    assert mesh.ambient_dim == 3
+    assert mesh.dim == 3
+    assert mesh.nvertices == 0
+    assert len(mesh.groups) == 1
+    assert mesh.nelements == 0
+
+    # Tensor product, empty mesh
+    mesh = mgen.generate_box_mesh(
+        3*(np.empty((0,)),), group_cls=TensorProductElementGroup)
+
+    assert mesh.ambient_dim == 3
+    assert mesh.dim == 3
+    assert mesh.nvertices == 0
+    assert len(mesh.groups) == 1
+    assert mesh.nelements == 0
+
 # }}}
 
 

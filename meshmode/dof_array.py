@@ -327,7 +327,8 @@ class DOFArray:
         for idx, ary in enumerate(data):
             assert len(axes_tags[idx]) == ary.ndim
             assert isinstance(axes_tags[idx], list)
-            d = actx.tag(tags[idx], actx.from_numpy(ary))
+
+            d = actx.from_numpy(ary)._with_new_tags(tags[idx])
 
             for ida, ax in enumerate(axes_tags[idx]):
                 d = actx.tag_axis(ida, ax, d)
