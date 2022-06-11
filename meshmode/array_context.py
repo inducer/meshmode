@@ -41,9 +41,7 @@ def thaw(actx, ary):
             "meshmode.array_context.thaw will continue to work until 2022.",
             DeprecationWarning, stacklevel=2)
 
-    from arraycontext import thaw as _thaw
-    # /!\ arg order flipped
-    return _thaw(ary, actx)
+    return actx.thaw(ary)
 
 
 # {{{ kernel transform function
