@@ -39,7 +39,6 @@ from meshmode.discretization.poly_element import (
         )
 import meshmode.mesh.generation as mgen
 
-from arraycontext import thaw
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from arraycontext import pytest_generate_tests_for_array_contexts
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
@@ -159,7 +158,7 @@ def test_visualizers(actx_factory, dim, group_cls):
     from meshmode.discretization import Discretization
     discr = Discretization(actx, mesh, group_factory(target_order))
 
-    nodes = thaw(discr.nodes(), actx)
+    nodes = actx.thaw(discr.nodes())
     f = actx.np.sqrt(sum(nodes**2)) + 1j*nodes[0]
     g = VisualizerData(g=f)
     names_and_fields = [("f", f), ("g", g)]

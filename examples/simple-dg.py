@@ -35,7 +35,6 @@ from meshmode.dof_array import DOFArray, flat_norm
 from meshmode.array_context import (PyOpenCLArrayContext,
                                     PytatoPyOpenCLArrayContext)
 from arraycontext import (
-        freeze, thaw,
         ArrayContainer,
         map_array_container,
         with_container_arithmetic,
@@ -57,7 +56,7 @@ logger = logging.getLogger(__name__)
 # {{{ discretization
 
 def parametrization_derivative(actx, discr):
-    thawed_nodes = thaw(discr.nodes(), actx)
+    thawed_nodes = actx.thaw(discr.nodes())
 
     from meshmode.discretization import num_reference_derivative
     result = np.zeros((discr.ambient_dim, discr.dim), dtype=object)
@@ -175,17 +174,17 @@ class DGDiscretization:
 
     @memoize_method
     def parametrization_derivative(self):
-        return freeze(
+        return self._setup_actx.freeze(
                 parametrization_derivative(self._setup_actx, self.volume_discr))
 
     @memoize_method
     def vol_jacobian(self):
-        [a, b], [c, d] = thaw(self.parametrization_derivative(), self._setup_actx)
-        return freeze(a*d-b*c)
+        [a, b], [c, d] = self._setup_actx.thaw(self.parametrization_derivative())
+        return self._setup_actx.freeze(a*d - b*c)
 
     @memoize_method
     def inverse_parametrization_derivative(self):
-        [a, b], [c, d] = thaw(self.parametrization_derivative(), self._setup_actx)
+        [a, b], [c, d] = self._setup_actx.thaw(self.parametrization_derivative())
 
         result = np.zeros((2, 2), dtype=object)
         det = a*d-b*c
@@ -194,13 +193,13 @@ class DGDiscretization:
         result[1, 0] = -c/det
         result[1, 1] = a/det
 
-        return freeze(result)
+        return self._setup_actx.freeze(result)
 
     def zeros(self, actx):
         return self.volume_discr.zeros(actx)
 
     def grad(self, vec):
-        ipder = thaw(self.inverse_parametrization_derivative(), vec.array_context)
+        ipder = vec.array_context.thaw(self.inverse_parametrization_derivative())
 
         from meshmode.discretization import num_reference_derivative
         dref = [
@@ -222,7 +221,7 @@ class DGDiscretization:
         ((a,), (b,)) = parametrization_derivative(self._setup_actx, bdry_discr)
 
         nrm = 1/(a**2+b**2)**0.5
-        return freeze(flat_obj_array(b*nrm, -a*nrm))
+        return self._setup_actx.freeze(flat_obj_array(b*nrm, -a*nrm))
 
     @memoize_method
     def face_jacobian(self, where):
@@ -230,7 +229,7 @@ class DGDiscretization:
 
         ((a,), (b,)) = parametrization_derivative(self._setup_actx, bdry_discr)
 
-        return freeze((a**2 + b**2)**0.5)
+        return self._setup_actx.freeze((a**2 + b**2)**0.5)
 
     @memoize_method
     def get_inverse_mass_matrix(self, grp, dtype):
@@ -261,7 +260,7 @@ class DGDiscretization:
                     tagged=(FirstAxisIsElementsTag(),)
                 ) for grp, vec_i in zip(discr.groups, vec)
             )
-        ) / thaw(self.vol_jacobian(), actx)
+        ) / actx.thaw(self.vol_jacobian())
 
     @memoize_method
     def get_local_face_mass_matrix(self, afgrp, volgrp, dtype):
@@ -300,7 +299,7 @@ class DGDiscretization:
         all_faces_discr = all_faces_conn.to_discr
         vol_discr = all_faces_conn.from_discr
 
-        fj = thaw(self.face_jacobian("all_faces"), vec.array_context)
+        fj = vec.array_context.thaw(self.face_jacobian("all_faces"))
         vec = vec*fj
 
         assert len(all_faces_discr.groups) == len(vol_discr.groups)
@@ -367,7 +366,7 @@ def wave_flux(actx, discr, c, q_tpair):
     u = q_tpair.u
     v = q_tpair.v
 
-    normal = thaw(discr.normal(q_tpair.where), actx)
+    normal = actx.thaw(discr.normal(q_tpair.where))
 
     flux_weak = WaveState(
             u=np.dot(v.avg, normal),
@@ -422,7 +421,7 @@ def bump(actx, discr, t=0):
     source_width = 0.05
     source_omega = 3
 
-    nodes = thaw(discr.volume_discr.nodes(), actx)
+    nodes = actx.thaw(discr.volume_discr.nodes())
     center_dist = flat_obj_array([
         nodes[0] - source_center[0],
         nodes[1] - source_center[1],
@@ -492,8 +491,8 @@ def main(lazy=False):
     compiled_rhs = actx_rhs.compile(rhs)
 
     def rhs_wrapper(t, q):
-        r = compiled_rhs(t, thaw(freeze(q, actx_outer), actx_rhs))
-        return thaw(freeze(r, actx_rhs), actx_outer)
+        r = compiled_rhs(t, actx_rhs.thaw(actx_outer.freeze(q)))
+        return actx_outer.thaw(actx_rhs.freeze(r))
 
     t = np.float64(0)
     t_final = 3
