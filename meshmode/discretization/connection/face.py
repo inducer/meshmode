@@ -22,6 +22,7 @@ THE SOFTWARE.
 
 from dataclasses import dataclass
 from meshmode.transform_metadata import DiscretizationElementAxisTag
+from arraycontext.metadata import NameHint
 
 import numpy as np
 import modepy as mp
@@ -446,10 +447,12 @@ def make_face_to_all_faces_embedding(actx, faces_connection, all_faces_discr,
                 assert all_faces_grp.nelements == nfaces * vol_grp.nelements
 
                 to_element_indices = actx.freeze(
-                    actx.tag_axis(0,
-                                  DiscretizationElementAxisTag(),
-                                  vol_grp.nelements*iface
-                                  + actx.thaw(src_batch.from_element_indices)))
+                        actx.tag(
+                            NameHint("f2allf_ind"),
+                            actx.tag_axis(0,
+                                DiscretizationElementAxisTag(),
+                                vol_grp.nelements*iface
+                                + actx.thaw(src_batch.from_element_indices))))
 
             batches.append(
                     InterpolationBatch(

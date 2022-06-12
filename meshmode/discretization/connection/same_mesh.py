@@ -42,13 +42,15 @@ def make_same_mesh_connection(actx, to_discr, from_discr):
 
     groups = []
     for igrp, (fgrp, tgrp) in enumerate(zip(from_discr.groups, to_discr.groups)):
-        all_elements = actx.freeze(
-                actx.tag_axis(0,
-                              DiscretizationElementAxisTag(),
-                              actx.from_numpy(
-                                  np.arange(
-                                      fgrp.nelements,
-                                      dtype=np.intp))))
+        from arraycontext.metadata import NameHint
+        all_elements = actx.tag(NameHint(f"all_el_ind_grp{igrp}"),
+                    actx.tag_axis(0,
+                        DiscretizationElementAxisTag(),
+                        actx.from_numpy(
+                            np.arange(
+                                fgrp.nelements,
+                                dtype=np.intp))))
+        all_elements = actx.freeze(all_elements)
         ibatch = InterpolationBatch(
                 from_group_index=igrp,
                 from_element_indices=all_elements,
