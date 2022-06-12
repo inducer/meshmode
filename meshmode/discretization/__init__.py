@@ -649,6 +649,7 @@ class Discretization:
             raise ElementGroupTypeError("Element groups must be nodal.")
 
         def resample_mesh_nodes(grp, iaxis):
+            name_hint = f"nodes{iaxis}_{self.ambient_dim}d"
             # TODO: would be nice to have the mesh use an array context already
             nodes = tag_axes(actx,
                     {0: DiscretizationElementAxisTag(),
@@ -658,10 +659,12 @@ class Discretization:
             grp_unit_nodes = grp.unit_nodes.reshape(-1)
             meg_unit_nodes = grp.mesh_el_group.unit_nodes.reshape(-1)
 
+            from arraycontext.metadata import NameHint
+
             tol = 10 * np.finfo(grp_unit_nodes.dtype).eps
             if (grp_unit_nodes.shape == meg_unit_nodes.shape
                     and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
-                return nodes
+                return actx.tag(NameHint(name_hint), nodes)
 
             return actx.einsum("ij,ej->ei",
                                actx.tag_axis(
@@ -669,7 +672,9 @@ class Discretization:
                                    DiscretizationDOFAxisTag(),
                                    actx.from_numpy(grp.from_mesh_interp_matrix())),
                                nodes,
-                               tagged=(FirstAxisIsElementsTag(),))
+                               tagged=(
+                                   FirstAxisIsElementsTag(),
+                                   NameHint(name_hint)))
 
         result = make_obj_array([
             _DOFArray(None, tuple([
