@@ -7,7 +7,7 @@
 .. autoclass:: DiscretizationFaceAxisTag
 .. autoclass:: DiscretizationDOFAxisTag
 .. autoclass:: DiscretizationAmbientDimAxisTag
-.. autoclass:: DiscretizationTopologicalAxisTag
+.. autoclass:: DiscretizationTopologicalDimAxisTag
 """
 
 __copyright__ = """
@@ -116,7 +116,7 @@ class DiscretizationAmbientDimAxisTag(DiscretizationDimAxisTag):
     """
 
 
-class DiscretizationTopologicalAxisTag(DiscretizationDimAxisTag):
+class DiscretizationTopologicalDimAxisTag(DiscretizationDimAxisTag):
     """
     Array dimensions tagged with this tag type describe an axis indexing over
     the discretization's physical coordinate dimensions.
