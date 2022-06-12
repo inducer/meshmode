@@ -47,9 +47,9 @@ from meshmode.transform_metadata import (DiscretizationElementAxisTag,
                                          DiscretizationDOFAxisTag,
                                          DiscretizationFaceAxisTag,
                                          DiscretizationDimAxisTag,
-                                         DiscretizationPhysicalDimAxisTag,
-                                         DiscretizationRefDimAxisTag,
-                                         DiscretizationMeshNodesAxisTag,
+                                         DiscretizationAmbientDimAxisTag,
+                                         DiscretizationTopologicalDimAxisTag,
+                                         DiscretizationFlattenedDOFAxisTag,
                                          DiscretizationEntityAxisTag)
 
 from pyrsistent import pmap
@@ -896,7 +896,7 @@ def _get_iel_to_idofs(kernel):
                   if (kernel
                       .inames[iname]
                       .tags_of_type((DiscretizationElementAxisTag,
-                                     DiscretizationMeshNodesAxisTag)))
+                                     DiscretizationFlattenedDOFAxisTag)))
                   }
     idof_inames = {iname
                    for iname in kernel.all_inames()
@@ -972,7 +972,7 @@ def _get_iel_loop_from_insn(insn, knl):
     iel, = {iname
             for iname in insn.within_inames
             if knl.inames[iname].tags_of_type((DiscretizationElementAxisTag,
-                                               DiscretizationMeshNodesAxisTag))}
+                                               DiscretizationFlattenedDOFAxisTag))}
     return iel
 
 
@@ -998,13 +998,13 @@ class EinsumTag(UniqueTag):
 
 
 def _prepare_kernel_for_parallelization(kernel):
-    discr_tag_to_prefix = {DiscretizationElementAxisTag:     "iel",
-                           DiscretizationDOFAxisTag:         "idof",
-                           DiscretizationDimAxisTag:         "idim",
-                           DiscretizationPhysicalDimAxisTag: "idim",
-                           DiscretizationRefDimAxisTag:      "idim",
-                           DiscretizationMeshNodesAxisTag:   "imsh_nodes",
-                           DiscretizationFaceAxisTag:        "iface"}
+    discr_tag_to_prefix = {DiscretizationElementAxisTag: "iel",
+                           DiscretizationDOFAxisTag: "idof",
+                           DiscretizationDimAxisTag: "idim",
+                           DiscretizationAmbientDimAxisTag: "idim",
+                           DiscretizationTopologicalDimAxisTag: "idim",
+                           DiscretizationFlattenedDOFAxisTag: "imsh_nodes",
+                           DiscretizationFaceAxisTag: "iface"}
     import loopy as lp
     from loopy.match import ObjTagged
 
