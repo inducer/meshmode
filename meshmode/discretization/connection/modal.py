@@ -27,10 +27,10 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
-from arraycontext import (NotAnArrayContainerError,
-    serialize_container, deserialize_container,)
 from meshmode.transform_metadata import (FirstAxisIsElementsTag,
-    IsDOFArray, IsOpArray, EinsumArgsTags)
+    DiscretizationDOFAxisTag, IsDOFArray, IsOpArray, EinsumArgsTags)
+from arraycontext import (
+        NotAnArrayContainerError, serialize_container, deserialize_container)
 from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
@@ -143,12 +143,12 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
                                  grp.unit_nodes)
             w_diag = np.diag(grp.quadrature_rule().weights)
             vtw = np.dot(vdm.T, w_diag)
-            return actx.from_numpy(vtw)
+            return actx.tag_axis(0, DiscretizationDOFAxisTag(),
+                    actx.from_numpy(vtw))
 
         return actx.einsum("ib,eb->ei",
-                           quadrature_matrix(grp, mgrp),
-                           ary,
-                           tagged=(FirstAxisIsElementsTag(),))
+                quadrature_matrix(grp, mgrp),
+                ary, tagged=(FirstAxisIsElementsTag(),))
 
     def _compute_coeffs_via_inv_vandermonde(self, actx, ary, grp):
 
@@ -161,15 +161,16 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             vdm = mp.vandermonde(grp.basis_obj().functions,
                                  grp.unit_nodes)
             vdm_inv = la.inv(vdm)
-            return actx.from_numpy(vdm_inv)
+            return actx.tag_axis(0, DiscretizationDOFAxisTag(),
+                    actx.from_numpy(vdm_inv))
 
         kd_tag = EinsumArgsTags({"arg0": (IsOpArray(),),
                     "arg1": (IsDOFArray(),), "out": (IsDOFArray(),)})
 
         return actx.einsum("ij,ej->ei",
-                           vandermonde_inverse(grp),
-                           ary,
-                           tagged=(FirstAxisIsElementsTag(), kd_tag,))
+                       vandermonde_inverse(grp),
+                       ary,
+                       tagged=(FirstAxisIsElementsTag(), kd_tag,))
 
     def __call__(self, ary):
         """Computes modal coefficients data from a functions

@@ -34,7 +34,6 @@ pytest_generate_tests = pytest_generate_tests_for_array_contexts(
          ])
 
 from arraycontext import (
-        thaw, freeze,
         dataclass_array_container,
         with_container_arithmetic)
 
@@ -87,7 +86,7 @@ def test_flatten_unflatten(actx_factory):
     a_round_trip = flatten_to_numpy(actx, unflatten_from_numpy(actx, discr, a))
     assert np.array_equal(a, a_round_trip)
 
-    x = thaw(discr.nodes(), actx)
+    x = actx.thaw(discr.nodes())
     avg_mass = DOFArray(actx, tuple([
         (np.pi + actx.zeros((grp.nelements, 1), a.dtype)) for grp in discr.groups
         ]))
@@ -114,7 +113,7 @@ def _get_test_containers(actx, ambient_dim=2):
             b=(+0.5,)*ambient_dim,
             nelements_per_axis=(3,)*ambient_dim, order=1)
     discr = Discretization(actx, mesh, default_simplex_group_factory(ambient_dim, 3))
-    x = thaw(discr.nodes()[0], actx)
+    x = actx.thaw(discr.nodes()[0])
 
     # pylint: disable=unexpected-keyword-arg, no-value-for-parameter
     dataclass_of_dofs = MyContainer(
@@ -207,9 +206,9 @@ def test_dof_array_pickling_tags(actx_factory):
     state = DOFArray(actx, (actx.zeros((10, 10), "float64"),
                      actx.zeros((10, 10), "float64"),))
 
-    state = thaw(freeze(actx.tag(FooTag(), state), actx), actx)
-    state = thaw(freeze(actx.tag_axis(0, FooAxisTag(), state), actx), actx)
-    state = thaw(freeze(actx.tag_axis(1, FooAxisTag2(), state), actx), actx)
+    state = actx.thaw(actx.freeze(actx.tag(FooTag(), state)))
+    state = actx.thaw(actx.freeze(actx.tag_axis(0, FooAxisTag(), state)))
+    state = actx.thaw(actx.freeze(actx.tag_axis(1, FooAxisTag2(), state)))
 
     with array_context_for_pickling(actx):
         pkl = dumps((state, ))

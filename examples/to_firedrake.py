@@ -25,7 +25,6 @@ import numpy as np
 import pyopencl as cl
 
 from meshmode.array_context import PyOpenCLArrayContext
-from arraycontext import thaw
 
 
 # Nb: Some of the initial setup was adapted from meshmode/examplse/simple-dg.py
@@ -75,7 +74,7 @@ def main():
     #           = e^x cos(y)
     nodes = discr.nodes()
     for i in range(len(nodes)):
-        nodes[i] = thaw(nodes[i], actx)
+        nodes[i] = actx.thaw(nodes[i])
     # First index is dimension
     candidate_sol = actx.np.exp(nodes[0]) * actx.np.cos(nodes[1])
 

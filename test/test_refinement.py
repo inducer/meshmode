@@ -26,8 +26,6 @@ from functools import partial
 import numpy as np
 import pytest
 
-from arraycontext import thaw
-
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from arraycontext import pytest_generate_tests_for_array_contexts
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
@@ -274,8 +272,8 @@ def test_refinement_connection(
 
         fine_discr = connection.to_discr
 
-        x = thaw(discr.nodes(), actx)
-        x_fine = thaw(fine_discr.nodes(), actx)
+        x = actx.thaw(discr.nodes())
+        x_fine = actx.thaw(fine_discr.nodes())
         f_coarse = f(x)
         f_interp = connection(f_coarse)
         f_true = f(x_fine)

@@ -31,11 +31,13 @@ from pytools import memoize_method
 import loopy as lp
 from meshmode.transform_metadata import (
         ConcurrentElementInameTag, ConcurrentDOFInameTag,
-        IsDOFArray, ParameterValue)
+        IsDOFArray, ParameterValue,
+        DiscretizationElementAxisTag, DiscretizationDOFAxisTag)
 from pytools import memoize_in, keyed_memoize_method
 from arraycontext import (
         ArrayContext, NotAnArrayContainerError,
         serialize_container, deserialize_container, make_loopy_program,
+        tag_axes
         )
 from arraycontext.container import ArrayT, ArrayOrContainerT
 
@@ -373,7 +375,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     from_grp_basis_fcts,
                     ibatch.result_unit_nodes, from_grp.unit_nodes)
 
-        return actx.freeze(actx.from_numpy(result))
+        # freeze, attach metadata
+        return actx.freeze(
+                tag_axes(actx, {1: DiscretizationDOFAxisTag()},
+                    actx.from_numpy(result)))
 
     # }}}
 
@@ -743,6 +748,14 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                                     from_el_present.reshape((-1, 1)),
                                     grp_ary_contrib,
                                     0)
+
+                            # attach metadata
+                            grp_ary_contrib = tag_axes(
+                                    actx,
+                                    {0: DiscretizationElementAxisTag(),
+                                        1: DiscretizationDOFAxisTag()},
+                                    grp_ary_contrib)
+
                             group_array_contributions.append(grp_ary_contrib)
                 else:
                     for fgpd in group_pick_info:
@@ -837,6 +850,12 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                                 nunit_dofs_tgt=(
                                     self.to_discr.groups[i_tgrp].nunit_dofs)
                             )["result"]
+
+                    # attach metadata
+                    batch_result = tag_axes(actx,
+                                            {0: DiscretizationElementAxisTag(),
+                                             1: DiscretizationDOFAxisTag()},
+                                            batch_result,)
 
                     group_array_contributions.append(batch_result)
 
