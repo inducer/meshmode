@@ -25,7 +25,6 @@ import pyopencl as cl
 
 from meshmode.array_context import PyOpenCLArrayContext
 from meshmode.transform_metadata import FirstAxisIsElementsTag
-from arraycontext import thaw
 
 from pytools import keyed_memoize_in
 from pytools.obj_array import make_obj_array
@@ -186,7 +185,7 @@ def run(actx, *,
 
     def source(t, x):
         discr = reconstruct_discr_from_nodes(actx, discr0, x)
-        u = velocity_field(thaw(discr.nodes(), actx))
+        u = velocity_field(actx.thaw(discr.nodes()))
 
         # {{{
 
@@ -194,7 +193,7 @@ def run(actx, *,
         # profile some more operators (turned out well!)
 
         from meshmode.discretization import num_reference_derivative
-        x = thaw(discr.nodes()[0], actx)
+        x = actx.thaw(discr.nodes()[0])
         gradx = sum(
                 num_reference_derivative(discr, (i,), x)
                 for i in range(discr.dim))
@@ -214,7 +213,7 @@ def run(actx, *,
     maxiter = int(tmax // timestep) + 1
     dt = tmax / maxiter + 1.0e-15
 
-    x = thaw(discr0.nodes(), actx)
+    x = actx.thaw(discr0.nodes())
     t = 0.0
 
     if visualize:

@@ -36,11 +36,13 @@ except ImportError:
 import numpy as np
 
 import loopy as lp
-from arraycontext import ArrayContext, make_loopy_program
+from arraycontext import ArrayContext, make_loopy_program, tag_axes
 from pytools import memoize_in, memoize_method, keyed_memoize_in
 from pytools.obj_array import make_obj_array
 from meshmode.transform_metadata import (
-        ConcurrentElementInameTag, ConcurrentDOFInameTag, FirstAxisIsElementsTag)
+        ConcurrentElementInameTag, ConcurrentDOFInameTag,
+        FirstAxisIsElementsTag, DiscretizationElementAxisTag,
+        DiscretizationDOFAxisTag)
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
@@ -542,9 +544,14 @@ class Discretization:
         else:
             dtype = np.dtype(dtype)
 
-        return _DOFArray(actx, tuple(
-            creation_func(shape=(grp.nelements, grp.nunit_dofs), dtype=dtype)
-            for grp in self.groups))
+        return tag_axes(actx, {
+                    0: DiscretizationElementAxisTag(),
+                    1: DiscretizationDOFAxisTag()},
+                _DOFArray(actx,
+                           tuple(creation_func(shape=(grp.nelements,
+                                                      grp.nunit_dofs),
+                                               dtype=dtype)
+                                 for grp in self.groups)))
 
     def empty(self, actx: ArrayContext,
               dtype: Optional[np.dtype] = None) -> _DOFArray:
@@ -642,21 +649,32 @@ class Discretization:
             raise ElementGroupTypeError("Element groups must be nodal.")
 
         def resample_mesh_nodes(grp, iaxis):
+            name_hint = f"nodes{iaxis}_{self.ambient_dim}d"
             # TODO: would be nice to have the mesh use an array context already
-            nodes = actx.from_numpy(grp.mesh_el_group.nodes[iaxis])
+            nodes = tag_axes(actx,
+                    {0: DiscretizationElementAxisTag(),
+                        1: DiscretizationDOFAxisTag()},
+                    actx.from_numpy(grp.mesh_el_group.nodes[iaxis]))
 
             grp_unit_nodes = grp.unit_nodes.reshape(-1)
             meg_unit_nodes = grp.mesh_el_group.unit_nodes.reshape(-1)
 
+            from arraycontext.metadata import NameHint
+
             tol = 10 * np.finfo(grp_unit_nodes.dtype).eps
             if (grp_unit_nodes.shape == meg_unit_nodes.shape
                     and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
-                return nodes
+                return actx.tag(NameHint(name_hint), nodes)
 
             return actx.einsum("ij,ej->ei",
-                               actx.from_numpy(grp.from_mesh_interp_matrix()),
+                               actx.tag_axis(
+                                   0,
+                                   DiscretizationDOFAxisTag(),
+                                   actx.from_numpy(grp.from_mesh_interp_matrix())),
                                nodes,
-                               tagged=(FirstAxisIsElementsTag(),))
+                               tagged=(
+                                   FirstAxisIsElementsTag(),
+                                   NameHint(name_hint)))
 
         result = make_obj_array([
             _DOFArray(None, tuple([
@@ -714,7 +732,9 @@ def num_reference_derivative(
 
     return _DOFArray(actx, tuple(
             actx.einsum("ij,ej->ei",
-                        get_mat(grp, ref_axes),
+                        actx.tag_axis(0,
+                                      DiscretizationDOFAxisTag(),
+                                      get_mat(grp, ref_axes)),
                         vec[igrp],
                         tagged=(FirstAxisIsElementsTag(),))
             for igrp, grp in enumerate(discr.groups)))

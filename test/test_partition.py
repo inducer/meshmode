@@ -28,7 +28,7 @@ import pyopencl as cl
 
 from meshmode.dof_array import flat_norm
 
-from arraycontext import thaw, flatten, unflatten
+from arraycontext import flatten, unflatten
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from arraycontext import pytest_generate_tests_for_array_contexts
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
@@ -161,7 +161,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
             check_connection(actx, remote_to_local_conn)
             check_connection(actx, local_to_remote_conn)
 
-            true_local_points = f(thaw(local_bdry.nodes()[0], actx))
+            true_local_points = f(actx.thaw(local_bdry.nodes()[0]))
             remote_points = local_to_remote_conn(true_local_points)
             local_points = remote_to_local_conn(remote_points)
 
@@ -490,7 +490,7 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
     for i_remote_part in connected_parts:
         conn = remote_to_local_bdry_conns[i_remote_part]
         bdry_discr = local_bdry_conns[i_remote_part].to_discr
-        bdry_x = thaw(bdry_discr.nodes()[0], actx)
+        bdry_x = actx.thaw(bdry_discr.nodes()[0])
 
         true_local_f = f(bdry_x)
         remote_f = conn(true_local_f)
@@ -529,7 +529,7 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
         conn = remote_to_local_bdry_conns[i_remote_part]
 
         local_f = unflatten(
-                thaw(conn.from_discr.nodes()[0], actx),
+                actx.thaw(conn.from_discr.nodes()[0]),
                 actx.from_numpy(remote_to_local_f_data[i_remote_part]),
                 actx)
         remote_f = actx.to_numpy(flatten(conn(local_f), actx))
@@ -564,7 +564,7 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
     # 7.
     for i_remote_part in connected_parts:
         bdry_discr = local_bdry_conns[i_remote_part].to_discr
-        bdry_x = thaw(bdry_discr.nodes()[0], actx)
+        bdry_x = actx.thaw(bdry_discr.nodes()[0])
 
         true_local_f = actx.to_numpy(flatten(f(bdry_x), actx))
         local_f = local_f_data[i_remote_part]

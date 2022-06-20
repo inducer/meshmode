@@ -31,8 +31,9 @@ import numpy as np
 
 from pytools import memoize_method
 from pytools.obj_array import make_obj_array
-from arraycontext import thaw, flatten
+from arraycontext import flatten
 from meshmode.dof_array import DOFArray
+from meshmode.transform_metadata import DiscretizationFlattenedDOFAxisTag
 
 from modepy.shapes import Shape, Simplex, Hypercube
 
@@ -144,7 +145,9 @@ def _resample_to_numpy(conn, vis_discr, vec, *, stack=False, by_group=False):
                 from meshmode.dof_array import check_dofarray_against_discr
                 check_dofarray_against_discr(vis_discr, vec)
 
-            return actx.to_numpy(flatten(vec, actx))
+            return actx.to_numpy(actx.tag_axis(0,
+                                               DiscretizationFlattenedDOFAxisTag(),
+                                               flatten(vec, actx)))
         else:
             raise TypeError(f"unsupported array type: {type(vec).__name__}")
 
@@ -550,7 +553,10 @@ class Visualizer:
     def _vis_nodes_numpy(self):
         actx = self.vis_discr._setup_actx
         return np.array([
-            actx.to_numpy(flatten(thaw(ary, actx), actx))
+            actx.to_numpy(actx.tag_axis(
+                0,
+                DiscretizationFlattenedDOFAxisTag(),
+                flatten(actx.thaw(ary), actx)))
             for ary in self.vis_discr.nodes()
             ])
 
@@ -1028,7 +1034,7 @@ class Visualizer:
         actx = self.vis_discr._setup_actx
         return _resample_to_numpy(
                 lambda x: x, self.vis_discr,
-                thaw(self.vis_discr.nodes(), actx),
+                actx.thaw(self.vis_discr.nodes()),
                 stack=True, by_group=True)
 
     def _vtk_to_xdmf_cell_type(self, cell_type):

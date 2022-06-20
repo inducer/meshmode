@@ -24,7 +24,6 @@ THE SOFTWARE.
 from functools import partial
 import numpy as np
 
-from arraycontext import thaw
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from arraycontext import pytest_generate_tests_for_array_contexts
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
@@ -100,7 +99,7 @@ def test_inverse_modal_connections(actx_factory, nodal_group_factory):
         modal_disc, nodal_disc
     )
 
-    x_nodal = thaw(nodal_disc.nodes()[0], actx)
+    x_nodal = actx.thaw(nodal_disc.nodes()[0])
     nodal_f = f(x_nodal)
 
     # Map nodal coefficients of f to modal coefficients
@@ -142,7 +141,7 @@ def test_modal_coefficients_by_projection(actx_factory, quad_group_factory):
     def f(x):
         return 2*actx.np.sin(5*x)
 
-    x_nodal = thaw(nodal_disc.nodes()[0], actx)
+    x_nodal = actx.thaw(nodal_disc.nodes()[0])
     nodal_f = f(x_nodal)
 
     # Compute modal coefficients we expect to get
@@ -208,7 +207,7 @@ def test_quadrature_based_modal_connection_reverse(actx_factory, quad_group_fact
     def f(x):
         return 1 + 2*x + 3*x**2
 
-    x_nodal = thaw(nodal_disc.nodes()[0], actx)
+    x_nodal = actx.thaw(nodal_disc.nodes()[0])
     nodal_f = f(x_nodal)
 
     # Map nodal coefficients using the quadrature-based projection
@@ -279,7 +278,7 @@ def test_modal_truncation(actx_factory, nodal_group_factory,
             modal_disc, nodal_disc
         )
 
-        x_nodal = thaw(nodal_disc.nodes()[0], actx)
+        x_nodal = actx.thaw(nodal_disc.nodes()[0])
         nodal_f = f(x_nodal)
 
         # Map to modal

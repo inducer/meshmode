@@ -2,7 +2,6 @@ import numpy as np  # noqa
 import pyopencl as cl
 
 from meshmode.array_context import PyOpenCLArrayContext
-from arraycontext import thaw
 
 order = 4
 
@@ -30,7 +29,7 @@ def main():
     vis = make_visualizer(actx, discr, order)
 
     vis.write_vtk_file("geometry.vtu", [
-        ("f", thaw(discr.nodes()[0], actx)),
+        ("f", actx.thaw(discr.nodes()[0])),
         ])
 
     from meshmode.discretization.visualization import \

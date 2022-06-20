@@ -41,9 +41,7 @@ def thaw(actx, ary):
             "meshmode.array_context.thaw will continue to work until 2022.",
             DeprecationWarning, stacklevel=2)
 
-    from arraycontext import thaw as _thaw
-    # /!\ arg order flipped
-    return _thaw(ary, actx)
+    return actx.thaw(ary)
 
 
 # {{{ kernel transform function
@@ -235,6 +233,27 @@ class PyOpenCLArrayContext(PyOpenCLArrayContextBase):
 # {{{ pytato pyopencl array context subclass
 
 class PytatoPyOpenCLArrayContext(PytatoPyOpenCLArrayContextBase):
+    def transform_dag(self, dag):
+        dag = super().transform_dag(dag)
+
+        # {{{ /!\ Remove tags from NamedArrays
+        # See <https://www.github.com/inducer/pytato/issues/195>
+
+        import pytato as pt
+
+        def untag_loopy_call_results(expr):
+            if isinstance(expr, pt.NamedArray):
+                return expr.copy(tags=frozenset(),
+                                 axes=(pt.Axis(frozenset()),)*expr.ndim)
+            else:
+                return expr
+
+        dag = pt.transform.map_and_copy(dag, untag_loopy_call_results)
+
+        # }}}
+
+        return dag
+
     def transform_loopy_program(self, t_unit):
         # FIXME: Do not parallelize for now.
         return t_unit

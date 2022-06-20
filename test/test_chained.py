@@ -28,7 +28,7 @@ from arraycontext import pytest_generate_tests_for_array_contexts
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         [PytestPyOpenCLArrayContextFactory])
 
-from arraycontext import thaw, flatten
+from arraycontext import flatten
 from meshmode.dof_array import flat_norm
 
 import logging
@@ -210,7 +210,7 @@ def test_chained_connection(actx_factory, ndim, visualize=False):
         from functools import reduce
         return 0.1 * reduce(lambda x, y: x * actx.np.sin(5 * y), x)
 
-    x = thaw(connections[0].from_discr.nodes(), actx)
+    x = actx.thaw(connections[0].from_discr.nodes())
     fx = f(x)
     f1 = chained(fx)
     f2 = connections[1](connections[0](fx))
@@ -242,7 +242,7 @@ def test_chained_full_resample_matrix(actx_factory, ndim, visualize=False):
 
     resample_mat = actx.to_numpy(make_full_resample_matrix(actx, chained))
 
-    x = thaw(connections[0].from_discr.nodes(), actx)
+    x = actx.thaw(connections[0].from_discr.nodes())
     fx = f(x)
     f1 = resample_mat @ actx.to_numpy(flatten(fx, actx))
     f2 = actx.to_numpy(flatten(chained(fx), actx))
@@ -307,7 +307,7 @@ def test_chained_to_direct(actx_factory, ndim, chain_type,
         from functools import reduce
         return 0.1 * reduce(lambda x, y: x * actx.np.sin(5 * y), x)
 
-    x = thaw(connections[0].from_discr.nodes(), actx)
+    x = actx.thaw(connections[0].from_discr.nodes())
     fx = f(x)
 
     t_start = time.time()
@@ -370,8 +370,8 @@ def test_reversed_chained_connection(actx_factory, ndim, mesh_name):
         reverse = L2ProjectionInverseDiscretizationConnection(chained)
 
         # create test vector
-        from_nodes = thaw(chained.from_discr.nodes(), actx)
-        to_nodes = thaw(chained.to_discr.nodes(), actx)
+        from_nodes = actx.thaw(chained.from_discr.nodes())
+        to_nodes = actx.thaw(chained.to_discr.nodes())
 
         from_x = 0
         to_x = 0

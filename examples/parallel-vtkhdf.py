@@ -63,9 +63,8 @@ def main(*, ambient_dim: int) -> None:
 
     logger.info("[%4d] discretization: finished", mpirank)
 
-    from arraycontext import thaw
-    vector_field = thaw(discr.nodes(), actx)
-    scalar_field = actx.np.sin(thaw(discr.nodes()[0], actx))
+    vector_field = actx.thaw(discr.nodes())
+    scalar_field = actx.np.sin(vector_field[0])
     part_id = 1 + mpirank + discr.zeros(actx)
     logger.info("[%4d] fields: finished", mpirank)
 

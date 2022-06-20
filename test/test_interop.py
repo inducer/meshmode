@@ -24,8 +24,6 @@ THE SOFTWARE.
 import numpy as np
 import pytest
 
-from arraycontext import thaw
-
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from arraycontext import pytest_generate_tests_for_array_contexts
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
@@ -58,10 +56,10 @@ def test_nodal_dg_interop(actx_factory, dim):
 
         for ax in range(dim):
             x_ax = ndgctx.pull_dof_array(actx, ndgctx.AXES[ax])
-            err = flat_norm(x_ax-thaw(discr.nodes()[ax], actx), np.inf)
+            err = flat_norm(x_ax - actx.thaw(discr.nodes()[ax]), np.inf)
             assert err < 1e-15
 
-        n0 = thaw(discr.nodes()[0], actx)
+        n0 = actx.thaw(discr.nodes()[0])
 
         ndgctx.push_dof_array("n0", n0)
         n0_2 = ndgctx.pull_dof_array(actx, "n0")
