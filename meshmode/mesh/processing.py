@@ -116,52 +116,38 @@ def _filter_mesh_groups(mesh, selected_elements, vertex_id_dtype):
     :arg selected_elements: A sorted array of indices of elements to be included in
         the filtered groups.
     :arg vertex_id_dtype: The vertex index data type.
-    :returns: A tuple ``(new_groups, group_to_new_group, required_vertex_indices)``,
-        where *new_groups* is made up of groups from *groups* with elements not in
-        *selected_elements* removed (Note: empty groups are omitted),
-        *group_to_new_group* maps groups in *groups* to their corresponding location
-        in *new_groups*, and *required_vertex_indices* contains indices of all
-        vertices required for elements belonging to *new_groups*.
+    :returns: A tuple ``(new_groups, required_vertex_indices)``, where *new_groups*
+        is made up of groups from *groups* containing only elements from
+        *selected_elements* (Note: resulting groups may be empty) and
+        *required_vertex_indices* contains indices of all vertices required for
+        elements belonging to *new_groups*.
     """
 
-    # {{{ find n_new_groups, group_to_new_group, filtered_group_elements
+    # {{{ find filtered_group_elements
 
     group_elem_starts = [
         np.searchsorted(selected_elements, base_element_nr)
         for base_element_nr in mesh.base_element_nrs
         ] + [len(selected_elements)]
 
-    new_group_to_old_group = []
     filtered_group_elements = []
     for igrp in range(len(mesh.groups)):
         start_idx, end_idx = group_elem_starts[igrp:igrp+2]
-        # if end_idx == start_idx:
-        #     continue
 
-        new_group_to_old_group.append(igrp)
         filtered_group_elements.append(
             selected_elements[start_idx:end_idx] - mesh.base_element_nrs[igrp])
-
-    n_new_groups = len(new_group_to_old_group)
-
-    group_to_new_group = [None] * len(mesh.groups)
-    for i_new_grp, i_old_grp in enumerate(new_group_to_old_group):
-        group_to_new_group[i_old_grp] = i_new_grp
 
     # }}}
 
     # {{{ filter vertex indices
 
     filtered_vertex_indices = [
-            mesh.groups[i_old_grp].vertex_indices[
-                    filtered_group_elements[i_new_grp], :]
-            for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
+            mesh.groups[igrp].vertex_indices[
+                    filtered_group_elements[igrp], :]
+            for igrp in range(len(mesh.groups))]
 
-    if n_new_groups > 0:
-        filtered_vertex_indices_flat = np.concatenate([indices.ravel() for indices
-                    in filtered_vertex_indices])
-    else:
-        filtered_vertex_indices_flat = np.empty(0, dtype=vertex_id_dtype)
+    filtered_vertex_indices_flat = np.concatenate([indices.ravel() for indices
+                in filtered_vertex_indices])
 
     required_vertex_indices, new_vertex_indices_flat = np.unique(
                 filtered_vertex_indices_flat, return_inverse=True)
@@ -178,14 +164,13 @@ def _filter_mesh_groups(mesh, selected_elements, vertex_id_dtype):
 
     from dataclasses import replace
     new_groups = [
-            replace(mesh.groups[i_old_grp],
-                vertex_indices=new_vertex_indices[i_new_grp],
-                nodes=mesh.groups[i_old_grp].nodes[
-                    :, filtered_group_elements[i_new_grp], :].copy(),
+            replace(grp,
+                vertex_indices=new_vertex_indices[igrp],
+                nodes=grp.nodes[:, filtered_group_elements[igrp], :].copy(),
                 element_nr_base=None, node_nr_base=None)
-            for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
+            for igrp, grp in enumerate(mesh.groups)]
 
-    return new_groups, group_to_new_group, required_vertex_indices
+    return new_groups, required_vertex_indices
 
 
 def _get_connected_partitions(
@@ -235,8 +220,7 @@ def _get_connected_partitions(
 
 
 def _create_self_to_self_adjacency_groups(mesh, global_elem_to_part_elem,
-            self_part_index, self_mesh_groups, global_group_to_self_group,
-            self_mesh_group_elem_base):
+            self_part_index, self_mesh_groups, self_mesh_group_elem_base):
     r"""
     Create self-to-self facial adjacency groups for a partitioned mesh.
 
@@ -248,9 +232,6 @@ def _create_self_to_self_adjacency_groups(mesh, global_elem_to_part_elem,
         the range ``[0, num_parts)``.
     :arg self_mesh_groups: An array of :class:`~meshmode.mesh.MeshElementGroup`
         instances representing the partitioned mesh groups.
-    :arg global_group_to_self_group: An array mapping groups in *mesh* to groups in
-        *self_mesh_groups* (or `None` if the group is not part of the current
-        partition).
     :arg self_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *self_mesh_groups*.
 
@@ -261,20 +242,12 @@ def _create_self_to_self_adjacency_groups(mesh, global_elem_to_part_elem,
     self_to_self_adjacency_groups = [[] for _ in self_mesh_groups]
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
-        i_self_grp = global_group_to_self_group[igrp]
-        if i_self_grp is None:
-            continue
-
         int_grps = [
             grp for grp in facial_adj_list
             if isinstance(grp, InteriorAdjacencyGroup)]
 
         for facial_adj in int_grps:
             jgrp = facial_adj.ineighbor_group
-
-            j_self_grp = global_group_to_self_group[jgrp]
-            if j_self_grp is None:
-                continue
 
             elem_base_i = mesh.base_element_nrs[igrp]
             elem_base_j = mesh.base_element_nrs[jgrp]
@@ -287,8 +260,8 @@ def _create_self_to_self_adjacency_groups(mesh, global_elem_to_part_elem,
             adj_indices, = np.where(elements_are_self & neighbors_are_self)
 
             if len(adj_indices) > 0:
-                self_elem_base_i = self_mesh_group_elem_base[i_self_grp]
-                self_elem_base_j = self_mesh_group_elem_base[j_self_grp]
+                self_elem_base_i = self_mesh_group_elem_base[igrp]
+                self_elem_base_j = self_mesh_group_elem_base[jgrp]
 
                 elements = global_elem_to_part_elem[facial_adj.elements[
                             adj_indices] + elem_base_i, 1] - self_elem_base_i
@@ -297,10 +270,10 @@ def _create_self_to_self_adjacency_groups(mesh, global_elem_to_part_elem,
                             adj_indices] + elem_base_j, 1] - self_elem_base_j
                 neighbor_faces = facial_adj.neighbor_faces[adj_indices]
 
-                self_to_self_adjacency_groups[i_self_grp].append(
+                self_to_self_adjacency_groups[igrp].append(
                     InteriorAdjacencyGroup(
-                        igroup=i_self_grp,
-                        ineighbor_group=j_self_grp,
+                        igroup=igrp,
+                        ineighbor_group=jgrp,
                         elements=elements,
                         element_faces=element_faces,
                         neighbors=neighbors,
@@ -312,8 +285,7 @@ def _create_self_to_self_adjacency_groups(mesh, global_elem_to_part_elem,
 
 def _create_self_to_other_adjacency_groups(
         mesh, part_id_to_part_index, global_elem_to_part_elem, self_part_id,
-        self_mesh_groups, global_group_to_self_group, self_mesh_group_elem_base,
-        connected_parts):
+        self_mesh_groups, self_mesh_group_elem_base, connected_parts):
     """
     Create self-to-other adjacency groups for the partitioned mesh.
 
@@ -326,9 +298,6 @@ def _create_self_to_other_adjacency_groups(
     :arg self_part_id: The identifier of the partition currently being created.
     :arg self_mesh_groups: An array of `~meshmode.mesh.MeshElementGroup` instances
         representing the partitioned mesh groups.
-    :arg global_group_to_self_group: An array mapping groups in *mesh* to groups in
-        *self_mesh_groups* (or `None` if the group is not part of the current
-        partition).
     :arg self_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *self_mesh_groups*.
     :arg connected_parts: A :class:`set` containing the partitions connected to
@@ -343,10 +312,6 @@ def _create_self_to_other_adjacency_groups(
     self_to_other_adj_groups = [[] for _ in self_mesh_groups]
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
-        i_self_grp = global_group_to_self_group[igrp]
-        if i_self_grp is None:
-            continue
-
         int_grps = [
             grp for grp in facial_adj_list
             if isinstance(grp, InteriorAdjacencyGroup)]
@@ -372,7 +337,7 @@ def _create_self_to_other_adjacency_groups(
                     & (neighbor_part_indices == neighbor_part_index))
 
                 if len(adj_indices) > 0:
-                    self_elem_base_i = self_mesh_group_elem_base[i_self_grp]
+                    self_elem_base_i = self_mesh_group_elem_base[igrp]
 
                     elements = global_elem_to_part_elem[facial_adj.elements[
                                 adj_indices] + elem_base_i, 1] - self_elem_base_i
@@ -381,9 +346,9 @@ def _create_self_to_other_adjacency_groups(
                         global_neighbors[adj_indices], 1]
                     neighbor_faces = facial_adj.neighbor_faces[adj_indices]
 
-                    self_to_other_adj_groups[i_self_grp].append(
+                    self_to_other_adj_groups[igrp].append(
                         InterPartitionAdjacencyGroup(
-                            igroup=i_self_grp,
+                            igroup=igrp,
                             boundary_tag=BTAG_PARTITION(neighbor_part_id),
                             elements=elements,
                             element_faces=element_faces,
@@ -395,7 +360,7 @@ def _create_self_to_other_adjacency_groups(
 
 
 def _create_boundary_groups(mesh, global_elem_to_part_elem, self_part_index,
-            self_mesh_groups, global_group_to_self_group, self_mesh_group_elem_base):
+            self_mesh_groups, self_mesh_group_elem_base):
     """
     Create boundary groups for partitioned mesh.
 
@@ -407,9 +372,6 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, self_part_index,
         the range ``[0, num_parts)``.
     :arg self_mesh_groups: An array of `~meshmode.mesh.MeshElementGroup` instances
         representing the partitioned mesh groups.
-    :arg global_group_to_self_group: An array mapping groups in *mesh* to groups in
-        *self_mesh_groups* (or `None` if the group is not part of the current
-        partition).
     :arg self_mesh_group_elem_base: An array containing the starting partition-wide
         element index for each group in *self_mesh_groups*.
 
@@ -420,10 +382,6 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, self_part_index,
     bdry_adj_groups = [[] for _ in self_mesh_groups]
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
-        i_self_grp = global_group_to_self_group[igrp]
-        if i_self_grp is None:
-            continue
-
         bdry_grps = [
             grp for grp in facial_adj_list
             if isinstance(grp, BoundaryAdjacencyGroup)]
@@ -436,7 +394,7 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, self_part_index,
                 == self_part_index)
 
             if len(adj_indices) > 0:
-                self_elem_base = self_mesh_group_elem_base[i_self_grp]
+                self_elem_base = self_mesh_group_elem_base[igrp]
                 elements = global_elem_to_part_elem[bdry_grp.elements[adj_indices]
                             + elem_base, 1] - self_elem_base
                 element_faces = bdry_grp.element_faces[adj_indices]
@@ -444,9 +402,9 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, self_part_index,
                 elements = np.empty(0, dtype=mesh.element_id_dtype)
                 element_faces = np.empty(0, dtype=mesh.face_id_dtype)
 
-            bdry_adj_groups[i_self_grp].append(
+            bdry_adj_groups[igrp].append(
                 BoundaryAdjacencyGroup(
-                    igroup=i_self_grp,
+                    igroup=igrp,
                     boundary_tag=bdry_grp.boundary_tag,
                     elements=elements,
                     element_faces=element_faces))
@@ -481,10 +439,8 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
 
     # Create new mesh groups that mimic the original mesh's groups but only contain
     # the current partition's elements
-    self_mesh_groups, global_group_to_self_group, required_vertex_indices =\
-                _filter_mesh_groups(
-                    mesh, part_id_to_elements[self_part_id],
-                    mesh.vertex_id_dtype)
+    self_mesh_groups, required_vertex_indices = _filter_mesh_groups(
+        mesh, part_id_to_elements[self_part_id], mesh.vertex_id_dtype)
 
     self_part_index = part_id_to_part_index[self_part_id]
 
@@ -494,8 +450,8 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
 
     self_mesh_group_elem_base = [0 for _ in self_mesh_groups]
     el_nr = 0
-    for i_self_grp, grp in enumerate(self_mesh_groups):
-        self_mesh_group_elem_base[i_self_grp] = el_nr
+    for igrp, grp in enumerate(self_mesh_groups):
+        self_mesh_group_elem_base[igrp] = el_nr
         el_nr += grp.nelements
 
     connected_parts = _get_connected_partitions(
@@ -504,23 +460,22 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
 
     self_to_self_adj_groups = _create_self_to_self_adjacency_groups(
                 mesh, global_elem_to_part_elem, self_part_index, self_mesh_groups,
-                global_group_to_self_group, self_mesh_group_elem_base)
+                self_mesh_group_elem_base)
 
     self_to_other_adj_groups = _create_self_to_other_adjacency_groups(
                 mesh, part_id_to_part_index, global_elem_to_part_elem, self_part_id,
-                self_mesh_groups, global_group_to_self_group,
-                self_mesh_group_elem_base, connected_parts)
+                self_mesh_groups, self_mesh_group_elem_base, connected_parts)
 
     boundary_adj_groups = _create_boundary_groups(
                 mesh, global_elem_to_part_elem, self_part_index, self_mesh_groups,
-                global_group_to_self_group, self_mesh_group_elem_base)
+                self_mesh_group_elem_base)
 
     # Combine adjacency groups
     self_facial_adj_groups = [
-        self_to_self_adj_groups[i_self_grp]
-        + self_to_other_adj_groups[i_self_grp]
-        + boundary_adj_groups[i_self_grp]
-        for i_self_grp in range(len(self_mesh_groups))]
+        self_to_self_adj_groups[igrp]
+        + self_to_other_adj_groups[igrp]
+        + boundary_adj_groups[igrp]
+        for igrp in range(len(self_mesh_groups))]
 
     from meshmode.mesh import Mesh
     self_mesh = Mesh(
