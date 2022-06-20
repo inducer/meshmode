@@ -39,8 +39,7 @@ from meshmode.transform_metadata import (
 from arraycontext import (
         ArrayContext, NotAnArrayContainerError,
         make_loopy_program, with_container_arithmetic,
-        serialize_container, deserialize_container,
-        thaw as _thaw, freeze as _freeze,
+        serialize_container, deserialize_container, with_array_context,
         rec_map_array_container, rec_multimap_array_container,
         mapped_over_array_containers, multimapped_over_array_containers)
 from arraycontext.container import ArrayOrContainerT
@@ -274,10 +273,10 @@ class DOFArray:
 
         # Make sure metadata inference has been done
         # https://github.com/inducer/meshmode/pull/318#issuecomment-1088320970
-        ary = _thaw(freeze(self, self.array_context), self.array_context)
+        ary = self.array_context.thaw(self.array_context.freeze(self))
 
         if self.array_context is not actx:
-            ary = _thaw(actx, _freeze(self))
+            ary = actx.thaw(actx.freeze(self))
 
         d = {}
         d["data"] = [actx.to_numpy(ary_i) for ary_i in ary._data]
@@ -326,7 +325,8 @@ class DOFArray:
         for idx, ary in enumerate(data):
             assert len(axes_tags[idx]) == ary.ndim
             assert isinstance(axes_tags[idx], list)
-            d = actx.tag(tags[idx], actx.from_numpy(ary))
+
+            d = actx.from_numpy(ary)._with_new_tags(tags[idx])
 
             for ida, ax in enumerate(axes_tags[idx]):
                 d = actx.tag_axis(ida, ax, d)
@@ -378,25 +378,11 @@ def _deserialize_dof_container(
                 data=tuple([v for _i, v in iterable]))
 
 
-@_freeze.register(DOFArray)
-def _freeze_dofarray(ary, actx=None):
-    if actx is not None:
-        if actx is not ary.array_context:
-            raise ValueError("supplied array context does not agree with the one "
-                    "in the DOFArray in freeze(DOFArray)")
-    return type(ary)(
-        None,
-        tuple(ary.array_context.freeze(subary) for subary in ary._data))
-
-
-@_thaw.register(DOFArray)
-def _thaw_dofarray(ary, actx):
-    if ary.array_context is not None:
-        raise ValueError("cannot thaw DOFArray that already has an array context")
-
-    return type(ary)(
-        actx,
-        tuple(actx.thaw(subary) for subary in ary._data))
+@with_array_context.register(DOFArray)
+def _with_actx_dofarray(ary, actx):
+    assert (actx is None) or all(isinstance(subary, actx.array_types)
+                                 for subary in ary._data)
+    return type(ary)(actx, ary._data)
 
 
 def rec_map_dof_array_container(f: Callable[[Any], Any], ary):
@@ -698,7 +684,7 @@ def flatten_to_numpy(actx: ArrayContext, ary: ArrayOrContainerT, *,
 
     def _flatten_to_numpy(subary):
         if isinstance(subary, DOFArray) and subary.array_context is None:
-            subary = _thaw(subary, actx)
+            subary = actx.thaw(subary)
 
         return actx.to_numpy(_flatten_dof_array(subary, strict=strict))
 
@@ -891,11 +877,15 @@ def thaw(actx, ary):
             "meshmode.dof_array.thaw will continue to work until 2022.",
             DeprecationWarning, stacklevel=2)
 
-    # /!\ arg order flipped
-    return _thaw(ary, actx)
+    return actx.thaw(ary)
 
 
-freeze = MovedFunctionDeprecationWrapper(_freeze, deadline="2022")
+def freeze(ary, actx):
+    warn("meshmode.dof_array.freeze is deprecated. Use arraycontext.freeze instead. "
+            "meshmode.dof_array.freeze will continue to work until 2022.",
+            DeprecationWarning, stacklevel=2)
+
+    return actx.freeze(ary)
 
 # }}}
 

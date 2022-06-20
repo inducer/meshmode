@@ -50,21 +50,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def connection_is_permutation(actx, conn):
-    for i_tgrp, cgrp in enumerate(conn.groups):
-        for i_batch, batch in enumerate(cgrp.batches):
-            if not len(batch.from_element_indices):
-                continue
-
-            point_pick_indices = conn._resample_point_pick_indices(
-                    actx, i_tgrp, i_batch)
-
-            if point_pick_indices is None:
-                return False
-
-    return True
-
-
 @pytest.mark.parametrize("group_factory", [
         "warp_and_blend",
         PolynomialEquidistantSimplexGroupFactory,
@@ -101,10 +86,15 @@ def test_bdry_restriction_is_permutation(actx_factory, group_factory, dim, order
             actx, vol_discr, group_factory(order),
             FACE_RESTR_ALL)
 
-    assert connection_is_permutation(actx, bdry_connection)
+    assert bdry_connection.is_permutation()
 
     opp_face = make_opposite_face_connection(actx, bdry_connection)
-    assert connection_is_permutation(actx, opp_face)
+    assert opp_face.is_permutation()
+
+    bdry_connection_upsample = make_face_restriction(
+            actx, vol_discr, group_factory(order+1),
+            FACE_RESTR_ALL)
+    assert not bdry_connection_upsample.is_permutation()
 
 
 if __name__ == "__main__":
