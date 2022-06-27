@@ -374,6 +374,7 @@ def _create_self_to_other_adjacency_groups(
                         InterPartAdjacencyGroup(
                             igroup=igrp,
                             boundary_tag=BTAG_PARTITION(neighbor_part_id),
+                            part_id=neighbor_part_id,
                             elements=elements,
                             element_faces=element_faces,
                             neighbors=neighbors,

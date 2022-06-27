@@ -173,7 +173,7 @@ def make_remote_group_infos(
                 inter_part_adj_groups=[
                     fagrp for fagrp in local_vol_mesh.facial_adjacency_groups[igrp]
                     if isinstance(fagrp, InterPartAdjacencyGroup)
-                    and fagrp.boundary_tag.part_id == remote_part_id],
+                    and fagrp.part_id == remote_part_id],
                 vol_elem_indices=np.concatenate([
                     actx.to_numpy(batch.from_element_indices)
                     for batch in bdry_conn.groups[igrp].batches]),
@@ -450,7 +450,7 @@ def get_connected_parts(mesh: Mesh) -> "Set[PartID]":
     assert mesh.facial_adjacency_groups is not None
 
     return {
-            grp.boundary_tag.part_id
+            grp.part_id
             for fagrp_list in mesh.facial_adjacency_groups
             for grp in fagrp_list
             if isinstance(grp, InterPartAdjacencyGroup)}

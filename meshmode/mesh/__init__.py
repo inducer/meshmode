@@ -784,6 +784,10 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
         The boundary tag identifier of this group. Will be an instance of
         :class:`~meshmode.mesh.BTAG_PARTITION`.
 
+    .. attribute:: part_id
+
+        The identifier of the neighboring part.
+
     .. attribute:: elements
 
         Group-local element numbers.
@@ -819,6 +823,7 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     .. versionadded:: 2017.1
     """
 
+    part_id: PartID
     neighbors: np.ndarray
     neighbor_faces: np.ndarray
     aff_map: AffineMap
@@ -826,6 +831,7 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     def __eq__(self, other):
         return (
             super().__eq__(other)
+            and np.array_equal(self.part_id, other.part_id)
             and np.array_equal(self.neighbors, other.neighbors)
             and np.array_equal(self.neighbor_faces, other.neighbor_faces)
             and self.aff_map == other.aff_map)
@@ -837,6 +843,7 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
         return self._as_python(
             igroup=self.igroup,
             boundary_tag=_boundary_tag_as_python(self.boundary_tag),
+            part_id=self.part_id,
             elements=_numpy_array_as_python(self.elements),
             element_faces=_numpy_array_as_python(self.element_faces),
             neighbors=_numpy_array_as_python(self.neighbors),
