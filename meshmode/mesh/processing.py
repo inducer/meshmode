@@ -151,10 +151,10 @@ def _filter_mesh_groups(
     # {{{ filter vertex indices
 
     filtered_vertex_indices = [
-            mesh.groups[igrp].vertex_indices[
+            grp.vertex_indices[
                     filtered_group_elements[igrp], :]
-            for igrp in range(len(mesh.groups))
-            if mesh.groups[igrp].vertex_indices is not None]
+            for igrp, grp in enumerate(mesh.groups)
+            if grp.vertex_indices is not None]
 
     filtered_vertex_indices_flat = np.concatenate([indices.ravel() for indices
                 in filtered_vertex_indices])
