@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 from functools import reduce
 from numbers import Real
-from typing import Optional, Union, Any, Tuple, Dict, List, Set
+from typing import Optional, Union, Any, Tuple, Dict, List, Set, Sequence
 
 from dataclasses import dataclass
 
@@ -36,6 +36,7 @@ from meshmode.mesh import (
     Mesh,
     BTAG_PARTITION,
     PartID,
+    FacialAdjacencyGroup,
     InteriorAdjacencyGroup,
     BoundaryAdjacencyGroup,
     InterPartAdjacencyGroup
@@ -255,7 +256,8 @@ def _create_self_to_self_adjacency_groups(
         corresponding to the entries in *mesh.facial_adjacency_groups* that
         have self-to-self adjacency.
     """
-    self_to_self_adjacency_groups = [[] for _ in self_mesh_groups]
+    self_to_self_adjacency_groups: List[List[InteriorAdjacencyGroup]] = [
+            [] for _ in self_mesh_groups]
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
         int_grps = [
@@ -330,7 +332,8 @@ def _create_self_to_other_adjacency_groups(
     """
     self_part_index = part_id_to_part_index[self_part_id]
 
-    self_to_other_adj_groups = [[] for _ in self_mesh_groups]
+    self_to_other_adj_groups: List[List[InterPartAdjacencyGroup]] = [
+            [] for _ in self_mesh_groups]
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
         int_grps = [
@@ -404,7 +407,8 @@ def _create_boundary_groups(
         corresponding to the entries in *mesh.facial_adjacency_groups* that have
         boundary faces.
     """
-    bdry_adj_groups = [[] for _ in self_mesh_groups]
+    bdry_adj_groups: List[List[BoundaryAdjacencyGroup]] = [
+            [] for _ in self_mesh_groups]
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
         bdry_grps = [
@@ -500,12 +504,16 @@ def _get_mesh_part(
                 mesh, global_elem_to_part_elem, self_part_index, self_mesh_groups,
                 self_mesh_group_elem_base)
 
+    def _gather_grps(igrp: int) -> List[FacialAdjacencyGroup]:
+        self_grps: Sequence[FacialAdjacencyGroup] = self_to_self_adj_groups[igrp]
+        other_grps: Sequence[FacialAdjacencyGroup] = self_to_other_adj_groups[igrp]
+        bdry_grps: Sequence[FacialAdjacencyGroup] = boundary_adj_groups[igrp]
+
+        return list(self_grps) + list(other_grps) + list(bdry_grps)
+
     # Combine adjacency groups
     self_facial_adj_groups = [
-        self_to_self_adj_groups[igrp]
-        + self_to_other_adj_groups[igrp]
-        + boundary_adj_groups[igrp]
-        for igrp in range(len(self_mesh_groups))]
+            _gather_grps(igrp) for igrp in range(len(self_mesh_groups))]
 
     return Mesh(
             self_vertices,
