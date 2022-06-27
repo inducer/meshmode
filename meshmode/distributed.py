@@ -385,6 +385,7 @@ class MPIBoundaryCommSetupHelper:
 # }}}
 
 
+# FIXME: Move somewhere else, since it's not strictly limited to distributed?
 def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs):
     """Return a mesh partition created by :mod:`pymetis`.
 
@@ -444,6 +445,7 @@ def membership_list_to_map(membership_list):
         for entry in set(membership_list)}
 
 
+# FIXME: Move somewhere else, since it's not strictly limited to distributed?
 def get_connected_parts(mesh: Mesh) -> "Set[PartID]":
     """For a local mesh part in *mesh*, determine the set of connected parts."""
     assert mesh.facial_adjacency_groups is not None
