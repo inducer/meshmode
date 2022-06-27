@@ -490,19 +490,24 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
     return self_mesh
 
 
-def partition_mesh(mesh, part_id_to_elements):
+def partition_mesh(mesh, part_id_to_elements, return_parts):
     """
     :arg mesh: A :class:`~meshmode.mesh.Mesh` to be partitioned.
     :arg part_id_to_elements: A :class:`dict` mapping part identifiers to sets of
         elements.
+    :arg return_parts: An optional list of parts to return. By default, returns all
+        parts.
 
     :returns: A :class:`dict` mapping part identifiers to instances of
         :class:`~meshmode.mesh.Mesh` that represent the corresponding part of
         *mesh*.
     """
+    if return_parts is None:
+        return_parts = part_id_to_elements.keys()
+
     return {
         part_id: _get_mesh_part(mesh, part_id_to_elements, part_id)
-        for part_id in part_id_to_elements.keys()}
+        for part_id in return_parts}
 
 # }}}
 
