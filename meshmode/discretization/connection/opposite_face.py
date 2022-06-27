@@ -525,17 +525,16 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
 def make_partition_connection(actx, *, local_bdry_conn,
         remote_bdry_discr, remote_group_infos):
     """
-    Connects ``local_bdry_conn`` to a neighboring partition.
+    Connects ``local_bdry_conn`` to a neighboring part.
 
-    :arg local_bdry_conn: A :class:`DiscretizationConnection` of the local
-        partition.
+    :arg local_bdry_conn: A :class:`DiscretizationConnection` of the local part.
     :arg remote_bdry_discr: A :class:`~meshmode.discretization.Discretization`
-        of the boundary of the remote partition.
+        of the boundary of the remote part.
     :arg remote_group_infos: An array of
         :class:`meshmode.distributed.RemoteGroupInfo` instances, one per remote
         volume element group.
     :returns: A :class:`DirectDiscretizationConnection` that performs data
-        exchange across faces from the remote partition to the local partition.
+        exchange across faces from the remote part to the local part.
 
     .. versionadded:: 2017.1
 
@@ -557,7 +556,7 @@ def make_partition_connection(actx, *, local_bdry_conn,
     # The code assumes that there is the same number of volume and surface groups.
     #
     # A weak reason to choose remote as the outer loop is because
-    # InterPartitionAdjacency refers to neighbors by global volume element
+    # InterPartAdjacency refers to neighbors by global volume element
     # numbers, and we only have enough information to resolve those to (group,
     # group_local_el_nr) for local elements (whereas we have no information
     # about remote volume elements).
@@ -565,7 +564,7 @@ def make_partition_connection(actx, *, local_bdry_conn,
     # (See the find_group_indices below.)
 
     for rgi in remote_group_infos:
-        rem_ipags = rgi.inter_partition_adj_groups
+        rem_ipags = rgi.inter_part_adj_groups
 
         for rem_ipag in rem_ipags:
             i_local_grps = find_group_indices(local_vol_groups, rem_ipag.neighbors)

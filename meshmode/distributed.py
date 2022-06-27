@@ -5,7 +5,7 @@
 
 .. autofunction:: get_partition_by_pymetis
 .. autofunction:: membership_list_to_map
-.. autofunction:: get_connected_partitions
+.. autofunction:: get_connected_parts
 
 .. autoclass:: RemoteGroupInfo
 .. autoclass:: make_remote_group_infos
@@ -47,8 +47,8 @@ from meshmode.discretization.connection import (
 from meshmode.mesh import (
         Mesh,
         InteriorAdjacencyGroup,
-        InterPartitionAdjacencyGroup,
-        PartitionID,
+        InterPartAdjacencyGroup,
+        PartID,
 )
 
 from meshmode.discretization import ElementGroupFactory
@@ -94,10 +94,10 @@ class MPIMeshDistributor:
         :arg part_per_element: A :class:`numpy.ndarray` containing one
             integer per element of *mesh* indicating which part of the
             partitioned mesh the element is to become a part of.
-        :arg num_parts: The number of partitions to divide the mesh into.
+        :arg num_parts: The number of parts to divide the mesh into.
 
-        Sends each partition to a different rank.
-        Returns one partition that was not sent to any other rank.
+        Sends each part to a different rank.
+        Returns one part that was not sent to any other rank.
         """
         mpi_comm = self.mpi_comm
         rank = mpi_comm.Get_rank()
@@ -119,7 +119,7 @@ class MPIMeshDistributor:
             else:
                 reqs.append(mpi_comm.isend(part, dest=r, tag=TAG_DISTRIBUTE_MESHES))
 
-        logger.info("rank %d: sent all mesh partitions", rank)
+        logger.info("rank %d: sent all mesh parts", rank)
         for req in reqs:
             req.wait()
 
@@ -149,11 +149,11 @@ class MPIMeshDistributor:
 # {{{ remote group info
 
 # FIXME: "Remote" is perhaps not the best naming convention for this. For example,
-# in a multi-volume context it may be used when constructing inter-partition
-# connections between two parts on the same rank.
+# in a multi-volume context it may be used when constructing inter-part connections
+# between two parts on the same rank.
 @dataclass
 class RemoteGroupInfo:
-    inter_partition_adj_groups: List[InterPartitionAdjacencyGroup]
+    inter_part_adj_groups: List[InterPartAdjacencyGroup]
     vol_elem_indices: np.ndarray
     bdry_elem_indices: np.ndarray
     bdry_faces: np.ndarray
@@ -161,7 +161,7 @@ class RemoteGroupInfo:
 
 def make_remote_group_infos(
         actx: ArrayContext,
-        remote_part_id: PartitionID,
+        remote_part_id: PartID,
         bdry_conn: DirectDiscretizationConnection
         ) -> Sequence[RemoteGroupInfo]:
     local_vol_mesh = bdry_conn.from_discr.mesh
@@ -170,9 +170,9 @@ def make_remote_group_infos(
 
     return [
             RemoteGroupInfo(
-                inter_partition_adj_groups=[
+                inter_part_adj_groups=[
                     fagrp for fagrp in local_vol_mesh.facial_adjacency_groups[igrp]
-                    if isinstance(fagrp, InterPartitionAdjacencyGroup)
+                    if isinstance(fagrp, InterPartAdjacencyGroup)
                     and fagrp.boundary_tag.part_id == remote_part_id],
                 vol_elem_indices=np.concatenate([
                     actx.to_numpy(batch.from_element_indices)
@@ -195,11 +195,11 @@ class InterRankBoundaryInfo:
     """
     .. attribute:: local_part_id
 
-        An opaque, hashable, picklable identifier for the local partition.
+        An opaque, hashable, picklable identifier for the local part.
 
     .. attribute:: remote_part_id
 
-        An opaque, hashable, picklable identifier for the remote partition.
+        An opaque, hashable, picklable identifier for the remote part.
 
     .. attribute:: remote_rank
 
@@ -214,15 +214,15 @@ class InterRankBoundaryInfo:
     .. automethod:: __init__
     """
 
-    local_part_id: PartitionID
-    remote_part_id: PartitionID
+    local_part_id: PartID
+    remote_part_id: PartID
     remote_rank: int
     local_boundary_connection: DirectDiscretizationConnection
 
 
 class MPIBoundaryCommSetupHelper:
     """
-    Helper for setting up inter-partition facial data exchange.
+    Helper for setting up inter-part facial data exchange.
 
     .. automethod:: __init__
     .. automethod:: __enter__
@@ -240,11 +240,11 @@ class MPIBoundaryCommSetupHelper:
                 ],
             bdry_grp_factory: ElementGroupFactory):
         """
-        :arg local_bdry_conns: A :class:`dict` mapping remote partition to
+        :arg local_bdry_conns: A :class:`dict` mapping remote part to
             `local_bdry_conn`, where `local_bdry_conn` is a
             :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`
-            that performs data exchange from
-            the volume to the faces adjacent to partition `i_remote_part`.
+            that performs data exchange from the volume to the faces adjacent to
+            part `i_remote_part`.
         :arg bdry_grp_factory: Group factory to use when creating the remote-to-local
             boundary connections
         """
@@ -313,13 +313,12 @@ class MPIBoundaryCommSetupHelper:
 
     def complete_some(self):
         """
-        Returns a :class:`dict` mapping a subset of remote partitions to
+        Returns a :class:`dict` mapping a subset of remote parts to
         remote-to-local boundary connections, where a remote-to-local boundary
         connection is a
         :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`
-        that performs data exchange across faces from partition `i_remote_part`
-        to the local mesh. When an empty dictionary is returned, setup is
-        complete.
+        that performs data exchange across faces from part `i_remote_part` to the
+        local mesh. When an empty dictionary is returned, setup is complete.
         """
         from mpi4py import MPI
 
@@ -393,7 +392,7 @@ def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs
         ``"facial"`` or ``"nodal"`` (based on vertices).
     :arg kwargs: Passed unmodified to :func:`pymetis.part_graph`.
     :returns: a :class:`numpy.ndarray` with one entry per element indicating
-        to which partition each element belongs, with entries between ``0`` and
+        to which part each element belongs, with entries between ``0`` and
         ``num_parts-1``.
 
     .. versionchanged:: 2020.2
@@ -443,15 +442,21 @@ def membership_list_to_map(membership_list):
         for entry in set(membership_list)}
 
 
-def get_connected_partitions(mesh: Mesh) -> "Set[PartitionID]":
-    """For a local mesh part in *mesh*, determine the set of connected partitions."""
+def get_connected_parts(mesh: Mesh) -> "Set[PartID]":
+    """For a local mesh part in *mesh*, determine the set of connected parts."""
     assert mesh.facial_adjacency_groups is not None
 
     return {
             grp.boundary_tag.part_id
             for fagrp_list in mesh.facial_adjacency_groups
             for grp in fagrp_list
-            if isinstance(grp, InterPartitionAdjacencyGroup)}
+            if isinstance(grp, InterPartAdjacencyGroup)}
 
+
+def get_connected_partitions(mesh: Mesh) -> "Set[PartID]":
+    warn(
+        "get_connected_partitions is deprecated and will stop working in June 2023. "
+        "Use get_connected_parts instead.", DeprecationWarning, stacklevel=2)
+    return get_connected_parts(mesh)
 
 # vim: foldmethod=marker

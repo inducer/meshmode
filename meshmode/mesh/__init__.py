@@ -44,7 +44,7 @@ __doc__ = """
 .. autoclass:: FacialAdjacencyGroup
 .. autoclass:: InteriorAdjacencyGroup
 .. autoclass:: BoundaryAdjacencyGroup
-.. autoclass:: InterPartitionAdjacencyGroup
+.. autoclass:: InterPartAdjacencyGroup
 
 .. autofunction:: as_python
 .. autofunction:: is_true_boundary
@@ -67,7 +67,7 @@ Predefined Boundary tags
 # {{{ element tags
 
 BoundaryTag = Hashable
-PartitionID = Hashable
+PartID = Hashable
 
 
 class BTAG_NONE:  # noqa: N801
@@ -110,14 +110,14 @@ class BTAG_NO_BOUNDARY:  # noqa: N801
 class BTAG_PARTITION(BTAG_NO_BOUNDARY):  # noqa: N801
     """
     A boundary tag indicating that this edge is adjacent to an element of
-    another :class:`Mesh`. The partition identifier of the adjacent mesh is given
+    another :class:`Mesh`. The part identifier of the adjacent mesh is given
     by ``part_id``.
 
     .. attribute:: part_id
 
     .. versionadded:: 2017.1
     """
-    def __init__(self, part_id: PartitionID, part_nr=None):
+    def __init__(self, part_id: PartID, part_nr=None):
         if part_nr is not None:
             from warnings import warn
             warn("part_nr is deprecated and will stop working in March 2023. "
@@ -770,9 +770,9 @@ class BoundaryAdjacencyGroup(FacialAdjacencyGroup):
 # {{{ partition adjacency
 
 @dataclass(frozen=True, eq=False)
-class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
+class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     """
-    Describes inter-partition adjacency information for one
+    Describes inter-part adjacency information for one
     :class:`MeshElementGroup`.
 
     .. attribute:: igroup
@@ -800,7 +800,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
     .. attribute:: neighbors
 
         ``element_id_dtype neighbors[i]`` gives the volume element number
-        within the neighboring partition of the element connected to
+        within the neighboring part of the element connected to
         ``element_id_dtype elements[i]`` (which is a boundary element index). Use
         `~meshmode.mesh.processing.find_group_indices` to find the group that
         the element belongs to, then subtract ``element_nr_base`` to find the
@@ -809,8 +809,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
     .. attribute:: neighbor_faces
 
         ``face_id_dtype global_neighbor_faces[i]`` gives face index within the
-        neighboring partition of the face connected to
-        ``element_id_dtype elements[i]``
+        neighboring part of the face connected to ``element_id_dtype elements[i]``
 
     .. attribute:: aff_map
 
@@ -832,7 +831,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
             and self.aff_map == other.aff_map)
 
     def as_python(self):
-        if type(self) != InterPartitionAdjacencyGroup:
+        if type(self) != InterPartAdjacencyGroup:
             raise NotImplementedError(f"Not implemented for {type(self)}.")
 
         return self._as_python(
@@ -1647,7 +1646,7 @@ def as_python(mesh, function_name="make_mesh"):
             FacialAdjacencyGroup,
             InteriorAdjacencyGroup,
             BoundaryAdjacencyGroup,
-            InterPartitionAdjacencyGroup,
+            InterPartAdjacencyGroup,
             BTAG_NONE,
             BTAG_ALL,
             BTAG_REALLY_ALL)

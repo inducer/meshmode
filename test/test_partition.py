@@ -39,7 +39,7 @@ from meshmode.mesh import (
     BTAG_ALL,
     InteriorAdjacencyGroup,
     BoundaryAdjacencyGroup,
-    InterPartitionAdjacencyGroup
+    InterPartAdjacencyGroup
 )
 
 import pytest
@@ -106,8 +106,8 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
 
         connected_parts = set()
         for i_local_part, part_mesh in part_meshes.items():
-            from meshmode.distributed import get_connected_partitions
-            neighbors = get_connected_partitions(part_mesh)
+            from meshmode.distributed import get_connected_parts
+            neighbors = get_connected_parts(part_mesh)
             for i_remote_part in neighbors:
                 connected_parts.add((i_local_part, i_remote_part))
 
@@ -136,7 +136,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
             remote_bdry_nelements = sum(
                     grp.nelements for grp in remote_bdry_conn.to_discr.groups)
             assert bdry_nelements == remote_bdry_nelements, \
-                    "partitions do not have the same number of connected elements"
+                    "parts do not have the same number of connected elements"
 
             local_bdry = local_bdry_conn.to_discr
 
@@ -195,7 +195,7 @@ def _check_for_cross_rank_adj(mesh, part_per_element):
     return False
 
 
-@pytest.mark.parametrize(("dim", "mesh_size", "num_parts", "scramble_partitions"),
+@pytest.mark.parametrize(("dim", "mesh_size", "num_parts", "scramble_parts"),
         [
             (2, 4, 4, False),
             (2, 4, 4, True),
@@ -207,7 +207,7 @@ def _check_for_cross_rank_adj(mesh, part_per_element):
             (3, 7, 32, False),
         ])
 @pytest.mark.parametrize("num_groups", [1, 2, 7])
-def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitions):
+def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_parts):
     np.random.seed(42)
     nelements_per_axis = (mesh_size,) * dim
     from meshmode.mesh.generation import generate_regular_rect_mesh
@@ -217,7 +217,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
     from meshmode.mesh.processing import merge_disjoint_meshes
     mesh = merge_disjoint_meshes(meshes)
 
-    if scramble_partitions:
+    if scramble_parts:
         part_per_element = np.random.randint(num_parts, size=mesh.nelements)
     else:
         pytest.importorskip("pymetis")
@@ -245,8 +245,8 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
 
     connected_parts = set()
     for i_local_part in range(num_parts):
-        from meshmode.distributed import get_connected_partitions
-        neighbors = get_connected_partitions(part_meshes[i_local_part])
+        from meshmode.distributed import get_connected_parts
+        neighbors = get_connected_parts(part_meshes[i_local_part])
         for i_remote_part in neighbors:
             connected_parts.add((i_local_part, i_remote_part))
 
@@ -260,7 +260,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
         for igrp in range(len(part_mesh.groups)):
             ipagrps = [
                 fagrp for fagrp in part_mesh.facial_adjacency_groups[igrp]
-                if isinstance(fagrp, InterPartitionAdjacencyGroup)]
+                if isinstance(fagrp, InterPartAdjacencyGroup)]
             for ipagrp in ipagrps:
                 for i, (elem, face) in enumerate(
                         zip(ipagrp.elements, ipagrp.element_faces)):
@@ -277,7 +277,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
         for grp_num in range(len(part.groups)):
             ipagrps = [
                 fagrp for fagrp in part.facial_adjacency_groups[grp_num]
-                if isinstance(fagrp, InterPartitionAdjacencyGroup)]
+                if isinstance(fagrp, InterPartAdjacencyGroup)]
             ipagrp_count += len(ipagrps)
             for ipagrp in ipagrps:
                 n_part_num = ipagrp.boundary_tag.part_id
@@ -297,7 +297,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                         n_part.groups, n_meshwide_elem))
                     n_ipagrps = [
                         fagrp for fagrp in n_part.facial_adjacency_groups[n_grp_num]
-                        if isinstance(fagrp, InterPartitionAdjacencyGroup)
+                        if isinstance(fagrp, InterPartAdjacencyGroup)
                         and fagrp.boundary_tag.part_id == part_num]
                     found_reverse_adj = False
                     for n_ipagrp in n_ipagrps:
@@ -314,7 +314,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                             p_meshwide_n_elem = (
                                 part_elem_to_global_elem[n_part_num][
                                     n_meshwide_elem])
-                    assert found_reverse_adj, ("InterPartitionAdjacencyGroup is not "
+                    assert found_reverse_adj, ("InterPartAdjacencyGroup is not "
                         "consistent")
 
                     p_grp_num = find_group_indices(mesh.groups, p_meshwide_elem)
@@ -339,7 +339,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_partitio
                                         "Tag does not give correct neighbor"
 
     assert ipagrp_count > 0 or not has_cross_rank_adj,\
-        "expected at least one InterPartitionAdjacencyGroup"
+        "expected at least one InterPartAdjacencyGroup"
 
     for i_remote_part in range(num_parts):
         tag_sum = 0
@@ -405,8 +405,8 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     from meshmode.discretization import Discretization
     vol_discr = Discretization(actx, local_mesh, group_factory)
 
-    from meshmode.distributed import get_connected_partitions
-    connected_parts = get_connected_partitions(local_mesh)
+    from meshmode.distributed import get_connected_parts
+    connected_parts = get_connected_parts(local_mesh)
 
     # Check that the connectivity makes sense before doing any communication
     _test_connected_parts(mpi_comm, connected_parts)
@@ -579,12 +579,12 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
 # {{{ MPI pytest entrypoint
 
 @pytest.mark.mpi
-@pytest.mark.parametrize("num_partitions", [3, 4])
+@pytest.mark.parametrize("num_parts", [3, 4])
 @pytest.mark.parametrize("order", [2, 3])
-def test_mpi_communication(num_partitions, order):
+def test_mpi_communication(num_parts, order):
     pytest.importorskip("mpi4py")
 
-    num_ranks = num_partitions
+    num_ranks = num_parts
     from subprocess import check_call
     import sys
     check_call([

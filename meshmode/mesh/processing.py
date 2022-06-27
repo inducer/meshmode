@@ -35,7 +35,7 @@ from meshmode.mesh import (
     BTAG_PARTITION,
     InteriorAdjacencyGroup,
     BoundaryAdjacencyGroup,
-    InterPartitionAdjacencyGroup
+    InterPartAdjacencyGroup
 )
 
 from meshmode.mesh.tools import AffineMap
@@ -83,20 +83,19 @@ def find_group_indices(groups, meshwide_elems):
 def _compute_global_elem_to_part_elem(
         nelements, part_id_to_elements, part_id_to_part_index, element_id_dtype):
     """
-    Create a map from global element index to partition-wide element index for
-    a set of partitions.
+    Create a map from global element index to part-wide element index for a set of
+    parts.
 
     :arg nelements: The number of elements in the global mesh.
-    :arg part_id_to_elements: A :class:`dict` mapping partition identifiers to
+    :arg part_id_to_elements: A :class:`dict` mapping part identifiers to
         sets of elements.
-    :arg part_id_to_part_index: A mapping from partition identifiers to indices in
+    :arg part_id_to_part_index: A mapping from part identifiers to indices in
         the range ``[0, num_parts)``.
     :arg element_id_dtype: The element index data type.
     :returns: A :class:`numpy.ndarray` ``global_elem_to_part_elem`` of shape
         ``(nelements, 2)``, where ``global_elem_to_part_elem[ielement, 0]`` gives
-        the partition index of the element and
-        ``global_elem_to_part_elem[ielement, 1]`` gives its partition-wide element
-        index.
+        the part index of the element and
+        ``global_elem_to_part_elem[ielement, 1]`` gives its part-wide element index.
     """
     global_elem_to_part_elem = np.empty((nelements, 2), dtype=element_id_dtype)
     for part_id in part_id_to_elements.keys():
@@ -173,20 +172,20 @@ def _filter_mesh_groups(mesh, selected_elements, vertex_id_dtype):
     return new_groups, required_vertex_indices
 
 
-def _get_connected_partitions(
+def _get_connected_parts(
         mesh, part_id_to_part_index, global_elem_to_part_elem, self_part_id):
     """
-    Find the partitions that are connected to the current partition.
+    Find the parts that are connected to the current part.
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
-    :arg part_id_to_part_index: A mapping from partition identifiers to indices in
-        the range ``[0, num_parts)``.
+    :arg part_id_to_part_index: A mapping from part identifiers to indices in the
+        range ``[0, num_parts)``.
     :arg global_elem_to_part_elem: A :class:`numpy.ndarray` that maps global element
-        indices to partition indices and partition-wide element indices. See
+        indices to part indices and part-wide element indices. See
         :func:`_compute_global_elem_to_part_elem`` for details.
-    :arg self_part_id: The identifier of the partition currently being created.
+    :arg self_part_id: The identifier of the part currently being created.
 
-    :returns: A :class:`set` of identifiers of the neighboring partitions.
+    :returns: A :class:`set` of identifiers of the neighboring parts.
     """
     self_part_index = part_id_to_part_index[self_part_id]
 
@@ -226,13 +225,13 @@ def _create_self_to_self_adjacency_groups(mesh, global_elem_to_part_elem,
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
     :arg global_elem_to_part_elem: A :class:`numpy.ndarray` that maps global element
-        indices to partition indices and partition-wide element indices. See
+        indices to part indices and part-wide element indices. See
         :func:`_compute_global_elem_to_part_elem`` for details.
-    :arg self_part_index: The index of the partition currently being created, in
-        the range ``[0, num_parts)``.
+    :arg self_part_index: The index of the part currently being created, in the
+        range ``[0, num_parts)``.
     :arg self_mesh_groups: An array of :class:`~meshmode.mesh.MeshElementGroup`
         instances representing the partitioned mesh groups.
-    :arg self_mesh_group_elem_base: An array containing the starting partition-wide
+    :arg self_mesh_group_elem_base: An array containing the starting part-wide
         element index for each group in *self_mesh_groups*.
 
     :returns: A list of lists of `~meshmode.mesh.InteriorAdjacencyGroup` instances
@@ -290,21 +289,21 @@ def _create_self_to_other_adjacency_groups(
     Create self-to-other adjacency groups for the partitioned mesh.
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
-    :arg part_id_to_part_index: A mapping from partition identifiers to indices in
-        the range ``[0, num_parts)``.
+    :arg part_id_to_part_index: A mapping from part identifiers to indices in the
+        range ``[0, num_parts)``.
     :arg global_elem_to_part_elem: A :class:`numpy.ndarray` that maps global element
-        indices to partition indices and partition-wide element indices. See
+        indices to part indices and part-wide element indices. See
         :func:`_compute_global_elem_to_part_elem`` for details.
-    :arg self_part_id: The identifier of the partition currently being created.
+    :arg self_part_id: The identifier of the part currently being created.
     :arg self_mesh_groups: An array of `~meshmode.mesh.MeshElementGroup` instances
         representing the partitioned mesh groups.
-    :arg self_mesh_group_elem_base: An array containing the starting partition-wide
+    :arg self_mesh_group_elem_base: An array containing the starting part-wide
         element index for each group in *self_mesh_groups*.
-    :arg connected_parts: A :class:`set` containing the partitions connected to
+    :arg connected_parts: A :class:`set` containing the parts connected to
         the current one.
 
-    :returns: A list of lists of `~meshmode.mesh.InterPartitionAdjacencyGroup`
-        instances corresponding to the entries in *mesh.facial_adjacency_groups* that
+    :returns: A list of lists of `~meshmode.mesh.InterPartAdjacencyGroup` instances
+        corresponding to the entries in *mesh.facial_adjacency_groups* that
         have self-to-other adjacency.
     """
     self_part_index = part_id_to_part_index[self_part_id]
@@ -347,7 +346,7 @@ def _create_self_to_other_adjacency_groups(
                     neighbor_faces = facial_adj.neighbor_faces[adj_indices]
 
                     self_to_other_adj_groups[igrp].append(
-                        InterPartitionAdjacencyGroup(
+                        InterPartAdjacencyGroup(
                             igroup=igrp,
                             boundary_tag=BTAG_PARTITION(neighbor_part_id),
                             elements=elements,
@@ -366,13 +365,13 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, self_part_index,
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
     :arg global_elem_to_part_elem: A :class:`numpy.ndarray` that maps global element
-        indices to partition indices and partition-wide element indices. See
+        indices to part indices and part-wide element indices. See
         :func:`_compute_global_elem_to_part_elem`` for details.
-    :arg self_part_index: The index of the partition currently being created, in
-        the range ``[0, num_parts)``.
+    :arg self_part_index: The index of the part currently being created, in the
+        range ``[0, num_parts)``.
     :arg self_mesh_groups: An array of `~meshmode.mesh.MeshElementGroup` instances
         representing the partitioned mesh groups.
-    :arg self_mesh_group_elem_base: An array containing the starting partition-wide
+    :arg self_mesh_group_elem_base: An array containing the starting part-wide
         element index for each group in *self_mesh_groups*.
 
     :returns: A list of lists of `~meshmode.mesh.BoundaryAdjacencyGroup` instances
@@ -415,11 +414,11 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, self_part_index,
 def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
     """
     :arg mesh: A :class:`~meshmode.mesh.Mesh` to be partitioned.
-    :arg part_id_to_elements: A :class:`dict` mapping partition identifiers to
+    :arg part_id_to_elements: A :class:`dict` mapping part identifiers to
         sets of elements.
-    :arg self_part_id: The partition identifier of the mesh to return.
+    :arg self_part_id: The part identifier of the mesh to return.
 
-    :returns: A :class:`~meshmode.mesh.Mesh` containing a partition of *mesh*.
+    :returns: A :class:`~meshmode.mesh.Mesh` containing a part of *mesh*.
 
     .. versionadded:: 2017.1
     """
@@ -438,7 +437,7 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
         mesh.element_id_dtype)
 
     # Create new mesh groups that mimic the original mesh's groups but only contain
-    # the current partition's elements
+    # the current part's elements
     self_mesh_groups, required_vertex_indices = _filter_mesh_groups(
         mesh, part_id_to_elements[self_part_id], mesh.vertex_id_dtype)
 
@@ -454,7 +453,7 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
         self_mesh_group_elem_base[igrp] = el_nr
         el_nr += grp.nelements
 
-    connected_parts = _get_connected_partitions(
+    connected_parts = _get_connected_parts(
         mesh, part_id_to_part_index, global_elem_to_part_elem,
         self_part_id)
 
@@ -490,11 +489,11 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
 def partition_mesh(mesh, part_id_to_elements):
     """
     :arg mesh: A :class:`~meshmode.mesh.Mesh` to be partitioned.
-    :arg part_id_to_elements: A :class:`dict` mapping partition identifiers to
-        sets of elements.
+    :arg part_id_to_elements: A :class:`dict` mapping part identifiers to sets of
+        elements.
 
-    :returns: A :class:`dict` mapping partition identifiers to instances of
-        :class:`~meshmode.mesh.Mesh` that represent the corresponding partition of
+    :returns: A :class:`dict` mapping part identifiers to instances of
+        :class:`~meshmode.mesh.Mesh` that represent the corresponding part of
         *mesh*.
     """
     return {
