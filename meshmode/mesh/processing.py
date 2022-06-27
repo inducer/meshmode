@@ -422,10 +422,13 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
 
     .. versionadded:: 2017.1
     """
-    nelements = sum(len(elems) for elems in part_id_to_elements.values())
-    if nelements != mesh.nelements:
-        raise ValueError(
-            "counts of partitioned elements don't add up to mesh.nelements")
+    element_counts = np.zeros(mesh.nelements)
+    for elements in part_id_to_elements.values():
+        element_counts[elements] += 1
+    if np.any(element_counts > 1):
+        raise ValueError("elements cannot belong to multiple parts")
+    if np.any(element_counts < 1):
+        raise ValueError("partition must contain all elements")
 
     part_id_to_part_index = {
         part_id: part_index
