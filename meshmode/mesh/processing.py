@@ -423,8 +423,9 @@ def _get_mesh_part(mesh, part_id_to_elements, self_part_id):
     .. versionadded:: 2017.1
     """
     nelements = sum(len(elems) for elems in part_id_to_elements.values())
-    assert nelements == mesh.nelements, \
-        "counts of partitioned elements must add up to mesh.nelements"
+    if nelements != mesh.nelements:
+        raise ValueError(
+            "counts of partitioned elements don't add up to mesh.nelements")
 
     part_id_to_part_index = {
         part_id: part_index

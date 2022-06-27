@@ -342,7 +342,9 @@ class MPIBoundaryCommSetupHelper:
         part_ids_to_irbi = {
                 (irbi.local_part_id, irbi.remote_part_id): irbi
                 for irbi in self.inter_rank_bdry_info}
-        assert len(part_ids_to_irbi) == len(self.inter_rank_bdry_info)
+        if len(part_ids_to_irbi) < len(self.inter_rank_bdry_info):
+            raise ValueError(
+                "duplicate local/remote part pair in inter_rank_bdry_info")
 
         for i_src_rank, recvd in zip(
                 source_ranks, data):
