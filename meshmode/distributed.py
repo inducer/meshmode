@@ -346,8 +346,7 @@ class MPIBoundaryCommSetupHelper:
             raise ValueError(
                 "duplicate local/remote part pair in inter_rank_bdry_info")
 
-        for i_src_rank, recvd in zip(
-                source_ranks, data):
+        for i_src_rank, recvd in zip(source_ranks, data):
             (remote_part_id, local_part_id,
                     remote_bdry_mesh, remote_group_infos) = recvd
 
