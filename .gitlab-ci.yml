@@ -114,6 +114,7 @@ Pylint:
 
 Mypy:
   script: |
+    EXTRA_INSTALL=Cython
     curl -L -O https://tiker.net/ci-support-v0
     . ./ci-support-v0
     build_py_project_in_venv
