@@ -25,7 +25,7 @@ import numpy as np
 import numpy.linalg as la
 from abc import ABC, abstractmethod
 
-from typing import Sequence, Optional, List, Tuple
+from typing import Generic, Sequence, Optional, List, Tuple
 from pytools import memoize_method
 
 import loopy as lp
@@ -34,12 +34,11 @@ from meshmode.transform_metadata import (
         DiscretizationElementAxisTag, DiscretizationDOFAxisTag)
 from pytools import memoize_in, keyed_memoize_method
 from arraycontext import (
-        ArrayContext, NotAnArrayContainerError,
+        ArrayContext, ArrayT, ArrayOrContainerT, NotAnArrayContainerError,
         serialize_container, deserialize_container, make_loopy_program,
         tag_axes
         )
 from arraycontext.metadata import NameHint
-from arraycontext.container import ArrayT, ArrayOrContainerT
 
 from meshmode.discretization import Discretization, ElementGroupBase
 from meshmode.dof_array import DOFArray
@@ -55,7 +54,7 @@ def _reshape_and_preserve_tags(
 # {{{ interpolation batch
 
 @dataclass
-class InterpolationBatch:
+class InterpolationBatch(Generic[ArrayT]):
     """One interpolation batch captures how a batch of elements *within* an
     element group should be an interpolated. Note that while it's possible that
     an interpolation batch takes care of interpolating an entire element group
@@ -179,7 +178,7 @@ class InterpolationBatch:
 # {{{ _FromGroupPickData
 
 @dataclass
-class _FromGroupPickData:
+class _FromGroupPickData(Generic[ArrayT]):
     """Represents information needed to pick DOFs from one source element
     group to a target element group. Note that the connection between these
     groups must be such that the information transfer can occur by indirect

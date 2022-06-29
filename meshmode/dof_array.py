@@ -37,12 +37,11 @@ from pytools import single_valued, memoize_in
 from meshmode.transform_metadata import (
             ConcurrentElementInameTag, ConcurrentDOFInameTag)
 from arraycontext import (
-        ArrayContext, NotAnArrayContainerError,
+        ArrayContext, ArrayOrContainerT, NotAnArrayContainerError,
         make_loopy_program, with_container_arithmetic,
         serialize_container, deserialize_container, with_array_context,
         rec_map_array_container, rec_multimap_array_container,
         mapped_over_array_containers, multimapped_over_array_containers)
-from arraycontext.container import ArrayOrContainerT
 
 __doc__ = """
 .. autoclass:: DOFArray
