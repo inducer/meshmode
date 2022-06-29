@@ -40,7 +40,9 @@ THE SOFTWARE.
 from dataclasses import dataclass
 from contextlib import contextmanager
 import numpy as np
-from typing import List, Set, Union, Mapping, cast, Sequence, TYPE_CHECKING
+from typing import (
+    Any, Optional, List, Set, Union, Mapping, cast, Sequence, TYPE_CHECKING
+)
 
 from arraycontext import ArrayContext
 from meshmode.discretization.connection import (
@@ -80,7 +82,10 @@ def _duplicate_mpi_comm(mpi_comm):
         dup_comm.Free()
 
 
-def mpi_distribute(mpi_comm, source_data=None, source_rank=0):
+def mpi_distribute(
+        mpi_comm: "mpi4py.MPI.Intracomm",
+        source_data: Optional[Mapping[int, Any]] = None,
+        source_rank: int = 0) -> Optional[Any]:
     """
     Distribute data to a set of processes.
 
@@ -88,6 +93,7 @@ def mpi_distribute(mpi_comm, source_data=None, source_rank=0):
     :arg source_data: A :class:`dict` mapping destination ranks to data to be sent.
         Only present on the source rank.
     :arg source_rank: The rank from which the data is being sent.
+
     :returns: The data local to the current process if there is any, otherwise
         *None*.
     """
@@ -101,7 +107,7 @@ def mpi_distribute(mpi_comm, source_data=None, source_rank=0):
             if source_data is None:
                 raise TypeError("source rank has no data.")
 
-            sending_to = np.full(num_proc, False)
+            sending_to = [False] * num_proc
             for dest_rank in source_data.keys():
                 sending_to[dest_rank] = True
 
@@ -121,7 +127,7 @@ def mpi_distribute(mpi_comm, source_data=None, source_rank=0):
             MPI.Request.waitall(reqs)
 
         else:
-            receiving = mpi_comm.scatter(None, root=source_rank)
+            receiving = mpi_comm.scatter([], root=source_rank)
 
             if receiving:
                 local_data = mpi_comm.recv(source=source_rank)
