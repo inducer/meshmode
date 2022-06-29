@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 from functools import reduce
 from numbers import Real
-from typing import Optional, Union, Any, Tuple, Dict, List, Set, Sequence
+from typing import Optional, Union, Any, Tuple, Mapping, List, Set, Sequence
 
 from dataclasses import dataclass
 
@@ -86,8 +86,8 @@ def find_group_indices(groups, meshwide_elems):
 
 def _compute_global_elem_to_part_elem(
         nelements: int,
-        part_id_to_elements: Dict[PartID, np.ndarray],
-        part_id_to_part_index: Dict[PartID, int],
+        part_id_to_elements: Mapping[PartID, np.ndarray],
+        part_id_to_part_index: Mapping[PartID, int],
         element_id_dtype: np.dtype[Any]) -> np.ndarray:
     """
     Create a map from global element index to part-wide element index for a set of
@@ -185,7 +185,7 @@ def _filter_mesh_groups(
 
 def _get_connected_parts(
         mesh: Mesh,
-        part_id_to_part_index: Dict[PartID, int],
+        part_id_to_part_index: Mapping[PartID, int],
         global_elem_to_part_elem: np.ndarray,
         self_part_id: PartID) -> "Set[PartID]":
     """
@@ -303,7 +303,7 @@ def _create_self_to_self_adjacency_groups(
 
 def _create_self_to_other_adjacency_groups(
         mesh: Mesh,
-        part_id_to_part_index: Dict[PartID, int],
+        part_id_to_part_index: Mapping[PartID, int],
         global_elem_to_part_elem: np.ndarray,
         self_part_id: PartID,
         self_mesh_groups: List[MeshElementGroup],
@@ -444,7 +444,7 @@ def _create_boundary_groups(
 
 def _get_mesh_part(
         mesh: Mesh,
-        part_id_to_elements: Dict[PartID, np.ndarray],
+        part_id_to_elements: Mapping[PartID, np.ndarray],
         self_part_id: PartID) -> Mesh:
     """
     :arg mesh: A :class:`~meshmode.mesh.Mesh` to be partitioned.
@@ -525,8 +525,8 @@ def _get_mesh_part(
 
 def partition_mesh(
         mesh: Mesh,
-        part_id_to_elements: Dict[PartID, np.ndarray],
-        return_parts: Optional[Sequence[PartID]] = None) -> "Dict[PartID, Mesh]":
+        part_id_to_elements: Mapping[PartID, np.ndarray],
+        return_parts: Optional[Sequence[PartID]] = None) -> "Mapping[PartID, Mesh]":
     """
     :arg mesh: A :class:`~meshmode.mesh.Mesh` to be partitioned.
     :arg part_id_to_elements: A :class:`dict` mapping a part identifier to
