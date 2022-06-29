@@ -88,7 +88,7 @@ def _compute_global_elem_to_part_elem(
         nelements: int,
         part_id_to_elements: Dict[PartID, np.ndarray],
         part_id_to_part_index: Dict[PartID, int],
-        element_id_dtype: Any) -> np.ndarray:
+        element_id_dtype: np.dtype[Any]) -> np.ndarray:
     """
     Create a map from global element index to part-wide element index for a set of
     parts.
@@ -117,7 +117,7 @@ def _compute_global_elem_to_part_elem(
 def _filter_mesh_groups(
         mesh: Mesh,
         selected_elements: np.ndarray,
-        vertex_id_dtype: Any) -> Tuple[List, np.ndarray]:
+        vertex_id_dtype: np.dtype[Any]) -> Tuple[List[MeshElementGroup], np.ndarray]:
     """
     Create new mesh groups containing a selected subset of elements.
 
