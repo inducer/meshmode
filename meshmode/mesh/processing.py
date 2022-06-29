@@ -149,7 +149,8 @@ def _filter_mesh_groups(mesh, selected_elements, vertex_id_dtype):
     filtered_vertex_indices = [
             mesh.groups[i_old_grp].vertex_indices[
                     filtered_group_elements[i_new_grp], :]
-            for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
+            for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)
+            if mesh.groups[i_old_grp].vertex_indices is not None]
 
     if n_new_groups > 0:
         filtered_vertex_indices_flat = np.concatenate([indices.ravel() for indices
@@ -1286,14 +1287,14 @@ def map_mesh(mesh, f):  # noqa
 # {{{ affine map
 
 def affine_map(mesh,
-        A: Optional[Union[Real, np.ndarray]] = None,    # noqa: N803
-        b: Optional[Union[Real, np.ndarray]] = None):
+        A: Optional[Union[np.generic, np.ndarray]] = None,    # noqa: N803
+        b: Optional[Union[np.generic, np.ndarray]] = None):
     """Apply the affine map :math:`f(x) = A x + b` to the geometry of *mesh*."""
 
-    if isinstance(A, Real):
+    if A is not None and not isinstance(A, np.ndarray):
         A = np.diag([A] * mesh.ambient_dim)             # noqa: N806
 
-    if isinstance(b, Real):
+    if b is not None and not isinstance(b, np.ndarray):
         b = np.array([b] * mesh.ambient_dim)
 
     if A is None and b is None:
