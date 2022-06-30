@@ -44,7 +44,7 @@ __doc__ = """
 .. autoclass:: FacialAdjacencyGroup
 .. autoclass:: InteriorAdjacencyGroup
 .. autoclass:: BoundaryAdjacencyGroup
-.. autoclass:: InterPartitionAdjacencyGroup
+.. autoclass:: InterPartAdjacencyGroup
 
 .. autofunction:: as_python
 .. autofunction:: is_true_boundary
@@ -67,6 +67,7 @@ Predefined Boundary tags
 # {{{ element tags
 
 BoundaryTag = Hashable
+PartID = Hashable
 
 
 class BTAG_NONE:  # noqa: N801
@@ -109,22 +110,37 @@ class BTAG_NO_BOUNDARY:  # noqa: N801
 class BTAG_PARTITION(BTAG_NO_BOUNDARY):  # noqa: N801
     """
     A boundary tag indicating that this edge is adjacent to an element of
-    another :class:`Mesh`. The partition number of the adjacent mesh
-    is given by ``part_nr``.
+    another :class:`Mesh`. The part identifier of the adjacent mesh is given
+    by ``part_id``.
 
-    .. attribute:: part_nr
+    .. attribute:: part_id
 
     .. versionadded:: 2017.1
     """
-    def __init__(self, part_nr):
-        self.part_nr = int(part_nr)
+    def __init__(self, part_id: PartID, part_nr=None):
+        if part_nr is not None:
+            from warnings import warn
+            warn("part_nr is deprecated and will stop working in March 2023. "
+                 "Use part_id instead.",
+                 DeprecationWarning, stacklevel=2)
+            self.part_id = int(part_nr)
+        else:
+            self.part_id = part_id
+
+    @property
+    def part_nr(self):
+        from warnings import warn
+        warn("part_nr is deprecated and will stop working in March 2023. "
+             "Use part_id instead.",
+             DeprecationWarning, stacklevel=2)
+        return self.part_id
 
     def __hash__(self):
-        return hash((type(self), self.part_nr))
+        return hash((type(self), self.part_id))
 
     def __eq__(self, other):
         if isinstance(other, BTAG_PARTITION):
-            return self.part_nr == other.part_nr
+            return self.part_id == other.part_id
         else:
             return False
 
@@ -132,10 +148,10 @@ class BTAG_PARTITION(BTAG_NO_BOUNDARY):  # noqa: N801
         return not self.__eq__(other)
 
     def __repr__(self):
-        return "<{}({})>".format(type(self).__name__, repr(self.part_nr))
+        return "<{}({})>".format(type(self).__name__, repr(self.part_id))
 
     def as_python(self):
-        return f"{self.__class__.__name__}({self.part_nr})"
+        return f"{self.__class__.__name__}({self.part_id})"
 
 
 class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801
@@ -754,9 +770,9 @@ class BoundaryAdjacencyGroup(FacialAdjacencyGroup):
 # {{{ partition adjacency
 
 @dataclass(frozen=True, eq=False)
-class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
+class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     """
-    Describes inter-partition adjacency information for one
+    Describes inter-part adjacency information for one
     :class:`MeshElementGroup`.
 
     .. attribute:: igroup
@@ -767,6 +783,10 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
 
         The boundary tag identifier of this group. Will be an instance of
         :class:`~meshmode.mesh.BTAG_PARTITION`.
+
+    .. attribute:: part_id
+
+        The identifier of the neighboring part.
 
     .. attribute:: elements
 
@@ -784,7 +804,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
     .. attribute:: neighbors
 
         ``element_id_dtype neighbors[i]`` gives the volume element number
-        within the neighboring partition of the element connected to
+        within the neighboring part of the element connected to
         ``element_id_dtype elements[i]`` (which is a boundary element index). Use
         `~meshmode.mesh.processing.find_group_indices` to find the group that
         the element belongs to, then subtract ``element_nr_base`` to find the
@@ -793,8 +813,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
     .. attribute:: neighbor_faces
 
         ``face_id_dtype global_neighbor_faces[i]`` gives face index within the
-        neighboring partition of the face connected to
-        ``element_id_dtype elements[i]``
+        neighboring part of the face connected to ``element_id_dtype elements[i]``
 
     .. attribute:: aff_map
 
@@ -804,6 +823,7 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
     .. versionadded:: 2017.1
     """
 
+    part_id: PartID
     neighbors: np.ndarray
     neighbor_faces: np.ndarray
     aff_map: AffineMap
@@ -811,17 +831,19 @@ class InterPartitionAdjacencyGroup(BoundaryAdjacencyGroup):
     def __eq__(self, other):
         return (
             super().__eq__(other)
+            and np.array_equal(self.part_id, other.part_id)
             and np.array_equal(self.neighbors, other.neighbors)
             and np.array_equal(self.neighbor_faces, other.neighbor_faces)
             and self.aff_map == other.aff_map)
 
     def as_python(self):
-        if type(self) != InterPartitionAdjacencyGroup:
+        if type(self) != InterPartAdjacencyGroup:
             raise NotImplementedError(f"Not implemented for {type(self)}.")
 
         return self._as_python(
             igroup=self.igroup,
             boundary_tag=_boundary_tag_as_python(self.boundary_tag),
+            part_id=self.part_id,
             elements=_numpy_array_as_python(self.elements),
             element_faces=_numpy_array_as_python(self.element_faces),
             neighbors=_numpy_array_as_python(self.neighbors),
@@ -1631,7 +1653,7 @@ def as_python(mesh, function_name="make_mesh"):
             FacialAdjacencyGroup,
             InteriorAdjacencyGroup,
             BoundaryAdjacencyGroup,
-            InterPartitionAdjacencyGroup,
+            InterPartAdjacencyGroup,
             BTAG_NONE,
             BTAG_ALL,
             BTAG_REALLY_ALL)
