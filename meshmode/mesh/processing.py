@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 from functools import reduce
 from numbers import Real
-from typing import Optional, Union, Any, Tuple, Mapping, List, Set, Sequence
+from typing import Optional, Union, Tuple, Mapping, List, Set, Sequence
 
 from dataclasses import dataclass
 
@@ -88,7 +88,7 @@ def _compute_global_elem_to_part_elem(
         nelements: int,
         part_id_to_elements: Mapping[PartID, np.ndarray],
         part_id_to_part_index: Mapping[PartID, int],
-        element_id_dtype: np.dtype[Any]) -> np.ndarray:
+        element_id_dtype: np.dtype) -> np.ndarray:
     """
     Create a map from global element index to part-wide element index for a set of
     parts.
@@ -117,7 +117,7 @@ def _compute_global_elem_to_part_elem(
 def _filter_mesh_groups(
         mesh: Mesh,
         selected_elements: np.ndarray,
-        vertex_id_dtype: np.dtype[Any]) -> Tuple[List[MeshElementGroup], np.ndarray]:
+        vertex_id_dtype: np.dtype) -> Tuple[List[MeshElementGroup], np.ndarray]:
     """
     Create new mesh groups containing a selected subset of elements.
 
