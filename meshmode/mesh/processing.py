@@ -126,7 +126,7 @@ def _filter_mesh_groups(
         the filtered groups.
     :arg vertex_id_dtype: The vertex index data type.
     :returns: A tuple ``(new_groups, required_vertex_indices)``, where *new_groups*
-        is made up of groups from *groups* containing only elements from
+        is made up of groups from *mesh* containing only elements from
         *selected_elements* (Note: resulting groups may be empty) and
         *required_vertex_indices* contains indices of all vertices required for
         elements belonging to *new_groups*.
