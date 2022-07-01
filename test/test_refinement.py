@@ -32,8 +32,7 @@ pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         [PytestPyOpenCLArrayContextFactory])
 
 from meshmode.dof_array import flat_norm
-from meshmode.mesh.refinement.utils import check_nodal_adj_against_geometry
-from meshmode.mesh.refinement import Refiner, RefinerWithoutAdjacency
+from meshmode.mesh.refinement import RefinerWithoutAdjacency
 import meshmode.mesh.generation as mgen
 
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
@@ -91,85 +90,13 @@ def uniform_refine_flags(mesh):
     return np.ones(mesh.nelements)
 
 
-@pytest.mark.parametrize(("case_name", "mesh_gen", "flag_gen", "num_generations"), [
-    # Fails?
-    # ("icosahedron",
-    #     partial(generate_icosahedron, 1, order=1),
-    #     partial(random_refine_flags, 0.4),
-    #     3),
+@pytest.mark.parametrize("group_factory", [
+    InterpolatoryQuadratureSimplexGroupFactory,
+    "warp_and_blend",
+    PolynomialEquidistantSimplexGroupFactory,
 
-    ("3_to_1_ellipse_unif",
-        partial(
-            mgen.make_curve_mesh,
-            partial(mgen.ellipse, 3),
-            np.linspace(0, 1, 21),
-            order=1),
-        uniform_refine_flags,
-        4),
-
-    ("rect2d_rand",
-        partial(mgen.generate_box_mesh, (
-            np.linspace(0, 1, 3),
-            np.linspace(0, 1, 3),
-            ), order=1),
-        partial(random_refine_flags, 0.4),
-        4),
-
-    ("rect2d_unif",
-        partial(mgen.generate_box_mesh, (
-            np.linspace(0, 1, 2),
-            np.linspace(0, 1, 2),
-            ), order=1),
-        uniform_refine_flags,
-        3),
-
-    ("blob2d_rand",
-        partial(get_blob_mesh, "6e-2", order=1),
-        partial(random_refine_flags, 0.4),
-        4),
-
-    ("rect3d_rand",
-        partial(mgen.generate_box_mesh, (
-            np.linspace(0, 1, 2),
-            np.linspace(0, 1, 3),
-            np.linspace(0, 1, 2),
-            ), order=1),
-        partial(random_refine_flags, 0.4),
-        3),
-
-    ("rect3d_unif",
-        partial(mgen.generate_box_mesh, (
-            np.linspace(0, 1, 2),
-            np.linspace(0, 1, 2)), order=1),
-        uniform_refine_flags,
-        3),
-    ])
-def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
-    from random import seed
-    seed(13)
-
-    mesh = mesh_gen()
-
-    r = Refiner(mesh)
-
-    for _ in range(num_generations):
-        flags = flag_gen(mesh)
-        mesh = r.refine(flags)
-
-        check_nodal_adj_against_geometry(mesh)
-
-
-@pytest.mark.parametrize(("refiner_cls", "group_factory"), [
-    (Refiner, InterpolatoryQuadratureSimplexGroupFactory),
-    (Refiner, "warp_and_blend"),
-    (Refiner, PolynomialEquidistantSimplexGroupFactory),
-
-    (RefinerWithoutAdjacency, InterpolatoryQuadratureSimplexGroupFactory),
-    (RefinerWithoutAdjacency, "warp_and_blend"),
-    (RefinerWithoutAdjacency, PolynomialEquidistantSimplexGroupFactory),
-
-    (RefinerWithoutAdjacency, LegendreGaussLobattoTensorProductGroupFactory),
-    (RefinerWithoutAdjacency, GaussLegendreTensorProductGroupFactory),
+    LegendreGaussLobattoTensorProductGroupFactory,
+    GaussLegendreTensorProductGroupFactory,
     ])
 @pytest.mark.parametrize(("mesh_name", "dim", "mesh_pars"), [
     ("circle", 1, [20, 30, 40]),
@@ -184,9 +111,9 @@ def test_refinement(case_name, mesh_gen, flag_gen, num_generations):
     #partial(random_refine_flags, 0.4)
     partial(even_refine_flags, 2)
 ])
-# test_refinement_connection(cl._csc, RefinerWithoutAdjacency, PolynomialWarpAndBlend2DRestrictingGroupFactory, 'warp', 2, [4, 5, 6], 5, partial(even_refine_flags, 2))  # noqa: E501
+# test_refinement_connection(cl._csc, PolynomialWarpAndBlend2DRestrictingGroupFactory, 'warp', 2, [4, 5, 6], 5, partial(even_refine_flags, 2))  # noqa: E501
 def test_refinement_connection(
-        actx_factory, refiner_cls, group_factory,
+        actx_factory, group_factory,
         mesh_name, dim, mesh_pars, mesh_order, refine_flags, visualize=False):
 
     if group_factory == "warp_and_blend":
@@ -263,7 +190,7 @@ def test_refinement_connection(
 
         discr = Discretization(actx, mesh, group_factory(order))
 
-        refiner = refiner_cls(mesh)
+        refiner = RefinerWithoutAdjacency(mesh)
         flags = refine_flags(mesh)
         refiner.refine(flags)
 

@@ -33,8 +33,7 @@ logger = logging.getLogger(__name__)
 class RefinerWithoutAdjacency:
     """A refiner that may be applied to non-conforming
     :class:`meshmode.mesh.Mesh` instances. It does not generate adjacency
-    information, and it is typically faster than
-    :class:`meshmode.mesh.refinement.Refiner`.
+    information.
 
     .. note::
 

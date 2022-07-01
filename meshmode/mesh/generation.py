@@ -849,8 +849,8 @@ def refine_mesh_and_get_urchin_warper(
         interpolation error estimates on the warped version of the mesh.
 
     :returns: a tuple ``(refiner, warp_mesh)``, where *refiner* is
-        a :class:`~meshmode.mesh.refinement.Refiner` (from which the unwarped mesh
-        may be obtained), and whose
+        a :class:`~meshmode.mesh.refinement.RefinerWithoutAdjacency` (from
+        which the unwarped mesh may be obtained), and whose
         :meth:`~meshmode.mesh.refinement.RefinerWithoutAdjacency.get_current_mesh`
         returns a locally-refined :class:`~meshmode.mesh.Mesh` of a sphere and
         *warp_mesh* is a callable taking and returning a mesh that warps the
@@ -1502,14 +1502,14 @@ def warp_and_refine_until_resolved(
     from modepy.modes import simplex_onb
     from modepy.matrices import vandermonde
     from modepy.modal_decay import simplex_interp_error_coefficient_estimator_matrix
-    from meshmode.mesh.refinement import Refiner, RefinerWithoutAdjacency
+    from meshmode.mesh.refinement import RefinerWithoutAdjacency
 
-    if isinstance(unwarped_mesh_or_refiner, (Refiner, RefinerWithoutAdjacency)):
+    if isinstance(unwarped_mesh_or_refiner, RefinerWithoutAdjacency):
         refiner = unwarped_mesh_or_refiner
         unwarped_mesh = refiner.get_current_mesh()
     else:
         unwarped_mesh = unwarped_mesh_or_refiner
-        refiner = Refiner(unwarped_mesh)
+        refiner = RefinerWithoutAdjacency(unwarped_mesh)
 
     iteration = 0
 

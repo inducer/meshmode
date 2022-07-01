@@ -95,7 +95,7 @@ Documentation:
 Flake8:
   script:
   - curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/prepare-and-run-flake8.sh
-  - . ./prepare-and-run-flake8.sh "$CI_PROJECT_NAME" test examples experiments
+  - . ./prepare-and-run-flake8.sh "$CI_PROJECT_NAME" test examples
   tags:
   - python3
   except:
@@ -106,7 +106,7 @@ Pylint:
     export PY_EXE=python3
     EXTRA_INSTALL="Cython pybind11 numpy mako matplotlib scipy mpi4py h5py oct2py"
     curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
-    . ./prepare-and-run-pylint.sh "$CI_PROJECT_NAME" examples/*.py test/test_*.py experiments/*.py
+    . ./prepare-and-run-pylint.sh "$CI_PROJECT_NAME" examples/*.py test/test_*.py
   tags:
   - python3
   except:
