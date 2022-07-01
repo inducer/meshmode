@@ -256,7 +256,8 @@ def test_refinement_connection(
                 factor = 9
 
             for iaxis in range(len(x)):
-                result = result * actx.np.sin(factor * (x[iaxis]/mesh_ext[iaxis]))
+                result = result * actx.np.sin(
+                        factor * (x[iaxis]/mesh_ext[iaxis]))  # noqa: B023
 
             return result
 

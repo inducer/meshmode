@@ -1790,7 +1790,7 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
             and fagrp.boundary_tag in boundary_tags]
 
         def get_bdry_counts(bdry_grp):
-            counts = np.full((grp.nfaces, grp.nelements), 0)
+            counts = np.full((grp.nfaces, grp.nelements), 0)  # noqa: B023
             counts[bdry_grp.element_faces, bdry_grp.elements] += 1
             return counts
 
