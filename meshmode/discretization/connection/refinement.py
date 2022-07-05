@@ -115,7 +115,7 @@ def make_refinement_connection(actx, refiner, coarse_discr, group_factory):
     connecting `coarse_discr` to a discretization on the fine mesh.
 
     :arg refiner: An instance of
-        :class:`meshmode.mesh.refinement.Refiner`
+        :class:`meshmode.mesh.refinement.RefinerWithoutAdjacency`
 
     :arg coarse_discr: An instance of
         :class:`meshmode.discretization.Discretization` associated

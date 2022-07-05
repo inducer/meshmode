@@ -1,3 +1,17 @@
+"""
+.. autoclass:: MPIMeshDistributor
+.. autoclass:: InterRankBoundaryInfo
+.. autoclass:: MPIBoundaryCommSetupHelper
+
+.. autofunction:: mpi_distribute
+.. autofunction:: get_partition_by_pymetis
+.. autofunction:: membership_list_to_map
+.. autofunction:: get_connected_parts
+
+.. autoclass:: RemoteGroupInfo
+.. autoclass:: make_remote_group_infos
+"""
+
 __copyright__ = """
 Copyright (C) 2017 Ellis Hoag
 Copyright (C) 2017 Andreas Kloeckner
@@ -24,34 +38,105 @@ THE SOFTWARE.
 """
 
 from dataclasses import dataclass
+from contextlib import contextmanager
 import numpy as np
-from typing import List
+from typing import (
+    Any, Optional, List, Set, Union, Mapping, cast, Sequence, TYPE_CHECKING
+)
+
+from arraycontext import ArrayContext
+from meshmode.discretization.connection import (
+        DirectDiscretizationConnection)
 
 from meshmode.mesh import (
-    InteriorAdjacencyGroup,
-    InterPartitionAdjacencyGroup
+        Mesh,
+        InteriorAdjacencyGroup,
+        InterPartAdjacencyGroup,
+        PartID,
 )
+
+from meshmode.discretization import ElementGroupFactory
+
+from warnings import warn
 
 # This file needs to be importable without mpi4py. So don't be tempted to add
 # that import here--push it into individual functions instead.
 
+
+if TYPE_CHECKING:
+    import mpi4py.MPI
+
+
 import logging
 logger = logging.getLogger(__name__)
-
-TAG_BASE = 83411
-TAG_DISTRIBUTE_MESHES = TAG_BASE + 1
-
-__doc__ = """
-.. autoclass:: MPIMeshDistributor
-.. autoclass:: MPIBoundaryCommSetupHelper
-
-.. autofunction:: get_partition_by_pymetis
-.. autofunction:: get_connected_partitions
-"""
 
 
 # {{{ mesh distributor
 
+@contextmanager
+def _duplicate_mpi_comm(mpi_comm):
+    dup_comm = mpi_comm.Dup()
+    try:
+        yield dup_comm
+    finally:
+        dup_comm.Free()
+
+
+def mpi_distribute(
+        mpi_comm: "mpi4py.MPI.Intracomm",
+        source_data: Optional[Mapping[int, Any]] = None,
+        source_rank: int = 0) -> Optional[Any]:
+    """
+    Distribute data to a set of processes.
+
+    :arg mpi_comm: An ``MPI.Intracomm``
+    :arg source_data: A :class:`dict` mapping destination ranks to data to be sent.
+        Only present on the source rank.
+    :arg source_rank: The rank from which the data is being sent.
+
+    :returns: The data local to the current process if there is any, otherwise
+        *None*.
+    """
+    with _duplicate_mpi_comm(mpi_comm) as mpi_comm:
+        num_proc = mpi_comm.Get_size()
+        rank = mpi_comm.Get_rank()
+
+        local_data = None
+
+        if rank == source_rank:
+            if source_data is None:
+                raise TypeError("source rank has no data.")
+
+            sending_to = [False] * num_proc
+            for dest_rank in source_data.keys():
+                sending_to[dest_rank] = True
+
+            mpi_comm.scatter(sending_to, root=source_rank)
+
+            reqs = []
+            for dest_rank, data in source_data.items():
+                if dest_rank == rank:
+                    local_data = data
+                    logger.info("rank %d: received data", rank)
+                else:
+                    reqs.append(mpi_comm.isend(data, dest=dest_rank))
+
+            logger.info("rank %d: sent all data", rank)
+
+            from mpi4py import MPI
+            MPI.Request.waitall(reqs)
+
+        else:
+            receiving = mpi_comm.scatter([], root=source_rank)
+
+            if receiving:
+                local_data = mpi_comm.recv(source=source_rank)
+                logger.info("rank %d: received data", rank)
+
+        return local_data
+
+
+# TODO: Deprecate?
 class MPIMeshDistributor:
     """
     .. automethod:: is_mananger_rank
@@ -74,78 +159,62 @@ class MPIMeshDistributor:
         :arg part_per_element: A :class:`numpy.ndarray` containing one
             integer per element of *mesh* indicating which part of the
             partitioned mesh the element is to become a part of.
-        :arg num_parts: The number of partitions to divide the mesh into.
+        :arg num_parts: The number of parts to divide the mesh into.
 
-        Sends each partition to a different rank.
-        Returns one partition that was not sent to any other rank.
+        Sends each part to a different rank.
+        Returns one part that was not sent to any other rank.
         """
-        mpi_comm = self.mpi_comm
-        rank = mpi_comm.Get_rank()
-        assert num_parts <= mpi_comm.Get_size()
+        assert num_parts <= self.mpi_comm.Get_size()
 
         assert self.is_mananger_rank()
 
+        part_num_to_elements = membership_list_to_map(part_per_element)
+
         from meshmode.mesh.processing import partition_mesh
-        parts = [partition_mesh(mesh, part_per_element, i)[0]
-                        for i in range(num_parts)]
+        parts = partition_mesh(mesh, part_num_to_elements)
 
-        local_part = None
-
-        reqs = []
-        for r, part in enumerate(parts):
-            if r == self.manager_rank:
-                local_part = part
-            else:
-                reqs.append(mpi_comm.isend(part, dest=r, tag=TAG_DISTRIBUTE_MESHES))
-
-        logger.info("rank %d: sent all mesh partitions", rank)
-        for req in reqs:
-            req.wait()
-
-        return local_part
+        return mpi_distribute(
+            self.mpi_comm, source_data=parts, source_rank=self.manager_rank)
 
     def receive_mesh_part(self):
         """
         Returns the mesh sent by the manager rank.
         """
-        mpi_comm = self.mpi_comm
-        rank = mpi_comm.Get_rank()
-
         assert not self.is_mananger_rank(), "Manager rank cannot receive mesh"
 
-        from mpi4py import MPI
-        status = MPI.Status()
-        result = self.mpi_comm.recv(
-                source=self.manager_rank, tag=TAG_DISTRIBUTE_MESHES,
-                status=status)
-        logger.info("rank %d: received local mesh (size = %d)", rank, status.count)
-
-        return result
+        return mpi_distribute(self.mpi_comm, source_rank=self.manager_rank)
 
 # }}}
 
 
-# {{{ boundary communication setup helper
+# {{{ remote group info
 
+# FIXME: "Remote" is perhaps not the best naming convention for this. For example,
+# in a multi-volume context it may be used when constructing inter-part connections
+# between two parts on the same rank.
 @dataclass
 class RemoteGroupInfo:
-    inter_partition_adj_groups: List[InterPartitionAdjacencyGroup]
+    inter_part_adj_groups: List[InterPartAdjacencyGroup]
     vol_elem_indices: np.ndarray
     bdry_elem_indices: np.ndarray
     bdry_faces: np.ndarray
 
 
-def make_remote_group_infos(actx, i_remote_part, bdry_conn):
+def make_remote_group_infos(
+        actx: ArrayContext,
+        remote_part_id: PartID,
+        bdry_conn: DirectDiscretizationConnection
+        ) -> Sequence[RemoteGroupInfo]:
     local_vol_mesh = bdry_conn.from_discr.mesh
 
     assert len(local_vol_mesh.groups) == len(bdry_conn.to_discr.groups)
 
     return [
             RemoteGroupInfo(
-                inter_partition_adj_groups=[
+                inter_part_adj_groups=[
                     fagrp for fagrp in local_vol_mesh.facial_adjacency_groups[igrp]
-                    if isinstance(fagrp, InterPartitionAdjacencyGroup)
-                    and fagrp.ineighbor_partition == i_remote_part],
+                    if isinstance(fagrp, InterPartAdjacencyGroup)
+                    and fagrp.part_id == remote_part_id],
                 vol_elem_indices=np.concatenate([
                     actx.to_numpy(batch.from_element_indices)
                     for batch in bdry_conn.groups[igrp].batches]),
@@ -157,56 +226,126 @@ def make_remote_group_infos(actx, i_remote_part, bdry_conn):
                         for batch in bdry_conn.groups[igrp].batches]))
             for igrp in range(len(bdry_conn.from_discr.groups))]
 
+# }}}
+
+
+# {{{ boundary communication setup helper
+
+@dataclass(init=True, frozen=True)
+class InterRankBoundaryInfo:
+    """
+    .. attribute:: local_part_id
+
+        An opaque, hashable, picklable identifier for the local part.
+
+    .. attribute:: remote_part_id
+
+        An opaque, hashable, picklable identifier for the remote part.
+
+    .. attribute:: remote_rank
+
+        The MPI rank with which this boundary communicates.
+
+    .. attribute:: local_boundary_connection
+
+        A :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`
+        from the volume onto the boundary described by
+        ``BTAG_PARTITION(remote_part_id)``.
+
+    .. automethod:: __init__
+    """
+
+    local_part_id: PartID
+    remote_part_id: PartID
+    remote_rank: int
+    local_boundary_connection: DirectDiscretizationConnection
+
 
 class MPIBoundaryCommSetupHelper:
     """
-    Helper for setting up inter-partition facial data exchange.
+    Helper for setting up inter-part facial data exchange.
 
     .. automethod:: __init__
     .. automethod:: __enter__
     .. automethod:: __exit__
     .. automethod:: complete_some
     """
-    def __init__(self, mpi_comm, actx, local_bdry_conns, bdry_grp_factory):
+    def __init__(self,
+            mpi_comm: "mpi4py.MPI.Intracomm",
+            actx: ArrayContext,
+            inter_rank_bdry_info: Union[
+                # new-timey
+                Sequence[InterRankBoundaryInfo],
+                # old-timey, for compatibility
+                Mapping[int, DirectDiscretizationConnection],
+                ],
+            bdry_grp_factory: ElementGroupFactory):
         """
-        :arg mpi_comm: An ``MPI.Intracomm``
-        :arg actx: An array context
-        :arg local_bdry_conns: A :class:`dict` mapping remote partition to
+        :arg local_bdry_conns: A :class:`dict` mapping remote part to
             `local_bdry_conn`, where `local_bdry_conn` is a
             :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`
-            that performs data exchange from
-            the volume to the faces adjacent to partition `i_remote_part`.
+            that performs data exchange from the volume to the faces adjacent to
+            part `i_remote_part`.
         :arg bdry_grp_factory: Group factory to use when creating the remote-to-local
             boundary connections
         """
         self.mpi_comm = mpi_comm
         self.array_context = actx
-        self.i_local_part = mpi_comm.Get_rank()
-        self.local_bdry_conns = local_bdry_conns
+        self.i_local_rank = mpi_comm.Get_rank()
+
+        # {{{ normalize inter_rank_bdry_info
+
+        self._using_old_timey_interface = False
+
+        if isinstance(inter_rank_bdry_info, dict):
+            self._using_old_timey_interface = True
+            warn("Using the old-timey interface of MPIBoundaryCommSetupHelper. "
+                    "That's deprecated and will stop working in July 2022. "
+                    "Use the currently documented interface instead.",
+                    DeprecationWarning, stacklevel=2)
+
+            inter_rank_bdry_info = [
+                    InterRankBoundaryInfo(
+                        local_part_id=self.i_local_rank,
+                        remote_part_id=remote_rank,
+                        remote_rank=remote_rank,
+                        local_boundary_connection=conn
+                        )
+                    for remote_rank, conn in inter_rank_bdry_info.items()]
+
+        # }}}
+
+        self.inter_rank_bdry_info = cast(
+                Sequence[InterRankBoundaryInfo], inter_rank_bdry_info)
+
         self.bdry_grp_factory = bdry_grp_factory
-        self._internal_mpi_comm = None
-        self.send_reqs = None
-        self.pending_recvs = None
 
     def __enter__(self):
         self._internal_mpi_comm = self.mpi_comm.Dup()
 
-        logger.info("bdry comm rank %d comm begin", self.i_local_part)
+        logger.info("bdry comm rank %d comm begin", self.i_local_rank)
 
         # Not using irecv because mpi4py only allocates 32KB per receive buffer
         # when receiving pickled objects. We could pass buffers to irecv explicitly,
         # but in order to know the required buffer sizes we would have to do all of
         # the pickling ourselves.
-        self.pending_recvs = set(self.local_bdry_conns.keys())
+
+        # to know when we're done
+        self.pending_recv_identifiers = {
+                (irbi.local_part_id, irbi.remote_part_id)
+                for irbi in self.inter_rank_bdry_info}
 
         self.send_reqs = [
-            self._internal_mpi_comm.isend((
-                self.local_bdry_conns[i_remote_part].to_discr.mesh,
-                make_remote_group_infos(
-                    self.array_context, i_remote_part,
-                    self.local_bdry_conns[i_remote_part])),
-                dest=i_remote_part)
-            for i_remote_part in self.local_bdry_conns.keys()]
+            self._internal_mpi_comm.isend(
+                (
+                    irbi.local_part_id,
+                    irbi.remote_part_id,
+                    irbi.local_boundary_connection.to_discr.mesh,
+                    make_remote_group_infos(
+                        self.array_context, irbi.remote_part_id,
+                        irbi.local_boundary_connection)),
+                dest=irbi.remote_rank)
+            for irbi in self.inter_rank_bdry_info]
 
         return self
 
@@ -215,17 +354,16 @@ class MPIBoundaryCommSetupHelper:
 
     def complete_some(self):
         """
-        Returns a :class:`dict` mapping a subset of remote partitions to
+        Returns a :class:`dict` mapping a subset of remote parts to
         remote-to-local boundary connections, where a remote-to-local boundary
         connection is a
         :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`
-        that performs data exchange across faces from partition `i_remote_part`
-        to the local mesh. When an empty dictionary is returned, setup is
-        complete.
+        that performs data exchange across faces from part `i_remote_part` to the
+        local mesh. When an empty dictionary is returned, setup is complete.
         """
         from mpi4py import MPI
 
-        if not self.pending_recvs:
+        if not self.pending_recv_identifiers:
             # Already completed, nothing more to do
             return {}
 
@@ -233,44 +371,61 @@ class MPIBoundaryCommSetupHelper:
 
         # Wait for any receive
         data = [self._internal_mpi_comm.recv(status=status)]
-        parts = [status.source]
+        source_ranks = [status.source]
 
         # Complete any other available receives while we're at it
         while self._internal_mpi_comm.iprobe():
             data.append(self._internal_mpi_comm.recv(status=status))
-            parts.append(status.source)
+            source_ranks.append(status.source)
 
         remote_to_local_bdry_conns = {}
 
-        for i_remote_part, (remote_bdry_mesh, remote_group_infos) in zip(parts,
-                data):
-            logger.debug("rank %d: Received rank %d data",
-                         self.i_local_part, i_remote_part)
+        part_ids_to_irbi = {
+                (irbi.local_part_id, irbi.remote_part_id): irbi
+                for irbi in self.inter_rank_bdry_info}
+        if len(part_ids_to_irbi) < len(self.inter_rank_bdry_info):
+            raise ValueError(
+                "duplicate local/remote part pair in inter_rank_bdry_info")
+
+        for i_src_rank, recvd in zip(source_ranks, data):
+            (remote_part_id, local_part_id,
+                    remote_bdry_mesh, remote_group_infos) = recvd
+
+            logger.debug("rank %d: Received part id '%s' data from rank %d",
+                         self.i_local_rank, remote_part_id, i_src_rank)
 
             # Connect local_mesh to remote_mesh
             from meshmode.discretization.connection import make_partition_connection
-            local_bdry_conn = self.local_bdry_conns[i_remote_part]
-            remote_to_local_bdry_conns[i_remote_part] = make_partition_connection(
+            irbi = part_ids_to_irbi[local_part_id, remote_part_id]
+            assert i_src_rank == irbi.remote_rank
+
+            if self._using_old_timey_interface:
+                key = remote_part_id
+            else:
+                key = (remote_part_id, local_part_id)
+
+            remote_to_local_bdry_conns[key] = (
+                make_partition_connection(
                     self.array_context,
-                    local_bdry_conn=local_bdry_conn,
-                    i_local_part=self.i_local_part,
-                    remote_bdry_discr=local_bdry_conn.to_discr.copy(
+                    local_bdry_conn=irbi.local_boundary_connection,
+                    remote_bdry_discr=irbi.local_boundary_connection.to_discr.copy(
                         actx=self.array_context,
                         mesh=remote_bdry_mesh,
                         group_factory=self.bdry_grp_factory),
-                    remote_group_infos=remote_group_infos)
+                    remote_group_infos=remote_group_infos))
 
-            self.pending_recvs.remove(i_remote_part)
+            self.pending_recv_identifiers.remove((local_part_id, remote_part_id))
 
-        if not self.pending_recvs:
+        if not self.pending_recv_identifiers:
             MPI.Request.waitall(self.send_reqs)
-            logger.info("bdry comm rank %d comm end", self.i_local_part)
+            logger.info("bdry comm rank %d comm end", self.i_local_rank)
 
         return remote_to_local_bdry_conns
 
 # }}}
 
 
+# FIXME: Move somewhere else, since it's not strictly limited to distributed?
 def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs):
     """Return a mesh partition created by :mod:`pymetis`.
 
@@ -280,7 +435,7 @@ def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs
         ``"facial"`` or ``"nodal"`` (based on vertices).
     :arg kwargs: Passed unmodified to :func:`pymetis.part_graph`.
     :returns: a :class:`numpy.ndarray` with one entry per element indicating
-        to which partition each element belongs, with entries between ``0`` and
+        to which part each element belongs, with entries between ``0`` and
         ``num_parts-1``.
 
     .. versionchanged:: 2020.2
@@ -319,18 +474,33 @@ def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs
     return np.array(p)
 
 
-def get_connected_partitions(mesh):
-    """For a local mesh part in *mesh*, determine the set of numbers
-    of remote partitions to which this mesh piece is connected.
-
-    :arg mesh: A :class:`meshmode.mesh.Mesh` instance
-    :returns: the set of partition numbers that are connected to `mesh`
+def membership_list_to_map(membership_list):
+    """
+    Convert a :class:`numpy.ndarray` that maps an index to a key into a
+    :class:`dict` that maps a key to a set of indices (with each set of indices
+    stored as a sorted :class:`numpy.ndarray`).
     """
     return {
-        grp.ineighbor_partition
-        for fagrp_list in mesh.facial_adjacency_groups
-        for grp in fagrp_list
-        if isinstance(grp, InterPartitionAdjacencyGroup)}
+        entry: np.where(membership_list == entry)[0]
+        for entry in set(membership_list)}
 
+
+# FIXME: Move somewhere else, since it's not strictly limited to distributed?
+def get_connected_parts(mesh: Mesh) -> "Set[PartID]":
+    """For a local mesh part in *mesh*, determine the set of connected parts."""
+    assert mesh.facial_adjacency_groups is not None
+
+    return {
+            grp.part_id
+            for fagrp_list in mesh.facial_adjacency_groups
+            for grp in fagrp_list
+            if isinstance(grp, InterPartAdjacencyGroup)}
+
+
+def get_connected_partitions(mesh: Mesh) -> "Set[PartID]":
+    warn(
+        "get_connected_partitions is deprecated and will stop working in June 2023. "
+        "Use get_connected_parts instead.", DeprecationWarning, stacklevel=2)
+    return get_connected_parts(mesh)
 
 # vim: foldmethod=marker
