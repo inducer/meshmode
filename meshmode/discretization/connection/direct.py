@@ -911,78 +911,12 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         pick_lists_dtype = fgpd.dof_pick_lists.dtype
                         pick_list_ind_dtype = fgpd.dof_pick_list_index.dtype
 
-                        if True:#fgpd.is_surjective: # Check if can handle non-surjective cases
+                        if False:
                             
                             dof_pick_lists = fgpd.dof_pick_lists
                             dof_pick_list_index = fgpd.dof_pick_list_index
                             data_ary = ary[fgpd.from_group_index]
                             from_element_indices = fgpd.from_element_indices
-
-
-                            # Can delete this once the rest is verified to work.
-                            def get_indices_numpy(dof_pick_lists, dof_pick_list_index, ary, from_element_indices):
-                                np_dof_pick_lists = dof_pick_lists.get(queue=actx.queue)
-                                np_dof_pick_list_index = dof_pick_list_index.get(queue=actx.queue)
-                                np_ary = ary.get(queue=actx.queue)
-                                np_from_element_indices = from_element_indices.get(queue=actx.queue)
-                                
-                                print(np_dof_pick_lists)
-                                print(np_dof_pick_list_index)
-                                print(np_from_element_indices)
-                                print(np_ary.flags.f_contiguous, np_ary.flags.c_contiguous)
-
-                                nelements = np_from_element_indices.shape[0]
-                                ndofs = np_dof_pick_lists.shape[1]
-
-                                order = "F" if np_ary.flags.f_contiguous else "C"
-                                result = np.zeros((nelements, ndofs), order=order)
-                                result_ind = np.zeros((nelements,ndofs),order=order, dtype=np.int32)
-
-                                if ary.flags.f_contiguous:
-                                    row_stride = 1
-                                    col_stride = ary.shape[0]
-                                else:
-                                    row_stride = ary.shape[1]
-                                    col_stride = 1
-
-                                for iel in range(nelements):
-                                    for idof in range(ndofs):
-                                        # Get the row and column indices
-                                        row = np_from_element_indices[iel]
-                                        col = np_dof_pick_lists[np_dof_pick_list_index[iel], idof]
-                                        # Calculate the index
-
-                                        result_ind[iel,idof] = row*row_stride + col*col_stride
-
-                                        result[iel,idof] = np_ary[row,col]
-                                        
-                                ary_flat = np_ary.flatten(order=order)
-                                result_ary_flat = ary_flat[result_ind]
-                                result_ary_flat_index_flat = ary_flat[result_ind.flatten(order=order)]
-                                result_from_flat = np.reshape(result_ary_flat, result.shape, order=order)
-                                orig_result_flat = result.flatten(order=order)
-
-                                print(result_ary_flat.shape)
-                                print(result_from_flat.shape)
-                                print(result_ary_flat_index_flat.shape)
-                                print(orig_result_flat.shape)
-                                print(result.shape)
-
-                                #assert np.allclose(result_ary_flat, orig_result_flat)
-                                #assert np.allclose(result_ary_flat, result)
-                                assert np.allclose(result_ary_flat, result)
-                                assert np.allclose(result_from_flat, result)
-                                assert np.allclose(result_ary_flat_index_flat, orig_result_flat)
-                                print("DONE!")
-                                #print(result_ary_flat)
-                                #print(result)
-                                return result_ind, result
-
-                            #indices, np_result = get_indices_numpy(dof_pick_lists, dof_pick_list_index, data_ary, from_element_indices)
-                            #lp_indices_host = lp_indices.get(queue=actx.queue)
-                            #assert np.allclose(indices, lp_indices_host)
-
-                            
 
                             order = "F" if data_ary.flags.f_contiguous else "C"
                             lp_indices = get_indices_loopy(dof_pick_lists, dof_pick_list_index, from_element_indices,
