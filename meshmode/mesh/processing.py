@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 from functools import reduce
 from numbers import Real
-from typing import Optional, Union
+from typing import Optional, Union, Tuple, Mapping, List, Set, Sequence
 
 from dataclasses import dataclass
 
@@ -32,10 +32,14 @@ import numpy.linalg as la
 import modepy as mp
 
 from meshmode.mesh import (
+    MeshElementGroup,
+    Mesh,
     BTAG_PARTITION,
+    PartID,
+    FacialAdjacencyGroup,
     InteriorAdjacencyGroup,
     BoundaryAdjacencyGroup,
-    InterPartitionAdjacencyGroup
+    InterPartAdjacencyGroup
 )
 
 from meshmode.mesh.tools import AffineMap
@@ -80,82 +84,80 @@ def find_group_indices(groups, meshwide_elems):
 
 # {{{ partition_mesh
 
-def _compute_global_elem_to_part_elem(part_per_element, parts, element_id_dtype):
+def _compute_global_elem_to_part_elem(
+        nelements: int,
+        part_id_to_elements: Mapping[PartID, np.ndarray],
+        part_id_to_part_index: Mapping[PartID, int],
+        element_id_dtype: np.dtype) -> np.ndarray:
     """
-    Create a map from global element index to partition-wide element index for
-    a set of partitions.
+    Create a map from global element index to part-wide element index for a set of
+    parts.
 
-    :arg part_per_element: A :class:`numpy.ndarray` mapping element indices to
-        partition numbers.
-    :arg parts: A :class:`set` of partition numbers.
+    :arg nelements: The number of elements in the global mesh.
+    :arg part_id_to_elements: A :class:`dict` mapping a part identifier to
+        a sorted :class:`numpy.ndarray` of elements.
+    :arg part_id_to_part_index: A mapping from part identifiers to indices in
+        the range ``[0, num_parts)``.
     :arg element_id_dtype: The element index data type.
-    :returns: A :class:`numpy.ndarray` that maps an element's global index
-        to its corresponding partition-wide index if that partition belongs to
-        *parts* (and if not, to -1).
+    :returns: A :class:`numpy.ndarray` ``global_elem_to_part_elem`` of shape
+        ``(nelements, 2)``, where ``global_elem_to_part_elem[ielement, 0]`` gives
+        the part index of the element and
+        ``global_elem_to_part_elem[ielement, 1]`` gives its part-wide element index.
     """
-    global_elem_to_part_elem = np.full(len(part_per_element), -1,
-                dtype=element_id_dtype)
-    for ipart in parts:
-        belongs_to_part = part_per_element == ipart
-        global_elem_to_part_elem[belongs_to_part] = (
-            np.cumsum(belongs_to_part)[belongs_to_part]-1)
+    global_elem_to_part_elem = np.empty((nelements, 2), dtype=element_id_dtype)
+    for part_id in part_id_to_elements.keys():
+        elements = part_id_to_elements[part_id]
+        global_elem_to_part_elem[elements, 0] = part_id_to_part_index[part_id]
+        global_elem_to_part_elem[elements, 1] = np.indices(
+            (len(elements),), dtype=element_id_dtype)
 
     return global_elem_to_part_elem
 
 
-def _filter_mesh_groups(mesh, selected_elements, vertex_id_dtype):
+def _filter_mesh_groups(
+        mesh: Mesh,
+        selected_elements: np.ndarray,
+        vertex_id_dtype: np.dtype) -> Tuple[List[MeshElementGroup], np.ndarray]:
     """
     Create new mesh groups containing a selected subset of elements.
 
-    :arg groups: An array of `~meshmode.mesh.ElementGroup` instances.
+    :arg mesh: A `~meshmode.mesh.Mesh` instance.
     :arg selected_elements: A sorted array of indices of elements to be included in
         the filtered groups.
-    :returns: A tuple ``(new_groups, group_to_new_group, required_vertex_indices)``,
-        where *new_groups* is made up of groups from *groups* with elements not in
-        *selected_elements* removed (Note: empty groups are omitted),
-        *group_to_new_group* maps groups in *groups* to their corresponding location
-        in *new_groups*, and *required_vertex_indices* contains indices of all
-        vertices required for elements belonging to *new_groups*.
+    :arg vertex_id_dtype: The vertex index data type.
+    :returns: A tuple ``(new_groups, required_vertex_indices)``, where *new_groups*
+        is made up of groups from *mesh* containing only elements from
+        *selected_elements* (Note: resulting groups may be empty) and
+        *required_vertex_indices* contains indices of all vertices required for
+        elements belonging to *new_groups*.
     """
 
-    # {{{ find n_new_groups, group_to_new_group, filtered_group_elements
+    # {{{ find filtered_group_elements
 
     group_elem_starts = [
         np.searchsorted(selected_elements, base_element_nr)
         for base_element_nr in mesh.base_element_nrs
         ] + [len(selected_elements)]
 
-    new_group_to_old_group = []
     filtered_group_elements = []
     for igrp in range(len(mesh.groups)):
         start_idx, end_idx = group_elem_starts[igrp:igrp+2]
-        if end_idx == start_idx:
-            continue
 
-        new_group_to_old_group.append(igrp)
         filtered_group_elements.append(
             selected_elements[start_idx:end_idx] - mesh.base_element_nrs[igrp])
-
-    n_new_groups = len(new_group_to_old_group)
-
-    group_to_new_group = [None] * len(mesh.groups)
-    for i_new_grp, i_old_grp in enumerate(new_group_to_old_group):
-        group_to_new_group[i_old_grp] = i_new_grp
 
     # }}}
 
     # {{{ filter vertex indices
 
     filtered_vertex_indices = [
-            mesh.groups[i_old_grp].vertex_indices[
-                    filtered_group_elements[i_new_grp], :]
-            for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
+            grp.vertex_indices[
+                    filtered_group_elements[igrp], :]
+            for igrp, grp in enumerate(mesh.groups)
+            if grp.vertex_indices is not None]
 
-    if n_new_groups > 0:
-        filtered_vertex_indices_flat = np.concatenate([indices.ravel() for indices
-                    in filtered_vertex_indices])
-    else:
-        filtered_vertex_indices_flat = np.empty(0, dtype=vertex_id_dtype)
+    filtered_vertex_indices_flat = np.concatenate([indices.ravel() for indices
+                in filtered_vertex_indices])
 
     required_vertex_indices, new_vertex_indices_flat = np.unique(
                 filtered_vertex_indices_flat, return_inverse=True)
@@ -172,31 +174,36 @@ def _filter_mesh_groups(mesh, selected_elements, vertex_id_dtype):
 
     from dataclasses import replace
     new_groups = [
-            replace(mesh.groups[i_old_grp],
-                vertex_indices=new_vertex_indices[i_new_grp],
-                nodes=mesh.groups[i_old_grp].nodes[
-                    :, filtered_group_elements[i_new_grp], :].copy(),
+            replace(grp,
+                vertex_indices=new_vertex_indices[igrp],
+                nodes=grp.nodes[:, filtered_group_elements[igrp], :].copy(),
                 element_nr_base=None, node_nr_base=None)
-            for i_new_grp, i_old_grp in enumerate(new_group_to_old_group)]
+            for igrp, grp in enumerate(mesh.groups)]
 
-    return new_groups, group_to_new_group, required_vertex_indices
+    return new_groups, required_vertex_indices
 
 
-def _get_connected_partitions(
-        mesh, part_per_element, global_elem_to_part_elem):
+def _get_connected_parts(
+        mesh: Mesh,
+        part_id_to_part_index: Mapping[PartID, int],
+        global_elem_to_part_elem: np.ndarray,
+        self_part_id: PartID) -> "Set[PartID]":
     """
-    Find the partitions that are connected to the current partition.
+    Find the parts that are connected to the current part.
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
-    :arg part_per_element: A :class:`numpy.ndarray` mapping element indices to
-        partition numbers.
-    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` mapping from global
-        element index to local partition-wide element index for local elements (and
-        -1 otherwise).
+    :arg part_id_to_part_index: A mapping from part identifiers to indices in the
+        range ``[0, num_parts)``.
+    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` that maps global element
+        indices to part indices and part-wide element indices. See
+        :func:`_compute_global_elem_to_part_elem`` for details.
+    :arg self_part_id: The identifier of the part currently being created.
 
-    :returns: A :class:`set` of indices of the neighboring partitions.
+    :returns: A :class:`set` of identifiers of the neighboring parts.
     """
-    connected_parts = set()
+    self_part_index = part_id_to_part_index[self_part_id]
+
+    connected_part_indices = set()
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
         int_grps = [
@@ -208,48 +215,51 @@ def _get_connected_partitions(
             elem_base_i = mesh.base_element_nrs[igrp]
             elem_base_j = mesh.base_element_nrs[jgrp]
 
-            elements_are_local = global_elem_to_part_elem[facial_adj.elements
-                        + elem_base_i] >= 0
-            neighbors_are_nonlocal = global_elem_to_part_elem[facial_adj.neighbors
-                        + elem_base_j] < 0
+            elements_are_self = global_elem_to_part_elem[facial_adj.elements
+                        + elem_base_i, 0] == self_part_index
+            neighbors_are_other = global_elem_to_part_elem[facial_adj.neighbors
+                        + elem_base_j, 0] != self_part_index
 
-            connected_parts.update(
-                part_per_element[
+            connected_part_indices.update(
+                global_elem_to_part_elem[
                     facial_adj.neighbors[
-                        elements_are_local & neighbors_are_nonlocal]
-                    + elem_base_j])
+                        elements_are_self & neighbors_are_other]
+                    + elem_base_j, 0])
 
-    return connected_parts
+    return {
+        part_id
+        for part_id, part_index in part_id_to_part_index.items()
+        if part_index in connected_part_indices}
 
 
-def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
-            part_mesh_groups, global_group_to_part_group,
-            part_mesh_group_elem_base):
+def _create_self_to_self_adjacency_groups(
+        mesh: Mesh,
+        global_elem_to_part_elem: np.ndarray,
+        self_part_index: int,
+        self_mesh_groups: List[MeshElementGroup],
+        self_mesh_group_elem_base: List[int]) -> List[List[InteriorAdjacencyGroup]]:
     r"""
-    Create local-to-local facial adjacency groups for a partitioned mesh.
+    Create self-to-self facial adjacency groups for a partitioned mesh.
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
-    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` mapping from global
-        element index to local partition-wide element index for local elements (and
-        -1 otherwise).
-    :arg part_mesh_groups: An array of :class:`~meshmode.mesh.ElementGroup` instances
-        representing the partitioned mesh groups.
-    :arg global_group_to_part_group: An array mapping groups in *mesh* to groups in
-        *part_mesh_groups* (or `None` if the group is not local).
-    :arg part_mesh_group_elem_base: An array containing the starting partition-wide
-        element index for each group in *part_mesh_groups*.
+    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` that maps global element
+        indices to part indices and part-wide element indices. See
+        :func:`_compute_global_elem_to_part_elem`` for details.
+    :arg self_part_index: The index of the part currently being created, in the
+        range ``[0, num_parts)``.
+    :arg self_mesh_groups: A list of :class:`~meshmode.mesh.MeshElementGroup`
+        instances representing the partitioned mesh groups.
+    :arg self_mesh_group_elem_base: A list containing the starting part-wide
+        element index for each group in *self_mesh_groups*.
 
     :returns: A list of lists of `~meshmode.mesh.InteriorAdjacencyGroup` instances
         corresponding to the entries in *mesh.facial_adjacency_groups* that
-        have local-to-local adjacency.
+        have self-to-self adjacency.
     """
-    local_to_local_adjacency_groups = [[] for _ in part_mesh_groups]
+    self_to_self_adjacency_groups: List[List[InteriorAdjacencyGroup]] = [
+            [] for _ in self_mesh_groups]
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
-        i_part_grp = global_group_to_part_group[igrp]
-        if i_part_grp is None:
-            continue
-
         int_grps = [
             grp for grp in facial_adj_list
             if isinstance(grp, InteriorAdjacencyGroup)]
@@ -257,79 +267,75 @@ def _create_local_to_local_adjacency_groups(mesh, global_elem_to_part_elem,
         for facial_adj in int_grps:
             jgrp = facial_adj.ineighbor_group
 
-            j_part_grp = global_group_to_part_group[jgrp]
-            if j_part_grp is None:
-                continue
-
             elem_base_i = mesh.base_element_nrs[igrp]
             elem_base_j = mesh.base_element_nrs[jgrp]
 
-            elements_are_local = global_elem_to_part_elem[facial_adj.elements
-                        + elem_base_i] >= 0
-            neighbors_are_local = global_elem_to_part_elem[facial_adj.neighbors
-                        + elem_base_j] >= 0
+            elements_are_self = global_elem_to_part_elem[facial_adj.elements
+                        + elem_base_i, 0] == self_part_index
+            neighbors_are_self = global_elem_to_part_elem[facial_adj.neighbors
+                        + elem_base_j, 0] == self_part_index
 
-            adj_indices, = np.where(elements_are_local & neighbors_are_local)
+            adj_indices, = np.where(elements_are_self & neighbors_are_self)
 
             if len(adj_indices) > 0:
-                part_elem_base_i = part_mesh_group_elem_base[i_part_grp]
-                part_elem_base_j = part_mesh_group_elem_base[j_part_grp]
+                self_elem_base_i = self_mesh_group_elem_base[igrp]
+                self_elem_base_j = self_mesh_group_elem_base[jgrp]
 
                 elements = global_elem_to_part_elem[facial_adj.elements[
-                            adj_indices] + elem_base_i] - part_elem_base_i
+                            adj_indices] + elem_base_i, 1] - self_elem_base_i
                 element_faces = facial_adj.element_faces[adj_indices]
                 neighbors = global_elem_to_part_elem[facial_adj.neighbors[
-                            adj_indices] + elem_base_j] - part_elem_base_j
+                            adj_indices] + elem_base_j, 1] - self_elem_base_j
                 neighbor_faces = facial_adj.neighbor_faces[adj_indices]
 
-                local_to_local_adjacency_groups[i_part_grp].append(
+                self_to_self_adjacency_groups[igrp].append(
                     InteriorAdjacencyGroup(
-                        igroup=i_part_grp,
-                        ineighbor_group=j_part_grp,
+                        igroup=igrp,
+                        ineighbor_group=jgrp,
                         elements=elements,
                         element_faces=element_faces,
                         neighbors=neighbors,
                         neighbor_faces=neighbor_faces,
                         aff_map=facial_adj.aff_map))
 
-    return local_to_local_adjacency_groups
+    return self_to_self_adjacency_groups
 
 
-def _create_nonlocal_adjacency_groups(
-        mesh, part_per_element, global_elem_to_part_elem, part_mesh_groups,
-        global_group_to_part_group, part_mesh_group_elem_base, connected_parts):
+def _create_self_to_other_adjacency_groups(
+        mesh: Mesh,
+        part_id_to_part_index: Mapping[PartID, int],
+        global_elem_to_part_elem: np.ndarray,
+        self_part_id: PartID,
+        self_mesh_groups: List[MeshElementGroup],
+        self_mesh_group_elem_base: List[int],
+        connected_parts: Set[PartID]) -> List[List[InterPartAdjacencyGroup]]:
     """
-    Create non-local adjacency groups for the partitioned mesh.
+    Create self-to-other adjacency groups for the partitioned mesh.
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
-    :arg part_per_element: A :class:`numpy.ndarray` mapping element indices to
-        partition numbers.
-    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` mapping from global
-        element index to local partition-wide element index for local elements (and
-        -1 otherwise).
-    :arg part_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
+    :arg part_id_to_part_index: A mapping from part identifiers to indices in the
+        range ``[0, num_parts)``.
+    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` that maps global element
+        indices to part indices and part-wide element indices. See
+        :func:`_compute_global_elem_to_part_elem`` for details.
+    :arg self_part_id: The identifier of the part currently being created.
+    :arg self_mesh_groups: A list of `~meshmode.mesh.MeshElementGroup` instances
         representing the partitioned mesh groups.
-    :arg global_group_to_part_group: An array mapping groups in *mesh* to groups in
-        *part_mesh_groups* (or `None` if the group is not local).
-    :arg part_mesh_group_elem_base: An array containing the starting partition-wide
-        element index for each group in *part_mesh_groups*.
-    :arg connected_parts: A :class:`set` containing the partitions connected to
+    :arg self_mesh_group_elem_base: A list containing the starting part-wide
+        element index for each group in *self_mesh_groups*.
+    :arg connected_parts: A :class:`set` containing the parts connected to
         the current one.
 
-    :returns: A list of lists of `~meshmode.mesh.InterPartitionAdjacencyGroup`
-        instances corresponding to the entries in *mesh.facial_adjacency_groups* that
-        have non-local adjacency.
+    :returns: A list of lists of `~meshmode.mesh.InterPartAdjacencyGroup` instances
+        corresponding to the entries in *mesh.facial_adjacency_groups* that
+        have self-to-other adjacency.
     """
-    global_elem_to_neighbor_elem = _compute_global_elem_to_part_elem(
-        part_per_element, connected_parts, mesh.element_id_dtype)
+    self_part_index = part_id_to_part_index[self_part_id]
 
-    nonlocal_adj_groups = [[] for _ in part_mesh_groups]
+    self_to_other_adj_groups: List[List[InterPartAdjacencyGroup]] = [
+            [] for _ in self_mesh_groups]
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
-        i_part_grp = global_group_to_part_group[igrp]
-        if i_part_grp is None:
-            continue
-
         int_grps = [
             grp for grp in facial_adj_list
             if isinstance(grp, InteriorAdjacencyGroup)]
@@ -343,66 +349,69 @@ def _create_nonlocal_adjacency_groups(
             global_elements = facial_adj.elements + elem_base_i
             global_neighbors = facial_adj.neighbors + elem_base_j
 
-            elements_are_local = global_elem_to_part_elem[global_elements] >= 0
+            elements_are_self = (
+                global_elem_to_part_elem[global_elements, 0] == self_part_index)
 
-            neighbor_parts = part_per_element[global_neighbors]
+            neighbor_part_indices = global_elem_to_part_elem[global_neighbors, 0]
 
-            for i_neighbor_part in connected_parts:
+            for neighbor_part_id in connected_parts:
+                neighbor_part_index = part_id_to_part_index[neighbor_part_id]
                 adj_indices, = np.where(
-                    elements_are_local
-                    & (neighbor_parts == i_neighbor_part))
+                    elements_are_self
+                    & (neighbor_part_indices == neighbor_part_index))
 
                 if len(adj_indices) > 0:
-                    part_elem_base_i = part_mesh_group_elem_base[i_part_grp]
+                    self_elem_base_i = self_mesh_group_elem_base[igrp]
 
                     elements = global_elem_to_part_elem[facial_adj.elements[
-                                adj_indices] + elem_base_i] - part_elem_base_i
+                                adj_indices] + elem_base_i, 1] - self_elem_base_i
                     element_faces = facial_adj.element_faces[adj_indices]
-                    neighbors = global_elem_to_neighbor_elem[
-                        global_neighbors[adj_indices]]
+                    neighbors = global_elem_to_part_elem[
+                        global_neighbors[adj_indices], 1]
                     neighbor_faces = facial_adj.neighbor_faces[adj_indices]
 
-                    nonlocal_adj_groups[i_part_grp].append(
-                        InterPartitionAdjacencyGroup(
-                            igroup=i_part_grp,
-                            boundary_tag=BTAG_PARTITION(i_neighbor_part),
-                            ineighbor_partition=i_neighbor_part,
+                    self_to_other_adj_groups[igrp].append(
+                        InterPartAdjacencyGroup(
+                            igroup=igrp,
+                            boundary_tag=BTAG_PARTITION(neighbor_part_id),
+                            part_id=neighbor_part_id,
                             elements=elements,
                             element_faces=element_faces,
                             neighbors=neighbors,
                             neighbor_faces=neighbor_faces,
                             aff_map=facial_adj.aff_map))
 
-    return nonlocal_adj_groups
+    return self_to_other_adj_groups
 
 
-def _create_boundary_groups(mesh, global_elem_to_part_elem, part_mesh_groups,
-            global_group_to_part_group, part_mesh_group_elem_base):
+def _create_boundary_groups(
+        mesh: Mesh,
+        global_elem_to_part_elem: np.ndarray,
+        self_part_index: PartID,
+        self_mesh_groups: List[MeshElementGroup],
+        self_mesh_group_elem_base: List[int]) -> List[List[BoundaryAdjacencyGroup]]:
     """
     Create boundary groups for partitioned mesh.
 
     :arg mesh: A :class:`~meshmode.mesh.Mesh` representing the unpartitioned mesh.
-    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` mapping from global
-        element index to local partition-wide element index for local elements (and
-        -1 otherwise).
-    :arg part_mesh_groups: An array of `~meshmode.mesh.ElementGroup` instances
+    :arg global_elem_to_part_elem: A :class:`numpy.ndarray` that maps global element
+        indices to part indices and part-wide element indices. See
+        :func:`_compute_global_elem_to_part_elem`` for details.
+    :arg self_part_index: The index of the part currently being created, in the
+        range ``[0, num_parts)``.
+    :arg self_mesh_groups: A list of `~meshmode.mesh.MeshElementGroup` instances
         representing the partitioned mesh groups.
-    :arg global_group_to_part_group: An array mapping groups in *mesh* to groups in
-        *part_mesh_groups* (or `None` if the group is not local).
-    :arg part_mesh_group_elem_base: An array containing the starting partition-wide
-        element index for each group in *part_mesh_groups*.
+    :arg self_mesh_group_elem_base: A list containing the starting part-wide
+        element index for each group in *self_mesh_groups*.
 
     :returns: A list of lists of `~meshmode.mesh.BoundaryAdjacencyGroup` instances
         corresponding to the entries in *mesh.facial_adjacency_groups* that have
         boundary faces.
     """
-    bdry_adj_groups = [[] for _ in part_mesh_groups]
+    bdry_adj_groups: List[List[BoundaryAdjacencyGroup]] = [
+            [] for _ in self_mesh_groups]
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
-        i_part_grp = global_group_to_part_group[igrp]
-        if i_part_grp is None:
-            continue
-
         bdry_grps = [
             grp for grp in facial_adj_list
             if isinstance(grp, BoundaryAdjacencyGroup)]
@@ -410,21 +419,22 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, part_mesh_groups,
         for bdry_grp in bdry_grps:
             elem_base = mesh.base_element_nrs[igrp]
 
-            adj_indices, = np.where(global_elem_to_part_elem[bdry_grp.elements
-                        + elem_base] >= 0)
+            adj_indices, = np.where(
+                global_elem_to_part_elem[bdry_grp.elements + elem_base, 0]
+                == self_part_index)
 
             if len(adj_indices) > 0:
-                part_elem_base = part_mesh_group_elem_base[i_part_grp]
+                self_elem_base = self_mesh_group_elem_base[igrp]
                 elements = global_elem_to_part_elem[bdry_grp.elements[adj_indices]
-                            + elem_base] - part_elem_base
+                            + elem_base, 1] - self_elem_base
                 element_faces = bdry_grp.element_faces[adj_indices]
             else:
                 elements = np.empty(0, dtype=mesh.element_id_dtype)
                 element_faces = np.empty(0, dtype=mesh.face_id_dtype)
 
-            bdry_adj_groups[i_part_grp].append(
+            bdry_adj_groups[igrp].append(
                 BoundaryAdjacencyGroup(
-                    igroup=i_part_grp,
+                    igroup=igrp,
                     boundary_tag=bdry_grp.boundary_tag,
                     elements=elements,
                     element_faces=element_faces))
@@ -432,76 +442,108 @@ def _create_boundary_groups(mesh, global_elem_to_part_elem, part_mesh_groups,
     return bdry_adj_groups
 
 
-def partition_mesh(mesh, part_per_element, part_num):
+def _get_mesh_part(
+        mesh: Mesh,
+        part_id_to_elements: Mapping[PartID, np.ndarray],
+        self_part_id: PartID) -> Mesh:
     """
     :arg mesh: A :class:`~meshmode.mesh.Mesh` to be partitioned.
-    :arg part_per_element: A :class:`numpy.ndarray` containing one
-        integer per element of *mesh* indicating which part of the
-        partitioned mesh the element is to become a part of.
-    :arg part_num: The part number of the mesh to return.
+    :arg part_id_to_elements: A :class:`dict` mapping a part identifier to
+        a sorted :class:`numpy.ndarray` of elements.
+    :arg self_part_id: The part identifier of the mesh to return.
 
-    :returns: A tuple ``(part_mesh, part_to_global)``, where *part_mesh*
-        is a :class:`~meshmode.mesh.Mesh` that is a partition of mesh, and
-        *part_to_global* is a :class:`numpy.ndarray` mapping element
-        numbers on *part_mesh* to ones in *mesh*.
+    :returns: A :class:`~meshmode.mesh.Mesh` containing a part of *mesh*.
 
     .. versionadded:: 2017.1
     """
-    assert len(part_per_element) == mesh.nelements, (
-        "part_per_element must have shape (mesh.nelements,)")
+    element_counts = np.zeros(mesh.nelements)
+    for elements in part_id_to_elements.values():
+        element_counts[elements] += 1
+    if np.any(element_counts > 1):
+        raise ValueError("elements cannot belong to multiple parts")
+    if np.any(element_counts < 1):
+        raise ValueError("partition must contain all elements")
 
-    # Contains the indices of the elements requested.
-    queried_elems, = np.where(part_per_element == part_num)
+    part_id_to_part_index = {
+        part_id: part_index
+        for part_index, part_id in enumerate(part_id_to_elements.keys())}
 
-    global_elem_to_part_elem = _compute_global_elem_to_part_elem(part_per_element,
-                {part_num}, mesh.element_id_dtype)
+    global_elem_to_part_elem = _compute_global_elem_to_part_elem(
+        mesh.nelements, part_id_to_elements, part_id_to_part_index,
+        mesh.element_id_dtype)
 
     # Create new mesh groups that mimic the original mesh's groups but only contain
-    # the local partition's elements
-    part_mesh_groups, global_group_to_part_group, required_vertex_indices =\
-                _filter_mesh_groups(mesh, queried_elems, mesh.vertex_id_dtype)
+    # the current part's elements
+    self_mesh_groups, required_vertex_indices = _filter_mesh_groups(
+        mesh, part_id_to_elements[self_part_id], mesh.vertex_id_dtype)
 
-    part_vertices = np.zeros((mesh.ambient_dim, len(required_vertex_indices)))
+    self_part_index = part_id_to_part_index[self_part_id]
+
+    self_vertices = np.zeros((mesh.ambient_dim, len(required_vertex_indices)))
     for dim in range(mesh.ambient_dim):
-        part_vertices[dim] = mesh.vertices[dim][required_vertex_indices]
+        self_vertices[dim] = mesh.vertices[dim][required_vertex_indices]
 
-    part_mesh_group_elem_base = [0 for _ in part_mesh_groups]
+    self_mesh_group_elem_base = [0 for _ in self_mesh_groups]
     el_nr = 0
-    for i_part_grp, grp in enumerate(part_mesh_groups):
-        part_mesh_group_elem_base[i_part_grp] = el_nr
+    for igrp, grp in enumerate(self_mesh_groups):
+        self_mesh_group_elem_base[igrp] = el_nr
         el_nr += grp.nelements
 
-    connected_parts = _get_connected_partitions(
-        mesh, part_per_element, global_elem_to_part_elem)
+    connected_parts = _get_connected_parts(
+        mesh, part_id_to_part_index, global_elem_to_part_elem,
+        self_part_id)
 
-    local_to_local_adj_groups = _create_local_to_local_adjacency_groups(
-                mesh, global_elem_to_part_elem, part_mesh_groups,
-                global_group_to_part_group, part_mesh_group_elem_base)
+    self_to_self_adj_groups = _create_self_to_self_adjacency_groups(
+                mesh, global_elem_to_part_elem, self_part_index, self_mesh_groups,
+                self_mesh_group_elem_base)
 
-    nonlocal_adj_groups = _create_nonlocal_adjacency_groups(
-                mesh, part_per_element, global_elem_to_part_elem,
-                part_mesh_groups, global_group_to_part_group,
-                part_mesh_group_elem_base, connected_parts)
+    self_to_other_adj_groups = _create_self_to_other_adjacency_groups(
+                mesh, part_id_to_part_index, global_elem_to_part_elem, self_part_id,
+                self_mesh_groups, self_mesh_group_elem_base, connected_parts)
 
     boundary_adj_groups = _create_boundary_groups(
-                mesh, global_elem_to_part_elem, part_mesh_groups,
-                global_group_to_part_group, part_mesh_group_elem_base)
+                mesh, global_elem_to_part_elem, self_part_index, self_mesh_groups,
+                self_mesh_group_elem_base)
 
-    # Combine local/nonlocal/boundary adjacency groups
-    part_facial_adj_groups = [
-        local_to_local_adj_groups[i_part_grp]
-        + nonlocal_adj_groups[i_part_grp]
-        + boundary_adj_groups[i_part_grp]
-        for i_part_grp in range(len(part_mesh_groups))]
+    def _gather_grps(igrp: int) -> List[FacialAdjacencyGroup]:
+        self_grps: Sequence[FacialAdjacencyGroup] = self_to_self_adj_groups[igrp]
+        other_grps: Sequence[FacialAdjacencyGroup] = self_to_other_adj_groups[igrp]
+        bdry_grps: Sequence[FacialAdjacencyGroup] = boundary_adj_groups[igrp]
 
-    from meshmode.mesh import Mesh
-    part_mesh = Mesh(
-            part_vertices,
-            part_mesh_groups,
-            facial_adjacency_groups=part_facial_adj_groups,
+        return list(self_grps) + list(other_grps) + list(bdry_grps)
+
+    # Combine adjacency groups
+    self_facial_adj_groups = [
+            _gather_grps(igrp) for igrp in range(len(self_mesh_groups))]
+
+    return Mesh(
+            self_vertices,
+            self_mesh_groups,
+            facial_adjacency_groups=self_facial_adj_groups,
             is_conforming=mesh.is_conforming)
 
-    return part_mesh, queried_elems
+
+def partition_mesh(
+        mesh: Mesh,
+        part_id_to_elements: Mapping[PartID, np.ndarray],
+        return_parts: Optional[Sequence[PartID]] = None) -> "Mapping[PartID, Mesh]":
+    """
+    :arg mesh: A :class:`~meshmode.mesh.Mesh` to be partitioned.
+    :arg part_id_to_elements: A :class:`dict` mapping a part identifier to
+        a sorted :class:`numpy.ndarray` of elements.
+    :arg return_parts: An optional list of parts to return. By default, returns all
+        parts.
+
+    :returns: A :class:`dict` mapping part identifiers to instances of
+        :class:`~meshmode.mesh.Mesh` that represent the corresponding part of
+        *mesh*.
+    """
+    if return_parts is None:
+        return_parts = list(part_id_to_elements.keys())
+
+    return {
+        part_id: _get_mesh_part(mesh, part_id_to_elements, part_id)
+        for part_id in return_parts}
 
 # }}}
 
@@ -614,7 +656,7 @@ def get_simplex_element_flip_matrix(order, unit_nodes, permutation=None):
     first two barycentric coordinates.
 
     :arg order: The order of the function space on the simplex,
-        (see second argument in :fun:`modepy.simplex_best_available_basis`).
+        (see second argument in :func:`modepy.simplex_best_available_basis`).
     :arg unit_nodes: A np array of unit nodes with shape *(dim, nunit_nodes)*.
     :arg permutation: Either *None*, or a tuple of shape storing a permutation:
         the *i*th barycentric coordinate gets mapped to the *permutation[i]*th
@@ -694,8 +736,6 @@ def perform_flips(mesh, flip_flags, skip_tests=False):
     """
 
     flip_flags = flip_flags.astype(bool)
-
-    from meshmode.mesh import Mesh
 
     new_groups = []
     for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
@@ -834,7 +874,6 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
 
     # }}}
 
-    from meshmode.mesh import Mesh
     return Mesh(vertices, new_groups, skip_tests=skip_tests,
             nodal_adjacency=nodal_adjacency,
             facial_adjacency_groups=facial_adjacency_groups,
@@ -892,7 +931,6 @@ def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
                 element_nr_base=None, node_nr_base=None,
                 ))
 
-    from meshmode.mesh import Mesh
     mesh = Mesh(
             vertices=mesh.vertices,
             groups=new_groups,
@@ -1182,8 +1220,6 @@ def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols, *, use_tree=None):
         _match_boundary_faces(mesh, mapping, tol, use_tree=use_tree)
         for mapping, tol in bdry_pair_mappings_and_tols]
 
-    from meshmode.mesh import InteriorAdjacencyGroup, BoundaryAdjacencyGroup
-
     facial_adjacency_groups = []
 
     for igrp, old_fagrp_list in enumerate(mesh.facial_adjacency_groups):
@@ -1287,14 +1323,14 @@ def map_mesh(mesh, f):  # noqa
 # {{{ affine map
 
 def affine_map(mesh,
-        A: Optional[Union[Real, np.ndarray]] = None,    # noqa: N803
-        b: Optional[Union[Real, np.ndarray]] = None):
+        A: Optional[Union[np.generic, np.ndarray]] = None,    # noqa: N803
+        b: Optional[Union[np.generic, np.ndarray]] = None):
     """Apply the affine map :math:`f(x) = A x + b` to the geometry of *mesh*."""
 
-    if isinstance(A, Real):
+    if A is not None and not isinstance(A, np.ndarray):
         A = np.diag([A] * mesh.ambient_dim)             # noqa: N806
 
-    if isinstance(b, Real):
+    if b is not None and not isinstance(b, np.ndarray):
         b = np.array([b] * mesh.ambient_dim)
 
     if A is None and b is None:
