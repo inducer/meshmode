@@ -33,7 +33,7 @@ from meshmode.transform_metadata import (
         ConcurrentElementInameTag, ConcurrentDOFInameTag,
         IsDOFArray, ParameterValue,
         DiscretizationElementAxisTag, DiscretizationDOFAxisTag)
-from pytools import memoize_in, keyed_memoize_method
+from pytools import memoize_in, keyed_memoize_method, keyed_memoize_in
 from arraycontext import (
         ArrayContext, NotAnArrayContainerError,
         serialize_container, deserialize_container, make_loopy_program,
@@ -682,7 +682,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         ary[
                                 from_element_indices[iel],
                                 dof_pick_lists[dof_pick_list_index[iel], idof]
-                            ]
+                            ] \
                         { if_present })
                 """,
                 [
@@ -694,7 +694,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         offset=lp.auto, tags=[IsDOFArray()]),
                     lp.GlobalArg("dof_pick_lists", pick_lists_dtype,
                         shape="nelements_tgt, nunit_dofs_tgt",
-                        offset=lp.auto),
+                        offset=0),
                     lp.GlobalArg("from_element_indices", from_el_ind_dtype,
                         shape="nelements,", offset=lp.auto),
                     lp.GlobalArg("dof_pick_list_index", pick_list_ind_dtype,
@@ -713,9 +713,145 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 ],
                 name="resample_by_picking_group",
             )
+
             return lp.tag_inames(t_unit, {
                 "iel": ConcurrentElementInameTag(),
                 "idof": ConcurrentDOFInameTag()})
+
+        
+        def calc_get_indices_key(dof_pick_lists, dof_pick_list_index, from_element_indices,
+                ary_shape, ary_order, from_el_present):
+            from pyopencl.array import Array
+            key = (dof_pick_lists.data.int_ptr,
+                    dof_pick_list_index.data.int_ptr,
+                    from_element_indices.data.int_ptr,
+                    ary_shape,
+                    ary_order,
+                    from_el_present.data.int_ptr if isinstance(from_el_present, Array) else None,)
+            return key
+
+
+        # from_el_present should be set to None if the indexing is surjective
+        @keyed_memoize_in(actx,
+                (DirectDiscretizationConnection, "calc_indices_knl"), calc_get_indices_key)
+        def get_indices_loopy(dof_pick_lists, dof_pick_list_index,
+                from_element_indices, ary_shape, ary_order,
+                from_el_present):
+
+            nelements = from_element_indices.shape[0]
+            nelements_tgt, nunit_dofs_tgt = dof_pick_lists.shape
+
+            if ary_order == "F":
+                row_stride = 1
+                col_stride = ary_shape[0]
+            else:
+                row_stride = ary_shape[1]
+                col_stride = 1
+
+            if from_el_present is None:
+                if_present = ""
+            else:
+                if_present = "if from_el_present[iel] else -1"
+ 
+
+            t_unit = make_loopy_program(
+                [
+                    "{[iel]: 0 <= iel < nelements}",
+                    "{[idof]: 0 <= idof < nunit_dofs_tgt}"
+                ],
+                f"""
+                    indices[iel, idof] = from_element_indices[iel]*{row_stride} \
+                         + dof_pick_lists[dof_pick_list_index[iel], idof]*{col_stride} \
+                         {if_present}
+                """,
+                [
+                    lp.GlobalArg("indices", np.int32,
+                        shape="nelements, nunit_dofs_tgt",
+                        offset=lp.auto, tags=[IsDOFArray()]),
+                    lp.ValueArg("nunit_dofs_tgt", np.int32,
+                        tags=[ParameterValue(nunit_dofs_tgt)]),
+                    lp.ValueArg("nelements", np.int32,
+                        tags=[ParameterValue(nelements)]),
+                    lp.ValueArg("nelements_tgt", np.int32,
+                        tags=[ParameterValue(nelements_tgt)]),
+                    lp.GlobalArg("dof_pick_lists", dof_pick_lists.dtype,
+                        shape="nelements_tgt, nunit_dofs_tgt",
+                        offset=lp.auto),
+                    lp.GlobalArg("from_element_indices", from_element_indices.dtype,
+                        shape="nelements,", offset=lp.auto),
+                    lp.GlobalArg("dof_pick_list_index", dof_pick_list_index.dtype,
+                        shape="nelements,", offset=lp.auto),
+                    "...",
+                ],
+                name="resample_by_picking_calc_indices_knl",
+            )
+
+            t_unit = lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
+
+            if from_el_present is None:
+                out = actx.call_loopy(t_unit, from_element_indices=from_element_indices, 
+                    dof_pick_lists=dof_pick_lists, dof_pick_list_index=dof_pick_list_index)
+            else:
+                out = actx.call_loopy(t_unit, from_element_indices=from_element_indices, 
+                    dof_pick_lists=dof_pick_lists, dof_pick_list_index=dof_pick_list_index,
+                    from_el_present=from_el_present)
+
+
+            return out["indices"]
+
+
+        @memoize_in(actx,
+                (DirectDiscretizationConnection, "resample_by_picking_single_indirection_knl"))
+        def group_pick_knl_single_indirection(nelements, nunit_dofs_tgt, ary_dtype, is_surjective: bool):
+
+            if is_surjective:
+                if_present = ""
+            else:
+                if_present = "if indices[iel,idof] >= 0 else 0"
+ 
+
+            t_unit = make_loopy_program(
+                [
+                    "{[iel]: 0 <= iel < nelements}",
+                    "{[idof]: 0 <= idof < nunit_dofs_tgt}"
+                ],
+                f"""
+                    result[iel, idof] = ary[indices[iel,idof]] \
+                    {if_present}
+                """,
+                [
+                    lp.GlobalArg("result", ary_dtype,
+                        shape="nelements, nunit_dofs_tgt",
+                        offset=lp.auto, tags=[IsDOFArray()]),
+                    # Assuming np.int32 but could it be np.int64?
+                    lp.GlobalArg("indices", np.int32,
+                        shape="nelements, nunit_dofs_tgt",
+                        offset=lp.auto, tags=[IsDOFArray()]),
+                    lp.GlobalArg("ary", ary_dtype, offset=lp.auto),
+                    #    shape="nelements_src, nunit_dofs_src",
+                    #    offset=lp.auto)#, tags=[IsDOFArray()]),
+                    lp.ValueArg("nunit_dofs_tgt", np.int32,
+                        tags=[ParameterValue(nunit_dofs_tgt)]),
+                    lp.ValueArg("nelements", np.int32,
+                        tags=[ParameterValue(nelements)]),
+                    "...",
+                ],
+                name="resample_by_picking_single_indirection",
+            )
+
+            t_unit = lp.tag_inames(t_unit, {
+                "iel": ConcurrentElementInameTag(),
+                "idof": ConcurrentDOFInameTag()})
+
+            return t_unit
+            #order = "F" if ary.flags.f_contiguous else "C"
+            #out = actx.call_loopy(t_unit, ary=ary.ravel(order=order), indices=indices)
+            # Raveling not needed?
+            #out = actx.call_loopy(t_unit, ary=ary, indices=indices)
+            #return = out["result"]
+
 
         # }}}
 
@@ -775,25 +911,141 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         pick_lists_dtype = fgpd.dof_pick_lists.dtype
                         pick_list_ind_dtype = fgpd.dof_pick_list_index.dtype
 
-                        group_array_contributions.append(
-                            actx.call_loopy(
-                                #group_pick_knl(fgpd.is_surjective),
-                                group_pick_knl(nelements, nelements_src,
-                                    nunit_dofs_src,
-                                    nelements_tgt,
-                                    nunit_dofs_tgt,
-                                    result_dtype,
-                                    ary_dtype,
-                                from_el_ind_dtype, pick_lists_dtype,
-                                pick_list_ind_dtype,
-                                fgpd.is_surjective),
-                                dof_pick_lists=fgpd.dof_pick_lists,
-                                dof_pick_list_index=fgpd.dof_pick_list_index,
-                                ary=ary[fgpd.from_group_index],
-                                from_element_indices=fgpd.from_element_indices,
-                                #nunit_dofs_tgt=(
-                                #    self.to_discr.groups[i_tgrp].nunit_dofs),
-                                **group_knl_kwargs)["result"])
+                        if True:#fgpd.is_surjective: # Check if can handle non-surjective cases
+                            
+                            dof_pick_lists = fgpd.dof_pick_lists
+                            dof_pick_list_index = fgpd.dof_pick_list_index
+                            data_ary = ary[fgpd.from_group_index]
+                            from_element_indices = fgpd.from_element_indices
+
+
+                            # Can delete this once the rest is verified to work.
+                            def get_indices_numpy(dof_pick_lists, dof_pick_list_index, ary, from_element_indices):
+                                np_dof_pick_lists = dof_pick_lists.get(queue=actx.queue)
+                                np_dof_pick_list_index = dof_pick_list_index.get(queue=actx.queue)
+                                np_ary = ary.get(queue=actx.queue)
+                                np_from_element_indices = from_element_indices.get(queue=actx.queue)
+                                
+                                print(np_dof_pick_lists)
+                                print(np_dof_pick_list_index)
+                                print(np_from_element_indices)
+                                print(np_ary.flags.f_contiguous, np_ary.flags.c_contiguous)
+
+                                nelements = np_from_element_indices.shape[0]
+                                ndofs = np_dof_pick_lists.shape[1]
+
+                                order = "F" if np_ary.flags.f_contiguous else "C"
+                                result = np.zeros((nelements, ndofs), order=order)
+                                result_ind = np.zeros((nelements,ndofs),order=order, dtype=np.int32)
+
+                                if ary.flags.f_contiguous:
+                                    row_stride = 1
+                                    col_stride = ary.shape[0]
+                                else:
+                                    row_stride = ary.shape[1]
+                                    col_stride = 1
+
+                                for iel in range(nelements):
+                                    for idof in range(ndofs):
+                                        # Get the row and column indices
+                                        row = np_from_element_indices[iel]
+                                        col = np_dof_pick_lists[np_dof_pick_list_index[iel], idof]
+                                        # Calculate the index
+
+                                        result_ind[iel,idof] = row*row_stride + col*col_stride
+
+                                        result[iel,idof] = np_ary[row,col]
+                                        
+                                ary_flat = np_ary.flatten(order=order)
+                                result_ary_flat = ary_flat[result_ind]
+                                result_ary_flat_index_flat = ary_flat[result_ind.flatten(order=order)]
+                                result_from_flat = np.reshape(result_ary_flat, result.shape, order=order)
+                                orig_result_flat = result.flatten(order=order)
+
+                                print(result_ary_flat.shape)
+                                print(result_from_flat.shape)
+                                print(result_ary_flat_index_flat.shape)
+                                print(orig_result_flat.shape)
+                                print(result.shape)
+
+                                #assert np.allclose(result_ary_flat, orig_result_flat)
+                                #assert np.allclose(result_ary_flat, result)
+                                assert np.allclose(result_ary_flat, result)
+                                assert np.allclose(result_from_flat, result)
+                                assert np.allclose(result_ary_flat_index_flat, orig_result_flat)
+                                print("DONE!")
+                                #print(result_ary_flat)
+                                #print(result)
+                                return result_ind, result
+
+                            #indices, np_result = get_indices_numpy(dof_pick_lists, dof_pick_list_index, data_ary, from_element_indices)
+                            #lp_indices_host = lp_indices.get(queue=actx.queue)
+                            #assert np.allclose(indices, lp_indices_host)
+
+                            
+
+                            order = "F" if data_ary.flags.f_contiguous else "C"
+                            lp_indices = get_indices_loopy(dof_pick_lists, dof_pick_list_index, from_element_indices,
+                                    data_ary.shape, order, None if fgpd.is_surjective else fgpd.from_el_present)
+                            
+                            #print("IS SURJECTIVE:", fgpd.is_surjective)
+                            cl_result = actx.call_loopy(group_pick_knl_single_indirection(lp_indices.shape[0],
+                                lp_indices.shape[1], ary_dtype, fgpd.is_surjective),
+                                ary=data_ary, indices=lp_indices)
+
+                            group_array_contributions.append(cl_result["result"])
+                            #np_cl_result = cl_result.get(queue=actx.queue)
+                            #assert np.allclose(np_cl_result, np_result)
+                            #print(np_cl_result)
+                            #print(cl_result)
+
+                            #exit()
+                            """
+                            old_result = actx.call_loopy(
+                                    #group_pick_knl(fgpd.is_surjective),
+                                    group_pick_knl(nelements, nelements_src,
+                                        nunit_dofs_src,
+                                        nelements_tgt,
+                                        nunit_dofs_tgt,
+                                        result_dtype,
+                                        ary_dtype,
+                                        from_el_ind_dtype,
+                                        pick_lists_dtype,
+                                        pick_list_ind_dtype,
+                                        fgpd.is_surjective),
+                                    dof_pick_lists=fgpd.dof_pick_lists,
+                                    dof_pick_list_index=fgpd.dof_pick_list_index,
+                                    ary=ary[fgpd.from_group_index],
+                                    from_element_indices=fgpd.from_element_indices,
+                                    #nunit_dofs_tgt=(
+                                    #    self.to_discr.groups[i_tgrp].nunit_dofs),
+                                    **group_knl_kwargs)["result"]
+                            assert np.allclose(old_result.get(queue=actx.queue), cl_result["result"].get(queue=actx.queue))
+                            """
+
+                            
+                        else:
+                            #print("==============CALLING NON-SURJECTIVE================")
+                            group_array_contributions.append(
+                                actx.call_loopy(
+                                    #group_pick_knl(fgpd.is_surjective),
+                                    group_pick_knl(nelements, nelements_src,
+                                        nunit_dofs_src,
+                                        nelements_tgt,
+                                        nunit_dofs_tgt,
+                                        result_dtype,
+                                        ary_dtype,
+                                        from_el_ind_dtype,
+                                        pick_lists_dtype,
+                                        pick_list_ind_dtype,
+                                        fgpd.is_surjective),
+                                    dof_pick_lists=fgpd.dof_pick_lists,
+                                    dof_pick_list_index=fgpd.dof_pick_list_index,
+                                    ary=ary[fgpd.from_group_index],
+                                    from_element_indices=fgpd.from_element_indices,
+                                    #nunit_dofs_tgt=(
+                                    #    self.to_discr.groups[i_tgrp].nunit_dofs),
+                                    **group_knl_kwargs)["result"])
 
                 group_array = sum(group_array_contributions)
             elif cgrp.batches:
