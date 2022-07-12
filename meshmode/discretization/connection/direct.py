@@ -775,7 +775,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 ],
                 f"""
                     indices[iel, idof] = from_element_indices[iel]*{row_stride} \
-                         + dof_pick_lists[dof_pick_list_index[iel], idof]*{col_stride} \
+                         + dof_pick_lists[dof_pick_list_indices[iel], idof]*{col_stride} \
                          {if_present}
                 """,
                 [
@@ -793,7 +793,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         offset=lp.auto),
                     lp.GlobalArg("from_element_indices", from_element_indices.dtype,
                         shape="nelements,", offset=lp.auto),
-                    lp.GlobalArg("dof_pick_list_index", dof_pick_list_indices.dtype,
+                    lp.GlobalArg("dof_pick_list_indices", dof_pick_list_indices.dtype,
                         shape="nelements,", offset=lp.auto),
                     "...",
                 ],
@@ -818,7 +818,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         @memoize_in(actx,
                 (DirectDiscretizationConnection, "resample_by_picking_single_indirection_knl"))
-        def group_pick_knl_single_indirection(nelements, nunit_dofs_tgt, ary_dtype, is_surjective: bool):
+        def group_pick_knl_single_indirection(nelements, nunit_dofs_tgt, nelements_src, nunit_dofs_src,
+                ary_dtype, is_surjective: bool):
 
             if is_surjective:
                 if_present = ""
@@ -843,13 +844,16 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     lp.GlobalArg("indices", np.int32,
                         shape="nelements, nunit_dofs_tgt",
                         offset=lp.auto, tags=[IsDOFArray()]),
-                    lp.GlobalArg("ary", ary_dtype, offset=lp.auto),
+                    lp.GlobalArg("ary", ary_dtype, offset=lp.auto,
+                        shape="ary_size"),
                     #    shape="nelements_src, nunit_dofs_src",
                     #    offset=lp.auto)#, tags=[IsDOFArray()]),
                     lp.ValueArg("nunit_dofs_tgt", np.int32,
                         tags=[ParameterValue(nunit_dofs_tgt)]),
                     lp.ValueArg("nelements", np.int32,
                         tags=[ParameterValue(nelements)]),
+                    lp.ValueArg("ary_size", np.int32,
+                        tags=[ParameterValue(nelements_src*nunit_dofs_src)]),
                     "...",
                 ],
                 name="resample_by_picking_single_indirection",
@@ -938,10 +942,11 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                             lp_indices = get_indices_loopy(dof_pick_lists, dof_pick_list_indices,
                                     from_element_indices,
                                     data_ary.shape, order, None if fgpd.is_surjective else fgpd.from_el_present)
-                            
+                           
                             cl_result = actx.call_loopy(group_pick_knl_single_indirection(lp_indices.shape[0],
-                                lp_indices.shape[1], ary_dtype, fgpd.is_surjective),
-                                ary=data_ary, indices=lp_indices)
+                                lp_indices.shape[1], data_ary.shape[0], data_ary.shape[1], ary_dtype,
+                                fgpd.is_surjective),
+                                ary=data_ary.ravel(order=order), indices=lp_indices)
 
                             group_array_contributions.append(cl_result["result"])
                             
