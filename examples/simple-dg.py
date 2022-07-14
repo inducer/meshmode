@@ -26,6 +26,7 @@ import numpy.linalg as la  # noqa
 
 import pyopencl as cl
 import pyopencl.array as cla  # noqa
+import pyopencl.tools as cl_tools
 
 from pytools import memoize_method, log_process
 from pytools.obj_array import flat_obj_array, make_obj_array
@@ -455,9 +456,9 @@ def main(lazy=False):
 
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    actx_outer = PyOpenCLArrayContext(queue, force_device_scalars=True)
+    actx_outer = PyOpenCLArrayContext(queue, force_device_scalars=True, allocator = cl_tools.SVMAllocator(cl_ctx, cl.svm_mem_flags.READ_WRITE, queue=queue))
     if lazy:
-        actx_rhs = PytatoPyOpenCLArrayContext(queue)
+        actx_rhs = PytatoPyOpenCLArrayContext(queue, allocator = cl_tools.SVMAllocator(cl_ctx, cl.svm_mem_flags.READ_WRITE, queue=queue))
     else:
         actx_rhs = actx_outer
 
