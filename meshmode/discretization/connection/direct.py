@@ -395,10 +395,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
     def _resample_point_pick_indices(self, to_group_index: int, ibatch_index: int,
             tol_multiplier: Optional[float] = None):
-        """If :meth:`_resample_matrix` *R* is a row subset of a permutation matrix *P*,
-        return the index subset I so that ``x[I] == R @ x`` up to machine
-        epsilon multiplied by *tol_multiplier* (or an internally specified
-        tolerance if none is given).
+        """If :meth:`_resample_matrix` *R* is a row subset of a permutation
+        matrix *P*, return the index subset I so that ``x[I] == R @ x`` up to
+        machine epsilon multiplied by *tol_multiplier* (or an internally
+        specified tolerance if none is given).
 
         Will return *None* if no such index array exists, or a
         :class:`numpy.ndarray` containing the index subset.
