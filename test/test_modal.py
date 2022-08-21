@@ -218,7 +218,7 @@ def test_quadrature_based_modal_connection_reverse(actx_factory, quad_group_fact
 
     err = flat_norm(nodal_f - nodal_f_computed)
 
-    assert err <= 1e-11
+    assert err <= 2e-11
 
 
 @pytest.mark.parametrize("nodal_group_factory", [
