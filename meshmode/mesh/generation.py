@@ -85,7 +85,7 @@ Tools for Iterative Refinement
 
 def circle(t: np.ndarray):
     """
-    :arg t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
     """
     return ellipse(1.0, t)
@@ -93,7 +93,7 @@ def circle(t: np.ndarray):
 
 def ellipse(aspect_ratio: float, t: np.ndarray):
     """
-    :arg t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
     """
 
@@ -107,7 +107,7 @@ def ellipse(aspect_ratio: float, t: np.ndarray):
 
 def cloverleaf(t: np.ndarray):
     """
-    :arg t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
     """
 
@@ -125,7 +125,7 @@ def cloverleaf(t: np.ndarray):
 
 def drop(t: np.ndarray):
     """
-    :arg t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
     """
 
@@ -140,7 +140,7 @@ def drop(t: np.ndarray):
 
 def n_gon(n_corners, t):
     """
-    :arg t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
     """
 
@@ -168,7 +168,7 @@ def n_gon(n_corners, t):
 
 def qbx_peanut(t: np.ndarray):
     """
-    :arg t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
     """
     ilength = 2*np.pi
@@ -184,7 +184,7 @@ def apple(a: float, t: np.ndarray):
     """
     :arg a: roundness parameter in :math:`[0, 1/2]`, where :math:`0` gives
         a circle and :math:`1/2` gives a cardioid.
-    :arg t: the parametrization, runs from :math:`[0, 1)`.
+    :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
     """
     ilength = 2*np.pi
@@ -218,7 +218,7 @@ class WobblyCircle:
 
     def __call__(self, t: np.ndarray):
         """
-        :arg t: the parametrization, runs from :math:`[0, 1)`.
+        :arg t: the parametrization, runs from :math:`[0, 1]`.
         :return: an array of shape ``(2, t.size)``.
         """
 
