@@ -1130,6 +1130,59 @@ def test_mesh_element_group_constructor(shape_cls, group_cls):
 # }}}
 
 
+# {{{ test_node_vertex_consistency_check
+
+def test_node_vertex_consistency_check(actx_factory):
+    actx = actx_factory()
+
+    # Mesh bounds invariance
+    h = 1e-5
+    for p in range(5):
+        nelems = 2**p
+        size = h*nelems
+        mesh = mgen.generate_regular_rect_mesh(  # noqa: F841
+            a=(-size/2,)*3, b=(size/2,)*3, nelements_per_axis=(nelems,)*3)
+
+    # Translation invariance
+    h = 1e-5
+    nelems = 8
+    size = h*nelems
+    for p in range(5):
+        mesh = mgen.generate_regular_rect_mesh(  # noqa: F841
+            a=(10**p-size/2,)*3, b=(10**p+size/2,)*3,
+            nelements_per_axis=(nelems,)*3)
+
+    # Zero-size elements
+    h = 1e-5
+    nelems = 7
+    size = h*nelems
+    vol_mesh = mgen.generate_regular_rect_mesh(
+        a=(-size/2,), b=(size/2,),
+        nelements_per_axis=(nelems,))
+    from meshmode.discretization import Discretization
+    group_factory = default_simplex_group_factory(1, 1)
+    vol_discr = Discretization(actx, vol_mesh, group_factory)
+    from meshmode.discretization.connection import (
+        FACE_RESTR_ALL,
+        make_face_restriction)
+    faces_mesh = make_face_restriction(  # noqa: F841
+        actx, vol_discr, group_factory, FACE_RESTR_ALL, per_face_groups=False)
+
+    # Zero-size elements at the origin
+    h = 1e-5
+    nelems = 8
+    size = h*nelems
+    vol_mesh = mgen.generate_regular_rect_mesh(
+        a=(-size/2,), b=(size/2,),
+        nelements_per_axis=(nelems,))
+    group_factory = default_simplex_group_factory(1, 1)
+    vol_discr = Discretization(actx, vol_mesh, group_factory)
+    faces_mesh = make_face_restriction(  # noqa: F841
+        actx, vol_discr, group_factory, FACE_RESTR_ALL, per_face_groups=False)
+
+# }}}
+
+
 # {{{ mesh boundary gluing
 
 @pytest.mark.parametrize("use_tree", [False, True])
