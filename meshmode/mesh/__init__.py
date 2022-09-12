@@ -1230,13 +1230,12 @@ def _test_node_vertex_consistency_resampling(mesh, mgrp, tol):
         np.sum(np.sum((per_vertex_errors)**2, axis=0), axis=-1)
     )
 
-    abs_tol = 1e-12
-    rel_tol = 1e-7
-    if tol is not None:
-        # Rescale for compatibility with tolerances from old version that used
-        # mesh bounding box for scale
-        old_default_tol = 1e3*np.finfo(per_element_vertex_errors.dtype).eps
-        rel_tol *= tol/old_default_tol
+    if tol is None:
+        tol = 1e3 * np.finfo(per_element_vertex_errors.dtype).eps
+
+    # Assume these are the same for now; can be made separate arguments if necessary
+    abs_tol = tol
+    rel_tol = tol
 
     grp_vertices = mesh.vertices[:, mgrp.vertex_indices]
 
