@@ -24,6 +24,7 @@ THE SOFTWARE.
 """
 
 from functools import partial
+from dataclasses import replace
 import numpy as np
 import numpy.linalg as la
 import pytest
@@ -1179,6 +1180,18 @@ def test_node_vertex_consistency_check(actx_factory):
     vol_discr = Discretization(actx, vol_mesh, group_factory)
     faces_mesh = make_face_restriction(  # noqa: F841
         actx, vol_discr, group_factory, FACE_RESTR_ALL, per_face_groups=False)
+
+    # Expected failing case: element vertex indices rotated
+    with pytest.raises(AssertionError):
+        vol_mesh_unrotated = mgen.generate_regular_rect_mesh(
+            a=(-1,)*2, b=(1,)*2,
+            nelements_per_axis=(8,)*2)
+        vol_mesh = vol_mesh_unrotated.copy(  # noqa: F841
+            groups=[
+                replace(
+                    grp,
+                    vertex_indices=np.roll(grp.vertex_indices, 1, axis=1))
+                for grp in vol_mesh_unrotated.groups])
 
 # }}}
 
