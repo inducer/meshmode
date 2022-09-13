@@ -1153,7 +1153,7 @@ def test_node_vertex_consistency_check(actx_factory):
             a=(10**p-size/2,)*3, b=(10**p+size/2,)*3,
             nelements_per_axis=(nelems,)*3)
 
-    # Zero-size elements
+    # Zero-D elements
     h = 1e-5
     nelems = 7
     size = h*nelems
@@ -1169,7 +1169,7 @@ def test_node_vertex_consistency_check(actx_factory):
     faces_mesh = make_face_restriction(  # noqa: F841
         actx, vol_discr, group_factory, FACE_RESTR_ALL, per_face_groups=False)
 
-    # Zero-size elements at the origin
+    # Zero-D elements at the origin
     h = 1e-5
     nelems = 8
     size = h*nelems
