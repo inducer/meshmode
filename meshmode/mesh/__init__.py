@@ -1259,6 +1259,8 @@ def _test_node_vertex_consistency(mesh, tol):
     """Ensure that order of by-index vertices matches that of mapped
     unit vertices.
     """
+    if not __debug__:
+        return True
 
     for igrp, mgrp in enumerate(mesh.groups):
         if isinstance(mgrp, _ModepyElementGroup):
