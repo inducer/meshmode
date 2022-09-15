@@ -1136,6 +1136,8 @@ def test_mesh_element_group_constructor(shape_cls, group_cls):
 def test_node_vertex_consistency_check(actx_factory):
     actx = actx_factory()
 
+    from meshmode import InconsistentVerticesError
+
     # Mesh bounds invariance
     h = 1e-5
     for p in range(5):
@@ -1182,7 +1184,7 @@ def test_node_vertex_consistency_check(actx_factory):
         actx, vol_discr, group_factory, FACE_RESTR_ALL, per_face_groups=False)
 
     # Expected failing case: element vertex indices rotated
-    with pytest.raises(AssertionError):
+    with pytest.raises(InconsistentVerticesError):
         vol_mesh_unrotated = mgen.generate_regular_rect_mesh(
             a=(-1,)*2, b=(1,)*2,
             nelements_per_axis=(8,)*2)

@@ -25,6 +25,7 @@ __doc__ = """
 .. exception:: Error
 .. exception:: DataUnavailable
 .. exception:: FileExistsError
+.. exception:: InconsistentVerticesError
 """
 
 from builtins import FileExistsError  # noqa: F401
@@ -36,6 +37,14 @@ class Error(RuntimeError):
 
 
 class DataUnavailable(Error):
+    pass
+
+
+class InconsistentVerticesError(Error):
+    """
+    Raised when an element's local-to-global mapping does not map the unit vertices
+    to the corresponding values in the mesh's *vertices* array.
+    """
     pass
 
 

@@ -1250,7 +1250,7 @@ def _test_node_vertex_consistency_resampling(mesh, igrp, tol):
         i_grp_elem = elements_above_tol[0]
         ielem = i_grp_elem + mesh.base_element_nrs[igrp]
         from meshmode import InconsistentVerticesError
-        raise AssertionError(
+        raise InconsistentVerticesError(
             f"vertex consistency check failed for element {ielem}; "
             f"{per_element_vertex_errors[i_grp_elem]} >= "
             f"{per_element_tols[i_grp_elem]}")
