@@ -1139,21 +1139,99 @@ def test_node_vertex_consistency_check(actx_factory):
     from meshmode import InconsistentVerticesError
 
     # Mesh bounds invariance
+
+    def gen_rect_mesh_with_perturbed_vertices(
+            a, b, nelements_per_axis, perturb_amount):
+        mesh_unperturbed = mgen.generate_regular_rect_mesh(
+            a=a, b=b, nelements_per_axis=nelements_per_axis)
+        return mesh_unperturbed.copy(  # noqa: F841
+            vertices=(
+                mesh_unperturbed.vertices
+                + perturb_amount*np.ones(mesh_unperturbed.vertices.shape)))
+
+    # Find critical perturbation amount "w" such that vertices shifted by w works
+    # but 10*w doesn't
     h = 1e-5
-    for p in range(5):
-        nelems = 2**p
+    nelems = 8
+    size = h*nelems
+    crit_perturb = None
+    for p in range(32):
+        w = h*10**(p-16)
+        try:
+            mesh = gen_rect_mesh_with_perturbed_vertices(  # noqa: F841
+                a=(-size/2,), b=(size/2,), nelements_per_axis=(nelems,),
+                perturb_amount=w)
+        except InconsistentVerticesError:
+            if p > 0:
+                crit_perturb = w/10
+            break
+    if crit_perturb is None:
+        raise RuntimeError("failed to find critical vertex perturbation amount")
+
+    # Scale invariance
+    nelems = 8
+    for p in range(32):
+        h = 10**(p-16)
         size = h*nelems
-        mesh = mgen.generate_regular_rect_mesh(  # noqa: F841
-            a=(-size/2,)*3, b=(size/2,)*3, nelements_per_axis=(nelems,)*3)
+        perturb = crit_perturb*h/1e-5
+        mesh = gen_rect_mesh_with_perturbed_vertices(  # noqa: F841
+            a=(-size/2,)*3, b=(size/2,)*3, nelements_per_axis=(nelems,)*3,
+            perturb_amount=perturb)
+        with pytest.raises(InconsistentVerticesError):
+            mesh = gen_rect_mesh_with_perturbed_vertices(  # noqa: F841
+                a=(-size/2,)*3, b=(size/2,)*3, nelements_per_axis=(nelems,)*3,
+                perturb_amount=10*perturb)
 
     # Translation invariance
     h = 1e-5
     nelems = 8
     size = h*nelems
+    for p in range(10):
+        shift = 10**p-1
+        perturb = crit_perturb*(size/2 + shift)/(size/2)
+        mesh = gen_rect_mesh_with_perturbed_vertices(  # noqa: F841
+            a=(shift-size/2,)*3, b=(shift+size/2,)*3,
+            nelements_per_axis=(nelems,)*3,
+            perturb_amount=perturb)
+        with pytest.raises(InconsistentVerticesError):
+            mesh = gen_rect_mesh_with_perturbed_vertices(  # noqa: F841
+                a=(shift-size/2,)*3, b=(shift+size/2,)*3,
+                nelements_per_axis=(nelems,)*3,
+                perturb_amount=10*perturb)
+
+    # Aspect ratio invariance
+    h = 1e-5
+    nelems = 8
+    size = h*nelems
+    for p in range(10):
+        h_x = 10**p * h
+        size_x = h_x * nelems
+        perturb = crit_perturb*h_x/1e-5
+        mesh = gen_rect_mesh_with_perturbed_vertices(  # noqa: F841
+            a=(-size_x/2,) + (-size/2,)*2,
+            b=(size_x/2,) + (size/2,)*2,
+            nelements_per_axis=(nelems,)*3,
+            perturb_amount=perturb)
+        with pytest.raises(InconsistentVerticesError):
+            mesh = gen_rect_mesh_with_perturbed_vertices(  # noqa: F841
+                a=(-size_x/2,) + (-size/2,)*2,
+                b=(size_x/2,) + (size/2,)*2,
+                nelements_per_axis=(nelems,)*3,
+                perturb_amount=10*perturb)
+
+    # Mesh size relative to element size invariance
+    h = 1e-5
     for p in range(5):
-        mesh = mgen.generate_regular_rect_mesh(  # noqa: F841
-            a=(10**p-size/2,)*3, b=(10**p+size/2,)*3,
-            nelements_per_axis=(nelems,)*3)
+        nelems = 2**(5-p)
+        size = h*nelems
+        perturb = crit_perturb
+        mesh = gen_rect_mesh_with_perturbed_vertices(  # noqa: F841
+            a=(-size/2,)*3, b=(size/2,)*3, nelements_per_axis=(nelems,)*3,
+            perturb_amount=perturb)
+        with pytest.raises(InconsistentVerticesError):
+            mesh = gen_rect_mesh_with_perturbed_vertices(  # noqa: F841
+                a=(-size/2,)*3, b=(size/2,)*3, nelements_per_axis=(nelems,)*3,
+                perturb_amount=10*perturb)
 
     # Zero-D elements
     h = 1e-5
@@ -1183,7 +1261,7 @@ def test_node_vertex_consistency_check(actx_factory):
     faces_mesh = make_face_restriction(  # noqa: F841
         actx, vol_discr, group_factory, FACE_RESTR_ALL, per_face_groups=False)
 
-    # Expected failing case: element vertex indices rotated
+    # Element vertex indices rotated
     with pytest.raises(InconsistentVerticesError):
         vol_mesh_unrotated = mgen.generate_regular_rect_mesh(
             a=(-1,)*2, b=(1,)*2,
