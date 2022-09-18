@@ -100,7 +100,7 @@ def main():
     bdy_vis.show_scalar_in_matplotlib_3d(bdy_field, do_show=False)
 
     import matplotlib.cm as cm
-    fig.colorbar(cm.ScalarMappable())
+    fig.colorbar(cm.ScalarMappable(), ax=ax2)
     plt.show()
 
 
