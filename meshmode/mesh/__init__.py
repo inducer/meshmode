@@ -1218,28 +1218,37 @@ def _mesh_group_node_vertex_error(mesh, mgrp):
     return map_vertices - grp_vertices
 
 
-def _test_node_vertex_consistency_resampling(mesh, mgrp, tol):
+def _test_node_vertex_consistency_resampling(mesh, igrp, tol):
     if mesh.vertices is None:
         return True
+
+    mgrp = mesh.groups[igrp]
 
     if mgrp.nelements == 0:
         return True
 
     per_vertex_errors = _mesh_group_node_vertex_error(mesh, mgrp)
-    per_element_vertex_errors = np.sqrt(
-        np.sum(np.sum((per_vertex_errors)**2, axis=0), axis=-1)
-    )
+    per_element_vertex_errors = np.max(
+        np.max(np.abs(per_vertex_errors), axis=-1), axis=0)
 
     if tol is None:
         tol = 1e3 * np.finfo(per_element_vertex_errors.dtype).eps
 
-    from meshmode.mesh.processing import find_bounding_box
+    grp_vertices = mesh.vertices[:, mgrp.vertex_indices]
 
-    bbox_min, bbox_max = find_bounding_box(mesh)
-    size = la.norm(bbox_max-bbox_min)
+    coord_scales = np.max(np.max(np.abs(grp_vertices), axis=-1), axis=0)
 
-    max_el_vertex_error = np.max(per_element_vertex_errors)
-    assert max_el_vertex_error < tol*size, max_el_vertex_error
+    per_element_tols = tol + tol * coord_scales
+
+    elements_above_tol, = np.where(per_element_vertex_errors >= per_element_tols)
+    if len(elements_above_tol) > 0:
+        i_grp_elem = elements_above_tol[0]
+        ielem = i_grp_elem + mesh.base_element_nrs[igrp]
+        from meshmode import InconsistentVerticesError
+        raise InconsistentVerticesError(
+            f"vertex consistency check failed for element {ielem}; "
+            f"{per_element_vertex_errors[i_grp_elem]} >= "
+            f"{per_element_tols[i_grp_elem]}")
 
     return True
 
@@ -1248,10 +1257,12 @@ def _test_node_vertex_consistency(mesh, tol):
     """Ensure that order of by-index vertices matches that of mapped
     unit vertices.
     """
+    if not __debug__:
+        return True
 
-    for mgrp in mesh.groups:
+    for igrp, mgrp in enumerate(mesh.groups):
         if isinstance(mgrp, _ModepyElementGroup):
-            assert _test_node_vertex_consistency_resampling(mesh, mgrp, tol)
+            assert _test_node_vertex_consistency_resampling(mesh, igrp, tol)
         else:
             from warnings import warn
             warn("not implemented: node-vertex consistency check for '%s'"
