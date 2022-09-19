@@ -1224,9 +1224,7 @@ def _test_node_vertex_consistency_resampling(mesh, igrp, tol):
 
     mgrp = mesh.groups[igrp]
 
-    if mgrp.dim == 0:
-        return True
-    elif mgrp.nelements == 0:
+    if mgrp.nelements == 0:
         return True
 
     per_vertex_errors = _mesh_group_node_vertex_error(mesh, mgrp)
@@ -1240,7 +1238,7 @@ def _test_node_vertex_consistency_resampling(mesh, igrp, tol):
 
     coord_scales = np.max(np.max(np.abs(grp_vertices), axis=-1), axis=0)
 
-    per_element_tols = tol * coord_scales
+    per_element_tols = tol + tol * coord_scales
 
     elements_above_tol, = np.where(per_element_vertex_errors >= per_element_tols)
     if len(elements_above_tol) > 0:
