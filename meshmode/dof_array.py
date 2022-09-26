@@ -35,7 +35,8 @@ from pytools import MovedFunctionDeprecationWrapper
 from pytools import single_valued, memoize_in
 
 from meshmode.transform_metadata import (
-            ConcurrentElementInameTag, ConcurrentDOFInameTag)
+            ConcurrentElementInameTag, ConcurrentDOFInameTag,
+            IsDOFArray)
 from arraycontext import (
         ArrayContext, ArrayOrContainerT, NotAnArrayContainerError,
         make_loopy_program, with_container_arithmetic,
@@ -59,8 +60,8 @@ __doc__ = """
 .. autofunction:: check_dofarray_against_discr
 """
 
-
 # {{{ DOFArray
+
 
 @with_container_arithmetic(
         bcast_obj_array=True,
@@ -459,9 +460,9 @@ def _flatten_dof_array(ary: Any, strict: bool = True):
             """,
             [
                 lp.GlobalArg("result", None,
-                             shape="nelements * ndofs_per_element"),
+                    shape="nelements * ndofs_per_element"),
                 lp.GlobalArg("grp_ary", None,
-                             shape=("nelements", "ndofs_per_element")),
+                    shape=("nelements", "ndofs_per_element"), tags=[IsDOFArray()]),
                 lp.ValueArg("nelements", np.int32),
                 lp.ValueArg("ndofs_per_element", np.int32),
                 "..."
@@ -536,6 +537,10 @@ def _unflatten_dof_array(actx: ArrayContext, ary: Any,
         t_unit = make_loopy_program(
             "{[iel,idof]: 0<=iel<nelements and 0<=idof<ndofs_per_element}",
             "result[iel, idof] = ary[grp_start + iel*ndofs_per_element + idof]",
+            kernel_data=[
+                lp.GlobalArg("result", None, shape=lp.auto, tags=[IsDOFArray()]),
+                ...
+            ],
             name="unflatten")
         return lp.tag_inames(t_unit, {
             "iel": ConcurrentElementInameTag(),

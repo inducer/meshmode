@@ -29,7 +29,7 @@ import loopy as lp
 from arraycontext import (
         NotAnArrayContainerError,
         make_loopy_program, serialize_container, deserialize_container)
-from meshmode.transform_metadata import FirstAxisIsElementsTag
+from meshmode.transform_metadata import FirstAxisIsElementsTag, IsDOFArray
 from meshmode.discretization.connection.direct import (
         DiscretizationConnection,
         DirectDiscretizationConnection)
@@ -172,7 +172,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                                  shape=("n_from_elements", "n_from_nodes")),
                     lp.GlobalArg("result", None,
                                  shape=("n_to_elements", "n_to_nodes"),
-                                 is_input=False),
+                                 is_input=False, tags=[IsDOFArray()]),
                     lp.GlobalArg("basis_tabulation", None,
                                  shape=("n_to_nodes", "n_to_nodes")),
                     lp.GlobalArg("weights", None,

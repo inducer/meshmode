@@ -40,9 +40,9 @@ from arraycontext import ArrayContext, make_loopy_program, tag_axes
 from pytools import memoize_in, memoize_method, keyed_memoize_in
 from pytools.obj_array import make_obj_array
 from meshmode.transform_metadata import (
-        ConcurrentElementInameTag, ConcurrentDOFInameTag,
-        FirstAxisIsElementsTag, DiscretizationElementAxisTag,
-        DiscretizationDOFAxisTag)
+        ConcurrentElementInameTag, ConcurrentDOFInameTag, FirstAxisIsElementsTag,
+        IsDOFArray, IsOpArray, EinsumArgsTags,
+        DiscretizationElementAxisTag, DiscretizationDOFAxisTag)
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
@@ -612,6 +612,10 @@ class Discretization:
             t_unit = make_loopy_program(
                 "{[iel,idof]: 0<=iel<nelements and 0<=idof<nunit_dofs}",
                 "result[iel,idof] = weights[idof]",
+                kernel_data=[
+                    lp.GlobalArg("result", None, shape=lp.auto, tags=[IsDOFArray()]),
+                    ...
+                ],
                 name="quad_weights")
             return lp.tag_inames(t_unit, {
                 "iel": ConcurrentElementInameTag(),
@@ -666,15 +670,16 @@ class Discretization:
                     and np.linalg.norm(grp_unit_nodes - meg_unit_nodes) < tol):
                 return actx.tag(NameHint(name_hint), nodes)
 
+            kd_tag = EinsumArgsTags({"out": (IsDOFArray(),),
+                        "arg0": (IsOpArray(),)})
+
             return actx.einsum("ij,ej->ei",
                                actx.tag_axis(
                                    0,
                                    DiscretizationDOFAxisTag(),
                                    actx.from_numpy(grp.from_mesh_interp_matrix())),
                                nodes,
-                               tagged=(
-                                   FirstAxisIsElementsTag(),
-                                   NameHint(name_hint)))
+                               tagged=(FirstAxisIsElementsTag(), NameHint(name_hint), kd_tag,))
 
         result = make_obj_array([
             _DOFArray(None, tuple([
@@ -730,14 +735,18 @@ def num_reference_derivative(
 
         return actx.from_numpy(mat)
 
+    kd_tag = EinsumArgsTags({"arg0": (IsOpArray(),),
+                "arg1": (IsDOFArray(),), "out": (IsDOFArray(),)})
+
     return _DOFArray(actx, tuple(
             actx.einsum("ij,ej->ei",
                         actx.tag_axis(0,
                                       DiscretizationDOFAxisTag(),
                                       get_mat(grp, ref_axes)),
                         vec[igrp],
-                        tagged=(FirstAxisIsElementsTag(),))
+                        tagged=(FirstAxisIsElementsTag(), kd_tag,))
             for igrp, grp in enumerate(discr.groups)))
+
 
 # }}}
 

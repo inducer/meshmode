@@ -27,10 +27,10 @@ import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
+from meshmode.transform_metadata import (FirstAxisIsElementsTag,
+    DiscretizationDOFAxisTag, IsDOFArray, IsOpArray, EinsumArgsTags)
 from arraycontext import (
         NotAnArrayContainerError, serialize_container, deserialize_container)
-from meshmode.transform_metadata import (FirstAxisIsElementsTag,
-                                         DiscretizationDOFAxisTag)
 from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
 from meshmode.discretization.connection.direct import DiscretizationConnection
@@ -164,9 +164,13 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             return actx.tag_axis(0, DiscretizationDOFAxisTag(),
                     actx.from_numpy(vdm_inv))
 
+        kd_tag = EinsumArgsTags({"arg0": (IsOpArray(),),
+                    "arg1": (IsDOFArray(),), "out": (IsDOFArray(),)})
+
         return actx.einsum("ij,ej->ei",
-                vandermonde_inverse(grp),
-                ary, tagged=(FirstAxisIsElementsTag(),))
+                       vandermonde_inverse(grp),
+                       ary,
+                       tagged=(FirstAxisIsElementsTag(), kd_tag,))
 
     def __call__(self, ary):
         """Computes modal coefficients data from a functions

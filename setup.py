@@ -41,15 +41,17 @@ def main():
               "numpy",
               "modepy>=2020.2",
               "gmsh_interop",
-              "pytools>=2020.4.1",
+              "pytools>=2021.2.1",
               "pytest>=2.3",
 
               # 2019.1 is required for the Firedrake CIs, which use an very specific
               # version of Loopy.
-              "loopy>=2019.1",
+              #"loopy>=2019.1",
+              "loopy>=2020.2.2",
 
               "arraycontext",
 
+              "immutables",
               "recursivenodes",
               "dataclasses; python_version<'3.7'",
               "typing_extensions; python_version<'3.8'",
