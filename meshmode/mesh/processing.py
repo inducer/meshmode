@@ -55,6 +55,7 @@ __doc__ = """
 .. autofunction:: perform_flips
 .. autofunction:: find_bounding_box
 .. autofunction:: merge_disjoint_meshes
+.. autofunction:: make_mesh_grid
 .. autofunction:: split_mesh_groups
 .. autofunction:: glue_mesh_boundaries
 
@@ -1454,6 +1455,50 @@ def rotate_mesh_around_axis(mesh, *,
 
     mat = _get_rotation_matrix_from_angle_and_axis(theta, axis)
     return affine_map(mesh, A=mat[:mesh.ambient_dim, :mesh.ambient_dim])
+
+# }}}
+
+
+# {{{ make_mesh_grid
+
+def make_mesh_grid(
+        mesh: Mesh, *,
+        shape: Tuple[int, ...],
+        offset: Optional[Tuple[np.ndarray, ...]] = None,
+        skip_tests: bool = False) -> Mesh:
+    """Constructs a grid of copies of *mesh*, with *shape* copies in each
+    dimensions at the given *offset*.
+
+    :returns: a merged mesh representing the grid.
+    """
+
+    if len(shape) != mesh.ambient_dim:
+        raise ValueError("grid shape length must match mesh ambient dimension")
+
+    if offset is None:
+        bmin, bmax = find_bounding_box(mesh)
+
+        from pytools import wandering_element
+        size = bmax - bmin
+        offset = tuple([
+            np.array(e_i) * (size[i] + 0.25 * size[i])
+            for i, e_i in enumerate(wandering_element(mesh.ambient_dim))
+            ])
+
+    if len(offset) != mesh.ambient_dim:
+        raise ValueError("must provide an offset per dimension")
+
+    if not all(o.size == mesh.ambient_dim for o in offset):
+        raise ValueError("offsets must have the mesh dimension")
+
+    from itertools import product
+    meshes = []
+
+    for index in product(*(range(n) for n in shape)):
+        b = sum([i * o for i, o in zip(index, offset)])
+        meshes.append(affine_map(mesh, b=b))
+
+    return merge_disjoint_meshes(meshes, skip_tests=skip_tests)
 
 # }}}
 
