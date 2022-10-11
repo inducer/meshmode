@@ -47,13 +47,14 @@ Curve parametrizations
 .. autofunction:: circle
 .. autofunction:: ellipse
 .. autofunction:: cloverleaf
-.. data :: starfish
 .. autofunction:: drop
 .. autofunction:: n_gon
 .. autofunction:: qbx_peanut
 .. autofunction:: apple
 .. autoclass:: WobblyCircle
 .. autoclass:: NArmedStarfish
+.. data:: starfish3
+.. data:: starfish5
 
 Surfaces
 --------
@@ -204,8 +205,9 @@ class WobblyCircle:
     .. automethod:: random
     .. automethod:: __call__
     """
-    def __init__(self, coeffs: np.ndarray):
+    def __init__(self, coeffs: np.ndarray, phase: float = 0.0) -> None:
         self.coeffs = coeffs
+        self.phase = phase
 
     @staticmethod
     def random(ncoeffs: int, seed: int):
@@ -227,7 +229,7 @@ class WobblyCircle:
 
         wave = 1
         for i, coeff in enumerate(self.coeffs):
-            wave = wave + coeff*np.sin((i+1)*t)
+            wave = wave + coeff*np.sin((i+1)*t + self.phase)
 
         return np.vstack([
             np.cos(t)*wave,
@@ -240,13 +242,16 @@ class NArmedStarfish(WobblyCircle):
 
     .. automethod:: __call__
     """
-    def __init__(self, n_arms: int, amplitude: float):
+    def __init__(self, n_arms: int, amplitude: float, phase: float = 0.0) -> None:
         coeffs = np.zeros(n_arms)
         coeffs[-1] = amplitude
-        super().__init__(coeffs)
+        super().__init__(coeffs, phase=phase)
 
 
-starfish = NArmedStarfish(5, 0.25)
+starfish3 = NArmedStarfish(3, 1 / 2, phase=np.pi / 2)
+starfish5 = NArmedStarfish(5, 0.25)
+
+starfish = starfish5
 
 # }}}
 
