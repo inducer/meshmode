@@ -1214,53 +1214,57 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
     facial_adjacency_groups = None
     face_vertex_indices_to_tags = {}
     boundary_tags = list(boundary_tag_to_face.keys())
+    nbnd_tags = len(boundary_tags)
 
-    if boundary_tags:
+    if nbnd_tags > 0:
         vert_index_to_tuple = {
                 vertex_indices[itup]: itup
                 for itup in np.ndindex(shape)}
 
-    for tag in boundary_tags:
-        # Need to map the correct face vertices to the boundary tags
-        for face in boundary_tag_to_face[tag]:
-            if len(face) != 2:
-                raise ValueError("face identifier '%s' does not "
-                        "consist of exactly two characters" % face)
+        for ielem in range(0, grp.nelements):
+            for ref_fvi in grp.face_vertex_indices():
+                fvi = grp.vertex_indices[ielem, ref_fvi]
+                try:
+                    fvi_tuples = [vert_index_to_tuple[i] for i in fvi]
+                except KeyError:
+                    # Happens for interior faces of "X" meshes because
+                    # midpoints aren't in vert_index_to_tuple. We don't
+                    # care about them.
+                    continue
 
-            side, axis = face
-            try:
-                axis = axes.index(axis)
-            except ValueError as exc:
-                raise ValueError(
-                        f"unrecognized axis in face identifier '{face}'") from exc
-            if axis >= dim:
-                raise ValueError("axis in face identifier '%s' does not exist in %dD"
-                        % (face, dim))
+                for tag in boundary_tags:
+                    # Need to map the correct face vertices to the boundary tags
+                    for face in boundary_tag_to_face[tag]:
+                        if len(face) != 2:
+                            raise ValueError(
+                                "face identifier '%s' does not "
+                                "consist of exactly two characters" % face)
 
-            if side == "-":
-                vert_crit = 0
-            elif side == "+":
-                vert_crit = shape[axis] - 1
-            else:
-                raise ValueError("first character of face identifier '%s' is not"
-                        "'+' or '-'" % face)
+                        side, axis = face
+                        try:
+                            axis = axes.index(axis)
+                        except ValueError as exc:
+                            raise ValueError(
+                                "unrecognized axis in face identifier "
+                                f"'{face}'") from exc
+                        if axis >= dim:
+                            raise ValueError("axis in face identifier '%s' "
+                                             "does not exist in %dD" % (face, dim))
 
-            for ielem in range(0, grp.nelements):
-                for ref_fvi in grp.face_vertex_indices():
-                    fvi = grp.vertex_indices[ielem, ref_fvi]
-                    try:
-                        fvi_tuples = [vert_index_to_tuple[i] for i in fvi]
-                    except KeyError:
-                        # Happens for interior faces of "X" meshes because
-                        # midpoints aren't in vert_index_to_tuple. We don't
-                        # care about them.
-                        continue
+                        if side == "-":
+                            vert_crit = 0
+                        elif side == "+":
+                            vert_crit = shape[axis] - 1
+                        else:
+                            raise ValueError("first character of face identifier"
+                                             " '%s' is not '+' or '-'" % face)
 
-                    if all(fvi_tuple[axis] == vert_crit for fvi_tuple in fvi_tuples):
-                        key = frozenset(fvi)
-                        face_vertex_indices_to_tags.setdefault(key, []).append(tag)
+                        if all(fvi_tuple[axis] == vert_crit
+                               for fvi_tuple in fvi_tuples):
+                            key = frozenset(fvi)
+                            face_vertex_indices_to_tags.setdefault(key,
+                                                                   []).append(tag)
 
-    if boundary_tags:
         from meshmode.mesh import _compute_facial_adjacency_from_vertices
         facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
                 [grp], np.int32, np.int8, face_vertex_indices_to_tags)
