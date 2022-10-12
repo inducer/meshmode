@@ -50,6 +50,8 @@ Curve parametrizations
 .. autofunction:: drop
 .. autofunction:: n_gon
 .. autofunction:: qbx_peanut
+.. autofunction:: dumbbell
+.. autofunction:: wobbly_dumbbell
 .. autofunction:: apple
 .. autoclass:: WobblyCircle
 .. autoclass:: NArmedStarfish
@@ -172,12 +174,38 @@ def qbx_peanut(t: np.ndarray):
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
     """
-    ilength = 2*np.pi
-    t = t*ilength
+    t = 2.0 * np.pi * t
 
+    r = (1.0 + 0.3 * np.sin(2 * t))
     return np.vstack([
-        0.75 * np.cos(t-0.25*np.pi) * (1+0.3*np.sin(2*t)),
-        np.sin(t-0.25*np.pi) * (1+0.3*np.sin(2*t))
+        3 / 4 * r * np.cos(t - np.pi / 4),
+        r * np.sin(t - np.pi / 4),
+        ])
+
+
+def dumbbell(gamma: float, beta: float, t: np.ndarray):
+    """
+    :arg t: the parametrization, runs from :math:`[0, 1]`.
+    :return: an array of shape ``(2, t.size)``.
+    """
+    return wobbly_dumbbell(gamma, beta, 1, 0, t)
+
+
+def wobbly_dumbbell(
+        gamma: float, beta: float, p: int, wavenumber: int,
+        t: np.ndarray):
+    """
+    :arg t: the parametrization, runs from :math:`[0, 1]`.
+    :return: an array of shape ``(2, t.size)``.
+    """
+    t = 2.0 * np.pi * t
+    r = (
+        gamma * (1 + beta / (1 - beta) * np.cos(t) ** 2) ** (1 / p)
+        + 0.02 * np.sin(wavenumber * t) ** 2)
+
+    return np.stack([
+        np.cos(t),
+        r * np.sin(t),
         ])
 
 
