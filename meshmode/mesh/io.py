@@ -187,7 +187,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         group_base_elem_nr = 0
 
         tag_to_meshwide_elements = {}
-        tag_to_faces = []
+        tag_to_group_faces = []
 
         for group_el_type, ngroup_elements in el_type_hist.items():
             if group_el_type.dimensions != mesh_bulk_dim:
@@ -267,7 +267,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
             group_base_elem_nr += group.nelements
 
-            group_tag_to_faces = {}
+            tag_to_faces = {}
 
             for tag, tagged_fvis in tag_to_fvis.items():
                 for fid, ref_fvi in enumerate(group.face_vertex_indices()):
@@ -285,19 +285,19 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                         np.sort(padded_fvis, axis=1).T)
                     face_element_indices = face_element_index_pairs[1, :]
                     if len(face_element_indices) > 0:
-                        elements_and_faces = np.stack(
+                        group_faces = np.stack(
                             (
                                 face_element_indices,
                                 np.full(face_element_indices.shape, fid)),
                             axis=-1)
-                        if tag in group_tag_to_faces:
-                            group_tag_to_faces[tag] = np.concatenate((
-                                group_tag_to_faces[tag],
-                                elements_and_faces))
+                        if tag in tag_to_faces:
+                            tag_to_faces[tag] = np.concatenate((
+                                tag_to_faces[tag],
+                                group_faces))
                         else:
-                            group_tag_to_faces[tag] = elements_and_faces
+                            tag_to_faces[tag] = group_faces
 
-            tag_to_faces.append(group_tag_to_faces)
+            tag_to_group_faces.append(tag_to_faces)
 
         for tag in tag_to_meshwide_elements.keys():
             tag_to_meshwide_elements[tag] = np.array(
@@ -314,7 +314,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         if is_conforming and self.tags:
             from meshmode.mesh import _compute_facial_adjacency_from_vertices
             facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
-                    groups, np.int32, np.int8, tag_to_faces)
+                    groups, np.int32, np.int8, tag_to_group_faces)
 
         mesh = Mesh(
                 vertices, groups,

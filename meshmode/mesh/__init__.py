@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace, field
-from typing import Any, ClassVar, Hashable, Optional, Tuple, Type, Sequence
+from typing import Any, ClassVar, Hashable, Optional, Tuple, Type, Sequence, Mapping
 
 import numpy as np
 import numpy.linalg as la
@@ -1416,13 +1416,21 @@ def _match_faces_by_vertices(groups, face_ids, vertex_index_map_func=None):
 
 
 def _compute_facial_adjacency_from_vertices(
-        groups, element_id_dtype, face_id_dtype, tag_to_faces=None
+        groups: Sequence[MeshElementGroup],
+        element_id_dtype,
+        face_id_dtype,
+        tag_to_group_faces: Optional[Sequence[Mapping[Any, np.ndarray]]] = None
         ) -> Sequence[Sequence[FacialAdjacencyGroup]]:
+    """
+    :arg tag_to_group_faces: for each group, a mapping from tag to
+        :class:`numpy.ndarray` of shape ``(2, nfaces)`` containing
+        the element and face indices of each tagged face in the group.
+    """
     if not groups:
         return []
 
-    if tag_to_faces is None:
-        tag_to_faces = [{} for grp in groups]
+    if tag_to_group_faces is None:
+        tag_to_group_faces = [{} for grp in groups]
 
     # Match up adjacent faces according to their vertex indices
 
@@ -1503,7 +1511,7 @@ def _compute_facial_adjacency_from_vertices(
 
             is_tagged = np.full(len(bdry_elements), False)
 
-            for tag, tagged_elements_and_faces in tag_to_faces[igrp].items():
+            for tag, tagged_elements_and_faces in tag_to_group_faces[igrp].items():
                 face_index_pairs = _find_matching_index_pairs(
                     tagged_elements_and_faces.T,
                     np.stack((bdry_elements, bdry_element_faces)))
