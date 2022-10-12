@@ -1513,7 +1513,7 @@ def _compute_facial_adjacency_from_vertices(
                             element_faces=element_faces))
                     is_tagged[face_indices] = True
 
-            if np.any(~is_tagged):
+            if not np.all(is_tagged):
                 grp_list.append(
                     BoundaryAdjacencyGroup(
                         igroup=igrp,
