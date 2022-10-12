@@ -1345,6 +1345,29 @@ def _concatenate_face_ids(face_ids_list):
         faces=np.concatenate([ids.faces for ids in face_ids_list]))
 
 
+def _find_matching_index_pairs_merged(indices):
+    """
+    Return an array of dimension ``(2, nmatches)`` containing pairs of indices into
+    *indices* representing entries that are the same.
+    """
+    order = np.lexsort(indices)
+    diffs = np.diff(indices[:, order], axis=1)
+    match_indices, = (~np.any(diffs, axis=0)).nonzero()
+    return np.stack((order[match_indices], order[match_indices+1]))
+
+
+def _find_matching_index_pairs(left_indices, right_indices):
+    """
+    Return an array of dimension ``(2, nmatches)`` containing pairs of indices into
+    *left_indices* (row 0) and *right_indices* (row 1) representing entries that
+    are the same.
+    """
+    index_pairs = _find_matching_index_pairs_merged(
+        np.concatenate((left_indices, right_indices), axis=1))
+    index_pairs[1, :] -= left_indices.shape[1]
+    return index_pairs
+
+
 def _match_faces_by_vertices(groups, face_ids, vertex_index_map_func=None):
     """
     Return matching faces in *face_ids* (expressed as pairs of indices into
@@ -1388,13 +1411,8 @@ def _match_faces_by_vertices(groups, face_ids, vertex_index_map_func=None):
 
     # Normalize vertex-based "face identifiers" by sorting
     face_vertex_indices_increasing = np.sort(face_vertex_indices, axis=0)
-    # Lexicographically sort the face vertex indices, then diff the result to find
-    # faces with the same vertices
-    order = np.lexsort(face_vertex_indices_increasing)
-    diffs = np.diff(face_vertex_indices_increasing[:, order], axis=1)
-    match_indices, = (~np.any(diffs, axis=0)).nonzero()
 
-    return np.stack((order[match_indices], order[match_indices+1]))
+    return _find_matching_index_pairs_merged(face_vertex_indices_increasing)
 
 
 def _compute_facial_adjacency_from_vertices(
@@ -1486,22 +1504,10 @@ def _compute_facial_adjacency_from_vertices(
             is_tagged = np.full(len(bdry_elements), False)
 
             for tag, tagged_elements_and_faces in tag_to_faces[igrp].items():
-                # Combine known tagged faces and current boundary faces into a
-                # single array, lexicographically sort them, and find identical
-                # neighboring entries to get tags
-                extended_elements_and_faces = np.concatenate((
-                    tagged_elements_and_faces,
-                    np.stack(
-                        (bdry_elements, bdry_element_faces),
-                        axis=-1)))
-                order = np.lexsort(extended_elements_and_faces.T)
-                diffs = np.diff(extended_elements_and_faces[order, :], axis=0)
-                match_indices, = (~np.any(diffs, axis=1)).nonzero()
-                # lexsort is stable, so the second entry in each match corresponds
-                # to the yet-to-be-tagged boundary face
-                face_indices = (
-                    order[match_indices+1]
-                    - len(tagged_elements_and_faces))
+                face_index_pairs = _find_matching_index_pairs(
+                    tagged_elements_and_faces.T,
+                    np.stack((bdry_elements, bdry_element_faces)))
+                face_indices = face_index_pairs[1, :]
                 if len(face_indices) > 0:
                     elements = bdry_elements[face_indices]
                     element_faces = bdry_element_faces[face_indices]

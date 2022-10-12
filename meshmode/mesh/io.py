@@ -272,26 +272,18 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             for tag, tagged_fvis in tag_to_fvis.items():
                 for fid, ref_fvi in enumerate(group.face_vertex_indices()):
                     fvis = group.vertex_indices[:, ref_fvi]
-                    # Combine known tagged fvis and current group fvis into a single
-                    # array, lexicographically sort them, and find identical
-                    # neighboring entries to get tags
                     if tagged_fvis.shape[1] < fvis.shape[1]:
+                        # tagged_fvis does not contain any faces with the right
+                        # number of vertices
                         continue
                     padded_fvis = np.full((fvis.shape[0], tagged_fvis.shape[1]), -1)
                     padded_fvis[:, :fvis.shape[1]] = fvis
-                    extended_fvis = np.concatenate((tagged_fvis, padded_fvis))
-                    # Make sure vertices are in the same order
-                    extended_fvis = np.sort(extended_fvis, axis=1)
-                    # Lexicographically sort the face vertex indices, then diff the
-                    # result to find tagged faces with the same vertices
-                    order = np.lexsort(extended_fvis.T)
-                    diffs = np.diff(extended_fvis[order, :], axis=0)
-                    match_indices, = (~np.any(diffs, axis=1)).nonzero()
-                    # lexsort is stable, so the second entry in each match
-                    # corresponds to the group face
-                    face_element_indices = (
-                        order[match_indices+1]
-                        - len(tagged_fvis))
+                    from meshmode.mesh import _find_matching_index_pairs
+                    face_element_index_pairs = _find_matching_index_pairs(
+                        # Make sure the vertices are in the same order
+                        np.sort(tagged_fvis, axis=1).T,
+                        np.sort(padded_fvis, axis=1).T)
+                    face_element_indices = face_element_index_pairs[1, :]
                     if len(face_element_indices) > 0:
                         elements_and_faces = np.stack(
                             (
