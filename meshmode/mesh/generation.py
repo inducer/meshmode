@@ -1213,7 +1213,7 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
 
     tag_to_faces = {}
 
-    for tag in boundary_tag_to_face.keys():
+    for tag in boundary_tag_to_face:
         # Need to map the correct face vertices to the boundary tags
         for face in boundary_tag_to_face[tag]:
             if len(face) != 2:
