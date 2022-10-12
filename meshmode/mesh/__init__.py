@@ -1398,21 +1398,13 @@ def _match_faces_by_vertices(groups, face_ids, vertex_index_map_func=None):
 
 
 def _compute_facial_adjacency_from_vertices(
-        groups, element_id_dtype, face_id_dtype, face_vertex_indices_to_tags=None
+        groups, element_id_dtype, face_id_dtype, tag_to_faces=None
         ) -> Sequence[Sequence[FacialAdjacencyGroup]]:
     if not groups:
         return []
 
-    if face_vertex_indices_to_tags is not None:
-        boundary_tags = {
-            tag
-            for tags in face_vertex_indices_to_tags.values()
-            for tag in tags
-            if tags is not None}
-    else:
-        boundary_tags = set()
-
-    boundary_tag_to_index = {tag: i for i, tag in enumerate(boundary_tags)}
+    if tag_to_faces is None:
+        tag_to_faces = [{} for grp in groups]
 
     # Match up adjacent faces according to their vertex indices
 
@@ -1490,33 +1482,38 @@ def _compute_facial_adjacency_from_vertices(
             bdry_element_faces, bdry_elements = np.where(~face_has_neighbor)
             bdry_element_faces = bdry_element_faces.astype(face_id_dtype)
             bdry_elements = bdry_elements.astype(element_id_dtype)
-            belongs_to_bdry = np.full(
-                (len(boundary_tags), len(bdry_elements)), False)
 
-            if face_vertex_indices_to_tags is not None:
-                for i in range(len(bdry_elements)):
-                    ref_fvi = grp.face_vertex_indices()[bdry_element_faces[i]]
-                    fvi = frozenset(grp.vertex_indices[bdry_elements[i], ref_fvi])
-                    tags = face_vertex_indices_to_tags.get(fvi, None)
-                    if tags is not None:
-                        for tag in tags:
-                            btag_idx = boundary_tag_to_index[tag]
-                            belongs_to_bdry[btag_idx, i] = True
+            is_tagged = np.full(len(bdry_elements), False)
 
-            for btag_idx, btag in enumerate(boundary_tags):
-                indices, = np.where(belongs_to_bdry[btag_idx, :])
-                if len(indices) > 0:
-                    elements = bdry_elements[indices]
-                    element_faces = bdry_element_faces[indices]
+            for tag, tagged_elements_and_faces in tag_to_faces[igrp].items():
+                # Combine known tagged faces and current boundary faces into a
+                # single array, lexicographically sort them, and find identical
+                # neighboring entries to get tags
+                extended_elements_and_faces = np.concatenate((
+                    tagged_elements_and_faces,
+                    np.stack(
+                        (bdry_elements, bdry_element_faces),
+                        axis=-1)))
+                order = np.lexsort(extended_elements_and_faces.T)
+                diffs = np.diff(extended_elements_and_faces[order, :], axis=0)
+                match_indices, = (~np.any(diffs, axis=1)).nonzero()
+                # lexsort is stable, so the second entry in each match corresponds
+                # to the yet-to-be-tagged boundary face
+                face_indices = (
+                    order[match_indices+1]
+                    - len(tagged_elements_and_faces))
+                if len(face_indices) > 0:
+                    elements = bdry_elements[face_indices]
+                    element_faces = bdry_element_faces[face_indices]
                     grp_list.append(
                         BoundaryAdjacencyGroup(
                             igroup=igrp,
-                            boundary_tag=btag,
+                            boundary_tag=tag,
                             elements=elements,
                             element_faces=element_faces))
+                    is_tagged[face_indices] = True
 
-            is_untagged = ~np.any(belongs_to_bdry, axis=0)
-            if np.any(is_untagged):
+            if np.any(~is_tagged):
                 grp_list.append(
                     BoundaryAdjacencyGroup(
                         igroup=igrp,

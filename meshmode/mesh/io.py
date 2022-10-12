@@ -131,27 +131,12 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         # {{{ build vertex numbering
 
-        # map set of face vertex indices to list of tags associated to face
-        face_vertex_indices_to_tags = {}
         vertex_gmsh_index_to_mine = {}
-        for element, el_vertices in enumerate(self.element_vertices):
+        for el_vertices in self.element_vertices:
             for gmsh_vertex_nr in el_vertices:
                 if gmsh_vertex_nr not in vertex_gmsh_index_to_mine:
                     vertex_gmsh_index_to_mine[gmsh_vertex_nr] = \
                             len(vertex_gmsh_index_to_mine)
-            if self.tags:
-                el_markers = self.element_markers[element]
-                el_tag_indexes = (
-                    [self.gmsh_tag_index_to_mine[t] for t in el_markers]
-                    if el_markers is not None else [])
-                # record tags of boundary dimension
-                el_tags = [self.tags[i][0] for i in el_tag_indexes if
-                           self.tags[i][1] == mesh_bulk_dim - 1]
-                el_grp_verts = {vertex_gmsh_index_to_mine[e] for e in el_vertices}
-                face_vertex_indices = frozenset(el_grp_verts)
-                if face_vertex_indices not in face_vertex_indices_to_tags:
-                    face_vertex_indices_to_tags[face_vertex_indices] = []
-                face_vertex_indices_to_tags[face_vertex_indices] += el_tags
 
         # }}}
 
@@ -166,6 +151,34 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         # }}}
 
+        # {{{ build map from tags to arrays of face vertex indices
+
+        tag_to_fvis = {}
+
+        if self.tags:
+            for element, el_vertices in enumerate(self.element_vertices):
+                el_markers = self.element_markers[element]
+                el_tag_indexes = (
+                    [self.gmsh_tag_index_to_mine[t] for t in el_markers]
+                    if el_markers is not None else [])
+                # record tags of boundary dimension
+                el_tags = [self.tags[i][0] for i in el_tag_indexes if
+                           self.tags[i][1] == mesh_bulk_dim - 1]
+                el_grp_verts = [vertex_gmsh_index_to_mine[e] for e in el_vertices]
+                for tag in el_tags:
+                    fvi_list = tag_to_fvis.setdefault(tag, [])
+                    fvi_list.append(el_grp_verts)
+
+            for tag in tag_to_fvis.keys():
+                fvi_list = tag_to_fvis[tag]
+                max_face_vertices = max(len(fvi) for fvi in fvi_list)
+                fvis = np.full((len(fvi_list), max_face_vertices), -1)
+                for i, fvi in enumerate(fvi_list):
+                    fvis[i, :len(fvi)] = fvi
+                tag_to_fvis[tag] = fvis
+
+        # }}}
+
         from meshmode.mesh import (Mesh,
                 SimplexElementGroup, TensorProductElementGroup)
 
@@ -173,7 +186,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         group_base_elem_nr = 0
 
-        tag_to_elements = {}
+        tag_to_meshwide_elements = {}
+        tag_to_faces = []
 
         for group_el_type, ngroup_elements in el_type_hist.items():
             if group_el_type.dimensions != mesh_bulk_dim:
@@ -204,10 +218,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 if el_markers is not None:
                     for t in el_markers:
                         tag = self.tags[self.gmsh_tag_index_to_mine[t]][0]
-                        if tag not in tag_to_elements:
-                            tag_to_elements[tag] = [group_base_elem_nr + i]
-                        else:
-                            tag_to_elements[tag].append(group_base_elem_nr + i)
+                        tagged_elements = tag_to_meshwide_elements.setdefault(
+                            tag, [])
+                        tagged_elements.append(group_base_elem_nr + i)
 
                 i += 1
 
@@ -254,8 +267,49 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
             group_base_elem_nr += group.nelements
 
-        for tag in tag_to_elements.keys():
-            tag_to_elements[tag] = np.array(tag_to_elements[tag], dtype=np.int32)
+            group_tag_to_faces = {}
+
+            for tag, tagged_fvis in tag_to_fvis.items():
+                for fid, ref_fvi in enumerate(group.face_vertex_indices()):
+                    fvis = group.vertex_indices[:, ref_fvi]
+                    # Combine known tagged fvis and current group fvis into a single
+                    # array, lexicographically sort them, and find identical
+                    # neighboring entries to get tags
+                    if tagged_fvis.shape[1] < fvis.shape[1]:
+                        continue
+                    padded_fvis = np.full((fvis.shape[0], tagged_fvis.shape[1]), -1)
+                    padded_fvis[:, :fvis.shape[1]] = fvis
+                    extended_fvis = np.concatenate((tagged_fvis, padded_fvis))
+                    # Make sure vertices are in the same order
+                    extended_fvis = np.sort(extended_fvis, axis=1)
+                    # Lexicographically sort the face vertex indices, then diff the
+                    # result to find tagged faces with the same vertices
+                    order = np.lexsort(extended_fvis.T)
+                    diffs = np.diff(extended_fvis[order, :], axis=0)
+                    match_indices, = (~np.any(diffs, axis=1)).nonzero()
+                    # lexsort is stable, so the second entry in each match
+                    # corresponds to the group face
+                    face_element_indices = (
+                        order[match_indices+1]
+                        - len(tagged_fvis))
+                    if len(face_element_indices) > 0:
+                        elements_and_faces = np.stack(
+                            (
+                                face_element_indices,
+                                np.full(face_element_indices.shape, fid)),
+                            axis=-1)
+                        if tag in group_tag_to_faces:
+                            group_tag_to_faces[tag] = np.concatenate((
+                                group_tag_to_faces[tag],
+                                elements_and_faces))
+                        else:
+                            group_tag_to_faces[tag] = elements_and_faces
+
+            tag_to_faces.append(group_tag_to_faces)
+
+        for tag in tag_to_meshwide_elements.keys():
+            tag_to_meshwide_elements[tag] = np.array(
+                tag_to_meshwide_elements[tag], dtype=np.int32)
 
         # FIXME: This is heuristic.
         if len(bulk_el_types) == 1:
@@ -268,7 +322,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         if is_conforming and self.tags:
             from meshmode.mesh import _compute_facial_adjacency_from_vertices
             facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
-                    groups, np.int32, np.int8, face_vertex_indices_to_tags)
+                    groups, np.int32, np.int8, tag_to_faces)
 
         mesh = Mesh(
                 vertices, groups,
@@ -276,7 +330,10 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 facial_adjacency_groups=facial_adjacency_groups,
                 **self.mesh_construction_kwargs)
 
-        return (mesh, tag_to_elements) if return_tag_to_elements_map else mesh
+        return (
+            (mesh, tag_to_meshwide_elements)
+            if return_tag_to_elements_map
+            else mesh)
 
 # }}}
 
