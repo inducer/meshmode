@@ -172,7 +172,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             for tag in tag_to_fvis.keys():
                 fvi_list = tag_to_fvis[tag]
                 max_face_vertices = max(len(fvi) for fvi in fvi_list)
-                fvis = np.full((len(fvi_list), max_face_vertices), -1)
+                fvis = np.full(
+                    (len(fvi_list), max_face_vertices), -1, dtype=np.int32)
                 for i, fvi in enumerate(fvi_list):
                     fvis[i, :len(fvi)] = fvi
                 tag_to_fvis[tag] = fvis
@@ -276,7 +277,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                         # tagged_fvis does not contain any faces with the right
                         # number of vertices
                         continue
-                    padded_fvis = np.full((fvis.shape[0], tagged_fvis.shape[1]), -1)
+                    padded_fvis = np.full(
+                        (fvis.shape[0], tagged_fvis.shape[1]), -1, dtype=np.int32)
                     padded_fvis[:, :fvis.shape[1]] = fvis
                     from meshmode.mesh import _find_matching_index_pairs
                     face_element_index_pairs = _find_matching_index_pairs(
@@ -288,7 +290,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                         group_faces = np.stack(
                             (
                                 face_element_indices,
-                                np.full(face_element_indices.shape, fid)),
+                                np.full(
+                                    face_element_indices.shape, fid,
+                                    dtype=np.int32)),
                             axis=-1)
                         if tag in tag_to_faces:
                             tag_to_faces[tag] = np.concatenate((
