@@ -356,7 +356,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
     # {{{ _resample_matrix
 
     @keyed_memoize_method(key=lambda actx, to_group_index, ibatch_index:
-            (to_group_index, ibatch_index))
+            (type(actx), to_group_index, ibatch_index))
     def _resample_matrix(self, actx: ArrayContext, to_group_index: int,
             ibatch_index: int):
         import modepy as mp
@@ -435,7 +435,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         return result
 
     @keyed_memoize_method(lambda actx, to_group_index, ibatch_index,
-            tol_multiplier=None: (to_group_index, ibatch_index, tol_multiplier))
+            tol_multiplier=None: (type(actx), to_group_index,
+                                  ibatch_index, tol_multiplier))
     def _frozen_resample_point_pick_indices(self, actx: ArrayContext,
             to_group_index: int, ibatch_index: int,
             tol_multiplier: Optional[float] = None):
