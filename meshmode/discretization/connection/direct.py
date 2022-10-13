@@ -232,6 +232,12 @@ class _FromGroupPickData(Generic[ArrayT]):
     from_element_indices: ArrayT
     is_surjective: bool
 
+    @keyed_memoize_method(key=lambda actx: type(actx))
+    def indexed_dof_pick_lists(self, actx):
+        assert actx.permits_advanced_indexing
+        return actx.freeze(
+            actx.thaw(self.dof_pick_lists)[actx.thaw(self.dof_pick_list_indices)])
+
 # }}}
 
 
@@ -737,8 +743,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                             grp_ary_contrib = ary[fgpd.from_group_index][
                                         _reshape_and_preserve_tags(
                                             actx, from_element_indices, (-1, 1)),
-                                        actx.thaw(fgpd.dof_pick_lists)[
-                                            actx.thaw(fgpd.dof_pick_list_indices)]
+                                        actx.thaw(fgpd.indexed_dof_pick_lists(actx))
                                         ]
 
                             if not fgpd.is_surjective:
