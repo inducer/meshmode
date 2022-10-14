@@ -1,3 +1,5 @@
+# mypy: disallow-untyped-defs
+
 __copyright__ = "Copyright (C) 2013 Andreas Kloeckner"
 
 __license__ = """
@@ -20,13 +22,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Type, Union, Sequence
 
 import numpy as np
 import numpy.linalg as la
 import modepy as mp
 
 from meshmode.mesh import Mesh, MeshElementGroup
+from meshmode.mesh.refinement import Refiner
 
 from pytools import log_process, deprecate_keyword
 
@@ -86,7 +89,7 @@ Tools for Iterative Refinement
 
 # {{{ test curve parametrizations
 
-def circle(t: np.ndarray):
+def circle(t: np.ndarray) -> np.ndarray:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -94,7 +97,7 @@ def circle(t: np.ndarray):
     return ellipse(1.0, t)
 
 
-def ellipse(aspect_ratio: float, t: np.ndarray):
+def ellipse(aspect_ratio: float, t: np.ndarray) -> np.ndarray:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -108,7 +111,7 @@ def ellipse(aspect_ratio: float, t: np.ndarray):
         ])
 
 
-def cloverleaf(t: np.ndarray):
+def cloverleaf(t: np.ndarray) -> np.ndarray:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -126,7 +129,7 @@ def cloverleaf(t: np.ndarray):
         ])
 
 
-def drop(t: np.ndarray):
+def drop(t: np.ndarray) -> np.ndarray:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -141,7 +144,7 @@ def drop(t: np.ndarray):
         ])
 
 
-def n_gon(n_corners, t):
+def n_gon(n_corners: int, t: np.ndarray) -> np.ndarray:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -169,7 +172,7 @@ def n_gon(n_corners, t):
     return result
 
 
-def qbx_peanut(t: np.ndarray):
+def qbx_peanut(t: np.ndarray) -> np.ndarray:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -209,7 +212,7 @@ def wobbly_dumbbell(
         ])
 
 
-def apple(a: float, t: np.ndarray):
+def apple(a: float, t: np.ndarray) -> np.ndarray:
     """
     :arg a: roundness parameter in :math:`[0, 1/2]`, where :math:`0` gives
         a circle and :math:`1/2` gives a cardioid.
@@ -238,7 +241,7 @@ class WobblyCircle:
         self.phase = phase
 
     @staticmethod
-    def random(ncoeffs: int, seed: int):
+    def random(ncoeffs: int, seed: int) -> "WobblyCircle":
         rng = np.random.default_rng(seed)
         coeffs = rng.random(ncoeffs)
 
@@ -246,7 +249,7 @@ class WobblyCircle:
 
         return WobblyCircle(coeffs)
 
-    def __call__(self, t: np.ndarray):
+    def __call__(self, t: np.ndarray) -> np.ndarray:
         """
         :arg t: the parametrization, runs from :math:`[0, 1]`.
         :return: an array of shape ``(2, t.size)``.
@@ -274,6 +277,16 @@ class NArmedStarfish(WobblyCircle):
         coeffs = np.zeros(n_arms)
         coeffs[-1] = amplitude
         super().__init__(coeffs, phase=phase)
+
+    @staticmethod
+    def random(seed: int) -> "NArmedStarfish":
+        rng = np.random.default_rng(seed)
+
+        # NOTE: 32 arms should be enough for everybody!
+        n_arms = rng.integers(3, 33)
+        amplitude = 0.25 + 0.75 * rng.random()
+
+        return NArmedStarfish(n_arms, amplitude)
 
 
 starfish3 = NArmedStarfish(3, 1 / 2, phase=np.pi / 2)
@@ -552,7 +565,7 @@ def generate_sphere(r: float, order: int, *,
         uniform_refinement_rounds: int = 0,
         node_vertex_consistency_tolerance: Optional[Union[float, bool]] = None,
         unit_nodes: Optional[np.ndarray] = None,
-        group_cls: Optional[type] = None):
+        group_cls: Optional[type] = None) -> Mesh:
     """
     :arg r: radius of the sphere.
     :arg order: order of the group elements. If *unit_nodes* is also
@@ -657,7 +670,7 @@ def generate_surface_of_revolution(
             is_conforming=True)
 
     # ensure vertices and nodes are still on the surface with radius r
-    def ensure_radius(arr):
+    def ensure_radius(arr: np.ndarray) -> np.ndarray:
         res = arr.copy()
         h = res[2, :].flatten()
         theta = np.arctan2(res[1, :].flatten(), res[0, :].flatten())
@@ -698,7 +711,7 @@ def generate_torus_and_cycle_vertices(
     if group_cls is None:
         group_cls = SimplexElementGroup
 
-    def idx(i, j):
+    def idx(i: int, j: int) -> int:
         return i + j * (n_major + 1)
 
     if issubclass(group_cls, SimplexElementGroup):
@@ -893,7 +906,7 @@ def refine_mesh_and_get_urchin_warper(
     .. versionadded: 2018.1
     """
 
-    def sph_harm(m, n, pts):
+    def sph_harm(m: int, n: int, pts: np.ndarray) -> np.ndarray:
         assert abs(m) <= n
         x, y, z = pts
         r = np.sqrt(np.sum(pts**2, axis=0))
@@ -910,7 +923,7 @@ def refine_mesh_and_get_urchin_warper(
         # arguments swapped maintains the intended meaning.
         return sps.sph_harm(m, n, phi, theta)       # pylint: disable=no-member
 
-    def map_coords(pts):
+    def map_coords(pts: np.ndarray) -> np.ndarray:
         r = np.sqrt(np.sum(pts**2, axis=0))
 
         sph = sph_harm(m, n, pts).real
@@ -919,7 +932,7 @@ def refine_mesh_and_get_urchin_warper(
 
         return pts * new_rad / r
 
-    def warp_mesh(mesh, node_vertex_consistency_tolerance):
+    def warp_mesh(mesh: Mesh) -> Mesh:
         from dataclasses import replace
         groups = [
             replace(grp, nodes=map_coords(grp.nodes),
@@ -951,7 +964,7 @@ def refine_mesh_and_get_urchin_warper(
     from functools import partial
     unwarped_mesh = warp_and_refine_until_resolved(
                 refiner,
-                partial(warp_mesh, node_vertex_consistency_tolerance=False),
+                warp_mesh,
                 est_rel_interp_tolerance)
 
     return refiner, partial(
@@ -990,9 +1003,15 @@ def generate_urchin(
 # {{{ generate_box_mesh
 
 @deprecate_keyword("group_factory", "group_cls")
-def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
-        periodic=None, group_cls=None, boundary_tag_to_face=None,
-        mesh_type=None, unit_nodes=None) -> Mesh:
+def generate_box_mesh(
+        axis_coords: Tuple[np.ndarray, ...],
+        order: int = 1, *,
+        coord_dtype: Any = np.float64,
+        periodic: Optional[bool] = None,
+        group_cls: Optional[Type[MeshElementGroup]] = None,
+        boundary_tag_to_face: Optional[Dict[Any, str]] = None,
+        mesh_type: Optional[str] = None,
+        unit_nodes: Optional[np.ndarray] = None) -> Mesh:
     r"""Create a semi-structured mesh.
 
     :arg axis_coords: a tuple with a number of entries corresponding
@@ -1012,7 +1031,8 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
 
         For example::
 
-            boundary_tag_to_face={"bdry_1": ["+x", "+y"], "bdry_2": ["-x"]}
+            boundary_tag_to_face = {"bdry_1": ["+x", "+y"], "bdry_2": ["-x"]}
+
     :arg mesh_type: In two dimensions with non-tensor-product elements,
         *mesh_type* may be set to ``"X"`` to generate this type
         of mesh::
@@ -1340,15 +1360,18 @@ def generate_box_mesh(axis_coords, order=1, *, coord_dtype=np.float64,
 # {{{ generate_regular_rect_mesh
 
 @deprecate_keyword("group_factory", "group_cls")
-def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
-                               npoints_per_axis=None,
-                               periodic=None,
-                               order=1,
-                               boundary_tag_to_face=None,
-                               group_cls=None,
-                               mesh_type=None,
-                               n=None,
-                               ) -> Mesh:
+def generate_regular_rect_mesh(
+        a: Sequence[float] = (0, 0),
+        b: Sequence[float] = (1, 1), *,
+        nelements_per_axis: Optional[int] = None,
+        npoints_per_axis: Optional[int] = None,
+        periodic: Optional[bool] = None,
+        order: int = 1,
+        boundary_tag_to_face: Optional[Dict[Any, str]] = None,
+        group_cls: Optional[Type[MeshElementGroup]] = None,
+        mesh_type: Optional[str] = None,
+        n: Optional[int] = None,
+        ) -> Mesh:
     """Create a semi-structured rectangular mesh with equispaced elements.
 
     :arg a: the lower left hand point of the rectangle.
@@ -1413,8 +1436,12 @@ def generate_regular_rect_mesh(a=(0, 0), b=(1, 1), *, nelements_per_axis=None,
 
 # {{{ generate_warped_rect_mesh
 
-def generate_warped_rect_mesh(dim, order, *, nelements_side=None,
-        npoints_side=None, group_cls=None, n=None) -> Mesh:
+def generate_warped_rect_mesh(
+        dim: int, order: int, *,
+        nelements_side: Optional[int] = None,
+        npoints_side: Optional[int] = None,
+        group_cls: Optional[Type[MeshElementGroup]] = None,
+        n: Optional[int] = None) -> Mesh:
     """Generate a mesh of a warped square/cube. Mainly useful for testing
     functionality with curvilinear meshes.
     """
@@ -1444,7 +1471,7 @@ def generate_warped_rect_mesh(dim, order, *, nelements_side=None,
             a=(-0.5,)*dim, b=(0.5,)*dim,
             npoints_per_axis=npoints_per_axis, order=order, group_cls=group_cls)
 
-    def m(x):
+    def m(x: np.ndarray) -> np.ndarray:
         result = np.empty_like(x)
         if len(x) >= 2:
             result[0] = (
@@ -1469,7 +1496,8 @@ def generate_warped_rect_mesh(dim, order, *, nelements_side=None,
 # {{{ generate_annular_cylinder_slice_mesh
 
 def generate_annular_cylinder_slice_mesh(
-        n, center, inner_radius, outer_radius, periodic=False) -> Mesh:
+        n: int, center: np.ndarray, inner_radius: float, outer_radius: float,
+        periodic: bool = False) -> Mesh:
     r"""
     Generate a slice of a 3D annular cylinder for
     :math:`\theta \in [-\frac{\pi}{4}, \frac{\pi}{4}]`. Optionally periodic in
@@ -1488,7 +1516,7 @@ def generate_annular_cylinder_slice_mesh(
             "+z": ["+z"],
             })
 
-    def transform(x):
+    def transform(x: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         r = inner_radius*(1 - x[0]) + outer_radius*x[0]
         theta = -np.pi/4*(1 - x[1]) + np.pi/4*x[1]
         z = -0.5*(1 - x[2]) + 0.5*x[2]
@@ -1524,7 +1552,9 @@ def generate_annular_cylinder_slice_mesh(
 
 @log_process(logger)
 def warp_and_refine_until_resolved(
-        unwarped_mesh_or_refiner, warp_callable, est_rel_interp_tolerance) -> Mesh:
+        unwarped_mesh_or_refiner: Union[Mesh, Refiner],
+        warp_callable: Callable[[Mesh], Mesh],
+        est_rel_interp_tolerance: float) -> Mesh:
     """Given an original ("unwarped") :class:`meshmode.mesh.Mesh` and a
     warping function *warp_callable* that takes and returns a mesh and a
     tolerance to which the mesh should be resolved by the mapping polynomials,
@@ -1544,9 +1574,12 @@ def warp_and_refine_until_resolved(
     if isinstance(unwarped_mesh_or_refiner, RefinerWithoutAdjacency):
         refiner = unwarped_mesh_or_refiner
         unwarped_mesh = refiner.get_current_mesh()
-    else:
+    elif isinstance(unwarped_mesh_or_refiner, Mesh):
         unwarped_mesh = unwarped_mesh_or_refiner
         refiner = RefinerWithoutAdjacency(unwarped_mesh)
+    else:
+        raise TypeError(
+            f"unsupported type: '{type(unwarped_mesh_or_refiner).__name__}'")
 
     iteration = 0
 
