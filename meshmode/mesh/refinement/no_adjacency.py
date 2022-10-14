@@ -26,11 +26,13 @@ THE SOFTWARE.
 
 import numpy as np
 
+from meshmode.mesh.refinement.utils import Refiner
+
 import logging
 logger = logging.getLogger(__name__)
 
 
-class RefinerWithoutAdjacency:
+class RefinerWithoutAdjacency(Refiner):
     """A refiner that may be applied to non-conforming
     :class:`meshmode.mesh.Mesh` instances. It does not generate adjacency
     information.

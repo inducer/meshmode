@@ -20,17 +20,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from meshmode.mesh.refinement.utils import Refiner
 from meshmode.mesh.refinement.no_adjacency import RefinerWithoutAdjacency
 
 import logging
 logger = logging.getLogger(__name__)
 
 __doc__ = """
+.. autoclass:: Refiner
 .. autoclass :: RefinerWithoutAdjacency
 .. autofunction :: refine_uniformly
 """
 
 __all__ = [
+    "Refiner",
     "RefinerWithoutAdjacency", "refine_uniformly"
 ]
 

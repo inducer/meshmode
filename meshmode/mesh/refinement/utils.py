@@ -1,3 +1,5 @@
+# mypy: disallow-untyped-defs
+
 __copyright__ = "Copyright (C) 2014-6 Shivam Gupta, Andreas Kloeckner"
 
 __license__ = """
@@ -20,17 +22,54 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from abc import ABC, abstractmethod
 from functools import singledispatch
+from typing import Optional
 
 import numpy as np
 
 from meshmode.mesh import (
+        Mesh,
         MeshElementGroup,
         SimplexElementGroup,
         TensorProductElementGroup)
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+# {{{ base class
+
+class Refiner(ABC):
+    """An abstract refiner class for :class:`meshmode.mesh.Mesh`.
+
+    .. automethod:: __init__
+    .. automethod:: get_current_mesh
+    .. automethod:: get_previous_mesh
+
+    .. automethod:: refine_uniformly
+    .. automethod:: refine
+    """
+
+    def __init__(self, mesh: Mesh) -> None:
+        self._current_mesh = mesh
+        self._previous_mesh = None
+
+    def get_current_mesh(self) -> Mesh:
+        return self._current_mesh
+
+    def get_previous_mesh(self) -> Optional[Mesh]:
+        return self._previous_mesh
+
+    def refine_uniformly(self):
+        flags = np.ones(self._current_mesh.nelements, dtype=bool)
+        return self.refine(flags)
+
+    @abstractmethod
+    def refine(self, refine_flags: np.ndarray) -> Mesh:
+        pass
+
+# }}}
 
 
 # {{{ map child unit nodes
