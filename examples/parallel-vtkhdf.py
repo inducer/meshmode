@@ -1,5 +1,6 @@
 import logging
 import numpy as np
+
 from meshmode.mesh import Mesh
 
 logger = logging.getLogger(__file__)
@@ -65,7 +66,7 @@ def main(*, ambient_dim: int) -> None:
 
     vector_field = actx.thaw(discr.nodes())
     scalar_field = actx.np.sin(vector_field[0])
-    part_id = 1 + mpirank + discr.zeros(actx)
+    part_id = 1.0 + mpirank + discr.zeros(actx)     # type: ignore[operator]
     logger.info("[%4d] fields: finished", mpirank)
 
     from meshmode.discretization.visualization import make_visualizer

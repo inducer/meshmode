@@ -20,6 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from typing import Optional, Type
+
 import numpy as np
 import pyopencl as cl
 
@@ -102,7 +104,7 @@ def advance(actx, dt, t, x, fn):
 
 def run(actx, *,
         ambient_dim: int = 3,
-        resolution: int = None,
+        resolution: Optional[int] = None,
         target_order: int = 4,
         tmax: float = 1.0,
         timestep: float = 1.0e-2,
@@ -125,7 +127,8 @@ def run(actx, *,
     # a bit of work when reconstructing after a time step
 
     if group_factory_name == "warp_and_blend":
-        group_factory_cls = poly.PolynomialWarpAndBlend2DRestrictingGroupFactory
+        group_factory_cls: Type[poly.HomogeneousOrderBasedGroupFactory] = (
+            poly.PolynomialWarpAndBlend2DRestrictingGroupFactory)
 
         unit_nodes = mp.warp_and_blend_nodes(ambient_dim - 1, mesh_order)
     elif group_factory_name == "quadrature":
