@@ -1,3 +1,5 @@
+# mypy: disallow-untyped-defs
+
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
 __license__ = """
@@ -21,8 +23,9 @@ THE SOFTWARE.
 """
 
 from functools import reduce
-from numbers import Real
-from typing import Optional, Union, Tuple, Mapping, List, Set, Sequence
+from typing import (
+    Callable, Dict, Optional, Union, Tuple, Mapping, List, Set, Sequence,
+    )
 
 from dataclasses import dataclass
 
@@ -42,6 +45,7 @@ from meshmode.mesh import (
     InterPartAdjacencyGroup
 )
 
+from meshmode.mesh import _FaceIDs
 from meshmode.mesh.tools import AffineMap
 
 
@@ -65,7 +69,9 @@ __doc__ = """
 """
 
 
-def find_group_indices(groups, meshwide_elems):
+def find_group_indices(
+        groups: List[MeshElementGroup],
+        meshwide_elems: np.ndarray) -> np.ndarray:
     """
     :arg groups: A list of :class:`~meshmode.mesh.MeshElementGroup` instances
         that contain *meshwide_elems*.
@@ -188,7 +194,7 @@ def _get_connected_parts(
         mesh: Mesh,
         part_id_to_part_index: Mapping[PartID, int],
         global_elem_to_part_elem: np.ndarray,
-        self_part_id: PartID) -> "Set[PartID]":
+        self_part_id: PartID) -> Set[PartID]:
     """
     Find the parts that are connected to the current part.
 
@@ -527,7 +533,7 @@ def _get_mesh_part(
 def partition_mesh(
         mesh: Mesh,
         part_id_to_elements: Mapping[PartID, np.ndarray],
-        return_parts: Optional[Sequence[PartID]] = None) -> "Mapping[PartID, Mesh]":
+        return_parts: Optional[Sequence[PartID]] = None) -> Mapping[PartID, Mesh]:
     """
     :arg mesh: A :class:`~meshmode.mesh.Mesh` to be partitioned.
     :arg part_id_to_elements: A :class:`dict` mapping a part identifier to
@@ -551,10 +557,13 @@ def partition_mesh(
 
 # {{{ orientations
 
-def find_volume_mesh_element_group_orientation(vertices, grp):
-    """Return a positive floating point number for each positively
-    oriented element, and a negative floating point number for
-    each negatively oriented element.
+def find_volume_mesh_element_group_orientation(
+        vertices: np.ndarray,
+        grp: MeshElementGroup) -> np.ndarray:
+    """
+    :returns: a positive floating point number for each positively
+        oriented element, and a negative floating point number for
+        each negatively oriented element.
     """
 
     from meshmode.mesh import SimplexElementGroup
@@ -601,7 +610,9 @@ def find_volume_mesh_element_group_orientation(vertices, grp):
     return (outer_prod.I | outer_prod).as_scalar()
 
 
-def find_volume_mesh_element_orientations(mesh, tolerate_unimplemented_checks=False):
+def find_volume_mesh_element_orientations(
+        mesh: Mesh, *,
+        tolerate_unimplemented_checks: bool = False) -> np.ndarray:
     """Return a positive floating point number for each positively
     oriented element, and a negative floating point number for
     each negatively oriented element.
@@ -635,13 +646,12 @@ def find_volume_mesh_element_orientations(mesh, tolerate_unimplemented_checks=Fa
     return result
 
 
-def test_volume_mesh_element_orientations(mesh):
+def test_volume_mesh_element_orientations(mesh: Mesh) -> bool:
     area_elements = find_volume_mesh_element_orientations(
             mesh, tolerate_unimplemented_checks=True)
-
     valid = ~np.isnan(area_elements)
 
-    return (area_elements[valid] > 0).all()
+    return bool(np.all(area_elements[valid] > 0))
 
 # }}}
 
@@ -649,7 +659,10 @@ def test_volume_mesh_element_orientations(mesh):
 # {{{ flips
 
 
-def get_simplex_element_flip_matrix(order, unit_nodes, permutation=None):
+def get_simplex_element_flip_matrix(
+        order: int,
+        unit_nodes: np.ndarray,
+        permutation: Optional[Tuple[int, ...]] = None) -> np.ndarray:
     """
     Generate a resampling matrix that corresponds to a
     permutation of the barycentric coordinates being applied.
@@ -701,7 +714,10 @@ def get_simplex_element_flip_matrix(order, unit_nodes, permutation=None):
     return flip_matrix
 
 
-def flip_simplex_element_group(vertices, grp, grp_flip_flags):
+def flip_simplex_element_group(
+        vertices: np.ndarray,
+        grp: MeshElementGroup,
+        grp_flip_flags: np.ndarray) -> MeshElementGroup:
     from meshmode.mesh import SimplexElementGroup
 
     if not isinstance(grp, SimplexElementGroup):
@@ -728,7 +744,10 @@ def flip_simplex_element_group(vertices, grp, grp_flip_flags):
             unit_nodes=grp.unit_nodes)
 
 
-def perform_flips(mesh, flip_flags, skip_tests=False):
+def perform_flips(
+        mesh: Mesh,
+        flip_flags: np.ndarray,
+        skip_tests: bool = False) -> Mesh:
     """
     :arg flip_flags: A :class:`numpy.ndarray` with
         :attr:`meshmode.mesh.Mesh.nelements` entries
@@ -761,7 +780,7 @@ def perform_flips(mesh, flip_flags, skip_tests=False):
 
 # {{{ bounding box
 
-def find_bounding_box(mesh):
+def find_bounding_box(mesh: Mesh) -> Tuple[np.ndarray, np.ndarray]:
     """
     :return: a tuple *(min, max)*, each consisting of a :class:`numpy.ndarray`
         indicating the minimal and maximal extent of the geometry along each axis.
@@ -777,7 +796,10 @@ def find_bounding_box(mesh):
 
 # {{{ merging
 
-def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
+def merge_disjoint_meshes(
+        meshes: Sequence[Mesh], *,
+        skip_tests: bool = False,
+        single_group: bool = False) -> Mesh:
     if not meshes:
         raise ValueError("must pass at least one mesh")
 
@@ -887,7 +909,11 @@ def merge_disjoint_meshes(meshes, skip_tests=False, single_group=False):
 
 # {{{ split meshes
 
-def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
+def split_mesh_groups(
+        mesh: Mesh,
+        element_flags: np.ndarray,
+        return_subgroup_mapping: bool = False,
+        ) -> Union[Mesh, Tuple[Mesh, Dict[Tuple[int, int], int]]]:
     """Split all the groups in *mesh* according to the values of
     *element_flags*. The element flags are expected to be integers
     defining, for each group, how the elements are to be split into
@@ -948,8 +974,12 @@ def split_mesh_groups(mesh, element_flags, return_subgroup_mapping=False):
 # {{{ vertex matching
 
 def _match_vertices(
-        mesh, src_vertex_indices, tgt_vertex_indices, *, aff_map=None, tol=1e-12,
-        use_tree=None):
+        mesh: Mesh,
+        src_vertex_indices: np.ndarray,
+        tgt_vertex_indices: np.ndarray, *,
+        aff_map: Optional[AffineMap] = None,
+        tol: float = 1e-12,
+        use_tree: Optional[bool] = None) -> np.ndarray:
     if aff_map is None:
         aff_map = AffineMap()
 
@@ -1041,8 +1071,7 @@ class BoundaryPairMapping:
     aff_map: AffineMap
 
 
-def _get_boundary_face_ids(mesh, btag):
-    from meshmode.mesh import _FaceIDs
+def _get_boundary_face_ids(mesh: Mesh, btag: int) -> _FaceIDs:
     face_ids_per_boundary_group = []
     for igrp, fagrp_list in enumerate(mesh.facial_adjacency_groups):
         matching_bdry_grps = [
@@ -1060,7 +1089,7 @@ def _get_boundary_face_ids(mesh, btag):
     return _concatenate_face_ids(face_ids_per_boundary_group)
 
 
-def _get_face_vertex_indices(mesh, face_ids):
+def _get_face_vertex_indices(mesh: Mesh, face_ids: _FaceIDs) -> np.ndarray:
     max_face_vertices = max(
         len(ref_fvi)
         for grp in mesh.groups
@@ -1083,7 +1112,9 @@ def _get_face_vertex_indices(mesh, face_ids):
     return np.stack(face_vertex_indices_per_group)
 
 
-def _match_boundary_faces(mesh, bdry_pair_mapping, tol, *, use_tree=None):
+def _match_boundary_faces(
+        mesh: Mesh, bdry_pair_mapping: BoundaryPairMapping, tol: float, *,
+        use_tree: Optional[bool] = None) -> Tuple[_FaceIDs, _FaceIDs]:
     """
     Given a :class:`BoundaryPairMapping` *bdry_pair_mapping*, return the
     correspondence between faces of the two boundaries (expressed as a pair of
@@ -1161,7 +1192,6 @@ def _match_boundary_faces(mesh, bdry_pair_mapping, tol, *, use_tree=None):
     # Since the first boundary's faces come before the second boundary's in
     # face_ids, the first boundary's faces should all be in the first row of the
     # result of _match_faces_by_vertices
-    from meshmode.mesh import _FaceIDs
     return (
         _FaceIDs(
             groups=face_ids.groups[face_index_pairs[0, :]],
@@ -1177,7 +1207,10 @@ def _match_boundary_faces(mesh, bdry_pair_mapping, tol, *, use_tree=None):
 
 # {{{ boundary gluing
 
-def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols, *, use_tree=None):
+def glue_mesh_boundaries(
+        mesh: Mesh,
+        bdry_pair_mappings_and_tols: List[Tuple[BoundaryPairMapping, float]], *,
+        use_tree: Optional[bool] = None) -> Mesh:
     """
     Create a new mesh from *mesh* in which one or more pairs of boundaries are
     "glued" together such that the boundary surfaces become part of the interior
@@ -1278,7 +1311,7 @@ def glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols, *, use_tree=None):
 
 # {{{ map
 
-def map_mesh(mesh, f):  # noqa
+def map_mesh(mesh: Mesh, f: Callable[[np.ndarray], np.ndarray]) -> Mesh:
     """Apply the map *f* to the mesh. *f* needs to accept and return arrays of
     shape ``(ambient_dim, npoints)``."""
 
@@ -1323,7 +1356,8 @@ def map_mesh(mesh, f):  # noqa
 
 # {{{ affine map
 
-def affine_map(mesh,
+def affine_map(
+        mesh: Mesh,
         A: Optional[Union[np.generic, np.ndarray]] = None,    # noqa: N803
         b: Optional[Union[np.generic, np.ndarray]] = None):
     """Apply the affine map :math:`f(x) = A x + b` to the geometry of *mesh*."""
@@ -1412,7 +1446,8 @@ def affine_map(mesh,
             is_conforming=mesh.is_conforming)
 
 
-def _get_rotation_matrix_from_angle_and_axis(theta, axis):
+def _get_rotation_matrix_from_angle_and_axis(
+        theta: float, axis: np.ndarray) -> np.ndarray:
     # https://en.wikipedia.org/wiki/Rotation_matrix#Rotation_matrix_from_axis_and_angle
     cos_t = np.cos(theta)
     sin_t = np.sin(theta)
@@ -1433,9 +1468,10 @@ def _get_rotation_matrix_from_angle_and_axis(theta, axis):
         ]])
 
 
-def rotate_mesh_around_axis(mesh, *,
-        theta: Real,
-        axis: Optional[np.ndarray] = None):
+def rotate_mesh_around_axis(
+        mesh: Mesh, *,
+        theta: float,
+        axis: Optional[np.ndarray] = None) -> Mesh:
     """Rotate the mesh by *theta* radians around the axis *axis*.
 
     :arg axis: a (not necessarily unit) vector. By default, the rotation is
