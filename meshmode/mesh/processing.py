@@ -726,11 +726,14 @@ def flip_simplex_element_group(
 
     # Swap the first two vertices on elements to be flipped.
 
-    new_vertex_indices = grp.vertex_indices.copy()
-    new_vertex_indices[grp_flip_flags, 0] \
-            = grp.vertex_indices[grp_flip_flags, 1]
-    new_vertex_indices[grp_flip_flags, 1] \
-            = grp.vertex_indices[grp_flip_flags, 0]
+    if grp.vertex_indices is not None:
+        new_vertex_indices = grp.vertex_indices.copy()
+        new_vertex_indices[grp_flip_flags, 0] \
+                = grp.vertex_indices[grp_flip_flags, 1]
+        new_vertex_indices[grp_flip_flags, 1] \
+                = grp.vertex_indices[grp_flip_flags, 0]
+    else:
+        new_vertex_indices = None
 
     # Apply the flip matrix to the nodes.
     flip_matrix = get_simplex_element_flip_matrix(grp.order, grp.unit_nodes)
@@ -739,9 +742,8 @@ def flip_simplex_element_group(
             "ij,dej->dei",
             flip_matrix, grp.nodes[:, grp_flip_flags])
 
-    return SimplexElementGroup.make_group(
-            grp.order, new_vertex_indices, new_nodes,
-            unit_nodes=grp.unit_nodes)
+    from dataclasses import replace
+    return replace(grp, vertex_indices=new_vertex_indices, nodes=new_nodes)
 
 
 def perform_flips(
@@ -835,60 +837,46 @@ def merge_disjoint_meshes(
     # {{{ assemble new groups list
 
     nodal_adjacency = None
+    if any(mesh._nodal_adjacency is not None for mesh in meshes):
+        nodal_adjacency = False
+
     facial_adjacency_groups = None
+    if any(mesh._facial_adjacency_groups is not None for mesh in meshes):
+        facial_adjacency_groups = False
 
+    from dataclasses import replace
     if single_group:
-        grp_cls = None
-        order = None
-        unit_nodes = None
-        nodal_adjacency = None
-        facial_adjacency_groups = None
+        from pytools import single_valued
+        ref_group = single_valued(
+            [group for mesh in meshes for group in mesh.groups],
+            lambda x, y: (
+                type(x) == type(y)
+                and x.order == y.order
+                and np.array_equal(x.unit_nodes, y.unit_nodes)
+                ))
 
-        for mesh in meshes:
-            if mesh._nodal_adjacency is not None:
-                nodal_adjacency = False
-            if mesh._facial_adjacency_groups is not None:
-                facial_adjacency_groups = False
-
+        group_vertex_indices = []
+        group_nodes = []
+        for mesh, vert_base in zip(meshes, vert_bases):
             for group in mesh.groups:
-                if grp_cls is None:
-                    grp_cls = type(group)
-                    order = group.order
-                    unit_nodes = group.unit_nodes
-                else:
-                    assert type(group) == grp_cls
-                    assert group.order == order
-                    assert np.array_equal(unit_nodes, group.unit_nodes)
+                assert group.vertex_indices is not None
+                group_vertex_indices.append(group.vertex_indices + vert_base)
+                group_nodes.append(group.nodes)
 
-        vertex_indices = np.vstack([
-            group.vertex_indices + vert_base
-            for mesh, vert_base in zip(meshes, vert_bases)
-            for group in mesh.groups])
-        nodes = np.hstack([
-            group.nodes
-            for mesh in meshes
-            for group in mesh.groups])
+        vertex_indices = np.vstack(group_vertex_indices)
+        nodes = np.hstack(group_nodes)
 
         if not nodes.flags.c_contiguous:
             # hstack stopped producing C-contiguous arrays in numpy 1.14
             nodes = nodes.copy(order="C")
 
-        new_groups = [
-                grp_cls(order, vertex_indices, nodes, unit_nodes=unit_nodes)]
+        new_groups = [replace(ref_group, vertex_indices=vertex_indices, nodes=nodes)]
 
     else:
         new_groups = []
-        nodal_adjacency = None
-        facial_adjacency_groups = None
-
         for mesh, vert_base in zip(meshes, vert_bases):
-            if mesh._nodal_adjacency is not None:
-                nodal_adjacency = False
-            if mesh._facial_adjacency_groups is not None:
-                facial_adjacency_groups = False
-
-            from dataclasses import replace
             for group in mesh.groups:
+                assert group.vertex_indices is not None
                 new_vertex_indices = group.vertex_indices + vert_base
                 new_group = replace(group, vertex_indices=new_vertex_indices,
                                     element_nr_base=None, node_nr_base=None)
@@ -897,12 +885,12 @@ def merge_disjoint_meshes(
 
     # }}}
 
-    return Mesh(vertices, new_groups, skip_tests=skip_tests,
+    return Mesh(
+            vertices, new_groups,
+            skip_tests=skip_tests,
             nodal_adjacency=nodal_adjacency,
             facial_adjacency_groups=facial_adjacency_groups,
-            is_conforming=all(
-                mesh.is_conforming
-                for mesh in meshes))
+            is_conforming=all(mesh.is_conforming for mesh in meshes))
 
 # }}}
 
@@ -937,13 +925,14 @@ def split_mesh_groups(
     """
     assert element_flags.shape == (mesh.nelements,)
 
-    new_groups = []
+    new_groups: List[MeshElementGroup] = []
     subgroup_to_group_map = {}
 
     from dataclasses import replace
     for igrp, (base_element_nr, grp) in enumerate(
             zip(mesh.base_element_nrs, mesh.groups)
             ):
+        assert grp.vertex_indices is not None
         grp_flags = element_flags[base_element_nr:base_element_nr + grp.nelements]
         unique_grp_flags = np.unique(grp_flags)
 
@@ -1097,16 +1086,20 @@ def _get_face_vertex_indices(mesh: Mesh, face_ids: _FaceIDs) -> np.ndarray:
 
     face_vertex_indices_per_group = []
     for igrp, grp in enumerate(mesh.groups):
+        assert grp.vertex_indices is not None
+
         belongs_to_group = face_ids.groups == igrp
         faces = face_ids.faces[belongs_to_group]
         elements = face_ids.elements[belongs_to_group]
         face_vertex_indices = np.full(
             (len(faces), max_face_vertices), -1,
             dtype=mesh.vertex_id_dtype)
+
         for fid, ref_fvi in enumerate(grp.face_vertex_indices()):
             is_face = faces == fid
             face_vertex_indices[is_face, :len(ref_fvi)] = (
                 grp.vertex_indices[elements[is_face], :][:, ref_fvi])
+
         face_vertex_indices_per_group.append(face_vertex_indices)
 
     return np.stack(face_vertex_indices_per_group)
@@ -1178,9 +1171,12 @@ def _match_boundary_faces(
     from meshmode.mesh import _concatenate_face_ids
     face_ids = _concatenate_face_ids([bdry_m_face_ids, bdry_n_face_ids])
 
-    max_vertex_index = max([np.max(grp.vertex_indices) for grp in mesh.groups])
-    vertex_index_map, = np.indices((max_vertex_index+1,),
-        dtype=mesh.element_id_dtype)
+    max_vertex_index = 0
+    for grp in mesh.groups:
+        assert grp.vertex_indices is not None
+        max_vertex_index = max(max_vertex_index, np.max(grp.vertex_indices))
+    vertex_index_map, = np.indices(
+        (max_vertex_index + 1,), dtype=mesh.element_id_dtype)
     vertex_index_map[bdry_m_vertex_indices] = matched_bdry_n_vertex_indices
 
     from meshmode.mesh import _match_faces_by_vertices
@@ -1231,6 +1227,10 @@ def glue_mesh_boundaries(
     :arg use_tree: Optional argument indicating whether to use a spatial binary
         search tree or a (quadratic) numpy algorithm when matching vertices.
     """
+    if any(grp.vertex_indices is None for grp in mesh.groups):
+        raise ValueError(
+            "gluing mesh boundaries requires 'vertex_indices' in all groups")
+
     glued_btags = {
         btag
         for mapping, _ in bdry_pair_mappings_and_tols
@@ -1244,10 +1244,12 @@ def glue_mesh_boundaries(
             btag_pair = (mapping.from_btag, mapping.to_btag)
         else:
             btag_pair = (mapping.to_btag, mapping.from_btag)
+
         if btag_pair in glued_btag_pairs:
             raise ValueError(
                 "multiple mappings detected for boundaries "
                 f"{btag_pair[0]} and {btag_pair[1]}.")
+
         glued_btag_pairs.add(btag_pair)
 
     face_id_pairs_for_mapping = [
@@ -1317,11 +1319,10 @@ def map_mesh(mesh: Mesh, f: Callable[[np.ndarray], np.ndarray]) -> Mesh:
 
     if mesh._facial_adjacency_groups is not None:
         has_adj_maps = any([
-            hasattr(fagrp, "aff_map")
-            and (fagrp.aff_map.matrix is not None
-                or fagrp.aff_map.offset is not None)
+            fagrp.aff_map.matrix is not None or fagrp.aff_map.offset is not None
             for fagrp_list in mesh.facial_adjacency_groups
-            for fagrp in fagrp_list])
+            for fagrp in fagrp_list if hasattr(fagrp, "aff_map")
+            ])
         if has_adj_maps:
             raise ValueError("cannot apply a general map to a mesh that has "
                 "affine mappings in its facial adjacency. If the map is affine, "
@@ -1359,7 +1360,7 @@ def map_mesh(mesh: Mesh, f: Callable[[np.ndarray], np.ndarray]) -> Mesh:
 def affine_map(
         mesh: Mesh,
         A: Optional[Union[np.generic, np.ndarray]] = None,    # noqa: N803
-        b: Optional[Union[np.generic, np.ndarray]] = None):
+        b: Optional[Union[np.generic, np.ndarray]] = None) -> Mesh:
     """Apply the affine map :math:`f(x) = A x + b` to the geometry of *mesh*."""
 
     if A is not None and not isinstance(A, np.ndarray):
@@ -1407,11 +1408,12 @@ def affine_map(
         # where:
         # G' = G
         # h' = Ah + (I - G)b
-        def compute_new_map(old_map):
+        def compute_new_map(old_map: AffineMap) -> AffineMap:
             if old_map.matrix is not None:
                 matrix = old_map.matrix.copy()
             else:
                 matrix = None
+
             if old_map.offset is not None:
                 if A is not None:
                     offset = A @ old_map.offset
@@ -1421,6 +1423,7 @@ def affine_map(
                     offset += b - matrix @ b
             else:
                 offset = None
+
             return AffineMap(matrix, offset)
 
         from dataclasses import replace
@@ -1429,10 +1432,11 @@ def affine_map(
             fagrp_list = []
             for old_fagrp in old_fagrp_list:
                 if hasattr(old_fagrp, "aff_map"):
-                    aff_map = compute_new_map(old_fagrp.aff_map)
-                    fagrp_list.append(replace(old_fagrp, aff_map=aff_map))
+                    new_fields = {"aff_map": compute_new_map(old_fagrp.aff_map)}
                 else:
-                    fagrp_list.append(replace(old_fagrp))
+                    new_fields = {}
+
+                fagrp_list.append(replace(old_fagrp, **new_fields))
             facial_adjacency_groups.append(fagrp_list)
 
     else:
