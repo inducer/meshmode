@@ -47,13 +47,16 @@ Curve parametrizations
 .. autofunction:: circle
 .. autofunction:: ellipse
 .. autofunction:: cloverleaf
-.. data :: starfish
 .. autofunction:: drop
 .. autofunction:: n_gon
 .. autofunction:: qbx_peanut
+.. autofunction:: dumbbell
+.. autofunction:: wobbly_dumbbell
 .. autofunction:: apple
 .. autoclass:: WobblyCircle
 .. autoclass:: NArmedStarfish
+.. data:: starfish3
+.. data:: starfish5
 
 Surfaces
 --------
@@ -171,12 +174,38 @@ def qbx_peanut(t: np.ndarray):
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
     """
-    ilength = 2*np.pi
-    t = t*ilength
+    t = 2.0 * np.pi * t
 
+    r = (1.0 + 0.3 * np.sin(2 * t))
     return np.vstack([
-        0.75 * np.cos(t-0.25*np.pi) * (1+0.3*np.sin(2*t)),
-        np.sin(t-0.25*np.pi) * (1+0.3*np.sin(2*t))
+        3 / 4 * r * np.cos(t - np.pi / 4),
+        r * np.sin(t - np.pi / 4),
+        ])
+
+
+def dumbbell(gamma: float, beta: float, t: np.ndarray):
+    """
+    :arg t: the parametrization, runs from :math:`[0, 1]`.
+    :return: an array of shape ``(2, t.size)``.
+    """
+    return wobbly_dumbbell(gamma, beta, 1, 0, t)
+
+
+def wobbly_dumbbell(
+        gamma: float, beta: float, p: int, wavenumber: int,
+        t: np.ndarray):
+    """
+    :arg t: the parametrization, runs from :math:`[0, 1]`.
+    :return: an array of shape ``(2, t.size)``.
+    """
+    t = 2.0 * np.pi * t
+    r = (
+        gamma * (1 + beta / (1 - beta) * np.cos(t) ** 2) ** (1 / p)
+        + 0.02 * np.sin(wavenumber * t) ** 2)
+
+    return np.stack([
+        np.cos(t),
+        r * np.sin(t),
         ])
 
 
@@ -204,8 +233,9 @@ class WobblyCircle:
     .. automethod:: random
     .. automethod:: __call__
     """
-    def __init__(self, coeffs: np.ndarray):
+    def __init__(self, coeffs: np.ndarray, phase: float = 0.0) -> None:
         self.coeffs = coeffs
+        self.phase = phase
 
     @staticmethod
     def random(ncoeffs: int, seed: int):
@@ -227,7 +257,7 @@ class WobblyCircle:
 
         wave = 1
         for i, coeff in enumerate(self.coeffs):
-            wave = wave + coeff*np.sin((i+1)*t)
+            wave = wave + coeff*np.sin((i+1)*t + self.phase)
 
         return np.vstack([
             np.cos(t)*wave,
@@ -240,13 +270,16 @@ class NArmedStarfish(WobblyCircle):
 
     .. automethod:: __call__
     """
-    def __init__(self, n_arms: int, amplitude: float):
+    def __init__(self, n_arms: int, amplitude: float, phase: float = 0.0) -> None:
         coeffs = np.zeros(n_arms)
         coeffs[-1] = amplitude
-        super().__init__(coeffs)
+        super().__init__(coeffs, phase=phase)
 
 
-starfish = NArmedStarfish(5, 0.25)
+starfish3 = NArmedStarfish(3, 1 / 2, phase=np.pi / 2)
+starfish5 = NArmedStarfish(5, 0.25)
+
+starfish = starfish5
 
 # }}}
 

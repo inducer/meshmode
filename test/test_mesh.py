@@ -1413,6 +1413,69 @@ def test_glued_mesh_offset_only():
 # }}}
 
 
+# {{{ test_mesh_grid
+
+@pytest.mark.parametrize("mesh_name", ["starfish3", "dumbbell", "torus"])
+@pytest.mark.parametrize("has_offset", [True, False])
+def test_mesh_grid(actx_factory, mesh_name, has_offset, visualize=False):
+
+    target_order = 4
+    if mesh_name == "starfish3":
+        nelements = 128
+        mesh = mgen.make_curve_mesh(
+            mgen.starfish3,
+            np.linspace(0.0, 1.0, nelements + 1),
+            order=target_order,
+            )
+        offset = (np.array([5, 0]), np.array([2.5, 3.0]))
+    elif mesh_name == "dumbbell":
+        nelements = 512
+        mesh = mgen.make_curve_mesh(
+            partial(mgen.wobbly_dumbbell, 0.01, 0.99, 1, 100),
+            np.linspace(0.0, 1.0, nelements + 1),
+            order=target_order,
+            )
+        offset = (np.array([3, 0]), np.array([0, 1]))
+    elif mesh_name == "torus":
+        mesh = mgen.generate_torus(2.0, 1.0, order=target_order)
+        offset = (np.array([6.5, 0, 0]), np.array([0, 6.5, 0]), np.array([0, 0, 3]))
+    else:
+        raise ValueError(f"unknown mesh name: '{mesh_name}'")
+
+    from meshmode.mesh.processing import make_mesh_grid
+    shape = (6, 3, 2)[:mesh.ambient_dim]
+    mgrid = make_mesh_grid(
+        mesh,
+        shape=shape,
+        offset=offset if has_offset else None,
+        skip_tests=False
+        )
+
+    from pytools import product
+    m = len(mgrid.groups)
+    assert m == product(shape)
+
+    def separated(x, y):
+        return np.all(
+            np.linalg.norm(x[:, :, None] - y[:, None, :], axis=0) > 0.1
+            )
+
+    assert all([
+        separated(mgrid.groups[i].nodes, mgrid.groups[j].nodes)
+        for i, j in zip(range(m), range(m)) if i != j])
+
+    if not visualize:
+        return
+
+    from meshmode.mesh.visualization import vtk_visualize_mesh
+    actx = actx_factory()
+    vtk_visualize_mesh(actx, mgrid,
+            f"mesh_grid_{mesh_name}_{has_offset}.vtu".lower(),
+            vtk_high_order=False, overwrite=True)
+
+# }}}
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
