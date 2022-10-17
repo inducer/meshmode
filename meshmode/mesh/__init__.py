@@ -1347,24 +1347,44 @@ def _concatenate_face_ids(face_ids_list):
 
 def _find_matching_index_pairs_merged(indices):
     """
-    Return an array of dimension ``(2, nmatches)`` containing pairs of indices into
-    *indices* representing entries that are the same.
+    Return an array containing pairs of indices into *indices* representing entries
+    that are the same.
+
+    Given an array *indices* of shape ``(N, nindices)`` containing integer-valued
+    N-tuples, returns an array of shape ``(2, nmatches)`` containing pairs of
+    indices into the second dimension of *indices* representing tuples that are
+    equal.
+
+    Returned matches are ordered such that the second element of the pair occurs
+    after the first in *indices*.
     """
     order = np.lexsort(indices)
     diffs = np.diff(indices[:, order], axis=1)
     match_indices, = (~np.any(diffs, axis=0)).nonzero()
+    # lexsort is stable, so the second entry in each match comes after the first
+    # in indices
     return np.stack((order[match_indices], order[match_indices+1]))
 
 
 def _find_matching_index_pairs(left_indices, right_indices):
     """
-    Return an array of dimension ``(2, nmatches)`` containing pairs of indices into
-    *left_indices* (row 0) and *right_indices* (row 1) representing entries that
-    are the same.
+    Return an array containing pairs of indices into *left_indices* and
+    *right_indices* representing entries that are the same.
+
+    Given an array *left_indices* of shape ``(N, nindices_left)`` and an array
+    *right_indices* of shape ``(N, nindices_right)`` containing integer-valued
+    N-tuples, returns an array of shape ``(2, nmatches)`` containing pairs of
+    indices into the second dimension of *left_indices* (first pair element) and
+    *right_indices* (second pair element) representing tuples that are equal.
     """
-    index_pairs = _find_matching_index_pairs_merged(
-        np.concatenate((left_indices, right_indices), axis=1))
+    all_indices = np.concatenate((left_indices, right_indices), axis=1)
+    index_pairs = _find_matching_index_pairs_merged(all_indices)
+
+    # Indices into left_indices are the same as indices into all_indices, but need
+    # a conversion for right_indices
     index_pairs[1, :] -= left_indices.shape[1]
+    assert index_pairs[1, :] >= 0  # Sanity check
+
     return index_pairs
 
 
