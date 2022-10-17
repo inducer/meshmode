@@ -1534,20 +1534,20 @@ def _compute_facial_adjacency_from_vertices(
             is_tagged = np.full(len(bdry_elements), False)
 
             for tag, tagged_elements_and_faces in tag_to_group_faces[igrp].items():
-                face_index_pairs = _find_matching_index_pairs(
+                tagged_and_bdry_face_index_pairs = _find_matching_index_pairs(
                     tagged_elements_and_faces.T,
                     np.stack((bdry_elements, bdry_element_faces)))
-                face_indices = face_index_pairs[1, :]
-                if len(face_indices) > 0:
-                    elements = bdry_elements[face_indices]
-                    element_faces = bdry_element_faces[face_indices]
+                bdry_face_indices = tagged_and_bdry_face_index_pairs[1, :]
+                if len(bdry_face_indices) > 0:
+                    elements = bdry_elements[bdry_face_indices]
+                    element_faces = bdry_element_faces[bdry_face_indices]
                     grp_list.append(
                         BoundaryAdjacencyGroup(
                             igroup=igrp,
                             boundary_tag=tag,
                             elements=elements,
                             element_faces=element_faces))
-                    is_tagged[face_indices] = True
+                    is_tagged[bdry_face_indices] = True
 
             if not np.all(is_tagged):
                 grp_list.append(
