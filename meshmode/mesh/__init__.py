@@ -1443,8 +1443,10 @@ def _compute_facial_adjacency_from_vertices(
         ) -> Sequence[Sequence[FacialAdjacencyGroup]]:
     """
     :arg tag_to_group_faces: for each group, a mapping from tag to
-        :class:`numpy.ndarray` of shape ``(2, nfaces)`` containing
-        the element and face indices of each tagged face in the group.
+        :class:`numpy.ndarray` of shape ``(2, nfaces)`` of tagged faces in the
+        group, where ``tag_to_group_faces[igrp][tag][0, :]`` contains the element
+        indices and ``tag_to_group_faces[igrp][tag][1, :]`` contains the reference
+        face indices.
     """
     if not groups:
         return []
