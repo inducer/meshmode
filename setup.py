@@ -49,10 +49,7 @@ def main():
               "loopy>=2019.1",
 
               "arraycontext",
-
               "recursivenodes",
-              "dataclasses; python_version<'3.7'",
-              "typing_extensions; python_version<'3.8'",
               ],
           extras_require={
               "visualization": ["h5py"],
