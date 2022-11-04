@@ -25,13 +25,7 @@ THE SOFTWARE.
 
 from abc import ABC, abstractmethod
 from warnings import warn
-from typing import Hashable, Iterable, Optional
-
-try:
-    # NOTE: only available in >=3.8
-    from typing import Protocol, runtime_checkable
-except ImportError:
-    from typing_extensions import Protocol, runtime_checkable  # type: ignore[misc]
+from typing import Hashable, Iterable, Protocol, Optional, runtime_checkable
 
 import numpy as np
 
