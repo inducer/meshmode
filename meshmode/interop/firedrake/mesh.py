@@ -750,6 +750,17 @@ build_connection_from_firedrake`.
 
 # {{{ Mesh exporting to firedrake
 
+class _PyOp2CommManager:
+    def __enter__(self):
+        from pyop2.mpi import internal_comm
+        self._comm = internal_comm(None)
+        return self._comm
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        from pyop2.mpi import decref
+        decref(self._comm)
+
+
 def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     r"""
     Create a firedrake mesh corresponding to one
@@ -831,12 +842,14 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
 
     # Get a dmplex object and then a mesh topology
     with ProcessLogger(logger, "Building dmplex object and MeshTopology"):
-        if comm is None:
-            from pyop2.mpi import COMM_WORLD
-            comm = COMM_WORLD
         # FIXME : not sure how to get around the private accesses
         import firedrake.mesh as fd_mesh
-        plex = fd_mesh._from_cell_list(group.dim, cells, coords, comm)
+        if comm is None:
+            with _PyOp2CommManager() as comm:
+                plex = fd_mesh._from_cell_list(group.dim, cells, coords, comm)
+        else:
+            plex = fd_mesh._from_cell_list(group.dim, cells, coords, comm)
+
         # Nb : One might be tempted to pass reorder=False and thereby save some
         #      hassle in exchange for forcing firedrake to have slightly
         #      less efficient caching. Unfortunately, that only prevents
