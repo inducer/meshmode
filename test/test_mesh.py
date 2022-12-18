@@ -419,11 +419,13 @@ def test_mesh_rotation(ambient_dim, visualize=False):
     order = 3
 
     if ambient_dim == 2:
-        nelements = 32
+        nelements = 256
         mesh = mgen.make_curve_mesh(
-                partial(mgen.ellipse, 2.0),
+                # partial(mgen.ellipse, 2.0),
+                partial(mgen.clamp_piecewise, 1.0, 2 / 3, np.pi / 6),
                 np.linspace(0.0, 1.0, nelements + 1),
                 order=order)
+
     elif ambient_dim == 3:
         mesh = mgen.generate_torus(4.0, 2.0, order=order)
     else:

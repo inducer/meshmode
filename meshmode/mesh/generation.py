@@ -56,6 +56,7 @@ Curve parametrizations
 .. autofunction:: dumbbell
 .. autofunction:: wobbly_dumbbell
 .. autofunction:: apple
+.. autofunction:: clamp_piecewise
 .. autoclass:: WobblyCircle
 .. autoclass:: NArmedStarfish
 .. data:: starfish3
@@ -229,6 +230,72 @@ def apple(a: float, t: np.ndarray) -> np.ndarray:
         cos(t) + a*cos(2*t),
         sin(t) + a*sin(2*t)
         ])
+
+
+def clamp_piecewise(
+        r_major: float, r_minor: float, gap: float,
+        t: np.ndarray) -> np.ndarray:
+    """
+    :arg r_major: radius of the outer shell.
+    :arg r_minor: radius of the inner shell.
+    :arg gap: half-angle (in radians) of the right-hand side gap.
+    :return: an array of shape ``(2, t.size)``.
+    """
+
+    def rotation_matrix(angle: float) -> np.ndarray:
+        return np.array([
+            [np.cos(angle), -np.sin(angle)],
+            [np.sin(angle), np.cos(angle)]])
+
+    assert r_major > 0 and r_minor > 0 and r_major > r_minor
+    assert gap > 0 and gap < 2 * np.pi
+    r_cap = (r_major - r_minor) / 2
+    inv_gap = 2 * np.pi - 2 * gap
+
+    # NOTE: Split [0, 1] interval into 5 chunks that have about equal arclength.
+    # This is possible because each chunk is a circle arc, so we know its length.
+
+    L = (       # noqa: N806
+        inv_gap * r_major
+        + inv_gap * r_minor
+        + 2 * np.pi * r_cap)
+    t0 = 0.0
+    t1 = inv_gap * r_major / L
+    t2 = t1 + np.pi * r_cap / L
+    t3 = t2 + inv_gap * r_minor / L
+    t4 = t3 + np.pi * r_cap / L
+
+    # outer shell
+    m_outer = (t < t1).astype(t.dtype)
+    theta = m_outer * (np.pi + inv_gap * (t - (t1 + t0) / 2) / (t1 - t0))
+    f_outer = np.stack([r_major * np.cos(theta), r_major * np.sin(theta)])
+
+    # first cap
+    m_caps0 = np.logical_and(t >= t1, t < t2).astype(t.dtype)
+    theta = m_caps0 * (np.pi / 2 + np.pi * (t - (t2 + t1) / 2) / (t2 - t1))
+    R = r_cap * rotation_matrix(-gap)       # noqa: N806
+    f_caps0 = R @ np.stack([
+        np.cos(theta) - 1, np.sin(theta)
+        ]) + r_major * np.stack([[np.cos(-gap), np.sin(-gap)]]).T
+
+    # inner shell
+    m_inner = np.logical_and(t >= t2, t < t3).astype(t.dtype)
+    theta = -m_inner * (np.pi + inv_gap * (t - (t2 + t3) / 2) / (t3 - t2))
+    f_inner = np.stack([r_minor * np.cos(theta), r_minor * np.sin(theta)])
+
+    # second cap
+    m_caps1 = (t >= t3).astype(t.dtype)
+    theta = m_caps1 * (np.pi / 2 + np.pi * (t - (t3 + t4) / 2) / (t4 - t3))
+    R = r_cap * rotation_matrix(np.pi + gap)        # noqa: N806
+    f_caps1 = R @ np.stack([
+        np.cos(theta) + 1, np.sin(theta)
+        ]) + r_major * np.stack([[np.cos(gap), np.sin(gap)]]).T
+
+    return (
+        m_outer * f_outer
+        + m_caps0 * f_caps0
+        + m_inner * f_inner
+        + m_caps1 * f_caps1)
 
 
 class WobblyCircle:
