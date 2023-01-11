@@ -637,7 +637,7 @@ def test_element_orientation_via_single_elements(order):
     assert len(el_ind_zero) == 0
 
     mesh = mio.read_gmsh("testmesh.msh", force_ambient_dim=2,
-            mesh_construction_kwargs=dict(skip_tests=True))
+                         mesh_construction_kwargs={"skip_tests": True})
     mgrp, = mesh.groups
     el_ind_pos, el_ind_neg, el_ind_zero = check(mesh.vertices, mgrp.vertex_indices)
     assert len(el_ind_pos) == 1
