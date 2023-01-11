@@ -336,9 +336,9 @@ class FiredrakeConnection:
             if arr.array_context is None:
                 raise ValueError(f"'{arr_name}' must have a non-*None* "
                                  "array_context")
-            if arr.shape != tuple([len(self.discr.groups)]):
+            if arr.shape != (len(self.discr.groups),):
                 raise ValueError(f"'{arr_name}' shape must be "
-                                 f"{tuple([len(self.discr.groups)])}, not "
+                                 f"{(len(self.discr.groups),)}, not "
                                  f"'{arr.shape}'")
             if arr[self.group_nr].shape != group_shape:
                 raise ValueError(f"'{arr_name}[{self.group_nr}].shape' must be"

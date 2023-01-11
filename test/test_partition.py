@@ -254,7 +254,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_parts):
     from meshmode.mesh.processing import find_group_indices
     num_tags = np.zeros((num_parts,))
 
-    index_lookup_table = dict()
+    index_lookup_table = {}
     for ipart in range(num_parts):
         part_mesh = part_meshes[ipart]
         for igrp in range(len(part_mesh.groups)):
