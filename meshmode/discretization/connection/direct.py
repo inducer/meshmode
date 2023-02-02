@@ -733,12 +733,22 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                         from_element_indices = actx.thaw(fgpd.from_element_indices)
 
                         if ary[fgpd.from_group_index].size:
-                            grp_ary_contrib = ary[fgpd.from_group_index][
-                                        _reshape_and_preserve_tags(
-                                            actx, from_element_indices, (-1, 1)),
-                                        actx.thaw(fgpd.dof_pick_lists)[
-                                            actx.thaw(fgpd.dof_pick_list_indices)]
-                                        ]
+                            assert fgpd.dof_pick_lists.ndim == 2
+                            if fgpd.dof_pick_lists.shape[0] > 1:
+                                grp_ary_contrib = ary[fgpd.from_group_index][
+                                    _reshape_and_preserve_tags(
+                                        actx, from_element_indices, (-1, 1)),
+                                    actx.thaw(fgpd.dof_pick_lists)[
+                                        actx.thaw(fgpd.dof_pick_list_indices)
+                                    ]]
+                            else:
+                                grp_ary_contrib = ary[fgpd.from_group_index][
+                                    _reshape_and_preserve_tags(
+                                        actx, from_element_indices, (-1, 1)),
+                                    actx.thaw(fgpd.dof_pick_lists)[
+                                        actx.zeros(fgpd.dof_pick_list_indices.size,
+                                                   dtype=np.int32)
+                                    ]]
 
                             if not fgpd.is_surjective:
                                 from_el_present = actx.thaw(fgpd.from_el_present)
