@@ -333,7 +333,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                   dtype=Mesh.face_id_dtype)
     # If only using some of the cells, throw away unused cells and
     # move to new cell index
-    ext_facet_markers = top.exterior_facets.markers
+    ext_facet_markers = top.exterior_facets.unique_markers
     if cells_to_use is not None:
         to_keep = np.isin(ext_elements, cells_to_use)
         ext_elements = np.vectorize(cells_to_use_inv.__getitem__)(
