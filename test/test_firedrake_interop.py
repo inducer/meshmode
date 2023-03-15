@@ -334,8 +334,11 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
 
     # Verify that the number of meshes tagged with a boundary tag
     # is the same in meshmode and firedrake for each tag in *bdy_ids*
+    from meshmode.interop.firedrake.mesh import _get_facet_markers
     fdrake_bdy_ids, fdrake_counts = \
-        np.unique(square_or_cube_mesh.exterior_facets.markers, return_counts=True)
+        np.unique(_get_facet_markers(
+            square_or_cube_mesh.topology.topology_dm,
+            square_or_cube_mesh.exterior_facets.facets), return_counts=True)
     assert set(fdrake_bdy_ids) == set(bdy_ids)
     for bdy_id, fdrake_count in zip(fdrake_bdy_ids, fdrake_counts):
         assert fdrake_count == bdy_id_to_mm_count[bdy_id]

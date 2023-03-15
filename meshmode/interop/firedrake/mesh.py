@@ -199,6 +199,25 @@ def _get_firedrake_boundary_tags(fdrake_mesh, tag_induced_boundary=False):
     return bdy_tags
 
 
+def _get_facet_markers(dm, facets):
+    # based on code removed in
+    # https://github.com/firedrakeproject/firedrake/commit/9125a65c0cb5bb671c62c33f05a0d42b983e06ed
+    import firedrake.cython.dmcommon as dmcommon
+
+    ids = np.empty_like(facets)
+    ids.fill(-1)
+
+    nfacet = facets.shape[0]
+    label = dm.getLabel(dmcommon.FACE_SETS_LABEL)
+    if not label:
+        return
+
+    for f in range(nfacet):
+        ids[f] = label.getValue(facets[f])
+
+    return ids
+
+
 def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                            cells_to_use=None):
     """
@@ -333,7 +352,10 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
                                   dtype=Mesh.face_id_dtype)
     # If only using some of the cells, throw away unused cells and
     # move to new cell index
-    ext_facet_markers = top.exterior_facets.markers
+
+    ext_facet_markers = _get_facet_markers(
+            top.topology_dm, top.exterior_facets.facets)
+
     if cells_to_use is not None:
         to_keep = np.isin(ext_elements, cells_to_use)
         ext_elements = np.vectorize(cells_to_use_inv.__getitem__)(
