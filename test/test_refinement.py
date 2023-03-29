@@ -47,6 +47,9 @@ from meshmode.discretization.poly_element import (
 
 logger = logging.getLogger(__name__)
 
+import pathlib
+thisdir = pathlib.Path(__file__).parent
+
 
 def get_blob_mesh(mesh_par, order=4):
     # from meshmode.mesh.io import generate_gmsh, FileSource
@@ -59,7 +62,7 @@ def get_blob_mesh(mesh_par, order=4):
 
     from meshmode.mesh.io import read_gmsh
     return read_gmsh(
-            "blob2d-order%d-h%s.msh" % (order, mesh_par),
+            str(thisdir / f"blob2d-order{order}-h{mesh_par}.msh"),
             force_ambient_dim=2)
 
 

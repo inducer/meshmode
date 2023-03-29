@@ -54,6 +54,9 @@ import modepy as mp
 import logging
 logger = logging.getLogger(__name__)
 
+import pathlib
+thisdir = pathlib.Path(__file__).parent
+
 
 def _get_rotation(amount, axis, center=None):
     """
@@ -228,7 +231,7 @@ def test_circle_mesh(visualize=False):
     from meshmode.mesh.io import generate_gmsh, FileSource
     logger.info("BEGIN GEN")
     mesh = generate_gmsh(
-            FileSource("circle.step"), 2, order=2,
+            FileSource(str(thisdir / "circle.step")), 2, order=2,
             force_ambient_dim=2,
             other_options=[
                 "-string", "Mesh.CharacteristicLengthMax = 0.05;"],
@@ -461,7 +464,7 @@ def test_mesh_to_tikz():
     order = 1
 
     mesh = generate_gmsh(
-            FileSource("blob-2d.step"), 2, order=order,
+            FileSource(str(thisdir / "blob-2d.step")), 2, order=order,
             force_ambient_dim=2,
             other_options=[
                 "-string", "Mesh.CharacteristicLengthMax = %s;" % h],
@@ -513,7 +516,7 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
 
     if group_cls is SimplexElementGroup:
         mesh = generate_gmsh(
-                FileSource("blob-2d.step"), 2, order=mesh_order,
+                FileSource(str(thisdir / "blob-2d.step")), 2, order=mesh_order,
                 force_ambient_dim=2,
                 other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"],
                 target_unit="MM",
@@ -559,7 +562,7 @@ def test_element_orientation_via_flipping():
     mesh_order = 3
 
     mesh = generate_gmsh(
-            FileSource("blob-2d.step"), 2, order=mesh_order,
+            FileSource(str(thisdir / "blob-2d.step")), 2, order=mesh_order,
             force_ambient_dim=2,
             other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"],
             target_unit="MM",
@@ -636,7 +639,7 @@ def test_element_orientation_via_single_elements(order):
     assert len(el_ind_neg) == 1
     assert len(el_ind_zero) == 0
 
-    mesh = mio.read_gmsh("testmesh.msh", force_ambient_dim=2,
+    mesh = mio.read_gmsh(str(thisdir / "testmesh.msh"), force_ambient_dim=2,
                          mesh_construction_kwargs={"skip_tests": True})
     mgrp, = mesh.groups
     el_ind_pos, el_ind_neg, el_ind_zero = check(mesh.vertices, mgrp.vertex_indices)
@@ -793,7 +796,7 @@ def test_lookup_tree(visualize=False):
 def test_boundary_tags():
     from meshmode.mesh.io import read_gmsh
     # ensure tags are read in
-    mesh = read_gmsh("annulus.msh")
+    mesh = read_gmsh(str(thisdir / "annulus.msh"))
 
     # correct answers
     num_on_outer_bdy = 26
@@ -833,7 +836,7 @@ def test_boundary_tags():
 def test_volume_tags():
     from meshmode.mesh.io import read_gmsh
     mesh, tag_to_elements_map = read_gmsh(
-        "testmesh_multivol.msh", return_tag_to_elements_map=True)
+        str(thisdir / "testmesh_multivol.msh"), return_tag_to_elements_map=True)
 
     assert len(tag_to_elements_map) == 2
 
@@ -959,7 +962,7 @@ def test_quad_mesh_2d(ambient_dim, filename, visualize=False):
                 Mesh 2;
                 Save "output.msh";
                 """,
-                [filename]),
+                [str(thisdir / filename)]),
             order=1,
             force_ambient_dim=ambient_dim,
             target_unit="MM",
