@@ -44,6 +44,9 @@ from arraycontext import pytest_generate_tests_for_array_contexts
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         [PytestPyOpenCLArrayContextFactory])
 
+import pathlib
+thisdir = pathlib.Path(__file__).parent
+
 
 # {{{ test visualizer
 
@@ -103,7 +106,7 @@ def test_parallel_vtk_file(actx_factory, dim):
     assert os.path.exists(pvtu_filename)
 
     import filecmp
-    assert filecmp.cmp(f"ref-{pvtu_filename}", pvtu_filename)
+    assert filecmp.cmp(str(thisdir / f"ref-{pvtu_filename}"), pvtu_filename)
 
 
 @dataclass

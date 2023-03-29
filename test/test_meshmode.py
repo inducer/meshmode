@@ -57,6 +57,9 @@ import pytest
 import logging
 logger = logging.getLogger(__name__)
 
+import pathlib
+thisdir = pathlib.Path(__file__).parent
+
 
 def normalize_group_factory(dim, grp_factory):
     if grp_factory == "warp_and_blend":
@@ -143,7 +146,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
             # print("END GEN")
             from meshmode.mesh.io import read_gmsh
             mesh = read_gmsh(
-                    "blob2d-order%d-h%s.msh" % (order, mesh_par),
+                    str(thisdir / f"blob2d-order{order}-h{mesh_par}.msh"),
                     force_ambient_dim=2)
         elif mesh_name == "warp":
             mesh = mgen.generate_warped_rect_mesh(dim, order=order,
@@ -255,7 +258,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
             from meshmode.mesh.io import generate_gmsh, FileSource
             print("BEGIN GEN")
             mesh = generate_gmsh(
-                    FileSource("blob-2d.step"), 2, order=order,
+                    FileSource(str(thisdir / "blob-2d.step")), 2, order=order,
                     force_ambient_dim=2,
                     other_options=[
                         "-string", "Mesh.CharacteristicLengthMax = %s;" % h],
@@ -390,7 +393,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
             from meshmode.mesh.io import generate_gmsh, FileSource
             print("BEGIN GEN")
             mesh = generate_gmsh(
-                    FileSource("blob-2d.step"), 2, order=order,
+                    FileSource(str(thisdir / "blob-2d.step")), 2, order=order,
                     force_ambient_dim=2,
                     other_options=[
                         "-string", "Mesh.CharacteristicLengthMax = %s;" % h],
