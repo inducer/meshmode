@@ -92,7 +92,7 @@ class DiscretizationFaceAxisTag(DiscretizationEntityAxisTag):
 class DiscretizationDOFAxisTag(DiscretizationEntityAxisTag):
     """
     Array dimensions tagged with this tag type describe an axis indexing over
-    the discretization's DoFs.
+    the discretization's DoFs (nodal or modal).
     """
 
 
