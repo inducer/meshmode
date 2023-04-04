@@ -28,7 +28,7 @@ import numpy.linalg as la
 import modepy as mp
 
 from arraycontext import (
-        NotAnArrayContainerError, serialize_container, deserialize_container)
+    NotAnArrayContainerError, serialize_container, deserialize_container, tag_axes)
 from meshmode.transform_metadata import (FirstAxisIsElementsTag,
                                          DiscretizationDOFAxisTag)
 from meshmode.discretization import InterpolatoryElementGroupBase
@@ -143,8 +143,10 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
                                  grp.unit_nodes)
             w_diag = np.diag(grp.quadrature_rule().weights)
             vtw = np.dot(vdm.T, w_diag)
-            return actx.tag_axis(0, DiscretizationDOFAxisTag(),
-                    actx.from_numpy(vtw))
+            return tag_axes(actx, {
+                    0: DiscretizationDOFAxisTag(),
+                    1: DiscretizationDOFAxisTag()},
+                actx.from_numpy(vtw))
 
         return actx.einsum("ib,eb->ei",
                 quadrature_matrix(grp, mgrp),
@@ -161,8 +163,10 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             vdm = mp.vandermonde(grp.basis_obj().functions,
                                  grp.unit_nodes)
             vdm_inv = la.inv(vdm)
-            return actx.tag_axis(0, DiscretizationDOFAxisTag(),
-                    actx.from_numpy(vdm_inv))
+            return tag_axes(actx, {
+                    0: DiscretizationDOFAxisTag(),
+                    1: DiscretizationDOFAxisTag()},
+                actx.from_numpy(vdm_inv))
 
         return actx.einsum("ij,ej->ei",
                 vandermonde_inverse(grp),
@@ -340,7 +344,10 @@ class ModalToNodalDiscretizationConnection(DiscretizationConnection):
         def matrix(to_grp, from_grp):
             vdm = mp.vandermonde(from_grp.basis_obj().functions,
                                  to_grp.unit_nodes)
-            return actx.from_numpy(vdm)
+            return tag_axes(actx, {
+                    0: DiscretizationDOFAxisTag(),
+                    1: DiscretizationDOFAxisTag()},
+                actx.from_numpy(vdm))
 
         result_data = tuple(
             actx.einsum("ib,eb->ei",
