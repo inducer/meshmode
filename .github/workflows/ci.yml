@@ -171,6 +171,7 @@ jobs:
 
     downstream_tests:
         strategy:
+            fail-fast: false
             matrix:
                 downstream_project: [grudge, pytential, mirgecom, mirgecom_examples]
         name: Tests for downstream project ${{ matrix.downstream_project }}
