@@ -1318,11 +1318,11 @@ def map_mesh(mesh: Mesh, f: Callable[[np.ndarray], np.ndarray]) -> Mesh:
     shape ``(ambient_dim, npoints)``."""
 
     if mesh._facial_adjacency_groups is not None:
-        has_adj_maps = any([
+        has_adj_maps = any(
             fagrp.aff_map.matrix is not None or fagrp.aff_map.offset is not None
             for fagrp_list in mesh.facial_adjacency_groups
             for fagrp in fagrp_list if hasattr(fagrp, "aff_map")
-            ])
+            )
         if has_adj_maps:
             raise ValueError("cannot apply a general map to a mesh that has "
                 "affine mappings in its facial adjacency. If the map is affine, "

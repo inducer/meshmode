@@ -1465,9 +1465,9 @@ def test_mesh_grid(actx_factory, mesh_name, has_offset, visualize=False):
             np.linalg.norm(x[:, :, None] - y[:, None, :], axis=0) > 0.1
             )
 
-    assert all([
+    assert all(
         separated(mgrid.groups[i].nodes, mgrid.groups[j].nodes)
-        for i, j in zip(range(m), range(m)) if i != j])
+        for i, j in zip(range(m), range(m)) if i != j)
 
     if not visualize:
         return
