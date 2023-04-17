@@ -691,9 +691,9 @@ def num_reference_derivative(
         axis and two in the second axis.
     """
 
-    if not all([
+    if not all(
             isinstance(grp, InterpolatoryElementGroupBase) for grp in discr.groups
-            ]):
+            ):
         raise NoninterpolatoryElementGroupError(
             "Element groups must be usable for differentiation and interpolation.")
 
