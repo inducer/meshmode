@@ -5,7 +5,7 @@ _conf_url = \
 with urlopen(_conf_url) as _inf:
     exec(compile(_inf.read(), _conf_url, "exec"), globals())
 
-extensions.extend([
+extensions.extend([  # noqa: F821
     "sphinx.ext.graphviz",
     "sphinxcontrib.tikz",
 ])
@@ -24,22 +24,22 @@ version = ".".join(str(x) for x in ver_dic["VERSION"])
 release = ver_dic["VERSION_TEXT"]
 
 intersphinx_mapping = {
-    "https://docs.python.org/3/": None,
-    "https://numpy.org/doc/stable/": None,
-    "https://documen.tician.de/pytools": None,
-    "https://documen.tician.de/pyopencl": None,
-    "https://documen.tician.de/meshpy": None,
-    "https://documen.tician.de/modepy": None,
-    "https://documen.tician.de/arraycontext": None,
-    "https://documen.tician.de/loopy": None,
-    "https://documen.tician.de/gmsh_interop": None,
-    "https://documen.tician.de/pymetis": None,
-    "https://firedrakeproject.org/": None,
-    "https://tisaac.gitlab.io/recursivenodes/": None,
-    "https://fenics.readthedocs.io/projects/fiat/en/latest/": None,
-    "https://finat.github.io/FInAT/": None,
-    "https://mpi4py.readthedocs.io/en/stable": None,
+    "arraycontext": ("https://documen.tician.de/arraycontext", None),
+    "fenics": ("https://fenics.readthedocs.io/projects/fiat/en/latest", None),
+    "FInAT": ("https://finat.github.io/FInAT/", None),
+    "firedrake": ("https://firedrakeproject.org", None),
+    "gmsh_interop": ("https://documen.tician.de/gmsh_interop", None),
     "h5py": ("https://docs.h5py.org/en/stable", None),
+    "loopy": ("https://documen.tician.de/loopy", None),
+    "meshpy": ("https://documen.tician.de/meshpy", None),
+    "modepy": ("https://documen.tician.de/modepy", None),
+    "mpi4py": ("https://mpi4py.readthedocs.io/en/stable", None),
+    "numpy": ("https://numpy.org/doc/stable", None),
+    "pymetis": ("https://documen.tician.de/pymetis", None),
+    "pyopencl": ("https://documen.tician.de/pyopencl", None),
+    "python": ("https://docs.python.org/3", None),
+    "pytools": ("https://documen.tician.de/pytools", None),
+    "recursivenodes": ("https://tisaac.gitlab.io/recursivenodes", None),
 }
 
 
@@ -53,4 +53,5 @@ intersphinx_mapping = {
 # this needs a setting of the same name across all packages involved, that's
 # why this name is as global-sounding as it is.
 import sys
+
 sys._BUILDING_SPHINX_DOCS = True
