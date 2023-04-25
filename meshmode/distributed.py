@@ -84,15 +84,15 @@ def _duplicate_mpi_comm(mpi_comm):
 
 def mpi_distribute(
         mpi_comm: "mpi4py.MPI.Intracomm",
-        source_data: Optional[Mapping[int, Any]] = None,
-        source_rank: int = 0) -> Optional[Any]:
+        source_rank: int = 0,
+        source_data: Optional[Mapping[int, Any]] = None) -> Optional[Any]:
     """
     Distribute data to a set of processes.
 
     :arg mpi_comm: An ``MPI.Intracomm``
+    :arg source_rank: The rank from which the data is being sent.
     :arg source_data: A :class:`dict` mapping destination ranks to data to be sent.
         Only present on the source rank.
-    :arg source_rank: The rank from which the data is being sent.
 
     :returns: The data local to the current process if there is any, otherwise
         *None*.
@@ -174,7 +174,7 @@ class MPIMeshDistributor:
         parts = partition_mesh(mesh, part_num_to_elements)
 
         return mpi_distribute(
-            self.mpi_comm, source_data=parts, source_rank=self.manager_rank)
+            self.mpi_comm, source_rank=self.manager_rank, source_data=parts)
 
     def receive_mesh_part(self):
         """
