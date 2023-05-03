@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 __copyright__ = "Copyright (C) 2020 Andreas Kloeckner"
 
 __license__ = """
@@ -37,7 +39,7 @@ from pytools import single_valued, memoize_in
 from meshmode.transform_metadata import (
             ConcurrentElementInameTag, ConcurrentDOFInameTag)
 from arraycontext import (
-        ArrayContext, ArrayOrContainerT, NotAnArrayContainerError,
+        Array, ArrayContext, ArrayOrContainerT, NotAnArrayContainerError,
         make_loopy_program, with_container_arithmetic,
         serialize_container, deserialize_container, with_array_context,
         rec_map_array_container, rec_multimap_array_container,
@@ -125,7 +127,7 @@ class DOFArray:
         the array context given to :func:`array_context_for_pickling`.
     """
 
-    def __init__(self, actx: Optional[ArrayContext], data: Tuple[Any]):
+    def __init__(self, actx: Optional[ArrayContext], data: Tuple[Any]) -> None:
         if __debug__:
             if not (actx is None or isinstance(actx, ArrayContext)):
                 raise TypeError("actx must be of type ArrayContext")
@@ -141,11 +143,11 @@ class DOFArray:
     __array_priority__ = 10
 
     @property
-    def array_context(self):
+    def array_context(self) -> ArrayContext:
         return self._array_context
 
     @property
-    def entry_dtype(self):
+    def entry_dtype(self) -> np.dtype:
         return single_valued(subary.dtype for subary in self._data)
 
     @classmethod
@@ -164,10 +166,10 @@ class DOFArray:
 
         return cls(actx, tuple(res_list))
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"DOFArray({str(self._data)})"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"DOFArray({repr(self._data)})"
 
     # {{{ sequence protocol
@@ -190,35 +192,35 @@ class DOFArray:
 
     # {{{ ndarray interface
 
-    def _like_me(self, data):
+    def _like_me(self, data: Iterable[Array]) -> DOFArray:
         return DOFArray(self.array_context, tuple(data))
 
     @property
-    def shape(self):
+    def shape(self) -> Tuple[int]:
         return (len(self),)
 
     @property
-    def size(self):
+    def size(self) -> int:
         return len(self)
 
-    def copy(self):
+    def copy(self) -> DOFArray:
         return self._like_me([subary.copy() for subary in self])
 
-    def fill(self, value):
+    def fill(self, value) -> DOFArray:
         for subary in self:
             subary.fill(value)
 
-    def conj(self):
+    def conj(self) -> DOFArray:
         return self._like_me([subary.conj() for subary in self])
 
     conjugate = conj
 
     @property
-    def real(self):
+    def real(self) -> DOFArray:
         return self._like_me([subary.real for subary in self])
 
     @property
-    def imag(self):
+    def imag(self) -> DOFArray:
         return self._like_me([subary.imag for subary in self])
 
     # }}}
