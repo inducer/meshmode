@@ -32,46 +32,48 @@ def main(*, ambient_dim: int) -> None:
 
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
-    mpisize = comm.Get_size()
-    mpirank = comm.Get_rank()
 
-    from meshmode.distributed import MPIMeshDistributor
-    dist = MPIMeshDistributor(comm)
+    from meshmode.mesh.processing import partition_mesh
+    from meshmode.distributed import membership_list_to_map
 
     order = 5
     nelements = 64 if ambient_dim == 3 else 256
 
-    logger.info("[%4d] distributing mesh: started", mpirank)
+    logger.info("[%4d] distributing mesh: started", comm.rank)
 
-    if dist.is_mananger_rank():
+    if comm.rank == 0:
         mesh = make_example_mesh(ambient_dim, nelements, order=order)
         logger.info("[%4d] mesh: nelements %d nvertices %d",
-                    mpirank, mesh.nelements, mesh.nvertices)
+                    comm.rank, mesh.nelements, mesh.nvertices)
 
         rng = np.random.default_rng()
-        part_per_element = rng.integers(mpisize, size=mesh.nelements)
 
-        local_mesh = dist.send_mesh_parts(mesh, part_per_element, mpisize)
+        part_id_to_part = partition_mesh(mesh,
+                       membership_list_to_map(
+                           rng.integers(comm.size, size=mesh.nelements)))
+        parts = [part_id_to_part[i] for i in range(comm.size)]
+        local_mesh = comm.scatter(parts)
     else:
-        local_mesh = dist.receive_mesh_part()
+        # Reason for type-ignore: presumed faulty type annotation in mpi4py
+        local_mesh = comm.scatter(None)  # type: ignore[arg-type]
 
-    logger.info("[%4d] distributing mesh: finished", mpirank)
+    logger.info("[%4d] distributing mesh: finished", comm.rank)
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import default_simplex_group_factory
     discr = Discretization(actx, local_mesh,
         default_simplex_group_factory(local_mesh.dim, order=order))
 
-    logger.info("[%4d] discretization: finished", mpirank)
+    logger.info("[%4d] discretization: finished", comm.rank)
 
     vector_field = actx.thaw(discr.nodes())
     scalar_field = actx.np.sin(vector_field[0])
-    part_id = 1.0 + mpirank + discr.zeros(actx)     # type: ignore[operator]
-    logger.info("[%4d] fields: finished", mpirank)
+    part_id = 1.0 + comm.rank + discr.zeros(actx)     # type: ignore[operator]
+    logger.info("[%4d] fields: finished", comm.rank)
 
     from meshmode.discretization.visualization import make_visualizer
     vis = make_visualizer(actx, discr, vis_order=order, force_equidistant=False)
-    logger.info("[%4d] make_visualizer: finished", mpirank)
+    logger.info("[%4d] make_visualizer: finished", comm.rank)
 
     filename = f"parallel-vtkhdf-example-{ambient_dim}d.hdf"
     vis.write_vtkhdf_file(filename, [
@@ -80,7 +82,7 @@ def main(*, ambient_dim: int) -> None:
         ("part_id", part_id)
         ], comm=comm, overwrite=True, use_high_order=False)
 
-    logger.info("[%4d] write: finished: %s", mpirank, filename)
+    logger.info("[%4d] write: finished: %s", comm.rank, filename)
 
 
 if __name__ == "__main__":
