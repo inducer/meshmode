@@ -112,6 +112,7 @@ class DOFArray:
     .. automethod:: conj
     .. attribute:: real
     .. attribute:: imag
+    .. automethod:: astype
 
     Implements the usual set of arithmetic operations, including broadcasting
     of numbers and over numpy object arrays.
@@ -222,6 +223,10 @@ class DOFArray:
     @property
     def imag(self) -> DOFArray:
         return self._like_me([subary.imag for subary in self])
+
+    def astype(self, dtype: np.dtype) -> DOFArray:
+        dtype = np.dtype(dtype)
+        return self._like_me([subary.astype(dtype) for subary in self])
 
     # }}}
 
