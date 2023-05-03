@@ -82,8 +82,9 @@ class DOFArray:
     of the associated group.
     ``ndofs_per_element`` is typically, but not necessarily, the same as
     :attr:`~meshmode.discretization.ElementGroupBase.nunit_dofs`
-    of the associated group. The entries in this array are further arrays managed by
-    :attr:`array_context`.
+    of the associated group. The entries in this array are further arrays
+    managed by :attr:`array_context`, i.e. :class:`DOFArray` is an
+    :class:`~arraycontext.ArrayContainer`.
 
     One main purpose of this class is to describe the data structure,
     i.e. when a :class:`DOFArray` occurs inside of further numpy object array,
