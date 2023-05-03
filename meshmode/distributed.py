@@ -1,5 +1,4 @@
 """
-.. autoclass:: MPIMeshDistributor
 .. autoclass:: InterRankBoundaryInfo
 .. autoclass:: MPIBoundaryCommSetupHelper
 
@@ -84,6 +83,10 @@ class MPIMeshDistributor:
         """
         self.mpi_comm = mpi_comm
         self.manager_rank = manager_rank
+
+        warn("MPIMeshDistributor is deprecated and will be removed in 2024. "
+             "Directly call partition_mesh and use mpi_comm.scatter instead.",
+             DeprecationWarning, stacklevel=2)
 
     def is_mananger_rank(self):
         return self.mpi_comm.Get_rank() == self.manager_rank
