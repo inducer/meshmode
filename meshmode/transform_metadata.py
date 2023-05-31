@@ -128,6 +128,6 @@ class DiscretizationTopologicalDimAxisTag(DiscretizationDimAxisTag):
 class DiscretizationDOFPickListAxisTag(DiscretizationEntityAxisTag):
     """
     Array dimensions tagged with this tag type describe an axis indexing over
-    DOF pick lists. See :mod:`meshmode.discretization.connection.direct` for
-    details.
+    DOF pick lists in
+    :class:`meshmode.discretization.connection.DirectDiscretizationConnection`.
     """
