@@ -167,12 +167,14 @@ class InterpolationBatch(Generic[ArrayT]):
         np_full_from_element_indices[~np_from_el_present] = 0
 
         from_el_present = actx.freeze(
-                actx.tag(NameHint("from_el_present"),
-                    actx.from_numpy(
-                        np_from_el_present.astype(np.int8))))
+                actx.tag_axis(0, DiscretizationElementAxisTag(),
+                    actx.tag(NameHint("from_el_present"),
+                        actx.from_numpy(
+                            np_from_el_present.astype(np.int8)))))
         full_from_element_indices = actx.freeze(
-                actx.tag(NameHint("from_el_indices"),
-                    actx.from_numpy(np_full_from_element_indices)))
+                actx.tag_axis(0, DiscretizationElementAxisTag(),
+                    actx.tag(NameHint("from_el_indices"),
+                        actx.from_numpy(np_full_from_element_indices))))
 
         self._global_from_element_indices_cache = (
                 from_el_present, full_from_element_indices)
