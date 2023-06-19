@@ -587,7 +587,7 @@ def find_volume_mesh_element_group_orientation(
     if ambient_dim != grp.dim:
         raise ValueError("can only find orientation of volume meshes")
 
-    spanning_object_array = np.empty(
+    spanning_object_array: np.ndarray = np.empty(
             (nspan_vectors, ambient_dim),
             dtype=object)
 
@@ -621,7 +621,7 @@ def find_volume_mesh_element_orientations(
         check is available will return *NaN*.
     """
 
-    result = np.empty(mesh.nelements, dtype=np.float64)
+    result: np.ndarray = np.empty(mesh.nelements, dtype=np.float64)
 
     for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
         result_grp_view = result[base_element_nr:base_element_nr + grp.nelements]
@@ -816,9 +816,7 @@ def merge_disjoint_meshes(
             mesh.vertices.shape[-1]
             for mesh in meshes)
 
-    vert_dtype = np.find_common_type(
-            [mesh.vertices.dtype for mesh in meshes],
-            [])
+    vert_dtype = np.result_type(*[mesh.vertices.dtype for mesh in meshes])
     vertices = np.empty(
             (ambient_dim, nvertices), vert_dtype)
 
