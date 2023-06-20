@@ -33,7 +33,7 @@ def make_same_mesh_connection(actx, to_discr, from_discr):
             IdentityDiscretizationConnection,
             DirectDiscretizationConnection)
 
-    if from_discr.mesh is not to_discr.mesh:
+    if from_discr.mesh != to_discr.mesh:
         raise ValueError("from_discr and to_discr must be based on "
                 "the same mesh")
 

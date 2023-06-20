@@ -1177,6 +1177,8 @@ class Mesh(Record):
 
     def __eq__(self, other):
         return (
+            self is other
+            or (
                 type(self) == type(other)
                 and np.array_equal(self.vertices, other.vertices)
                 and self.groups == other.groups
@@ -1184,7 +1186,7 @@ class Mesh(Record):
                 and self.element_id_dtype == other.element_id_dtype
                 and self._nodal_adjacency == other._nodal_adjacency
                 and self._facial_adjacency_groups == other._facial_adjacency_groups
-                and self.is_conforming == other.is_conforming)
+                and self.is_conforming == other.is_conforming))
 
     def __ne__(self, other):
         return not self.__eq__(other)
