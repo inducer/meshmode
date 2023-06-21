@@ -47,7 +47,10 @@ from dataclasses import dataclass
 
 def _reshape_and_preserve_tags(
         actx: ArrayContext, ary: ArrayT, new_shape: Tuple[int, ...]) -> ArrayT:
-    return actx.tag(ary.tags, ary.reshape(new_shape))
+    try:
+        return actx.tag(ary.tags, ary.reshape(new_shape))
+    except AttributeError:
+        return ary.reshape(new_shape)
 
 
 # {{{ interpolation batch
