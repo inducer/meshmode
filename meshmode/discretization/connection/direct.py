@@ -48,10 +48,12 @@ from dataclasses import dataclass
 def _reshape_and_preserve_tags(
         actx: ArrayContext, ary: ArrayT, new_shape: Tuple[int, ...]) -> ArrayT:
     try:
-        return actx.tag(ary.tags, ary.reshape(new_shape))
+        tags = ary.tags
     except AttributeError:
         # 'ary' might not have a 'tags' attribute (e.g., in case of an np.ndarray)
         return ary.reshape(new_shape)
+    else:
+        return actx.tag(tags, ary.reshape(new_shape))
 
 
 # {{{ interpolation batch
