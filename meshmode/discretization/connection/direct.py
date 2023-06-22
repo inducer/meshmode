@@ -50,6 +50,7 @@ def _reshape_and_preserve_tags(
     try:
         return actx.tag(ary.tags, ary.reshape(new_shape))
     except AttributeError:
+        # 'ary' might not have a 'tags' attribute (e.g., in case of an np.ndarray)
         return ary.reshape(new_shape)
 
 
