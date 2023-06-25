@@ -1,7 +1,7 @@
 Python 3 POCL:
   script: |
     export PY_EXE=python3
-    export PYOPENCL_TEST=portable:pthread
+    export PYOPENCL_TEST=portable:cpu
     # cython is here because pytential (for now, for TS) depends on it
     export EXTRA_INSTALL="pybind11 cython numpy mako mpi4py h5py oct2py"
     curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/build-and-test-py-project.sh
@@ -37,7 +37,7 @@ Python 3 POCL Examples:
   script:
   - test -n "$SKIP_EXAMPLES" && exit
   - export PY_EXE=python3
-  - export PYOPENCL_TEST=portable:pthread
+  - export PYOPENCL_TEST=portable:cpu
   # cython is here because pytential (for now, for TS) depends on it
   - export EXTRA_INSTALL="pybind11 cython numpy mako matplotlib"
   - curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/build-py-project-and-run-examples.sh
