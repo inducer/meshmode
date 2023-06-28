@@ -64,11 +64,11 @@ def get_affine_reference_simplex_mapping(ambient_dim, firedrake_to_meshmode=True
                         f"'{type(firedrake_to_meshmode)}'")
 
     from FIAT.reference_element import ufc_simplex
-    from modepy.tools import unit_vertices
+    from modepy import unit_vertices_for_shape, Simplex
     # Get the unit vertices from each system,
     # each stored with shape *(dim, nunit_vertices)*
     firedrake_unit_vertices = np.array(ufc_simplex(ambient_dim).vertices).T
-    modepy_unit_vertices = unit_vertices(ambient_dim).T
+    modepy_unit_vertices = unit_vertices_for_shape(Simplex(ambient_dim))
 
     if firedrake_to_meshmode:
         from_verts = firedrake_unit_vertices
