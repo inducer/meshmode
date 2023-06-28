@@ -28,7 +28,7 @@ from meshmode.array_context import PyOpenCLArrayContext
 # This example provides a brief template for bringing information in
 # from firedrake and makes some plots to help you better understand
 # what a FromBoundaryFiredrakeConnection does
-def main():
+def main(visualize=True):
     # If can't import firedrake, do nothing
     #
     # filename MUST include "firedrake" (i.e. match *firedrake*.py) in order
@@ -52,7 +52,7 @@ def main():
     # Make connections
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = PyOpenCLArrayContext(queue, force_device_scalars=True)
 
     fd_connection = build_connection_from_firedrake(actx, fd_fspace)
     fd_bdy_connection = \
@@ -84,24 +84,26 @@ def main():
     vis = make_visualizer(actx, discr, discr.groups[0].order+3)
     field = fd_connection.from_firedrake(fd_fntn, actx=actx)
 
-    fig = plt.figure()
-    ax1 = fig.add_subplot(1, 2, 1, projection="3d")
-    ax1.set_title("cos(x+y) in\nFiredrakeConnection")
-    vis.show_scalar_in_matplotlib_3d(field, do_show=False)
+    if visualize:
+        fig = plt.figure()
+        ax1 = fig.add_subplot(1, 2, 1, projection="3d")
+        ax1.set_title("cos(x+y) in\nFiredrakeConnection")
+        vis.show_scalar_in_matplotlib_3d(field, do_show=False)
 
     # Now repeat using FiredrakeConnection restricted to "on_boundary"
     bdy_discr = fd_bdy_connection.discr
     bdy_vis = make_visualizer(actx, bdy_discr, bdy_discr.groups[0].order+3)
     bdy_field = fd_bdy_connection.from_firedrake(fd_fntn, actx=actx)
 
-    ax2 = fig.add_subplot(1, 2, 2, projection="3d")
-    plt.sca(ax2)
-    ax2.set_title("cos(x+y) in\nFiredrakeConnection 'on_boundary'")
-    bdy_vis.show_scalar_in_matplotlib_3d(bdy_field, do_show=False)
+    if visualize:
+        ax2 = fig.add_subplot(1, 2, 2, projection="3d")
+        plt.sca(ax2)
+        ax2.set_title("cos(x+y) in\nFiredrakeConnection 'on_boundary'")
+        bdy_vis.show_scalar_in_matplotlib_3d(bdy_field, do_show=False)
 
-    import matplotlib.cm as cm
-    fig.colorbar(cm.ScalarMappable(), ax=ax2)
-    plt.show()
+        import matplotlib.cm as cm
+        fig.colorbar(cm.ScalarMappable(), ax=ax2)
+        plt.show()
 
 
 if __name__ == "__main__":

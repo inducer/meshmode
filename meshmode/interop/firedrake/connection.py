@@ -509,9 +509,8 @@ class FiredrakeConnection:
         :return: a :class:`firedrake.function.Function` holding the transported
             data (*out*, if *out* was not *None*)
         """
-        # All firedrake functions are the same dtype
-        dtype = self.firedrake_fspace().mesh().coordinates.dat.data.dtype
-        self._validate_field(mm_field, "mm_field", dtype=dtype)
+        # Don't check dtype: if it's numpy-assignable, that's good enough for us.
+        self._validate_field(mm_field, "mm_field")
 
         # get the shape of mm_field
         from meshmode.dof_array import DOFArray
@@ -523,7 +522,8 @@ class FiredrakeConnection:
         # make sure out is a firedrake function in an appropriate
         # function space
         if out is not None:
-            self._validate_function(out, "out", fspace_shape, dtype)
+            # Don't check dtype: if it's numpy-assignable, that's good enough for us.
+            self._validate_function(out, "out", fspace_shape)
         else:
             from firedrake.function import Function
             # Translate shape so that don't always get a TensorFunctionSpace,

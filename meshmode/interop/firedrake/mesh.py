@@ -24,7 +24,7 @@ from warnings import warn  # noqa
 import logging
 import numpy as np
 
-from modepy import resampling_matrix, simplex_best_available_basis
+from modepy import resampling_matrix, basis_for_space, PN, Simplex
 
 from meshmode.mesh import (
     BTAG_ALL,
@@ -875,7 +875,7 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
 
         import firedrake.mesh as fd_mesh
         with _PyOp2CommDuplicator(comm) as comm:
-            plex = fd_mesh._from_cell_list(group.dim, cells, coords, comm)
+            plex = fd_mesh.plex_from_cell_list(group.dim, cells, coords, comm)
 
         # Nb : One might be tempted to pass reorder=False and thereby save some
         #      hassle in exchange for forcing firedrake to have slightly
@@ -949,8 +949,8 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     fd_unit_nodes = get_finat_element_unit_nodes(coords_fspace.finat_element)
     fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
 
-    basis = simplex_best_available_basis(group.dim, group.order)
-    resampling_mat = resampling_matrix(basis,
+    basis = basis_for_space(PN(group.dim, group.order), Simplex(group.dim))
+    resampling_mat = resampling_matrix(basis.functions,
                                        new_nodes=fd_unit_nodes,
                                        old_nodes=group.unit_nodes)
     # Store the meshmode data resampled to firedrake unit nodes
