@@ -49,28 +49,32 @@ Python 3 POCL Examples:
   except:
   - tags
 
-Python 3 POCL Firedrake:
-  tags:
-  - "docker-runner"
-  image: "firedrakeproject/firedrake"
-  script:
-  - . .ci/install-for-firedrake.sh
-  - cd test
-  - python -m pytest --tb=native --junitxml=pytest.xml -rxsw test_firedrake_interop.py
-  artifacts:
-    reports:
-      junit: test/pytest.xml
-
-Python 3 POCL Firedrake Examples:
-  tags:
-  - "docker-runner"
-  image: "firedrakeproject/firedrake"
-  script:
-  - . .ci/install-for-firedrake.sh
-  - . ./.ci/run_firedrake_examples.sh
-  artifacts:
-    reports:
-      junit: test/pytest.xml
+# The machine shop is too old for the Firedrake container.
+# Lawrence Mitchell says that they likely build PETSc with -march=native
+# on something like Skylake.
+#
+# Python 3 POCL Firedrake:
+#   tags:
+#   - "docker-runner"
+#   image: "firedrakeproject/firedrake"
+#   script:
+#   - . .ci/install-for-firedrake.sh
+#   - cd test
+#   - python -m pytest --tb=native --junitxml=pytest.xml -rxsw test_firedrake_interop.py
+#   artifacts:
+#     reports:
+#       junit: test/pytest.xml
+#
+# Python 3 POCL Firedrake Examples:
+#   tags:
+#   - "docker-runner"
+#   image: "firedrakeproject/firedrake"
+#   script:
+#   - . .ci/install-for-firedrake.sh
+#   - . ./.ci/run_firedrake_examples.sh
+#   artifacts:
+#     reports:
+#       junit: test/pytest.xml
 
 Python 3 Conda:
   script: |
