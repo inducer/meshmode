@@ -330,7 +330,7 @@ class MeshElementGroup(ABC):
 
     def __eq__(self, other):
         return (
-                type(self) == type(other)
+                type(self) is type(other)
                 and self.order == other.order
                 and np.array_equal(self.vertex_indices, other.vertex_indices)
                 and np.array_equal(self.nodes, other.nodes)
@@ -556,7 +556,7 @@ class NodalAdjacency:
 
     def __eq__(self, other):
         return (
-                type(self) == type(other)
+                type(self) is type(other)
                 and np.array_equal(self.neighbors_starts, other.neighbors_starts)
                 and np.array_equal(self.neighbors, other.neighbors))
 
@@ -612,7 +612,7 @@ class FacialAdjacencyGroup:
 
     def __eq__(self, other):
         return (
-                type(self) == type(other)
+                type(self) is type(other)
                 and self.igroup == other.igroup)
 
     def __ne__(self, other):
@@ -629,7 +629,7 @@ class FacialAdjacencyGroup:
         :returns: a string that can be evaluated to reconstruct the class.
         """
 
-        if type(self) != FacialAdjacencyGroup:
+        if type(self) is not FacialAdjacencyGroup:
             raise NotImplementedError(
                     f"Not implemented for '{type(self).__name__}'.")
 
@@ -703,7 +703,7 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
             and self.aff_map == other.aff_map)
 
     def as_python(self):
-        if type(self) != InteriorAdjacencyGroup:
+        if type(self) is not InteriorAdjacencyGroup:
             raise NotImplementedError(f"Not implemented for {type(self)}.")
 
         return self._as_python(
@@ -755,7 +755,7 @@ class BoundaryAdjacencyGroup(FacialAdjacencyGroup):
             and np.array_equal(self.element_faces, other.element_faces))
 
     def as_python(self):
-        if type(self) != BoundaryAdjacencyGroup:
+        if type(self) is not BoundaryAdjacencyGroup:
             raise NotImplementedError(f"Not implemented for {type(self)}.")
 
         return self._as_python(
@@ -837,7 +837,7 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
             and self.aff_map == other.aff_map)
 
     def as_python(self):
-        if type(self) != InterPartAdjacencyGroup:
+        if type(self) is not InterPartAdjacencyGroup:
             raise NotImplementedError(f"Not implemented for {type(self)}.")
 
         return self._as_python(
@@ -1177,7 +1177,7 @@ class Mesh(Record):
 
     def __eq__(self, other):
         return (
-                type(self) == type(other)
+                type(self) is type(other)
                 and np.array_equal(self.vertices, other.vertices)
                 and self.groups == other.groups
                 and self.vertex_id_dtype == other.vertex_id_dtype
