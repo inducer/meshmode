@@ -848,7 +848,7 @@ def merge_disjoint_meshes(
         ref_group = single_valued(
             [group for mesh in meshes for group in mesh.groups],
             lambda x, y: (
-                type(x) == type(y)
+                type(x) is type(y)
                 and x.order == y.order
                 and np.array_equal(x.unit_nodes, y.unit_nodes)
                 ))
