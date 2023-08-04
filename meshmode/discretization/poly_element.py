@@ -41,6 +41,7 @@ from meshmode.discretization import (
         InterpolatoryElementGroupBase)
 
 import modepy as mp
+from modepy import Basis
 
 __doc__ = """
 Group types
@@ -518,7 +519,9 @@ class HypercubeElementGroupBase(NodalElementGroupBase):
 
 class TensorProductElementGroupBase(PolynomialElementGroupBase,
         HypercubeElementGroupBase):
-    def __init__(self, mesh_el_group, order, index=None, *, basis, unit_nodes):
+    def __init__(self, mesh_el_group: _MeshTensorProductElementGroup,
+                 order: int, index=None, *, basis: Basis,
+                 unit_nodes: np.ndarray) -> None:
         """
         :arg basis: a :class:`modepy.TensorProductBasis`.
         :arg unit_nodes: unit nodes for the tensor product, obtained by
@@ -530,15 +533,42 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
             raise ValueError("basis dimension does not match element group: "
                     f"expected {mesh_el_group.dim}, got {basis._dim}.")
 
+        if isinstance(basis, mp.TensorProductBasis):
+            for b in basis.bases:
+                if b._dim != 1:
+                    raise NotImplementedError(
+                        "All bases used to construct the tensor "
+                        "product must be of dimension 1. Support "
+                        "for higher-dimensional component bases "
+                        "does not yet exist.")
+
         if unit_nodes.shape[0] != mesh_el_group.dim:
             raise ValueError("unit node dimension does not match element group: "
-                    f"expected {mesh_el_group.dim}, got {unit_nodes.shape[0]}.")
+                    f"expected {self.mesh_el_group.dim}, "
+                    f"got {unit_nodes.shape[0]}.")
+
+        # NOTE there are cases where basis is a 1D `_SimplexONB` object. We wrap
+        # in a TensorProductBasis object if this is the case
+        if not isinstance(basis, mp.TensorProductBasis):
+            if basis._dim == 1 and unit_nodes.shape[0] == 1:
+                basis = mp.TensorProductBasis([basis])
+            else:
+                raise ValueError("`basis` is not a TensorProductBasis object, "
+                                 "and `basis` and `unit_nodes` are not both of "
+                                 "dimension 1. Found `basis` dim = {basis._dim}, "
+                                 "`unit_nodes` dim = {unit_nodes.shape[0]}.")
 
         self._basis = basis
+        self._bases_1d = basis.bases[0]
         self._nodes = unit_nodes
 
     def basis_obj(self):
         return self._basis
+
+    def bases_1d(self):
+        """Return 1D component bases used to construct the tensor product basis.
+        """
+        return self._bases_1d
 
     @memoize_method
     def quadrature_rule(self):
@@ -548,6 +578,11 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
         weights = np.dot(mass_matrix,
                          np.ones(len(basis_fcts)))
         return mp.Quadrature(nodes, weights, exact_to=self.order)
+
+    @property
+    @memoize_method
+    def unit_nodes_1d(self):
+        return self._nodes[0][:self.order + 1].reshape(1, self.order + 1)
 
     def discretization_key(self):
         # FIXME?
@@ -604,9 +639,10 @@ class LegendreGaussLobattoTensorProductElementGroup(
     def __init__(self, mesh_el_group, order, index=None):
         from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
         unit_nodes_1d = legendre_gauss_lobatto_nodes(order)
-        unit_nodes = mp.tensor_product_nodes([unit_nodes_1d] * mesh_el_group.dim)
+        unit_nodes = mp.tensor_product_nodes([unit_nodes_1d]*mesh_el_group.dim)
 
-        super().__init__(mesh_el_group, order, index=index, unit_nodes=unit_nodes)
+        super().__init__(mesh_el_group, order, index=index,
+                         unit_nodes=unit_nodes)
 
     def discretization_key(self):
         return (type(self), self.dim, self.order)
@@ -624,9 +660,10 @@ class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
     def __init__(self, mesh_el_group, order, index=None):
         from modepy.nodes import equidistant_nodes
         unit_nodes_1d = equidistant_nodes(1, order)[0]
-        unit_nodes = mp.tensor_product_nodes([unit_nodes_1d] * mesh_el_group.dim)
+        unit_nodes = mp.tensor_product_nodes([unit_nodes_1d]*mesh_el_group.dim)
 
-        super().__init__(mesh_el_group, order, index=index, unit_nodes=unit_nodes)
+        super().__init__(mesh_el_group, order, index=index,
+                         unit_nodes=unit_nodes)
 
     def discretization_key(self):
         return (type(self), self.dim, self.order)

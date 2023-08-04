@@ -700,7 +700,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                                 from_element_indices[iel],
                                 dof_pick_lists[dof_pick_list_indices[iel], idof]
                             ]
-                        { if_present })
+                        {if_present})
                 """,
                 [
                     lp.GlobalArg("ary", None,

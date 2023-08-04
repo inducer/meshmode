@@ -513,6 +513,11 @@ class TensorProductElementGroup(_ModepyElementGroup):
     r"""Inherits from :class:`MeshElementGroup`."""
     _modepy_shape_cls: ClassVar[Type[mp.Shape]] = mp.Hypercube
 
+    def is_affine(self):
+        # Tensor product mappings are generically bilinear.
+        # FIXME: Are affinely mapped ones a 'juicy' enough special case?
+        return False
+
 # }}}
 
 
