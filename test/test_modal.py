@@ -284,7 +284,7 @@ def test_modal_truncation(actx_factory, nodal_group_factory,
         # Map to modal
         modal_f = nodal_to_modal_conn(nodal_f)
 
-        # Now we compute the basis function indices corresonding
+        # Now we compute the basis function indices corresponding
         # to modes > truncated_order
         mgrp, = modal_disc.groups
         mgrp_mode_ids = mgrp.basis_obj().mode_ids

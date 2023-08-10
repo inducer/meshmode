@@ -205,7 +205,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
 # }}}
 
 
-# {{{ boundary-to-all-faces connecttion
+# {{{ boundary-to-all-faces connection
 
 @pytest.mark.parametrize("group_factory", [
     InterpolatoryQuadratureSimplexGroupFactory,

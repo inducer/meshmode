@@ -485,7 +485,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             self, actx: ArrayContext, i_tgrp: int
             ) -> Optional[Sequence[_FromGroupPickData]]:
         """Returns a list of :class:`_FromGroupPickData`, one per source group
-        from which data ist to be transferred, or *None*, if conditions for
+        from which data is to be transferred, or *None*, if conditions for
         this representation are not met.
         """
         cgrp = self.groups[i_tgrp]
@@ -596,7 +596,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         """
         # _force_use_loopy, _force_no_merged_batches:
-        # private arguments only used to ensure test coverge of all code paths.
+        # private arguments only used to ensure test coverage of all code paths.
 
         # {{{ recurse into array containers
 
@@ -923,7 +923,7 @@ def make_direct_full_resample_matrix(actx, conn):
         return lp.tag_inames(t_unit, {
                 "iel": ConcurrentElementInameTag(),
                 "idof": ConcurrentDOFInameTag(),
-                # FIXME: jdof is also concurrent, but the tranform in
+                # FIXME: jdof is also concurrent, but the transform in
                 # `meshmode.array_context` does not handle two of them right now
                 # "jdof": ConcurrentDOFInameTag(),
                 })
