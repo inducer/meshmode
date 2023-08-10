@@ -466,7 +466,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
 
 # {{{ element orientation: canned 3D meshes
 
-# python test_meshmode.py "test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)"  # noqa
+# python test_meshmode.py "test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)"  # noqa: E501
 @pytest.mark.parametrize(("what", "mesh_gen_func"), [
     ("ball", lambda: mgen.generate_icosahedron(1, 1)),
     ("torus", lambda: mgen.generate_torus(5, 1)),
@@ -579,7 +579,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     nodes = actx.thaw(vol_discr.nodes())
     vol_one = 1 + 0 * nodes[0]
 
-    from pytential import norm, integral  # noqa
+    from pytential import integral
     comp_vol = integral(vol_discr, vol_one)
     rel_vol_err = abs(true_vol - comp_vol) / true_vol
 
@@ -663,7 +663,7 @@ def test_sanity_no_elements(actx_factory, dim, mesh_order, group_cls,
     nodes = actx.thaw(vol_discr.nodes())
     vol_one = 1 + 0 * nodes[0]
 
-    from pytential import norm, integral  # noqa
+    from pytential import integral
     assert integral(vol_discr, vol_one) == 0.
 
     # }}}
@@ -741,7 +741,7 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
 
 # {{{ sanity checks: ball meshes
 
-# python test_meshmode.py "test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)"  # noqa
+# python test_meshmode.py "test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)"  # noqa: E501
 @pytest.mark.parametrize(("src_file", "dim"), [
     ("disk-radius-1.step", 2),
     ("ball-radius-1.step", 3),
@@ -799,7 +799,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
         vol_x = actx.thaw(vol_discr.nodes())
 
         vol_one = vol_x[0]*0 + 1
-        from pytential import norm, integral  # noqa
+        from pytential import integral, norm
 
         comp_vol = actx.to_numpy(integral(vol_discr, vol_one))
         rel_vol_err = abs(true_vol - comp_vol) / true_vol
