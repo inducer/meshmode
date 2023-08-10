@@ -49,7 +49,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Is there a smart way of choosing this number?
-# Currenly it is the same as the base from MPIBoundaryCommSetupHelper
+# Currently it is the same as the base from MPIBoundaryCommSetupHelper
 TAG_BASE = 83411
 TAG_SEND_REMOTE_NODES = TAG_BASE + 3
 TAG_SEND_LOCAL_NODES = TAG_BASE + 4

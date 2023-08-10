@@ -782,7 +782,7 @@ def generate_torus_and_cycle_vertices(
         return i + j * (n_major + 1)
 
     if issubclass(group_cls, SimplexElementGroup):
-        # NOTE: this makes two triangles from a the square like
+        # NOTE: this makes two triangles from a square like
         #   (i, j+1)    (i+1, j+1)
         #       o---------o
         #       | \       |

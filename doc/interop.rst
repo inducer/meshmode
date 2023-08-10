@@ -165,7 +165,7 @@ roughly as so:
     is used to define what meshmode calls the unit nodes and unit
     vertices. It is worth noting that :mod:`firedrake` does
     not require a positive orientation of elements and that its
-    reference traingle is different than specified in :mod:`modepy`.
+    reference triangle is different than specified in :mod:`modepy`.
 
 (2) A `~firedrake.mesh.MeshTopology`
     which holds information about connectivity

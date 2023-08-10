@@ -71,8 +71,8 @@ def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None):
     """Creates a random rotation matrix.
 
     :arg deflection: the magnitude of the rotation. For 0, no rotation; for 1,
-        competely random rotation. Small deflection => small perturbation.
-    :arg randnums: 3 random numbers in the range [0, 1]. If `None`, they will be
+        completely random rotation. Small deflection => small perturbation.
+    :arg randnums: 3 random numbers in the range [0, 1]. If *None*, they will be
         auto-generated.
     """
     # from https://www.realtimerendering.com/resources/GraphicsGems/gemsiii/rand_rotation.c  # noqa: E501
