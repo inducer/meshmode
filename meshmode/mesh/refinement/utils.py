@@ -166,7 +166,7 @@ def check_nodal_adj_against_geometry(mesh, tol=1e-12):
                     nearby_grp = mesh.groups[nearby_igrp]
 
                     nearby_origin_vertex = mesh.vertices[
-                            :, nearby_grp.vertex_indices[nearby_iel][0]]  # noqa
+                            :, nearby_grp.vertex_indices[nearby_iel][0]]
                     transformation = np.empty(
                             (len(mesh.vertices), nvertices_per_element-1))
                     vertex_transformed = vertex - nearby_origin_vertex

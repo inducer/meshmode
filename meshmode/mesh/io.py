@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 import numpy as np
 
-from gmsh_interop.reader import (  # noqa
+from gmsh_interop.reader import (  # noqa: F401
         GmshMeshReceiverBase, ScriptSource, FileSource, LiteralSource,
         ScriptWithFilesSource,
         GmshSimplexElementBase,
@@ -283,6 +283,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
 # {{{ gmsh
 
+AXIS_NAMES = "xyz"
+
+
 def read_gmsh(
         filename, force_ambient_dim=None, mesh_construction_kwargs=None,
         return_tag_to_elements_map=False):
@@ -350,8 +353,6 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=None,
             mesh = result[0]
         else:
             mesh = result
-
-        AXIS_NAMES = "xyz"  # noqa
 
         dim = mesh.vertices.shape[0]
         for idim in range(dim):
