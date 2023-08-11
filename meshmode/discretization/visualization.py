@@ -1307,6 +1307,9 @@ def make_visualizer(actx, discr, vis_order=None,
                     stacklevel=2)
 
             vis_discr = discr
+        else:
+            if vis_order is None:
+                raise ValueError("A 'vis_order' must be provided for interpolation.")
 
     from meshmode.discretization.connection import make_same_mesh_connection
     return Visualizer(
