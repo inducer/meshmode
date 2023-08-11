@@ -1429,12 +1429,14 @@ def affine_map(
         for old_fagrp_list in mesh.facial_adjacency_groups:
             fagrp_list = []
             for old_fagrp in old_fagrp_list:
-                if hasattr(old_fagrp, "aff_map"):
-                    new_fields = {"aff_map": compute_new_map(old_fagrp.aff_map)}
+                if isinstance(old_fagrp,
+                              (InteriorAdjacencyGroup, InterPartAdjacencyGroup)):
+                    new_fagrp: FacialAdjacencyGroup = replace(
+                        old_fagrp, aff_map=compute_new_map(old_fagrp.aff_map))
                 else:
-                    new_fields = {}
+                    new_fagrp = old_fagrp
 
-                fagrp_list.append(replace(old_fagrp, **new_fields))
+                fagrp_list.append(new_fagrp)
             facial_adjacency_groups.append(fagrp_list)
 
     else:
