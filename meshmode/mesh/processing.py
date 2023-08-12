@@ -1434,6 +1434,7 @@ def affine_map(
                     new_fagrp: FacialAdjacencyGroup = replace(
                         old_fagrp, aff_map=compute_new_map(old_fagrp.aff_map))
                 else:
+                    assert not hasattr(old_fagrp, "aff_map")
                     new_fagrp = old_fagrp
 
                 fagrp_list.append(new_fagrp)
