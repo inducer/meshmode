@@ -275,15 +275,19 @@ class DGDiscretization:
 
         import modepy as mp
         shape = mp.Simplex(volgrp.dim)
-        unit_vertices = mp.unit_vertices_for_shape(shape).T
 
         for face in mp.faces_for_shape(shape):
-            face_vertices = unit_vertices[np.array(face.volume_vertex_indices)].T
-            matrix[:, face.face_index, :] = mp.nodal_face_mass_matrix(
+            from modepy import basis_for_space, quadrature_for_space, PN, Simplex
+            face_space = PN(volgrp.dim - 1, volgrp.order)
+            face_shape = Simplex(volgrp.dim-1)
+            face_quad = quadrature_for_space(face_space, face_shape)
+            face_basis = basis_for_space(face_space, face_shape)
+
+            matrix[:, face.face_index, :] = mp.nodal_mass_matrix_for_face(
+                    face, face_quad,
+                    face_basis.functions,
                     volgrp.basis_obj().functions,
-                    volgrp.unit_nodes, afgrp.unit_nodes,
-                    volgrp.order,
-                    face_vertices)
+                    volgrp.unit_nodes, afgrp.unit_nodes)
 
         actx = self._setup_actx
         return actx.freeze(actx.from_numpy(matrix))
