@@ -183,6 +183,9 @@ jobs:
             run: |
                 curl -L -O https://tiker.net/ci-support-v0
                 . ./ci-support-v0
+                if [[ "$DOWNSTREAM_PROJECT" == "grudge" && "$GITHUB_HEAD_REF" == "group-constr-drop-index" ]]; then
+                    DOWNSTREAM_PROJECT=https://github.com/inducer/grudge.git@grad-test-overint
+                fi
                 test_downstream "$DOWNSTREAM_PROJECT"
 
 # vim: sw=4

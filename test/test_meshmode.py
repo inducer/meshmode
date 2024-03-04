@@ -36,7 +36,8 @@ pytest_generate_tests = pytest_generate_tests_for_array_contexts(
          PytestPyOpenCLArrayContextFactory,
          ])
 
-from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+from meshmode.mesh import (
+    MeshElementGroup, SimplexElementGroup, TensorProductElementGroup)
 from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
         default_simplex_group_factory,
@@ -914,6 +915,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
             mesh.vertices[0, mesh.groups[0].vertex_indices] < 0.0,
             axis=1).astype(np.int64)
     mesh = split_mesh_groups(mesh, element_flags)
+    assert isinstance(mesh, Mesh)
 
     assert len(mesh.groups) == 2            # pylint: disable=no-member
     assert mesh.facial_adjacency_groups
@@ -932,10 +934,19 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
 
     from meshmode.discretization import Discretization
 
-    def grp_factory(mesh_el_group, index):
+    def grp_factory(mesh_el_group: MeshElementGroup):
+        index = None
+
+        for i, meg in enumerate(mesh.groups):  # pylint: disable=no-member
+            if meg is mesh_el_group:
+                index = i
+
+        if mesh_el_group.dim == mesh.ambient_dim:
+            assert index is not None
+
         return default_simplex_group_factory(
                 base_dim=ambient_dim, order=order + 2 if index == 0 else order
-                )(mesh_el_group, index)
+                )(mesh_el_group)
 
     discr = Discretization(actx, mesh, grp_factory)
 

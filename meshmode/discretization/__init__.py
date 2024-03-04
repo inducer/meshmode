@@ -451,13 +451,7 @@ class Discretization:
             raise TypeError("'actx' must be an ArrayContext")
 
         self.mesh = mesh
-        groups = []
-        for igrp, mg in enumerate(mesh.groups):
-            # TODO: setting index is deprecated
-            ng = group_factory(mg, index=igrp)
-            groups.append(ng)
-
-        self.groups = groups
+        self.groups = [group_factory(mg) for mg in mesh.groups]
 
         self.real_dtype = np.dtype(real_dtype)
         self.complex_dtype = np.dtype({
