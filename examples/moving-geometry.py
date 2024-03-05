@@ -78,6 +78,8 @@ def reconstruct_discr_from_nodes(actx, discr, x):
                            discr_nodes,
                            tagged=(FirstAxisIsElementsTag(),))
 
+    from dataclasses import replace
+
     megs = []
     for igrp, grp in enumerate(discr.groups):
         nodes = np.stack([
@@ -85,10 +87,7 @@ def reconstruct_discr_from_nodes(actx, discr, x):
             for iaxis in range(discr.ambient_dim)
             ])
 
-        meg = grp.mesh_el_group.copy(
-                vertex_indices=None,
-                nodes=nodes,
-                )
+        meg = replace(grp.mesh_el_group, vertex_indices=None, nodes=nodes)
         megs.append(meg)
 
     mesh = discr.mesh.copy(groups=megs, vertices=None)

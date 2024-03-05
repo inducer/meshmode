@@ -21,8 +21,9 @@ THE SOFTWARE.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace, field
-from typing import Any, ClassVar, Hashable, Optional, Tuple, Type, Sequence
+from dataclasses import dataclass, field, replace
+from typing import Any, ClassVar, Hashable, Optional, Sequence, Tuple, Type
+from warnings import warn
 
 import numpy as np
 import numpy.linalg as la
@@ -31,6 +32,7 @@ import modepy as mp
 from pytools import Record, memoize_method
 
 from meshmode.mesh.tools import AffineMap
+
 
 __doc__ = """
 
@@ -117,23 +119,8 @@ class BTAG_PARTITION(BTAG_NO_BOUNDARY):  # noqa: N801
 
     .. versionadded:: 2017.1
     """
-    def __init__(self, part_id: PartID, part_nr=None):
-        if part_nr is not None:
-            from warnings import warn
-            warn("part_nr is deprecated and will stop working in March 2023. "
-                 "Use part_id instead.",
-                 DeprecationWarning, stacklevel=2)
-            self.part_id = int(part_nr)
-        else:
-            self.part_id = part_id
-
-    @property
-    def part_nr(self):
-        from warnings import warn
-        warn("part_nr is deprecated and will stop working in March 2023. "
-             "Use part_id instead.",
-             DeprecationWarning, stacklevel=2)
-        return self.part_id
+    def __init__(self, part_id: PartID) -> None:
+        self.part_id = part_id
 
     def __hash__(self):
         return hash((type(self), self.part_id))
@@ -216,7 +203,8 @@ class MeshElementGroup(ABC):
     .. attribute:: vertex_indices
 
         An array of shape ``(nelements, nvertices)`` of (mesh-wide)
-        vertex indices.
+        vertex indices. This can also be *None* to support the case where the
+        associated mesh does not have any :attr:`~Mesh.vertices`.
 
     .. attribute:: nodes
 
@@ -251,43 +239,9 @@ class MeshElementGroup(ABC):
     """
 
     order: int
-
-    # NOTE: the mesh supports not having vertices if no facial or nodal
-    # adjacency is required, so we can mark this as optional
     vertex_indices: Optional[np.ndarray]
     nodes: np.ndarray
-
-    # TODO: Remove ` = None` when everything is constructed through the factory
-    unit_nodes: np.ndarray = None
-
-    # FIXME: these should be removed!
-    # https://github.com/inducer/meshmode/issues/224
-    element_nr_base: Optional[int] = None
-    node_nr_base: Optional[int] = None
-
-    # TODO: remove when everything has been constructed through the factory
-    _factory_constructed: bool = False
-
-    def __post_init__(self):
-        if not self._factory_constructed:
-            from warnings import warn
-            warn(f"Calling the constructor of '{type(self).__name__}' is "
-                 "deprecated and will stop working in July 2022. "
-                 f"Use '{type(self).__name__}.make_group' instead",
-                 DeprecationWarning, stacklevel=2)
-
-    def __getattribute__(self, name):
-        if name in ("element_nr_base", "node_nr_base"):
-            new_name = ("base_element_nrs"
-                        if name == "element_nr_base" else
-                        "base_node_nrs")
-
-            from warnings import warn
-            warn(f"'{type(self).__name__}.{name}' is deprecated and will be "
-                 f"removed in July 2022. Use 'Mesh.{new_name}' instead",
-                 DeprecationWarning, stacklevel=2)
-
-        return super().__getattribute__(name)
+    unit_nodes: np.ndarray
 
     @property
     def dim(self):
@@ -312,21 +266,6 @@ class MeshElementGroup(ABC):
     @property
     def nnodes(self):
         return self.nelements * self.unit_nodes.shape[-1]
-
-    def copy(self, **kwargs: Any) -> "MeshElementGroup":
-        from warnings import warn
-        warn(f"{type(self).__name__}.copy is deprecated and will be removed in "
-                f"July 2022. {type(self).__name__} is now a dataclass, so "
-                "standard functions such as dataclasses.replace should be used "
-                "instead.",
-                DeprecationWarning, stacklevel=2)
-
-        if "element_nr_base" not in kwargs:
-            kwargs["element_nr_base"] = None
-        if "node_nr_base" not in kwargs:
-            kwargs["node_nr_base"] = None
-
-        return replace(self, **kwargs)
 
     def __eq__(self, other):
         return (
@@ -384,61 +323,9 @@ class _ModepyElementGroup(MeshElementGroup):
     .. attribute:: _modepy_space
     """
 
-    # TODO: remove once `make_group` is used everywhere
-    dim: Optional[int] = None
-
     _modepy_shape_cls: ClassVar[Type[mp.Shape]] = mp.Shape
     _modepy_shape: mp.Shape = field(default=None, repr=False)
     _modepy_space: mp.FunctionSpace = field(default=None, repr=False)
-
-    def __post_init__(self):
-        super().__post_init__()
-        if self._factory_constructed:
-            return
-
-        # {{{ duplicates make_group below, keep in sync
-
-        if self.unit_nodes is None:
-            if self.dim is None:
-                raise TypeError("either 'dim' or 'unit_nodes' must be provided")
-        else:
-            if self.dim is None:
-                object.__setattr__(self, "dim", self.unit_nodes.shape[0])
-
-            if self.unit_nodes.shape[0] != self.dim:
-                raise ValueError("'dim' does not match 'unit_nodes' dimension")
-
-        # dim is now usable
-        assert self._modepy_shape_cls is not mp.Shape
-        object.__setattr__(self, "_modepy_shape",
-                # pylint: disable=abstract-class-instantiated
-                self._modepy_shape_cls(self.dim))
-        object.__setattr__(self, "_modepy_space",
-                mp.space_for_shape(self._modepy_shape, self.order))
-
-        if self.unit_nodes is None:
-            unit_nodes = mp.edge_clustered_nodes_for_space(
-                    self._modepy_space, self._modepy_shape)
-            object.__setattr__(self, "unit_nodes", unit_nodes)
-
-        if self.nodes is not None:
-            if self.unit_nodes.shape[-1] != self.nodes.shape[-1]:
-                raise ValueError(
-                        "'nodes' has wrong number of unit nodes per element."
-                        f" expected {self.unit_nodes.shape[-1]}, "
-                        f" but got {self.nodes.shape[-1]}.")
-
-        if self.vertex_indices is not None:
-            if not issubclass(self.vertex_indices.dtype.type, np.integer):
-                raise TypeError("'vertex_indices' must be integral")
-
-            if self.vertex_indices.shape[-1] != self.nvertices:
-                raise ValueError(
-                        "'vertex_indices' has wrong number of vertices per element."
-                        f" expected {self.nvertices},"
-                        f" got {self.vertex_indices.shape[-1]}")
-
-        # }}}
 
     @property
     def nvertices(self):
@@ -486,11 +373,12 @@ class _ModepyElementGroup(MeshElementGroup):
             raise ValueError("'unit_nodes' size does not match the dimension "
                              f"of a '{type(space).__name__}' space of order {order}")
 
-        return cls(order=order, vertex_indices=vertex_indices, nodes=nodes,
-                   dim=dim,
+        return cls(order=order,
+                   vertex_indices=vertex_indices,
+                   nodes=nodes,
                    unit_nodes=unit_nodes,
-                   _modepy_shape=shape, _modepy_space=space,
-                   _factory_constructed=True)
+                   _modepy_shape=shape,
+                   _modepy_space=space)
 
         # }}}
 
@@ -500,6 +388,7 @@ class _ModepyElementGroup(MeshElementGroup):
 @dataclass(frozen=True, eq=False)
 class SimplexElementGroup(_ModepyElementGroup):
     r"""Inherits from :class:`MeshElementGroup`."""
+
     _modepy_shape_cls: ClassVar[Type[mp.Shape]] = mp.Simplex
 
     @property
@@ -511,6 +400,7 @@ class SimplexElementGroup(_ModepyElementGroup):
 @dataclass(frozen=True, eq=False)
 class TensorProductElementGroup(_ModepyElementGroup):
     r"""Inherits from :class:`MeshElementGroup`."""
+
     _modepy_shape_cls: ClassVar[Type[mp.Shape]] = mp.Hypercube
 
     def is_affine(self):
@@ -548,16 +438,6 @@ class NodalAdjacency:
 
     neighbors_starts: np.ndarray
     neighbors: np.ndarray
-
-    def copy(self, **kwargs: Any) -> "NodalAdjacency":
-        from warnings import warn
-        warn(f"{type(self).__name__}.copy is deprecated and will be removed in "
-                f"July 2022. {type(self).__name__} is now a dataclass, so "
-                "standard functions such as dataclasses.replace should be used "
-                "instead.",
-                DeprecationWarning, stacklevel=2)
-
-        return replace(self, **kwargs)
 
     def __eq__(self, other):
         return (
@@ -604,16 +484,6 @@ class FacialAdjacencyGroup:
     """
 
     igroup: int
-
-    def copy(self, **kwargs: Any) -> "FacialAdjacencyGroup":
-        from warnings import warn
-        warn(f"{type(self).__name__}.copy is deprecated and will be removed in "
-                f"July 2022. {type(self).__name__} is now a dataclass, so "
-                "standard functions such as dataclasses.replace should be used "
-                "instead.",
-                DeprecationWarning, stacklevel=2)
-
-        return replace(self, **kwargs)
 
     def __eq__(self, other):
         return (
@@ -1000,16 +870,6 @@ class Mesh(Record):
             :attr:`facial_adjacency_groups` may be passed.
         """
 
-        el_nr = 0
-        node_nr = 0
-
-        new_groups = []
-        for g in groups:
-            ng = replace(g, element_nr_base=el_nr, node_nr_base=node_nr)
-            new_groups.append(ng)
-            el_nr += ng.nelements
-            node_nr += ng.nnodes
-
         if vertices is None:
             is_conforming = None
 
@@ -1038,7 +898,7 @@ class Mesh(Record):
                 self.face_id_dtype)
 
         Record.__init__(
-                self, vertices=vertices, groups=new_groups,
+                self, vertices=vertices, groups=groups,
                 _nodal_adjacency=nodal_adjacency,
                 _facial_adjacency_groups=facial_adjacency_groups,
                 vertex_id_dtype=np.dtype(vertex_id_dtype),
@@ -1076,8 +936,8 @@ class Mesh(Record):
                             assert fagrp.neighbor_faces.dtype == self.face_id_dtype
                             assert fagrp.neighbor_faces.shape == (nfagrp_elements,)
 
-            from meshmode.mesh.processing import \
-                    test_volume_mesh_element_orientations
+            from meshmode.mesh.processing import (
+                test_volume_mesh_element_orientations)
 
             if self.dim == self.ambient_dim and not skip_element_orientation_test:
                 # only for volume meshes, for now
@@ -1093,9 +953,8 @@ class Mesh(Record):
 
         set_if_not_present("vertices")
         if "groups" not in kwargs:
-            kwargs["groups"] = [
-                replace(group, element_nr_base=None, node_nr_base=None)
-                for group in self.groups]
+            kwargs["groups"] = self.groups
+
         set_if_not_present("nodal_adjacency", "_nodal_adjacency")
         set_if_not_present("facial_adjacency_groups", "_facial_adjacency_groups")
         set_if_not_present("vertex_id_dtype")
@@ -1269,9 +1128,9 @@ def _test_node_vertex_consistency(mesh, tol):
         if isinstance(mgrp, _ModepyElementGroup):
             assert _test_node_vertex_consistency_resampling(mesh, igrp, tol)
         else:
-            from warnings import warn
-            warn("not implemented: node-vertex consistency check for '%s'"
-                    % type(mgrp).__name__)
+            warn("Not implemented: node-vertex consistency check for "
+                 f"groups of type '{type(mgrp).__name__}'.",
+                 stacklevel=3)
 
     return True
 
@@ -1657,7 +1516,7 @@ def as_python(mesh, function_name="make_mesh"):
     recreate the mesh given as an input parameter.
     """
 
-    from pytools.py_codegen import PythonCodeGenerator, Indentation
+    from pytools.py_codegen import Indentation, PythonCodeGenerator
     cg = PythonCodeGenerator()
     cg("""
         # generated by meshmode.mesh.as_python

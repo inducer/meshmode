@@ -876,8 +876,7 @@ def test_mesh_without_vertices(actx_factory):
     from dataclasses import replace
     grp, = mesh.groups
     groups = [
-        replace(grp, nodes=grp.nodes, vertex_indices=None,
-                element_nr_base=None, node_nr_base=None)
+        replace(grp, nodes=grp.nodes, vertex_indices=None)
         for grp in mesh.groups]
     mesh = Mesh(None, groups, is_conforming=False)
 
