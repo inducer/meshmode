@@ -25,7 +25,7 @@ THE SOFTWARE.
 from dataclasses import dataclass, replace
 from functools import reduce
 from typing import (
-    Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union)
+    Callable, Dict, List, Literal, Mapping, Optional, Sequence, Set, Tuple, Union)
 
 import numpy as np
 import numpy.linalg as la
@@ -451,6 +451,9 @@ def _get_mesh_part(
 
     .. versionadded:: 2017.1
     """
+    if mesh.vertices is None:
+        raise ValueError("Mesh must have vertices")
+
     element_counts = np.zeros(mesh.nelements)
     for elements in part_id_to_elements.values():
         element_counts[elements] += 1
@@ -608,6 +611,8 @@ def find_volume_mesh_element_orientations(
     :arg tolerate_unimplemented_checks: If *True*, elements for which no
         check is available will return *NaN*.
     """
+    if mesh.vertices is None:
+        raise ValueError("Mesh must have vertices to check orientation")
 
     result: np.ndarray = np.empty(mesh.nelements, dtype=np.float64)
 
@@ -743,6 +748,8 @@ def perform_flips(
         indicating by their Boolean value whether the element is to be
         flipped.
     """
+    if mesh.vertices is None:
+        raise ValueError("Mesh must have vertices to perform flips")
 
     flip_flags = flip_flags.astype(bool)
 
@@ -772,6 +779,8 @@ def find_bounding_box(mesh: Mesh) -> Tuple[np.ndarray, np.ndarray]:
     :return: a tuple *(min, max)*, each consisting of a :class:`numpy.ndarray`
         indicating the minimal and maximal extent of the geometry along each axis.
     """
+    if mesh.vertices is None:
+        raise ValueError("Mesh must have vertices to compute bounding box")
 
     return (
             np.min(mesh.vertices, axis=-1),
@@ -796,34 +805,35 @@ def merge_disjoint_meshes(
 
     # {{{ assemble combined vertex array
 
-    ambient_dim = meshes[0].ambient_dim
-    nvertices = sum(
-            mesh.vertices.shape[-1]
-            for mesh in meshes)
+    if all(mesh.vertices is not None for mesh in meshes):
+        ambient_dim = meshes[0].ambient_dim
+        nvertices = sum(mesh.nvertices for mesh in meshes)
 
-    vert_dtype = np.result_type(*[mesh.vertices.dtype for mesh in meshes])
-    vertices = np.empty(
-            (ambient_dim, nvertices), vert_dtype)
+        vert_dtype = np.result_type(*[mesh.vertex_dtype for mesh in meshes])
+        vertices = np.empty((ambient_dim, nvertices), vert_dtype)
 
-    current_vert_base = 0
-    vert_bases = []
-    for mesh in meshes:
-        mesh_nvert = mesh.vertices.shape[-1]
-        vertices[:, current_vert_base:current_vert_base+mesh_nvert] = \
-                mesh.vertices
+        current_vert_base = 0
+        vert_bases = []
+        for mesh in meshes:
+            assert mesh.vertices is not None
+            mesh_nvert = mesh.nvertices
+            vertices[:, current_vert_base:current_vert_base+mesh_nvert] = \
+                    mesh.vertices
 
-        vert_bases.append(current_vert_base)
-        current_vert_base += mesh_nvert
+            vert_bases.append(current_vert_base)
+            current_vert_base += mesh_nvert
+    else:
+        raise ValueError("All meshes must have vertices to perform merge")
 
     # }}}
 
     # {{{ assemble new groups list
 
-    nodal_adjacency = None
+    nodal_adjacency: Optional[Literal[False]] = None
     if any(mesh._nodal_adjacency is not None for mesh in meshes):
         nodal_adjacency = False
 
-    facial_adjacency_groups = None
+    facial_adjacency_groups: Optional[Literal[False]] = None
     if any(mesh._facial_adjacency_groups is not None for mesh in meshes):
         facial_adjacency_groups = False
 
@@ -948,6 +958,9 @@ def _match_vertices(
         aff_map: Optional[AffineMap] = None,
         tol: float = 1e-12,
         use_tree: Optional[bool] = None) -> np.ndarray:
+    if mesh.vertices is None:
+        raise ValueError("Mesh must have vertices")
+
     if aff_map is None:
         aff_map = AffineMap()
 
@@ -1106,6 +1119,9 @@ def _match_boundary_faces(
         second contains faces from boundary *bdry_pair_mapping.to_btag*. The order
         of the faces is unspecified.
     """
+    if mesh.vertices is None:
+        raise ValueError("Mesh must have vertices")
+
     btag_m = bdry_pair_mapping.from_btag
     btag_n = bdry_pair_mapping.to_btag
 
@@ -1307,9 +1323,12 @@ def map_mesh(mesh: Mesh, f: Callable[[np.ndarray], np.ndarray]) -> Mesh:
                 "affine mappings in its facial adjacency. If the map is affine, "
                 "use affine_map instead")
 
-    vertices = f(mesh.vertices)
-    if not vertices.flags.c_contiguous:
-        vertices = np.copy(vertices, order="C")
+    if mesh.vertices is not None:
+        vertices = f(mesh.vertices)
+        if not vertices.flags.c_contiguous:
+            vertices = np.copy(vertices, order="C")
+    else:
+        vertices = None
 
     # {{{ assemble new groups list
 
@@ -1512,7 +1531,7 @@ def make_mesh_grid(
     meshes = []
 
     for index in product(*(range(n) for n in shape)):
-        b = sum([i * o for i, o in zip(index, offset)])
+        b = sum([i * o for i, o in zip(index, offset)], offset[0])
         meshes.append(affine_map(mesh, b=b))
 
     return merge_disjoint_meshes(meshes, skip_tests=skip_tests)

@@ -831,7 +831,7 @@ def test_boundary_tags():
 
 def test_volume_tags():
     from meshmode.mesh.io import read_gmsh
-    mesh, tag_to_elements_map = read_gmsh(
+    mesh, tag_to_elements_map = read_gmsh(  # pylint: disable=unpacking-non-sequence
         str(thisdir / "testmesh_multivol.msh"), return_tag_to_elements_map=True)
 
     assert len(tag_to_elements_map) == 2

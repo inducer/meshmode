@@ -28,7 +28,7 @@ intersphinx_mapping = {
     "arraycontext": ("https://documen.tician.de/arraycontext", None),
     "fenics": ("https://fenics.readthedocs.io/projects/fiat/en/latest", None),
     "FInAT": ("https://finat.github.io/FInAT/", None),
-    "firedrake": ("https://firedrakeproject.org", None),
+    "firedrake": ("https://www.firedrakeproject.org", None),
     "gmsh_interop": ("https://documen.tician.de/gmsh_interop", None),
     "h5py": ("https://docs.h5py.org/en/stable", None),
     "loopy": ("https://documen.tician.de/loopy", None),
