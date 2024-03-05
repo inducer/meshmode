@@ -8,6 +8,7 @@
 .. autoclass:: DiscretizationDOFAxisTag
 .. autoclass:: DiscretizationAmbientDimAxisTag
 .. autoclass:: DiscretizationTopologicalDimAxisTag
+.. autoclass:: DiscretizationDOFPickListAxisTag
 """
 
 __copyright__ = """
@@ -120,4 +121,13 @@ class DiscretizationTopologicalDimAxisTag(DiscretizationDimAxisTag):
     """
     Array dimensions tagged with this tag type describe an axis indexing over
     the discretization's physical coordinate dimensions.
+    """
+
+
+@tag_dataclass
+class DiscretizationDOFPickListAxisTag(DiscretizationEntityAxisTag):
+    """
+    Array dimensions tagged with this tag type describe an axis indexing over
+    DOF pick lists in
+    :class:`meshmode.discretization.connection.DirectDiscretizationConnection`.
     """
