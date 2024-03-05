@@ -479,8 +479,7 @@ class Discretization:
              group_factory: Optional[ElementGroupFactory] = None,
              real_dtype: Optional[np.dtype] = None) -> "Discretization":
         """Creates a new object of the same type with all arguments that are not
-        *None* replaced. The copy is not recursive (e.g. it does not call
-        :meth:`meshmode.mesh.Mesh.copy`).
+        *None* replaced. The copy is not recursive.
         """
 
         return type(self)(
