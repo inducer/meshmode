@@ -20,34 +20,29 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import logging
 from functools import partial
-import numpy as np  # noqa: F401
-import numpy.linalg as la  # noqa: F401
-
-import meshmode         # noqa: F401
-
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
-from arraycontext import pytest_generate_tests_for_array_contexts
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
-
-
-from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-from meshmode.discretization.poly_element import (
-        PolynomialWarpAndBlend2DRestrictingGroupFactory,
-        PolynomialWarpAndBlend3DRestrictingGroupFactory,
-        PolynomialEquidistantSimplexGroupFactory,
-        LegendreGaussLobattoTensorProductGroupFactory,
-        PolynomialRecursiveNodesGroupFactory,
-        )
-from meshmode.discretization import Discretization
-from meshmode.discretization.connection import FACE_RESTR_ALL
-import meshmode.mesh.generation as mgen
 
 import pytest
 
-import logging
+from arraycontext import pytest_generate_tests_for_array_contexts
+
+import meshmode.mesh.generation as mgen
+from meshmode import _acf  # noqa: F401
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.discretization import Discretization
+from meshmode.discretization.connection import FACE_RESTR_ALL
+from meshmode.discretization.poly_element import (
+    LegendreGaussLobattoTensorProductGroupFactory,
+    PolynomialEquidistantSimplexGroupFactory, PolynomialRecursiveNodesGroupFactory,
+    PolynomialWarpAndBlend2DRestrictingGroupFactory,
+    PolynomialWarpAndBlend3DRestrictingGroupFactory)
+from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+
+
 logger = logging.getLogger(__name__)
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 
 @pytest.mark.parametrize("group_factory", [
@@ -81,7 +76,7 @@ def test_bdry_restriction_is_permutation(actx_factory, group_factory, dim, order
 
     vol_discr = Discretization(actx, mesh, group_factory(order))
     from meshmode.discretization.connection import (
-            make_face_restriction, make_opposite_face_connection)
+        make_face_restriction, make_opposite_face_connection)
     bdry_connection = make_face_restriction(
             actx, vol_discr, group_factory(order),
             FACE_RESTR_ALL)

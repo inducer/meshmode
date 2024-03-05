@@ -1,5 +1,6 @@
-from meshmode.mesh.io import generate_gmsh, FileSource
+from meshmode.mesh.io import FileSource, generate_gmsh
 from meshmode.mesh.visualization import mesh_to_tikz
+
 
 h = 0.3
 order = 1

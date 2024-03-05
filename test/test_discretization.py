@@ -20,18 +20,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-
 import numpy as np
-# import numpy.linalg as la
+
+from arraycontext import pytest_generate_tests_for_array_contexts
 
 import meshmode.mesh.generation as mgen
+from meshmode import _acf  # noqa: F401
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import (
-        InterpolatoryQuadratureSimplexGroupFactory,
-        )
+    InterpolatoryQuadratureSimplexGroupFactory)
 
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
-from arraycontext import pytest_generate_tests_for_array_contexts
+
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         [PytestPyOpenCLArrayContextFactory])
 

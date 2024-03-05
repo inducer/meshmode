@@ -1,7 +1,9 @@
 import numpy as np  # noqa
+
 import pyopencl as cl
 
 from meshmode.array_context import PyOpenCLArrayContext
+
 
 order = 4
 
@@ -12,15 +14,15 @@ def main():
     actx = PyOpenCLArrayContext(queue)
 
     from meshmode.mesh.generation import (  # noqa: F401
-            generate_sphere, generate_icosahedron,
-            generate_torus)
+        generate_icosahedron, generate_sphere, generate_torus)
+
     #mesh = generate_sphere(1, order=order)
     mesh = generate_icosahedron(1, order=order)
     #mesh = generate_torus(3, 1, order=order)
 
     from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-            PolynomialWarpAndBlend3DRestrictingGroupFactory
+    from meshmode.discretization.poly_element import (
+        PolynomialWarpAndBlend3DRestrictingGroupFactory)
 
     discr = Discretization(
             actx, mesh, PolynomialWarpAndBlend3DRestrictingGroupFactory(order))
@@ -32,8 +34,7 @@ def main():
         ("f", actx.thaw(discr.nodes()[0])),
         ])
 
-    from meshmode.discretization.visualization import \
-            write_nodal_adjacency_vtk_file
+    from meshmode.discretization.visualization import write_nodal_adjacency_vtk_file
 
     write_nodal_adjacency_vtk_file("adjacency.vtu",
             mesh)

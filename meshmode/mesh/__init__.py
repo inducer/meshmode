@@ -21,7 +21,7 @@ THE SOFTWARE.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Any, ClassVar, Hashable, Optional, Sequence, Tuple, Type
 from warnings import warn
 

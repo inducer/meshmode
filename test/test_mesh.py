@@ -23,38 +23,33 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from functools import partial
+import logging
+import pathlib
 from dataclasses import replace
+from functools import partial
+
 import numpy as np
 import numpy.linalg as la
 import pytest
 
-from meshmode import _acf       # noqa: F401
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from arraycontext import pytest_generate_tests_for_array_contexts
+
+import meshmode.mesh.generation as mgen
+import meshmode.mesh.io as mio
+from meshmode import _acf  # noqa: F401
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.discretization.poly_element import (
+    LegendreGaussLobattoTensorProductGroupFactory, default_simplex_group_factory)
+from meshmode.mesh import (
+    BoundaryAdjacencyGroup, InteriorAdjacencyGroup, Mesh, SimplexElementGroup,
+    TensorProductElementGroup)
+from meshmode.mesh.tools import AffineMap
+
+
+logger = logging.getLogger(__name__)
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         [PytestPyOpenCLArrayContextFactory])
 
-from meshmode.mesh import (
-    Mesh,
-    SimplexElementGroup,
-    TensorProductElementGroup,
-    InteriorAdjacencyGroup,
-    BoundaryAdjacencyGroup)
-from meshmode.discretization.poly_element import (
-        default_simplex_group_factory,
-        LegendreGaussLobattoTensorProductGroupFactory,
-        )
-import meshmode.mesh.generation as mgen
-import meshmode.mesh.io as mio
-from meshmode.mesh.tools import AffineMap
-import modepy as mp
-
-
-import logging
-logger = logging.getLogger(__name__)
-
-import pathlib
 thisdir = pathlib.Path(__file__).parent
 
 
@@ -228,7 +223,7 @@ def test_box_mesh(actx_factory, visualize=False):
 # {{{ circle mesh
 
 def test_circle_mesh(visualize=False):
-    from meshmode.mesh.io import generate_gmsh, FileSource
+    from meshmode.mesh.io import FileSource, generate_gmsh
     logger.info("BEGIN GEN")
     mesh = generate_gmsh(
             FileSource(str(thisdir / "circle.step")), 2, order=2,
@@ -458,7 +453,7 @@ def test_mesh_rotation(ambient_dim, visualize=False):
 # {{{ test_mesh_to_tikz
 
 def test_mesh_to_tikz():
-    from meshmode.mesh.io import generate_gmsh, FileSource
+    from meshmode.mesh.io import FileSource, generate_gmsh
 
     h = 0.3
     order = 1
@@ -509,7 +504,7 @@ def test_quad_single_element(visualize=False):
     TensorProductElementGroup
     ])
 def test_merge_and_map(actx_factory, group_cls, visualize=False):
-    from meshmode.mesh.io import generate_gmsh, FileSource
+    from meshmode.mesh.io import FileSource, generate_gmsh
 
     order = 3
     mesh_order = 3
@@ -532,7 +527,7 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
 
         discr_grp_factory = LegendreGaussLobattoTensorProductGroupFactory(order)
 
-    from meshmode.mesh.processing import merge_disjoint_meshes, affine_map
+    from meshmode.mesh.processing import affine_map, merge_disjoint_meshes
     mesh2 = affine_map(mesh,
             A=np.eye(mesh.ambient_dim),
             b=np.array([2, 0, 0])[:mesh.ambient_dim])
@@ -557,7 +552,7 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
 # {{{ element orientation
 
 def test_element_orientation_via_flipping():
-    from meshmode.mesh.io import generate_gmsh, FileSource
+    from meshmode.mesh.io import FileSource, generate_gmsh
 
     mesh_order = 3
 
@@ -568,8 +563,8 @@ def test_element_orientation_via_flipping():
             target_unit="MM",
             )
 
-    from meshmode.mesh.processing import (perform_flips,
-            find_volume_mesh_element_orientations)
+    from meshmode.mesh.processing import (
+        find_volume_mesh_element_orientations, perform_flips)
     mesh_orient = find_volume_mesh_element_orientations(mesh)
 
     assert (mesh_orient > 0).all()
@@ -795,6 +790,7 @@ def test_lookup_tree(visualize=False):
 
 def test_boundary_tags():
     from meshmode.mesh.io import read_gmsh
+
     # ensure tags are read in
     mesh = read_gmsh(str(thisdir / "annulus.msh"))
 
@@ -868,9 +864,7 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
         pytest.skip("mesh type not supported on tensor product elements")
 
     from meshmode.mesh import (
-        mesh_has_boundary,
-        check_bc_coverage,
-        is_boundary_tag_empty)
+        check_bc_coverage, is_boundary_tag_empty, mesh_has_boundary)
 
     if dim == 1:
         a = (0,)
@@ -950,7 +944,7 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
 @pytest.mark.parametrize(("ambient_dim", "filename"),
         [(2, "blob-2d.step"), (3, "ball-radius-1.step")])
 def test_quad_mesh_2d(ambient_dim, filename, visualize=False):
-    from meshmode.mesh.io import generate_gmsh, ScriptWithFilesSource
+    from meshmode.mesh.io import ScriptWithFilesSource, generate_gmsh
     logger.info("BEGIN GEN")
 
     mesh = generate_gmsh(
@@ -1222,8 +1216,7 @@ def test_node_vertex_consistency_check(actx_factory):
     group_factory = default_simplex_group_factory(1, 1)
     vol_discr = Discretization(actx, vol_mesh, group_factory)
     from meshmode.discretization.connection import (
-        FACE_RESTR_ALL,
-        make_face_restriction)
+        FACE_RESTR_ALL, make_face_restriction)
     make_face_restriction(
         actx, vol_discr, group_factory, FACE_RESTR_ALL, per_face_groups=False)
 
@@ -1266,8 +1259,7 @@ def test_glued_mesh(use_tree):
     map_lower_to_upper = _get_rotation(np.pi/2, np.array([0, 0, 1]), center)
     map_upper_to_lower = _get_rotation(-np.pi/2, np.array([0, 0, 1]), center)
 
-    from meshmode.mesh.processing import (
-        glue_mesh_boundaries, BoundaryPairMapping)
+    from meshmode.mesh.processing import BoundaryPairMapping, glue_mesh_boundaries
     mesh = glue_mesh_boundaries(
         orig_mesh, bdry_pair_mappings_and_tols=[
             (BoundaryPairMapping("-theta", "+theta", map_lower_to_upper), 1e-12)
@@ -1338,8 +1330,7 @@ def test_glued_mesh_matrix_only():
     map_lower_to_upper = AffineMap(matrix=matrix_lower_to_upper)
     map_upper_to_lower = AffineMap(matrix=matrix_upper_to_lower)
 
-    from meshmode.mesh.processing import (
-        glue_mesh_boundaries, BoundaryPairMapping)
+    from meshmode.mesh.processing import BoundaryPairMapping, glue_mesh_boundaries
     mesh = glue_mesh_boundaries(
         orig_mesh, bdry_pair_mappings_and_tols=[
             (BoundaryPairMapping("-theta", "+theta", map_lower_to_upper), 1e-12)
@@ -1366,8 +1357,7 @@ def test_glued_mesh_offset_only():
     map_lower_to_upper = AffineMap(offset=offset_lower_to_upper)
     map_upper_to_lower = AffineMap(offset=offset_upper_to_lower)
 
-    from meshmode.mesh.processing import (
-        glue_mesh_boundaries, BoundaryPairMapping)
+    from meshmode.mesh.processing import BoundaryPairMapping, glue_mesh_boundaries
     mesh = glue_mesh_boundaries(
         orig_mesh, bdry_pair_mappings_and_tols=[
             (BoundaryPairMapping("-z", "+z", map_lower_to_upper), 1e-12)

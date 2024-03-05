@@ -1,13 +1,13 @@
-import numpy as np  # noqa
 import sys
+
+import numpy as np  # noqa
 
 
 order = 4
 
 
 def main():
-    from meshmode.mesh.generation import (  # noqa
-            make_curve_mesh, starfish)
+    from meshmode.mesh.generation import make_curve_mesh, starfish  # noqa
     mesh1 = make_curve_mesh(starfish, np.linspace(0, 1, 20), 4)
 
     from meshmode.mesh.processing import affine_map, merge_disjoint_meshes

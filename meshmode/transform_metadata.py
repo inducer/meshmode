@@ -34,7 +34,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools.tag import Tag, tag_dataclass, UniqueTag
+from pytools.tag import Tag, UniqueTag, tag_dataclass
 
 
 class FirstAxisIsElementsTag(Tag):

@@ -28,20 +28,19 @@ from typing import ClassVar, Tuple
 from warnings import warn
 
 import numpy as np
-from pytools import memoize_method, memoize_on_first_arg
-from meshmode.mesh import (
-        MeshElementGroup as _MeshElementGroup,
-        SimplexElementGroup as _MeshSimplexElementGroup,
-        TensorProductElementGroup as _MeshTensorProductElementGroup)
-from meshmode.discretization import (
-        NoninterpolatoryElementGroupError,
-        ElementGroupBase,
-        ElementGroupFactory,
-        NodalElementGroupBase, ModalElementGroupBase,
-        InterpolatoryElementGroupBase)
 
 import modepy as mp
 from modepy import Basis
+from pytools import memoize_method, memoize_on_first_arg
+
+from meshmode.discretization import (
+    ElementGroupBase, ElementGroupFactory, InterpolatoryElementGroupBase,
+    ModalElementGroupBase, NodalElementGroupBase, NoninterpolatoryElementGroupError)
+from meshmode.mesh import (
+    MeshElementGroup as _MeshElementGroup,
+    SimplexElementGroup as _MeshSimplexElementGroup,
+    TensorProductElementGroup as _MeshTensorProductElementGroup)
+
 
 __doc__ = """
 Group types

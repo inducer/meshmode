@@ -20,18 +20,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import logging
 from typing import Optional, Type
 
 import numpy as np
+
 import pyopencl as cl
+from pytools import keyed_memoize_in
+from pytools.obj_array import make_obj_array
 
 from meshmode.array_context import PyOpenCLArrayContext
 from meshmode.transform_metadata import FirstAxisIsElementsTag
 
-from pytools import keyed_memoize_in
-from pytools.obj_array import make_obj_array
 
-import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
@@ -120,6 +121,7 @@ def run(actx, *,
     # {{{ element groups
 
     import modepy as mp
+
     import meshmode.discretization.poly_element as poly
 
     # NOTE: picking the same unit nodes for the mesh and the discr saves

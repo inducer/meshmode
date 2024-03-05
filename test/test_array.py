@@ -20,31 +20,30 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import logging
 from dataclasses import dataclass
-import pytest
+
 import numpy as np
+import pytest
+
+from arraycontext import (
+    dataclass_array_container, pytest_generate_tests_for_array_contexts,
+    with_container_arithmetic)
+from pytools.obj_array import make_obj_array
 
 from meshmode import _acf  # noqa: F401
-from meshmode.array_context import (PytestPyOpenCLArrayContextFactory,
-                                    PytestPytatoPyOpenCLArrayContextFactory)
-from arraycontext import pytest_generate_tests_for_array_contexts
+from meshmode.array_context import (
+    PytestPyOpenCLArrayContextFactory, PytestPytatoPyOpenCLArrayContextFactory)
+from meshmode.discretization import Discretization
+from meshmode.discretization.poly_element import default_simplex_group_factory
+from meshmode.dof_array import DOFArray, array_context_for_pickling, flat_norm
+
+
+logger = logging.getLogger(__name__)
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         [PytestPytatoPyOpenCLArrayContextFactory,
          PytestPyOpenCLArrayContextFactory,
          ])
-
-from arraycontext import (
-        dataclass_array_container,
-        with_container_arithmetic)
-
-from meshmode.discretization import Discretization
-from meshmode.discretization.poly_element import default_simplex_group_factory
-from meshmode.dof_array import DOFArray, flat_norm, array_context_for_pickling
-
-from pytools.obj_array import make_obj_array
-
-import logging
-logger = logging.getLogger(__name__)
 
 
 # {{{ test_flatten_unflatten
@@ -172,7 +171,7 @@ def test_dof_array_pickling(actx_factory):
     actx = actx_factory()
     ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs = _get_test_containers(actx)
 
-    from pickle import loads, dumps
+    from pickle import dumps, loads
     with array_context_for_pickling(actx):
         pkl = dumps((mat_of_dofs, dc_of_dofs))
 
@@ -201,7 +200,7 @@ class FooAxisTag2(Tag):
 def test_dof_array_pickling_tags(actx_factory):
     actx = actx_factory()
 
-    from pickle import loads, dumps
+    from pickle import dumps, loads
 
     state = DOFArray(actx, (actx.zeros((10, 10), "float64"),
                      actx.zeros((10, 10), "float64"),))

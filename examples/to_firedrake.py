@@ -22,6 +22,7 @@ THE SOFTWARE.
 
 
 import numpy as np
+
 import pyopencl as cl
 
 from meshmode.array_context import PyOpenCLArrayContext
@@ -63,8 +64,8 @@ def main():
     order = 3
 
     from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-        InterpolatoryQuadratureSimplexGroupFactory
+    from meshmode.discretization.poly_element import (
+        InterpolatoryQuadratureSimplexGroupFactory)
     group_factory = InterpolatoryQuadratureSimplexGroupFactory(order=order)
     discr = Discretization(actx, mesh, group_factory)
 
@@ -91,8 +92,8 @@ def main():
 
     # set up dirichlet laplace problem in fd and solve
     from firedrake import (
-        FunctionSpace, TrialFunction, TestFunction, Function, inner, grad, dx,
-        Constant, project, DirichletBC, solve)
+        Constant, DirichletBC, Function, FunctionSpace, TestFunction, TrialFunction,
+        dx, grad, inner, project, solve)
 
     # because it's easier to write down the variational problem,
     # we're going to project from our "DG" space

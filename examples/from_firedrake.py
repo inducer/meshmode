@@ -38,10 +38,10 @@ def main(visualize=True):
     except ImportError:
         return 0
 
-    from meshmode.interop.firedrake import build_connection_from_firedrake
     from firedrake import (
-        UnitSquareMesh, FunctionSpace, SpatialCoordinate, Function, cos
-        )
+        Function, FunctionSpace, SpatialCoordinate, UnitSquareMesh, cos)
+
+    from meshmode.interop.firedrake import build_connection_from_firedrake
 
     # Create a firedrake mesh and interpolate cos(x+y) onto it
     fd_mesh = UnitSquareMesh(10, 10)
@@ -62,6 +62,7 @@ def main(visualize=True):
 
     # Plot the meshmode meshes that the connections connect to
     import matplotlib.pyplot as plt
+
     from meshmode.mesh.visualization import draw_2d_mesh
     fig, (ax1, ax2) = plt.subplots(1, 2)
     ax1.set_title("FiredrakeConnection")

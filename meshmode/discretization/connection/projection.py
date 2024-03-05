@@ -22,19 +22,17 @@ THE SOFTWARE.
 
 import numpy as np
 
-from pytools import keyed_memoize_method, keyed_memoize_in, memoize_in
-
 import loopy as lp
-
 from arraycontext import (
-        NotAnArrayContainerError,
-        make_loopy_program, serialize_container, deserialize_container)
-from meshmode.transform_metadata import FirstAxisIsElementsTag
+    NotAnArrayContainerError, deserialize_container, make_loopy_program,
+    serialize_container)
+from pytools import keyed_memoize_in, keyed_memoize_method, memoize_in
+
+from meshmode.discretization.connection.chained import (
+    ChainedDiscretizationConnection)
 from meshmode.discretization.connection.direct import (
-        DiscretizationConnection,
-        DirectDiscretizationConnection)
-from meshmode.discretization.connection.chained import \
-        ChainedDiscretizationConnection
+    DirectDiscretizationConnection, DiscretizationConnection)
+from meshmode.transform_metadata import FirstAxisIsElementsTag
 
 
 class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
@@ -89,9 +87,10 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         :return: a dictionary with keys ``(group_id, batch_id)``.
         """
 
-        from pymbolic.geometric_algebra import MultiVector
         from functools import reduce
         from operator import xor
+
+        from pymbolic.geometric_algebra import MultiVector
 
         def det(v):
             nnodes = v[0].shape[0]
@@ -186,7 +185,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 name="conn_projection_knl"
             )
             from meshmode.transform_metadata import (
-                    ConcurrentElementInameTag, ConcurrentDOFInameTag)
+                ConcurrentDOFInameTag, ConcurrentElementInameTag)
             return lp.tag_inames(t_unit, {
                     "iel_init": ConcurrentElementInameTag(),
                     "idof_init": ConcurrentDOFInameTag(),

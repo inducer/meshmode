@@ -25,6 +25,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 
 from arraycontext import ArrayContext
+
 from meshmode.mesh import Mesh
 
 
@@ -58,8 +59,8 @@ def draw_2d_mesh(
     """
     assert mesh.ambient_dim == 2
 
-    import matplotlib.pyplot as pt
     import matplotlib.patches as mpatches
+    import matplotlib.pyplot as pt
     from matplotlib.path import Path
 
     for igrp, grp in enumerate(mesh.groups):
@@ -209,18 +210,12 @@ def write_vertex_vtk_file(
         mesh: Mesh, file_name: str, *,
         compressor: Optional[str] = None,
         overwrite: bool = False) -> None:
-    from pyvisfile.vtk import (
-            UnstructuredGrid, DataArray,
-            AppendedDataXMLGenerator,
-            VF_LIST_OF_COMPONENTS)
-
     # {{{ create cell_types
-
     from pyvisfile.vtk import (
-            VTK_LINE, VTK_TRIANGLE, VTK_TETRA,
-            VTK_QUAD, VTK_HEXAHEDRON)
+        VF_LIST_OF_COMPONENTS, VTK_HEXAHEDRON, VTK_LINE, VTK_QUAD, VTK_TETRA,
+        VTK_TRIANGLE, AppendedDataXMLGenerator, DataArray, UnstructuredGrid)
 
-    from meshmode.mesh import TensorProductElementGroup, SimplexElementGroup
+    from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
     cell_types = np.empty(mesh.nelements, dtype=np.uint8)
     cell_types.fill(255)
@@ -345,9 +340,9 @@ def vtk_visualize_mesh(
     if not vtk_high_order:
         vis_order = None
 
-    from meshmode.discretization.poly_element import \
-            InterpolatoryEdgeClusteredGroupFactory
     from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import (
+        InterpolatoryEdgeClusteredGroupFactory)
     discr = Discretization(actx, mesh, InterpolatoryEdgeClusteredGroupFactory(order))
 
     from meshmode.discretization.visualization import make_visualizer
@@ -412,8 +407,8 @@ def visualize_mesh_vertex_resampling_error(
         overwrite: bool = False) -> None:
     # {{{ comput resampling errors
 
-    from meshmode.mesh import _mesh_group_node_vertex_error
     from meshmode.dof_array import DOFArray
+    from meshmode.mesh import _mesh_group_node_vertex_error
     error = DOFArray(actx, tuple([
         actx.from_numpy(
             np.sqrt(np.sum(_mesh_group_node_vertex_error(mesh, mgrp)**2, axis=0))
@@ -425,9 +420,9 @@ def visualize_mesh_vertex_resampling_error(
 
     # {{{ visualize
 
-    from meshmode.discretization.poly_element import \
-            InterpolatoryEdgeClusteredGroupFactory
     from meshmode.discretization import Discretization
+    from meshmode.discretization.poly_element import (
+        InterpolatoryEdgeClusteredGroupFactory)
     discr = Discretization(actx, mesh, InterpolatoryEdgeClusteredGroupFactory(1))
 
     from meshmode.discretization.visualization import make_visualizer

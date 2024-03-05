@@ -20,45 +20,38 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import logging
+import pathlib
 from functools import partial
 
 import numpy as np
 import numpy.linalg as la
+import pytest
 
-import meshmode         # noqa: F401
-from arraycontext import flatten
+from arraycontext import flatten, pytest_generate_tests_for_array_contexts
 
-from meshmode.array_context import (PytestPyOpenCLArrayContextFactory,
-                                    PytestPytatoPyOpenCLArrayContextFactory)
-from arraycontext import pytest_generate_tests_for_array_contexts
+import meshmode.mesh.generation as mgen
+from meshmode import _acf  # noqa: F401
+from meshmode.array_context import (
+    PytestPyOpenCLArrayContextFactory, PytestPytatoPyOpenCLArrayContextFactory)
+from meshmode.discretization.connection import FACE_RESTR_ALL, FACE_RESTR_INTERIOR
+from meshmode.discretization.poly_element import (
+    InterpolatoryQuadratureSimplexGroupFactory,
+    LegendreGaussLobattoTensorProductGroupFactory,
+    PolynomialEquidistantSimplexGroupFactory, PolynomialRecursiveNodesGroupFactory,
+    PolynomialWarpAndBlend2DRestrictingGroupFactory,
+    PolynomialWarpAndBlend3DRestrictingGroupFactory, default_simplex_group_factory)
+from meshmode.dof_array import flat_norm
+from meshmode.mesh import (
+    BTAG_ALL, Mesh, MeshElementGroup, SimplexElementGroup, TensorProductElementGroup)
+
+
+logger = logging.getLogger(__name__)
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         [PytestPytatoPyOpenCLArrayContextFactory,
          PytestPyOpenCLArrayContextFactory,
          ])
 
-from meshmode.mesh import (
-    MeshElementGroup, SimplexElementGroup, TensorProductElementGroup)
-from meshmode.discretization.poly_element import (
-        InterpolatoryQuadratureSimplexGroupFactory,
-        default_simplex_group_factory,
-        PolynomialWarpAndBlend2DRestrictingGroupFactory,
-        PolynomialWarpAndBlend3DRestrictingGroupFactory,
-        PolynomialRecursiveNodesGroupFactory,
-        PolynomialEquidistantSimplexGroupFactory,
-        LegendreGaussLobattoTensorProductGroupFactory
-        )
-from meshmode.mesh import Mesh, BTAG_ALL
-from meshmode.dof_array import flat_norm
-from meshmode.discretization.connection import \
-        FACE_RESTR_ALL, FACE_RESTR_INTERIOR
-import meshmode.mesh.generation as mgen
-
-import pytest
-
-import logging
-logger = logging.getLogger(__name__)
-
-import pathlib
 thisdir = pathlib.Path(__file__).parent
 
 
@@ -116,11 +109,11 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
     else:
         group_cls = SimplexElementGroup
 
+    from pytools.convergence import EOCRecorder
+
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
-            make_face_restriction, check_connection)
-
-    from pytools.convergence import EOCRecorder
+        check_connection, make_face_restriction)
     eoc_rec = EOCRecorder()
 
     order = 4
@@ -184,8 +177,8 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
         bdry_f_2 = bdry_connection(vol_f)
 
         if mesh_name == "blob" and dim == 2 and mesh.nelements < 500:
-            from meshmode.discretization.connection.direct import \
-                    make_direct_full_resample_matrix
+            from meshmode.discretization.connection.direct import (
+                make_direct_full_resample_matrix)
             mat = actx.to_numpy(
                     make_direct_full_resample_matrix(actx, bdry_connection))
             bdry_f_2_by_mat = mat.dot(actx.to_numpy(flatten(vol_f, actx)))
@@ -235,12 +228,11 @@ def test_all_faces_interpolation(actx_factory, group_factory,
     else:
         group_cls = SimplexElementGroup
 
+    from pytools.convergence import EOCRecorder
+
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
-            make_face_restriction, make_face_to_all_faces_embedding,
-            check_connection)
-
-    from pytools.convergence import EOCRecorder
+        check_connection, make_face_restriction, make_face_to_all_faces_embedding)
     eoc_rec = EOCRecorder()
 
     order = 4
@@ -256,7 +248,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
 
             h = mesh_par
 
-            from meshmode.mesh.io import generate_gmsh, FileSource
+            from meshmode.mesh.io import FileSource, generate_gmsh
             print("BEGIN GEN")
             mesh = generate_gmsh(
                     FileSource(str(thisdir / "blob-2d.step")), 2, order=order,
@@ -362,12 +354,11 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
     else:
         group_cls = SimplexElementGroup
 
+    from pytools.convergence import EOCRecorder
+
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
-            make_face_restriction, make_opposite_face_connection,
-            check_connection)
-
-    from pytools.convergence import EOCRecorder
+        check_connection, make_face_restriction, make_opposite_face_connection)
     eoc_rec = EOCRecorder()
 
     order = 5
@@ -391,7 +382,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
 
             h = mesh_par
 
-            from meshmode.mesh.io import generate_gmsh, FileSource
+            from meshmode.mesh.io import FileSource, generate_gmsh
             print("BEGIN GEN")
             mesh = generate_gmsh(
                     FileSource(str(thisdir / "blob-2d.step")), 2, order=order,
@@ -701,7 +692,7 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
     logging.basicConfig(level=logging.INFO)
     actx = actx_factory()
 
-    from scipy.spatial import Delaunay          # pylint: disable=no-name-in-module
+    from scipy.spatial import Delaunay  # pylint: disable=no-name-in-module
     verts = np.random.rand(1000, dim)
     dtri = Delaunay(verts)
 
@@ -768,7 +759,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
     from pytential import bind, sym
 
     for h in [0.2, 0.1, 0.05]:
-        from meshmode.mesh.io import generate_gmsh, FileSource
+        from meshmode.mesh.io import FileSource, generate_gmsh
         mesh = generate_gmsh(
                 FileSource(src_file), dim, order=mesh_order,
                 other_options=["-string", "Mesh.CharacteristicLengthMax = %g;" % h],
@@ -962,10 +953,8 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
 
     # check face restrictions
     from meshmode.discretization.connection import (
-            make_face_restriction,
-            make_face_to_all_faces_embedding,
-            make_opposite_face_connection,
-            check_connection)
+        check_connection, make_face_restriction, make_face_to_all_faces_embedding,
+        make_opposite_face_connection)
     for boundary_tag in [BTAG_ALL, FACE_RESTR_INTERIOR, FACE_RESTR_ALL]:
         conn = make_face_restriction(actx, discr,
                 group_factory=grp_factory,
