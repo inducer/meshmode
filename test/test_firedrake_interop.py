@@ -25,12 +25,7 @@ import logging
 import numpy as np
 import pytest
 
-import pyopencl as cl
-from arraycontext import (
-    PyOpenCLArrayContext, pytest_generate_tests_for_array_contexts)
-from firedrake import (
-    Function, FunctionSpace, SpatialCoordinate, TensorFunctionSpace, UnitCubeMesh,
-    UnitIntervalMesh, UnitSquareMesh, VectorFunctionSpace, as_tensor, sin)
+from arraycontext import pytest_generate_tests_for_array_contexts
 
 from meshmode import _acf  # noqa: F401
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
@@ -41,15 +36,13 @@ from meshmode.dof_array import DOFArray
 from meshmode.interop.firedrake import (
     build_connection_from_firedrake, build_connection_to_firedrake,
     import_firedrake_mesh)
-from meshmode.mesh import BTAG_ALL, BTAG_INDUCED_BOUNDARY, check_bc_coverage
+from meshmode.mesh import BTAG_ALL, BTAG_INDUCED_BOUNDARY, Mesh, check_bc_coverage
 
 
 logger = logging.getLogger(__name__)
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         [PytestPyOpenCLArrayContextFactory])
 
-# skip testing this module if cannot import firedrake
-firedrake = pytest.importorskip("firedrake")
 CLOSE_ATOL = 1e-12
 
 
@@ -62,8 +55,7 @@ CLOSE_ATOL = 1e-12
                         "blob2d-order4-h8e-2.msh",
                         ])
 def mm_mesh(request):
-    from meshmode.mesh.io import read_gmsh
-    return read_gmsh(request.param)
+    return request.param
 
 
 @pytest.fixture(params=["FiredrakeUnitIntervalMesh",
@@ -76,34 +68,45 @@ def mm_mesh(request):
                         "blob2d-order1-h8e-2.msh",
                         ])
 def fdrake_mesh(request):
-    mesh_name = request.param
-    if mesh_name == "FiredrakeUnitIntervalMesh":
-        return UnitIntervalMesh(100)
-    elif mesh_name == "FiredrakeUnitSquareMesh":
-        return UnitSquareMesh(10, 10)
-    elif mesh_name == "FiredrakeUnitSquareMesh-order2":
-        m = UnitSquareMesh(10, 10)
-        fspace = VectorFunctionSpace(m, "CG", 2)
-        coords = Function(fspace).interpolate(SpatialCoordinate(m))
-        from firedrake.mesh import Mesh
-        return Mesh(coords)
-    elif mesh_name == "FiredrakeUnitCubeMesh":
-        return UnitCubeMesh(5, 5, 5)
-    elif mesh_name not in ("annulus.msh", "blob2d-order1-h4e-2.msh",
-                           "blob2d-order1-h6e-2.msh", "blob2d-order1-h8e-2.msh"):
-        raise ValueError("Unexpected value for request.param")
-
-    # Firedrake can't read in higher order meshes from gmsh,
-    # so we can only use the order1 blobs
-    from firedrake import Mesh
-    fd_mesh = Mesh(mesh_name)
-    fd_mesh.init()
-    return fd_mesh
+    return request.param
 
 
 @pytest.fixture(params=[1, 4], ids=["P^1", "P^4"])
 def fspace_degree(request):
     return request.param
+
+
+def make_mm_mesh(name: str) -> Mesh:
+    from meshmode.mesh.io import read_gmsh
+    return read_gmsh(name)
+
+
+def make_firedrake_mesh(name: str):
+    from firedrake import (
+        Function, Mesh, SpatialCoordinate, UnitCubeMesh, UnitIntervalMesh,
+        UnitSquareMesh, VectorFunctionSpace)
+
+    if name == "FiredrakeUnitIntervalMesh":
+        return UnitIntervalMesh(100)
+    elif name == "FiredrakeUnitSquareMesh":
+        return UnitSquareMesh(10, 10)
+    elif name == "FiredrakeUnitSquareMesh-order2":
+        m = UnitSquareMesh(10, 10)
+        fspace = VectorFunctionSpace(m, "CG", 2)
+        coords = Function(fspace).interpolate(SpatialCoordinate(m))
+        return Mesh(coords)
+    elif name == "FiredrakeUnitCubeMesh":
+        return UnitCubeMesh(5, 5, 5)
+    elif name not in ("annulus.msh", "blob2d-order1-h4e-2.msh",
+                      "blob2d-order1-h6e-2.msh", "blob2d-order1-h8e-2.msh"):
+        raise ValueError(f"Unexpected value for mesh name: {name}")
+
+    # Firedrake can't read in higher order meshes from gmsh,
+    # so we can only use the order1 blobs
+    fd_mesh = Mesh(name)
+    fd_mesh.init()
+
+    return fd_mesh
 
 
 # {{{ Basic conversion checks for the function space
@@ -160,16 +163,18 @@ def check_consistency(fdrake_fspace, discr, group_nr=0):
     assert discr.ndofs == fdrake_fspace.node_count
 
 
-def test_from_fd_consistency(ctx_factory, fdrake_mesh, fspace_degree):
+def test_from_fd_consistency(actx_factory, fdrake_mesh, fspace_degree):
     """
     Check basic consistency with a FiredrakeConnection built from firedrake
     """
-    # make discretization from firedrake
-    fdrake_fspace = FunctionSpace(fdrake_mesh, "DG", fspace_degree)
+    pytest.importorskip("firedrake")
+    actx = actx_factory()
 
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    from firedrake import FunctionSpace
+
+    # make discretization from firedrake
+    fdrake_mesh = make_firedrake_mesh(fdrake_mesh)
+    fdrake_fspace = FunctionSpace(fdrake_mesh, "DG", fspace_degree)
 
     fdrake_connection = build_connection_from_firedrake(actx, fdrake_fspace)
     discr = fdrake_connection.discr
@@ -177,12 +182,12 @@ def test_from_fd_consistency(ctx_factory, fdrake_mesh, fspace_degree):
     check_consistency(fdrake_fspace, discr)
 
 
-def test_to_fd_consistency(ctx_factory, mm_mesh, fspace_degree):
-    fspace_degree += mm_mesh.groups[0].order
+def test_to_fd_consistency(actx_factory, mm_mesh, fspace_degree):
+    pytest.importorskip("firedrake")
+    actx = actx_factory()
 
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    mm_mesh = make_mm_mesh(mm_mesh)
+    fspace_degree += mm_mesh.groups[0].order
 
     factory = InterpolatoryQuadratureSimplexGroupFactory(fspace_degree)
     discr = Discretization(actx, mm_mesh, factory)
@@ -196,7 +201,7 @@ def test_to_fd_consistency(ctx_factory, mm_mesh, fspace_degree):
 
 # {{{ Now check the FiredrakeConnection consistency when restricted to bdy
 
-def test_from_boundary_consistency(ctx_factory,
+def test_from_boundary_consistency(actx_factory,
                                    fdrake_mesh,
                                    fspace_degree):
     """
@@ -209,11 +214,13 @@ def test_from_boundary_consistency(ctx_factory,
     and that each boundary tag is associated to the same number of facets
     in the converted meshmode mesh as in the original firedrake mesh.
     """
-    fdrake_fspace = FunctionSpace(fdrake_mesh, "DG", fspace_degree)
+    pytest.importorskip("firedrake")
+    actx = actx_factory()
 
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    from firedrake import FunctionSpace
+
+    fdrake_mesh = make_firedrake_mesh(fdrake_mesh)
+    fdrake_fspace = FunctionSpace(fdrake_mesh, "DG", fspace_degree)
 
     frombdy_conn = \
         build_connection_from_firedrake(actx,
@@ -276,21 +283,19 @@ def test_from_boundary_consistency(ctx_factory,
 
 # {{{ Boundary tags checking
 
-bdy_tests = [(UnitSquareMesh(10, 10),
-             [1, 2, 3, 4],
-             [0, 0, 1, 1],
-             [0.0, 1.0, 0.0, 1.0]),
-             (UnitCubeMesh(5, 5, 5),
-              [1, 2, 3, 4, 5, 6],
-              [0, 0, 1, 1, 2, 2],
-              [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]),
-             ]
-
-
-@pytest.mark.parametrize("square_or_cube_mesh,bdy_ids,coord_indices,coord_values",
-                         bdy_tests)
+@pytest.mark.parametrize(
+    ("mesh_name", "bdy_ids", "coord_indices", "coord_values"), [
+        ("square",
+         [1, 2, 3, 4],
+         [0, 0, 1, 1],
+         [0.0, 1.0, 0.0, 1.0]),
+        ("cube",
+         [1, 2, 3, 4, 5, 6],
+         [0, 0, 1, 1, 2, 2],
+         [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]),
+    ])
 @pytest.mark.parametrize("only_convert_bdy", (True, False))
-def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
+def test_bdy_tags(mesh_name, bdy_ids, coord_indices, coord_values,
                   only_convert_bdy):
     """
     Make sure the given boundary ids cover the converted mesh.
@@ -299,6 +304,17 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
     documentation to see how the boundary tags for its utility meshes are
     defined)
     """
+    pytest.importorskip("firedrake")
+
+    from firedrake import UnitCubeMesh, UnitSquareMesh
+
+    if mesh_name == "square":
+        square_or_cube_mesh = UnitSquareMesh(10, 10)
+    elif mesh_name == "cube":
+        square_or_cube_mesh = UnitCubeMesh(5, 5, 5)
+    else:
+        raise ValueError(f"Unknown mesh name: {mesh_name!r}")
+
     cells_to_use = None
     if only_convert_bdy:
         from meshmode.interop.firedrake.connection import _get_cells_to_use
@@ -374,7 +390,7 @@ def test_bdy_tags(square_or_cube_mesh, bdy_ids, coord_indices, coord_values,
      ("warp", [10, 20, 30], 3),
      ])
 @pytest.mark.parametrize("only_convert_bdy", [False, True])
-def test_from_fd_transfer(ctx_factory, fspace_degree,
+def test_from_fd_transfer(actx_factory, fspace_degree,
                           fdrake_mesh_name, fdrake_mesh_pars, dim,
                           only_convert_bdy):
     """
@@ -383,6 +399,9 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
     (up to resampling error) as projecting to one
     dimension on the transported mesh
     """
+    pytest.importorskip("firedrake")
+    actx = actx_factory()
+
     # build estimate-of-convergence recorder
     from pytools.convergence import EOCRecorder
 
@@ -392,12 +411,9 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
         for d in range(dim):
             eoc_recorders[(False, d)] = EOCRecorder()
 
-    # make a computing context
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
-
     def get_fdrake_mesh_and_h_from_par(mesh_par):
+        from firedrake import Mesh, UnitCubeMesh, UnitIntervalMesh, UnitSquareMesh
+
         if fdrake_mesh_name == "UnitInterval":
             assert dim == 1
             n = mesh_par
@@ -416,7 +432,6 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
         elif fdrake_mesh_name in ("blob2d-order1", "blob2d-order4"):
             assert dim == 2
             if fdrake_mesh_name == "blob2d-order1":
-                from firedrake import Mesh
                 fdrake_mesh = Mesh(f"{fdrake_mesh_name}-h{mesh_par}.msh",
                                    dim=dim)
             else:
@@ -437,6 +452,8 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
             raise ValueError("fdrake_mesh_name not recognized")
 
         return (fdrake_mesh, h)
+
+    from firedrake import Function, FunctionSpace, SpatialCoordinate, sin
 
     # Record error for each refinement of each mesh
     for mesh_par in fdrake_mesh_pars:
@@ -498,23 +515,23 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
      ("warp", [10, 20, 30], 2),
      ("warp", [10, 20, 30], 3),
      ])
-def test_to_fd_transfer(ctx_factory, fspace_degree, mesh_name, mesh_pars, dim):
+def test_to_fd_transfer(actx_factory, fspace_degree, mesh_name, mesh_pars, dim):
     """
     Make sure creating a function which projects onto
     one dimension then transports it is the same
     (up to resampling error) as projecting to one
     dimension on the transported mesh
     """
+    pytest.importorskip("firedrake")
+    actx = actx_factory()
+
     # build estimate-of-convergence recorder
     from pytools.convergence import EOCRecorder
 
     # dimension projecting onto -> EOCRecorder
     eoc_recorders = {d: EOCRecorder() for d in range(dim)}
 
-    # make a computing context
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    from firedrake import Function, SpatialCoordinate
 
     # Get each of the refinements of the meshmeshes and record
     # conversions errors
@@ -572,13 +589,21 @@ def test_to_fd_transfer(ctx_factory, fspace_degree, mesh_name, mesh_pars, dim):
 
 @pytest.mark.parametrize("fspace_type", ("scalar", "vector", "tensor"))
 @pytest.mark.parametrize("only_convert_bdy", (False, True))
-def test_from_fd_idempotency(ctx_factory,
+def test_from_fd_idempotency(actx_factory,
                              fdrake_mesh, fspace_degree,
                              fspace_type, only_convert_bdy):
     """
     Make sure fd->mm->fd and (fd->)->mm->fd->mm are identity
     """
+    pytest.importorskip("firedrake")
+    actx = actx_factory()
+
+    from firedrake import (
+        Function, FunctionSpace, SpatialCoordinate, TensorFunctionSpace,
+        VectorFunctionSpace, as_tensor)
+
     # Make a function space and a function with unique values at each node
+    fdrake_mesh = make_firedrake_mesh(fdrake_mesh)
     if fspace_type == "scalar":
         fdrake_fspace = FunctionSpace(fdrake_mesh, "DG", fspace_degree)
         # Just use the node nr
@@ -596,11 +621,6 @@ def test_from_fd_idempotency(ctx_factory,
         dim = fdrake_fspace.mesh().geometric_dimension()
         unique_expr = as_tensor([xx for _ in range(dim)])
         fdrake_unique = Function(fdrake_fspace).interpolate(unique_expr)
-
-    # Make connection
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
 
     # If only converting boundary, first go ahead and do one round of
     # fd->mm->fd. This will zero out any degrees of freedom absent in
@@ -642,15 +662,15 @@ def test_from_fd_idempotency(ctx_factory,
                                        atol=CLOSE_ATOL)
 
 
-def test_to_fd_idempotency(ctx_factory, mm_mesh, fspace_degree):
+def test_to_fd_idempotency(actx_factory, mm_mesh, fspace_degree):
     """
     Make sure mm->fd->mm and (mm->)->fd->mm->fd are identity
     """
-    cl_ctx = ctx_factory()
-    queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    pytest.importorskip("firedrake")
+    actx = actx_factory()
 
     # make sure degree is higher order than mesh
+    mm_mesh = make_mm_mesh(mm_mesh)
     fspace_degree += mm_mesh.groups[0].order
 
     # Make a function space and a function with unique values at each node
@@ -680,5 +700,14 @@ def test_to_fd_idempotency(ctx_factory, mm_mesh, fspace_degree):
                                atol=CLOSE_ATOL)
 
 # }}}
+
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1:
+        exec(sys.argv[1])
+    else:
+        from pytest import main
+        main([__file__])
 
 # vim: foldmethod=marker
