@@ -23,10 +23,8 @@ THE SOFTWARE.
 import numpy as np
 
 from gmsh_interop.reader import (  # noqa: F401
-        GmshMeshReceiverBase, ScriptSource, FileSource, LiteralSource,
-        ScriptWithFilesSource,
-        GmshSimplexElementBase,
-        GmshTensorProductElementBase)
+    FileSource, GmshMeshReceiverBase, GmshSimplexElementBase,
+    GmshTensorProductElementBase, LiteralSource, ScriptSource, ScriptWithFilesSource)
 
 
 __doc__ = """
@@ -166,8 +164,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         # }}}
 
-        from meshmode.mesh import (Mesh,
-                SimplexElementGroup, TensorProductElementGroup)
+        from meshmode.mesh import (
+            Mesh, SimplexElementGroup, TensorProductElementGroup)
 
         bulk_el_types = set()
 
@@ -329,8 +327,8 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=None,
 
     recv = GmshMeshReceiver(mesh_construction_kwargs=mesh_construction_kwargs)
 
-    from gmsh_interop.runner import GmshRunner
     from gmsh_interop.reader import parse_gmsh
+    from gmsh_interop.runner import GmshRunner
 
     if target_unit is None:
         target_unit = "MM"
@@ -416,8 +414,7 @@ def from_vertices_and_simplices(vertices, simplices, order=1, fix_orientation=Fa
             raise ValueError("can only fix orientation of volume meshes")
 
         from meshmode.mesh.processing import (
-                find_volume_mesh_element_group_orientation,
-                flip_simplex_element_group)
+            find_volume_mesh_element_group_orientation, flip_simplex_element_group)
         orient = find_volume_mesh_element_group_orientation(vertices, grp)
         grp = flip_simplex_element_group(vertices, grp, orient < 0)
 

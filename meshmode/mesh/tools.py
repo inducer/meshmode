@@ -24,8 +24,9 @@ import numpy as np
 import numpy.linalg as la
 
 from modepy.tools import hypercube_submesh
-from pytools.spatial_btree import SpatialBinaryTreeBucket
 from pytools import MovedFunctionDeprecationWrapper
+from pytools.spatial_btree import SpatialBinaryTreeBucket
+
 
 __doc__ = """
 .. currentmodule:: meshmode

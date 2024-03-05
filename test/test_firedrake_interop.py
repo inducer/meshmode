@@ -20,44 +20,36 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import logging
+
 import numpy as np
+import pytest
+
 import pyopencl as cl
+from arraycontext import (
+    PyOpenCLArrayContext, pytest_generate_tests_for_array_contexts)
+from firedrake import (
+    Function, FunctionSpace, SpatialCoordinate, TensorFunctionSpace, UnitCubeMesh,
+    UnitIntervalMesh, UnitSquareMesh, VectorFunctionSpace, as_tensor, sin)
 
+from meshmode import _acf  # noqa: F401
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
-from arraycontext import pytest_generate_tests_for_array_contexts
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
-
-from arraycontext import PyOpenCLArrayContext
-
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import (
     InterpolatoryQuadratureSimplexGroupFactory)
-
 from meshmode.dof_array import DOFArray
-
-from meshmode.mesh import (
-    BTAG_ALL, BTAG_INDUCED_BOUNDARY, check_bc_coverage
-    )
-
 from meshmode.interop.firedrake import (
     build_connection_from_firedrake, build_connection_to_firedrake,
     import_firedrake_mesh)
+from meshmode.mesh import BTAG_ALL, BTAG_INDUCED_BOUNDARY, check_bc_coverage
 
-import pytest
 
-import logging
 logger = logging.getLogger(__name__)
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 # skip testing this module if cannot import firedrake
 firedrake = pytest.importorskip("firedrake")
-
-from firedrake import (
-    UnitIntervalMesh, UnitSquareMesh, UnitCubeMesh,
-    FunctionSpace, VectorFunctionSpace, TensorFunctionSpace,
-    Function, SpatialCoordinate, as_tensor, sin)
-
-
 CLOSE_ATOL = 1e-12
 
 
@@ -393,6 +385,7 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
     """
     # build estimate-of-convergence recorder
     from pytools.convergence import EOCRecorder
+
     # (fd -> mm ? True : False, dimension projecting onto)
     eoc_recorders = {(True, d): EOCRecorder() for d in range(dim)}
     if not only_convert_bdy:
@@ -427,15 +420,15 @@ def test_from_fd_transfer(ctx_factory, fspace_degree,
                 fdrake_mesh = Mesh(f"{fdrake_mesh_name}-h{mesh_par}.msh",
                                    dim=dim)
             else:
-                from meshmode.mesh.io import read_gmsh
                 from meshmode.interop.firedrake import export_mesh_to_firedrake
+                from meshmode.mesh.io import read_gmsh
                 mm_mesh = read_gmsh(f"{fdrake_mesh_name}-h{mesh_par}.msh",
                                     force_ambient_dim=dim)
                 fdrake_mesh, _, _ = export_mesh_to_firedrake(mm_mesh)
             h = float(mesh_par)
         elif fdrake_mesh_name == "warp":
-            from meshmode.mesh.generation import generate_warped_rect_mesh
             from meshmode.interop.firedrake import export_mesh_to_firedrake
+            from meshmode.mesh.generation import generate_warped_rect_mesh
             mm_mesh = generate_warped_rect_mesh(dim, order=4,
                 nelements_side=mesh_par)
             fdrake_mesh, _, _ = export_mesh_to_firedrake(mm_mesh)
@@ -514,6 +507,7 @@ def test_to_fd_transfer(ctx_factory, fspace_degree, mesh_name, mesh_pars, dim):
     """
     # build estimate-of-convergence recorder
     from pytools.convergence import EOCRecorder
+
     # dimension projecting onto -> EOCRecorder
     eoc_recorders = {d: EOCRecorder() for d in range(dim)}
 

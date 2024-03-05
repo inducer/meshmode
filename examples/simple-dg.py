@@ -20,29 +20,26 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import logging
 from dataclasses import dataclass
+
 import numpy as np
 import numpy.linalg as la  # noqa
 
 import pyopencl as cl
 import pyopencl.array as cla  # noqa
-
-from pytools import memoize_method, log_process
+from arraycontext import (
+    ArrayContainer, dataclass_array_container, map_array_container,
+    with_container_arithmetic)
+from pytools import log_process, memoize_method
 from pytools.obj_array import flat_obj_array, make_obj_array
 
-from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
+from meshmode.array_context import PyOpenCLArrayContext, PytatoPyOpenCLArrayContext
 from meshmode.dof_array import DOFArray, flat_norm
-from meshmode.array_context import (PyOpenCLArrayContext,
-                                    PytatoPyOpenCLArrayContext)
-from arraycontext import (
-        ArrayContainer,
-        map_array_container,
-        with_container_arithmetic,
-        dataclass_array_container,
-        )
+from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
 from meshmode.transform_metadata import FirstAxisIsElementsTag
 
-import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -73,8 +70,8 @@ class DGDiscretization:
         self.order = order
 
         from meshmode.discretization import Discretization
-        from meshmode.discretization.poly_element import \
-                PolynomialWarpAndBlend2DRestrictingGroupFactory
+        from meshmode.discretization.poly_element import (
+            PolynomialWarpAndBlend2DRestrictingGroupFactory)
         self.group_factory = PolynomialWarpAndBlend2DRestrictingGroupFactory(
                 order=order)
         self.volume_discr = Discretization(actx, mesh, self.group_factory)
@@ -103,7 +100,7 @@ class DGDiscretization:
     @memoize_method
     def interior_faces_connection(self):
         from meshmode.discretization.connection import (
-                make_face_restriction, FACE_RESTR_INTERIOR)
+            FACE_RESTR_INTERIOR, make_face_restriction)
         return make_face_restriction(
                         self.volume_discr._setup_actx,
                         self.volume_discr,
@@ -113,8 +110,7 @@ class DGDiscretization:
 
     @memoize_method
     def opposite_face_connection(self):
-        from meshmode.discretization.connection import \
-                make_opposite_face_connection
+        from meshmode.discretization.connection import make_opposite_face_connection
 
         return make_opposite_face_connection(
                 self._setup_actx, self.interior_faces_connection())
@@ -122,7 +118,7 @@ class DGDiscretization:
     @memoize_method
     def all_faces_connection(self):
         from meshmode.discretization.connection import (
-                make_face_restriction, FACE_RESTR_ALL)
+            FACE_RESTR_ALL, make_face_restriction)
         return make_face_restriction(
                         self.volume_discr._setup_actx,
                         self.volume_discr,
@@ -132,8 +128,8 @@ class DGDiscretization:
 
     @memoize_method
     def get_to_all_face_embedding(self, where):
-        from meshmode.discretization.connection import \
-                make_face_to_all_faces_embedding
+        from meshmode.discretization.connection import (
+            make_face_to_all_faces_embedding)
 
         faces_conn = self.get_connection("vol", where)
         return make_face_to_all_faces_embedding(
@@ -277,7 +273,7 @@ class DGDiscretization:
         shape = mp.Simplex(volgrp.dim)
 
         for face in mp.faces_for_shape(shape):
-            from modepy import basis_for_space, quadrature_for_space, PN, Simplex
+            from modepy import PN, Simplex, basis_for_space, quadrature_for_space
             face_space = PN(volgrp.dim - 1, volgrp.order)
             face_shape = Simplex(volgrp.dim-1)
             face_quad = quadrature_for_space(face_space, face_shape)

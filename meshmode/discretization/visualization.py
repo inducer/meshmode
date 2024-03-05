@@ -23,21 +23,22 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import logging
 from dataclasses import dataclass
 from functools import singledispatch
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from arraycontext import flatten
+from modepy.shapes import Hypercube, Shape, Simplex
 from pytools import memoize_method
 from pytools.obj_array import make_obj_array
-from arraycontext import flatten
+
 from meshmode.dof_array import DOFArray
 from meshmode.transform_metadata import DiscretizationFlattenedDOFAxisTag
 
-from modepy.shapes import Shape, Simplex, Hypercube
 
-import logging
 logger = logging.getLogger(__name__)
 
 __doc__ = """
@@ -62,8 +63,7 @@ def separate_by_real_and_imag(names_and_fields, real_only):
         if isinstance(field, np.ndarray) and field.dtype.char == "O":
             assert len(field.shape) == 1
             from pytools.obj_array import (
-                    obj_array_real_copy, obj_array_imag_copy,
-                    obj_array_vectorize)
+                obj_array_imag_copy, obj_array_real_copy, obj_array_vectorize)
 
             if field[0].dtype.kind == "c":
                 if real_only:
@@ -312,6 +312,7 @@ class VTKConnectivity:
 
     def connectivity_for_element_group(self, grp):
         import modepy as mp
+
         from meshmode.mesh import _ModepyElementGroup
 
         if isinstance(grp.mesh_el_group, _ModepyElementGroup):
@@ -428,8 +429,8 @@ class VTKLagrangeConnectivity(VTKConnectivity):
         vtk_version = tuple(int(v) for v in self.version.split("."))
         if isinstance(grp.mesh_el_group, SimplexElementGroup):
             from pyvisfile.vtk.vtk_ordering import (
-                    vtk_lagrange_simplex_node_tuples,
-                    vtk_lagrange_simplex_node_tuples_to_permutation)
+                vtk_lagrange_simplex_node_tuples,
+                vtk_lagrange_simplex_node_tuples_to_permutation)
 
             node_tuples = vtk_lagrange_simplex_node_tuples(
                     grp.dim, grp.order, vtk_version=vtk_version)
@@ -441,8 +442,8 @@ class VTKLagrangeConnectivity(VTKConnectivity):
 
         elif isinstance(grp.mesh_el_group, TensorProductElementGroup):
             from pyvisfile.vtk.vtk_ordering import (
-                    vtk_lagrange_quad_node_tuples,
-                    vtk_lagrange_quad_node_tuples_to_permutation)
+                vtk_lagrange_quad_node_tuples,
+                vtk_lagrange_quad_node_tuples_to_permutation)
 
             node_tuples = vtk_lagrange_quad_node_tuples(
                     grp.dim, grp.order, vtk_version=vtk_version)
@@ -742,10 +743,8 @@ class Visualizer:
             use_high_order = False
 
         from pyvisfile.vtk import (
-                UnstructuredGrid, DataArray,
-                AppendedDataXMLGenerator,
-                ParallelXMLGenerator,
-                VF_LIST_OF_COMPONENTS)
+            VF_LIST_OF_COMPONENTS, AppendedDataXMLGenerator, DataArray,
+            ParallelXMLGenerator, UnstructuredGrid)
 
         nodes = self._vis_nodes_numpy()
 
@@ -977,6 +976,7 @@ class Visualizer:
                 global_conn_count = conn_count
             else:
                 from mpi4py import MPI
+
                 # FIXME: should be able to do all these in one go
                 global_cell_offset = comm.scan(cell_count) - cell_count
                 global_node_offset = comm.scan(node_count) - node_count
@@ -1123,8 +1123,7 @@ class Visualizer:
         #   Paraview.
 
         from pyvisfile.xdmf import (
-                XdmfUnstructuredGrid, DataArray,
-                GeometryType, Information)
+            DataArray, GeometryType, Information, XdmfUnstructuredGrid)
 
         if self.vis_discr.ambient_dim == 2:
             geometry_type = GeometryType.XY
@@ -1203,7 +1202,6 @@ class Visualizer:
 
     def show_scalar_in_matplotlib_3d(self, field, **kwargs):
         import matplotlib.pyplot as plt
-
         # This import also registers the 3D projection.
         import mpl_toolkits.mplot3d.art3d as art3d
 
@@ -1290,11 +1288,11 @@ def make_visualizer(actx, discr, vis_order=None,
         vis_discr = discr
     else:
         if force_equidistant:
-            from meshmode.discretization.poly_element import \
-                InterpolatoryEquidistantGroupFactory as VisGroupFactory
+            from meshmode.discretization.poly_element import (
+                InterpolatoryEquidistantGroupFactory as VisGroupFactory)
         else:
-            from meshmode.discretization.poly_element import \
-                InterpolatoryEdgeClusteredGroupFactory as VisGroupFactory
+            from meshmode.discretization.poly_element import (
+                InterpolatoryEdgeClusteredGroupFactory as VisGroupFactory)
 
         vis_discr = discr.copy(actx=actx, group_factory=VisGroupFactory(vis_order))
 
@@ -1353,10 +1351,8 @@ def write_nodal_adjacency_vtk_file(file_name, mesh,
                                    compressor=None,
                                    overwrite=False):
     from pyvisfile.vtk import (
-            UnstructuredGrid, DataArray,
-            AppendedDataXMLGenerator,
-            VTK_LINE,
-            VF_LIST_OF_COMPONENTS)
+        VF_LIST_OF_COMPONENTS, VTK_LINE, AppendedDataXMLGenerator, DataArray,
+        UnstructuredGrid)
 
     centroids = np.empty(
             (mesh.ambient_dim, mesh.nelements),

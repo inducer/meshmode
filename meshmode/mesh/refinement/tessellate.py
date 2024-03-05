@@ -24,18 +24,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import logging
 from dataclasses import dataclass
 from functools import singledispatch
+from typing import List, Optional, Tuple
 
 import numpy as np
 
 import modepy as mp
+
 from meshmode.mesh import MeshElementGroup, _ModepyElementGroup
 
-import logging
-logger = logging.getLogger(__name__)
 
-from typing import List, Tuple, Optional
+logger = logging.getLogger(__name__)
 
 
 # {{{ interface

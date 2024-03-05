@@ -21,11 +21,14 @@ THE SOFTWARE.
 """
 
 
+import logging
+
 import numpy as np
 import numpy.linalg as la
+
 from meshmode.discretization.connection.direct import InterpolationBatch
 
-import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -479,8 +482,9 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
                         print("TVE", adj.elements[adj_tgt_flags])
                         print("TBE", tgt_bdry_element_indices)
                         print("FVE", src_vol_element_indices)
-                        from meshmode.mesh.visualization import draw_2d_mesh
                         import matplotlib.pyplot as pt
+
+                        from meshmode.mesh.visualization import draw_2d_mesh
                         draw_2d_mesh(vol_discr.mesh, draw_element_numbers=True,
                                 set_bounding_box=True,
                                 draw_vertex_numbers=False,
@@ -507,7 +511,7 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
                     groups[i_tgt_grp].extend(batches)
 
     from meshmode.discretization.connection import (
-            DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
+        DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
     return DirectDiscretizationConnection(
             from_discr=bdry_discr,
             to_discr=bdry_discr,
@@ -541,9 +545,9 @@ def make_partition_connection(actx, *, local_bdry_conn,
     .. warning:: Interface is not final.
     """
 
-    from meshmode.mesh.processing import find_group_indices
     from meshmode.discretization.connection import (
-            DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
+        DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
+    from meshmode.mesh.processing import find_group_indices
 
     local_vol_mesh = local_bdry_conn.from_discr.mesh
     local_vol_groups = local_vol_mesh.groups

@@ -1,4 +1,4 @@
-arg = "Copyright (C) 2020 Benjamin Sepanski"
+__copyright__ = "Copyright (C) 2020 Benjamin Sepanski"
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -20,25 +20,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from warnings import warn
 import logging
+from warnings import warn
+
 import numpy as np
 
-from modepy import resampling_matrix, basis_for_space, PN, Simplex
+from modepy import PN, Simplex, basis_for_space, resampling_matrix
+from pytools import ProcessLogger
 
-from meshmode.mesh import (
-    BTAG_ALL,
-    BTAG_INDUCED_BOUNDARY,
-    Mesh,
-    SimplexElementGroup,
-    NodalAdjacency,
-    InteriorAdjacencyGroup,
-    BoundaryAdjacencyGroup
-    )
 from meshmode.interop.firedrake.reference_cell import (
     get_affine_reference_simplex_mapping, get_finat_element_unit_nodes)
+from meshmode.mesh import (
+    BTAG_ALL, BTAG_INDUCED_BOUNDARY, BoundaryAdjacencyGroup, InteriorAdjacencyGroup,
+    Mesh, NodalAdjacency, SimplexElementGroup)
 
-from pytools import ProcessLogger
 
 __doc__ = """
 .. autofunction:: import_firedrake_mesh
@@ -437,8 +432,8 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
     if gdim == tdim:
         # If the co-dimension is 0, :mod:`meshmode` has a convenient
         # function to compute cell orientations
-        from meshmode.mesh.processing import \
-            find_volume_mesh_element_group_orientation
+        from meshmode.mesh.processing import (
+            find_volume_mesh_element_group_orientation)
 
         orient = find_volume_mesh_element_group_orientation(vertices,
                                                             unflipped_group)
@@ -939,7 +934,7 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     # Now make a coordinates function
     with ProcessLogger(logger, "Building firedrake function "
                        "space for mesh coordinates"):
-        from firedrake import VectorFunctionSpace, Function
+        from firedrake import Function, VectorFunctionSpace
         coords_fspace = VectorFunctionSpace(top, "CG", group.order,
                                             dim=mesh.ambient_dim)
         coords = Function(coords_fspace)

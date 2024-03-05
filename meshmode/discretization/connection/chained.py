@@ -21,11 +21,12 @@ THE SOFTWARE.
 """
 
 from dataclasses import dataclass
+
 import numpy as np
 
 import modepy as mp
-from meshmode.discretization.connection.direct import \
-        DiscretizationConnection
+
+from meshmode.discretization.connection.direct import DiscretizationConnection
 
 
 # {{{ chained discretization connection
@@ -145,8 +146,7 @@ def _build_new_group_table(from_conn, to_conn):
 
 
 def _build_batches(actx, from_bins, to_bins, batch):
-    from meshmode.discretization.connection.direct import \
-            InterpolationBatch
+    from meshmode.discretization.connection.direct import InterpolationBatch
 
     def to_device(x):
         return actx.freeze(actx.from_numpy(np.asarray(x)))
@@ -196,10 +196,8 @@ def flatten_chained_connection(actx, connection):
         :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`.
     """
     from meshmode.discretization.connection import (
-            IdentityDiscretizationConnection,
-            DirectDiscretizationConnection,
-            DiscretizationConnectionElementGroup,
-            make_same_mesh_connection)
+        DirectDiscretizationConnection, DiscretizationConnectionElementGroup,
+        IdentityDiscretizationConnection, make_same_mesh_connection)
 
     if not hasattr(connection, "connections"):
         return connection
@@ -284,8 +282,8 @@ def make_full_resample_matrix(actx, connection):
     :return: a :class:`pyopencl.array.Array` of shape
         `(connection.from_discr.ndofs, connection.to_discr.ndofs)`.
     """
-    from meshmode.discretization.connection.direct import \
-            DirectDiscretizationConnection, make_direct_full_resample_matrix
+    from meshmode.discretization.connection.direct import (
+        DirectDiscretizationConnection, make_direct_full_resample_matrix)
 
     if isinstance(connection, DirectDiscretizationConnection):
         return make_direct_full_resample_matrix(actx, connection)

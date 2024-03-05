@@ -23,30 +23,27 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import numpy as np
-import pyopencl as cl
-
-from meshmode.dof_array import flat_norm
-
-from arraycontext import flatten, unflatten
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
-from arraycontext import pytest_generate_tests_for_array_contexts
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
-
-from meshmode.discretization.poly_element import default_simplex_group_factory
-from meshmode.mesh import (
-    BTAG_ALL,
-    InteriorAdjacencyGroup,
-    BoundaryAdjacencyGroup,
-    InterPartAdjacencyGroup
-)
-
-import pytest
+import logging
 import os
 
-import logging
+import numpy as np
+import pytest
+
+import pyopencl as cl
+from arraycontext import flatten, pytest_generate_tests_for_array_contexts, unflatten
+
+from meshmode import _acf  # noqa: F401
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.discretization.poly_element import default_simplex_group_factory
+from meshmode.dof_array import flat_norm
+from meshmode.mesh import (
+    BTAG_ALL, BoundaryAdjacencyGroup, InteriorAdjacencyGroup,
+    InterPartAdjacencyGroup)
+
+
 logger = logging.getLogger(__name__)
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 # Is there a smart way of choosing this number?
 # Currently it is the same as the base from MPIBoundaryCommSetupHelper
@@ -82,6 +79,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
 
         if num_groups > 1:
             from meshmode.mesh.processing import split_mesh_groups
+
             # Group every Nth element
             element_flags = np.arange(base_mesh.nelements,
                         dtype=base_mesh.element_id_dtype) % num_groups
@@ -115,10 +113,9 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
         vol_discrs = [Discretization(actx, part_mesh, group_factory)
                         for part_mesh in part_meshes.values()]
 
+        from meshmode.discretization.connection import (
+            check_connection, make_face_restriction, make_partition_connection)
         from meshmode.mesh import BTAG_PARTITION
-        from meshmode.discretization.connection import (make_face_restriction,
-                                                        make_partition_connection,
-                                                        check_connection)
 
         for i_local_part, i_remote_part in connected_parts:
             # Mark faces within local_mesh that are connected to remote_mesh
@@ -368,11 +365,11 @@ def count_tags(mesh, tag):
 # {{{ MPI test boundary swap
 
 def _test_mpi_boundary_swap(dim, order, num_groups):
-    from meshmode.distributed import (MPIBoundaryCommSetupHelper,
-                                      membership_list_to_map)
-    from meshmode.mesh.processing import partition_mesh
-
     from mpi4py import MPI
+
+    from meshmode.distributed import (
+        MPIBoundaryCommSetupHelper, membership_list_to_map)
+    from meshmode.mesh.processing import partition_mesh
     mpi_comm = MPI.COMM_WORLD
 
     if mpi_comm.rank == 0:
@@ -585,8 +582,8 @@ def test_mpi_communication(num_parts, order):
     pytest.importorskip("mpi4py")
 
     num_ranks = num_parts
-    from subprocess import check_call
     import sys
+    from subprocess import check_call
     check_call([
         "mpiexec",
         "--oversubscribe",

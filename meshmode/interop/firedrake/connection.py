@@ -30,21 +30,16 @@ import numpy as np
 import numpy.linalg as la
 
 from modepy import resampling_matrix
+from pytools import memoize_method
 
+from meshmode.discretization import Discretization, InterpolatoryElementGroupBase
+from meshmode.discretization.poly_element import (
+    ElementGroupFactory, default_simplex_group_factory)
 from meshmode.interop.firedrake.mesh import (
-    import_firedrake_mesh, export_mesh_to_firedrake)
+    export_mesh_to_firedrake, import_firedrake_mesh)
 from meshmode.interop.firedrake.reference_cell import (
     get_affine_reference_simplex_mapping, get_finat_element_unit_nodes)
-
 from meshmode.mesh.processing import get_simplex_element_flip_matrix
-
-from meshmode.discretization.poly_element import (
-    default_simplex_group_factory,
-    ElementGroupFactory)
-from meshmode.discretization import (
-    Discretization, InterpolatoryElementGroupBase)
-
-from pytools import memoize_method
 
 
 def _reorder_nodes(orient, nodes, flip_matrix, unflip=False):
@@ -526,6 +521,7 @@ class FiredrakeConnection:
             self._validate_function(out, "out", fspace_shape)
         else:
             from firedrake.function import Function
+
             # Translate shape so that don't always get a TensorFunctionSpace,
             # but instead get FunctionSpace or VectorFunctionSpace when
             # reasonable

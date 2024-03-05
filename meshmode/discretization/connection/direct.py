@@ -20,29 +20,25 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Generic, List, Optional, Sequence, Tuple
+
 import numpy as np
 import numpy.linalg as la
-from abc import ABC, abstractmethod
-
-from typing import Generic, Sequence, Optional, List, Tuple
-from pytools import memoize_method
 
 import loopy as lp
-from meshmode.transform_metadata import (
-        ConcurrentElementInameTag, ConcurrentDOFInameTag,
-        DiscretizationElementAxisTag, DiscretizationDOFAxisTag)
-from pytools import memoize_in, keyed_memoize_method
 from arraycontext import (
-        ArrayContext, ArrayT, ArrayOrContainerT, NotAnArrayContainerError,
-        serialize_container, deserialize_container, make_loopy_program,
-        tag_axes
-        )
+    ArrayContext, ArrayOrContainerT, ArrayT, NotAnArrayContainerError,
+    deserialize_container, make_loopy_program, serialize_container, tag_axes)
 from arraycontext.metadata import NameHint
+from pytools import keyed_memoize_method, memoize_in, memoize_method
 
 from meshmode.discretization import Discretization, ElementGroupBase
 from meshmode.dof_array import DOFArray
-
-from dataclasses import dataclass
+from meshmode.transform_metadata import (
+    ConcurrentDOFInameTag, ConcurrentElementInameTag, DiscretizationDOFAxisTag,
+    DiscretizationElementAxisTag)
 
 
 def _reshape_and_preserve_tags(

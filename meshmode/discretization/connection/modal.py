@@ -25,17 +25,17 @@ THE SOFTWARE.
 
 import numpy as np
 import numpy.linalg as la
+
 import modepy as mp
-
 from arraycontext import (
-    NotAnArrayContainerError, serialize_container, deserialize_container, tag_axes)
-from meshmode.transform_metadata import (FirstAxisIsElementsTag,
-                                         DiscretizationDOFAxisTag)
-from meshmode.discretization import InterpolatoryElementGroupBase
-from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
-from meshmode.discretization.connection.direct import DiscretizationConnection
-
+    NotAnArrayContainerError, deserialize_container, serialize_container, tag_axes)
 from pytools import keyed_memoize_in
+
+from meshmode.discretization import InterpolatoryElementGroupBase
+from meshmode.discretization.connection.direct import DiscretizationConnection
+from meshmode.discretization.poly_element import QuadratureSimplexElementGroup
+from meshmode.transform_metadata import (
+    DiscretizationDOFAxisTag, FirstAxisIsElementsTag)
 
 
 class NodalToModalDiscretizationConnection(DiscretizationConnection):

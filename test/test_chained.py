@@ -20,19 +20,21 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import logging
+
 import numpy as np
-
 import pytest
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
-from arraycontext import pytest_generate_tests_for_array_contexts
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
 
-from arraycontext import flatten
+from arraycontext import flatten, pytest_generate_tests_for_array_contexts
+
+from meshmode import _acf  # noqa: F401
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from meshmode.dof_array import flat_norm
 
-import logging
+
 logger = logging.getLogger(__name__)
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 
 def create_discretization(actx, ndim,
@@ -42,7 +44,8 @@ def create_discretization(actx, ndim,
     # construct mesh
     if ndim == 2:
         from functools import partial
-        from meshmode.mesh.generation import make_curve_mesh, ellipse, starfish
+
+        from meshmode.mesh.generation import ellipse, make_curve_mesh, starfish
 
         if mesh_name is None:
             mesh_name = "ellipse"
@@ -55,8 +58,8 @@ def create_discretization(actx, ndim,
         else:
             raise ValueError(f"unknown mesh name: {mesh_name}")
     elif ndim == 3:
-        from meshmode.mesh.generation import generate_torus
-        from meshmode.mesh.generation import generate_warped_rect_mesh
+        from meshmode.mesh.generation import (
+            generate_torus, generate_warped_rect_mesh)
 
         if mesh_name is None:
             mesh_name = "torus"
@@ -74,8 +77,8 @@ def create_discretization(actx, ndim,
 
     # create discretization
     from meshmode.discretization import Discretization
-    from meshmode.discretization.poly_element import \
-            InterpolatoryQuadratureSimplexGroupFactory
+    from meshmode.discretization.poly_element import (
+        InterpolatoryQuadratureSimplexGroupFactory)
     discr = Discretization(actx, mesh,
             InterpolatoryQuadratureSimplexGroupFactory(order))
 
@@ -83,10 +86,10 @@ def create_discretization(actx, ndim,
 
 
 def create_refined_connection(actx, discr, threshold=0.3):
-    from meshmode.mesh.refinement import RefinerWithoutAdjacency
     from meshmode.discretization.connection import make_refinement_connection
-    from meshmode.discretization.poly_element import \
-            InterpolatoryQuadratureSimplexGroupFactory
+    from meshmode.discretization.poly_element import (
+        InterpolatoryQuadratureSimplexGroupFactory)
+    from meshmode.mesh.refinement import RefinerWithoutAdjacency
 
     flags = np.random.rand(discr.mesh.nelements) < threshold
     refiner = RefinerWithoutAdjacency(discr.mesh)
@@ -100,10 +103,10 @@ def create_refined_connection(actx, discr, threshold=0.3):
 
 
 def create_face_connection(actx, discr):
-    from meshmode.discretization.connection import FACE_RESTR_ALL
-    from meshmode.discretization.connection import make_face_restriction
-    from meshmode.discretization.poly_element import \
-            InterpolatoryQuadratureSimplexGroupFactory
+    from meshmode.discretization.connection import (
+        FACE_RESTR_ALL, make_face_restriction)
+    from meshmode.discretization.poly_element import (
+        InterpolatoryQuadratureSimplexGroupFactory)
 
     discr_order = discr.groups[0].order
     connection = make_face_restriction(actx, discr,
@@ -117,8 +120,8 @@ def create_face_connection(actx, discr):
 @pytest.mark.skip(reason="implementation detail")
 @pytest.mark.parametrize("ndim", [2, 3])
 def test_chained_batch_table(actx_factory, ndim, visualize=False):
-    from meshmode.discretization.connection.chained import \
-        _build_element_lookup_table
+    from meshmode.discretization.connection.chained import (
+        _build_element_lookup_table)
 
     actx = actx_factory()
 
@@ -146,8 +149,7 @@ def test_chained_batch_table(actx_factory, ndim, visualize=False):
 @pytest.mark.skip(reason="implementation detail")
 @pytest.mark.parametrize("ndim", [2, 3])
 def test_chained_new_group_table(actx_factory, ndim, visualize=False):
-    from meshmode.discretization.connection.chained import \
-        _build_new_group_table
+    from meshmode.discretization.connection.chained import _build_new_group_table
 
     actx = actx_factory()
 
@@ -202,8 +204,7 @@ def test_chained_connection(actx_factory, ndim, visualize=False):
     conn = create_refined_connection(actx, conn.to_discr, threshold=np.inf)
     connections.append(conn)
 
-    from meshmode.discretization.connection import \
-            ChainedDiscretizationConnection
+    from meshmode.discretization.connection import ChainedDiscretizationConnection
     chained = ChainedDiscretizationConnection(connections)
 
     def f(x):
@@ -220,8 +221,7 @@ def test_chained_connection(actx_factory, ndim, visualize=False):
 
 @pytest.mark.parametrize("ndim", [2, 3])
 def test_chained_full_resample_matrix(actx_factory, ndim, visualize=False):
-    from meshmode.discretization.connection.chained import \
-        make_full_resample_matrix
+    from meshmode.discretization.connection.chained import make_full_resample_matrix
 
     actx = actx_factory()
 
@@ -232,8 +232,7 @@ def test_chained_full_resample_matrix(actx_factory, ndim, visualize=False):
     conn = create_refined_connection(actx, conn.to_discr)
     connections.append(conn)
 
-    from meshmode.discretization.connection import \
-            ChainedDiscretizationConnection
+    from meshmode.discretization.connection import ChainedDiscretizationConnection
     chained = ChainedDiscretizationConnection(connections)
 
     def f(x):
@@ -257,8 +256,8 @@ def test_chained_full_resample_matrix(actx_factory, ndim, visualize=False):
 def test_chained_to_direct(actx_factory, ndim, chain_type,
                            nelements=128, visualize=False):
     import time
-    from meshmode.discretization.connection.chained import \
-        flatten_chained_connection
+
+    from meshmode.discretization.connection.chained import flatten_chained_connection
 
     actx = actx_factory()
 
@@ -284,8 +283,7 @@ def test_chained_to_direct(actx_factory, ndim, chain_type,
     else:
         raise ValueError("unknown test case")
 
-    from meshmode.discretization.connection import \
-            ChainedDiscretizationConnection
+    from meshmode.discretization.connection import ChainedDiscretizationConnection
     chained = ChainedDiscretizationConnection(connections)
 
     t_start = time.time()
@@ -362,11 +360,11 @@ def test_reversed_chained_connection(actx_factory, ndim, mesh_name):
                     conn.to_discr, threshold=threshold)
             connections.append(conn)
 
-        from meshmode.discretization.connection import \
-                ChainedDiscretizationConnection
+        from meshmode.discretization.connection import (
+            ChainedDiscretizationConnection)
         chained = ChainedDiscretizationConnection(connections)
-        from meshmode.discretization.connection import \
-                L2ProjectionInverseDiscretizationConnection
+        from meshmode.discretization.connection import (
+            L2ProjectionInverseDiscretizationConnection)
         reverse = L2ProjectionInverseDiscretizationConnection(chained)
 
         # create test vector

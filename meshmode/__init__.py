@@ -29,6 +29,7 @@ __doc__ = """
 """
 
 from builtins import FileExistsError  # noqa: F401
+
 from meshmode.mesh.tools import AffineMap  # noqa: F401
 
 
@@ -53,6 +54,7 @@ def _acf():
     argument when running them from the command line.
     """
     import pyopencl as cl
+
     from meshmode.array_context import PyOpenCLArrayContext
 
     context = cl._csc()

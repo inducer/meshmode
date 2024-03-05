@@ -24,25 +24,22 @@ THE SOFTWARE.
 """
 
 from abc import ABC, abstractmethod
+from typing import Hashable, Iterable, Optional, Protocol, runtime_checkable
 from warnings import warn
-from typing import Hashable, Iterable, Protocol, Optional, runtime_checkable
 
 import numpy as np
 
 import loopy as lp
 from arraycontext import ArrayContext, make_loopy_program, tag_axes
-from pytools import memoize_in, memoize_method, keyed_memoize_in
+from pytools import keyed_memoize_in, memoize_in, memoize_method
 from pytools.obj_array import make_obj_array
-from meshmode.transform_metadata import (
-        ConcurrentElementInameTag, ConcurrentDOFInameTag,
-        FirstAxisIsElementsTag, DiscretizationElementAxisTag,
-        DiscretizationDOFAxisTag)
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
-from meshmode.mesh import (
-        Mesh as _Mesh,
-        MeshElementGroup as _MeshElementGroup)
+from meshmode.mesh import Mesh as _Mesh, MeshElementGroup as _MeshElementGroup
+from meshmode.transform_metadata import (
+    ConcurrentDOFInameTag, ConcurrentElementInameTag, DiscretizationDOFAxisTag,
+    DiscretizationElementAxisTag, FirstAxisIsElementsTag)
 
 
 __doc__ = """

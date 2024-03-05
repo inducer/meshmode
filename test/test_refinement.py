@@ -21,33 +21,33 @@ THE SOFTWARE.
 """
 
 import logging
+import pathlib
 from functools import partial
 
 import numpy as np
 import pytest
 
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from arraycontext import pytest_generate_tests_for_array_contexts
+
+import meshmode.mesh.generation as mgen
+from meshmode import _acf  # noqa: F401
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.discretization.poly_element import (
+    GaussLegendreTensorProductGroupFactory,
+    InterpolatoryQuadratureSimplexGroupFactory,
+    LegendreGaussLobattoTensorProductGroupFactory,
+    PolynomialEquidistantSimplexGroupFactory,
+    PolynomialWarpAndBlend2DRestrictingGroupFactory,
+    PolynomialWarpAndBlend3DRestrictingGroupFactory)
+from meshmode.dof_array import flat_norm
+from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+from meshmode.mesh.refinement import RefinerWithoutAdjacency
+
+
+logger = logging.getLogger(__name__)
 pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         [PytestPyOpenCLArrayContextFactory])
 
-from meshmode.dof_array import flat_norm
-from meshmode.mesh.refinement import RefinerWithoutAdjacency
-import meshmode.mesh.generation as mgen
-
-from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
-from meshmode.discretization.poly_element import (
-    InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlend2DRestrictingGroupFactory,
-    PolynomialWarpAndBlend3DRestrictingGroupFactory,
-    PolynomialEquidistantSimplexGroupFactory,
-    LegendreGaussLobattoTensorProductGroupFactory,
-    GaussLegendreTensorProductGroupFactory,
-)
-
-logger = logging.getLogger(__name__)
-
-import pathlib
 thisdir = pathlib.Path(__file__).parent
 
 
@@ -70,7 +70,7 @@ def random_refine_flags(fract, mesh):
     all_els = list(range(mesh.nelements))
 
     flags = np.zeros(mesh.nelements)
-    from random import shuffle, seed
+    from random import seed, shuffle
     seed(17)
     shuffle(all_els)
     for i in range(int(mesh.nelements * fract)):
@@ -139,11 +139,11 @@ def test_refinement_connection(
     # discretization order
     order = 5
 
+    from pytools.convergence import EOCRecorder
+
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
-            make_refinement_connection, check_connection)
-
-    from pytools.convergence import EOCRecorder
+        check_connection, make_refinement_connection)
     eoc_rec = EOCRecorder()
 
     for mesh_par in mesh_pars:
@@ -210,8 +210,8 @@ def test_refinement_connection(
         f_true = f(x_fine)
 
         if visualize == "dots":
-            import matplotlib.pyplot as plt
             import matplotlib.cm as cm
+            import matplotlib.pyplot as plt
 
             x = x.get(actx.queue)
             err = np.array(np.log10(
@@ -271,7 +271,7 @@ def test_conformity_of_uniform_mesh(refinement_rounds):
 
     assert mesh.is_conforming
 
-    from meshmode.mesh import is_boundary_tag_empty, BTAG_ALL
+    from meshmode.mesh import BTAG_ALL, is_boundary_tag_empty
     assert is_boundary_tag_empty(mesh, BTAG_ALL)
 
 

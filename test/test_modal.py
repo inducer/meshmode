@@ -22,42 +22,31 @@ THE SOFTWARE.
 
 
 from functools import partial
+
 import numpy as np
+import pytest
 
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from arraycontext import pytest_generate_tests_for_array_contexts
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
-
-from meshmode.dof_array import DOFArray, flat_norm
-from meshmode.mesh import (
-    SimplexElementGroup,
-    TensorProductElementGroup
-    )
-
-from meshmode.discretization.poly_element import (
-    # Simplex group factories
-    ModalSimplexGroupFactory,
-    InterpolatoryQuadratureSimplexGroupFactory,
-    PolynomialWarpAndBlend2DRestrictingGroupFactory,
-    PolynomialWarpAndBlend3DRestrictingGroupFactory,
-    PolynomialRecursiveNodesGroupFactory,
-    PolynomialEquidistantSimplexGroupFactory,
-    # Tensor product group factories
-    ModalTensorProductGroupFactory,
-    LegendreGaussLobattoTensorProductGroupFactory,
-    # Quadrature-based (non-interpolatory) group factories
-    QuadratureSimplexGroupFactory
-    )
-
-from meshmode.discretization import Discretization
-from meshmode.discretization.connection.modal import (
-    NodalToModalDiscretizationConnection,
-    ModalToNodalDiscretizationConnection
-    )
 
 import meshmode.mesh.generation as mgen
-import pytest
+from meshmode import _acf  # noqa: F401
+from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.discretization import Discretization
+from meshmode.discretization.connection.modal import (
+    ModalToNodalDiscretizationConnection, NodalToModalDiscretizationConnection)
+from meshmode.discretization.poly_element import (
+    InterpolatoryQuadratureSimplexGroupFactory,
+    LegendreGaussLobattoTensorProductGroupFactory, ModalSimplexGroupFactory,
+    ModalTensorProductGroupFactory, PolynomialEquidistantSimplexGroupFactory,
+    PolynomialRecursiveNodesGroupFactory,
+    PolynomialWarpAndBlend2DRestrictingGroupFactory,
+    PolynomialWarpAndBlend3DRestrictingGroupFactory, QuadratureSimplexGroupFactory)
+from meshmode.dof_array import DOFArray, flat_norm
+from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+
+
+pytest_generate_tests = pytest_generate_tests_for_array_contexts(
+        [PytestPyOpenCLArrayContextFactory])
 
 
 @pytest.mark.parametrize("nodal_group_factory", [

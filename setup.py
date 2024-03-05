@@ -3,7 +3,7 @@
 
 
 def main():
-    from setuptools import setup, find_packages
+    from setuptools import find_packages, setup
 
     version_dict = {}
     init_filename = "meshmode/version.py"

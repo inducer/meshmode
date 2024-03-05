@@ -24,11 +24,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import logging
+
 import numpy as np
 
 from meshmode.mesh.refinement.utils import Refiner
 
-import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -86,9 +88,8 @@ class RefinerWithoutAdjacency(Refiner):
             inew_vertex = mesh.nvertices
 
         from meshmode.mesh.refinement.tessellate import (
-                get_group_tessellation_info,
-                get_group_midpoints,
-                get_group_tessellated_nodes)
+            get_group_midpoints, get_group_tessellated_nodes,
+            get_group_tessellation_info)
 
         for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
             el_tess_info = get_group_tessellation_info(grp)

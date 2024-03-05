@@ -27,12 +27,13 @@ THE SOFTWARE.
 
 import sys
 from warnings import warn
-from arraycontext import PyOpenCLArrayContext as PyOpenCLArrayContextBase
-from arraycontext import PytatoPyOpenCLArrayContext as PytatoPyOpenCLArrayContextBase
+
+from arraycontext import (
+    PyOpenCLArrayContext as PyOpenCLArrayContextBase,
+    PytatoPyOpenCLArrayContext as PytatoPyOpenCLArrayContextBase)
 from arraycontext.pytest import (
-        _PytestPyOpenCLArrayContextFactoryWithClass,
-        _PytestPytatoPyOpenCLArrayContextFactory,
-        register_pytest_array_context_factory)
+    _PytestPyOpenCLArrayContextFactoryWithClass,
+    _PytestPytatoPyOpenCLArrayContextFactory, register_pytest_array_context_factory)
 
 
 def thaw(actx, ary):
@@ -48,10 +49,10 @@ def thaw(actx, ary):
 
 def _transform_loopy_inner(t_unit):
     import loopy as lp
-    from meshmode.transform_metadata import FirstAxisIsElementsTag
     from arraycontext.transform_metadata import ElementwiseMapKernelTag
-
     from pymbolic.primitives import Subscript, Variable
+
+    from meshmode.transform_metadata import FirstAxisIsElementsTag
 
     default_ep = t_unit.default_entrypoint
 
@@ -155,8 +156,8 @@ def _transform_loopy_inner(t_unit):
 
     # {{{ element/dof iname tag
 
-    from meshmode.transform_metadata import \
-            ConcurrentElementInameTag, ConcurrentDOFInameTag
+    from meshmode.transform_metadata import (
+        ConcurrentDOFInameTag, ConcurrentElementInameTag)
     el_inames = [iname.name
             for iname in default_ep.inames.values()
             if ConcurrentElementInameTag() in iname.tags]

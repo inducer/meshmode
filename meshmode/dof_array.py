@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 __copyright__ = "Copyright (C) 2020 Andreas Kloeckner"
 
 __license__ = """
@@ -22,28 +23,28 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import threading
 import operator as op
-from warnings import warn
-from numbers import Number
+import threading
 from contextlib import contextmanager
 from functools import partial, update_wrapper
+from numbers import Number
 from typing import Any, Callable, Iterable, Optional, Tuple
+from warnings import warn
 
 import numpy as np
-import loopy as lp
 
-from pytools import MovedFunctionDeprecationWrapper
-from pytools import single_valued, memoize_in
+import loopy as lp
+from arraycontext import (
+    Array, ArrayContext, ArrayOrContainerT, NotAnArrayContainerError,
+    deserialize_container, make_loopy_program, mapped_over_array_containers,
+    multimapped_over_array_containers, rec_map_array_container,
+    rec_multimap_array_container, serialize_container, with_array_context,
+    with_container_arithmetic)
+from pytools import MovedFunctionDeprecationWrapper, memoize_in, single_valued
 
 from meshmode.transform_metadata import (
-            ConcurrentElementInameTag, ConcurrentDOFInameTag)
-from arraycontext import (
-        Array, ArrayContext, ArrayOrContainerT, NotAnArrayContainerError,
-        make_loopy_program, with_container_arithmetic,
-        serialize_container, deserialize_container, with_array_context,
-        rec_map_array_container, rec_multimap_array_container,
-        mapped_over_array_containers, multimapped_over_array_containers)
+    ConcurrentDOFInameTag, ConcurrentElementInameTag)
+
 
 __doc__ = """
 .. autoclass:: DOFArray
@@ -735,8 +736,8 @@ def unflatten_from_numpy(
 # {{{ flat_norm
 
 def _reduce_norm(actx, arys, ord):
-    from numbers import Number
     from functools import reduce
+    from numbers import Number
 
     # NOTE: actx can be None if there are no DOFArrays in the container, in
     # which case all the entries should be Numbers and using numpy is ok

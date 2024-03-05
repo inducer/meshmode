@@ -20,10 +20,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import logging
+
 import numpy as np
 
 from pytools import log_process
-import logging
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -126,8 +129,7 @@ def make_refinement_connection(actx, refiner, coarse_discr, group_factory):
         for discretizing the fine mesh.
     """
     from meshmode.discretization.connection import (
-        DiscretizationConnectionElementGroup,
-        DirectDiscretizationConnection)
+        DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
 
     coarse_mesh = refiner.get_previous_mesh()
     fine_mesh = refiner.get_current_mesh()

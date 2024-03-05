@@ -36,23 +36,18 @@ THE SOFTWARE.
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, List, Mapping, Sequence, Set, Union, cast
+from warnings import warn
+
 import numpy as np
-from typing import List, Set, Union, Mapping, cast, Sequence, TYPE_CHECKING
 
 from arraycontext import ArrayContext
-from meshmode.discretization.connection import (
-        DirectDiscretizationConnection)
-
-from meshmode.mesh import (
-        Mesh,
-        InteriorAdjacencyGroup,
-        InterPartAdjacencyGroup,
-        PartID,
-)
 
 from meshmode.discretization import ElementGroupFactory
+from meshmode.discretization.connection import DirectDiscretizationConnection
+from meshmode.mesh import (
+    InteriorAdjacencyGroup, InterPartAdjacencyGroup, Mesh, PartID)
 
-from warnings import warn
 
 # This file needs to be importable without mpi4py. So don't be tempted to add
 # that import here--push it into individual functions instead.
@@ -61,8 +56,9 @@ from warnings import warn
 if TYPE_CHECKING:
     import mpi4py.MPI
 
-
 import logging
+
+
 logger = logging.getLogger(__name__)
 
 TAG_BASE = 83411

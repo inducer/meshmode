@@ -20,10 +20,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from meshmode.mesh.refinement.utils import Refiner
-from meshmode.mesh.refinement.no_adjacency import RefinerWithoutAdjacency
-
 import logging
+
+from meshmode.mesh.refinement.no_adjacency import RefinerWithoutAdjacency
+from meshmode.mesh.refinement.utils import Refiner
+
+
 logger = logging.getLogger(__name__)
 
 __doc__ = """

@@ -23,34 +23,29 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from meshmode.discretization.connection.direct import (
-        InterpolationBatch,
-        DiscretizationConnectionElementGroup,
-        DiscretizationConnection,
-        IdentityDiscretizationConnection,
-        DirectDiscretizationConnection)
-from meshmode.discretization.connection.chained import \
-        ChainedDiscretizationConnection
-from meshmode.discretization.connection.projection import \
-        L2ProjectionInverseDiscretizationConnection
+import logging
 
 from arraycontext import ArrayContext
-from meshmode.discretization.connection.same_mesh import \
-        make_same_mesh_connection
-from meshmode.discretization.connection.face import (
-        FACE_RESTR_INTERIOR, FACE_RESTR_ALL,
-        make_face_restriction,
-        make_face_to_all_faces_embedding)
-from meshmode.discretization.connection.opposite_face import \
-        make_opposite_face_connection, make_partition_connection
-from meshmode.discretization.connection.refinement import \
-        make_refinement_connection
-from meshmode.discretization.connection.chained import \
-        flatten_chained_connection
-from meshmode.discretization.connection.modal import \
-        NodalToModalDiscretizationConnection, ModalToNodalDiscretizationConnection
 
-import logging
+from meshmode.discretization.connection.chained import (
+    ChainedDiscretizationConnection, flatten_chained_connection)
+from meshmode.discretization.connection.direct import (
+    DirectDiscretizationConnection, DiscretizationConnection,
+    DiscretizationConnectionElementGroup, IdentityDiscretizationConnection,
+    InterpolationBatch)
+from meshmode.discretization.connection.face import (
+    FACE_RESTR_ALL, FACE_RESTR_INTERIOR, make_face_restriction,
+    make_face_to_all_faces_embedding)
+from meshmode.discretization.connection.modal import (
+    ModalToNodalDiscretizationConnection, NodalToModalDiscretizationConnection)
+from meshmode.discretization.connection.opposite_face import (
+    make_opposite_face_connection, make_partition_connection)
+from meshmode.discretization.connection.projection import (
+    L2ProjectionInverseDiscretizationConnection)
+from meshmode.discretization.connection.refinement import make_refinement_connection
+from meshmode.discretization.connection.same_mesh import make_same_mesh_connection
+
+
 logger = logging.getLogger(__name__)
 
 

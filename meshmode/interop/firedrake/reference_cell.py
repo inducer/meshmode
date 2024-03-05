@@ -64,7 +64,9 @@ def get_affine_reference_simplex_mapping(ambient_dim, firedrake_to_meshmode=True
                         f"'{type(firedrake_to_meshmode)}'")
 
     from FIAT.reference_element import ufc_simplex
-    from modepy import unit_vertices_for_shape, Simplex
+
+    from modepy import Simplex, unit_vertices_for_shape
+
     # Get the unit vertices from each system,
     # each stored with shape *(dim, nunit_vertices)*
     firedrake_unit_vertices = np.array(ufc_simplex(ambient_dim).vertices).T
@@ -133,10 +135,9 @@ def get_finat_element_unit_nodes(finat_element):
              by the finat element's reference element
              (see its ``cell`` attribute)
     """
-    from finat.fiat_elements import (
-        Lagrange, DiscontinuousLagrange, CrouzeixRaviart)
-    from finat.spectral import GaussLobattoLegendre, GaussLegendre
     from FIAT.reference_element import Simplex
+    from finat.fiat_elements import CrouzeixRaviart, DiscontinuousLagrange, Lagrange
+    from finat.spectral import GaussLegendre, GaussLobattoLegendre
     allowed_finat_elts = (Lagrange, DiscontinuousLagrange, CrouzeixRaviart,
                           GaussLobattoLegendre, GaussLegendre)
     if not isinstance(finat_element, allowed_finat_elts):
