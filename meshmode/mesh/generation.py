@@ -672,9 +672,10 @@ def generate_sphere(r: float, order: int, *,
     from dataclasses import replace
     vertices = mesh.vertices * r / np.sqrt(np.sum(mesh.vertices**2, axis=0))
     grp, = mesh.groups
-    grp = replace(grp,
-            nodes=grp.nodes * r / np.sqrt(np.sum(grp.nodes**2, axis=0)),
-            element_nr_base=None, node_nr_base=None)
+    grp = replace(
+        grp,
+        nodes=grp.nodes * r / np.sqrt(np.sum(grp.nodes**2, axis=0))
+        )
 
     from meshmode.mesh import Mesh
     return Mesh(
@@ -748,8 +749,7 @@ def generate_surface_of_revolution(
     from dataclasses import replace
     vertices = ensure_radius(mesh.vertices)
     grp, = mesh.groups
-    grp = replace(grp, nodes=ensure_radius(grp.nodes),
-                  element_nr_base=None, node_nr_base=None)
+    grp = replace(grp, nodes=ensure_radius(grp.nodes))
 
     from meshmode.mesh import Mesh
     return Mesh(
@@ -854,8 +854,7 @@ def generate_torus_and_cycle_vertices(
     # }}}
 
     from dataclasses import replace
-    grp = replace(grp, vertex_indices=vertex_indices, nodes=nodes,
-                  element_nr_base=None, node_nr_base=None)
+    grp = replace(grp, vertex_indices=vertex_indices, nodes=nodes)
 
     from meshmode.mesh import Mesh
     return (
@@ -1002,8 +1001,7 @@ def refine_mesh_and_get_urchin_warper(
     def warp_mesh(mesh: Mesh) -> Mesh:
         from dataclasses import replace
         groups = [
-            replace(grp, nodes=map_coords(grp.nodes),
-                    element_nr_base=None, node_nr_base=None)
+            replace(grp, nodes=map_coords(grp.nodes))
             for grp in mesh.groups]
 
         from meshmode.mesh import Mesh
