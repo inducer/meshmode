@@ -596,7 +596,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         # {{{ recurse into array containers
 
-        if not isinstance(ary, DOFArray):
+        from numbers import Number
+        if isinstance(ary, Number):
+            return ary
+        elif not isinstance(ary, DOFArray):
             try:
                 iterable = serialize_container(ary)
             except NotAnArrayContainerError:
