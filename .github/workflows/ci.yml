@@ -150,7 +150,8 @@ jobs:
             run: |
                 # texlive is needed for sphinxcontrib-tikz
                 sudo apt-get update
-                sudo apt-get install -y --no-install-recommends texlive-pictures graphviz pdf2svg
+                sudo apt-get install -y --no-install-recommends \
+                    texlive-pictures texlive-latex-extra graphviz pdf2svg
 
                 curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/ci-support.sh
                 . ci-support.sh
