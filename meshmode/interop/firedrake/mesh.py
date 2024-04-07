@@ -214,7 +214,8 @@ def _get_facet_markers(dm, facets):
 
 
 def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
-                                           cells_to_use=None):
+                                           cells_to_use=None,
+                                           face_id_dtype=None):
     """
     Return facial_adjacency_groups corresponding to
     the given firedrake mesh topology. Note that as we do not
@@ -236,6 +237,8 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         by a :mod:`meshmode` :class:`Mesh`.
     """
     top = fdrake_mesh_topology.topology
+    if face_id_dtype is None:
+        face_id_dtype = np.int8
 
     # We only need one group
     # for interconnectivity and one for boundary connectivity.
@@ -283,10 +286,10 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
 
     int_elements = int_facet_cell.flatten()
     int_neighbors = np.concatenate((int_facet_cell[:, 1], int_facet_cell[:, 0]))
-    int_element_faces = int_fac_loc_nr.flatten().astype(Mesh.face_id_dtype)
+    int_element_faces = int_fac_loc_nr.flatten().astype(face_id_dtype)
     int_neighbor_faces = np.concatenate((int_fac_loc_nr[:, 1],
                                          int_fac_loc_nr[:, 0]))
-    int_neighbor_faces = int_neighbor_faces.astype(Mesh.face_id_dtype)
+    int_neighbor_faces = int_neighbor_faces.astype(face_id_dtype)
     # If only using some of the cells
     from pyop2.datatypes import IntType
     if cells_to_use is not None:
@@ -344,7 +347,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
 
     ext_element_faces = np.array([fd_loc_fac_nr_to_mm[fac_nr] for fac_nr in
                                   top.exterior_facets.local_facet_dat.data],
-                                  dtype=Mesh.face_id_dtype)
+                                  dtype=face_id_dtype)
     # If only using some of the cells, throw away unused cells and
     # move to new cell index
 
@@ -707,11 +710,12 @@ build_connection_from_firedrake`.
         elif 1 not in face:
             no_one_face_ndx = iface
 
+    face_id_dtype = np.int8
     with ProcessLogger(logger, "Building (possibly) unflipped "
                        "FacialAdjacencyGroups"):
-        unflipped_facial_adjacency_groups = \
-            _get_firedrake_facial_adjacency_groups(fdrake_mesh,
-                                                   cells_to_use=cells_to_use)
+        unflipped_facial_adjacency_groups = (
+            _get_firedrake_facial_adjacency_groups(
+                fdrake_mesh, cells_to_use=cells_to_use, face_id_dtype=face_id_dtype))
 
     # applied below to take elements and element_faces
     # (or neighbors and neighbor_faces) and flip in any faces that need to
@@ -757,10 +761,15 @@ build_connection_from_firedrake`.
                             elements=fagrp.elements,
                             element_faces=new_element_faces))
 
-    return (Mesh(vertices, [group],
-                 nodal_adjacency=nodal_adjacency,
-                 facial_adjacency_groups=facial_adjacency_groups),
-            orient)
+    mesh = Mesh(
+        vertices, [group],
+        vertex_id_dtype=vertex_indices.dtype,
+        element_id_dtype=vertex_indices.dtype,
+        face_id_dtype=face_id_dtype,
+        nodal_adjacency=nodal_adjacency,
+        facial_adjacency_groups=facial_adjacency_groups)
+
+    return mesh, orient
 
 # }}}
 
