@@ -1439,6 +1439,10 @@ def test_mesh_grid(actx_factory, mesh_name, has_offset, visualize=False):
 # }}}
 
 
+def test_urchin():
+    mgen.generate_urchin(3, 2, 4, 1e-4)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
