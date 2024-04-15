@@ -156,7 +156,8 @@ jobs:
                 curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/ci-support.sh
                 . ci-support.sh
 
-                export EXTRA_INSTALL="sphinxcontrib-tikz"
+                # https://github.com/sphinx-contrib/tikz/issues/21
+                export EXTRA_INSTALL="sphinxcontrib-tikz!=0.4.18"
                 build_py_project_in_conda_env
 
                 # Work around
