@@ -91,7 +91,8 @@ Python 3 Conda:
 
 Documentation:
   script:
-  - EXTRA_INSTALL="pybind11 cython numpy sphinxcontrib-tikz"
+  # https://github.com/sphinx-contrib/tikz/issues/21
+  - EXTRA_INSTALL="pybind11 cython numpy sphinxcontrib-tikz!=0.4.18"
   - curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/main/build-docs.sh
   - . ./build-docs.sh
   tags:
