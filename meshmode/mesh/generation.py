@@ -951,9 +951,10 @@ def generate_torus(
 # {{{ get_urchin
 
 def refine_mesh_and_get_urchin_warper(
-        order: int, m: int, n: int, est_rel_interp_tolerance: float,
-        min_rad: float = 0.2,
-        uniform_refinement_rounds: int = 0) -> Mesh:
+            order: int, m: int, n: int, est_rel_interp_tolerance: float,
+            min_rad: float = 0.2,
+            uniform_refinement_rounds: int = 0
+        ) -> Tuple[Refiner, Callable[[Mesh], Mesh]]:
     """
     :arg order: order of the (simplex) elements.
     :arg m: order of the spherical harmonic :math:`Y^m_n`.
@@ -1028,15 +1029,12 @@ def refine_mesh_and_get_urchin_warper(
     hi = np.max(nodes_sph)
     del nodes_sph
 
-    from functools import partial
     unwarped_mesh = warp_and_refine_until_resolved(
                 refiner,
                 warp_mesh,
                 est_rel_interp_tolerance)
 
-    return refiner, partial(
-            warp_mesh,
-            node_vertex_consistency_tolerance=est_rel_interp_tolerance)
+    return refiner, warp_mesh
 
 
 def generate_urchin(
