@@ -217,7 +217,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
 
     # }}}
 
-    from meshmode.mesh import Mesh, _ModepyElementGroup
+    from meshmode.mesh import _ModepyElementGroup, make_mesh
     bdry_mesh_groups = []
     connection_data = {}
 
@@ -346,7 +346,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
                         unit_nodes=bdry_unit_nodes)
                 bdry_mesh_groups.append(bdry_mesh_group)
 
-    bdry_mesh = Mesh(bdry_vertices, bdry_mesh_groups)
+    bdry_mesh = make_mesh(bdry_vertices, bdry_mesh_groups)
 
     bdry_discr = discr.copy(
             actx=actx,

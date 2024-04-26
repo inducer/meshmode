@@ -41,8 +41,8 @@ from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from meshmode.discretization.poly_element import (
     LegendreGaussLobattoTensorProductGroupFactory, default_simplex_group_factory)
 from meshmode.mesh import (
-    BoundaryAdjacencyGroup, InteriorAdjacencyGroup, Mesh, SimplexElementGroup,
-    TensorProductElementGroup)
+    BoundaryAdjacencyGroup, InteriorAdjacencyGroup, SimplexElementGroup,
+    TensorProductElementGroup, make_mesh)
 from meshmode.mesh.tools import AffineMap
 
 
@@ -272,6 +272,7 @@ def test_mesh_as_python():
     print(code)
     exec_dict = {}
     exec(compile(code, "gen_code.py", "exec"), exec_dict)
+    exec_dict["_MODULE_SOURCE_CODE"] = code
 
     mesh_2 = exec_dict["make_mesh"]()
 
@@ -486,7 +487,7 @@ def test_quad_single_element(visualize=False):
             np.array([[0, 1, 2, 3]], dtype=np.int32),
             30, group_cls=TensorProductElementGroup)
 
-    Mesh(vertices, [mg], nodal_adjacency=None, facial_adjacency_groups=None)
+    make_mesh(vertices, [mg], nodal_adjacency=None, facial_adjacency_groups=None)
     if visualize:
         import matplotlib.pyplot as plt
         plt.plot(
@@ -980,7 +981,7 @@ def test_quad_mesh_2d(ambient_dim, filename, visualize=False):
 
         groups.append(g)
 
-    mesh_from_vertices = Mesh(mesh.vertices, groups=groups, is_conforming=True)
+    mesh_from_vertices = make_mesh(mesh.vertices, groups=groups, is_conforming=True)
 
     if visualize:
         from meshmode.mesh.visualization import write_vertex_vtk_file

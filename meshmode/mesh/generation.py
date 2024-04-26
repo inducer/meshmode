@@ -31,7 +31,7 @@ import numpy.linalg as la
 import modepy as mp
 from pytools import deprecate_keyword, log_process
 
-from meshmode.mesh import Mesh, MeshElementGroup
+from meshmode.mesh import Mesh, MeshElementGroup, make_mesh
 from meshmode.mesh.refinement import Refiner
 
 
@@ -429,14 +429,14 @@ def make_curve_mesh(
     t = t.ravel()
     nodes = curve_f(t).reshape(vertices.shape[0], nelements, -1)
 
-    from meshmode.mesh import Mesh, SimplexElementGroup
+    from meshmode.mesh import SimplexElementGroup
     egroup = SimplexElementGroup.make_group(
             order,
             vertex_indices=vertex_indices,
             nodes=nodes,
             unit_nodes=unit_nodes)
 
-    mesh = Mesh(
+    mesh = make_mesh(
             vertices=vertices, groups=[egroup],
             node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
             is_conforming=True)
@@ -578,8 +578,7 @@ def generate_icosahedron(
     grp = make_group_from_vertices(vertices, vertex_indices, order,
             unit_nodes=unit_nodes)
 
-    from meshmode.mesh import Mesh
-    return Mesh(
+    return make_mesh(
             vertices, [grp],
             node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
             is_conforming=True)
@@ -601,8 +600,7 @@ def generate_cube_surface(r: float, order: int, *,
             group_cls=TensorProductElementGroup,
             unit_nodes=unit_nodes)
 
-    from meshmode.mesh import Mesh
-    return Mesh(
+    return make_mesh(
             vertices, [grp],
             node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
             is_conforming=True)
@@ -678,8 +676,7 @@ def generate_sphere(r: float, order: int, *,
         nodes=grp.nodes * r / np.sqrt(np.sum(grp.nodes**2, axis=0))
         )
 
-    from meshmode.mesh import Mesh
-    return Mesh(
+    return make_mesh(
             vertices, [grp],
             node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
             is_conforming=True)
@@ -732,8 +729,7 @@ def generate_surface_of_revolution(
     grp = make_group_from_vertices(vertices, vertex_indices, order,
                 unit_nodes=unit_nodes)
 
-    from meshmode.mesh import Mesh
-    mesh = Mesh(
+    mesh = make_mesh(
             vertices, [grp],
             node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
             is_conforming=True)
@@ -752,8 +748,7 @@ def generate_surface_of_revolution(
     grp, = mesh.groups
     grp = replace(grp, nodes=ensure_radius(grp.nodes))
 
-    from meshmode.mesh import Mesh
-    return Mesh(
+    return make_mesh(
             vertices, [grp],
             node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
             is_conforming=True)
@@ -857,9 +852,8 @@ def generate_torus_and_cycle_vertices(
     from dataclasses import replace
     grp = replace(grp, vertex_indices=vertex_indices, nodes=nodes)
 
-    from meshmode.mesh import Mesh
     return (
-            Mesh(
+            make_mesh(
                 vertices, [grp],
                 node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
                 is_conforming=True),
@@ -1007,8 +1001,7 @@ def refine_mesh_and_get_urchin_warper(
             replace(grp, nodes=map_coords(grp.nodes))
             for grp in mesh.groups]
 
-        from meshmode.mesh import Mesh
-        return Mesh(
+        return make_mesh(
                 map_coords(mesh.vertices),
                 groups,
                 node_vertex_consistency_tolerance=False,
@@ -1391,8 +1384,7 @@ def generate_box_mesh(
 
     # }}}
 
-    from meshmode.mesh import Mesh
-    mesh = Mesh(vertices, [grp],
+    mesh = make_mesh(vertices, [grp],
             facial_adjacency_groups=facial_adjacency_groups,
             is_conforming=True)
 

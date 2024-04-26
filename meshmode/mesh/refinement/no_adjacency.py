@@ -222,8 +222,8 @@ class RefinerWithoutAdjacency(Refiner):
         else:
             new_vertices = None
 
-        from meshmode.mesh import Mesh
-        new_mesh = Mesh(new_vertices, new_el_groups, is_conforming=(
+        from meshmode.mesh import make_mesh
+        new_mesh = make_mesh(new_vertices, new_el_groups, is_conforming=(
             mesh.is_conforming
             and (refine_flags.all() or (~refine_flags).all())))
 

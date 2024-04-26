@@ -35,7 +35,7 @@ import modepy as mp
 from meshmode.mesh import (
     BTAG_PARTITION, BoundaryAdjacencyGroup, FacialAdjacencyGroup,
     InteriorAdjacencyGroup, InterPartAdjacencyGroup, Mesh, MeshElementGroup, PartID,
-    _FaceIDs)
+    _FaceIDs, make_mesh)
 from meshmode.mesh.tools import AffineMap
 
 
@@ -514,7 +514,7 @@ def _get_mesh_part(
     self_facial_adj_groups = [
             _gather_grps(igrp) for igrp in range(len(self_mesh_groups))]
 
-    return Mesh(
+    return make_mesh(
             self_vertices,
             self_mesh_groups,
             facial_adjacency_groups=self_facial_adj_groups,
@@ -764,7 +764,7 @@ def perform_flips(
 
         new_groups.append(new_grp)
 
-    return Mesh(
+    return make_mesh(
             mesh.vertices, new_groups, skip_tests=skip_tests,
             is_conforming=mesh.is_conforming,
             )
@@ -876,7 +876,7 @@ def merge_disjoint_meshes(
 
     # }}}
 
-    return Mesh(
+    return make_mesh(
             vertices, new_groups,
             skip_tests=skip_tests,
             nodal_adjacency=nodal_adjacency,
@@ -936,7 +936,7 @@ def split_mesh_groups(
                 nodes=grp.nodes[:, mask, :].copy(),
                 ))
 
-    mesh = Mesh(
+    mesh = make_mesh(
             vertices=mesh.vertices,
             groups=new_groups,
             is_conforming=mesh.is_conforming)
