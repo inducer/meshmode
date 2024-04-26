@@ -547,17 +547,26 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
 
 # {{{ element orientation
 
-def test_element_orientation_via_flipping():
+@pytest.mark.parametrize("case", ["blob", "gh-394"])
+def test_element_orientation_via_flipping(case):
     from meshmode.mesh.io import FileSource, generate_gmsh
 
     mesh_order = 3
 
-    mesh = generate_gmsh(
-            FileSource(str(thisdir / "blob-2d.step")), 2, order=mesh_order,
-            force_ambient_dim=2,
-            other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"],
-            target_unit="MM",
-            )
+    if case == "blob":
+        mesh = generate_gmsh(
+                FileSource(str(thisdir / "blob-2d.step")), 2, order=mesh_order,
+                force_ambient_dim=2,
+                other_options=["-string", "Mesh.CharacteristicLengthMax = 0.02;"],
+                target_unit="MM",
+                )
+    elif case == "gh-394":
+        mesh = mio.read_gmsh(
+                             str(thisdir / "gh-394.msh"),
+                             force_ambient_dim=2,
+                             mesh_construction_kwargs={"skip_tests": True})
+    else:
+        raise ValueError(f"unknown case: {case}")
 
     mesh_orient = mproc.find_volume_mesh_element_orientations(mesh)
 
@@ -951,7 +960,12 @@ def test_quad_mesh_2d(ambient_dim, filename, visualize=False):
             order=1,
             force_ambient_dim=ambient_dim,
             target_unit="MM",
+            # gmsh seems to make some negatively-oriented elements here
+            mesh_construction_kwargs={"skip_tests": True}
             )
+    if mesh.dim == mesh.ambient_dim:
+        mesh = mproc.perform_flips(
+                mesh,  mproc.find_volume_mesh_element_orientations(mesh) < 0)
 
     logger.info("END GEN")
     logger.info("nelements: %d", mesh.nelements)

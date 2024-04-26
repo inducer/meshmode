@@ -232,8 +232,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     )
 
                 if group.dim == 2:
-                    from meshmode.mesh.processing import flip_simplex_element_group
-                    group = flip_simplex_element_group(vertices, group,
+                    from meshmode.mesh.processing import flip_element_group
+                    group = flip_element_group(vertices, group,
                             np.ones(ngroup_elements, bool))
 
             elif isinstance(group_el_type, GmshTensorProductElementBase):
@@ -421,9 +421,9 @@ def from_vertices_and_simplices(
             raise ValueError("can only fix orientation of volume meshes")
 
         from meshmode.mesh.processing import (
-            find_volume_mesh_element_group_orientation, flip_simplex_element_group)
+            find_volume_mesh_element_group_orientation, flip_element_group)
         orient = find_volume_mesh_element_group_orientation(vertices, grp)
-        grp = flip_simplex_element_group(vertices, grp, orient < 0)
+        grp = flip_element_group(vertices, grp, orient < 0)
 
     return make_mesh(
             vertices=vertices, groups=[grp],
