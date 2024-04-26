@@ -36,6 +36,7 @@ from arraycontext import pytest_generate_tests_for_array_contexts
 
 import meshmode.mesh.generation as mgen
 import meshmode.mesh.io as mio
+import meshmode.mesh.processing as mproc
 from meshmode import _acf  # noqa: F401
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from meshmode.discretization.poly_element import (
@@ -60,8 +61,7 @@ def _get_rotation(amount, axis, center=None):
     corresponding to a rotation by *amount* (in radians) through a vector *axis*
     centered at *center*. *center* defaults to the origin if not specified.
     """
-    from meshmode.mesh.processing import _get_rotation_matrix_from_angle_and_axis
-    matrix = _get_rotation_matrix_from_angle_and_axis(amount, axis)
+    matrix = mproc._get_rotation_matrix_from_angle_and_axis(amount, axis)
     if center is None:
         return matrix
     else:
@@ -235,8 +235,7 @@ def test_circle_mesh(visualize=False):
     logger.info("END GEN")
     logger.info("nelements: %d", mesh.nelements)
 
-    from meshmode.mesh.processing import affine_map
-    mesh = affine_map(mesh, A=3*np.eye(2))
+    mesh = mproc.affine_map(mesh, A=3*np.eye(2))
 
     if visualize:
         from meshmode.mesh.visualization import draw_2d_mesh
@@ -326,8 +325,6 @@ def test_affine_map_with_facial_adjacency_maps(visualize=False):
         from meshmode.mesh.visualization import write_vertex_vtk_file
         write_vertex_vtk_file(orig_mesh, "affine_map_facial_adj_original.vtu")
 
-    from meshmode.mesh.processing import affine_map
-
     tol = 1e-12
 
     def almost_equal(map1, map2):
@@ -342,7 +339,8 @@ def test_affine_map_with_facial_adjacency_maps(visualize=False):
             and component_almost_equal(map1.offset, map2.offset))
 
     # Matrix only
-    mesh = affine_map(orig_mesh, A=_get_rotation(np.pi/2, axis=np.array([0, 0, 1])))
+    mesh = mproc.affine_map(
+                orig_mesh, A=_get_rotation(np.pi/2, axis=np.array([0, 0, 1])))
 
     if visualize:
         write_vertex_vtk_file(mesh, "affine_map_facial_adj_matrix.vtu")
@@ -365,7 +363,7 @@ def test_affine_map_with_facial_adjacency_maps(visualize=False):
             -np.pi/2, axis=np.array([0, 0, 1]), center=np.array([-2, 1, 0])))
 
     # Offset only
-    mesh = affine_map(orig_mesh, b=np.array([0, -2, 0]))
+    mesh = mproc.affine_map(orig_mesh, b=np.array([0, -2, 0]))
 
     if visualize:
         write_vertex_vtk_file(mesh, "affine_map_facial_adj_offset.vtu")
@@ -390,7 +388,7 @@ def test_affine_map_with_facial_adjacency_maps(visualize=False):
     # Matrix and offset
     aff_map = _get_rotation(
         np.pi/2, axis=np.array([0, 0, 1]), center=np.array([1, 1, 0]))
-    mesh = affine_map(orig_mesh, A=aff_map.matrix, b=aff_map.offset)
+    mesh = mproc.affine_map(orig_mesh, A=aff_map.matrix, b=aff_map.offset)
 
     if visualize:
         write_vertex_vtk_file(mesh, "affine_map_facial_adj_matrix_and_offset.vtu")
@@ -430,16 +428,14 @@ def test_mesh_rotation(ambient_dim, visualize=False):
     else:
         raise ValueError("unsupported dimension")
 
-    from meshmode.mesh.processing import _get_rotation_matrix_from_angle_and_axis
-    mat = _get_rotation_matrix_from_angle_and_axis(
+    mat = mproc._get_rotation_matrix_from_angle_and_axis(
             np.pi/3.0, np.array([1.0, 2.0, 1.4]))
 
     # check that the matrix is in the rotation group
     assert abs(abs(la.det(mat)) - 1) < 10e-14
     assert la.norm(mat @ mat.T - np.eye(3)) < 1.0e-14
 
-    from meshmode.mesh.processing import rotate_mesh_around_axis
-    rotated_mesh = rotate_mesh_around_axis(mesh,
+    rotated_mesh = mproc.rotate_mesh_around_axis(mesh,
             theta=np.pi/2.0,
             axis=np.array([1, 0, 0]))
 
@@ -528,12 +524,11 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
 
         discr_grp_factory = LegendreGaussLobattoTensorProductGroupFactory(order)
 
-    from meshmode.mesh.processing import affine_map, merge_disjoint_meshes
-    mesh2 = affine_map(mesh,
+    mesh2 = mproc.affine_map(mesh,
             A=np.eye(mesh.ambient_dim),
             b=np.array([2, 0, 0])[:mesh.ambient_dim])
 
-    mesh3 = merge_disjoint_meshes((mesh2, mesh))
+    mesh3 = mproc.merge_disjoint_meshes((mesh2, mesh))
     assert mesh3.facial_adjacency_groups
 
     mesh4 = mesh3.copy()
@@ -564,9 +559,7 @@ def test_element_orientation_via_flipping():
             target_unit="MM",
             )
 
-    from meshmode.mesh.processing import (
-        find_volume_mesh_element_orientations, perform_flips)
-    mesh_orient = find_volume_mesh_element_orientations(mesh)
+    mesh_orient = mproc.find_volume_mesh_element_orientations(mesh)
 
     assert (mesh_orient > 0).all()
 
@@ -575,20 +568,18 @@ def test_element_orientation_via_flipping():
     for _ in range(int(0.3*mesh.nelements)):
         flippy[randrange(0, mesh.nelements)] = 1
 
-    mesh = perform_flips(mesh, flippy, skip_tests=True)
+    mesh = mproc.perform_flips(mesh, flippy, skip_tests=True)
 
-    mesh_orient = find_volume_mesh_element_orientations(mesh)
+    mesh_orient = mproc.find_volume_mesh_element_orientations(mesh)
 
     assert ((mesh_orient < 0) == (flippy > 0)).all()
 
 
 @pytest.mark.parametrize("order", [1, 2, 3])
 def test_element_orientation_via_single_elements(order):
-    from meshmode.mesh.processing import find_volume_mesh_element_group_orientation
-
     def check(vertices, element_indices, tol=1e-14):
         grp = mgen.make_group_from_vertices(vertices, element_indices, order)
-        orient = find_volume_mesh_element_group_orientation(vertices, grp)
+        orient = mproc.find_volume_mesh_element_group_orientation(vertices, grp)
         return (
                 np.where(orient > tol)[0],
                 np.where(orient < tol)[0],
@@ -769,8 +760,7 @@ def test_lookup_tree(visualize=False):
     from meshmode.mesh.tools import make_element_lookup_tree
     tree = make_element_lookup_tree(mesh)
 
-    from meshmode.mesh.processing import find_bounding_box
-    bbox_min, bbox_max = find_bounding_box(mesh)
+    bbox_min, bbox_max = mproc.find_bounding_box(mesh)
 
     extent = bbox_max-bbox_min
 
@@ -1260,10 +1250,10 @@ def test_glued_mesh(use_tree):
     map_lower_to_upper = _get_rotation(np.pi/2, np.array([0, 0, 1]), center)
     map_upper_to_lower = _get_rotation(-np.pi/2, np.array([0, 0, 1]), center)
 
-    from meshmode.mesh.processing import BoundaryPairMapping, glue_mesh_boundaries
-    mesh = glue_mesh_boundaries(
+    mesh = mproc.glue_mesh_boundaries(
         orig_mesh, bdry_pair_mappings_and_tols=[
-            (BoundaryPairMapping("-theta", "+theta", map_lower_to_upper), 1e-12)
+            (mproc.BoundaryPairMapping("-theta", "+theta", map_lower_to_upper),
+             1e-12)
         ], use_tree=use_tree)
 
     int_grps = [
@@ -1331,10 +1321,10 @@ def test_glued_mesh_matrix_only():
     map_lower_to_upper = AffineMap(matrix=matrix_lower_to_upper)
     map_upper_to_lower = AffineMap(matrix=matrix_upper_to_lower)
 
-    from meshmode.mesh.processing import BoundaryPairMapping, glue_mesh_boundaries
-    mesh = glue_mesh_boundaries(
+    mesh = mproc.glue_mesh_boundaries(
         orig_mesh, bdry_pair_mappings_and_tols=[
-            (BoundaryPairMapping("-theta", "+theta", map_lower_to_upper), 1e-12)
+            (mproc.BoundaryPairMapping("-theta", "+theta", map_lower_to_upper),
+                1e-12)
         ])
 
     int_grps = [
@@ -1358,10 +1348,9 @@ def test_glued_mesh_offset_only():
     map_lower_to_upper = AffineMap(offset=offset_lower_to_upper)
     map_upper_to_lower = AffineMap(offset=offset_upper_to_lower)
 
-    from meshmode.mesh.processing import BoundaryPairMapping, glue_mesh_boundaries
-    mesh = glue_mesh_boundaries(
+    mesh = mproc.glue_mesh_boundaries(
         orig_mesh, bdry_pair_mappings_and_tols=[
-            (BoundaryPairMapping("-z", "+z", map_lower_to_upper), 1e-12)
+            (mproc.BoundaryPairMapping("-z", "+z", map_lower_to_upper), 1e-12)
         ])
 
     int_grps = [
@@ -1406,9 +1395,8 @@ def test_mesh_grid(actx_factory, mesh_name, has_offset, visualize=False):
     else:
         raise ValueError(f"unknown mesh name: '{mesh_name}'")
 
-    from meshmode.mesh.processing import make_mesh_grid
     shape = (6, 3, 2)[:mesh.ambient_dim]
-    mgrid = make_mesh_grid(
+    mgrid = mproc.make_mesh_grid(
         mesh,
         shape=shape,
         offset=offset if has_offset else None,
