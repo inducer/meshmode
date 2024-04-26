@@ -20,6 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from typing import Optional
+
 import numpy as np
 import numpy.linalg as la
 
@@ -197,6 +199,54 @@ class AffineMap:
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+# }}}
+
+
+# {{{ find_point_permutation
+
+def find_point_permutation(
+            targets: np.ndarray,
+            permutees: np.ndarray,
+            tol_multiplier: Optional[float] = None
+        ) -> Optional[np.ndarray]:
+    """
+    :arg targets: shaped ``(dim, npoints)`` or just ``(dim,)`` if a single point
+    :arg permutees: shaped ``(dim, npoints)``
+    :returns: a "from"-style permutation, or None if none was found.
+    """
+
+    if len(targets.shape) == 1:
+        targets = targets.reshape(-1, 1)
+
+    if tol_multiplier is None:
+        tol_multiplier = 250
+
+    tol = np.finfo(targets.dtype).eps * tol_multiplier
+
+    dim, ntgt_nodes = targets.shape
+    if dim == 0:
+        assert ntgt_nodes == 1
+        return np.array([0], dtype=np.int16)
+
+    dist_vecs = (targets.reshape(dim, -1, 1)
+            - permutees.reshape(dim, 1, -1))
+    dists = la.norm(dist_vecs, axis=0, ord=2)
+
+    assert ntgt_nodes < 2**16
+
+    result: np.ndarray = np.zeros(ntgt_nodes, dtype=np.int16)
+
+    for irow in range(ntgt_nodes):
+        close_indices, = np.where(dists[irow] < tol)
+
+        if len(close_indices) != 1:
+            return None
+
+        close_index, = close_indices
+        result[irow] = close_index
+
+    return result
 
 # }}}
 
