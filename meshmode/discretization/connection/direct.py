@@ -25,7 +25,6 @@ from dataclasses import dataclass
 from typing import Generic, List, Optional, Sequence, Tuple
 
 import numpy as np
-import numpy.linalg as la
 
 import loopy as lp
 from arraycontext import (
@@ -409,32 +408,11 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         ibatch = self.groups[to_group_index].batches[ibatch_index]
         from_grp = self.from_discr.groups[ibatch.from_group_index]
 
-        if tol_multiplier is None:
-            tol_multiplier = 250
-
-        tol = np.finfo(ibatch.result_unit_nodes.dtype).eps * tol_multiplier
-
-        dim, ntgt_nodes = ibatch.result_unit_nodes.shape
-        if dim == 0:
-            assert ntgt_nodes == 1
-            return np.array([0], dtype=np.int32)
-
-        dist_vecs = (ibatch.result_unit_nodes.reshape(dim, -1, 1)
-                - from_grp.unit_nodes.reshape(dim, 1, -1))
-        dists = la.norm(dist_vecs, axis=0, ord=2)
-
-        result = np.zeros(ntgt_nodes, dtype=self.to_discr.mesh.element_id_dtype)
-
-        for irow in range(ntgt_nodes):
-            close_indices, = np.where(dists[irow] < tol)
-
-            if len(close_indices) != 1:
-                return None
-
-            close_index, = close_indices
-            result[irow] = close_index
-
-        return result
+        from meshmode.mesh.tools import find_point_permutation
+        return find_point_permutation(
+                    targets=ibatch.result_unit_nodes,
+                    permutees=from_grp.unit_nodes,
+                    tol_multiplier=tol_multiplier)
 
     @keyed_memoize_method(lambda actx, to_group_index, ibatch_index,
             tol_multiplier=None: (to_group_index, ibatch_index, tol_multiplier))
