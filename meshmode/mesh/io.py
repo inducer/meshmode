@@ -94,7 +94,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
     def finalize_elements(self):
         pass
 
-    # May raise ValueError if try to add different tags with the same name
+    # May raise ValueError if called multiple times with the same name
     def add_tag(self, name, index, dimension):
         if self.tags is None:
             self.tags = []
