@@ -1652,7 +1652,12 @@ def _compute_facial_adjacency_from_vertices(
 # {{{ complete facial adjacency groups
 
 def _merge_boundary_adjacency_groups(
-        igrp, bdry_grps, merged_btag, element_id_dtype, face_id_dtype):
+            igrp: int,
+            bdry_grps: Sequence[BoundaryAdjacencyGroup],
+            merged_btag: BoundaryTag,
+            element_id_dtype: np.dtype,
+            face_id_dtype: np.dtype,
+        ) -> BoundaryAdjacencyGroup:
     """
     Create a new :class:`~meshmode.mesh.BoundaryAdjacencyGroup` containing all of
     the entries from a list of existing boundary adjacency groups.
