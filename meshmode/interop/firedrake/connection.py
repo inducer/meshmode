@@ -726,8 +726,8 @@ def build_connection_from_firedrake(actx, fdrake_fspace, grp_factory=None,
     # a numpy array
 
     # Get the reordering fd->mm.
-    flip_mat = get_simplex_element_flip_matrix(ufl_elt.degree(),
-                                               fd_unit_nodes)
+    flip_mat, _perm = get_simplex_element_flip_matrix(
+                              ufl_elt.degree(), fd_unit_nodes)
     fd_cell_node_list = fdrake_fspace.cell_node_list
     if cells_to_use is not None:
         fd_cell_node_list = fd_cell_node_list[cells_to_use]
@@ -810,7 +810,7 @@ InterpolatoryQuadratureSimplexElementGroup`.
         # matrix from the Firedrake unit nodes, not necessarily the meshmode
         # unit nodes
         #
-        flip_mat = get_simplex_element_flip_matrix(el_group.order,
+        flip_mat, _perm = get_simplex_element_flip_matrix(el_group.order,
                                                    fd_unit_nodes,
                                                    np.argsort(perm))
         flip_mat = np.rint(flip_mat).astype(IntType)

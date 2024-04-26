@@ -693,8 +693,8 @@ build_connection_from_firedrake`.
                                              no_normals_warn=no_normals_warn)
 
     with ProcessLogger(logger, "Flipping group"):
-        from meshmode.mesh.processing import flip_simplex_element_group
-        group = flip_simplex_element_group(vertices, unflipped_group, orient < 0)
+        from meshmode.mesh.processing import flip_element_group
+        group = flip_element_group(vertices, unflipped_group, orient < 0)
 
     # Now, any flipped element had its 0 vertex and 1 vertex exchanged.
     # This changes the local facet nr, so we need to create and then
@@ -967,9 +967,8 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
                        " in firedrake nodal order"):
         from meshmode.mesh.processing import get_simplex_element_flip_matrix
         for perm, cells in perm2cells.items():
-            flip_mat = get_simplex_element_flip_matrix(group.order,
-                                                       fd_unit_nodes,
-                                                       perm)
+            flip_mat, _perm = get_simplex_element_flip_matrix(
+                          group.order, fd_unit_nodes, perm)
             flip_mat = np.rint(flip_mat).astype(np.int32)
             resampled_group_nodes[:, cells, :] = \
                 np.matmul(resampled_group_nodes[:, cells, :], flip_mat.T)

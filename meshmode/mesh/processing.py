@@ -45,7 +45,7 @@ __doc__ = """
 .. autofunction:: find_group_indices
 .. autofunction:: partition_mesh
 .. autofunction:: find_volume_mesh_element_orientations
-.. autofunction:: flip_simplex_element_group
+.. autofunction:: flip_element_group
 .. autofunction:: perform_flips
 .. autofunction:: find_bounding_box
 .. autofunction:: merge_disjoint_meshes
@@ -672,11 +672,11 @@ def test_volume_mesh_element_orientations(mesh: Mesh) -> bool:
 
 # {{{ flips
 
-
 def get_simplex_element_flip_matrix(
-        order: int,
-        unit_nodes: np.ndarray,
-        permutation: Optional[Tuple[int, ...]] = None) -> np.ndarray:
+            order: int,
+            unit_nodes: np.ndarray,
+            permutation: Optional[Tuple[int, ...]] = None,
+        ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Generate a resampling matrix that corresponds to a
     permutation of the barycentric coordinates being applied.
@@ -693,21 +693,26 @@ def get_simplex_element_flip_matrix(
     :return: A numpy array of shape *(nunit_nodes, nunit_nodes)*
         which, when its transpose is right-applied to the matrix of nodes
         (shaped *(dim, nunit_nodes)*), corresponds to the permutation being
-        applied.
+        applied. Also, an array of indices to carry out the vertex permutation.
     """
     from modepy.tools import barycentric_to_unit, unit_to_barycentric
 
     bary_unit_nodes = unit_to_barycentric(unit_nodes)
 
+    dim = unit_nodes.shape[0]
+
     flipped_bary_unit_nodes = bary_unit_nodes.copy()
     if permutation is None:
-        flipped_bary_unit_nodes[0, :] = bary_unit_nodes[1, :]
-        flipped_bary_unit_nodes[1, :] = bary_unit_nodes[0, :]
+        # Swap the first two vertices on elements to be flipped.
+        permutation_ary = np.arange(dim + 1)
+        permutation_ary[1] = 0
+        permutation_ary[0] = 1
     else:
-        flipped_bary_unit_nodes[permutation, :] = bary_unit_nodes
+        permutation_ary = np.asarray(permutation)
+
+    flipped_bary_unit_nodes[permutation_ary, :] = bary_unit_nodes
     flipped_unit_nodes = barycentric_to_unit(flipped_bary_unit_nodes)
 
-    dim = unit_nodes.shape[0]
     shape = mp.Simplex(dim)
     space = mp.PN(dim, order)
     basis = mp.basis_for_space(space, shape)
@@ -725,32 +730,74 @@ def get_simplex_element_flip_matrix(
                 np.dot(flip_matrix, flip_matrix)
                 - np.eye(len(flip_matrix))) < 1e-13
 
-    return flip_matrix
+    return flip_matrix, permutation_ary
 
 
-def flip_simplex_element_group(
+def _get_tensor_product_element_flip_matrix_and_vertex_permutation(
+            grp: TensorProductElementGroup,
+        ) -> Tuple[np.ndarray, np.ndarray]:
+    unit_flip_matrix = np.eye(grp.dim)
+    unit_flip_matrix[0, 0] = -1
+
+    flipped_vertices = np.einsum(
+                 "ij,jn->in",
+                 unit_flip_matrix,
+                 grp.vertex_unit_coordinates().T)
+
+    vertex_permutation_to = find_point_permutation(
+        targets=flipped_vertices,
+        permutees=grp.vertex_unit_coordinates().T,
+    )
+    if vertex_permutation_to is None:
+        raise RuntimeError("flip permutation was not found")
+
+    flipped_unit_nodes = np.einsum("ij,jn->in", unit_flip_matrix, grp.unit_nodes)
+
+    basis = mp.basis_for_space(grp._modepy_space, grp._modepy_shape)
+    flip_matrix = mp.resampling_matrix(
+        basis.functions,
+        flipped_unit_nodes,
+        grp.unit_nodes
+    )
+
+    flip_matrix[np.abs(flip_matrix) < 1e-15] = 0
+
+    # Flipping twice should be the identity
+    assert la.norm(
+            np.dot(flip_matrix, flip_matrix)
+            - np.eye(len(flip_matrix))) < 1e-13
+
+    return flip_matrix, vertex_permutation_to
+
+
+def flip_element_group(
         vertices: np.ndarray,
         grp: MeshElementGroup,
         grp_flip_flags: np.ndarray) -> MeshElementGroup:
-    from meshmode.mesh import SimplexElementGroup
+    from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
-    if not isinstance(grp, SimplexElementGroup):
+    if isinstance(grp, SimplexElementGroup):
+        flip_matrix, vertex_permutation = get_simplex_element_flip_matrix(
+                grp.order, grp.unit_nodes)
+
+    elif isinstance(grp, TensorProductElementGroup):
+        flip_matrix, vertex_permutation = \
+            _get_tensor_product_element_flip_matrix_and_vertex_permutation(grp)
+
+    else:
         raise NotImplementedError("flips only supported on "
-                "exclusively SimplexElementGroup-based meshes")
-
-    # Swap the first two vertices on elements to be flipped.
+                "simplices and tensor product elements")
 
     if grp.vertex_indices is not None:
         new_vertex_indices = grp.vertex_indices.copy()
-        new_vertex_indices[grp_flip_flags, 0] \
-                = grp.vertex_indices[grp_flip_flags, 1]
-        new_vertex_indices[grp_flip_flags, 1] \
-                = grp.vertex_indices[grp_flip_flags, 0]
+        vertex_indices_to_be_flipped = grp.vertex_indices[grp_flip_flags]
+        permuted_vertex_indices = np.empty_like(vertex_indices_to_be_flipped)
+        permuted_vertex_indices[:, vertex_permutation] = vertex_indices_to_be_flipped
+        new_vertex_indices[grp_flip_flags] = permuted_vertex_indices
     else:
         new_vertex_indices = None
 
     # Apply the flip matrix to the nodes.
-    flip_matrix = get_simplex_element_flip_matrix(grp.order, grp.unit_nodes)
     new_nodes = grp.nodes.copy()
     new_nodes[:, grp_flip_flags] = np.einsum(
             "ij,dej->dei",
@@ -779,7 +826,7 @@ def perform_flips(
         grp_flip_flags = flip_flags[base_element_nr:base_element_nr + grp.nelements]
 
         if grp_flip_flags.any():
-            new_grp = flip_simplex_element_group(mesh.vertices, grp, grp_flip_flags)
+            new_grp = flip_element_group(mesh.vertices, grp, grp_flip_flags)
         else:
             new_grp = replace(grp)
 
