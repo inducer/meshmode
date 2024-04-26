@@ -35,8 +35,8 @@ import modepy as mp
 from meshmode.mesh import (
     BTAG_PARTITION, BoundaryAdjacencyGroup, FacialAdjacencyGroup,
     InteriorAdjacencyGroup, InterPartAdjacencyGroup, Mesh, MeshElementGroup, PartID,
-    _FaceIDs, make_mesh)
-from meshmode.mesh.tools import AffineMap
+    TensorProductElementGroup, _FaceIDs, make_mesh)
+from meshmode.mesh.tools import AffineMap, find_point_permutation
 
 
 __doc__ = """
@@ -557,23 +557,44 @@ def find_volume_mesh_element_group_orientation(
         each negatively oriented element.
     """
 
-    from meshmode.mesh import SimplexElementGroup
+    from meshmode.mesh import _ModepyElementGroup
 
-    if not isinstance(grp, SimplexElementGroup):
+    if not isinstance(grp, _ModepyElementGroup):
         raise NotImplementedError(
                 "finding element orientations "
                 "only supported on "
-                "exclusively SimplexElementGroup-based meshes")
+                "meshes containing element groups described by modepy")
 
     # (ambient_dim, nelements, nvertices)
     my_vertices = vertices[:, grp.vertex_indices]
 
-    # (ambient_dim, nelements, nspan_vectors)
-    spanning_vectors = (
-            my_vertices[:, :, 1:] - my_vertices[:, :, 0][:, :, np.newaxis])
+    def evec(i: int) -> np.ndarray:
+        """Make the i-th unit vector."""
+        result = np.zeros(grp.dim)
+        result[i] = 1
+        return result
 
-    ambient_dim = spanning_vectors.shape[0]
-    nspan_vectors = spanning_vectors.shape[-1]
+    def unpack_single(ary: Optional[np.ndarray]) -> np.ndarray:
+        assert ary is not None
+        item, = ary
+        return item
+
+    base_vertex_index = unpack_single(find_point_permutation(
+             targets=-np.ones(grp.dim),
+             permutees=grp.vertex_unit_coordinates().T))
+    spanning_vertex_indices = [
+        unpack_single(find_point_permutation(
+                     targets=-np.ones(grp.dim) + 2 * evec(i),
+                     permutees=grp.vertex_unit_coordinates().T))
+        for i in range(grp.dim)
+    ]
+
+    spanning_vectors = (
+                my_vertices[:, :, spanning_vertex_indices]
+                - my_vertices[:, :, base_vertex_index][:, :, np.newaxis])
+
+    ambient_dim, _nelements, nspan_vectors = spanning_vectors.shape
+    assert nspan_vectors == grp.dim
 
     if ambient_dim != grp.dim:
         raise ValueError("can only find orientation of volume meshes")
