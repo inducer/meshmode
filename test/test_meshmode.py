@@ -43,7 +43,8 @@ from meshmode.discretization.poly_element import (
     PolynomialWarpAndBlend3DRestrictingGroupFactory, default_simplex_group_factory)
 from meshmode.dof_array import flat_norm
 from meshmode.mesh import (
-    BTAG_ALL, Mesh, MeshElementGroup, SimplexElementGroup, TensorProductElementGroup)
+    BTAG_ALL, Mesh, MeshElementGroup, SimplexElementGroup, TensorProductElementGroup,
+    make_mesh)
 
 
 logger = logging.getLogger(__name__)
@@ -553,7 +554,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     vertex_indices = np.arange(shape.nvertices, dtype=np.int32).reshape(1, -1)
 
     mg = group_cls.make_group(mesh_order, vertex_indices, nodes, dim=dim)
-    mesh = Mesh(vertices, [mg], is_conforming=True)
+    mesh = make_mesh(vertices, [mg], is_conforming=True)
 
     from meshmode.discretization import Discretization
     vol_discr = Discretization(actx, mesh, group_factory)
@@ -645,7 +646,7 @@ def test_sanity_no_elements(actx_factory, dim, mesh_order, group_cls,
     vertex_indices = np.empty((0, shape.nvertices), dtype=np.int32)
 
     mg = group_cls.make_group(mesh_order, vertex_indices, nodes, dim=dim)
-    mesh = Mesh(vertices, [mg], is_conforming=True)
+    mesh = make_mesh(vertices, [mg], is_conforming=True)
 
     from meshmode.discretization import Discretization
     vol_discr = Discretization(actx, mesh, group_factory)
@@ -869,7 +870,7 @@ def test_mesh_without_vertices(actx_factory):
     groups = [
         replace(grp, nodes=grp.nodes, vertex_indices=None)
         for grp in mesh.groups]
-    mesh = Mesh(None, groups, is_conforming=False)
+    mesh = make_mesh(None, groups, is_conforming=False)
 
     # try refining it
     from meshmode.mesh.refinement import refine_uniformly

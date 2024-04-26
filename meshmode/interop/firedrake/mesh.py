@@ -32,7 +32,7 @@ from meshmode.interop.firedrake.reference_cell import (
     get_affine_reference_simplex_mapping, get_finat_element_unit_nodes)
 from meshmode.mesh import (
     BTAG_ALL, BTAG_INDUCED_BOUNDARY, BoundaryAdjacencyGroup, InteriorAdjacencyGroup,
-    Mesh, NodalAdjacency, SimplexElementGroup)
+    Mesh, NodalAdjacency, SimplexElementGroup, make_mesh)
 
 
 __doc__ = """
@@ -761,7 +761,7 @@ build_connection_from_firedrake`.
                             elements=fagrp.elements,
                             element_faces=new_element_faces))
 
-    mesh = Mesh(
+    mesh = make_mesh(
         vertices, [group],
         vertex_id_dtype=vertex_indices.dtype,
         element_id_dtype=vertex_indices.dtype,

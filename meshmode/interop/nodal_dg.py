@@ -146,7 +146,7 @@ class NodalDGContext:
         nodes = np.array([self.octave.pull(self.AXES[ax]).T for ax in range(dim)])
         vertex_indices = (self.octave.pull("EToV")).astype(np.int32)-1
 
-        from meshmode.mesh import Mesh, SimplexElementGroup
+        from meshmode.mesh import SimplexElementGroup, make_mesh
         order = int(self.octave.pull("N"))
         egroup = SimplexElementGroup.make_group(
                 order,
@@ -154,7 +154,7 @@ class NodalDGContext:
                 nodes=nodes,
                 unit_nodes=unit_nodes)
 
-        mesh = Mesh(vertices=vertices, groups=[egroup], is_conforming=True)
+        mesh = make_mesh(vertices=vertices, groups=[egroup], is_conforming=True)
 
         from meshmode.discretization import Discretization
         from meshmode.discretization.poly_element import (

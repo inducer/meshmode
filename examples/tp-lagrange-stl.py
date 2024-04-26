@@ -12,7 +12,7 @@ import meshmode.discretization.poly_element as poly
 import meshmode.mesh.generation as mgen
 from meshmode.array_context import PyOpenCLArrayContext
 from meshmode.discretization import Discretization
-from meshmode.mesh import BTAG_ALL, Mesh
+from meshmode.mesh import BTAG_ALL, make_mesh
 
 
 def main():
@@ -79,7 +79,7 @@ def main():
     from meshmode.mesh.generation import make_group_from_vertices
     mod_grp = make_group_from_vertices(vertices, grp.vertex_indices, order=grp.order)
 
-    mod_mesh = Mesh(
+    mod_mesh = make_mesh(
             vertices=vertices, groups=[mod_grp],
             is_conforming=bdry_mesh.is_conforming)
 

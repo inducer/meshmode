@@ -1774,7 +1774,7 @@ def as_python(mesh, function_name="make_mesh"):
 
         import numpy as np
         from meshmode.mesh import (
-            Mesh,
+            make_mesh as mm_make_mesh,
             MeshElementGroup,
             FacialAdjacencyGroup,
             InteriorAdjacencyGroup,
@@ -1823,7 +1823,7 @@ def as_python(mesh, function_name="make_mesh"):
 
         # }}}
 
-        cg("return Mesh(vertices, groups, skip_tests=True,")
+        cg("return mm_make_mesh(vertices, groups, skip_tests=True,")
         cg("    vertex_id_dtype=np.%s," % mesh.vertex_id_dtype.name)
         cg("    element_id_dtype=np.%s," % mesh.element_id_dtype.name)
 
