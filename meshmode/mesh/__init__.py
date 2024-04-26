@@ -1689,7 +1689,10 @@ def _merge_boundary_adjacency_groups(
 
 
 def _complete_facial_adjacency_groups(
-        facial_adjacency_groups, element_id_dtype, face_id_dtype):
+            facial_adjacency_groups: Tuple[Tuple[FacialAdjacencyGroup, ...], ...],
+            element_id_dtype: np.dtype,
+            face_id_dtype: np.dtype
+        ) -> Tuple[Tuple[FacialAdjacencyGroup, ...], ...]:
     """
     Add :class:`~meshmode.mesh.BoundaryAdjacencyGroup` instances for
     :class:`~meshmode.mesh.BTAG_NONE`, :class:`~meshmode.mesh.BTAG_ALL`, and
@@ -1697,7 +1700,9 @@ def _complete_facial_adjacency_groups(
     they are not present.
     """
 
-    completed_facial_adjacency_groups = facial_adjacency_groups.copy()
+    completed_facial_adjacency_groups = [
+        list(fagrps) for fagrps in facial_adjacency_groups
+    ]
 
     for igrp, fagrp_list in enumerate(facial_adjacency_groups):
         completed_fagrp_list = completed_facial_adjacency_groups[igrp]
@@ -1731,7 +1736,9 @@ def _complete_facial_adjacency_groups(
                     igrp, bdry_grps, BTAG_REALLY_ALL, element_id_dtype,
                     face_id_dtype))
 
-    return completed_facial_adjacency_groups
+    return tuple(
+        tuple(fagrps) for fagrps in completed_facial_adjacency_groups
+    )
 
 # }}}
 
