@@ -129,16 +129,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
         mesh_bulk_dim = max(el_type.dimensions for el_type in el_type_hist)
 
-        # {{{ build vertex numbering
-
         # map set of face vertex indices to list of tags associated to face
         face_vertex_indices_to_tags = {}
-        vertex_gmsh_index_to_mine = {}
         for element, el_vertices in enumerate(self.element_vertices):
-            for gmsh_vertex_nr in el_vertices:
-                if gmsh_vertex_nr not in vertex_gmsh_index_to_mine:
-                    vertex_gmsh_index_to_mine[gmsh_vertex_nr] = \
-                            len(vertex_gmsh_index_to_mine)
             if self.tags:
                 el_markers = self.element_markers[element]
                 el_tag_indexes = (
@@ -147,22 +140,14 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 # record tags of boundary dimension
                 el_tags = [self.tags[i][0] for i in el_tag_indexes if
                            self.tags[i][1] == mesh_bulk_dim - 1]
-                el_grp_verts = {vertex_gmsh_index_to_mine[e] for e in el_vertices}
-                face_vertex_indices = frozenset(el_grp_verts)
+                face_vertex_indices = frozenset(el_vertices)
                 if face_vertex_indices not in face_vertex_indices_to_tags:
                     face_vertex_indices_to_tags[face_vertex_indices] = []
                 face_vertex_indices_to_tags[face_vertex_indices] += el_tags
 
-        # }}}
-
         # {{{ build vertex array
 
-        gmsh_vertex_indices, my_vertex_indices = \
-                list(zip(*vertex_gmsh_index_to_mine.items()))
-        vertices = np.empty(
-                (ambient_dim, len(vertex_gmsh_index_to_mine)), dtype=np.float64)
-        vertices[:, np.array(my_vertex_indices, np.intp)] = \
-                self.points[np.array(gmsh_vertex_indices, np.intp)].T
+        vertices = np.asarray(self.points.T, dtype=np.float64, order="C")
 
         # }}}
 
@@ -197,9 +182,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                     continue
 
                 nodes[:, i] = self.points[el_nodes].T
-                vertex_indices[i] = [
-                        vertex_gmsh_index_to_mine[v_nr] for v_nr in el_vertices
-                        ]
+                vertex_indices[i] = el_vertices
 
                 if el_markers is not None:
                     for t in el_markers:
