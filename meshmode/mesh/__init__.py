@@ -800,9 +800,9 @@ def check_mesh_consistency(
 
 
 def make_mesh(
+        vertices: Optional[np.ndarray],
         groups: Iterable[MeshElementGroup],
         *,
-        vertices: Optional[np.ndarray] = None,
         nodal_adjacency: Optional[NodalAdjacencyLike] = None,
         facial_adjacency_groups: Optional[FacialAdjacencyLike] = None,
         is_conforming: Optional[bool] = None,
