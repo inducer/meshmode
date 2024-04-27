@@ -441,12 +441,12 @@ def to_json(mesh):
             "dim": group.dim,
             }
 
-    from meshmode import DataUnavailable
+    from meshmode import DataUnavailableError
 
     def nodal_adjacency_to_json(mesh):
         try:
             na = mesh.nodal_adjacency
-        except DataUnavailable:
+        except DataUnavailableError:
             return None
 
         return {

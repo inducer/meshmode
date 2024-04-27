@@ -44,6 +44,7 @@ __doc__ = """
 .. autoclass:: Mesh
 .. autofunction:: make_mesh
 .. autofunction:: check_mesh_consistency
+.. autofunction:: is_mesh_consistent
 
 .. autoclass:: NodalAdjacency
 .. autoclass:: FacialAdjacencyGroup
@@ -761,42 +762,149 @@ def check_mesh_consistency(
     * The facial adjacency shapes and dtypes.
     * The mesh orientation using
       :func:`~meshmode.mesh.processing.find_volume_mesh_element_orientations`.
-    """
-    if node_vertex_consistency_tolerance is not False:
-        assert _test_node_vertex_consistency(
-            mesh, node_vertex_consistency_tolerance)
 
-    for g in mesh.groups:
-        if g.vertex_indices is not None:
-            assert g.vertex_indices.dtype == mesh.vertex_id_dtype
+    :arg node_vertex_consistency_tolerance: If *False*, do not check for
+        consistency between vertex and nodal data. If *None*, a default tolerance
+        based on the :class:`~numpy.dtype` of the *vertices* array will be used.
+        Otherwise, the given value is used as the tolerance.
+    :arg skip_element_orientation_test: If *False*, check that element
+        orientation is positive in volume meshes (i.e. ones where ambient and
+        topological dimension match).
+
+    :raises InconsistentMeshError: when the mesh is found to be inconsistent in
+        some fashion.
+    """
+    from meshmode import (
+        InconsistentAdjacencyError, InconsistentArrayDTypeError,
+        InconsistentMeshError)
+
+    if node_vertex_consistency_tolerance is not False:
+        _test_node_vertex_consistency(mesh, tol=node_vertex_consistency_tolerance)
+
+    for i, g in enumerate(mesh.groups):
+        if g.vertex_indices is None:
+            continue
+
+        if g.vertex_indices.dtype != mesh.vertex_id_dtype:
+            raise InconsistentArrayDTypeError(
+                f"Group '{i}' attribute 'vertex_indices' has incorrect dtype: "
+                f"{g.vertex_indices.dtype!r} (expected mesh 'vertex_id_dtype' = "
+                f"{mesh.vertex_id_dtype!r})")
 
     nodal_adjacency = mesh._nodal_adjacency
     if nodal_adjacency:
-        assert nodal_adjacency.neighbors_starts.shape == (mesh.nelements + 1,)
-        assert len(nodal_adjacency.neighbors.shape) == 1
-        assert nodal_adjacency.neighbors_starts.dtype == mesh.element_id_dtype
-        assert nodal_adjacency.neighbors.dtype == mesh.element_id_dtype
+        if nodal_adjacency.neighbors_starts.shape != (mesh.nelements + 1,):
+            raise InconsistentAdjacencyError(
+                "Nodal adjacency 'neighbors_starts' has incorrect shape: "
+                f"'{nodal_adjacency.neighbors_starts.shape}' (expected "
+                f"nelements + 1 = {mesh.nelements + 1})")
+
+        if len(nodal_adjacency.neighbors.shape) != 1:
+            raise InconsistentAdjacencyError(
+                "Nodal adjacency 'neighbors' have incorrect dim: "
+                f"{nodal_adjacency.neighbors.shape} (expected ndim = 1)")
+
+        if nodal_adjacency.neighbors_starts.dtype != mesh.element_id_dtype:
+            raise InconsistentArrayDTypeError(
+                "Nodal adjacency 'neighbors_starts' has incorrect dtype: "
+                f"{nodal_adjacency.neighbors_starts.dtype!r} (expected mesh "
+                f"'element_id_dtype' = {mesh.element_id_dtype!r})")
+
+        if nodal_adjacency.neighbors.dtype != mesh.element_id_dtype:
+            raise InconsistentArrayDTypeError(
+                "Nodal adjacency 'neighbors' has incorrect dtype: "
+                f"{nodal_adjacency.neighbors.dtype!r} (expected mesh "
+                f"'element_id_dtype' = {mesh.element_id_dtype!r})")
 
     facial_adjacency_groups = mesh._facial_adjacency_groups
     if facial_adjacency_groups:
-        assert len(facial_adjacency_groups) == len(mesh.groups)
+        if len(facial_adjacency_groups) != len(mesh.groups):
+            raise InconsistentAdjacencyError(
+                "Facial adjacency groups do not match mesh groups: "
+                f"{len(facial_adjacency_groups)} (expected {len(mesh.groups)})")
 
-        for fagrp_list in facial_adjacency_groups:
-            for fagrp in fagrp_list:
+        for igrp, fagrp_list in enumerate(facial_adjacency_groups):
+            for ifagrp, fagrp in enumerate(fagrp_list):
+                if len(fagrp.elements.shape) != 1:
+                    raise InconsistentAdjacencyError(
+                        f"Facial adjacency {ifagrp} for group {igrp} has incorrect "
+                        f"'elements' shape: {fagrp.elements.shape} "
+                        "(expected ndim = 1)")
+
                 nfagrp_elements, = fagrp.elements.shape
-                assert fagrp.element_faces.dtype == mesh.face_id_dtype
-                assert fagrp.element_faces.shape == (nfagrp_elements,)
+                if fagrp.element_faces.shape != (nfagrp_elements,):
+                    raise InconsistentAdjacencyError(
+                        f"Facial adjacency {ifagrp} for group {igrp} has incorrect "
+                        f"'element_faces' shape: {fagrp.element_faces.shape} "
+                        f"(expected 'elements.shape' = {fagrp.elements.shape})")
+
+                if fagrp.element_faces.dtype != mesh.face_id_dtype:
+                    raise InconsistentArrayDTypeError(
+                        f"Facial adjacency {ifagrp} for group {igrp} has "
+                        "incorrect 'element_faces' dtype: "
+                        f"{fagrp.element_faces.dtype!r} (expected mesh "
+                        f"'face_id_dtype' = {mesh.face_id_dtype!r})")
 
                 if isinstance(fagrp, InteriorAdjacencyGroup):
-                    assert fagrp.neighbors.dtype == mesh.element_id_dtype
-                    assert fagrp.neighbors.shape == (nfagrp_elements,)
-                    assert fagrp.neighbor_faces.dtype == mesh.face_id_dtype
-                    assert fagrp.neighbor_faces.shape == (nfagrp_elements,)
+                    if fagrp.neighbors.dtype != mesh.element_id_dtype:
+                        raise InconsistentArrayDTypeError(
+                            f"Facial adjacency {ifagrp} for group {igrp} has "
+                            "incorrect 'neighbors' dtype: "
+                            f"{fagrp.neighbors.dtype!r} (expected mesh "
+                            f"'element_id_dtype' = {mesh.element_id_dtype!r})")
+
+                    if fagrp.neighbor_faces.dtype != mesh.face_id_dtype:
+                        raise InconsistentArrayDTypeError(
+                            f"Facial adjacency {ifagrp} for group {igrp} has "
+                            "incorrect 'neighbor_faces' dtype: "
+                            f"{fagrp.neighbor_faces.dtype!r} (expected mesh "
+                            f"'face_id_dtype' = {mesh.face_id_dtype!r})")
+
+                    if fagrp.neighbors.shape != (nfagrp_elements,):
+                        raise InconsistentAdjacencyError(
+                            f"Facial adjacency {ifagrp} for group {igrp} has "
+                            "incorrect 'neighbors' shape: "
+                            f"{fagrp.neighbors.shape} (expected "
+                            f"'elements.shape' = {fagrp.elements.shape})")
+
+                    if fagrp.neighbor_faces.shape != (nfagrp_elements,):
+                        raise InconsistentAdjacencyError(
+                            f"Facial adjacency {ifagrp} for group {igrp} has "
+                            "incorrect 'neighbor_faces' shape: "
+                            f"{fagrp.neighbor_faces.shape} (expected "
+                            f"'elements.shape' = {fagrp.elements.shape})")
 
     from meshmode.mesh.processing import test_volume_mesh_element_orientations
 
-    if mesh.dim == mesh.ambient_dim and not skip_element_orientation_test:
-        assert test_volume_mesh_element_orientations(mesh)
+    if not skip_element_orientation_test:
+        if mesh.dim == mesh.ambient_dim:
+            if not test_volume_mesh_element_orientations(mesh):
+                raise InconsistentMeshError("Mesh has inconsistent orientations")
+        else:
+            warn("Cannot check element orientation for a mesh with "
+                 "mesh.dim != mesh.ambient_dim", stacklevel=2)
+
+
+def is_mesh_consistent(
+        mesh: "Mesh",
+        *,
+        node_vertex_consistency_tolerance: Optional[
+            Union[Literal[False], float]] = None,
+        skip_element_orientation_test: bool = False,
+        ) -> bool:
+    """A boolean version of :func:`check_mesh_consistency`."""
+
+    from meshmode import InconsistentMeshError
+
+    try:
+        check_mesh_consistency(
+            mesh,
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+            skip_element_orientation_test=skip_element_orientation_test)
+    except InconsistentMeshError:
+        return False
+    else:
+        return True
 
 
 def make_mesh(
@@ -857,12 +965,8 @@ def make_mesh(
     :arg skip_tests: a flag used to skip any mesh consistency checks. This can
         be set to *True* in special situation, e.g. when loading a broken mesh
         that will be fixed later.
-    :arg node_vertex_consistency_tolerance: If *False*, do not check for
-        consistency between vertex and nodal data. If *None*, a default tolerance
-        based on the :class:`~numpy.dtype` of the *vertices* array will be used.
-    :arg skip_element_orientation_test: If *False*, check that element
-        orientation is positive in volume meshes (i.e. ones where ambient and
-        topological dimension match).
+    :arg node_vertex_consistency_tolerance: see :func:`check_mesh_consistency`.
+    :arg skip_element_orientation_test: see :func:`check_mesh_consistency`.
     """
     vertex_id_dtype = np.dtype(vertex_id_dtype)
     if vertex_id_dtype.kind not in {"i", "u"}:
@@ -1145,8 +1249,8 @@ class Mesh:
     def nvertices(self) -> int:
         """Number of vertices in the mesh, if available."""
         if self.vertices is None:
-            from meshmode import DataUnavailable
-            raise DataUnavailable("vertices")
+            from meshmode import DataUnavailableError
+            raise DataUnavailableError("vertices")
 
         return self.vertices.shape[-1]
 
@@ -1175,8 +1279,8 @@ class Mesh:
     def vertex_dtype(self):
         """The :class:`~numpy.dtype` of the :attr:`~Mesh.vertices` array, if any."""
         if self.vertices is None:
-            from meshmode import DataUnavailable
-            raise DataUnavailable("vertices")
+            from meshmode import DataUnavailableError
+            raise DataUnavailableError("vertices")
 
         return self.vertices.dtype
 
@@ -1187,17 +1291,17 @@ class Mesh:
         This property gets the :attr:`Mesh._nodal_adjacency` of the mesh. If the
         attribute value is *None*, the adjacency is computed and cached.
 
-        :raises DataUnavailable: if the nodal adjacency cannot be obtained.
+        :raises DataUnavailableError: if the nodal adjacency cannot be obtained.
         """
-        from meshmode import DataUnavailable
+        from meshmode import DataUnavailableError
 
         nodal_adjacency = self._nodal_adjacency
         if nodal_adjacency is False:
-            raise DataUnavailable("Nodal adjacency is not available")
+            raise DataUnavailableError("Nodal adjacency is not available")
 
         if nodal_adjacency is None:
             if not self.is_conforming:
-                raise DataUnavailable(
+                raise DataUnavailableError(
                     "Nodal adjacency can only be computed for conforming meshes"
                     )
 
@@ -1254,17 +1358,17 @@ class Mesh:
         Note that element groups are not necessarily geometrically contiguous
         like the figure may suggest.
 
-        :raises DataUnavailable: if the facial adjacency cannot be obtained.
+        :raises DataUnavailableError: if the facial adjacency cannot be obtained.
         """
-        from meshmode import DataUnavailable
+        from meshmode import DataUnavailableError
 
         facial_adjacency_groups = self._facial_adjacency_groups
         if facial_adjacency_groups is False:
-            raise DataUnavailable("Facial adjacency is not available")
+            raise DataUnavailableError("Facial adjacency is not available")
 
         if facial_adjacency_groups is None:
             if not self.is_conforming:
-                raise DataUnavailable(
+                raise DataUnavailableError(
                     "Facial adjacency can only be computed for conforming meshes"
                     )
 
@@ -1333,14 +1437,17 @@ def _mesh_group_node_vertex_error(mesh, mgrp):
     return map_vertices - grp_vertices
 
 
-def _test_node_vertex_consistency_resampling(mesh, igrp, tol):
+def _test_group_node_vertex_consistency_resampling(
+        mesh: Mesh, igrp: int, *, tol: Optional[float] = None) -> None:
     if mesh.vertices is None:
-        return True
+        return
 
     mgrp = mesh.groups[igrp]
 
     if mgrp.nelements == 0:
-        return True
+        return
+
+    from meshmode import InconsistentVerticesError
 
     per_vertex_errors = _mesh_group_node_vertex_error(mesh, mgrp)
     per_element_vertex_errors = np.max(
@@ -1359,31 +1466,26 @@ def _test_node_vertex_consistency_resampling(mesh, igrp, tol):
     if len(elements_above_tol) > 0:
         i_grp_elem = elements_above_tol[0]
         ielem = i_grp_elem + mesh.base_element_nrs[igrp]
-        from meshmode import InconsistentVerticesError
+
         raise InconsistentVerticesError(
-            f"vertex consistency check failed for element {ielem}; "
+            f"Vertex consistency check failed for element {ielem}; "
             f"{per_element_vertex_errors[i_grp_elem]} >= "
             f"{per_element_tols[i_grp_elem]}")
 
-    return True
 
+def _test_node_vertex_consistency(
+        mesh: Mesh, *, tol: Optional[float] = None) -> None:
+    """Ensure that order of by-index vertices matches that of mapped unit vertices.
 
-def _test_node_vertex_consistency(mesh, tol):
-    """Ensure that order of by-index vertices matches that of mapped
-    unit vertices.
+    :raises InconsistentVerticesError: if the vertices are not consistent.
     """
-    if not __debug__:
-        return True
-
     for igrp, mgrp in enumerate(mesh.groups):
         if isinstance(mgrp, _ModepyElementGroup):
-            assert _test_node_vertex_consistency_resampling(mesh, igrp, tol)
+            _test_group_node_vertex_consistency_resampling(mesh, igrp, tol=tol)
         else:
             warn("Not implemented: node-vertex consistency check for "
                  f"groups of type '{type(mgrp).__name__}'.",
                  stacklevel=3)
-
-    return True
 
 # }}}
 
