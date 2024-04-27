@@ -16,10 +16,9 @@ tikz_tikzlibraries = "decorations.markings"
 copyright = "2014-21, Meshmode contributors"
 
 ver_dic = {}
-exec(
-        compile(
-            open("../meshmode/version.py").read(), "../meshmode/version.py", "exec"),
-        ver_dic)
+with open("../meshmode/version.py") as _inf:
+    exec(compile(_inf.read(), "../meshmode/version.py", "exec"), ver_dic)
+
 version = ".".join(str(x) for x in ver_dic["VERSION"])
 # The full version, including alpha/beta/rc tags.
 release = ver_dic["VERSION_TEXT"]
