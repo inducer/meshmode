@@ -22,10 +22,13 @@ THE SOFTWARE.
 
 
 __doc__ = """
-.. exception:: Error
-.. exception:: DataUnavailable
-.. exception:: FileExistsError
-.. exception:: InconsistentVerticesError
+.. autoexception:: Error
+.. autoexception:: DataUnavailableError
+
+.. autoexception:: InconsistentMeshError
+.. autoexception:: InconsistentArrayDTypeError
+.. autoexception:: InconsistentVerticesError
+.. autoexception:: InconsistentAdjacencyError
 """
 
 from builtins import FileExistsError  # noqa: F401
@@ -34,19 +37,42 @@ from meshmode.mesh.tools import AffineMap  # noqa: F401
 
 
 class Error(RuntimeError):
-    pass
+    """Exception base for :mod:`meshmode` errors."""
 
 
-class DataUnavailable(Error):
-    pass
+class DataUnavailableError(Error):
+    """Raised when some data on the mesh or the discretization is not available.
 
-
-class InconsistentVerticesError(Error):
+    This error should not be raised when the specific data simply fails to be
+    computed for other reasons.
     """
-    Raised when an element's local-to-global mapping does not map the unit vertices
-    to the corresponding values in the mesh's *vertices* array.
+
+
+DataUnavailable = DataUnavailableError
+
+
+class InconsistentMeshError(Error):
+    """Raised when the mesh is inconsistent in some fashion.
+
+    Prefer the more specific exceptions, e.g. :exc:`InconsistentVerticesError`
+    when possible.
     """
-    pass
+
+
+class InconsistentArrayDTypeError(InconsistentMeshError):
+    """Raised when a mesh (or group) array does not match the provided
+    :class:`~numpy.dtype`.
+    """
+
+
+class InconsistentVerticesError(InconsistentMeshError):
+    """Raised when an element's local-to-global mapping does not map the unit
+    vertices to the corresponding values in the mesh's *vertices* array.
+    """
+
+
+class InconsistentAdjacencyError(InconsistentMeshError):
+    """Raised when the nodal or the facial adjacency is inconsistent."""
 
 
 def _acf():
