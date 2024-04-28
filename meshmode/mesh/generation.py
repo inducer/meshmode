@@ -1622,10 +1622,10 @@ def warp_and_refine_until_resolved(
 
     .. versionadded:: 2018.1
     """
-    from modepy.matrices import vandermonde
+    import modepy as mp
     from modepy.modal_decay import simplex_interp_error_coefficient_estimator_matrix
-    from modepy.modes import simplex_onb
 
+    from meshmode.mesh import SimplexElementGroup
     from meshmode.mesh.refinement import RefinerWithoutAdjacency
 
     if isinstance(unwarped_mesh_or_refiner, RefinerWithoutAdjacency):
@@ -1657,14 +1657,19 @@ def warp_and_refine_until_resolved(
 
         for base_element_nr, egrp in zip(
                 warped_mesh.base_element_nrs, warped_mesh.groups):
+            if not isinstance(egrp, SimplexElementGroup):
+                raise TypeError(
+                    f"Unsupported element group type: '{type(egrp).__name__}'")
+
             dim, _ = egrp.unit_nodes.shape
 
             interp_err_est_mat = simplex_interp_error_coefficient_estimator_matrix(
                     egrp.unit_nodes, egrp.order,
                     n_tail_orders=1 if warped_mesh.dim > 1 else 2)
 
-            vdm_inv = la.inv(
-                    vandermonde(simplex_onb(dim, egrp.order), egrp.unit_nodes))
+            basis = mp.orthonormal_basis_for_space(
+                egrp._modepy_space, egrp._modepy_shape)
+            vdm_inv = la.inv(mp.vandermonde(basis.functions, egrp.unit_nodes))
 
             mapping_coeffs = np.einsum("ij,dej->dei", vdm_inv, egrp.nodes)
             mapping_norm_2 = np.sqrt(np.sum(mapping_coeffs**2, axis=-1))
