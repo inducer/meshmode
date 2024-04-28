@@ -1230,7 +1230,12 @@ class Visualizer:
             while len(nodes) < 3:
                 nodes.append(0*nodes[0])
 
-            from matplotlib.tri.triangulation import Triangulation
+            try:
+                from matplotlib.tri import Triangulation
+            except ImportError:
+                # NOTE: deprecated starting with v3.7
+                from matplotlib.tri.triangulation import Triangulation
+
             tri, _, kwargs = \
                 Triangulation.get_from_args_and_kwargs(
                         *nodes,
