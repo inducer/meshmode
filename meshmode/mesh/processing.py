@@ -1359,7 +1359,10 @@ def glue_mesh_boundaries(
 
     return mesh.copy(
         nodal_adjacency=False,
-        facial_adjacency_groups=facial_adjacency_groups)
+        _facial_adjacency_groups=tuple([
+            tuple(fagrps) for fagrps in facial_adjacency_groups
+            ]),
+        )
 
 # }}}
 
@@ -1403,7 +1406,8 @@ def map_mesh(mesh: Mesh, f: Callable[[np.ndarray], np.ndarray]) -> Mesh:
     # }}}
 
     return mesh.copy(
-            vertices=vertices, groups=new_groups,
+            vertices=vertices,
+            groups=tuple(new_groups),
             is_conforming=mesh.is_conforming)
 
 # }}}
@@ -1499,8 +1503,11 @@ def affine_map(
     # }}}
 
     return mesh.copy(
-            vertices=vertices, groups=new_groups,
-            facial_adjacency_groups=facial_adjacency_groups,
+            vertices=vertices,
+            groups=tuple(new_groups),
+            _facial_adjacency_groups=tuple([
+                tuple(fagrps) for fagrps in facial_adjacency_groups
+                ]) if facial_adjacency_groups is not None else None,
             is_conforming=mesh.is_conforming)
 
 
