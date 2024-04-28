@@ -30,6 +30,7 @@ from arraycontext import (
     dataclass_array_container, pytest_generate_tests_for_array_contexts,
     with_container_arithmetic)
 from pytools.obj_array import make_obj_array
+from pytools.tag import Tag
 
 from meshmode import _acf  # noqa: F401
 from meshmode.array_context import (
@@ -48,7 +49,9 @@ pytest_generate_tests = pytest_generate_tests_for_array_contexts(
 
 # {{{ test_flatten_unflatten
 
-@with_container_arithmetic(bcast_obj_array=False, rel_comparison=True)
+@with_container_arithmetic(bcast_obj_array=False,
+                           rel_comparison=True,
+                           _cls_has_array_context_attr=True)
 @dataclass_array_container
 @dataclass(frozen=True)
 class MyContainer:
@@ -180,9 +183,6 @@ def test_dof_array_pickling(actx_factory):
 
     assert actx.to_numpy(flat_norm(mat_of_dofs - mat2_of_dofs, np.inf)) == 0
     assert actx.to_numpy(flat_norm(dc_of_dofs - dc2_of_dofs, np.inf)) == 0
-
-
-from pytools.tag import Tag
 
 
 class FooTag(Tag):
