@@ -562,7 +562,7 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     # {{{ volume calculation check
 
     if isinstance(mg, SimplexElementGroup):
-        from pytools import factorial
+        from math import factorial
         true_vol = 1/factorial(dim) * 2**dim
     elif isinstance(mg, TensorProductElementGroup):
         true_vol = 2**dim
