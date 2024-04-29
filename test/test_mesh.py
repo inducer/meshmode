@@ -961,11 +961,8 @@ def test_quad_mesh_2d(ambient_dim, filename, visualize=False):
             force_ambient_dim=ambient_dim,
             target_unit="MM",
             # gmsh seems to make some negatively-oriented elements here
-            mesh_construction_kwargs={"skip_tests": True}
+            mesh_construction_kwargs={"force_positive_orientation": ambient_dim == 2}
             )
-    if mesh.dim == mesh.ambient_dim:
-        mesh = mproc.perform_flips(
-                mesh,  mproc.find_volume_mesh_element_orientations(mesh) < 0)
 
     logger.info("END GEN")
     logger.info("nelements: %d", mesh.nelements)

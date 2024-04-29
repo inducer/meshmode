@@ -640,32 +640,20 @@ def find_volume_mesh_element_orientations(
     for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
         result_grp_view = result[base_element_nr:base_element_nr + grp.nelements]
 
-        if tolerate_unimplemented_checks:
-            try:
-                signed_area_elements = \
-                        find_volume_mesh_element_group_orientation(
-                                mesh.vertices, grp)
-            except NotImplementedError:
-                result_grp_view[:] = float("nan")
-            else:
-                assert not np.isnan(signed_area_elements).any()
-                result_grp_view[:] = signed_area_elements
-        else:
+        try:
             signed_area_elements = \
                     find_volume_mesh_element_group_orientation(
                             mesh.vertices, grp)
+        except NotImplementedError:
+            if tolerate_unimplemented_checks:
+                result_grp_view[:] = float("nan")
+            else:
+                raise
+        else:
             assert not np.isnan(signed_area_elements).any()
             result_grp_view[:] = signed_area_elements
 
     return result
-
-
-def test_volume_mesh_element_orientations(mesh: Mesh) -> bool:
-    area_elements = find_volume_mesh_element_orientations(
-            mesh, tolerate_unimplemented_checks=True)
-    valid = ~np.isnan(area_elements)
-
-    return bool(np.all(area_elements[valid] > 0))
 
 # }}}
 

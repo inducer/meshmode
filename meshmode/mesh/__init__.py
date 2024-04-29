@@ -874,14 +874,24 @@ def check_mesh_consistency(
                             f"{fagrp.neighbor_faces.shape} (expected "
                             f"'elements.shape' = {fagrp.elements.shape})")
 
-    from meshmode.mesh.processing import test_volume_mesh_element_orientations
+    from meshmode.mesh.processing import find_volume_mesh_element_orientations
 
     if not skip_element_orientation_test:
         if mesh.dim == mesh.ambient_dim:
-            if not test_volume_mesh_element_orientations(mesh):
-                raise InconsistentMeshError("Mesh has inconsistent orientations")
+            area_elements = find_volume_mesh_element_orientations(
+                    mesh, tolerate_unimplemented_checks=True)
+            valid = ~np.isnan(area_elements)
+            if (~valid).any():
+                warn("Some element orientations could not be checked due to "
+                     "unimplemented orientation computations.", stacklevel=2)
+
+            if not bool(np.all(area_elements[valid] > 0)):
+                raise InconsistentMeshError(
+                    "Mesh has negatively oriented elements. "
+                    "To address this problem, create the mesh while providing the "
+                    "parameter force_positive_orientation=True to make_mesh().")
         else:
-            warn("Cannot check element orientation for a mesh with "
+            warn("Unimplemented: Cannot check element orientation for a mesh with "
                  "mesh.dim != mesh.ambient_dim", stacklevel=2)
 
 
@@ -922,6 +932,7 @@ def make_mesh(
         skip_tests: bool = False,
         node_vertex_consistency_tolerance: Optional[float] = None,
         skip_element_orientation_test: bool = False,
+        force_positive_orientation: bool = False,
         ) -> "Mesh":
     """Construct a new mesh from a given list of *groups*.
 
@@ -1032,6 +1043,19 @@ def make_mesh(
         _facial_adjacency_groups=facial_adjacency_groups,
         factory_constructed=True
         )
+
+    if force_positive_orientation:
+        if mesh.dim == mesh.ambient_dim:
+            import meshmode.mesh.processing as mproc
+            mesh = mproc.perform_flips(
+                    mesh,  mproc.find_volume_mesh_element_orientations(mesh) < 0)
+        else:
+            raise ValueError("cannot enforce positive element orientation "
+                             "on non-volume meshes")
+
+        # By default, element orientation will be tested again below.
+        # As a matter of defense-in-depth, that's probably a good idea,
+        # in order to help defend against potential bugs in element flipping.
 
     if __debug__ and not skip_tests:
         check_mesh_consistency(
