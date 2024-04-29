@@ -558,16 +558,10 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
                                  "`unit_nodes` dim = {unit_nodes.shape[0]}.")
 
         self._basis = basis
-        self._bases_1d = basis.bases[0]
         self._nodes = unit_nodes
 
     def basis_obj(self):
         return self._basis
-
-    def bases_1d(self):
-        """Return 1D component bases used to construct the tensor product basis.
-        """
-        return self._bases_1d
 
     @memoize_method
     def quadrature_rule(self):
