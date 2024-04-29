@@ -1092,6 +1092,7 @@ class Mesh:
     .. autoattribute:: _nodal_adjacency
     .. autoattribute:: _facial_adjacency_groups
 
+    .. automethod:: copy
     .. automethod:: __eq__
     """
 
@@ -1242,12 +1243,15 @@ class Mesh:
                 node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
                 skip_element_orientation_test=skip_element_orientation_test)
 
-    def copy(self, **kwargs: Any) -> "Mesh":
-        warn(f"'{type(self).__name__}.copy' is deprecated and will be removed in "
-             f"2025. '{type(self).__name__}' is a dataclass and can use the "
-             "standard 'replace' function.",
-             DeprecationWarning, stacklevel=2)
-
+    def copy(self, *,
+             skip_tests: bool = False,
+             node_vertex_consistency_tolerance:
+                 Optional[Union[Literal[False], bool]] = None,
+             skip_element_orientation_test: bool = False,
+             # NOTE: this is set to *True* to avoid the meaningless warning in
+             # `__init__` when calling `Mesh.copy`
+             factory_constructed: bool = True,
+             **kwargs: Any) -> "Mesh":
         if "nodal_adjacency" in kwargs:
             kwargs["_nodal_adjacency"] = kwargs.pop("nodal_adjacency")
 
@@ -1255,7 +1259,14 @@ class Mesh:
             kwargs["_facial_adjacency_groups"] = (
                 kwargs.pop("facial_adjacency_groups"))
 
-        return replace(self, **kwargs)
+        mesh = replace(self, factory_constructed=factory_constructed, **kwargs)
+        if __debug__ and not skip_tests:
+            check_mesh_consistency(
+                mesh,
+                node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+                skip_element_orientation_test=skip_element_orientation_test)
+
+        return mesh
 
     @property
     def ambient_dim(self) -> int:
