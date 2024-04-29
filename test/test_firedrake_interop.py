@@ -78,7 +78,8 @@ def fspace_degree(request):
 
 def make_mm_mesh(name: str) -> Mesh:
     from meshmode.mesh.io import read_gmsh
-    return read_gmsh(name)
+    from meshmode.mesh.processing import remove_unused_vertices
+    return remove_unused_vertices(read_gmsh(name))
 
 
 def make_firedrake_mesh(name: str):

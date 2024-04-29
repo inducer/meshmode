@@ -56,6 +56,8 @@ __doc__ = """
 .. autofunction:: map_mesh
 .. autofunction:: affine_map
 .. autofunction:: rotate_mesh_around_axis
+
+.. autofunction:: remove_unused_vertices
 """
 
 
@@ -1591,6 +1593,38 @@ def make_mesh_grid(
         meshes.append(affine_map(mesh, b=b))
 
     return merge_disjoint_meshes(meshes, skip_tests=skip_tests)
+
+# }}}
+
+
+# {{{ remove_unused_vertices
+
+def remove_unused_vertices(mesh: Mesh) -> Mesh:
+    if mesh.vertices is None:
+        raise ValueError("mesh must have vertices")
+
+    def not_none(vi: Optional[np.ndarray]) -> np.ndarray:
+        if vi is None:
+            raise ValueError("mesh element groups must have vertex indices")
+        return vi
+
+    used_vertices = np.unique(np.sort(np.concatenate([
+        not_none(grp.vertex_indices).reshape(-1)
+        for grp in mesh.groups
+    ])))
+
+    used_flags: np.ndarray = np.zeros(mesh.nvertices, dtype=np.bool_)
+    used_flags[used_vertices] = 1
+    new_vertex_indices = np.cumsum(used_flags, dtype=mesh.vertex_id_dtype) - 1
+    new_vertex_indices[~used_flags] = -1
+
+    return replace(
+        mesh,
+        vertices=mesh.vertices[:, used_flags],
+        groups=tuple(
+            replace(grp, vertex_indices=new_vertex_indices[grp.vertex_indices])
+            for grp in mesh.groups
+        ))
 
 # }}}
 
