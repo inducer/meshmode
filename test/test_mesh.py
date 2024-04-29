@@ -256,6 +256,30 @@ def test_mesh_copy():
     mesh.copy()
 
 
+def test_remove_unused_vertices():
+    mesh = mgen.generate_box_mesh(3*(np.linspace(0, 1, 5),))
+
+    assert mesh.vertices is not None
+
+    mesh2 = replace(
+        mesh,
+        vertices=np.concatenate([np.zeros((3, 1)), mesh.vertices], axis=1),
+        groups=tuple(
+            replace(
+                grp,
+                vertex_indices=grp.vertex_indices + 1
+                )
+            for grp in mesh.groups
+        ))
+
+    mesh3 = mproc.remove_unused_vertices(mesh2)
+
+    assert np.array_equal(mesh3.vertices, mesh.vertices)
+    assert np.array_equal(
+                  mesh3.groups[0].vertex_indices,
+                  mesh.groups[0].vertex_indices)
+
+
 # {{{ as_python stringification
 
 def test_mesh_as_python():
