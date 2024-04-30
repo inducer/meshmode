@@ -500,8 +500,7 @@ def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
     The vertex and node coordinates will be the same, as well
     as the cell/element ordering. However, :mod:`firedrake`
     does not require elements to be positively oriented,
-    so any negative elements are flipped
-    as in :func:`meshmode.mesh.processing.flip_simplex_element_group`.
+    so any negative elements are flipped.
 
     The flipped cells/elements are identified by the returned
     *firedrake_orient* array
