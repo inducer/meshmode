@@ -399,18 +399,10 @@ def from_vertices_and_simplices(
 
     grp = make_group_from_vertices(vertices, simplices, order)
 
-    if fix_orientation:
-        if grp.dim != vertices.shape[0]:
-            raise ValueError("can only fix orientation of volume meshes")
-
-        from meshmode.mesh.processing import (
-            find_volume_mesh_element_group_orientation, flip_element_group)
-        orient = find_volume_mesh_element_group_orientation(vertices, grp)
-        grp = flip_element_group(vertices, grp, orient < 0)
-
     return make_mesh(
             vertices=vertices, groups=[grp],
-            is_conforming=True)
+            is_conforming=True,
+            force_positive_orientation=fix_orientation)
 
 # }}}
 
