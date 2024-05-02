@@ -1467,6 +1467,11 @@ def test_urchin():
     mgen.generate_urchin(3, 2, 4, 1e-4)
 
 
+def test_read_nastran():
+    pytest.importorskip("meshio")
+    mio.read_via_meshio(thisdir / "coarse.bdf", force_ambient_dim=2)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:

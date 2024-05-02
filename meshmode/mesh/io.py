@@ -1,4 +1,7 @@
-__copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
+__copyright__ = """
+Copyright (C) 2014 University of Illinois Board of Trustees
+Copyright (C) 2020 Miche Jansen (for the meshio cell node locations TikZ)
+"""
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -20,13 +23,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from dataclasses import dataclass
+from os import PathLike
+from typing import BinaryIO, List, Optional, TextIO, Type, Union
+
 import numpy as np
 
 from gmsh_interop.reader import (  # noqa: F401
     FileSource, GmshMeshReceiverBase, GmshSimplexElementBase,
     GmshTensorProductElementBase, LiteralSource, ScriptSource, ScriptWithFilesSource)
 
-from meshmode.mesh import Mesh
+from meshmode.mesh import (
+    Mesh, MeshElementGroup, SimplexElementGroup, TensorProductElementGroup,
+    _ModepyElementGroup)
+from meshmode.mesh.tools import find_point_permutation
 
 
 __doc__ = """
@@ -40,6 +50,7 @@ __doc__ = """
 .. autofunction:: from_meshpy
 .. autofunction:: from_vertices_and_simplices
 .. autofunction:: to_json
+.. autofunction:: read_via_meshio
 
 """
 
@@ -451,6 +462,258 @@ def to_json(mesh: Mesh) -> dict:
         "facial_adjacency_groups": None,
         "is_conforming": mesh.is_conforming,
         }
+
+# }}}
+
+
+# {{{ read_via_meshio
+
+@dataclass(frozen=True)
+class _MeshIOCellTypeInfo:
+    egrp_cls: Type[_ModepyElementGroup]
+    dim: int
+    order: int
+    # in bi-unit coordinates
+    unit_nodes: str
+
+
+_MESHIO_CELL_TYPE_INFO = {
+    # https://github.com/inducer/meshio/blob/b2ee99842e119901349fdeee06b5bf61e01f450a/doc/cell_types.tex
+    "line": _MeshIOCellTypeInfo(
+            egrp_cls=SimplexElementGroup,
+            dim=1,
+            order=1,
+            unit_nodes=r"""
+            \cnode(n0,0,0,0,0,below right);
+            \cnode(n1,2,0,0,1,below right);
+            """,
+    ),
+    "line3": _MeshIOCellTypeInfo(
+            egrp_cls=SimplexElementGroup,
+            dim=1,
+            order=2,
+            unit_nodes=r"""
+            \cnode(n0,0,0,0,0,below right);
+            \cnode(n1,2,0,0,1,below right);
+            \cnode(n2,1,0,0,2,below right);
+            """,
+    ),
+    "triangle": _MeshIOCellTypeInfo(
+            egrp_cls=SimplexElementGroup,
+            dim=2,
+            order=1,
+            unit_nodes=r"""
+            \cnode(n0,0,0,0,0,below right);
+            \cnode(n1,2,0,0,1,below right);
+            \cnode(n2,0,2,0,2,right);
+            """,
+    ),
+    "triangle6": _MeshIOCellTypeInfo(
+            egrp_cls=SimplexElementGroup,
+            dim=2,
+            order=2,
+            unit_nodes=r"""
+            \cnode(n0,0,0,0,0,below right);
+            \cnode(n1,2,0,0,1,below right);
+            \cnode(n2,0,2,0,2,right);
+            \cnode(n3,1,0,0,3,below right);
+            \cnode(n4,1,1,0,4,right);
+            \cnode(n5,0,1,0,5,below right);
+            """,
+    ),
+    "quad": _MeshIOCellTypeInfo(
+            egrp_cls=TensorProductElementGroup,
+            dim=2,
+            order=1,
+            unit_nodes=r"""
+            \cnode(n0,0,0,0,0,below right);
+            \cnode(n1,2,0,0,1,below right);
+            \cnode(n2,2,2,0,2,below right);
+            \cnode(n3,0,2,0,3,below right);
+            """,
+    ),
+    "quad9": _MeshIOCellTypeInfo(
+            egrp_cls=TensorProductElementGroup,
+            dim=2,
+            order=2,
+            unit_nodes=r"""
+            \cnode(n0,0,0,0,0,below right);
+            \cnode(n1,2,0,0,1,below right);
+            \cnode(n2,2,2,0,2,below right);
+            \cnode(n3,0,2,0,3,below right);
+            \cnode(n4,1,0,0,4,below right);
+            \cnode(n5,2,1,0,5,below right);
+            \cnode(n6,1,2,0,6,below right);
+            \cnode(n7,0,1,0,7,below right);
+            \cnode(n8,1,1,0,8,below right);
+            """,
+    ),
+    "tetra": _MeshIOCellTypeInfo(
+            egrp_cls=SimplexElementGroup,
+            dim=3,
+            order=1,
+            unit_nodes=r"""
+            \cnode(n0,0,0,0,0,below right);
+            \cnode(n1,2,0,0,1,below right);
+            \cnode(n2,0,2,0,2,below right);
+            \cnode(n3,0,0,2,3,right);
+            """,
+    ),
+    "tetra10": _MeshIOCellTypeInfo(
+            egrp_cls=SimplexElementGroup,
+            dim=3,
+            order=2,
+            unit_nodes=r"""
+            \cnode(n0,0,0,0,0,below right);
+            \cnode(n1,2,0,0,1,below right);
+            \cnode(n2,0,2,0,2,below right);
+            \cnode(n3,0,0,2,3,right);
+            \cnode(n4,1,0,0,4,below right);
+            \cnode(n5,1,1,0,5,below right);
+            \cnode(n6,0,1,0,6,below right);
+            \cnode(n7,0,0,1,7,below right);
+            \cnode(n8,1,0,1,8,below right);
+            \cnode(n9,0,1,1,9,right);
+            """,
+    ),
+    "hexahedron": _MeshIOCellTypeInfo(
+            egrp_cls=TensorProductElementGroup,
+            dim=3,
+            order=1,
+            unit_nodes=r"""
+            \cnode(n0,0,0,0,0,below right);
+            \cnode(n1,2,0,0,1,below right);
+            \cnode(n2,2,2,0,2,below right);
+            \cnode(n3,0,2,0,3,below right);
+            \cnode(n4,0,0,2,4,below right);
+            \cnode(n5,2,0,2,5,below right);
+            \cnode(n6,2,2,2,6,below right);
+            \cnode(n7,0,2,2,7,below right);
+            """,
+    ),
+    "hexahedron27": _MeshIOCellTypeInfo(
+            egrp_cls=TensorProductElementGroup,
+            dim=3,
+            order=2,
+            unit_nodes=r""""
+            \cnode(n0,0,0,0,0,below right);
+            \cnode(n1,2,0,0,1,below right);
+            \cnode(n2,2,2,0,2,below right);
+            \cnode(n3,0,2,0,3,below right);
+            \cnode(n4,0,0,2,4,below right);
+            \cnode(n5,2,0,2,5,below right);
+            \cnode(n6,2,2,2,6,below right);
+            \cnode(n7,0,2,2,7,below right);
+            \cnode(n8,1,0,0,8,below right);
+            \cnode(n9,2,1,0,9,below right);
+            \cnode(n10,1,2,0,10,below right);
+            \cnode(n11,0,1,0,11,below right);
+            \cnode(n12,1,0,2,12,below right);
+            \cnode(n13,2,1,2,13,below right);
+            \cnode(n14,1,2,2,14,below right);
+            \cnode(n15,0,1,2,15,below right);
+            \cnode(n16,0,0,1,16,below right);
+            \cnode(n17,2,0,1,17,below right);
+            \cnode(n18,2,2,1,18,below right);
+            \cnode(n19,0,2,1,19,below right);
+            \cnode(n20,0,1,1,20,below right);
+            \cnode(n21,2,1,1,21,below right);
+            \cnode(n22,1,0,1,22,below right);
+            \cnode(n23,1,2,1,23,below right);
+            \cnode(n24,1,1,0,24,below right);
+            \cnode(n25,1,1,2,25,below right);
+            \cnode(n26,1,1,1,26,below right);
+            """,
+    )
+}
+
+
+def _mio_parse_unit_nodes(dim: int, unode_str: str) -> np.ndarray:
+    import re
+    cnode_re = re.compile(r"^\\cnode\((.+)\);$")
+
+    result: List[List[int]] = []
+    for ln in unode_str.split("\n"):
+        ln = ln.strip()
+        if not ln:
+            continue
+        match = cnode_re.match(ln)
+        assert match
+        node_id, c0, c1, c2, node_nr, _alignment = match.group(1).split(",")
+        assert node_id == f"n{len(result)}"
+        assert int(node_nr) == len(result)
+        coords = [int(c) for c in [c0, c1, c2]]
+        assert all(ci == 0 for ci in coords[dim:])
+        coords = coords[:dim]
+        result.append([c-1 for c in coords])
+
+    return np.array(result).T.copy()
+
+
+def _mio_cell_block_to_grp(
+           mio_mesh, cblock, force_ambient_dim: Optional[int]
+       ) -> MeshElementGroup:
+    try:
+        info = _MESHIO_CELL_TYPE_INFO[cblock.type]
+    except KeyError:
+        raise NotImplementedError(f"meshio cell block type '{cblock.type}'")
+
+    unit_nodes = _mio_parse_unit_nodes(info.dim, info.unit_nodes)
+
+    shape = info.egrp_cls._modepy_shape_cls(info.dim)
+    import modepy as mp
+    ref_unit_vertices = mp.unit_vertices_for_shape(shape)
+    unit_vertex_indices = find_point_permutation(ref_unit_vertices, unit_nodes)
+    assert unit_vertex_indices is not None
+
+    assert cblock.data.shape[1] == unit_nodes.shape[1]
+
+    nodes = mio_mesh.points[cblock.data].transpose(2, 0, 1).copy()
+    if force_ambient_dim is not None:
+        assert (nodes[force_ambient_dim:] == 0).all()
+        nodes = nodes[:force_ambient_dim].copy()
+
+    return info.egrp_cls.make_group(
+        order=info.order,
+        vertex_indices=cblock.data[:, unit_vertex_indices].astype(np.int32),
+        nodes=nodes,
+        unit_nodes=unit_nodes
+    )
+
+
+def read_via_meshio(
+            file: Union[str, PathLike, BinaryIO, TextIO],
+            file_format: Optional[str] = None,
+            force_ambient_dim: Optional[int] = None,
+        ) -> Mesh:
+    from meshio import read
+    mio_mesh = read(file, file_format)
+
+    max_dim = max(cblock.dim for cblock in mio_mesh.cells)
+
+    vertices = mio_mesh.points.T.copy()
+    if force_ambient_dim is not None:
+        assert (vertices[force_ambient_dim:] == 0).all()
+        vertices = vertices[:force_ambient_dim].copy()
+
+    vol_groups = [
+        _mio_cell_block_to_grp(
+                       mio_mesh, cb, force_ambient_dim=force_ambient_dim)
+        for cb in mio_mesh.cells
+        if cb.dim == max_dim]
+
+    # FIXME: This is heuristic.
+    if len(vol_groups) == 1:
+        is_conforming = True
+    else:
+        is_conforming = max_dim < 3
+
+    from meshmode.mesh import make_mesh
+    return make_mesh(
+             vertices=vertices,
+             groups=vol_groups,
+             is_conforming=is_conforming,
+    )
 
 # }}}
 
