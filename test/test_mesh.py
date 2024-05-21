@@ -908,6 +908,9 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
         nelements_per_axis = (nelem,)*3
         btag_to_face = {"btag_test_1": ["+x", "-y", "-z"],
                         "btag_test_2": ["+y", "-x", "+z"]}
+    else:
+        raise AssertionError("unexpected dim")
+
     mesh = mgen.generate_regular_rect_mesh(a=a, b=b,
                                       nelements_per_axis=nelements_per_axis, order=3,
                                       boundary_tag_to_face=btag_to_face,

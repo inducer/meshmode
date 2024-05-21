@@ -314,8 +314,8 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_parts):
                     assert found_reverse_adj, ("InterPartAdjacencyGroup is not "
                         "consistent")
 
-                    p_grp_num = find_group_indices(mesh.groups, p_meshwide_elem)
-                    p_n_grp_num = find_group_indices(mesh.groups, p_meshwide_n_elem)
+                    p_grp_num = find_group_indices(mesh.groups, p_meshwide_elem)  # pylint: disable=possibly-used-before-assignment  # noqa: E501
+                    p_n_grp_num = find_group_indices(mesh.groups, p_meshwide_n_elem)  # pylint: disable=possibly-used-before-assignment  # noqa: E501
 
                     p_elem_base = mesh.base_element_nrs[p_grp_num]
                     p_n_elem_base = mesh.base_element_nrs[p_n_grp_num]

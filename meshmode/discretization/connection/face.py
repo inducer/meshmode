@@ -311,7 +311,7 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
 
             face_unit_nodes = face.map_to_volume(bdry_unit_nodes)
             resampling_mat = mp.resampling_matrix(
-                    vol_basis,
+                    vol_basis,  # pylint: disable=possibly-used-before-assignment
                     face_unit_nodes, mgrp.unit_nodes)
 
             # }}}
@@ -321,11 +321,11 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
             # Find vertex_indices
             glob_face_vertices = mgrp.vertex_indices[
                     batch_boundary_el_numbers_in_grp][:, face.volume_vertex_indices]
-            vertex_indices[new_el_numbers] = \
-                    vol_to_bdry_vertices[glob_face_vertices]
+            vertex_indices[new_el_numbers] = (  # pylint: disable=possibly-used-before-assignment  # noqa: E501
+                    vol_to_bdry_vertices[glob_face_vertices])
 
             # Find nodes
-            nodes[:, new_el_numbers, :] = np.einsum(
+            nodes[:, new_el_numbers, :] = np.einsum(  # pylint: disable=possibly-used-before-assignment  # noqa: E501
                     "ij,dej->dei",
                     resampling_mat,
                     mgrp.nodes[:, batch_boundary_el_numbers_in_grp, :])
