@@ -31,6 +31,9 @@ dependencies:
 # for xdmf/hdf5 visualizer
 - h5py=*=mpi_openmpi*
 
+# To test meshio reader
+- meshio
+
 # Only needed to make pylint succeed
 - matplotlib-base
 
