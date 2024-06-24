@@ -249,6 +249,9 @@ class DiscretizationConnectionElementGroup:
     def __init__(self, batches):
         self.batches = batches
 
+    def __repr__(self):
+        return f"{type(self).__name__}({self.batches})"
+
 # }}}
 
 
@@ -488,9 +491,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     if batch.from_group_index == source_group_index]
 
             # {{{ find and weed out duplicate dof pick lists
+            from pytools import unique
 
-            dof_pick_lists = list({tuple(batch_dof_pick_lists[bi])
-                    for bi in batch_indices_for_this_source_group})
+            dof_pick_lists = list(unique(tuple(batch_dof_pick_lists[bi])
+                    for bi in batch_indices_for_this_source_group))
             dof_pick_list_to_index = {
                     p_ind: i for i, p_ind in enumerate(dof_pick_lists)}
             # shape: (number of pick lists, nunit_dofs_tgt)

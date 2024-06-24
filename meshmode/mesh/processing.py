@@ -25,7 +25,7 @@ THE SOFTWARE.
 from dataclasses import dataclass, replace
 from functools import reduce
 from typing import (
-    Callable, Dict, List, Literal, Mapping, Optional, Sequence, Set, Tuple, Union)
+    Callable, Dict, List, Literal, Mapping, Optional, Sequence, Tuple, Union)
 
 import numpy as np
 import numpy.linalg as la
@@ -184,7 +184,7 @@ def _get_connected_parts(
         mesh: Mesh,
         part_id_to_part_index: Mapping[PartID, int],
         global_elem_to_part_elem: np.ndarray,
-        self_part_id: PartID) -> Set[PartID]:
+        self_part_id: PartID) -> Sequence[PartID]:
     """
     Find the parts that are connected to the current part.
 
@@ -196,10 +196,11 @@ def _get_connected_parts(
         :func:`_compute_global_elem_to_part_elem`` for details.
     :arg self_part_id: The identifier of the part currently being created.
 
-    :returns: A :class:`set` of identifiers of the neighboring parts.
+    :returns: A sequence of identifiers of the neighboring parts.
     """
     self_part_index = part_id_to_part_index[self_part_id]
 
+    # This set is not used in a way that will cause nondeterminism.
     connected_part_indices = set()
 
     for igrp, facial_adj_list in enumerate(mesh.facial_adjacency_groups):
@@ -223,10 +224,12 @@ def _get_connected_parts(
                         elements_are_self & neighbors_are_other]
                     + elem_base_j, 0])
 
-    return {
+    result = tuple(
         part_id
         for part_id, part_index in part_id_to_part_index.items()
-        if part_index in connected_part_indices}
+        if part_index in connected_part_indices)
+    assert len(set(result)) == len(result)
+    return result
 
 
 def _create_self_to_self_adjacency_groups(
@@ -305,7 +308,7 @@ def _create_self_to_other_adjacency_groups(
         self_part_id: PartID,
         self_mesh_groups: List[MeshElementGroup],
         self_mesh_group_elem_base: List[int],
-        connected_parts: Set[PartID]) -> List[List[InterPartAdjacencyGroup]]:
+        connected_parts: Sequence[PartID]) -> List[List[InterPartAdjacencyGroup]]:
     """
     Create self-to-other adjacency groups for the partitioned mesh.
 
