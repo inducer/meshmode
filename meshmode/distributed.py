@@ -36,7 +36,7 @@ THE SOFTWARE.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Hashable, List, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Hashable, List, Mapping, Sequence, Union, cast
 from warnings import warn
 
 import numpy as np
@@ -231,7 +231,12 @@ class MPIBoundaryCommSetupHelper:
     def __init__(self,
             mpi_comm: "mpi4py.MPI.Intracomm",
             actx: ArrayContext,
-            inter_rank_bdry_info: Sequence[InterRankBoundaryInfo],
+            inter_rank_bdry_info: Union[
+                # new-timey
+                Sequence[InterRankBoundaryInfo],
+                # old-timey, for compatibility
+                Mapping[int, DirectDiscretizationConnection],
+                ],
             bdry_grp_factory: ElementGroupFactory):
         """
         :arg bdry_grp_factory: Group factory to use when creating the remote-to-local
@@ -241,7 +246,30 @@ class MPIBoundaryCommSetupHelper:
         self.array_context = actx
         self.i_local_rank = mpi_comm.Get_rank()
 
-        self.inter_rank_bdry_info = inter_rank_bdry_info
+        # {{{ normalize inter_rank_bdry_info
+
+        self._using_old_timey_interface = False
+
+        if isinstance(inter_rank_bdry_info, dict):
+            self._using_old_timey_interface = True
+            warn("Using the old-timey interface of MPIBoundaryCommSetupHelper. "
+                    "That's deprecated and will stop working in July 2022. "
+                    "Use the currently documented interface instead.",
+                    DeprecationWarning, stacklevel=2)
+
+            inter_rank_bdry_info = [
+                    InterRankBoundaryInfo(
+                        local_part_id=self.i_local_rank,
+                        remote_part_id=remote_rank,
+                        remote_rank=remote_rank,
+                        local_boundary_connection=conn
+                        )
+                    for remote_rank, conn in inter_rank_bdry_info.items()]
+
+        # }}}
+
+        self.inter_rank_bdry_info = cast(
+                Sequence[InterRankBoundaryInfo], inter_rank_bdry_info)
 
         self.bdry_grp_factory = bdry_grp_factory
 
@@ -334,7 +362,10 @@ class MPIBoundaryCommSetupHelper:
             irbi = part_ids_to_irbi[local_part_id, remote_part_id]
             assert i_src_rank == irbi.remote_rank
 
-            key = (remote_part_id, local_part_id)
+            if self._using_old_timey_interface:
+                key = remote_part_id
+            else:
+                key = (remote_part_id, local_part_id)
 
             remote_to_local_bdry_conns[key] = (
                 make_partition_connection(
