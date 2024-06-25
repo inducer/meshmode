@@ -415,9 +415,11 @@ def membership_list_to_map(
     stored as a sorted :class:`numpy.ndarray`).
     """
     from pytools import unique
+
+    # FIXME: not clear why the sorted() call is necessary here
     return {
         entry: np.where(membership_list == entry)[0]
-        for entry in unique(list(membership_list))}
+        for entry in sorted(unique(membership_list))}
 
 
 # FIXME: Move somewhere else, since it's not strictly limited to distributed?

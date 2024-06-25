@@ -455,7 +455,7 @@ def _test_connected_parts(mpi_comm, connected_parts):
     for i_remote_part in range(num_parts):
         if all_connected_masks[i_remote_part][mpi_comm.rank]:
             parts_connected_to_me.add(i_remote_part)
-    assert parts_connected_to_me == connected_parts
+    assert parts_connected_to_me == set(connected_parts)
 
 
 # TODO
