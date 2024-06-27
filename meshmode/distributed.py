@@ -284,13 +284,12 @@ class MPIBoundaryCommSetupHelper:
         # the pickling ourselves.
 
         # to know when we're done
-        self.pending_recv_identifiers = [
-                (irbi.local_part_id, irbi.remote_part_id)
-                for irbi in self.inter_rank_bdry_info]
+        self.pending_recv_identifiers = {
+                (irbi.local_part_id, irbi.remote_part_id): i
+                for i, irbi in enumerate(self.inter_rank_bdry_info)}
 
         assert len(self.pending_recv_identifiers) \
-                == len(self.inter_rank_bdry_info) \
-                == len(set(self.pending_recv_identifiers))
+                == len(self.inter_rank_bdry_info)
 
         self.send_reqs = [
             self._internal_mpi_comm.isend(
@@ -334,7 +333,7 @@ class MPIBoundaryCommSetupHelper:
         while nrecvs > 0:
             r = self._internal_mpi_comm.recv(status=status)
             key = (r[1], r[0])
-            loc = self.pending_recv_identifiers.index(key)
+            loc = self.pending_recv_identifiers[key]
             assert data[loc] is None
             assert source_ranks[loc] is None
             data[loc] = r
@@ -377,7 +376,7 @@ class MPIBoundaryCommSetupHelper:
                         group_factory=self.bdry_grp_factory),
                     remote_group_infos=remote_group_infos))
 
-            self.pending_recv_identifiers.remove((local_part_id, remote_part_id))
+            del self.pending_recv_identifiers[(local_part_id, remote_part_id)]
 
         assert not self.pending_recv_identifiers
         MPI.Request.waitall(self.send_reqs)
