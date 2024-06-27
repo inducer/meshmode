@@ -387,6 +387,8 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
         part_id_to_part = partition_mesh(mesh,
                        membership_list_to_map(
                            np.random.randint(mpi_comm.size, size=mesh.nelements)))
+
+        assert list(part_id_to_part.keys()) == list(range(mpi_comm.size))
         parts = [part_id_to_part[i] for i in range(mpi_comm.size)]
 
         local_mesh = mpi_comm.scatter(parts)
@@ -424,6 +426,11 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
             conns = bdry_setup_helper.complete_some()
             if not conns:
                 break
+
+            expected_keys = list(range(mpi_comm.size))
+            expected_keys.remove(mpi_comm.rank)
+            assert list(conns.keys()) == expected_keys
+
             for i_remote_part, conn in conns.items():
                 check_connection(actx, conn)
                 remote_to_local_bdry_conns[i_remote_part] = conn
