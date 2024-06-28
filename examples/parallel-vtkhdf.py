@@ -56,7 +56,8 @@ def main(*, ambient_dim: int) -> None:
         parts = [part_id_to_part[i] for i in range(comm.size)]
         local_mesh = comm.scatter(parts)
     else:
-        local_mesh = comm.scatter(None)
+        # Reason for type-ignore: presumed faulty type annotation in mpi4py
+        local_mesh = comm.scatter(None)  # type: ignore[arg-type]
 
     logger.info("[%4d] distributing mesh: finished", comm.rank)
 
