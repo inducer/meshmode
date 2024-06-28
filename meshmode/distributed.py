@@ -326,6 +326,8 @@ class MPIBoundaryCommSetupHelper:
         status = MPI.Status()
 
         # Wait for all receives
+        # Note: This is inefficient, but ensures a deterministic order of
+        # boundary setup.
         nrecvs = len(self.pending_recv_identifiers)
         data = [None] * nrecvs
         source_ranks = [None] * nrecvs
