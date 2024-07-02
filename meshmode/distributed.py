@@ -36,7 +36,7 @@ THE SOFTWARE.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Mapping, Sequence, Set, Union, cast
+from typing import TYPE_CHECKING, Any, Hashable, List, Mapping, Sequence, Union, cast
 from warnings import warn
 
 import numpy as np
@@ -239,11 +239,6 @@ class MPIBoundaryCommSetupHelper:
                 ],
             bdry_grp_factory: ElementGroupFactory):
         """
-        :arg local_bdry_conns: A :class:`dict` mapping remote part to
-            `local_bdry_conn`, where `local_bdry_conn` is a
-            :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`
-            that performs data exchange from the volume to the faces adjacent to
-            part `i_remote_part`.
         :arg bdry_grp_factory: Group factory to use when creating the remote-to-local
             boundary connections
         """
@@ -290,8 +285,11 @@ class MPIBoundaryCommSetupHelper:
 
         # to know when we're done
         self.pending_recv_identifiers = {
-                (irbi.local_part_id, irbi.remote_part_id)
-                for irbi in self.inter_rank_bdry_info}
+                (irbi.local_part_id, irbi.remote_part_id): i
+                for i, irbi in enumerate(self.inter_rank_bdry_info)}
+
+        assert len(self.pending_recv_identifiers) \
+                == len(self.inter_rank_bdry_info)
 
         self.send_reqs = [
             self._internal_mpi_comm.isend(
@@ -327,14 +325,22 @@ class MPIBoundaryCommSetupHelper:
 
         status = MPI.Status()
 
-        # Wait for any receive
-        data = [self._internal_mpi_comm.recv(status=status)]
-        source_ranks = [status.source]
+        # Wait for all receives
+        # Note: This is inefficient, but ensures a deterministic order of
+        # boundary setup.
+        nrecvs = len(self.pending_recv_identifiers)
+        data = [None] * nrecvs
+        source_ranks = [None] * nrecvs
 
-        # Complete any other available receives while we're at it
-        while self._internal_mpi_comm.iprobe():
-            data.append(self._internal_mpi_comm.recv(status=status))
-            source_ranks.append(status.source)
+        while nrecvs > 0:
+            r = self._internal_mpi_comm.recv(status=status)
+            key = (r[1], r[0])
+            loc = self.pending_recv_identifiers[key]
+            assert data[loc] is None
+            assert source_ranks[loc] is None
+            data[loc] = r
+            source_ranks[loc] = status.source
+            nrecvs -= 1
 
         remote_to_local_bdry_conns = {}
 
@@ -372,11 +378,11 @@ class MPIBoundaryCommSetupHelper:
                         group_factory=self.bdry_grp_factory),
                     remote_group_infos=remote_group_infos))
 
-            self.pending_recv_identifiers.remove((local_part_id, remote_part_id))
+            del self.pending_recv_identifiers[(local_part_id, remote_part_id)]
 
-        if not self.pending_recv_identifiers:
-            MPI.Request.waitall(self.send_reqs)
-            logger.info("bdry comm rank %d comm end", self.i_local_rank)
+        assert not self.pending_recv_identifiers
+        MPI.Request.waitall(self.send_reqs)
+        logger.info("bdry comm rank %d comm end", self.i_local_rank)
 
         return remote_to_local_bdry_conns
 
@@ -432,30 +438,37 @@ def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs
     return np.array(p)
 
 
-def membership_list_to_map(membership_list):
+def membership_list_to_map(
+            membership_list: np.ndarray[Any, Any]
+        ) -> Mapping[Hashable, np.ndarray]:
     """
     Convert a :class:`numpy.ndarray` that maps an index to a key into a
     :class:`dict` that maps a key to a set of indices (with each set of indices
     stored as a sorted :class:`numpy.ndarray`).
     """
+    from pytools import unique
+
+    # FIXME: not clear why the sorted() call is necessary here
     return {
         entry: np.where(membership_list == entry)[0]
-        for entry in set(membership_list)}
+        for entry in sorted(unique(membership_list))}
 
 
 # FIXME: Move somewhere else, since it's not strictly limited to distributed?
-def get_connected_parts(mesh: Mesh) -> "Set[PartID]":
+def get_connected_parts(mesh: Mesh) -> "Sequence[PartID]":
     """For a local mesh part in *mesh*, determine the set of connected parts."""
     assert mesh.facial_adjacency_groups is not None
 
-    return {
+    from pytools import unique
+
+    return tuple(unique(
             grp.part_id
             for fagrp_list in mesh.facial_adjacency_groups
             for grp in fagrp_list
-            if isinstance(grp, InterPartAdjacencyGroup)}
+            if isinstance(grp, InterPartAdjacencyGroup)))
 
 
-def get_connected_partitions(mesh: Mesh) -> "Set[PartID]":
+def get_connected_partitions(mesh: Mesh) -> "Sequence[PartID]":
     warn(
         "get_connected_partitions is deprecated and will stop working in June 2023. "
         "Use get_connected_parts instead.", DeprecationWarning, stacklevel=2)
