@@ -38,8 +38,12 @@ from pytools.obj_array import make_obj_array
 from meshmode.dof_array import DOFArray as _DOFArray
 from meshmode.mesh import Mesh as _Mesh, MeshElementGroup as _MeshElementGroup
 from meshmode.transform_metadata import (
-    ConcurrentDOFInameTag, ConcurrentElementInameTag, DiscretizationDOFAxisTag,
-    DiscretizationElementAxisTag, FirstAxisIsElementsTag)
+    ConcurrentDOFInameTag,
+    ConcurrentElementInameTag,
+    DiscretizationDOFAxisTag,
+    DiscretizationElementAxisTag,
+    FirstAxisIsElementsTag,
+)
 
 
 __doc__ = """

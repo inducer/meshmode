@@ -22,10 +22,14 @@ THE SOFTWARE.
 
 
 from meshmode.interop.firedrake.connection import (
-    FiredrakeConnection, build_connection_from_firedrake,
-    build_connection_to_firedrake)
+    FiredrakeConnection,
+    build_connection_from_firedrake,
+    build_connection_to_firedrake,
+)
 from meshmode.interop.firedrake.mesh import (
-    export_mesh_to_firedrake, import_firedrake_mesh)
+    export_mesh_to_firedrake,
+    import_firedrake_mesh,
+)
 
 
 __all__ = ["build_connection_from_firedrake", "build_connection_to_firedrake",

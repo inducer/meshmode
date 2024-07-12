@@ -27,14 +27,18 @@ import numpy as np
 import pytest
 
 from arraycontext import (
-    dataclass_array_container, pytest_generate_tests_for_array_contexts,
-    with_container_arithmetic)
+    dataclass_array_container,
+    pytest_generate_tests_for_array_contexts,
+    with_container_arithmetic,
+)
 from pytools.obj_array import make_obj_array
 from pytools.tag import Tag
 
 from meshmode import _acf  # noqa: F401
 from meshmode.array_context import (
-    PytestPyOpenCLArrayContextFactory, PytestPytatoPyOpenCLArrayContextFactory)
+    PytestPyOpenCLArrayContextFactory,
+    PytestPytatoPyOpenCLArrayContextFactory,
+)
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import default_simplex_group_factory
 from meshmode.dof_array import DOFArray, array_context_for_pickling, flat_norm

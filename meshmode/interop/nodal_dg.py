@@ -158,7 +158,8 @@ class NodalDGContext:
 
         from meshmode.discretization import Discretization
         from meshmode.discretization.poly_element import (
-            PolynomialGivenNodesGroupFactory)
+            PolynomialGivenNodesGroupFactory,
+        )
         return Discretization(actx, mesh,
                 PolynomialGivenNodesGroupFactory(order, unit_nodes))
 

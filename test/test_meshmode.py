@@ -33,18 +33,28 @@ from arraycontext import flatten, pytest_generate_tests_for_array_contexts
 import meshmode.mesh.generation as mgen
 from meshmode import _acf  # noqa: F401
 from meshmode.array_context import (
-    PytestPyOpenCLArrayContextFactory, PytestPytatoPyOpenCLArrayContextFactory)
+    PytestPyOpenCLArrayContextFactory,
+    PytestPytatoPyOpenCLArrayContextFactory,
+)
 from meshmode.discretization.connection import FACE_RESTR_ALL, FACE_RESTR_INTERIOR
 from meshmode.discretization.poly_element import (
     InterpolatoryQuadratureSimplexGroupFactory,
     LegendreGaussLobattoTensorProductGroupFactory,
-    PolynomialEquidistantSimplexGroupFactory, PolynomialRecursiveNodesGroupFactory,
+    PolynomialEquidistantSimplexGroupFactory,
+    PolynomialRecursiveNodesGroupFactory,
     PolynomialWarpAndBlend2DRestrictingGroupFactory,
-    PolynomialWarpAndBlend3DRestrictingGroupFactory, default_simplex_group_factory)
+    PolynomialWarpAndBlend3DRestrictingGroupFactory,
+    default_simplex_group_factory,
+)
 from meshmode.dof_array import flat_norm
 from meshmode.mesh import (
-    BTAG_ALL, Mesh, MeshElementGroup, SimplexElementGroup, TensorProductElementGroup,
-    make_mesh)
+    BTAG_ALL,
+    Mesh,
+    MeshElementGroup,
+    SimplexElementGroup,
+    TensorProductElementGroup,
+    make_mesh,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -114,7 +124,9 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
-        check_connection, make_face_restriction)
+        check_connection,
+        make_face_restriction,
+    )
     eoc_rec = EOCRecorder()
 
     order = 4
@@ -179,7 +191,8 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
 
         if mesh_name == "blob" and dim == 2 and mesh.nelements < 500:
             from meshmode.discretization.connection.direct import (
-                make_direct_full_resample_matrix)
+                make_direct_full_resample_matrix,
+            )
             mat = actx.to_numpy(
                     make_direct_full_resample_matrix(actx, bdry_connection))
             bdry_f_2_by_mat = mat.dot(actx.to_numpy(flatten(vol_f, actx)))
@@ -233,7 +246,10 @@ def test_all_faces_interpolation(actx_factory, group_factory,
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
-        check_connection, make_face_restriction, make_face_to_all_faces_embedding)
+        check_connection,
+        make_face_restriction,
+        make_face_to_all_faces_embedding,
+    )
     eoc_rec = EOCRecorder()
 
     order = 4
@@ -359,7 +375,10 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
-        check_connection, make_face_restriction, make_opposite_face_connection)
+        check_connection,
+        make_face_restriction,
+        make_opposite_face_connection,
+    )
     eoc_rec = EOCRecorder()
 
     order = 5
@@ -954,8 +973,11 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
 
     # check face restrictions
     from meshmode.discretization.connection import (
-        check_connection, make_face_restriction, make_face_to_all_faces_embedding,
-        make_opposite_face_connection)
+        check_connection,
+        make_face_restriction,
+        make_face_to_all_faces_embedding,
+        make_opposite_face_connection,
+    )
     for boundary_tag in [BTAG_ALL, FACE_RESTR_INTERIOR, FACE_RESTR_ALL]:
         conn = make_face_restriction(actx, discr,
                 group_factory=grp_factory,

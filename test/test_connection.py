@@ -34,9 +34,11 @@ from meshmode.discretization import Discretization
 from meshmode.discretization.connection import FACE_RESTR_ALL
 from meshmode.discretization.poly_element import (
     LegendreGaussLobattoTensorProductGroupFactory,
-    PolynomialEquidistantSimplexGroupFactory, PolynomialRecursiveNodesGroupFactory,
+    PolynomialEquidistantSimplexGroupFactory,
+    PolynomialRecursiveNodesGroupFactory,
     PolynomialWarpAndBlend2DRestrictingGroupFactory,
-    PolynomialWarpAndBlend3DRestrictingGroupFactory)
+    PolynomialWarpAndBlend3DRestrictingGroupFactory,
+)
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
 
@@ -76,7 +78,9 @@ def test_bdry_restriction_is_permutation(actx_factory, group_factory, dim, order
 
     vol_discr = Discretization(actx, mesh, group_factory(order))
     from meshmode.discretization.connection import (
-        make_face_restriction, make_opposite_face_connection)
+        make_face_restriction,
+        make_opposite_face_connection,
+    )
     bdry_connection = make_face_restriction(
             actx, vol_discr, group_factory(order),
             FACE_RESTR_ALL)

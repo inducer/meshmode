@@ -29,8 +29,11 @@ import numpy.linalg as la  # noqa
 import pyopencl as cl
 import pyopencl.array as cla  # noqa
 from arraycontext import (
-    ArrayContainer, dataclass_array_container, map_array_container,
-    with_container_arithmetic)
+    ArrayContainer,
+    dataclass_array_container,
+    map_array_container,
+    with_container_arithmetic,
+)
 from pytools import log_process, memoize_method
 from pytools.obj_array import flat_obj_array, make_obj_array
 
@@ -71,7 +74,8 @@ class DGDiscretization:
 
         from meshmode.discretization import Discretization
         from meshmode.discretization.poly_element import (
-            PolynomialWarpAndBlend2DRestrictingGroupFactory)
+            PolynomialWarpAndBlend2DRestrictingGroupFactory,
+        )
         self.group_factory = PolynomialWarpAndBlend2DRestrictingGroupFactory(
                 order=order)
         self.volume_discr = Discretization(actx, mesh, self.group_factory)
@@ -100,7 +104,9 @@ class DGDiscretization:
     @memoize_method
     def interior_faces_connection(self):
         from meshmode.discretization.connection import (
-            FACE_RESTR_INTERIOR, make_face_restriction)
+            FACE_RESTR_INTERIOR,
+            make_face_restriction,
+        )
         return make_face_restriction(
                         self.volume_discr._setup_actx,
                         self.volume_discr,
@@ -118,7 +124,9 @@ class DGDiscretization:
     @memoize_method
     def all_faces_connection(self):
         from meshmode.discretization.connection import (
-            FACE_RESTR_ALL, make_face_restriction)
+            FACE_RESTR_ALL,
+            make_face_restriction,
+        )
         return make_face_restriction(
                         self.volume_discr._setup_actx,
                         self.volume_discr,
@@ -128,8 +136,7 @@ class DGDiscretization:
 
     @memoize_method
     def get_to_all_face_embedding(self, where):
-        from meshmode.discretization.connection import (
-            make_face_to_all_faces_embedding)
+        from meshmode.discretization.connection import make_face_to_all_faces_embedding
 
         faces_conn = self.get_connection("vol", where)
         return make_face_to_all_faces_embedding(

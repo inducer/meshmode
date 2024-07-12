@@ -28,16 +28,26 @@ import numpy as np
 
 import loopy as lp
 from arraycontext import (
-    ArrayContext, ArrayOrContainerT, ArrayT, NotAnArrayContainerError,
-    deserialize_container, make_loopy_program, serialize_container, tag_axes)
+    ArrayContext,
+    ArrayOrContainerT,
+    ArrayT,
+    NotAnArrayContainerError,
+    deserialize_container,
+    make_loopy_program,
+    serialize_container,
+    tag_axes,
+)
 from arraycontext.metadata import NameHint
 from pytools import keyed_memoize_method, memoize_in, memoize_method
 
 from meshmode.discretization import Discretization, ElementGroupBase
 from meshmode.dof_array import DOFArray
 from meshmode.transform_metadata import (
-    ConcurrentDOFInameTag, ConcurrentElementInameTag, DiscretizationDOFAxisTag,
-    DiscretizationElementAxisTag)
+    ConcurrentDOFInameTag,
+    ConcurrentElementInameTag,
+    DiscretizationDOFAxisTag,
+    DiscretizationElementAxisTag,
+)
 
 
 def _reshape_and_preserve_tags(

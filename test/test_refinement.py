@@ -38,7 +38,8 @@ from meshmode.discretization.poly_element import (
     LegendreGaussLobattoTensorProductGroupFactory,
     PolynomialEquidistantSimplexGroupFactory,
     PolynomialWarpAndBlend2DRestrictingGroupFactory,
-    PolynomialWarpAndBlend3DRestrictingGroupFactory)
+    PolynomialWarpAndBlend3DRestrictingGroupFactory,
+)
 from meshmode.dof_array import flat_norm
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 from meshmode.mesh.refinement import RefinerWithoutAdjacency
@@ -143,7 +144,9 @@ def test_refinement_connection(
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.connection import (
-        check_connection, make_refinement_connection)
+        check_connection,
+        make_refinement_connection,
+    )
     eoc_rec = EOCRecorder()
 
     for mesh_par in mesh_pars:

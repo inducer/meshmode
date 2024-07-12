@@ -88,8 +88,10 @@ class RefinerWithoutAdjacency(Refiner):
             inew_vertex = mesh.nvertices
 
         from meshmode.mesh.refinement.tessellate import (
-            get_group_midpoints, get_group_tessellated_nodes,
-            get_group_tessellation_info)
+            get_group_midpoints,
+            get_group_tessellated_nodes,
+            get_group_tessellation_info,
+        )
 
         for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
             el_tess_info = get_group_tessellation_info(grp)

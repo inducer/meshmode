@@ -34,11 +34,17 @@ from pytools import memoize_method
 
 from meshmode.discretization import Discretization, InterpolatoryElementGroupBase
 from meshmode.discretization.poly_element import (
-    ElementGroupFactory, default_simplex_group_factory)
+    ElementGroupFactory,
+    default_simplex_group_factory,
+)
 from meshmode.interop.firedrake.mesh import (
-    export_mesh_to_firedrake, import_firedrake_mesh)
+    export_mesh_to_firedrake,
+    import_firedrake_mesh,
+)
 from meshmode.interop.firedrake.reference_cell import (
-    get_affine_reference_simplex_mapping, get_finat_element_unit_nodes)
+    get_affine_reference_simplex_mapping,
+    get_finat_element_unit_nodes,
+)
 from meshmode.mesh.processing import get_simplex_element_flip_matrix
 
 

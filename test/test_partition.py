@@ -37,8 +37,11 @@ from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from meshmode.discretization.poly_element import default_simplex_group_factory
 from meshmode.dof_array import flat_norm
 from meshmode.mesh import (
-    BTAG_ALL, BoundaryAdjacencyGroup, InteriorAdjacencyGroup,
-    InterPartAdjacencyGroup)
+    BTAG_ALL,
+    BoundaryAdjacencyGroup,
+    InteriorAdjacencyGroup,
+    InterPartAdjacencyGroup,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -114,7 +117,10 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
                         for part_mesh in part_meshes.values()]
 
         from meshmode.discretization.connection import (
-            check_connection, make_face_restriction, make_partition_connection)
+            check_connection,
+            make_face_restriction,
+            make_partition_connection,
+        )
         from meshmode.mesh import BTAG_PARTITION
 
         for i_local_part, i_remote_part in connected_parts:
@@ -367,8 +373,7 @@ def count_tags(mesh, tag):
 def _test_mpi_boundary_swap(dim, order, num_groups):
     from mpi4py import MPI
 
-    from meshmode.distributed import (
-        MPIBoundaryCommSetupHelper, membership_list_to_map)
+    from meshmode.distributed import MPIBoundaryCommSetupHelper, membership_list_to_map
     from meshmode.mesh.processing import partition_mesh
     mpi_comm = MPI.COMM_WORLD
 

@@ -129,7 +129,9 @@ def make_refinement_connection(actx, refiner, coarse_discr, group_factory):
         for discretizing the fine mesh.
     """
     from meshmode.discretization.connection import (
-        DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
+        DirectDiscretizationConnection,
+        DiscretizationConnectionElementGroup,
+    )
 
     coarse_mesh = refiner.get_previous_mesh()
     fine_mesh = refiner.get_current_mesh()

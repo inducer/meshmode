@@ -30,10 +30,13 @@ from warnings import warn
 
 from arraycontext import (
     PyOpenCLArrayContext as PyOpenCLArrayContextBase,
-    PytatoPyOpenCLArrayContext as PytatoPyOpenCLArrayContextBase)
+    PytatoPyOpenCLArrayContext as PytatoPyOpenCLArrayContextBase,
+)
 from arraycontext.pytest import (
     _PytestPyOpenCLArrayContextFactoryWithClass,
-    _PytestPytatoPyOpenCLArrayContextFactory, register_pytest_array_context_factory)
+    _PytestPytatoPyOpenCLArrayContextFactory,
+    register_pytest_array_context_factory,
+)
 
 
 def thaw(actx, ary):
@@ -157,7 +160,9 @@ def _transform_loopy_inner(t_unit):
     # {{{ element/dof iname tag
 
     from meshmode.transform_metadata import (
-        ConcurrentDOFInameTag, ConcurrentElementInameTag)
+        ConcurrentDOFInameTag,
+        ConcurrentElementInameTag,
+    )
     el_inames = [iname.name
             for iname in default_ep.inames.values()
             if ConcurrentElementInameTag() in iname.tags]

@@ -212,8 +212,16 @@ def write_vertex_vtk_file(
         overwrite: bool = False) -> None:
     # {{{ create cell_types
     from pyvisfile.vtk import (
-        VF_LIST_OF_COMPONENTS, VTK_HEXAHEDRON, VTK_LINE, VTK_QUAD, VTK_TETRA,
-        VTK_TRIANGLE, AppendedDataXMLGenerator, DataArray, UnstructuredGrid)
+        VF_LIST_OF_COMPONENTS,
+        VTK_HEXAHEDRON,
+        VTK_LINE,
+        VTK_QUAD,
+        VTK_TETRA,
+        VTK_TRIANGLE,
+        AppendedDataXMLGenerator,
+        DataArray,
+        UnstructuredGrid,
+    )
 
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
@@ -342,7 +350,8 @@ def vtk_visualize_mesh(
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import (
-        InterpolatoryEdgeClusteredGroupFactory)
+        InterpolatoryEdgeClusteredGroupFactory,
+    )
     discr = Discretization(actx, mesh, InterpolatoryEdgeClusteredGroupFactory(order))
 
     from meshmode.discretization.visualization import make_visualizer
@@ -422,7 +431,8 @@ def visualize_mesh_vertex_resampling_error(
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import (
-        InterpolatoryEdgeClusteredGroupFactory)
+        InterpolatoryEdgeClusteredGroupFactory,
+    )
     discr = Discretization(actx, mesh, InterpolatoryEdgeClusteredGroupFactory(1))
 
     from meshmode.discretization.visualization import make_visualizer

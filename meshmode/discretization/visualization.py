@@ -63,7 +63,10 @@ def separate_by_real_and_imag(names_and_fields, real_only):
         if isinstance(field, np.ndarray) and field.dtype.char == "O":
             assert len(field.shape) == 1
             from pytools.obj_array import (
-                obj_array_imag_copy, obj_array_real_copy, obj_array_vectorize)
+                obj_array_imag_copy,
+                obj_array_real_copy,
+                obj_array_vectorize,
+            )
 
             if field[0].dtype.kind == "c":
                 if real_only:
@@ -430,7 +433,8 @@ class VTKLagrangeConnectivity(VTKConnectivity):
         if isinstance(grp.mesh_el_group, SimplexElementGroup):
             from pyvisfile.vtk.vtk_ordering import (
                 vtk_lagrange_simplex_node_tuples,
-                vtk_lagrange_simplex_node_tuples_to_permutation)
+                vtk_lagrange_simplex_node_tuples_to_permutation,
+            )
 
             node_tuples = vtk_lagrange_simplex_node_tuples(
                     grp.dim, grp.order, vtk_version=vtk_version)
@@ -443,7 +447,8 @@ class VTKLagrangeConnectivity(VTKConnectivity):
         elif isinstance(grp.mesh_el_group, TensorProductElementGroup):
             from pyvisfile.vtk.vtk_ordering import (
                 vtk_lagrange_quad_node_tuples,
-                vtk_lagrange_quad_node_tuples_to_permutation)
+                vtk_lagrange_quad_node_tuples_to_permutation,
+            )
 
             node_tuples = vtk_lagrange_quad_node_tuples(
                     grp.dim, grp.order, vtk_version=vtk_version)
@@ -743,8 +748,12 @@ class Visualizer:
             use_high_order = False
 
         from pyvisfile.vtk import (
-            VF_LIST_OF_COMPONENTS, AppendedDataXMLGenerator, DataArray,
-            ParallelXMLGenerator, UnstructuredGrid)
+            VF_LIST_OF_COMPONENTS,
+            AppendedDataXMLGenerator,
+            DataArray,
+            ParallelXMLGenerator,
+            UnstructuredGrid,
+        )
 
         nodes = self._vis_nodes_numpy()
 
@@ -1123,7 +1132,11 @@ class Visualizer:
         #   Paraview.
 
         from pyvisfile.xdmf import (
-            DataArray, GeometryType, Information, XdmfUnstructuredGrid)
+            DataArray,
+            GeometryType,
+            Information,
+            XdmfUnstructuredGrid,
+        )
 
         if self.vis_discr.ambient_dim == 2:
             geometry_type = GeometryType.XY
@@ -1202,6 +1215,7 @@ class Visualizer:
 
     def show_scalar_in_matplotlib_3d(self, field, **kwargs):
         import matplotlib.pyplot as plt
+
         # This import also registers the 3D projection.
         import mpl_toolkits.mplot3d.art3d as art3d
 
@@ -1294,10 +1308,12 @@ def make_visualizer(actx, discr, vis_order=None,
     else:
         if force_equidistant:
             from meshmode.discretization.poly_element import (
-                InterpolatoryEquidistantGroupFactory as VisGroupFactory)
+                InterpolatoryEquidistantGroupFactory as VisGroupFactory,
+            )
         else:
             from meshmode.discretization.poly_element import (
-                InterpolatoryEdgeClusteredGroupFactory as VisGroupFactory)
+                InterpolatoryEdgeClusteredGroupFactory as VisGroupFactory,
+            )
 
         vis_discr = discr.copy(actx=actx, group_factory=VisGroupFactory(vis_order))
 
@@ -1356,8 +1372,12 @@ def write_nodal_adjacency_vtk_file(file_name, mesh,
                                    compressor=None,
                                    overwrite=False):
     from pyvisfile.vtk import (
-        VF_LIST_OF_COMPONENTS, VTK_LINE, AppendedDataXMLGenerator, DataArray,
-        UnstructuredGrid)
+        VF_LIST_OF_COMPONENTS,
+        VTK_LINE,
+        AppendedDataXMLGenerator,
+        DataArray,
+        UnstructuredGrid,
+    )
 
     centroids = np.empty(
             (mesh.ambient_dim, mesh.nelements),

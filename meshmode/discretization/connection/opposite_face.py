@@ -511,7 +511,9 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
                     groups[i_tgt_grp].extend(batches)
 
     from meshmode.discretization.connection import (
-        DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
+        DirectDiscretizationConnection,
+        DiscretizationConnectionElementGroup,
+    )
     return DirectDiscretizationConnection(
             from_discr=bdry_discr,
             to_discr=bdry_discr,
@@ -546,7 +548,9 @@ def make_partition_connection(actx, *, local_bdry_conn,
     """
 
     from meshmode.discretization.connection import (
-        DirectDiscretizationConnection, DiscretizationConnectionElementGroup)
+        DirectDiscretizationConnection,
+        DiscretizationConnectionElementGroup,
+    )
     from meshmode.mesh.processing import find_group_indices
 
     local_vol_mesh = local_bdry_conn.from_discr.mesh

@@ -23,8 +23,17 @@ THE SOFTWARE.
 from abc import ABC, abstractmethod
 from dataclasses import InitVar, dataclass, field, replace
 from typing import (
-    Any, ClassVar, Hashable, Iterable, Literal, Optional, Sequence, Tuple, Type,
-    Union)
+    Any,
+    ClassVar,
+    Hashable,
+    Iterable,
+    Literal,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+)
 from warnings import warn
 
 import numpy as np
@@ -775,8 +784,10 @@ def check_mesh_consistency(
         some fashion.
     """
     from meshmode import (
-        InconsistentAdjacencyError, InconsistentArrayDTypeError,
-        InconsistentMeshError)
+        InconsistentAdjacencyError,
+        InconsistentArrayDTypeError,
+        InconsistentMeshError,
+    )
 
     if node_vertex_consistency_tolerance is not False:
         _test_node_vertex_consistency(mesh, tol=node_vertex_consistency_tolerance)

@@ -23,8 +23,14 @@ THE SOFTWARE.
 import numpy as np
 
 from gmsh_interop.reader import (  # noqa: F401
-    FileSource, GmshMeshReceiverBase, GmshSimplexElementBase,
-    GmshTensorProductElementBase, LiteralSource, ScriptSource, ScriptWithFilesSource)
+    FileSource,
+    GmshMeshReceiverBase,
+    GmshSimplexElementBase,
+    GmshTensorProductElementBase,
+    LiteralSource,
+    ScriptSource,
+    ScriptWithFilesSource,
+)
 
 from meshmode.mesh import Mesh
 
@@ -152,7 +158,10 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         # }}}
 
         from meshmode.mesh import (
-            SimplexElementGroup, TensorProductElementGroup, make_mesh)
+            SimplexElementGroup,
+            TensorProductElementGroup,
+            make_mesh,
+        )
 
         bulk_el_types = set()
 
@@ -404,7 +413,9 @@ def from_vertices_and_simplices(
             raise ValueError("can only fix orientation of volume meshes")
 
         from meshmode.mesh.processing import (
-            find_volume_mesh_element_group_orientation, flip_element_group)
+            find_volume_mesh_element_group_orientation,
+            flip_element_group,
+        )
         orient = find_volume_mesh_element_group_orientation(vertices, grp)
         grp = flip_element_group(vertices, grp, orient < 0)
 

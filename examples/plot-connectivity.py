@@ -14,7 +14,10 @@ def main():
     actx = PyOpenCLArrayContext(queue)
 
     from meshmode.mesh.generation import (  # noqa: F401
-        generate_icosahedron, generate_sphere, generate_torus)
+        generate_icosahedron,
+        generate_sphere,
+        generate_torus,
+    )
 
     #mesh = generate_sphere(1, order=order)
     mesh = generate_icosahedron(1, order=order)
@@ -22,7 +25,8 @@ def main():
 
     from meshmode.discretization import Discretization
     from meshmode.discretization.poly_element import (
-        PolynomialWarpAndBlend3DRestrictingGroupFactory)
+        PolynomialWarpAndBlend3DRestrictingGroupFactory,
+    )
 
     discr = Discretization(
             actx, mesh, PolynomialWarpAndBlend3DRestrictingGroupFactory(order))

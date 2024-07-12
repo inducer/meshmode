@@ -45,8 +45,7 @@ from arraycontext import ArrayContext
 
 from meshmode.discretization import ElementGroupFactory
 from meshmode.discretization.connection import DirectDiscretizationConnection
-from meshmode.mesh import (
-    InteriorAdjacencyGroup, InterPartAdjacencyGroup, Mesh, PartID)
+from meshmode.mesh import InteriorAdjacencyGroup, InterPartAdjacencyGroup, Mesh, PartID
 
 
 # This file needs to be importable without mpi4py. So don't be tempted to add
