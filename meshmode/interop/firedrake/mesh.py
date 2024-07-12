@@ -407,7 +407,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
 
     # }}}
 
-    return [[interconnectivity_grp] + exterior_grps]
+    return [[interconnectivity_grp, *exterior_grps]]
 
 # }}}
 
@@ -466,7 +466,8 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
                 if np.cross(normal, edge) < 0:
                     orient[i] = -1.0
         elif no_normals_warn:
-            warn("Assuming all elements are positively-oriented.")
+            warn("Assuming all elements are positively-oriented.",
+                 stacklevel=2)
 
     elif tdim == 2 and gdim == 3:
         # In this case we have a 2-surface embedded in 3-space.
@@ -646,7 +647,7 @@ build_connection_from_firedrake`.
         nodes = np.real(coords.dat.data[cell_node_list])
         # Add extra dim in 1D for shape (nelements, nunit_nodes, dim)
         if tdim == 1:
-            nodes = np.reshape(nodes, nodes.shape + (1,))
+            nodes = np.reshape(nodes, (*nodes.shape, 1))
         # Transpose nodes to have shape (dim, nelements, nunit_nodes)
         nodes = np.transpose(nodes, (2, 0, 1))
 

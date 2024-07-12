@@ -25,7 +25,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import sys
 from warnings import warn
 
 from arraycontext import (
@@ -326,27 +325,19 @@ _actx_names = (
         )
 
 
-if sys.version_info >= (3, 7):
-    def __getattr__(name):
-        if name not in _actx_names:
-            raise AttributeError(name)
+def __getattr__(name):
+    if name not in _actx_names:
+        raise AttributeError(name)
 
-        import arraycontext
-        result = getattr(arraycontext, name)
+    import arraycontext
+    result = getattr(arraycontext, name)
 
-        warn(f"meshmode.array_context.{name} is deprecated. "
-                f"Use arraycontext.{name} instead. "
-                f"meshmode.array_context.{name} will continue to work until 2022.",
-                DeprecationWarning, stacklevel=2)
+    warn(f"meshmode.array_context.{name} is deprecated. "
+         f"Use arraycontext.{name} instead. "
+         f"meshmode.array_context.{name} will continue to work until 2022.",
+         DeprecationWarning, stacklevel=2)
 
-        return result
-else:
-    def _import_names():
-        import arraycontext
-        for name in _actx_names:
-            globals()[name] = getattr(arraycontext, name)
-
-    _import_names()
+    return result
 
 # }}}
 

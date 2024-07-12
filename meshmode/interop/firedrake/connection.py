@@ -314,8 +314,8 @@ class FiredrakeConnection:
             raise ValueError(f"'{function_name}.dat.dtype' must be "
                              f"{dtype}, not '{function.dat.data.dtype}'")
         if shape is not None and function.function_space().shape != shape:
-            raise ValueError("'{function_name}.function_space().shape' must be"
-                             " {shape}, not '{function.function_space().shape}"
+            raise ValueError(f"'{function_name}.function_space().shape' must be"
+                             f" {shape}, not '{function.function_space().shape}"
                              "'")
 
     def _validate_field(self, field, field_name, shape=None, dtype=None):
@@ -375,7 +375,7 @@ class FiredrakeConnection:
                         " for FiredrakeConnection.from_meshmode or " \
                         "FiredrakeConnection.from_firedrake to see how " \
                         "fields in a discretization are represented."
-                    raise TypeError(prefix + "\n" + msg)
+                    raise TypeError(f"{prefix}\n{msg}") from None
         else:
             raise TypeError("'field' must be of type DOFArray or a numpy object "
                             "array of those, not '%s'." % type(field))
@@ -463,13 +463,13 @@ class FiredrakeConnection:
         else:
             # firedrake drops extra dimensions
             if len(function_data.shape) != 1 + len(fspace_shape):
-                shape = (function_data.shape[0],) + fspace_shape
+                shape = (function_data.shape[0], *fspace_shape)
                 function_data = function_data.reshape(shape)
             # otherwise, have to grab each dofarray and the corresponding
             # data from *function_data*
             for multi_index in np.ndindex(fspace_shape):
                 dof_array = out[multi_index]
-                index = (np.s_[:],) + multi_index
+                index = (np.s_[:], *multi_index)
                 fd_data = function_data[index]
                 reorder_and_resample(dof_array, fd_data)
 
@@ -543,7 +543,7 @@ class FiredrakeConnection:
         out_data = out.dat.data
         # Handle firedrake dropping dimensions
         if len(out.dat.data.shape) != 1 + len(fspace_shape):
-            shape = (out.dat.data.shape[0],) + fspace_shape
+            shape = (out.dat.data.shape[0], *fspace_shape)
             out_data = out_data.reshape(shape)
 
         def resample_and_reorder(fd_data, dof_array):
@@ -566,7 +566,7 @@ class FiredrakeConnection:
             # data from *function_data*
             for multi_index in np.ndindex(fspace_shape):
                 # have to be careful to take view and not copy
-                index = (np.s_[:],) + multi_index
+                index = (np.s_[:], *multi_index)
                 fd_data = out_data[index]
                 dof_array = mm_field[multi_index]
                 resample_and_reorder(fd_data, dof_array)

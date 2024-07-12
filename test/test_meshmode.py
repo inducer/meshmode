@@ -271,7 +271,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
                     FileSource(str(thisdir / "blob-2d.step")), 2, order=order,
                     force_ambient_dim=2,
                     other_options=[
-                        "-string", "Mesh.CharacteristicLengthMax = %s;" % h],
+                        "-string", f"Mesh.CharacteristicLengthMax = {h};"],
                     target_unit="MM",
                     )
             print("END GEN")
@@ -408,7 +408,7 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
                     FileSource(str(thisdir / "blob-2d.step")), 2, order=order,
                     force_ambient_dim=2,
                     other_options=[
-                        "-string", "Mesh.CharacteristicLengthMax = %s;" % h],
+                        "-string", f"Mesh.CharacteristicLengthMax = {h};"],
                     target_unit="MM",
                     )
             print("END GEN")
@@ -533,7 +533,7 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
         from meshmode.discretization.visualization import make_visualizer
         vis = make_visualizer(actx, discr, 3)
 
-        vis.write_vtk_file("orientation_3d_%s_normals.vtu" % what, [
+        vis.write_vtk_file(f"orientation_3d_{what}_normals.vtu", [
             ("normals", normals),
             ])
 
@@ -711,9 +711,10 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
 
     logging.basicConfig(level=logging.INFO)
     actx = actx_factory()
+    rng = np.random.default_rng(seed=42)
 
     from scipy.spatial import Delaunay  # pylint: disable=no-name-in-module
-    verts = np.random.rand(1000, dim)
+    verts = rng.random(size=(1000, dim))
     dtri = Delaunay(verts)
 
     # pylint: disable=no-member
@@ -782,7 +783,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
         from meshmode.mesh.io import FileSource, generate_gmsh
         mesh = generate_gmsh(
                 FileSource(src_file), dim, order=mesh_order,
-                other_options=["-string", "Mesh.CharacteristicLengthMax = %g;" % h],
+                other_options=["-string", f"Mesh.CharacteristicLengthMax = {h};"],
                 force_ambient_dim=dim,
                 target_unit="MM")
 
@@ -885,7 +886,6 @@ def test_mesh_without_vertices(actx_factory):
 
     # create one without the vertices
     from dataclasses import replace
-    grp, = mesh.groups
     groups = [
         replace(grp, nodes=grp.nodes, vertex_indices=None)
         for grp in mesh.groups]

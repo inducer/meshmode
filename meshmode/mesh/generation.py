@@ -154,7 +154,7 @@ def n_gon(n_corners: int, t: np.ndarray) -> np.ndarray:
 
     t = t*n_corners
 
-    result = np.empty((2,)+t.shape)
+    result = np.empty((2, *t.shape))
 
     for side in range(n_corners):
         indices = np.where((side <= t) & (t < side+1))
@@ -256,7 +256,7 @@ def clamp_piecewise(
     # NOTE: Split [0, 1] interval into 5 chunks that have about equal arclength.
     # This is possible because each chunk is a circle arc, so we know its length.
 
-    L = (       # noqa: N806
+    L = (
         inv_gap * r_major
         + inv_gap * r_minor
         + 2 * np.pi * r_cap)
@@ -274,7 +274,7 @@ def clamp_piecewise(
     # first cap
     m_caps0 = np.logical_and(t >= t1, t < t2).astype(t.dtype)
     theta = m_caps0 * (np.pi / 2 + np.pi * (t - (t2 + t1) / 2) / (t2 - t1))
-    R = r_cap * rotation_matrix(-gap)       # noqa: N806
+    R = r_cap * rotation_matrix(-gap)
     f_caps0 = R @ np.stack([
         np.cos(theta) - 1, np.sin(theta)
         ]) + r_major * np.stack([[np.cos(-gap), np.sin(-gap)]]).T
@@ -287,7 +287,7 @@ def clamp_piecewise(
     # second cap
     m_caps1 = (t >= t3).astype(t.dtype)
     theta = m_caps1 * (np.pi / 2 + np.pi * (t - (t3 + t4) / 2) / (t4 - t3))
-    R = r_cap * rotation_matrix(np.pi + gap)        # noqa: N806
+    R = r_cap * rotation_matrix(np.pi + gap)
     f_caps1 = R @ np.stack([
         np.cos(theta) + 1, np.sin(theta)
         ]) + r_major * np.stack([[np.cos(gap), np.sin(gap)]]).T
@@ -1150,7 +1150,7 @@ def generate_box_mesh(
 
     vertex_indices = np.arange(nvertices).reshape(*shape)
 
-    vertices = np.empty((dim,)+shape, dtype=coord_dtype)
+    vertices = np.empty((dim, *shape), dtype=coord_dtype)
     for idim in range(dim):
         vshape = (shape[idim],) + (1,)*(dim-1-idim)
         vertices[idim] = axis_coords[idim].reshape(*vshape)
@@ -1200,7 +1200,7 @@ def generate_box_mesh(
                     nvertices
                     + np.arange(nmidpoints).reshape(*shape_m1, order="F"))
 
-            midpoints = np.empty((dim,)+shape_m1, dtype=coord_dtype)
+            midpoints = np.empty((dim, *shape_m1), dtype=coord_dtype)
             for idim in range(dim):
                 vshape = (shape_m1[idim],) + (1,)*(1-idim)
                 left_axis_coords = axis_coords[idim][:-1]
@@ -1658,8 +1658,6 @@ def warp_and_refine_until_resolved(
             if not isinstance(egrp, SimplexElementGroup):
                 raise TypeError(
                     f"Unsupported element group type: '{type(egrp).__name__}'")
-
-            dim, _ = egrp.unit_nodes.shape
 
             interp_err_est_mat = simplex_interp_error_coefficient_estimator_matrix(
                     egrp.unit_nodes, egrp.order,

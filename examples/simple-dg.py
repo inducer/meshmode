@@ -402,7 +402,7 @@ def wave_operator(actx, discr, c, q):
                 u=c*discr.div(q.v),
                 v=c*discr.grad(q.u)
                 )
-            -  # noqa: W504
+            -
             discr.inverse_mass(
                 discr.face_mass(
                     wave_flux(actx, discr, c=c,

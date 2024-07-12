@@ -1561,7 +1561,7 @@ def _compute_nodal_adjacency_from_vertices(mesh):
 
     lengths = [len(el_list) for el_list in element_to_element]
     neighbors_starts = np.cumsum(
-            np.array([0] + lengths, dtype=mesh.element_id_dtype))
+            np.array([0, *lengths], dtype=mesh.element_id_dtype))
     from pytools import flatten
     neighbors = np.array(
             list(flatten(element_to_element)),
@@ -1818,12 +1818,12 @@ def _merge_boundary_adjacency_groups(
             elements=np.empty((0,), dtype=element_id_dtype),
             element_faces=np.empty((0,), dtype=face_id_dtype))
 
-    max_ielem = max([
+    max_ielem = max(
         np.max(grp.elements, initial=0)
-        for grp in bdry_grps])
-    max_iface = max([
+        for grp in bdry_grps)
+    max_iface = max(
         np.max(grp.element_faces, initial=0)
-        for grp in bdry_grps])
+        for grp in bdry_grps)
 
     face_has_adj = np.full((max_iface+1, max_ielem+1), False)
 
@@ -2065,10 +2065,10 @@ def check_bc_coverage(mesh, boundary_tags, incomplete_ok=False,
         else:
             all_btag = BTAG_REALLY_ALL
 
-        all_bdry_grp, = [
+        all_bdry_grp, = (
             fagrp for fagrp in fagrp_list
             if isinstance(fagrp, BoundaryAdjacencyGroup)
-            and fagrp.boundary_tag == all_btag]
+            and fagrp.boundary_tag == all_btag)
 
         matching_bdry_grps = [
             fagrp for fagrp in fagrp_list
@@ -2111,10 +2111,10 @@ def is_boundary_tag_empty(mesh, boundary_tag):
         raise ValueError(f"invalid boundary tag {boundary_tag}.")
 
     for igrp in range(len(mesh.groups)):
-        nfaces = sum([
+        nfaces = sum(
             len(grp.elements) for grp in mesh.facial_adjacency_groups[igrp]
             if isinstance(grp, BoundaryAdjacencyGroup)
-            and grp.boundary_tag == boundary_tag])
+            and grp.boundary_tag == boundary_tag)
         if nfaces > 0:
             return False
 

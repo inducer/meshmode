@@ -983,7 +983,8 @@ def default_simplex_group_factory(base_dim, order):
         elif base_dim == 3:
             return PolynomialWarpAndBlend3DRestrictingGroupFactory(order)
         else:
-            raise ValueError(f"no usable set of nodes found for {base_dim}D")
+            raise ValueError(
+                f"no usable set of nodes found for {base_dim}D") from None
 
     return PolynomialRecursiveNodesGroupFactory(order, family="lgl")
 

@@ -45,6 +45,7 @@ __doc__ = """
 
 def draw_2d_mesh(
         mesh: Mesh, *,
+        rng: Optional[np.random.Generator] = None,
         draw_vertex_numbers: bool = True,
         draw_element_numbers: bool = True,
         draw_nodal_adjacency: bool = False,
@@ -58,6 +59,9 @@ def draw_2d_mesh(
         the mesh group elements.
     """
     assert mesh.ambient_dim == 2
+
+    if rng is None:
+        rng = np.random.default_rng()
 
     import matplotlib.patches as mpatches
     import matplotlib.pyplot as pt
@@ -135,8 +139,8 @@ def draw_2d_mesh(
                 start = centroid + 0.15*dx
 
                 mag = np.max(np.abs(dx))
-                start += 0.05*(np.random.rand(2)-0.5)*mag
-                dx += 0.05*(np.random.rand(2)-0.5)*mag
+                start += 0.05*(rng.random(2)-0.5)*mag
+                dx += 0.05*(rng.random(2)-0.5)*mag
 
                 pt.arrow(start[0], start[1], 0.7*dx[0], 0.7*dx[1],
                         length_includes_head=True,
@@ -242,7 +246,7 @@ def write_vertex_vtk_file(
                     }[egrp.dim]
         else:
             raise NotImplementedError("mesh vtk file writing for "
-                    "element group of type '%s'" % type(egrp).__name__)
+                    f"element group of type '{type(egrp).__name__}'")
 
         cell_types[base_element_nr:base_element_nr + egrp.nelements] = vtk_cell_type
 
@@ -290,7 +294,7 @@ def write_vertex_vtk_file(
         if overwrite:
             os.remove(file_name)
         else:
-            raise FileExistsError("output file '%s' already exists" % file_name)
+            raise FileExistsError(f"output file '{file_name}' already exists")
 
     with open(file_name, "w") as outf:
         AppendedDataXMLGenerator(compressor)(grid).write(outf)
@@ -317,12 +321,11 @@ def mesh_to_tikz(mesh: Mesh) -> str:
 
             centroid = np.average(elverts, axis=1)
             lines.append(r"\coordinate (cent%d) at (%s);"
-                    % (el_nr,
-                        ", ".join("%.5f" % (vi) for vi in centroid)))
+                    % (el_nr, ", ".join(f"{vi:.5f}" for vi in centroid)))
 
             for ivert, vert in enumerate(elverts.T):
                 lines.append(r"\coordinate (v%d-%d) at (%s);"
-                        % (el_nr, ivert+1, ", ".join("%.5f" % vi for vi in vert)))
+                        % (el_nr, ivert+1, ", ".join(f"{vi:.5f}" for vi in vert)))
             drawel_lines.append(
                     r"\draw [#1] %s -- cycle;"
                     % " -- ".join(

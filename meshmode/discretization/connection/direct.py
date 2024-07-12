@@ -525,7 +525,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 if (from_el_indices[to_el_ind] != -1).any():
                     from warnings import warn
                     warn("per-batch target elements not disjoint during "
-                            "attempted merge")
+                         "attempted merge", stacklevel=3)
                     return None
 
                 from_el_indices[to_el_ind] = \
@@ -927,7 +927,7 @@ def make_direct_full_resample_matrix(actx, conn):
     from_group_sizes = [
             grp.nelements*grp.nunit_dofs
             for grp in conn.from_discr.groups]
-    from_group_starts = np.cumsum([0] + from_group_sizes)
+    from_group_starts = np.cumsum([0, *from_group_sizes])
 
     tgt_node_nr_base = 0
     mats = []

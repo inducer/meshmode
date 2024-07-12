@@ -588,7 +588,7 @@ class Visualizer:
                 nodes.append(0*nodes[0])
             assert len(nodes) == 3
 
-            args = tuple(nodes) + (field,)
+            args = (*nodes, field)
 
             # https://docs.enthought.com/mayavi/mayavi/auto/example_plotting_many_lines.html  # noqa: E501
             src = mlab.pipeline.scalar_scatter(*args)
@@ -603,7 +603,7 @@ class Visualizer:
             while len(nodes) < 3:
                 nodes.append(0*nodes[0])
 
-            args = tuple(nodes) + (vis_connectivity.reshape(-1, 3),)
+            args = (*nodes, vis_connectivity.reshape(-1, 3))
             kwargs["scalars"] = field
 
             mlab.triangular_mesh(*args, **kwargs)
@@ -742,7 +742,7 @@ class Visualizer:
 
             - Added *par_manifest_filename* and *par_file_names*.
             - Added *use_high_order*.
-        """  # noqa: E501
+        """
 
         if use_high_order is None:
             use_high_order = False
