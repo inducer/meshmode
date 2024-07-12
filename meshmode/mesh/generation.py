@@ -1390,8 +1390,7 @@ def generate_box_mesh(
 
     if any(periodic):
         from meshmode import AffineMap
-        from meshmode.mesh.processing import (
-            BoundaryPairMapping, glue_mesh_boundaries)
+        from meshmode.mesh.processing import BoundaryPairMapping, glue_mesh_boundaries
         bdry_pair_mappings_and_tols = []
         for idim in range(dim):
             if periodic[idim]:
@@ -1591,8 +1590,7 @@ def generate_annular_cylinder_slice_mesh(
         from meshmode.mesh.tools import AffineMap
         aff_map = AffineMap(matrix, center - matrix @ center)
 
-        from meshmode.mesh.processing import (
-            BoundaryPairMapping, glue_mesh_boundaries)
+        from meshmode.mesh.processing import BoundaryPairMapping, glue_mesh_boundaries
         periodic_mesh = glue_mesh_boundaries(
             mesh, bdry_pair_mappings_and_tols=[
                 (BoundaryPairMapping("-theta", "+theta", aff_map), 1e-12)])

@@ -24,14 +24,18 @@ import numpy as np
 
 import loopy as lp
 from arraycontext import (
-    NotAnArrayContainerError, deserialize_container, make_loopy_program,
-    serialize_container)
+    NotAnArrayContainerError,
+    deserialize_container,
+    make_loopy_program,
+    serialize_container,
+)
 from pytools import keyed_memoize_in, keyed_memoize_method, memoize_in
 
-from meshmode.discretization.connection.chained import (
-    ChainedDiscretizationConnection)
+from meshmode.discretization.connection.chained import ChainedDiscretizationConnection
 from meshmode.discretization.connection.direct import (
-    DirectDiscretizationConnection, DiscretizationConnection)
+    DirectDiscretizationConnection,
+    DiscretizationConnection,
+)
 from meshmode.transform_metadata import FirstAxisIsElementsTag
 
 
@@ -185,7 +189,9 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 name="conn_projection_knl"
             )
             from meshmode.transform_metadata import (
-                ConcurrentDOFInameTag, ConcurrentElementInameTag)
+                ConcurrentDOFInameTag,
+                ConcurrentElementInameTag,
+            )
             return lp.tag_inames(t_unit, {
                     "iel_init": ConcurrentElementInameTag(),
                     "idof_init": ConcurrentDOFInameTag(),

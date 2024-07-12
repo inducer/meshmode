@@ -67,8 +67,10 @@ class _ConnectionBatchData:
 def _build_boundary_connection(actx, vol_discr, bdry_discr, connection_data,
         per_face_groups):
     from meshmode.discretization.connection.direct import (
-        DirectDiscretizationConnection, DiscretizationConnectionElementGroup,
-        InterpolationBatch)
+        DirectDiscretizationConnection,
+        DiscretizationConnectionElementGroup,
+        InterpolationBatch,
+    )
 
     ibdry_grp = 0
     batches = []
@@ -408,8 +410,10 @@ def make_face_to_all_faces_embedding(actx, faces_connection, all_faces_discr,
                 "same number of groups")
 
     from meshmode.discretization.connection import (
-        DirectDiscretizationConnection, DiscretizationConnectionElementGroup,
-        InterpolationBatch)
+        DirectDiscretizationConnection,
+        DiscretizationConnectionElementGroup,
+        InterpolationBatch,
+    )
 
     i_faces_grp = 0
 

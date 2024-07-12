@@ -33,14 +33,20 @@ from meshmode import _acf  # noqa: F401
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from meshmode.discretization import Discretization
 from meshmode.discretization.connection.modal import (
-    ModalToNodalDiscretizationConnection, NodalToModalDiscretizationConnection)
+    ModalToNodalDiscretizationConnection,
+    NodalToModalDiscretizationConnection,
+)
 from meshmode.discretization.poly_element import (
     InterpolatoryQuadratureSimplexGroupFactory,
-    LegendreGaussLobattoTensorProductGroupFactory, ModalSimplexGroupFactory,
-    ModalTensorProductGroupFactory, PolynomialEquidistantSimplexGroupFactory,
+    LegendreGaussLobattoTensorProductGroupFactory,
+    ModalSimplexGroupFactory,
+    ModalTensorProductGroupFactory,
+    PolynomialEquidistantSimplexGroupFactory,
     PolynomialRecursiveNodesGroupFactory,
     PolynomialWarpAndBlend2DRestrictingGroupFactory,
-    PolynomialWarpAndBlend3DRestrictingGroupFactory, QuadratureSimplexGroupFactory)
+    PolynomialWarpAndBlend3DRestrictingGroupFactory,
+    QuadratureSimplexGroupFactory,
+)
 from meshmode.dof_array import DOFArray, flat_norm
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 

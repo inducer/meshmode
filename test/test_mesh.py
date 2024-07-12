@@ -40,10 +40,16 @@ import meshmode.mesh.processing as mproc
 from meshmode import _acf  # noqa: F401
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from meshmode.discretization.poly_element import (
-    LegendreGaussLobattoTensorProductGroupFactory, default_simplex_group_factory)
+    LegendreGaussLobattoTensorProductGroupFactory,
+    default_simplex_group_factory,
+)
 from meshmode.mesh import (
-    BoundaryAdjacencyGroup, InteriorAdjacencyGroup, SimplexElementGroup,
-    TensorProductElementGroup, make_mesh)
+    BoundaryAdjacencyGroup,
+    InteriorAdjacencyGroup,
+    SimplexElementGroup,
+    TensorProductElementGroup,
+    make_mesh,
+)
 from meshmode.mesh.tools import AffineMap
 
 
@@ -888,7 +894,10 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
         pytest.skip("mesh type not supported on tensor product elements")
 
     from meshmode.mesh import (
-        check_bc_coverage, is_boundary_tag_empty, mesh_has_boundary)
+        check_bc_coverage,
+        is_boundary_tag_empty,
+        mesh_has_boundary,
+    )
 
     if dim == 1:
         a = (0,)
@@ -1244,8 +1253,7 @@ def test_node_vertex_consistency_check(actx_factory):
     from meshmode.discretization import Discretization
     group_factory = default_simplex_group_factory(1, 1)
     vol_discr = Discretization(actx, vol_mesh, group_factory)
-    from meshmode.discretization.connection import (
-        FACE_RESTR_ALL, make_face_restriction)
+    from meshmode.discretization.connection import FACE_RESTR_ALL, make_face_restriction
     make_face_restriction(
         actx, vol_discr, group_factory, FACE_RESTR_ALL, per_face_groups=False)
 

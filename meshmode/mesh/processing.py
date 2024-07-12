@@ -25,7 +25,16 @@ THE SOFTWARE.
 from dataclasses import dataclass, replace
 from functools import reduce
 from typing import (
-    Callable, Dict, List, Literal, Mapping, Optional, Sequence, Tuple, Union)
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 import numpy.linalg as la
@@ -33,9 +42,18 @@ import numpy.linalg as la
 import modepy as mp
 
 from meshmode.mesh import (
-    BTAG_PARTITION, BoundaryAdjacencyGroup, FacialAdjacencyGroup,
-    InteriorAdjacencyGroup, InterPartAdjacencyGroup, Mesh, MeshElementGroup, PartID,
-    TensorProductElementGroup, _FaceIDs, make_mesh)
+    BTAG_PARTITION,
+    BoundaryAdjacencyGroup,
+    FacialAdjacencyGroup,
+    InteriorAdjacencyGroup,
+    InterPartAdjacencyGroup,
+    Mesh,
+    MeshElementGroup,
+    PartID,
+    TensorProductElementGroup,
+    _FaceIDs,
+    make_mesh,
+)
 from meshmode.mesh.tools import AffineMap, find_point_permutation
 
 

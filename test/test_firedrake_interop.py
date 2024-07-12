@@ -31,11 +31,14 @@ from meshmode import _acf  # noqa: F401
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from meshmode.discretization import Discretization
 from meshmode.discretization.poly_element import (
-    InterpolatoryQuadratureSimplexGroupFactory)
+    InterpolatoryQuadratureSimplexGroupFactory,
+)
 from meshmode.dof_array import DOFArray
 from meshmode.interop.firedrake import (
-    build_connection_from_firedrake, build_connection_to_firedrake,
-    import_firedrake_mesh)
+    build_connection_from_firedrake,
+    build_connection_to_firedrake,
+    import_firedrake_mesh,
+)
 from meshmode.mesh import BTAG_ALL, BTAG_INDUCED_BOUNDARY, Mesh, check_bc_coverage
 
 
@@ -84,8 +87,14 @@ def make_mm_mesh(name: str) -> Mesh:
 
 def make_firedrake_mesh(name: str):
     from firedrake import (
-        Function, Mesh, SpatialCoordinate, UnitCubeMesh, UnitIntervalMesh,
-        UnitSquareMesh, VectorFunctionSpace)
+        Function,
+        Mesh,
+        SpatialCoordinate,
+        UnitCubeMesh,
+        UnitIntervalMesh,
+        UnitSquareMesh,
+        VectorFunctionSpace,
+    )
 
     if name == "FiredrakeUnitIntervalMesh":
         return UnitIntervalMesh(100)
@@ -601,8 +610,13 @@ def test_from_fd_idempotency(actx_factory,
     actx = actx_factory()
 
     from firedrake import (
-        Function, FunctionSpace, SpatialCoordinate, TensorFunctionSpace,
-        VectorFunctionSpace, as_tensor)
+        Function,
+        FunctionSpace,
+        SpatialCoordinate,
+        TensorFunctionSpace,
+        VectorFunctionSpace,
+        as_tensor,
+    )
 
     # Make a function space and a function with unique values at each node
     fdrake_mesh = make_firedrake_mesh(fdrake_mesh)

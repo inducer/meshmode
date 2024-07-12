@@ -30,7 +30,11 @@ from typing import Optional
 import numpy as np
 
 from meshmode.mesh import (
-    Mesh, MeshElementGroup, SimplexElementGroup, TensorProductElementGroup)
+    Mesh,
+    MeshElementGroup,
+    SimplexElementGroup,
+    TensorProductElementGroup,
+)
 
 
 logger = logging.getLogger(__name__)

@@ -34,12 +34,18 @@ from modepy import Basis
 from pytools import memoize_method, memoize_on_first_arg
 
 from meshmode.discretization import (
-    ElementGroupBase, ElementGroupFactory, InterpolatoryElementGroupBase,
-    ModalElementGroupBase, NodalElementGroupBase, NoninterpolatoryElementGroupError)
+    ElementGroupBase,
+    ElementGroupFactory,
+    InterpolatoryElementGroupBase,
+    ModalElementGroupBase,
+    NodalElementGroupBase,
+    NoninterpolatoryElementGroupError,
+)
 from meshmode.mesh import (
     MeshElementGroup as _MeshElementGroup,
     SimplexElementGroup as _MeshSimplexElementGroup,
-    TensorProductElementGroup as _MeshTensorProductElementGroup)
+    TensorProductElementGroup as _MeshTensorProductElementGroup,
+)
 
 
 __doc__ = """

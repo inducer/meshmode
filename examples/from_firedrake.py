@@ -39,7 +39,12 @@ def main(visualize=True):
         return 0
 
     from firedrake import (
-        Function, FunctionSpace, SpatialCoordinate, UnitSquareMesh, cos)
+        Function,
+        FunctionSpace,
+        SpatialCoordinate,
+        UnitSquareMesh,
+        cos,
+    )
 
     from meshmode.interop.firedrake import build_connection_from_firedrake
 

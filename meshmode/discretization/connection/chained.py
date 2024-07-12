@@ -196,8 +196,11 @@ def flatten_chained_connection(actx, connection):
         :class:`~meshmode.discretization.connection.DirectDiscretizationConnection`.
     """
     from meshmode.discretization.connection import (
-        DirectDiscretizationConnection, DiscretizationConnectionElementGroup,
-        IdentityDiscretizationConnection, make_same_mesh_connection)
+        DirectDiscretizationConnection,
+        DiscretizationConnectionElementGroup,
+        IdentityDiscretizationConnection,
+        make_same_mesh_connection,
+    )
 
     if not hasattr(connection, "connections"):
         return connection
@@ -283,7 +286,9 @@ def make_full_resample_matrix(actx, connection):
         `(connection.from_discr.ndofs, connection.to_discr.ndofs)`.
     """
     from meshmode.discretization.connection.direct import (
-        DirectDiscretizationConnection, make_direct_full_resample_matrix)
+        DirectDiscretizationConnection,
+        make_direct_full_resample_matrix,
+    )
 
     if isinstance(connection, DirectDiscretizationConnection):
         return make_direct_full_resample_matrix(actx, connection)
