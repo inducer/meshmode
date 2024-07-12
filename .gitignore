@@ -17,6 +17,8 @@ a.out
 *.h5
 *.xmf
 *.hdf
+*.pdf
+*.stl
 
 .cache
 .pytest_cache
