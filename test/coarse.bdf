@@ -1,0 +1,204 @@
+
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+$
+$                         CUBIT version 2023.11 NX Nastran Translator
+$
+$            File: coarse.bdf
+$      Time Stamp: 26-Apr-24 at 09:46:50
+$
+$
+$                        PLEASE CHECK YOUR MODEL FOR UNITS CONSISTENCY.
+$
+$       It should be noted that load ID's from CUBIT may NOT correspond to Nastran SID's
+$ The SID's for the load and restraint sets start at one and increment by one:i.e.,1,2,3,4...
+$
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+$
+$
+$ -------------------------
+$ Executive Control Section
+$ -------------------------
+$
+SOL 101
+CEND
+$
+$
+$ --------------------
+$ Case Control Section
+$ --------------------
+$
+ECHO = SORT
+$
+$
+$ Name: Initial
+$
+$
+$ Name: Default Set
+$
+SUBCASE = 1
+$
+LABEL = Default Set
+$
+$ -----------------
+$ Bulk Data Section
+$ -----------------
+$
+BEGIN BULK
+$
+$ Params
+$
+$
+$ Node cards
+$
+GRID    33      0       0.5     0.5     0
+GRID    17      0       0.3     0.5     0
+GRID    1       0       0.3     0.3     0
+GRID    32      0       0.5     0.3     0
+GRID    18      0       0.1     0.5     0
+GRID    2       0       0.1     0.3     0
+GRID    19      0       -0.1    0.5     0
+GRID    3       0       -0.1    0.3     0
+GRID    20      0       -0.3    0.5     0
+GRID    4       0       -0.3    0.3     0
+GRID    34      0       -0.5    0.5     0
+GRID    21      0       -0.5    0.3     0
+GRID    5       0       0.3     0.1     0
+GRID    31      0       0.5     0.1     0
+GRID    6       0       0.1     0.1     0
+GRID    7       0       -0.1    0.1     0
+GRID    8       0       -0.3    0.1     0
+GRID    22      0       -0.5    0.1     0
+GRID    9       0       0.3     -0.1    0
+GRID    30      0       0.5     -0.1    0
+GRID    10      0       0.1     -0.1    0
+GRID    11      0       -0.1    -0.1    0
+GRID    12      0       -0.3    -0.1    0
+GRID    23      0       -0.5    -0.1    0
+GRID    13      0       0.3     -0.3    0
+GRID    29      0       0.5     -0.3    0
+GRID    14      0       0.1     -0.3    0
+GRID    15      0       -0.1    -0.3    0
+GRID    16      0       -0.3    -0.3    0
+GRID    24      0       -0.5    -0.3    0
+GRID    28      0       0.3     -0.5    0
+GRID    36      0       0.5     -0.5    0
+GRID    27      0       0.1     -0.5    0
+GRID    26      0       -0.1    -0.5    0
+GRID    25      0       -0.3    -0.5    0
+GRID    35      0       -0.5    -0.5    0
+$
+$ Element cards
+$
+$
+$ Name: fluid_block
+$
+CQUAD4  1       1       33      17      1       32
+CQUAD4  2       1       17      18      2       1
+CQUAD4  3       1       18      19      3       2
+CQUAD4  4       1       19      20      4       3
+CQUAD4  5       1       20      34      21      4
+CQUAD4  6       1       32      1       5       31
+CQUAD4  7       1       1       2       6       5
+CQUAD4  8       1       2       3       7       6
+CQUAD4  9       1       3       4       8       7
+CQUAD4  10      1       4       21      22      8
+CQUAD4  11      1       31      5       9       30
+CQUAD4  12      1       5       6       10      9
+CQUAD4  13      1       6       7       11      10
+CQUAD4  14      1       7       8       12      11
+CQUAD4  15      1       8       22      23      12
+CQUAD4  16      1       30      9       13      29
+CQUAD4  17      1       9       10      14      13
+CQUAD4  18      1       10      11      15      14
+CQUAD4  19      1       11      12      16      15
+CQUAD4  20      1       12      23      24      16
+CQUAD4  21      1       29      13      28      36
+CQUAD4  22      1       13      14      27      28
+CQUAD4  23      1       14      15      26      27
+CQUAD4  24      1       15      16      25      26
+CQUAD4  25      1       16      24      35      25
+$
+$ Name: inflow_block
+$
+CROD    26      2       35      25
+CROD    27      2       25      26
+CROD    28      2       26      27
+CROD    29      2       27      28
+CROD    30      2       28      36
+$
+$ Name: wall_block
+$
+CROD    31      3       34      21
+CROD    32      3       21      22
+CROD    33      3       22      23
+CROD    34      3       23      24
+CROD    35      3       24      35
+CROD    36      3       33      17
+CROD    37      3       17      18
+CROD    38      3       18      19
+CROD    39      3       19      20
+CROD    40      3       20      34
+CROD    41      3       36      29
+CROD    42      3       29      30
+CROD    43      3       30      31
+CROD    44      3       31      32
+CROD    45      3       32      33
+$
+$ Name: all_boundary_block
+$
+CROD    26      4       35      25
+CROD    27      4       25      26
+CROD    28      4       26      27
+CROD    29      4       27      28
+CROD    30      4       28      36
+CROD    36      4       33      17
+CROD    37      4       17      18
+CROD    38      4       18      19
+CROD    39      4       19      20
+CROD    40      4       20      34
+CROD    31      4       34      21
+CROD    32      4       21      22
+CROD    33      4       22      23
+CROD    34      4       23      24
+CROD    35      4       24      35
+CROD    41      4       36      29
+CROD    42      4       29      30
+CROD    43      4       30      31
+CROD    44      4       31      32
+CROD    45      4       32      33
+$
+$ Property cards
+$
+$
+$ Name: fluid_block
+$
+PSHELL  1       100     1
+$
+$ Name: inflow_block
+$
+PROD    2       100     0       0       0       0
+$
+$ Name: wall_block
+$
+PROD    3       100     0       0       0       0
+$
+$ Name: all_boundary_block
+$
+PROD    4       100     0       0       0       0
+$
+$ Material cards
+$
+$
+$ Name: Default-Steel
+$
+MAT1*   100             206800          80155.039       0.29
+*       7e-06           1.2e-05
+$
+$ Restraint cards
+$
+$
+$ Load cards
+$
+$
+$
+ENDDATA

@@ -52,6 +52,7 @@ def main():
               ],
           extras_require={
               "visualization": ["h5py"],
+              "meshio": ["meshio"],
               "test": ["pytest>=2.3"],
               },
           )
