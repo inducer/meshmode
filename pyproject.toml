@@ -1,4 +1,4 @@
-[build-system
+[build-system]
 build-backend = "setuptools.build_meta"
 requires = [
     "setuptools>=63",
@@ -22,7 +22,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Information Analysis",
     "Topic :: Scientific/Engineering :: Mathematics",
@@ -32,7 +32,7 @@ classifiers = [
 ]
 dependencies = [
     "arraycontext>=2021.1",
-    "gmsh_interop>=2021.1",
+    "gmsh-interop>=2021.1",
     "loopy>=2024.1",
     "modepy>=2021.1",
     "numpy",
@@ -44,18 +44,18 @@ dependencies = [
 [project.optional-dependencies]
 doc = [
     "furo",
-    "sphinx-copybutton",
     "sphinx>=4",
-]
-visualization = [
-    "h5py",
-    "pyvisfile>=2022.1",
+    "sphinx-copybutton",
 ]
 test = [
     "mypy",
     "pylint",
     "pytest",
     "ruff",
+]
+visualization = [
+    "h5py",
+    "pyvisfile>=2022.1",
 ]
 
 [project.urls]
@@ -66,3 +66,65 @@ Repository = "https://github.com/inducer/meshmode"
 include = [
     "meshmode*",
 ]
+
+[tool.isort]
+known_firstparty = [
+    "pytools",
+    "pyopencl",
+    "loopy",
+    "arraycontext",
+    "gmsh_interop",
+    "pyvisfile",
+    "modepy",
+    "pytato",
+    "pymbolic",
+    "pymetis",
+    "firedrake",
+]
+known_local_folder = [ "meshmode" ]
+line_length = 85
+lines_after_imports = 2
+combine_as_imports = true
+multi_line_output = 4
+
+[tool.pytest.ini_options]
+markers = [
+    "mpi: test requires MPI",
+    "octave: test requires Octave",
+]
+
+[tool.mypy]
+python_version = "3.8"
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+    "meshmode.discretization.*",
+    "meshmode.dof_array.*",
+    "meshmode.interop.*",
+    "meshmode.mesh.*",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "FIAT.*",
+    "finat.*",
+    "firedrake.*",
+    "gmsh_interop.*",
+    "h5py.*",
+    "loopy.*",
+    "matplotlib.*",
+    "mayavi.*",
+    "mpl_toolkits.*",
+    "oct2py.*",
+    "pymbolic.*",
+    "pymetis.*",
+    "pyop2.*",
+    "pyopencl.*",
+    "pytential.*",
+    "pyvisfile.*",
+    "recursivenodes.*",
+    "scipy.*",
+]
+ignore_missing_imports = true
