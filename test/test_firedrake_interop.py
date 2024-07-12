@@ -329,8 +329,8 @@ def test_bdy_tags(mesh_name, bdy_ids, coord_indices, coord_values,
     if only_convert_bdy:
         from meshmode.interop.firedrake.connection import _get_cells_to_use
         cells_to_use = _get_cells_to_use(square_or_cube_mesh, "on_boundary")
-    mm_mesh, orient = import_firedrake_mesh(square_or_cube_mesh,
-                                            cells_to_use=cells_to_use)
+    mm_mesh, _orient = import_firedrake_mesh(square_or_cube_mesh,
+                                             cells_to_use=cells_to_use)
     # Check disjoint coverage of bdy ids and BTAG_ALL
     check_bc_coverage(mm_mesh, [BTAG_ALL])
     check_bc_coverage(mm_mesh, bdy_ids)
@@ -513,8 +513,8 @@ def test_from_fd_transfer(actx_factory, fspace_degree,
 
     # assert that order is correct or error is "low enough"
     for ((fd2mm, d), eoc_rec) in eoc_recorders.items():
-        print("\nfiredrake -> meshmode: %s\nvector *x* -> *sin(x[%s])*\n"
-              % (fd2mm, d), eoc_rec)
+        print(f"\nfiredrake -> meshmode: {fd2mm}\nvector *x* -> *sin(x[{d}])*\n",
+              eoc_rec)
         assert (
             eoc_rec.order_estimate() >= fspace_degree
             or eoc_rec.max_error() < 2e-14)
@@ -588,7 +588,7 @@ def test_to_fd_transfer(actx_factory, fspace_degree, mesh_name, mesh_pars, dim):
 
     # assert that order is correct or error is "low enough"
     for d, eoc_rec in eoc_recorders.items():
-        print("\nvector *x* -> *x[%s]*\n" % d, eoc_rec)
+        print(f"\nvector *x* -> *x[{d}]*\n", eoc_rec)
         assert (
             eoc_rec.order_estimate() >= fspace_degree
             or eoc_rec.max_error() < 2e-14)

@@ -92,7 +92,8 @@ def create_refined_connection(actx, discr, threshold=0.3):
     )
     from meshmode.mesh.refinement import RefinerWithoutAdjacency
 
-    flags = np.random.rand(discr.mesh.nelements) < threshold
+    rng = np.random.default_rng(seed=42)
+    flags = rng.random(size=discr.mesh.nelements) < threshold
     refiner = RefinerWithoutAdjacency(discr.mesh)
     refiner.refine(flags)
 

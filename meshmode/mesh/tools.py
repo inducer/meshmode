@@ -70,7 +70,7 @@ nd_quad_submesh = MovedFunctionDeprecationWrapper(hypercube_submesh)
 
 # {{{ random rotation matrix
 
-def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None):
+def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None, rng=None):
     """Creates a random rotation matrix.
 
     :arg deflection: the magnitude of the rotation. For 0, no rotation; for 1,
@@ -85,7 +85,10 @@ def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None):
         raise NotImplementedError("ambient_dim=%d" % ambient_dim)
 
     if randnums is None:
-        randnums = np.random.uniform(size=(3,))
+        if rng is None:
+            rng = np.random.default_rng()
+
+        randnums = rng.uniform(size=(3,))
 
     theta, phi, z = randnums
 
@@ -100,7 +103,7 @@ def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None):
     # has length sqrt(2) to eliminate the 2 in the Householder matrix.
 
     r = np.sqrt(z)
-    V = (  # noqa: N806
+    V = (
         np.sin(phi) * r,
         np.cos(phi) * r,
         np.sqrt(2.0 - z)
@@ -109,11 +112,11 @@ def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None):
     st = np.sin(theta)
     ct = np.cos(theta)
 
-    R = np.array(((ct, st, 0), (-st, ct, 0), (0, 0, 1)))  # noqa: N806
+    R = np.array(((ct, st, 0), (-st, ct, 0), (0, 0, 1)))
 
     # Construct the rotation matrix  ( V Transpose(V) - I ) R.
 
-    M = (np.outer(V, V) - np.eye(3)).dot(R)  # noqa: N806
+    M = (np.outer(V, V) - np.eye(3)).dot(R)
     return M
 
 # }}}

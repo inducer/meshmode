@@ -1438,12 +1438,12 @@ def map_mesh(mesh: Mesh, f: Callable[[np.ndarray], np.ndarray]) -> Mesh:
 
 def affine_map(
         mesh: Mesh,
-        A: Optional[Union[np.generic, np.ndarray]] = None,    # noqa: N803
+        A: Optional[Union[np.generic, np.ndarray]] = None,
         b: Optional[Union[np.generic, np.ndarray]] = None) -> Mesh:
     """Apply the affine map :math:`f(x) = A x + b` to the geometry of *mesh*."""
 
     if A is not None and not isinstance(A, np.ndarray):
-        A = np.diag([A] * mesh.ambient_dim)             # noqa: N806
+        A = np.diag([A] * mesh.ambient_dim)
 
     if b is not None and not isinstance(b, np.ndarray):
         b = np.array([b] * mesh.ambient_dim)

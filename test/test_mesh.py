@@ -313,15 +313,17 @@ def test_mesh_as_python():
 # {{{ test_affine_map
 
 def test_affine_map():
+    rng = np.random.default_rng(seed=42)
+
     for d in range(1, 5):
         for _ in range(100):
-            a = np.random.randn(d, d)+10*np.eye(d)
-            b = np.random.randn(d)
+            a = rng.normal(size=(d, d)) + 10*np.eye(d)
+            b = rng.normal(size=d)
 
             m = AffineMap(a, b)
             assert la.norm(m.inverted().matrix - la.inv(a)) < 1e-10*la.norm(a)
 
-            x = np.random.randn(d)
+            x = rng.normal(size=d)
             m_inv = m.inverted()
             assert la.norm(x-m_inv(m(x))) < 1e-10
 
@@ -489,7 +491,7 @@ def test_mesh_to_tikz():
             FileSource(str(thisdir / "blob-2d.step")), 2, order=order,
             force_ambient_dim=2,
             other_options=[
-                "-string", "Mesh.CharacteristicLengthMax = %s;" % h],
+                "-string", f"Mesh.CharacteristicLengthMax = {h};"],
             target_unit="MM",
             )
 
@@ -802,9 +804,10 @@ def test_lookup_tree(visualize=False):
     bbox_min, bbox_max = mproc.find_bounding_box(mesh)
 
     extent = bbox_max-bbox_min
+    rng = np.random.default_rng(seed=42)
 
     for _ in range(20):
-        pt = bbox_min + np.random.rand(2) * extent
+        pt = bbox_min + rng.random(size=2) * extent
         print(pt)
         for igrp, iel in tree.generate_matches(pt):
             print(igrp, iel)
@@ -861,7 +864,7 @@ def test_boundary_tags():
 
 def test_volume_tags():
     from meshmode.mesh.io import read_gmsh
-    mesh, tag_to_elements_map = read_gmsh(  # pylint: disable=unpacking-non-sequence
+    _mesh, tag_to_elements_map = read_gmsh(  # pylint: disable=unpacking-non-sequence
         str(thisdir / "testmesh_multivol.msh"), return_tag_to_elements_map=True)
 
     assert len(tag_to_elements_map) == 2
@@ -1152,7 +1155,7 @@ def test_node_vertex_consistency_check(actx_factory):
             a, b, nelements_per_axis, perturb_amount):
         mesh_unperturbed = mgen.generate_regular_rect_mesh(
             a=a, b=b, nelements_per_axis=nelements_per_axis)
-        return mesh_unperturbed.copy(  # noqa: F841
+        return mesh_unperturbed.copy(
             vertices=(
                 mesh_unperturbed.vertices
                 + perturb_amount*np.ones(mesh_unperturbed.vertices.shape)),
@@ -1274,7 +1277,7 @@ def test_node_vertex_consistency_check(actx_factory):
         vol_mesh_unrotated = mgen.generate_regular_rect_mesh(
             a=(-1,)*2, b=(1,)*2,
             nelements_per_axis=(8,)*2)
-        vol_mesh = vol_mesh_unrotated.copy(  # noqa: F841
+        vol_mesh = vol_mesh_unrotated.copy(
             groups=[
                 replace(
                     grp,

@@ -63,26 +63,25 @@ logger = logging.getLogger(__name__)
 
 
 __all__ = [
-        "DiscretizationConnection",
-        "IdentityDiscretizationConnection",
-        "DirectDiscretizationConnection",
-        "ChainedDiscretizationConnection",
-        "L2ProjectionInverseDiscretizationConnection",
-        "NodalToModalDiscretizationConnection",
-        "ModalToNodalDiscretizationConnection",
-
-        "make_same_mesh_connection",
-        "FACE_RESTR_INTERIOR", "FACE_RESTR_ALL",
-        "make_face_restriction",
-        "make_face_to_all_faces_embedding",
-        "make_opposite_face_connection",
-        "make_partition_connection",
-        "make_refinement_connection",
-        "flatten_chained_connection",
-
-        "InterpolationBatch",
-        "DiscretizationConnectionElementGroup",
-        ]
+    "FACE_RESTR_ALL",
+    "FACE_RESTR_INTERIOR",
+    "ChainedDiscretizationConnection",
+    "DirectDiscretizationConnection",
+    "DiscretizationConnection",
+    "DiscretizationConnectionElementGroup",
+    "IdentityDiscretizationConnection",
+    "InterpolationBatch",
+    "L2ProjectionInverseDiscretizationConnection",
+    "ModalToNodalDiscretizationConnection",
+    "NodalToModalDiscretizationConnection",
+    "flatten_chained_connection",
+    "make_face_restriction",
+    "make_face_to_all_faces_embedding",
+    "make_opposite_face_connection",
+    "make_partition_connection",
+    "make_refinement_connection",
+    "make_same_mesh_connection",
+]
 
 __doc__ = """
 Base classes

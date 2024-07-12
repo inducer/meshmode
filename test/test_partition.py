@@ -68,8 +68,8 @@ TAG_SEND_LOCAL_NODES = TAG_BASE + 4
 def test_partition_interpolation(actx_factory, dim, mesh_pars,
                                  num_parts, num_groups, part_method):
     order = 4
+    rng = np.random.default_rng(seed=42)
 
-    np.random.seed(42)
     group_factory = default_simplex_group_factory(base_dim=dim, order=order)
     actx = actx_factory()
 
@@ -91,7 +91,7 @@ def test_partition_interpolation(actx_factory, dim, mesh_pars,
             mesh = base_mesh
 
         if part_method == "random":
-            part_per_element = np.random.randint(num_parts, size=mesh.nelements)
+            part_per_element = rng.integers(0, num_parts, size=mesh.nelements)
         else:
             pytest.importorskip("pymetis")
 
@@ -211,7 +211,8 @@ def _check_for_cross_rank_adj(mesh, part_per_element):
         ])
 @pytest.mark.parametrize("num_groups", [1, 2, 7])
 def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_parts):
-    np.random.seed(42)
+    rng = np.random.default_rng(seed=42)
+
     nelements_per_axis = (mesh_size,) * dim
     from meshmode.mesh.generation import generate_regular_rect_mesh
     meshes = [generate_regular_rect_mesh(a=(0 + i,) * dim, b=(1 + i,) * dim,
@@ -221,7 +222,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_parts):
     mesh = merge_disjoint_meshes(meshes)
 
     if scramble_parts:
-        part_per_element = np.random.randint(num_parts, size=mesh.nelements)
+        part_per_element = rng.integers(0, num_parts, size=mesh.nelements)
     else:
         pytest.importorskip("pymetis")
 
@@ -320,8 +321,8 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_parts):
                     assert found_reverse_adj, ("InterPartAdjacencyGroup is not "
                         "consistent")
 
-                    p_grp_num = find_group_indices(mesh.groups, p_meshwide_elem)  # pylint: disable=possibly-used-before-assignment  # noqa: E501
-                    p_n_grp_num = find_group_indices(mesh.groups, p_meshwide_n_elem)  # pylint: disable=possibly-used-before-assignment  # noqa: E501
+                    p_grp_num = find_group_indices(mesh.groups, p_meshwide_elem)  # pylint: disable=possibly-used-before-assignment
+                    p_n_grp_num = find_group_indices(mesh.groups, p_meshwide_n_elem)  # pylint: disable=possibly-used-before-assignment
 
                     p_elem_base = mesh.base_element_nrs[p_grp_num]
                     p_n_elem_base = mesh.base_element_nrs[p_n_grp_num]
@@ -378,7 +379,8 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
     mpi_comm = MPI.COMM_WORLD
 
     if mpi_comm.rank == 0:
-        np.random.seed(42)
+        rng = np.random.default_rng(seed=42)
+
         from meshmode.mesh.generation import generate_warped_rect_mesh
         meshes = [generate_warped_rect_mesh(dim, order=order, nelements_side=4)
                         for _ in range(num_groups)]
@@ -389,9 +391,10 @@ def _test_mpi_boundary_swap(dim, order, num_groups):
         else:
             mesh = meshes[0]
 
-        part_id_to_part = partition_mesh(mesh,
-                       membership_list_to_map(
-                           np.random.randint(mpi_comm.size, size=mesh.nelements)))
+        part_id_to_part = partition_mesh(
+            mesh,
+            membership_list_to_map(rng.integers(0, mpi_comm.size, size=mesh.nelements))
+            )
 
         assert list(part_id_to_part.keys()) == list(range(mpi_comm.size))
         parts = [part_id_to_part[i] for i in range(mpi_comm.size)]
@@ -580,7 +583,7 @@ def _test_data_transfer(mpi_comm, actx, local_bdry_conns,
 
         from numpy.linalg import norm
         err = norm(true_local_f - local_f, np.inf)
-        assert err < 1e-11, "Error = %f is too large" % err
+        assert err < 1e-11, f"Error = {err:f} is too large"
 
 # }}}
 

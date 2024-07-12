@@ -198,10 +198,12 @@ def _find_src_unit_nodes_via_gauss_newton(
     # {{{ test map applier and jacobian
 
     if 0:
+        rng = np.random.default_rng(seed=None)
+
         u = src_unit_nodes
         f = apply_map(u)
         for h in [1e-1, 1e-2]:
-            du = h*np.random.randn(*u.shape)
+            du = h*rng.normal(size=u.shape)
 
             f_2 = apply_map(u+du)
 

@@ -67,8 +67,47 @@ include = [
     "meshmode*",
 ]
 
-[tool.isort]
-known_firstparty = [
+[tool.ruff]
+preview = true
+
+[tool.ruff.lint]
+extend-select = [
+    "B",    # flake8-bugbear
+    "C",    # flake8-comprehensions
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "G",    # flake8-logging-format
+    "I",    # flake8-isort
+    "N",    # pep8-naming
+    "NPY",  # numpy
+    "Q",    # flake8-quotes
+    "RUF",  # ruff
+    "UP",   # pyupgrade
+    "W",    # pycodestyle
+]
+extend-ignore = [
+    "C90",  # McCabe complexity
+    "E226", # missing whitespace around arithmetic operator
+    "E241", # multiple spaces after comma
+    "E242", # tab after comma
+    "E265", # comment should have a space
+    "E402", # module level import not at the top of file
+    "N802", # function name should be lowercase
+    "N803", # argument name should be lowercase
+    "N806", # variable name should be lowercase
+    "N818", # error suffix in exception names
+    "UP031", # use f-strings instead of % format
+    "UP032", # use f-strings instead of .format
+]
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+inline-quotes = "double"
+multiline-quotes = "double"
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+known-first-party = [
     "pytools",
     "pyopencl",
     "loopy",
@@ -81,11 +120,10 @@ known_firstparty = [
     "pymetis",
     "firedrake",
 ]
-known_local_folder = [ "meshmode" ]
-line_length = 85
-lines_after_imports = 2
-combine_as_imports = true
-multi_line_output = 4
+known-local-folder = [
+    "meshmode",
+]
+lines-after-imports = 2
 
 [tool.pytest.ini_options]
 markers = [

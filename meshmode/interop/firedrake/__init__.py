@@ -32,7 +32,10 @@ from meshmode.interop.firedrake.mesh import (
 )
 
 
-__all__ = ["build_connection_from_firedrake", "build_connection_to_firedrake",
-           "FiredrakeConnection", "import_firedrake_mesh",
-           "export_mesh_to_firedrake",
-           ]
+__all__ = [
+    "FiredrakeConnection",
+    "build_connection_from_firedrake",
+    "build_connection_to_firedrake",
+    "export_mesh_to_firedrake",
+    "import_firedrake_mesh",
+]

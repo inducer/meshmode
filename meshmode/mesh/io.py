@@ -350,10 +350,10 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=None,
         for idim in range(dim):
             if (mesh.vertices[idim] == 0).all():
                 from warnings import warn
-                warn("all vertices' %s coordinate is zero--perhaps you want to pass "
-                        "force_ambient_dim=%d (pass any fixed value to "
-                        "force_ambient_dim to silence this warning)" % (
-                            AXIS_NAMES[idim], idim))
+                warn(f"all vertices' {AXIS_NAMES[idim]} coordinate is zero -- "
+                     f"perhaps you want to pass force_ambient_dim={idim} (pass "
+                     "any fixed value to force_ambient_dim to silence this warning)",
+                     stacklevel=2)
                 break
 
     return result

@@ -82,7 +82,9 @@ def test_flatten_unflatten(actx_factory):
             b=(+0.5,)*ambient_dim,
             nelements_per_axis=(3,)*ambient_dim, order=1)
     discr = Discretization(actx, mesh, default_simplex_group_factory(ambient_dim, 3))
-    a = np.random.randn(discr.ndofs)
+
+    rng = np.random.default_rng(seed=42)
+    a = rng.normal(size=discr.ndofs)
 
     from meshmode.dof_array import flatten, unflatten
     a_round_trip = actx.to_numpy(flatten(unflatten(actx, discr, actx.from_numpy(a))))
@@ -176,7 +178,7 @@ def test_container_norm(actx_factory, ord):
 
 def test_dof_array_pickling(actx_factory):
     actx = actx_factory()
-    ary_dof, ary_of_dofs, mat_of_dofs, dc_of_dofs = _get_test_containers(actx)
+    _, _, mat_of_dofs, dc_of_dofs = _get_test_containers(actx)
 
     from pickle import dumps, loads
     with array_context_for_pickling(actx):

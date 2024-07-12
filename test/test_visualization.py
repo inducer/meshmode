@@ -85,10 +85,10 @@ def test_parallel_vtk_file(actx_factory, dim):
     vis = make_visualizer(actx, discr, target_order)
 
     class FakeComm:
-        def Get_rank(self):  # noqa: N802
+        def Get_rank(self):
             return 0
 
-        def Get_size(self):  # noqa: N802
+        def Get_size(self):
             return 2
 
     file_name_pattern = f"visualizer_vtk_linear_{dim}_{{rank}}.vtu"

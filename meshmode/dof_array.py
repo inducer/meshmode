@@ -28,7 +28,7 @@ import threading
 from contextlib import contextmanager
 from functools import partial, update_wrapper
 from numbers import Number
-from typing import Any, Callable, Iterable, Optional, Tuple
+from typing import Any, Callable, Iterable
 from warnings import warn
 
 import numpy as np
@@ -138,7 +138,7 @@ class DOFArray:
         the array context given to :func:`array_context_for_pickling`.
     """
 
-    def __init__(self, actx: Optional[ArrayContext], data: Tuple[Any]) -> None:
+    def __init__(self, actx: ArrayContext | None, data: tuple[Any, ...]) -> None:
         if __debug__:
             if not (actx is None or isinstance(actx, ArrayContext)):
                 raise TypeError("actx must be of type ArrayContext")
@@ -162,7 +162,7 @@ class DOFArray:
         return single_valued(subary.dtype for subary in self._data)
 
     @classmethod
-    def from_list(cls, actx: Optional[ArrayContext], res_list) -> "DOFArray":
+    def from_list(cls, actx: ArrayContext | None, res_list) -> DOFArray:
         r"""Create a :class:`DOFArray` from a list of arrays
         (one per :class:`~meshmode.discretization.ElementGroupBase`).
 
@@ -178,10 +178,10 @@ class DOFArray:
         return cls(actx, tuple(res_list))
 
     def __str__(self) -> str:
-        return f"DOFArray({str(self._data)})"
+        return f"DOFArray({self._data})"
 
     def __repr__(self) -> str:
-        return f"DOFArray({repr(self._data)})"
+        return f"DOFArray({self._data!r})"
 
     # {{{ sequence protocol
 
@@ -207,7 +207,7 @@ class DOFArray:
         return DOFArray(self.array_context, tuple(data))
 
     @property
-    def shape(self) -> Tuple[int]:
+    def shape(self) -> tuple[int]:
         return (len(self),)
 
     @property
@@ -263,15 +263,15 @@ class DOFArray:
 
         return self
 
-    def __iadd__(self, arg): return self._ibop(op.iadd, arg)            # noqa: E704
-    def __isub__(self, arg): return self._ibop(op.isub, arg)            # noqa: E704
-    def __imul__(self, arg): return self._ibop(op.imul, arg)            # noqa: E704
-    def __itruediv__(self, arg): return self._ibop(op.itruediv, arg)    # noqa: E704
-    def __imod__(self, arg): return self._ibop(op.imod, arg)            # noqa: E704
+    def __iadd__(self, arg): return self._ibop(op.iadd, arg)
+    def __isub__(self, arg): return self._ibop(op.isub, arg)
+    def __imul__(self, arg): return self._ibop(op.imul, arg)
+    def __itruediv__(self, arg): return self._ibop(op.itruediv, arg)
+    def __imod__(self, arg): return self._ibop(op.imod, arg)
 
-    def __iand__(self, arg): return self._ibop(op.iand, arg)            # noqa: E704
-    def __ixor__(self, arg): return self._ibop(op.ixor, arg)            # noqa: E704
-    def __ior__(self, arg): return self._ibop(op.ior, arg)              # noqa: E704
+    def __iand__(self, arg): return self._ibop(op.iand, arg)
+    def __ixor__(self, arg): return self._ibop(op.ixor, arg)
+    def __ior__(self, arg): return self._ibop(op.ior, arg)
 
     # }}}
 
@@ -327,7 +327,8 @@ class DOFArray:
             # For backwards compatibility
             from warnings import warn
             warn("A DOFArray is being unpickled without (tag) metadata. "
-            "Program transformation may fail as a result.")
+                 "Program transformation may fail as a result.",
+                 stacklevel=2)
 
             data = state
             tags = [frozenset() for _ in range(len(data))]
@@ -383,7 +384,7 @@ def _serialize_dof_container(ary: DOFArray):
 
 @deserialize_container.register(DOFArray)
 def _deserialize_dof_container(
-        template: Any, iterable: Iterable[Tuple[Any, Any]]):
+        template: Any, iterable: Iterable[tuple[Any, Any]]):
     if __debug__:
         def _raise_index_inconsistency(i, stream_i):
             raise ValueError(
@@ -586,14 +587,14 @@ def _unflatten_group_sizes(discr, ndofs_per_element_per_group):
             in zip(discr.groups, ndofs_per_element_per_group)]
 
     group_sizes = [nel * ndof for nel, ndof in group_shapes]
-    group_starts = np.cumsum([0] + group_sizes)
+    group_starts = np.cumsum([0, *group_sizes])
 
     return group_shapes, group_starts
 
 
 def unflatten(
         actx: ArrayContext, discr, ary: ArrayOrContainerT,
-        ndofs_per_element_per_group: Optional[Iterable[int]] = None, *,
+        ndofs_per_element_per_group: Iterable[int] | None = None, *,
         strict: bool = True,
         ) -> ArrayOrContainerT:
     r"""Convert all "flat" arrays returned by :func:`flatten` back to
@@ -668,7 +669,7 @@ def unflatten_like(
         if isinstance(_prototype, DOFArray):
             group_shapes = [subary.shape for subary in _prototype]
             group_sizes = [subary.size for subary in _prototype]
-            group_starts = np.cumsum([0] + group_sizes)
+            group_starts = np.cumsum([0, *group_sizes])
 
             return _unflatten_dof_array(
                     actx, _ary, group_shapes, group_starts,
@@ -680,9 +681,11 @@ def unflatten_like(
                     serialize_container(_prototype))
         except NotAnArrayContainerError:
             if strict:
-                raise ValueError("cannot unflatten array "
-                        f"with prototype '{type(_prototype).__name__}'; "
-                        "use 'strict=False' to leave the array unchanged")
+                raise ValueError(
+                        "cannot unflatten array with prototype "
+                        f"'{type(_prototype).__name__}': "
+                        "use 'strict=False' to leave the array unchanged"
+                        ) from None
 
             assert type(_ary) is type(_prototype)
             return _ary
@@ -716,7 +719,7 @@ def flatten_to_numpy(actx: ArrayContext, ary: ArrayOrContainerT, *,
 
 def unflatten_from_numpy(
         actx: ArrayContext, discr, ary: ArrayOrContainerT,
-        ndofs_per_element_per_group: Optional[Iterable[int]] = None, *,
+        ndofs_per_element_per_group: Iterable[int] | None = None, *,
         strict: bool = True,
         ) -> ArrayOrContainerT:
     r"""Takes "flat" arrays returned by :func:`flatten_to_numpy` and
@@ -808,7 +811,8 @@ def flat_norm(ary, ord=None) -> Any:
         try:
             iterable = serialize_container(_ary)
         except NotAnArrayContainerError:
-            raise TypeError(f"unsupported array type: '{type(_ary).__name__}'")
+            raise TypeError(
+                    f"unsupported array type: '{type(_ary).__name__}'") from None
         else:
             arys = [_rec(subary) for _, subary in iterable]
             return _reduce_norm(actx, arys, ord=ord)
