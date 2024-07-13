@@ -267,8 +267,7 @@ def test_remove_unused_vertices():
 
     assert mesh.vertices is not None
 
-    mesh2 = replace(
-        mesh,
+    mesh2 = mesh.copy(
         vertices=np.concatenate([np.zeros((3, 1)), mesh.vertices], axis=1),
         groups=tuple(
             replace(
