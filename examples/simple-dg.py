@@ -439,7 +439,9 @@ def bump(actx, discr, t=0):
             / source_width**2))
 
 
-@with_container_arithmetic(bcast_obj_array=True, rel_comparison=True)
+@with_container_arithmetic(bcast_obj_array=True,
+                           rel_comparison=True,
+                           _cls_has_array_context_attr=True)
 @dataclass_array_container
 @dataclass(frozen=True)
 class WaveState:

@@ -245,7 +245,7 @@ def run(actx, *,
 if __name__ == "__main__":
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue)
+    actx = PyOpenCLArrayContext(queue, force_device_scalars=True)
 
     from pytools import ProcessTimer
     for _ in range(1):
