@@ -126,7 +126,7 @@ def mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
 
     assert grp.is_orthonormal_basis()
     return mp.mass_matrix(
-            grp.basis_obj().functions,
+            grp.basis_obj(),
             grp.unit_nodes)
 
 
@@ -288,11 +288,11 @@ class QuadratureSimplexElementGroup(SimplexElementGroupBase):
 class _MassMatrixQuadratureElementGroup(PolynomialSimplexElementGroupBase):
     @memoize_method
     def quadrature_rule(self):
-        basis_fcts = self.basis_obj().functions
+        basis = self.basis_obj()
         nodes = self._interp_nodes
-        mass_matrix = mp.mass_matrix(basis_fcts, nodes)
+        mass_matrix = mp.mass_matrix(basis, nodes)
         weights = np.dot(mass_matrix,
-                         np.ones(len(basis_fcts)))
+                         np.ones(len(basis.functions)))
         return mp.Quadrature(nodes, weights, exact_to=self.order)
 
     @property
@@ -571,11 +571,11 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
 
     @memoize_method
     def quadrature_rule(self):
-        basis_fcts = self._basis.functions
+        basis = self._basis
         nodes = self._nodes
-        mass_matrix = mp.mass_matrix(basis_fcts, nodes)
+        mass_matrix = mp.mass_matrix(basis, nodes)
         weights = np.dot(mass_matrix,
-                         np.ones(len(basis_fcts)))
+                         np.ones(len(basis.functions)))
         return mp.Quadrature(nodes, weights, exact_to=self.order)
 
     @property

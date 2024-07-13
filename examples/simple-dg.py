@@ -237,9 +237,7 @@ class DGDiscretization:
     @memoize_method
     def get_inverse_mass_matrix(self, grp, dtype):
         import modepy as mp
-        matrix = mp.inverse_mass_matrix(
-                grp.basis_obj().functions,
-                grp.unit_nodes)
+        matrix = mp.inverse_mass_matrix(grp.basis_obj(), grp.unit_nodes)
 
         actx = self._setup_actx
         return actx.freeze(actx.from_numpy(matrix))
