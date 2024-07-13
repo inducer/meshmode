@@ -1646,8 +1646,7 @@ def remove_unused_vertices(mesh: Mesh) -> Mesh:
     new_vertex_indices = np.cumsum(used_flags, dtype=mesh.vertex_id_dtype) - 1
     new_vertex_indices[~used_flags] = -1
 
-    return replace(
-        mesh,
+    return mesh.copy(
         vertices=mesh.vertices[:, used_flags],
         groups=tuple(
             replace(grp, vertex_indices=new_vertex_indices[grp.vertex_indices])

@@ -889,7 +889,7 @@ def test_mesh_without_vertices(actx_factory):
     groups = [
         replace(grp, nodes=grp.nodes, vertex_indices=None)
         for grp in mesh.groups]
-    mesh = make_mesh(None, groups, is_conforming=False)
+    mesh = make_mesh(None, groups, is_conforming=None)
 
     # try refining it
     from meshmode.mesh.refinement import refine_uniformly
