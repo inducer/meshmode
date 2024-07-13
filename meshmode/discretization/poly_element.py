@@ -296,6 +296,11 @@ class _MassMatrixQuadratureElementGroup(PolynomialSimplexElementGroupBase):
         return mp.Quadrature(nodes, weights, exact_to=self.order)
 
     @property
+    @memoize_method
+    def unit_nodes(self):
+        return self._interp_nodes
+
+    @property
     @abstractmethod
     def _interp_nodes(self):
         """Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
