@@ -1617,7 +1617,7 @@ def make_mesh_grid(
     meshes = []
 
     for index in product(*(range(n) for n in shape)):
-        b = sum([i * o for i, o in zip(index, offset)], offset[0])
+        b = sum((i * o for i, o in zip(index, offset)), offset[0])
         meshes.append(affine_map(mesh, b=b))
 
     return merge_disjoint_meshes(meshes, skip_tests=skip_tests)
