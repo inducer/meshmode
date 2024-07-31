@@ -63,6 +63,8 @@ class MyContainer:
     momentum: np.ndarray
     enthalpy: DOFArray
 
+    __array_ufunc__ = None
+
     @property
     def array_context(self):
         return self.mass.array_context
