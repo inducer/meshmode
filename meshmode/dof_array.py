@@ -149,8 +149,7 @@ class DOFArray:
         self._data = data
 
     # Tell numpy that we would like to do our own array math, thank you very much.
-    # (numpy arrays have priority 0.)
-    __array_priority__ = 10
+    __array_ufunc__ = None
 
     @property
     def array_context(self) -> ArrayContext:
