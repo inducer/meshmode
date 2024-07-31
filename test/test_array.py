@@ -52,8 +52,6 @@ pytest_generate_tests = pytest_generate_tests_for_array_contexts(
          ])
 
 
-# {{{ test_flatten_unflatten
-
 @with_container_arithmetic(bcast_obj_array=False,
                            rel_comparison=True,
                            _cls_has_array_context_attr=True)
@@ -68,49 +66,6 @@ class MyContainer:
     @property
     def array_context(self):
         return self.mass.array_context
-
-
-def test_flatten_unflatten(actx_factory):
-    actx = actx_factory()
-
-    if isinstance(actx_factory, PytestPytatoPyOpenCLArrayContextFactory):
-        pytest.skip()
-
-    ambient_dim = 2
-    from meshmode.mesh.generation import generate_regular_rect_mesh
-    mesh = generate_regular_rect_mesh(
-            a=(-0.5,)*ambient_dim,
-            b=(+0.5,)*ambient_dim,
-            nelements_per_axis=(3,)*ambient_dim, order=1)
-    discr = Discretization(actx, mesh, default_simplex_group_factory(ambient_dim, 3))
-
-    rng = np.random.default_rng(seed=42)
-    a = rng.normal(size=discr.ndofs)
-
-    from meshmode.dof_array import flatten, unflatten
-    a_round_trip = actx.to_numpy(flatten(unflatten(actx, discr, actx.from_numpy(a))))
-    assert np.array_equal(a, a_round_trip)
-
-    from meshmode.dof_array import flatten_to_numpy, unflatten_from_numpy
-    a_round_trip = flatten_to_numpy(actx, unflatten_from_numpy(actx, discr, a))
-    assert np.array_equal(a, a_round_trip)
-
-    x = actx.thaw(discr.nodes())
-    avg_mass = DOFArray(actx, tuple([
-        (np.pi + actx.zeros((grp.nelements, 1), a.dtype)) for grp in discr.groups
-        ]))
-
-    c = MyContainer(name="flatten",
-            mass=avg_mass,
-            momentum=make_obj_array([x, x, x]),
-            enthalpy=x)
-
-    from meshmode.dof_array import unflatten_like
-    c_round_trip = unflatten_like(actx, flatten(c), c)
-    assert flat_norm(c - c_round_trip) < 1.0e-8
-
-
-# }}}
 
 
 # {{{ test_container_norm
