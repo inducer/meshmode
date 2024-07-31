@@ -1,3 +1,3 @@
 #! /bin/sh
 
-rsync --verbose --archive --delete _build/html/* doc-upload:doc/meshmode
+rsync --verbose --archive --delete _build/html/ doc-upload:doc/meshmode
