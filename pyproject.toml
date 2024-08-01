@@ -39,6 +39,9 @@ dependencies = [
     "pymbolic>=2022.2",
     "pytools>=2022.1",
     "recursivenodes",
+
+    # for TypeAlias
+    "typing-extensions>=4; python_version<'3.10'",
 ]
 
 [project.optional-dependencies]
@@ -140,7 +143,10 @@ module = [
     "meshmode.discretization.*",
     "meshmode.dof_array.*",
     "meshmode.interop.*",
-    "meshmode.mesh.*",
+    "meshmode.mesh.visualization",
+    "meshmode.mesh.generation",
+    "meshmode.mesh.refinement.utils",
+    "meshmode.mesh.refinement.tessellate",
 ]
 ignore_errors = true
 

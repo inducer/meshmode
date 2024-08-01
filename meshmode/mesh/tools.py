@@ -68,6 +68,17 @@ nd_quad_submesh = MovedFunctionDeprecationWrapper(hypercube_submesh)
 # }}}
 
 
+def optional_array_equal(a: Optional[np.ndarray], b: Optional[np.ndarray]) -> bool:
+    if a is None:
+        return b is None
+    else:
+        if b is None:
+            assert a is not None
+            return False
+
+        return np.array_equal(a, b)
+
+
 # {{{ random rotation matrix
 
 def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None, rng=None):
