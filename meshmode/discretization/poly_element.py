@@ -178,21 +178,8 @@ def to_mesh_interp_matrix(grp: NodalElementGroupBase) -> np.ndarray:
 # {{{ base class for interpolatory polynomial elements
 
 class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
-    def mass_matrix(self):
-        warn(
-                "This method is deprecated and will go away in 2022.x. "
-                "Use 'meshmode.discretization.poly_element.mass_matrix' instead.",
-                DeprecationWarning, stacklevel=2)
+    pass
 
-        return mass_matrix(self)
-
-    def diff_matrices(self):
-        warn(
-                "This method is deprecated and will go away in 2022.x. "
-                "Use 'meshmode.discretization.poly_element.diff_matrices' instead.",
-                DeprecationWarning, stacklevel=2)
-
-        return diff_matrices(self)
 # }}}
 
 

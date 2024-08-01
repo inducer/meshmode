@@ -246,18 +246,6 @@ class NodalElementGroupBase(ElementGroupBase):
         element group.
         """
 
-    @property
-    def weights(self):
-        """Returns a :class:`numpy.ndarray` of shape ``(nunit_dofs,)``
-        containing quadrature weights applicable on the reference
-        element.
-        """
-        warn("`grp.weights` is deprecated and will be dropped "
-             "in version 2022.x. To access the quadrature weights, use "
-             "`grp.quadrature_rule().weights` instead.",
-             DeprecationWarning, stacklevel=2)
-        return self.quadrature_rule().weights
-
 # }}}
 
 
@@ -281,30 +269,6 @@ class ElementGroupWithBasis(ElementGroupBase):
         """
 
     @memoize_method
-    def mode_ids(self):
-        warn("`grp.mode_ids()` is deprecated and will be dropped "
-             "in version 2022.x. To access the basis function mode ids, use "
-             "`grp.basis_obj().mode_ids` instead.",
-             DeprecationWarning, stacklevel=2)
-        return self.basis_obj().mode_ids
-
-    @memoize_method
-    def basis(self):
-        warn("`grp.basis()` is deprecated and will be dropped "
-             "in version 2022.x. To access the basis functions, use "
-             "`grp.basis_obj().functions` instead.",
-             DeprecationWarning, stacklevel=2)
-        return self.basis_obj().functions
-
-    @memoize_method
-    def grad_basis(self):
-        warn("`grp.grad_basis()` is deprecated and will be dropped "
-             "in version 2022.x. To access the basis function gradients, use "
-             "`grp.basis_obj().gradients` instead.",
-             DeprecationWarning, stacklevel=2)
-        return self.basis_obj().gradients
-
-    @memoize_method
     def is_orthonormal_basis(self):
         """Returns a :class:`bool` flag that is *True* if the
         basis corresponding to the element group is orthonormal
@@ -316,14 +280,6 @@ class ElementGroupWithBasis(ElementGroupBase):
             return self.basis_obj().orthonormality_weight() == 1
         except mp.BasisNotOrthonormal:
             return False
-
-    def is_orthogonal_basis(self):
-        warn("`is_orthogonal_basis` is deprecated and will be dropped "
-             "in version 2022.x since orthonormality is the more "
-             "operationally important case. "
-             "Use `is_orthonormal_basis` instead.",
-             DeprecationWarning, stacklevel=2)
-        return self.is_orthonormal_basis()
 
 # }}}
 
@@ -342,32 +298,7 @@ class InterpolatoryElementGroupBase(NodalElementGroupBase,
 
     Inherits from :class:`NodalElementGroupBase` and
     :class:`ElementGroupWithBasis`.
-
-    .. automethod:: mass_matrix
-    .. automethod:: diff_matrices
     """
-
-    @abstractmethod
-    def mass_matrix(self):
-        r"""Return a :class:`numpy.ndarray` of shape
-        ``(nunit_nodes, nunit_nodes)``, which is defined as the
-        operator :math:`M`, with
-
-        .. math::
-
-            M_{ij} = \int_{K} \phi_i \cdot \phi_j \mathrm{d}x,
-
-        where :math:`K` denotes a cell and :math:`\phi_i` is the
-        basis spanning the underlying :attr:`~ElementGroupBase.space`.
-        """
-
-    @abstractmethod
-    def diff_matrices(self):
-        """Return a :attr:`~ElementGroupBase.dim`-long :class:`tuple` of
-        :class:`numpy.ndarray` of shape ``(nunit_nodes, nunit_nodes)``,
-        each of which, when applied to an array of nodal values, take
-        derivatives in the reference :math:`(r, s, t)` directions.
-        """
 
 # }}}
 
