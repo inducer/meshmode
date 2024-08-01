@@ -30,6 +30,7 @@ from warnings import warn
 import numpy as np
 
 import loopy as lp
+import modepy as mp
 from arraycontext import ArrayContext, make_loopy_program, tag_axes
 from pytools import keyed_memoize_in, memoize_in, memoize_method
 from pytools.obj_array import make_obj_array
@@ -241,9 +242,10 @@ class NodalElementGroupBase(ElementGroupBase):
         return result
 
     @abstractmethod
-    def quadrature_rule(self):
+    def quadrature_rule(self) -> mp.Quadrature:
         """Returns a :class:`modepy.Quadrature` object for the
-        element group.
+        element group. This quadrature rule shares the nodes
+        returned by :meth:`unit_nodes`.
         """
 
 # }}}
