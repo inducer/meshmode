@@ -316,7 +316,7 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
 
     Uses :func:`modepy.warp_and_blend_nodes`.
     """
-    def __init__(self, mesh_el_group, order, index=None):
+    def __init__(self, mesh_el_group, order):
         from warnings import warn
         warn("PolynomialWarpAndBlendElementGroup is deprecated, since "
                 "the facial restrictions of the 3D nodes are not the 2D nodes. "
@@ -324,7 +324,7 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
                 "Use PolynomialWarpAndBlend2DRestrictingElementGroup or "
                 "PolynomialWarpAndBlend3DRestrictingElementGroup instead.",
                 DeprecationWarning, stacklevel=2)
-        super().__init__(mesh_el_group, order, index=index)
+        super().__init__(mesh_el_group, order)
 
     @property
     @memoize_method
@@ -419,8 +419,8 @@ class PolynomialRecursiveNodesElementGroup(_MassMatrixQuadratureElementGroup):
 
     .. versionadded:: 2020.2
     """
-    def __init__(self, mesh_el_group, order, family, index=None):
-        super().__init__(mesh_el_group, order, index=index)
+    def __init__(self, mesh_el_group, order, family):
+        super().__init__(mesh_el_group, order)
         self.family = family
 
     @property
@@ -464,8 +464,8 @@ class PolynomialGivenNodesElementGroup(_MassMatrixQuadratureElementGroup):
     polynomials in :math:`P^k`, hence usable for differentiation and
     interpolation. Uses nodes given by the user.
     """
-    def __init__(self, mesh_el_group, order, unit_nodes, index=None):
-        super().__init__(mesh_el_group, order, index=index)
+    def __init__(self, mesh_el_group, order, unit_nodes):
+        super().__init__(mesh_el_group, order)
         self._unit_nodes = unit_nodes
 
     @property
@@ -530,14 +530,14 @@ class HypercubeElementGroupBase(NodalElementGroupBase):
 class TensorProductElementGroupBase(PolynomialElementGroupBase,
         HypercubeElementGroupBase):
     def __init__(self, mesh_el_group: _MeshTensorProductElementGroup,
-                 order: int, index=None, *, basis: Basis,
+                 order: int, *, basis: Basis,
                  unit_nodes: np.ndarray) -> None:
         """
         :arg basis: a :class:`modepy.TensorProductBasis`.
         :arg unit_nodes: unit nodes for the tensor product, obtained by
             using :func:`modepy.tensor_product_nodes`, for example.
         """
-        super().__init__(mesh_el_group, order, index=index)
+        super().__init__(mesh_el_group, order)
 
         if basis._dim != mesh_el_group.dim:
             raise ValueError("basis dimension does not match element group: "
@@ -597,14 +597,12 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
 
 
 class LegendreTensorProductElementGroup(TensorProductElementGroupBase):
-    def __init__(self, mesh_el_group, order, index=None, *, unit_nodes):
+    def __init__(self, mesh_el_group, order, *, unit_nodes):
         basis = mp.orthonormal_basis_for_space(
                 mp.QN(mesh_el_group.dim, order),
                 mp.Hypercube(mesh_el_group.dim))
 
-        super().__init__(mesh_el_group, order, index=index,
-                basis=basis,
-                unit_nodes=unit_nodes)
+        super().__init__(mesh_el_group, order, basis=basis, unit_nodes=unit_nodes)
 
 
 class GaussLegendreTensorProductElementGroup(LegendreTensorProductElementGroup):
@@ -615,11 +613,11 @@ class GaussLegendreTensorProductElementGroup(LegendreTensorProductElementGroup):
     No interpolation nodes are present on the boundary of the hypercube.
     """
 
-    def __init__(self, mesh_el_group, order, index=None):
+    def __init__(self, mesh_el_group, order):
         self._quadrature_rule = mp.LegendreGaussTensorProductQuadrature(
                 order, mesh_el_group.dim)
 
-        super().__init__(mesh_el_group, order, index=index,
+        super().__init__(mesh_el_group, order,
                 unit_nodes=self._quadrature_rule.nodes)
 
     @memoize_method
@@ -640,13 +638,12 @@ class LegendreGaussLobattoTensorProductElementGroup(
     Uses :func:`~modepy.quadrature.jacobi_gauss.legendre_gauss_lobatto_nodes`.
     """
 
-    def __init__(self, mesh_el_group, order, index=None):
+    def __init__(self, mesh_el_group, order):
         from modepy.quadrature.jacobi_gauss import legendre_gauss_lobatto_nodes
         unit_nodes_1d = legendre_gauss_lobatto_nodes(order)
         unit_nodes = mp.tensor_product_nodes([unit_nodes_1d]*mesh_el_group.dim)
 
-        super().__init__(mesh_el_group, order, index=index,
-                         unit_nodes=unit_nodes)
+        super().__init__(mesh_el_group, order, unit_nodes=unit_nodes)
 
     def discretization_key(self):
         return (type(self), self.dim, self.order)
@@ -661,13 +658,12 @@ class EquidistantTensorProductElementGroup(LegendreTensorProductElementGroup):
     Uses :func:`~modepy.equidistant_nodes`.
     """
 
-    def __init__(self, mesh_el_group, order, index=None):
+    def __init__(self, mesh_el_group, order):
         from modepy.nodes import equidistant_nodes
         unit_nodes_1d = equidistant_nodes(1, order)[0]
         unit_nodes = mp.tensor_product_nodes([unit_nodes_1d]*mesh_el_group.dim)
 
-        super().__init__(mesh_el_group, order, index=index,
-                         unit_nodes=unit_nodes)
+        super().__init__(mesh_el_group, order, unit_nodes=unit_nodes)
 
     def discretization_key(self):
         return (type(self), self.dim, self.order)
@@ -702,7 +698,7 @@ class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
 
         self.order = order
 
-    def __call__(self, mesh_el_group, index=None):
+    def __call__(self, mesh_el_group):
         """
         :returns: an element group of type :attr:`group_class` and order
             :attr:`order`.
@@ -711,7 +707,7 @@ class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
             raise TypeError("only mesh element groups of type '%s' "
                     "are supported" % self.mesh_group_class.__name__)
 
-        return self.group_class(mesh_el_group, self.order, index=index)
+        return self.group_class(mesh_el_group, self.order)
 
 
 class TypeMappingGroupFactory(ElementGroupFactory):
@@ -744,7 +740,7 @@ class TypeMappingGroupFactory(ElementGroupFactory):
         self.order = order
         self.mesh_group_class_to_factory = mesh_group_class_to_factory
 
-    def __call__(self, mesh_el_group, index=None):
+    def __call__(self, mesh_el_group):
         cls = self.mesh_group_class_to_factory.get(type(mesh_el_group), None)
 
         if cls is None:
@@ -755,9 +751,9 @@ class TypeMappingGroupFactory(ElementGroupFactory):
                         ))
 
         if isinstance(cls, type) and issubclass(cls, ElementGroupBase):
-            return cls(mesh_el_group, self.order, index=index)
+            return cls(mesh_el_group, self.order)
         elif isinstance(cls, ElementGroupFactory):
-            return cls(mesh_el_group, index=index)
+            return cls(mesh_el_group)
         else:
             raise TypeError(f"unknown class: '{cls.__name__}'")
 
@@ -825,13 +821,13 @@ class PolynomialRecursiveNodesGroupFactory(HomogeneousOrderBasedGroupFactory):
         super().__init__(order)
         self.family = family
 
-    def __call__(self, mesh_el_group, index=None):
+    def __call__(self, mesh_el_group):
         if not isinstance(mesh_el_group, _MeshSimplexElementGroup):
             raise TypeError("only mesh element groups of type '%s' "
                     "are supported" % _MeshSimplexElementGroup.__name__)
 
         return PolynomialRecursiveNodesElementGroup(
-                mesh_el_group, self.order, self.family, index=index)
+                mesh_el_group, self.order, self.family)
 
     mesh_group_class = _MeshSimplexElementGroup
     group_class = PolynomialRecursiveNodesElementGroup
@@ -851,13 +847,13 @@ class PolynomialGivenNodesGroupFactory(HomogeneousOrderBasedGroupFactory):
         super().__init__(order)
         self.unit_nodes = unit_nodes
 
-    def __call__(self, mesh_el_group, index=None):
+    def __call__(self, mesh_el_group):
         if not isinstance(mesh_el_group, _MeshSimplexElementGroup):
             raise TypeError("only mesh element groups of type '%s' "
                     "are supported" % _MeshSimplexElementGroup.__name__)
 
         return PolynomialGivenNodesElementGroup(
-                mesh_el_group, self.order, self.unit_nodes, index=index)
+                mesh_el_group, self.order, self.unit_nodes)
 
 # }}}
 
@@ -893,9 +889,9 @@ class _DefaultPolynomialSimplexGroupFactory(ElementGroupFactory):
     def __init__(self, order):
         self.order = order
 
-    def __call__(self, mesh_el_group, index=None):
+    def __call__(self, mesh_el_group):
         factory = default_simplex_group_factory(mesh_el_group.dim, self.order)
-        return factory(mesh_el_group, index=index)
+        return factory(mesh_el_group)
 
 
 class InterpolatoryEdgeClusteredGroupFactory(TypeMappingGroupFactory):

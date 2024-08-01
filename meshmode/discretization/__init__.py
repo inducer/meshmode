@@ -113,18 +113,9 @@ class ElementGroupBase(ABC):
     def __init__(self,
                  mesh_el_group: _MeshElementGroup,
                  order: int,
-                 index: Optional[int] = None) -> None:
+                 ) -> None:
         self.mesh_el_group = mesh_el_group
         self.order = order
-        self._index = index
-
-    @property
-    def index(self):
-        warn("Accessing 'index' is deprecated and will be removed in July 2022. "
-             "The index always matches the index in 'Discretization.groups'.",
-             DeprecationWarning, stacklevel=2)
-
-        return self._index
 
     @property
     def is_affine(self):
@@ -199,9 +190,7 @@ class ElementGroupFactory(Protocol):
     .. automethod:: __call__
     """
 
-    def __call__(self,
-            mesh_el_group: _MeshElementGroup,
-            index: Optional[int] = None) -> ElementGroupBase:
+    def __call__(self, mesh_el_group: _MeshElementGroup) -> ElementGroupBase:
         """Create a new :class:`~meshmode.discretization.ElementGroupBase`
         for the given *mesh_el_group*.
         """
