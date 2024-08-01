@@ -267,7 +267,6 @@ class PolynomialWarpAndBlendElementGroup(_MassMatrixQuadratureElementGroup):
     Uses :func:`modepy.warp_and_blend_nodes`.
     """
     def __init__(self, mesh_el_group, order):
-        from warnings import warn
         warn("PolynomialWarpAndBlendElementGroup is deprecated, since "
                 "the facial restrictions of the 3D nodes are not the 2D nodes. "
                 "It will go away in 2022. "
@@ -710,7 +709,6 @@ class TypeMappingGroupFactory(ElementGroupFactory):
 
 class OrderAndTypeBasedGroupFactory(TypeMappingGroupFactory):
     def __init__(self, order, simplex_group_class, tensor_product_group_class):
-        from warnings import warn
         warn("OrderAndTypeBasedGroupFactory is deprecated and will go away in 2023. "
                 "Use TypeMappingGroupFactory instead.",
                 DeprecationWarning, stacklevel=2)
@@ -740,7 +738,6 @@ class QuadratureSimplexGroupFactory(HomogeneousOrderBasedGroupFactory):
 
 class PolynomialWarpAndBlendGroupFactory(HomogeneousOrderBasedGroupFactory):
     def __init__(self, order):
-        from warnings import warn
         warn("PolynomialWarpAndBlendGroupFactory is deprecated, since "
                 "the facial restrictions of the 3D nodes are not the 2D nodes. "
                 "It will go away in 2022. "

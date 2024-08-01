@@ -33,14 +33,11 @@ from warnings import warn
 
 import numpy as np
 
-import loopy as lp
 from arraycontext import (
     Array,
     ArrayContext,
-    ArrayOrContainerT,
     NotAnArrayContainerError,
     deserialize_container,
-    make_loopy_program,
     mapped_over_array_containers,
     multimapped_over_array_containers,
     rec_map_array_container,
@@ -49,9 +46,7 @@ from arraycontext import (
     with_array_context,
     with_container_arithmetic,
 )
-from pytools import MovedFunctionDeprecationWrapper, memoize_in, single_valued
-
-from meshmode.transform_metadata import ConcurrentDOFInameTag, ConcurrentElementInameTag
+from pytools import MovedFunctionDeprecationWrapper, single_valued
 
 
 __doc__ = """
