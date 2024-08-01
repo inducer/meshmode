@@ -23,6 +23,7 @@ THE SOFTWARE.
 import numpy as np
 
 import loopy as lp
+import modepy as mp
 from arraycontext import (
     NotAnArrayContainerError,
     deserialize_container,
@@ -31,6 +32,7 @@ from arraycontext import (
 )
 from pytools import keyed_memoize_in, keyed_memoize_method, memoize_in
 
+from meshmode.discretization import InterpolatoryElementGroupBase
 from meshmode.discretization.connection.chained import ChainedDiscretizationConnection
 from meshmode.discretization.connection.direct import (
     DirectDiscretizationConnection,
@@ -109,9 +111,11 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
         weights = {}
         jac = np.empty(self.to_discr.dim, dtype=object)
 
-        from meshmode.discretization.poly_element import diff_matrices
         for igrp, grp in enumerate(self.to_discr.groups):
-            matrices = diff_matrices(grp)
+            if not isinstance(grp, InterpolatoryElementGroupBase):
+                raise ValueError("element group must be interpolatory")
+
+            matrices = mp.diff_matrices(grp.basis_obj(), grp.unit_nodes)
 
             for ibatch, batch in enumerate(self.conn.groups[igrp].batches):
                 for iaxis in range(grp.dim):
