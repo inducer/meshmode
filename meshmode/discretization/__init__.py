@@ -624,9 +624,12 @@ def num_reference_derivative(
     @keyed_memoize_in(actx,
             (num_reference_derivative, "num_reference_derivative_matrix"),
             lambda grp, gref_axes: grp.discretization_key() + gref_axes)
-    def get_mat(grp, gref_axes):
-        from meshmode.discretization.poly_element import diff_matrices
-        matrices = diff_matrices(grp)
+    def get_mat(grp: ElementGroupBase, gref_axes):
+        if not isinstance(grp, InterpolatoryElementGroupBase):
+            raise ValueError("element groups must be interpolatory "
+                             "to allow taking derivatives")
+
+        matrices = mp.diff_matrices(grp.basis_obj(), grp.unit_nodes)
 
         mat = None
         for ref_axis in gref_axes:

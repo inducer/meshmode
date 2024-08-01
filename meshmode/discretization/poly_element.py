@@ -24,7 +24,7 @@ THE SOFTWARE.
 """
 
 from abc import abstractmethod
-from typing import ClassVar, Tuple
+from typing import ClassVar
 from warnings import warn
 
 import numpy as np
@@ -39,7 +39,6 @@ from meshmode.discretization import (
     InterpolatoryElementGroupBase,
     ModalElementGroupBase,
     NodalElementGroupBase,
-    NoninterpolatoryElementGroupError,
 )
 from meshmode.mesh import (
     MeshElementGroup as _MeshElementGroup,
@@ -51,9 +50,6 @@ from meshmode.mesh import (
 __doc__ = """
 Group types
 ^^^^^^^^^^^
-
-.. autofunction:: mass_matrix
-.. autofunction:: diff_matrices
 
 Simplicial group types
 ----------------------
@@ -119,54 +115,21 @@ Type-based group factories
 # {{{ matrices
 
 @memoize_on_first_arg
-def mass_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
-    if not isinstance(grp, InterpolatoryElementGroupBase):
-        raise NoninterpolatoryElementGroupError(
-                f"cannot construct mass matrix on '{type(grp).__name__}'")
-
-    assert grp.is_orthonormal_basis()
-    return mp.mass_matrix(
-            grp.basis_obj(),
-            grp.unit_nodes)
-
-
-@memoize_on_first_arg
-def diff_matrices(grp: InterpolatoryElementGroupBase) -> Tuple[np.ndarray]:
-    if not isinstance(grp, InterpolatoryElementGroupBase):
-        raise NoninterpolatoryElementGroupError(
-                f"cannot construct diff matrices on '{type(grp).__name__}'")
-
-    basis_fcts = grp.basis_obj().functions
-    grad_basis_fcts = grp.basis_obj().gradients
-
-    if len(basis_fcts) != grp.unit_nodes.shape[1]:
-        raise NoninterpolatoryElementGroupError(
-                f"{type(grp).__name__} does not support interpolation because "
-                "it is not unisolvent (its unit node count does not match its "
-                "number of basis functions). Differentiation requires "
-                "the ability to interpolate.")
-
-    result = mp.differentiation_matrices(
-            basis_fcts,
-            grad_basis_fcts,
-            grp.unit_nodes)
-
-    return result if isinstance(result, tuple) else (result,)
-
-
-@memoize_on_first_arg
-def from_mesh_interp_matrix(grp: NodalElementGroupBase) -> np.ndarray:
+def from_mesh_interp_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
     meg = grp.mesh_el_group
-    meg_space = type(grp.space)(meg.dim, meg.order)
 
+    from meshmode.mesh import _ModepyElementGroup
+    assert isinstance(meg, _ModepyElementGroup)
+
+    meg_basis = mp.basis_for_space(meg._modepy_space, meg._modepy_shape)
     return mp.resampling_matrix(
-            mp.basis_for_space(meg_space, grp.shape).functions,
+            meg_basis.functions,
             grp.unit_nodes,
             meg.unit_nodes)
 
 
 @memoize_on_first_arg
-def to_mesh_interp_matrix(grp: NodalElementGroupBase) -> np.ndarray:
+def to_mesh_interp_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
     return mp.resampling_matrix(
             grp.basis_obj().functions,
             grp.mesh_el_group.unit_nodes,
