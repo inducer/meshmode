@@ -204,6 +204,8 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
 
     logger.info("building face restriction: start")
 
+    assert discr.mesh.vertices is not None
+
     # {{{ gather boundary vertices
 
     bdry_vertex_vol_nrs = _get_face_vertices(discr.mesh, boundary_tag)
@@ -368,8 +370,12 @@ def make_face_restriction(actx, discr, group_factory, boundary_tag,
 
 # {{{ face -> all_faces connection
 
-def make_face_to_all_faces_embedding(actx, faces_connection, all_faces_discr,
-        from_discr=None):
+def make_face_to_all_faces_embedding(
+            actx: ArrayContext,
+            faces_connection: DirectDiscretizationConnection,
+            all_faces_discr: Discretization,
+            from_discr: Optional[Discretization] = None
+        ) -> DirectDiscretizationConnection:
     """Return a
     :class:`meshmode.discretization.connection.DiscretizationConnection`
     connecting a discretization containing some faces of a discretization

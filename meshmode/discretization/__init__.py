@@ -118,7 +118,7 @@ class ElementGroupBase(ABC):
         self.order = order
 
     @property
-    def is_affine(self):
+    def is_affine(self) -> bool:
         """A :class:`bool` flag that is *True* if the local-to-global
         parametrization of all the elements in the group is affine. Based on
         :attr:`meshmode.mesh.MeshElementGroup.is_affine`.
@@ -126,7 +126,7 @@ class ElementGroupBase(ABC):
         return self.mesh_el_group.is_affine
 
     @property
-    def nelements(self):
+    def nelements(self) -> int:
         """The total number of polygonal elements in the
         :class:`meshmode.mesh.MeshElementGroup`.
         """
@@ -134,20 +134,20 @@ class ElementGroupBase(ABC):
 
     @property
     @abstractmethod
-    def nunit_dofs(self):
+    def nunit_dofs(self) -> int:
         """The number of degrees of freedom ("DOFs")
         associated with a single element.
         """
 
     @property
-    def ndofs(self):
+    def ndofs(self) -> int:
         """The total number of degrees of freedom ("DOFs")
         associated with the entire element group.
         """
         return self.nunit_dofs * self.nelements
 
     @property
-    def dim(self):
+    def dim(self) -> int:
         """The number of spatial dimensions in which the functions
         in :attr:`~space` operate.
         """
@@ -155,14 +155,14 @@ class ElementGroupBase(ABC):
 
     @property
     @abstractmethod
-    def shape(self):
+    def shape(self) -> mp.Shape:
         """Returns a subclass of :class:`modepy.Shape` representing
         the reference element defining the element group.
         """
 
     @property
     @abstractmethod
-    def space(self):
+    def space(self) -> mp.FunctionSpace:
         """Returns a :class:`modepy.FunctionSpace` representing
         the underlying polynomial space defined on the element
         group's reference element.
@@ -216,7 +216,7 @@ class NodalElementGroupBase(ElementGroupBase):
     """
 
     @property
-    def nunit_dofs(self):
+    def nunit_dofs(self) -> int:
         """The number of (nodal) degrees of freedom ("DOFs")
         associated with a single element.
         """
@@ -224,7 +224,7 @@ class NodalElementGroupBase(ElementGroupBase):
 
     @property
     @memoize_method
-    def unit_nodes(self):
+    def unit_nodes(self) -> np.ndarray:
         """Returns a :class:`numpy.ndarray` of shape ``(dim, nunit_dofs)``
         of reference coordinates of interpolation nodes.
 
@@ -275,7 +275,7 @@ class ElementGroupWithBasis(ElementGroupBase):
     """
 
     @abstractmethod
-    def basis_obj(self):
+    def basis_obj(self) -> mp.Basis:
         """Returns the `modepy.Basis` which spans the underlying
         :attr:`~ElementGroupBase.space`.
         """
@@ -383,7 +383,7 @@ class ModalElementGroupBase(ElementGroupWithBasis):
     """
 
     @property
-    def nunit_dofs(self):
+    def nunit_dofs(self) -> int:
         """The number of (modal) degrees of freedom ("DOFs")
         associated with a single element.
         """
