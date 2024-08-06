@@ -346,7 +346,6 @@ class Discretization:
     .. automethod:: zeros
     .. automethod:: zeros_like
     .. automethod:: nodes
-    .. automethod:: num_reference_derivative
     .. automethod:: quad_weights
     """
 
@@ -503,16 +502,6 @@ class Discretization:
 
     def zeros_like(self, array: _DOFArray) -> _DOFArray:
         return self.zeros(array.array_context, dtype=array.entry_dtype)
-
-    def num_reference_derivative(self,
-                                 ref_axes: Iterable[int],
-                                 vec: _DOFArray) -> _DOFArray:
-        warn(
-                "This method is deprecated and will go away in 2022.x. "
-                "Use 'meshmode.discretization.num_reference_derivative' instead.",
-                DeprecationWarning, stacklevel=2)
-
-        return num_reference_derivative(self, ref_axes, vec)
 
     @memoize_method
     def quad_weights(self) -> _DOFArray:
