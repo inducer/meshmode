@@ -71,6 +71,13 @@ __doc__ = """
 @with_container_arithmetic(
         bcast_obj_array=True,
         rel_comparison=True,
+
+        # Required for compatibility with mirgecom, for now.
+        # Example usage site:
+        # https://github.com/illinois-ceesd/mirgecom/blob/f5d0d97c41e8c8a05546b1d1a6a2979ec8ea3554/mirgecom/inviscid.py#L95
+        # Will complain via warnings in arraycontext. Remove in 2025.
+        bcast_numpy_array=True,
+
         bitwise=True,
         _cls_has_array_context_attr=True)
 class DOFArray:
