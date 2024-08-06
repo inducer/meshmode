@@ -844,7 +844,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             else:
                 # If no batched data at all, return zeros for this
                 # particular group array
-                group_array = actx.zeros(
+                group_array = actx.np.zeros(
                         shape=(self.to_discr.groups[i_tgrp].nelements,
                                self.to_discr.groups[i_tgrp].nunit_dofs),
                         dtype=ary.entry_dtype)

@@ -343,9 +343,7 @@ class Discretization:
 
     .. automethod:: __init__
     .. automethod:: copy
-    .. automethod:: empty
     .. automethod:: zeros
-    .. automethod:: empty_like
     .. automethod:: zeros_like
     .. automethod:: nodes
     .. automethod:: num_reference_derivative
@@ -472,10 +470,14 @@ class Discretization:
             *None* (the default), a real vector will be returned.
         """
         if not isinstance(actx, ArrayContext):
-            raise TypeError("'actx' must be an ArrayContext, not '%s'"
-                    % type(actx).__name__)
+            raise TypeError(
+                f"'actx' must be an ArrayContext, not '{type(actx).__name__}'")
 
-        return self._new_array(actx, actx.empty, dtype=dtype)
+        warn(f"'{type(self).__name__}.empty' is deprecated and will be removed "
+             f"in 2025. Use '{type(self).__name__}.zeros' instead.",
+             DeprecationWarning, stacklevel=2)
+
+        return self._new_array(actx, actx.np.zeros, dtype=dtype)
 
     def zeros(self, actx: ArrayContext,
               dtype: Optional[np.dtype] = None) -> _DOFArray:
@@ -486,13 +488,18 @@ class Discretization:
             *None* (the default), a real vector will be returned.
         """
         if not isinstance(actx, ArrayContext):
-            raise TypeError("'actx' must be an ArrayContext, not '%s'"
-                    % type(actx).__name__)
+            raise TypeError(
+                f"'actx' must be an ArrayContext, not '{type(actx).__name__}'")
 
-        return self._new_array(actx, actx.zeros, dtype=dtype)
+        return self._new_array(actx, actx.np.zeros, dtype=dtype)
 
     def empty_like(self, array: _DOFArray) -> _DOFArray:
-        return self.empty(array.array_context, dtype=array.entry_dtype)
+        warn(f"'{type(self).__name__}.empty_like' is deprecated and will be removed "
+             f"in 2025. Use '{type(self).__name__}.zeros_like' instead.",
+             DeprecationWarning, stacklevel=2)
+
+        actx = array.array_context
+        return self._new_array(actx, actx.np.zeros, dtype=array.entry_dtype)
 
     def zeros_like(self, array: _DOFArray) -> _DOFArray:
         return self.zeros(array.array_context, dtype=array.entry_dtype)

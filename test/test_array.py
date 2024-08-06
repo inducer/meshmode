@@ -165,8 +165,10 @@ def test_dof_array_pickling_tags(actx_factory):
 
     from pickle import dumps, loads
 
-    state = DOFArray(actx, (actx.zeros((10, 10), "float64"),
-                     actx.zeros((10, 10), "float64"),))
+    state = DOFArray(actx, (
+        actx.np.zeros((10, 10), dtype=np.float64),
+        actx.np.zeros((10, 10), dtype=np.float64),
+        ))
 
     state = actx.thaw(actx.freeze(actx.tag(FooTag(), state)))
     state = actx.thaw(actx.freeze(actx.tag_axis(0, FooAxisTag(), state)))
