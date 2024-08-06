@@ -315,7 +315,7 @@ class MeshElementGroup(ABC):
 
     @classmethod
     @abstractmethod
-    def make_group(cls, **kwargs: Any) -> MeshElementGroup:
+    def make_group(cls, *args: Any, **kwargs: Any) -> MeshElementGroup:
         """Instantiate a new group of class *cls*.
 
         Unlike the constructor, this factory function performs additional
@@ -361,13 +361,12 @@ class _ModepyElementGroup(MeshElementGroup):
         return mp.unit_vertices_for_shape(self._modepy_shape).T
 
     @classmethod
-    # Type ignore because I do not know how to annotate this factory
-    # function usage. Possible reference:
-    # https://github.com/python/typing/discussions/1191#discussioncomment-2796173
-    def make_group(cls, order: int,  # type: ignore[override]
+    def make_group(cls,
+                   order: int,
                    vertex_indices: np.ndarray | None,
                    nodes: np.ndarray,
-                   *, unit_nodes: np.ndarray | None = None,
+                   *,
+                   unit_nodes: np.ndarray | None = None,
                    dim: int | None = None) -> _ModepyElementGroup:
 
         if unit_nodes is None:
