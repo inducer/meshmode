@@ -420,7 +420,7 @@ def test_from_fd_transfer(actx_factory, fspace_degree,
     eoc_recorders = {(True, d): EOCRecorder() for d in range(dim)}
     if not only_convert_bdy:
         for d in range(dim):
-            eoc_recorders[(False, d)] = EOCRecorder()
+            eoc_recorders[False, d] = EOCRecorder()
 
     def get_fdrake_mesh_and_h_from_par(mesh_par):
         from firedrake import Mesh, UnitCubeMesh, UnitIntervalMesh, UnitSquareMesh
@@ -500,7 +500,7 @@ def test_from_fd_transfer(actx_factory, fspace_degree,
 
             # record fd -> mm error
             err = np.max(np.abs(fd2mm_f - meshmode_f))
-            eoc_recorders[(True, d)].add_data_point(h, err)
+            eoc_recorders[True, d].add_data_point(h, err)
 
             if not only_convert_bdy:
                 # now transport mm -> fd
@@ -509,7 +509,7 @@ def test_from_fd_transfer(actx_factory, fspace_degree,
                 mm2fd_f = fdrake_connection.from_meshmode(meshmode_f_dofarr)
                 # record mm -> fd error
                 err = np.max(np.abs(fdrake_f.dat.data - mm2fd_f.dat.data))
-                eoc_recorders[(False, d)].add_data_point(h, err)
+                eoc_recorders[False, d].add_data_point(h, err)
 
     # assert that order is correct or error is "low enough"
     for ((fd2mm, d), eoc_rec) in eoc_recorders.items():
