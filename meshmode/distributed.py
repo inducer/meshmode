@@ -377,7 +377,7 @@ class MPIBoundaryCommSetupHelper:
                         group_factory=self.bdry_grp_factory),
                     remote_group_infos=remote_group_infos))
 
-            del self.pending_recv_identifiers[(local_part_id, remote_part_id)]
+            del self.pending_recv_identifiers[local_part_id, remote_part_id]
 
         assert not self.pending_recv_identifiers
         MPI.Request.waitall(self.send_reqs)
