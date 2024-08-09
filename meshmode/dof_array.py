@@ -70,6 +70,7 @@ __doc__ = """
 
 @with_container_arithmetic(
         bcast_obj_array=True,
+        bcast_numpy_array=True,
         rel_comparison=True,
         bitwise=True,
         _cls_has_array_context_attr=True)
