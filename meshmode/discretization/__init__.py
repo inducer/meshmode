@@ -583,9 +583,8 @@ class Discretization:
                                    NameHint(name_hint)))
 
         result = make_obj_array([
-            _DOFArray(None, tuple([
-                actx.freeze(resample_mesh_nodes(grp, iaxis)) for grp in self.groups
-                ]))
+            _DOFArray(None, tuple(actx.freeze(resample_mesh_nodes(grp, iaxis))
+                      for grp in self.groups))
             for iaxis in range(self.ambient_dim)])
         if cached:
             self._cached_nodes = result

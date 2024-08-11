@@ -259,10 +259,8 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     # )
     # and meshmode's facet ordering: obtained from a simplex element group
     import modepy as mp
-    mm_face_vertex_indices = tuple([
-        face.volume_vertex_indices
-        for face in mp.faces_for_shape(mp.Simplex(top.cell_dimension()))
-        ])
+    mm_face_vertex_indices = tuple(face.volume_vertex_indices
+        for face in mp.faces_for_shape(mp.Simplex(top.cell_dimension())))
 
     # map firedrake local face number to meshmode local face number
     fd_loc_fac_nr_to_mm = {}

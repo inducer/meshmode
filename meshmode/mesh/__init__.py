@@ -354,7 +354,7 @@ class _ModepyElementGroup(MeshElementGroup):
 
     @memoize_method
     def face_vertex_indices(self) -> tuple[tuple[int, ...], ...]:
-        return tuple([face.volume_vertex_indices for face in self._modepy_faces])
+        return tuple(face.volume_vertex_indices for face in self._modepy_faces)
 
     @memoize_method
     def vertex_unit_coordinates(self) -> np.ndarray:
@@ -1052,9 +1052,7 @@ def make_mesh(
             facial_adjacency_groups,
             element_id_dtype,
             face_id_dtype)
-        facial_adjacency_groups = tuple([
-            tuple(grps) for grps in facial_adjacency_groups
-            ])
+        facial_adjacency_groups = tuple(tuple(grps) for grps in facial_adjacency_groups)
 
     mesh = Mesh(
         groups=tuple(groups),

@@ -421,12 +421,10 @@ def visualize_mesh_vertex_resampling_error(
 
     from meshmode.dof_array import DOFArray
     from meshmode.mesh import _mesh_group_node_vertex_error
-    error = DOFArray(actx, tuple([
-        actx.from_numpy(
+    error = DOFArray(actx, tuple(actx.from_numpy(
             np.sqrt(np.sum(_mesh_group_node_vertex_error(mesh, mgrp)**2, axis=0))
         )
-        for mgrp in mesh.groups
-    ]))
+        for mgrp in mesh.groups))
 
     # }}}
 
