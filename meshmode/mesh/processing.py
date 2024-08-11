@@ -1380,9 +1380,8 @@ def glue_mesh_boundaries(
 
     return mesh.copy(
         nodal_adjacency=False,
-        _facial_adjacency_groups=tuple([
-            tuple(fagrps) for fagrps in facial_adjacency_groups
-            ]),
+        _facial_adjacency_groups=tuple(
+            tuple(fagrps) for fagrps in facial_adjacency_groups),
         )
 
 # }}}
@@ -1526,9 +1525,10 @@ def affine_map(
     return mesh.copy(
             vertices=vertices,
             groups=tuple(new_groups),
-            _facial_adjacency_groups=tuple([
-                tuple(fagrps) for fagrps in facial_adjacency_groups
-                ]) if facial_adjacency_groups is not None else None,
+            _facial_adjacency_groups=tuple(
+                tuple(fagrps)
+                for fagrps in facial_adjacency_groups)
+            if facial_adjacency_groups is not None else None,
             is_conforming=mesh.is_conforming)
 
 
@@ -1602,10 +1602,8 @@ def make_mesh_grid(
 
         from pytools import wandering_element
         size = bmax - bmin
-        offset = tuple([
-            np.array(e_i) * (size[i] + 0.25 * size[i])
-            for i, e_i in enumerate(wandering_element(mesh.ambient_dim))
-            ])
+        offset = tuple(np.array(e_i) * (size[i] + 0.25 * size[i])
+            for i, e_i in enumerate(wandering_element(mesh.ambient_dim)))
 
     if len(offset) != mesh.ambient_dim:
         raise ValueError("must provide an offset per dimension")

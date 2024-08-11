@@ -247,9 +247,7 @@ def _get_group_tessellation_info_modepy(meg: _ModepyElementGroup):
     from pytools import add_tuples
     space = mp.space_for_shape(shape, 1)
     assert type(space) == type(meg._modepy_space)  # noqa: E721
-    orig_vertices = tuple([
-        add_tuples(vt, vt) for vt in mp.node_tuples_for_space(space)
-        ])
+    orig_vertices = tuple(add_tuples(vt, vt) for vt in mp.node_tuples_for_space(space))
     orig_vertex_indices = [ref_vertices_to_index[vt] for vt in orig_vertices]
 
     midpoints = _get_ref_midpoints(shape, ref_vertices)
