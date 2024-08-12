@@ -31,7 +31,9 @@ from arraycontext import pytest_generate_tests_for_array_contexts
 
 import meshmode.mesh.generation as mgen
 from meshmode import _acf  # noqa: F401
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.array_context import (
+    PytestPyOpenCLArrayContextFactory,
+)
 from meshmode.discretization.poly_element import (
     GaussLegendreTensorProductGroupFactory,
     InterpolatoryQuadratureSimplexGroupFactory,
@@ -46,8 +48,9 @@ from meshmode.mesh.refinement import RefinerWithoutAdjacency
 
 
 logger = logging.getLogger(__name__)
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
+pytest_generate_tests = pytest_generate_tests_for_array_contexts([
+    PytestPyOpenCLArrayContextFactory,
+    ])
 
 thisdir = pathlib.Path(__file__).parent
 

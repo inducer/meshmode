@@ -30,7 +30,9 @@ from arraycontext import pytest_generate_tests_for_array_contexts
 
 import meshmode.mesh.generation as mgen
 from meshmode import _acf  # noqa: F401
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.array_context import (
+    PytestPyOpenCLArrayContextFactory,
+)
 from meshmode.discretization import Discretization
 from meshmode.discretization.connection.modal import (
     ModalToNodalDiscretizationConnection,
@@ -51,8 +53,9 @@ from meshmode.dof_array import DOFArray, flat_norm
 from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
 
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
+pytest_generate_tests = pytest_generate_tests_for_array_contexts([
+    PytestPyOpenCLArrayContextFactory,
+    ])
 
 
 @pytest.mark.parametrize("nodal_group_factory", [

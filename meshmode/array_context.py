@@ -28,10 +28,12 @@ THE SOFTWARE.
 from warnings import warn
 
 from arraycontext import (
+    NumpyArrayContext as NumpyArrayContextBase,
     PyOpenCLArrayContext as PyOpenCLArrayContextBase,
     PytatoPyOpenCLArrayContext as PytatoPyOpenCLArrayContextBase,
 )
 from arraycontext.pytest import (
+    _PytestNumpyArrayContextFactory,
     _PytestPyOpenCLArrayContextFactoryWithClass,
     _PytestPytatoPyOpenCLArrayContextFactory,
     register_pytest_array_context_factory,
@@ -198,6 +200,24 @@ def _transform_with_element_and_dof_inames(t_unit, el_inames, dof_inames):
 # }}}
 
 
+# {{{ numpy array context subclass
+
+class NumpyArrayContext(NumpyArrayContextBase):
+    def transform_loopy_program(self, t_unit):
+        default_ep = t_unit.default_entrypoint
+        options = default_ep.options
+        if not (options.return_dict and options.no_numpy):
+            raise ValueError("Loopy kernel passed to call_loopy must "
+                    "have return_dict and no_numpy options set. "
+                    "Did you use arraycontext.make_loopy_program "
+                    "to create this kernel?")
+
+        import loopy as lp
+        return lp.add_inames_for_unused_hw_axes(t_unit)
+
+# }}}
+
+
 # {{{ pyopencl array context subclass
 
 class PyOpenCLArrayContext(PyOpenCLArrayContextBase):
@@ -268,6 +288,11 @@ class PytatoPyOpenCLArrayContext(PytatoPyOpenCLArrayContextBase):
 
 # {{{ pytest actx factory
 
+class PytestNumpyArrayContextFactory(_PytestNumpyArrayContextFactory):
+    def __call__(self):
+        return NumpyArrayContext()
+
+
 class PytestPyOpenCLArrayContextFactory(
         _PytestPyOpenCLArrayContextFactoryWithClass):
     actx_class = PyOpenCLArrayContext
@@ -281,6 +306,8 @@ class PytestPytatoPyOpenCLArrayContextFactory(
         return PytatoPyOpenCLArrayContext
 
 
+register_pytest_array_context_factory("meshmode.numpy",
+        PytestNumpyArrayContextFactory)
 register_pytest_array_context_factory("meshmode.pyopencl",
         PytestPyOpenCLArrayContextFactory)
 register_pytest_array_context_factory("meshmode.pytato_cl",
