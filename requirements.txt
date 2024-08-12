@@ -1,5 +1,6 @@
 numpy
 recursivenodes
+
 git+https://github.com/inducer/pytools.git#egg=pytools
 git+https://github.com/inducer/gmsh_interop.git#egg=gmsh_interop
 git+https://github.com/inducer/pyvisfile.git#egg=pyvisfile
@@ -9,6 +10,8 @@ git+https://github.com/inducer/islpy.git#egg=islpy
 git+https://github.com/inducer/pytato.git#egg=pytato
 
 # required by pytential, which is in turn needed for some tests
+sympy
+cython
 git+https://github.com/inducer/pymbolic.git#egg=pymbolic
 
 # also depends on pymbolic, so should come after it
