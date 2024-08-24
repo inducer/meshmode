@@ -1862,10 +1862,10 @@ def _merge_boundary_adjacency_groups(
             elements=np.empty((0,), dtype=element_id_dtype),
             element_faces=np.empty((0,), dtype=face_id_dtype))
 
-    max_ielem = max(
+    max_ielem: int = max(
         np.max(grp.elements, initial=0)
         for grp in bdry_grps)
-    max_iface = max(
+    max_iface: int = max(
         np.max(grp.element_faces, initial=0)
         for grp in bdry_grps)
 
@@ -2205,14 +2205,14 @@ def is_affine_simplex_group(
 
     # check just the first element for a non-affine local-to-global mapping
     ddx_coeffs = np.einsum("aij,bj->abi", mats, group.nodes[:, 0, :])
-    norm_inf = np.max(np.abs(ddx_coeffs))
+    norm_inf: np.floating = np.max(np.abs(ddx_coeffs))
     if norm_inf > abs_tol:
         return False
 
     # check all elements for a non-affine local-to-global mapping
     ddx_coeffs = np.einsum("aij,bcj->abci", mats, group.nodes)
     norm_inf = np.max(np.abs(ddx_coeffs))
-    return norm_inf < abs_tol
+    return bool(norm_inf < abs_tol)
 
 # }}}
 
