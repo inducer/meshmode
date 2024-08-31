@@ -932,7 +932,7 @@ class Visualizer:
         # {{{ write
 
         # https://gitlab.kitware.com/vtk/vtk/-/merge_requests/7552/diffs?commit_id=ff63361e1e625bf5f8ff82a4063a9bc5b9f35818#92f6af7573e5302296e4d465fea1d411d4a2611d
-        # https://vtk.org/doc/nightly/html/VTKHDFFileFormat.html
+        # https://docs.vtk.org/en/latest/design_documents/VTKFileFormats.html#vtkhdf-file-format
 
         def create_dataset(grp, name, data, *, shape, offset):
             if data.ndim == 2 and data.shape[1] < 3:
