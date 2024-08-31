@@ -52,7 +52,7 @@ straightforward. Some language is different:
   created by calling the function :func:`~firedrake.functionspace.FunctionSpace`
   and referred to as a "function space"
 * In a mesh, any vertices, faces, cells, etc. are :mod:`firedrake`
-  "entities" (see `the PETSc documentation on dmplex <https://www.mcs.anl.gov/petsc/petsc-current/docs/manualpages/DMPLEX/index.html>`__
+  "entities" (see `the PETSc documentation on DMPLEX <https://petsc.org/release/manualpages/DMPlex/>`__
   for more info on how topological mesh information is stored
   in :mod:`firedrake`).
 
