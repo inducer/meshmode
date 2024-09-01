@@ -70,6 +70,10 @@ include = [
     "meshmode*",
 ]
 
+[tool.setuptools.package-dir]
+# https://github.com/Infleqtion/client-superstaq/pull/715
+"" = "."
+
 [tool.setuptools.package-data]
 meshmode = [
     "py.typed",
