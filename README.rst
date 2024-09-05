@@ -31,7 +31,7 @@ Features:
 
 Meshmode emerged as the shared discretization layer for `pytential
 <https://github.com/inducer/pytential/>`__ (layer potentials) and `grudge
-<https://github.com/inducer/grudge>`__ (discontinous Galerkin).
+<https://github.com/inducer/grudge>`__ (discontinuous Galerkin).
 
 Places on the web related to meshmode:
 

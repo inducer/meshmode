@@ -71,8 +71,8 @@ def main():
     discr = Discretization(actx, mesh, group_factory)
 
     # Get our solution: we will use
-    # Real(e^z) = Real(e^{x+iy})
-    #           = e^x Real(e^{iy})
+    # Real(e^z) = Real(e^{x+i y})
+    #           = e^x Real(e^{i y})
     #           = e^x cos(y)
     nodes = discr.nodes()
     for i in range(len(nodes)):
