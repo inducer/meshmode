@@ -43,8 +43,9 @@ from meshmode.mesh import BTAG_ALL, BTAG_INDUCED_BOUNDARY, Mesh, check_bc_covera
 
 
 logger = logging.getLogger(__name__)
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
+pytest_generate_tests = pytest_generate_tests_for_array_contexts([
+    PytestPyOpenCLArrayContextFactory,
+    ])
 
 CLOSE_ATOL = 1e-12
 
