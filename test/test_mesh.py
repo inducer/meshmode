@@ -578,12 +578,14 @@ def test_merge_and_map(actx_factory, group_cls, visualize=False):
 
 # {{{ element orientation
 
-@pytest.mark.parametrize("case", ["blob", "gh-394"])
+@pytest.mark.parametrize("case", ["blob", "gh-394", "3x3", "3x3_twisted",
+                                  "3x3_minus", "3x3_bound"])
 def test_element_orientation_via_flipping(case):
     from meshmode.mesh.io import FileSource, generate_gmsh
 
     mesh_order = 3
 
+    meshfile = f"{thisdir}/{case}.msh"
     if case == "blob":
         mesh = generate_gmsh(
                 FileSource(str(thisdir / "blob-2d.step")), 2, order=mesh_order,
@@ -593,13 +595,73 @@ def test_element_orientation_via_flipping(case):
                 )
     elif case == "gh-394":
         mesh = mio.read_gmsh(
-                             str(thisdir / "gh-394.msh"),
+                             meshfile,
+                             force_ambient_dim=2,
+                             mesh_construction_kwargs={"skip_tests": True})
+    elif case == "3x3":  # regular ole rectangular 3x3 tensor product els (TPE)
+        mesh = mio.read_gmsh(
+                             meshfile,
+                             force_ambient_dim=2,
+                             mesh_construction_kwargs={"skip_tests": True})
+    elif case == "3x3_twisted":  # TPEs, rotated connectivities, all positive
+        mesh = mio.read_gmsh(
+                             meshfile,
+                             force_ambient_dim=2,
+                             mesh_construction_kwargs={"skip_tests": True})
+    elif case == "3x3_minus":  # TPEs with negative orientation (clockwise conn)
+        mesh = mio.read_gmsh(
+                             meshfile,
+                             force_ambient_dim=2,
+                             mesh_construction_kwargs={"skip_tests": True})
+    elif case == "3x3_bound":  # TPEs (clockwise conn, w/boundaries)
+        mesh = mio.read_gmsh(
+                             meshfile,
                              force_ambient_dim=2,
                              mesh_construction_kwargs={"skip_tests": True})
     else:
         raise ValueError(f"unknown case: {case}")
 
+    boundary_tags = set()
+    for igrp in range(len(mesh.groups)):
+        print(f"{meshfile=} Boundaries:")
+        bdry_fagrps = [
+            fagrp for fagrp in mesh.facial_adjacency_groups[igrp]
+            if isinstance(fagrp, BoundaryAdjacencyGroup)]
+        for bdry_fagrp in bdry_fagrps:
+            print(f"Boundary tag: {bdry_fagrp.boundary_tag}")
+            boundary_tags.add(bdry_fagrp.boundary_tag)
+            # print(f"----{bdry_fagrp.elements=}")
+            # if bdry_fagrp.boundary_tag == "outer_bdy":
+            #    num_marked_outer_bdy += len(bdry_fagrp.elements)
+            #if bdry_fagrp.boundary_tag == "inner_bdy":
+            #    num_marked_inner_bdy += len(bdry_fagrp.elements)
+
     mesh_orient = mproc.find_volume_mesh_element_orientations(mesh)
+    if not (mesh_orient > 0).all():
+        print(f"Mesh({meshfile}) is negative, trying to reorient.")
+        mesh = mio.read_gmsh(
+            meshfile,
+            force_ambient_dim=2,
+            mesh_construction_kwargs={
+                "skip_tests": True,
+                "force_positive_orientation": True})
+        mesh_orient = mproc.find_volume_mesh_element_orientations(mesh)
+        boundary_tags_reoriented = set()
+        for igrp in range(len(mesh.groups)):
+            print(f"{meshfile=} Reoriented Boundaries:")
+            bdry_fagrps = [
+                fagrp for fagrp in mesh.facial_adjacency_groups[igrp]
+                if isinstance(fagrp, BoundaryAdjacencyGroup)]
+            for bdry_fagrp in bdry_fagrps:
+                print(f"Boundary tag: {bdry_fagrp.boundary_tag}")
+                boundary_tags_reoriented.add(bdry_fagrp.boundary_tag)
+                # print(f"----{bdry_fagrp.elements=}")
+                # if bdry_fagrp.boundary_tag == "outer_bdy":
+                #    num_marked_outer_bdy += len(bdry_fagrp.elements)
+                #if bdry_fagrp.boundary_tag == "inner_bdy":
+                #    num_marked_inner_bdy += len(bdry_fagrp.elements)
+        # Make sure rotation doesn't lose boundaries
+        assert boundary_tags == boundary_tags_reoriented
 
     assert (mesh_orient > 0).all()
 
