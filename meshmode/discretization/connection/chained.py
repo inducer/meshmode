@@ -105,13 +105,13 @@ def _build_new_group_table(from_conn, to_conn):
         return (-1, -1)
 
     nfrom_groups = len(from_conn.groups)
-    nto_groups = len(to_conn.groups)
+    n_to_groups = len(to_conn.groups)
 
     # construct a table from (old groups) -> (new groups)
     # NOTE: we try to reduce the number of new groups and batches by matching
     # the `result_unit_nodes` and only adding a new batch if necessary
     grp_to_grp = {}
-    batch_info = [[] for i in range(nfrom_groups * nto_groups)]
+    batch_info = [[] for i in range(nfrom_groups * n_to_groups)]
     for (igrp, ibatch), (_, fbatch) in _iterbatches(from_conn.groups):
         for (jgrp, jbatch), (_, tbatch) in _iterbatches(to_conn.groups):
             # compute result_unit_nodes
@@ -132,7 +132,7 @@ def _build_new_group_table(from_conn, to_conn):
             # find new (group, batch)
             (igrp_new, ibatch_new) = find_batch(result_unit_nodes, batch_info)
             if igrp_new < 0:
-                igrp_new = nto_groups * igrp + jgrp
+                igrp_new = n_to_groups * igrp + jgrp
                 ibatch_new = len(batch_info[igrp_new])
 
                 batch_info[igrp_new].append(_ConnectionBatchData(

@@ -251,15 +251,15 @@ def _find_src_unit_nodes_via_gauss_newton(
 
         if dim == 1:
             # A is df.T
-            ata = np.einsum("iket,jket->ijet", df, df)
-            atb = np.einsum("iket,ket->iet", df, resid)
+            ata = np.einsum("ikes,jkes->ijes", df, df)
+            atb = np.einsum("ikes,kes->ies", df, resid)
 
             df_inv_resid = atb / ata[0, 0]
 
         elif dim == 2:
             # A is df.T
-            ata = np.einsum("iket,jket->ijet", df, df)
-            atb = np.einsum("iket,ket->iet", df, resid)
+            ata = np.einsum("ikes,jkes->ijes", df, df)
+            atb = np.einsum("ikes,kes->ies", df, resid)
 
             det = ata[0, 0]*ata[1, 1] - ata[0, 1]*ata[1, 0]
 
@@ -481,9 +481,9 @@ def make_opposite_face_connection(actx, volume_to_bdry_conn):
                     # {{{ visualization (for debugging)
 
                     if 0:
-                        print("TVE", adj.elements[adj_tgt_flags])
-                        print("TBE", tgt_bdry_element_indices)
-                        print("FVE", src_vol_element_indices)
+                        print("target volume elements:", adj.elements[adj_tgt_flags])
+                        print("target boundary elements:", tgt_bdry_element_indices)
+                        print("neighbor volume elements:", src_vol_element_indices)
                         import matplotlib.pyplot as pt
 
                         from meshmode.mesh.visualization import draw_2d_mesh

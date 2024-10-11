@@ -181,3 +181,15 @@ module = [
     "scipy.*",
 ]
 ignore_missing_imports = true
+
+
+[tool.typos.default]
+extend-ignore-re = [
+  "(?Rm)^.*(#|//)\\s*spellchecker:\\s*disable-line$"
+]
+
+[tool.typos.default.extend-words]
+"PN" = "PN"
+"nd" = "nd"
+# TODO: needed by deprecated MPIMeshDistributor.is_mananger_rank
+"mananger" = "mananger"
