@@ -525,12 +525,14 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
 
     @memoize_method
     def quadrature_rule(self):
-        basis = self._basis
-        nodes = self._nodes
+        basis = self._basis.bases[0]
+        nodes = self.unit_nodes_1d
         mass_matrix = mp.mass_matrix(basis, nodes)
         weights = np.dot(mass_matrix,
                          np.ones(len(basis.functions)))
-        return mp.Quadrature(nodes, weights, exact_to=self.order)
+        quads = (mp.Quadrature(nodes, weights, exact_to=self.order),)*self.dim
+
+        return mp.TensorProductQuadrature(quads)
 
     @property
     @memoize_method
