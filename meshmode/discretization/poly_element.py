@@ -539,7 +539,7 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
 
             # get current dimension's nodes from fastest varying axis
             if self.dim != 1:
-                nodes = np.swapaxes(nodes, 0, idim)[:,*(0,)*(self.dim-1)]
+                nodes = np.swapaxes(nodes, 0, idim)[:, *(0,)*(self.dim-1)]
 
             nodes_1d = nodes.reshape(1, -1)
             mass_matrix = mp.mass_matrix(basis, nodes_1d)
