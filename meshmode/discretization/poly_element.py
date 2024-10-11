@@ -525,19 +525,19 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
 
     @memoize_method
     def quadrature_rule(self):
-        from modepy.tools import reshape_array_for_tensor_product_space as fold
+        from modepy.tools import reshape_array_for_tensor_product_space
 
         quads = []
 
         if self.dim != 1:
-            nodes_tp = fold(self.space, self._nodes)
+            nodes_tp = reshape_array_for_tensor_product_space(self.space,
+                                                              self._nodes)
         else:
             nodes_tp = self._nodes
 
         for idim, (nodes, basis) in enumerate(zip(nodes_tp, self._basis.bases)):
             # get current dimension's nodes from fastest varying axis
-            if self.dim != 1:
-                nodes = np.swapaxes(nodes, 0, idim)[:, *(0,)*(self.dim-1)]
+            nodes = nodes[*(0,)*idim, :, *(0,)*(self.dim-idim-1)]
 
             nodes_1d = nodes.reshape(1, -1)
             mass_matrix = mp.mass_matrix(basis, nodes_1d)
@@ -545,7 +545,10 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
 
             quads.append(mp.Quadrature(nodes_1d, weights, exact_to=self.order))
 
-        return mp.TensorProductQuadrature(quads)
+        tp_quad = mp.TensorProductQuadrature(quads)
+        assert np.allclose(tp_quad.nodes, self._nodes)
+
+        return tp_quad
 
     @property
     @memoize_method
