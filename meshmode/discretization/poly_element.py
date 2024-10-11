@@ -592,7 +592,14 @@ class LegendreGaussLobattoTensorProductElementGroup(
         unit_nodes_1d = legendre_gauss_lobatto_nodes(order)
         unit_nodes = mp.tensor_product_nodes([unit_nodes_1d]*mesh_el_group.dim)
 
+        self._quadrature_rule = mp.LegendreGaussLobattoTensorProductQuadrature(
+            order, mesh_el_group.dim)
+
         super().__init__(mesh_el_group, order, unit_nodes=unit_nodes)
+
+    @memoize_method
+    def quadrature_rule(self):
+        return self._quadrature_rule
 
     def discretization_key(self):
         return (type(self), self.dim, self.order)
