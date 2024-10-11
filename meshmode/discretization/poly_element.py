@@ -534,7 +534,7 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
         else:
             nodes_tp = self._nodes
 
-        for idim, zipped in enumerate(zip(nodes_tp, self._basis.bases)):
+        for idim, (nodes, basis) in enumerate(zip(nodes_tp, self._basis.bases)):
             nodes, basis = zipped
 
             # get current dimension's nodes from fastest varying axis
