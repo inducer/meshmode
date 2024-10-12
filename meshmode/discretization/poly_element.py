@@ -536,8 +536,9 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
             nodes_tp = self._nodes
 
         for idim, (nodes, basis) in enumerate(zip(nodes_tp, self._basis.bases)):
-            # get current dimension's nodes from fastest varying axis
-            nodes = nodes[*(0,)*idim, :, *(0,)*(self.dim-idim-1)]
+            # get current dimension's nodes
+            iaxis = (*(0,)*idim, slice(None), *(0,)*(self.dim-idim-1))
+            nodes = nodes[iaxis]
 
             nodes_1d = nodes.reshape(1, -1)
             mass_matrix = mp.mass_matrix(basis, nodes_1d)
