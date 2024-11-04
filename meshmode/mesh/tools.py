@@ -20,8 +20,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from typing import Optional
-
 import numpy as np
 import numpy.linalg as la
 
@@ -68,7 +66,7 @@ nd_quad_submesh = MovedFunctionDeprecationWrapper(hypercube_submesh)
 # }}}
 
 
-def optional_array_equal(a: Optional[np.ndarray], b: Optional[np.ndarray]) -> bool:
+def optional_array_equal(a: np.ndarray | None, b: np.ndarray | None) -> bool:
     if a is None:
         return b is None
     else:
@@ -222,8 +220,8 @@ class AffineMap:
 def find_point_permutation(
             targets: np.ndarray,
             permutees: np.ndarray,
-            tol_multiplier: Optional[float] = None
-        ) -> Optional[np.ndarray]:
+            tol_multiplier: float | None = None
+        ) -> np.ndarray | None:
     """
     :arg targets: shaped ``(dim, npoints)`` or just ``(dim,)`` if a single point
     :arg permutees: shaped ``(dim, npoints)``

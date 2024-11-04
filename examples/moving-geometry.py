@@ -21,7 +21,6 @@ THE SOFTWARE.
 """
 
 import logging
-from typing import Optional, Type
 
 import numpy as np
 
@@ -104,7 +103,7 @@ def advance(actx, dt, t, x, fn):
 
 def run(actx, *,
         ambient_dim: int = 3,
-        resolution: Optional[int] = None,
+        resolution: int | None = None,
         target_order: int = 4,
         tmax: float = 1.0,
         timestep: float = 1.0e-2,
@@ -128,7 +127,7 @@ def run(actx, *,
     # a bit of work when reconstructing after a time step
 
     if group_factory_name == "warp_and_blend":
-        group_factory_cls: Type[poly.HomogeneousOrderBasedGroupFactory] = (
+        group_factory_cls: type[poly.HomogeneousOrderBasedGroupFactory] = (
             poly.PolynomialWarpAndBlend2DRestrictingGroupFactory)
 
         unit_nodes = mp.warp_and_blend_nodes(ambient_dim - 1, mesh_order)

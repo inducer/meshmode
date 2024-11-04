@@ -26,20 +26,14 @@ THE SOFTWARE.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Collection, Hashable, Iterable, Mapping, Sequence
 from dataclasses import InitVar, dataclass, field, replace
 from typing import (
     Any,
-    Callable,
     ClassVar,
-    Collection,
-    Hashable,
-    Iterable,
     Literal,
-    Mapping,
-    Sequence,
     TypeAlias,
     TypeVar,
-    Union,
 )
 from warnings import warn
 
@@ -758,13 +752,13 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
 
 # {{{ mesh
 
-DTypeLike = Union[np.dtype, np.generic]
-NodalAdjacencyLike = Union[
-    Literal[False], Iterable[np.ndarray], NodalAdjacency
-]
-FacialAdjacencyLike = Union[
-    Literal[False], Sequence[Sequence[FacialAdjacencyGroup]]
-]
+DTypeLike = np.dtype | np.generic
+NodalAdjacencyLike = (
+    Literal[False] | Iterable[np.ndarray] | NodalAdjacency
+    )
+FacialAdjacencyLike = (
+    Literal[False] | Sequence[Sequence[FacialAdjacencyGroup]]
+    )
 
 
 def check_mesh_consistency(

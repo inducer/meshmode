@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 
@@ -45,7 +45,7 @@ __doc__ = """
 
 def draw_2d_mesh(
         mesh: Mesh, *,
-        rng: Optional[np.random.Generator] = None,
+        rng: np.random.Generator | None = None,
         draw_vertex_numbers: bool = True,
         draw_element_numbers: bool = True,
         draw_nodal_adjacency: bool = False,
@@ -175,9 +175,9 @@ def draw_2d_mesh(
 def draw_curve(
         mesh: Mesh, *,
         el_bdry_style: str = "o",
-        el_bdry_kwargs: Optional[Dict[str, Any]] = None,
+        el_bdry_kwargs: dict[str, Any] | None = None,
         node_style: str = "x-",
-        node_kwargs: Optional[Dict[str, Any]] = None) -> None:
+        node_kwargs: dict[str, Any] | None = None) -> None:
     """Draw a curve mesh.
 
     :arg el_bdry_kwargs: passed to ``plot`` when drawing elements.
@@ -212,7 +212,7 @@ def draw_curve(
 
 def write_vertex_vtk_file(
         mesh: Mesh, file_name: str, *,
-        compressor: Optional[str] = None,
+        compressor: str | None = None,
         overwrite: bool = False) -> None:
     # {{{ create cell_types
     from pyvisfile.vtk import (
