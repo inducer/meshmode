@@ -37,6 +37,7 @@ from typing import (
     Literal,
     Mapping,
     Sequence,
+    TypeAlias,
     TypeVar,
     Union,
 )
@@ -44,7 +45,6 @@ from warnings import warn
 
 import numpy as np
 import numpy.linalg as la
-from typing_extensions import TypeAlias
 
 import modepy as mp
 from pytools import memoize_method
