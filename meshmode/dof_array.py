@@ -592,7 +592,7 @@ def check_dofarray_against_discr(discr, dof_ary: DOFArray):
                 "DOFArray has unexpected number of groups "
                 f"({len(dof_ary)}, expected: {len(discr.groups)})")
 
-    for i, (grp, grp_ary) in enumerate(zip(discr.groups, dof_ary)):
+    for i, (grp, grp_ary) in enumerate(zip(discr.groups, dof_ary, strict=True)):
         expected_shape = (grp.nelements, grp.nunit_dofs)
         if grp_ary.shape != expected_shape:
             raise InconsistentDOFArray(

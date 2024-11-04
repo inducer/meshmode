@@ -86,7 +86,7 @@ def draw_2d_mesh(
             pathdata.append(
                 (Path.CLOSEPOLY, (elverts[0, 0], elverts[1, 0])))
 
-            codes, verts = zip(*pathdata)
+            codes, verts = zip(*pathdata, strict=True)
             path = Path(verts, codes)
             patch = mpatches.PathPatch(path, **kwargs)
             pt.gca().add_patch(patch)
@@ -231,7 +231,7 @@ def write_vertex_vtk_file(
 
     cell_types = np.empty(mesh.nelements, dtype=np.uint8)
     cell_types.fill(255)
-    for base_element_nr, egrp in zip(mesh.base_element_nrs, mesh.groups):
+    for base_element_nr, egrp in zip(mesh.base_element_nrs, mesh.groups, strict=True):
         if isinstance(egrp, SimplexElementGroup):
             vtk_cell_type = {
                     1: VTK_LINE,
@@ -314,7 +314,7 @@ def mesh_to_tikz(mesh: Mesh) -> str:
     drawel_lines = []
     drawel_lines.append(r"\def\drawelements#1{")
 
-    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups, strict=True):
         for iel, el in enumerate(grp.vertex_indices):
             el_nr = base_element_nr + iel + 1
             elverts = mesh.vertices[:, el]

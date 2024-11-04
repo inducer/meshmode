@@ -535,7 +535,8 @@ class TensorProductElementGroupBase(PolynomialElementGroupBase,
         else:
             nodes_tp = self._nodes
 
-        for idim, (nodes, basis) in enumerate(zip(nodes_tp, self._basis.bases)):
+        for idim, (nodes, basis) in enumerate(
+                zip(nodes_tp, self._basis.bases, strict=True)):
             # get current dimension's nodes
             iaxis = (*(0,)*idim, slice(None), *(0,)*(self.dim-idim-1))
             nodes = nodes[iaxis]

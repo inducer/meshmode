@@ -651,7 +651,7 @@ def find_volume_mesh_element_orientations(
 
     result: np.ndarray = np.empty(mesh.nelements, dtype=np.float64)
 
-    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups, strict=True):
         result_grp_view = result[base_element_nr:base_element_nr + grp.nelements]
 
         try:
@@ -824,7 +824,7 @@ def perform_flips(
     flip_flags = flip_flags.astype(bool)
 
     new_groups = []
-    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups, strict=True):
         grp_flip_flags = flip_flags[base_element_nr:base_element_nr + grp.nelements]
 
         if grp_flip_flags.any():
@@ -919,7 +919,7 @@ def merge_disjoint_meshes(
 
         group_vertex_indices = []
         group_nodes = []
-        for mesh, vert_base in zip(meshes, vert_bases):
+        for mesh, vert_base in zip(meshes, vert_bases, strict=True):
             for group in mesh.groups:
                 assert group.vertex_indices is not None
                 group_vertex_indices.append(group.vertex_indices + vert_base)
@@ -936,7 +936,7 @@ def merge_disjoint_meshes(
 
     else:
         new_groups = []
-        for mesh, vert_base in zip(meshes, vert_bases):
+        for mesh, vert_base in zip(meshes, vert_bases, strict=True):
             for group in mesh.groups:
                 assert group.vertex_indices is not None
                 new_vertex_indices = group.vertex_indices + vert_base
@@ -990,7 +990,7 @@ def split_mesh_groups(
     subgroup_to_group_map = {}
 
     for igrp, (base_element_nr, grp) in enumerate(
-            zip(mesh.base_element_nrs, mesh.groups)
+            zip(mesh.base_element_nrs, mesh.groups, strict=True)
             ):
         assert grp.vertex_indices is not None
         grp_flags = element_flags[base_element_nr:base_element_nr + grp.nelements]
@@ -1606,7 +1606,7 @@ def make_mesh_grid(
     meshes = []
 
     for index in product(*(range(n) for n in shape)):
-        b = sum((i * o for i, o in zip(index, offset)), offset[0])
+        b = sum((i * o for i, o in zip(index, offset, strict=True)), offset[0])
         meshes.append(affine_map(mesh, b=b))
 
     return merge_disjoint_meshes(meshes, skip_tests=skip_tests)

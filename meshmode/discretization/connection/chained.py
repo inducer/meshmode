@@ -151,7 +151,7 @@ def _build_batches(actx, from_bins, to_bins, batch):
     def to_device(x):
         return actx.freeze(actx.from_numpy(np.asarray(x)))
 
-    for ibatch, (from_bin, to_bin) in enumerate(zip(from_bins, to_bins)):
+    for ibatch, (from_bin, to_bin) in enumerate(zip(from_bins, to_bins, strict=True)):
         yield InterpolationBatch(
                 from_group_index=batch[ibatch].from_group_index,
                 from_element_indices=to_device(from_bin),
@@ -248,7 +248,7 @@ def flatten_chained_connection(actx, connection):
 
         # build new groups
         groups = []
-        for igrp, (from_bin, to_bin) in enumerate(zip(from_bins, to_bins)):
+        for igrp, (from_bin, to_bin) in enumerate(zip(from_bins, to_bins, strict=True)):
             groups.append(DiscretizationConnectionElementGroup(
                 list(_build_batches(actx, from_bin, to_bin,
                                     batch_info[igrp]))))
