@@ -939,9 +939,8 @@ def default_simplex_group_factory(base_dim, order):
     """
 
     try:
-        # recursivenodes is only importable in Python 3.8 since
-        # it uses :func:`math.comb`, so need to check if it can
-        # be imported.
+        # FIXME: this is a hard dependency (in pyproject.toml) now, so this
+        # shouldn't be needed
         import recursivenodes  # noqa: F401
     except ImportError:
         # If it cannot be imported, use warp-and-blend nodes.
