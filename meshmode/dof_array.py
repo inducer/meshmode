@@ -25,10 +25,11 @@ THE SOFTWARE.
 
 import operator as op
 import threading
+from collections.abc import Callable, Iterable
 from contextlib import contextmanager
 from functools import partial, update_wrapper
 from numbers import Number
-from typing import Any, Callable, Iterable
+from typing import Any
 from warnings import warn
 
 import numpy as np

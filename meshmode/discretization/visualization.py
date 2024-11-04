@@ -26,7 +26,7 @@ THE SOFTWARE.
 import logging
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -864,13 +864,13 @@ class Visualizer:
     # {{{ vtkhdf
 
     def write_vtkhdf_file(self,
-            file_name: str, names_and_fields: List[Tuple[str, Any]], *,
+            file_name: str, names_and_fields: list[tuple[str, Any]], *,
             comm=None,
             use_high_order: bool = False,
             real_only: bool = False,
             overwrite: bool = False,
-            h5_file_options: Optional[Dict[str, Any]] = None,
-            dset_options: Optional[Dict[str, Any]] = None) -> None:
+            h5_file_options: dict[str, Any] | None = None,
+            dset_options: dict[str, Any] | None = None) -> None:
         """Write a VTK HDF5 file (typical extension ``'.hdf'``) containing
         the visualization fields in *names_and_fields*.
 

@@ -22,7 +22,6 @@ THE SOFTWARE.
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
@@ -165,7 +164,7 @@ def make_face_restriction(
             discr: Discretization,
             group_factory: ElementGroupFactory,
             boundary_tag: BoundaryTag,
-            per_face_groups: Optional[bool] = False
+            per_face_groups: bool | None = False
         ) -> DirectDiscretizationConnection:
     """Create a mesh, a discretization and a connection to restrict
     a function on *discr* to its values on the edges of element faces
@@ -383,7 +382,7 @@ def make_face_to_all_faces_embedding(
             actx: ArrayContext,
             faces_connection: DirectDiscretizationConnection,
             all_faces_discr: Discretization,
-            from_discr: Optional[Discretization] = None
+            from_discr: Discretization | None = None
         ) -> DirectDiscretizationConnection:
     """Return a
     :class:`meshmode.discretization.connection.DiscretizationConnection`
