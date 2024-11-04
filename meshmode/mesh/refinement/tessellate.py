@@ -150,7 +150,7 @@ def _midpoint_tuples(a, b):
 
         return d
 
-    return tuple(midpoint(ai, bi) for ai, bi in zip(a, b))
+    return tuple(midpoint(ai, bi) for ai, bi in zip(a, b, strict=True))
 
 
 def _get_ref_midpoints(shape, ref_vertices):
@@ -201,7 +201,7 @@ def _get_group_midpoints_modepy(
     resampled_midpoints = np.einsum("mu,deu->edm",
             resampling_mat, meg.nodes[:, elements])
 
-    return dict(zip(elements, resampled_midpoints))
+    return dict(zip(elements, resampled_midpoints, strict=True))
 
 
 @get_group_tessellated_nodes.register(_ModepyElementGroup)

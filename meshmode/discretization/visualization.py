@@ -218,7 +218,7 @@ def _check_discr_same_connectivity(discr, other):
     if not all(
             sg.discretization_key() == og.discretization_key()
             and sg.nelements == og.nelements
-            for sg, og in zip(discr.groups, other.groups)):
+            for sg, og in zip(discr.groups, other.groups, strict=True)):
         return False
 
     return True
@@ -482,7 +482,8 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                     grp.nunit_dofs,
                     grp.nelements * grp.nunit_dofs + 1,
                     grp.nunit_dofs)
-                for grp_offset, grp in zip(grp_offsets, self.vis_discr.groups)
+                for grp_offset, grp in zip(grp_offsets[:-1], self.vis_discr.groups,
+                                           strict=True)
                 ])
 
         return self.vis_discr.mesh.nelements, connectivity, offsets
@@ -1161,7 +1162,8 @@ class Visualizer:
 
             grids = []
             node_nr_base = 0
-            for igrp, (vgrp, gnodes) in enumerate(zip(connectivity.groups, nodes)):
+            for igrp, (vgrp, gnodes) in enumerate(
+                    zip(connectivity.groups, nodes, strict=True)):
                 grp_name = f"Group_{igrp:05d}"
                 h5grp = h5grid.create_group(grp_name)
 
@@ -1318,7 +1320,7 @@ def make_visualizer(actx, discr, vis_order=None,
         vis_discr = discr.copy(actx=actx, group_factory=VisGroupFactory(vis_order))
 
         if all(grp.discretization_key() == vgrp.discretization_key()
-                for grp, vgrp in zip(discr.groups, vis_discr.groups)):
+                for grp, vgrp in zip(discr.groups, vis_discr.groups, strict=True)):
             from warnings import warn
             warn("Visualization discretization is identical to base discretization. "
                     "To avoid the creation of a separate discretization for "
@@ -1383,7 +1385,7 @@ def write_nodal_adjacency_vtk_file(file_name, mesh,
             (mesh.ambient_dim, mesh.nelements),
             dtype=mesh.vertices.dtype)
 
-    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups, strict=True):
         centroids[:, base_element_nr:base_element_nr + grp.nelements] = (
                 np.sum(mesh.vertices[:, grp.vertex_indices], axis=-1)
                 / grp.vertex_indices.shape[-1])

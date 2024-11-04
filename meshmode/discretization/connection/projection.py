@@ -258,7 +258,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                             c_i,
                             arg_names=("vdm", "coeffs"),
                             tagged=(FirstAxisIsElementsTag(),))
-                for grp, c_i in zip(self.to_discr.groups, coefficients)
+                for grp, c_i in zip(self.to_discr.groups, coefficients, strict=True)
             )
         )
 

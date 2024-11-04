@@ -267,7 +267,7 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_parts):
                 if isinstance(fagrp, InterPartAdjacencyGroup)]
             for ipagrp in ipagrps:
                 for i, (elem, face) in enumerate(
-                        zip(ipagrp.elements, ipagrp.element_faces)):
+                        zip(ipagrp.elements, ipagrp.element_faces, strict=True)):
                     index_lookup_table[ipart, igrp, elem, face] = i
 
     ipagrp_count = 0
