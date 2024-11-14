@@ -624,7 +624,8 @@ def find_volume_mesh_element_group_orientation(
 
     from pymbolic.geometric_algebra import MultiVector
 
-    mvs = [MultiVector(vec) for vec in spanning_object_array]
+    mvs: list[MultiVector[np.floating]] = (
+        [MultiVector(vec) for vec in spanning_object_array])
 
     from operator import xor
     outer_prod = -reduce(xor, mvs)      # pylint: disable=invalid-unary-operand-type
