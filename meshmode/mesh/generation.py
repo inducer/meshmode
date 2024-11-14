@@ -1478,7 +1478,7 @@ def generate_regular_rect_mesh(
             "lower topological dimension and map it.)")
 
     axis_coords = [np.linspace(a_i, b_i, npoints_i)
-            for a_i, b_i, npoints_i in zip(a, b, npoints_per_axis)]
+            for a_i, b_i, npoints_i in zip(a, b, npoints_per_axis, strict=True)]
 
     return generate_box_mesh(axis_coords, order=order,
                              periodic=periodic,
@@ -1654,7 +1654,7 @@ def warp_and_refine_until_resolved(
                                          "(NaN or Inf)")
 
         for base_element_nr, egrp in zip(
-                warped_mesh.base_element_nrs, warped_mesh.groups):
+                warped_mesh.base_element_nrs, warped_mesh.groups, strict=True):
             if not isinstance(egrp, SimplexElementGroup):
                 raise TypeError(
                     f"Unsupported element group type: '{type(egrp).__name__}'")

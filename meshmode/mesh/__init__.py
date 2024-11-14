@@ -1562,7 +1562,7 @@ def _compute_nodal_adjacency_from_vertices(mesh: Mesh) -> NodalAdjacency:
     _, nvertices = mesh.vertices.shape
     vertex_to_element: list[list[int]] = [[] for i in range(nvertices)]
 
-    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups, strict=True):
         if grp.vertex_indices is None:
             raise ValueError("unable to compute nodal adjacency without vertices")
 
@@ -1571,7 +1571,7 @@ def _compute_nodal_adjacency_from_vertices(mesh: Mesh) -> NodalAdjacency:
                 vertex_to_element[ivertex].append(base_element_nr + iel_grp)
 
     element_to_element: list[set[int]] = [set() for i in range(mesh.nelements)]
-    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups, strict=True):
         assert grp.vertex_indices is not None
 
         for iel_grp in range(grp.nelements):

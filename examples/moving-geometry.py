@@ -201,7 +201,9 @@ def run(actx, *,
         gradx = sum(
                 num_reference_derivative(discr, (i,), x)
                 for i in range(discr.dim))
-        intx = sum(actx.np.sum(xi * wi) for xi, wi in zip(x, discr.quad_weights()))
+        intx = sum(
+            actx.np.sum(xi * wi)
+            for xi, wi in zip(x, discr.quad_weights(), strict=True))
 
         assert gradx is not None
         assert intx is not None

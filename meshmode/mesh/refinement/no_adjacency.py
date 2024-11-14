@@ -93,7 +93,8 @@ class RefinerWithoutAdjacency(Refiner):
             get_group_tessellation_info,
         )
 
-        for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
+        for base_element_nr, grp in zip(
+                mesh.base_element_nrs, mesh.groups, strict=True):
             el_tess_info = get_group_tessellation_info(grp)
 
             # {{{ compute counts and index arrays
@@ -153,7 +154,9 @@ class RefinerWithoutAdjacency(Refiner):
 
                     for imidpoint, (iref_midpoint, (v1, v2)) in enumerate(zip(
                             el_tess_info.midpoint_indices,
-                            el_tess_info.midpoint_vertex_pairs)):
+                            el_tess_info.midpoint_vertex_pairs,
+                            strict=True
+                        )):
 
                         global_v1 = grp.vertex_indices[old_iel, v1]
                         global_v2 = grp.vertex_indices[old_iel, v2]

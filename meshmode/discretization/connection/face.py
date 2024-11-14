@@ -232,7 +232,7 @@ def make_face_restriction(
     connection_data = {}
 
     for igrp, (grp, fagrp_list) in enumerate(
-            zip(discr.groups, discr.mesh.facial_adjacency_groups)):
+            zip(discr.groups, discr.mesh.facial_adjacency_groups, strict=True)):
 
         mgrp = grp.mesh_el_group
 
@@ -252,7 +252,7 @@ def make_face_restriction(
                 if isinstance(fagrp, InteriorAdjacencyGroup)]
             for fagrp in int_grps:
                 group_boundary_faces.extend(
-                        zip(fagrp.elements, fagrp.element_faces))
+                        zip(fagrp.elements, fagrp.element_faces, strict=True))
 
         elif boundary_tag is FACE_RESTR_ALL:
             group_boundary_faces.extend(
@@ -271,7 +271,8 @@ def make_face_restriction(
                 group_boundary_faces.extend(
                             zip(
                                 bdry_grp.elements,
-                                bdry_grp.element_faces))
+                                bdry_grp.element_faces,
+                                strict=True))
 
         # }}}
 

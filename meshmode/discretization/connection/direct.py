@@ -708,7 +708,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         group_arrays = []
         for i_tgrp, (cgrp, group_pick_info) in enumerate(
-                zip(self.groups, self._global_point_pick_info(actx))):
+                zip(self.groups, self._global_point_pick_info(actx), strict=True)):
 
             group_array_contributions = []
 
@@ -925,7 +925,7 @@ def make_direct_full_resample_matrix(actx, conn):
     tgt_node_nr_base = 0
     mats = []
     for i_tgrp, (tgrp, cgrp) in enumerate(
-            zip(conn.to_discr.groups, conn.groups)):
+            zip(conn.to_discr.groups, conn.groups, strict=True)):
         for i_batch, batch in enumerate(cgrp.batches):
             if not len(batch.from_element_indices):
                 continue

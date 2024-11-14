@@ -358,7 +358,7 @@ def test_bdy_tags(mesh_name, bdy_ids, coord_indices, coord_values,
             square_or_cube_mesh.topology.topology_dm,
             square_or_cube_mesh.exterior_facets.facets), return_counts=True)
     assert set(fdrake_bdy_ids) == set(bdy_ids)
-    for bdy_id, fdrake_count in zip(fdrake_bdy_ids, fdrake_counts):
+    for bdy_id, fdrake_count in zip(fdrake_bdy_ids, fdrake_counts, strict=True):
         assert fdrake_count == bdy_id_to_mm_count[bdy_id]
 
     # Now make sure we have identified the correct faces
@@ -369,7 +369,7 @@ def test_bdy_tags(mesh_name, bdy_ids, coord_indices, coord_values,
             if grp.boundary_tag == bdy_id]
         assert len(matching_ext_grps) == 1
         ext_grp = matching_ext_grps[0]
-        for iel, ifac in zip(ext_grp.elements, ext_grp.element_faces):
+        for iel, ifac in zip(ext_grp.elements, ext_grp.element_faces, strict=True):
             el_vert_indices = mm_mesh.groups[0].vertex_indices[iel]
             # numpy nb: have to have comma to use advanced indexing
             face_vert_indices = el_vert_indices[face_vertex_indices[ifac], ]
@@ -672,7 +672,7 @@ def test_from_fd_idempotency(actx_factory,
                                    atol=CLOSE_ATOL)
     else:
         for dof_arr_cp, dof_arr in zip(mm_field_copy.flatten(),
-                                       mm_field.flatten()):
+                                       mm_field.flatten(), strict=True):
             np.testing.assert_allclose(actx.to_numpy(dof_arr_cp[0]),
                                        actx.to_numpy(dof_arr[0]),
                                        atol=CLOSE_ATOL)

@@ -137,7 +137,7 @@ def check_connection(actx: ArrayContext, connection: DirectDiscretizationConnect
 
     assert len(connection.groups) == len(to_discr.groups)
 
-    for cgrp, tgrp in zip(connection.groups, to_discr.groups):
+    for cgrp, tgrp in zip(connection.groups, to_discr.groups, strict=True):
         for batch in cgrp.batches:
             fgrp = from_discr.groups[batch.from_group_index]
 

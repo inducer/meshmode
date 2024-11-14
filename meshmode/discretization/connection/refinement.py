@@ -84,7 +84,7 @@ def _build_interpolation_batches_for_group(
             assert len(refinement_result) == num_children
             # Refined -> interpolates to children
             for from_bin, to_bin, child_idx in zip(
-                    from_bins[1:], to_bins[1:], refinement_result):
+                    from_bins[1:], to_bins[1:], refinement_result, strict=True):
                 from_bin.append(elt_idx)
                 to_bin.append(child_idx)
 
@@ -98,7 +98,7 @@ def _build_interpolation_batches_for_group(
     from itertools import chain
     for from_bin, to_bin, unit_nodes in zip(
             from_bins, to_bins,
-            chain([fine_unit_nodes], mapped_unit_nodes)):
+            chain([fine_unit_nodes], mapped_unit_nodes), strict=True):
         if not from_bin:
             continue
         yield InterpolationBatch(
@@ -149,7 +149,7 @@ def make_refinement_connection(actx, refiner, coarse_discr, group_factory):
     groups = []
     for group_idx, (coarse_discr_group, fine_discr_group, record) in \
             enumerate(zip(coarse_discr.groups, fine_discr.groups,
-                          refiner.group_refinement_records)):
+                          refiner.group_refinement_records, strict=True)):
         groups.append(
             DiscretizationConnectionElementGroup(
                 list(_build_interpolation_batches_for_group(

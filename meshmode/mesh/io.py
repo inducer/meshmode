@@ -186,7 +186,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
             for el_vertices, el_nodes, el_type, el_markers in zip(
                     self.element_vertices, self.element_nodes, self.element_types,
-                    self.element_markers):
+                    self.element_markers,
+                    strict=True):
                 if el_type is not group_el_type:
                     continue
 
