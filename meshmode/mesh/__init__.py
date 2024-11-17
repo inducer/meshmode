@@ -1143,7 +1143,7 @@ class Mesh:
     # TODO: Once the @property(nodal_adjacency) is past its deprecation period
     # and removed, these can deprecated in favor of non-underscored variants.
 
-    _nodal_adjacency: None | Literal[False] | NodalAdjacency
+    _nodal_adjacency: Literal[False] | NodalAdjacency | None
     """A description of the nodal adjacency of the mesh. This can be *False* if
     no adjacency is known or should be computed, *None* to compute the adjacency
     on demand or a given :class:`NodalAdjacency` instance.
@@ -1152,7 +1152,7 @@ class Mesh:
     """
 
     _facial_adjacency_groups: \
-        None | Literal[False] | tuple[tuple[FacialAdjacencyGroup, ...], ...]
+        Literal[False] | tuple[tuple[FacialAdjacencyGroup, ...], ...] | None
     """A description of the facial adjacency of the mesh. This can be *False* if
     no adjacency is known or should be computed, *None* to compute the adjacency
     on demand or a list of :class:`FacialAdjacencyGroup` instances.
