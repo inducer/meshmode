@@ -46,8 +46,8 @@ Curves
 
 .. autofunction:: make_curve_mesh
 
-Curve parametrizations
-^^^^^^^^^^^^^^^^^^^^^^
+Curve parameterizations
+^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autofunction:: circle
 .. autofunction:: ellipse
@@ -90,7 +90,7 @@ Tools for Iterative Refinement
 """
 
 
-# {{{ test curve parametrizations
+# {{{ test curve parameterizations
 
 def circle(t: np.ndarray) -> np.ndarray:
     """
