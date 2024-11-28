@@ -29,7 +29,7 @@ from collections.abc import Callable, Iterable
 from contextlib import contextmanager
 from functools import partial, update_wrapper
 from numbers import Number
-from typing import Any
+from typing import Any, TypeAlias, Union
 from warnings import warn
 
 import numpy as np
@@ -68,6 +68,9 @@ __doc__ = """
 
 
 # {{{ DOFArray
+
+ArithType: TypeAlias = Union["DOFArray", int, float, complex, np.generic]
+
 
 @with_container_arithmetic(
         bcast_obj_array=True,
@@ -372,6 +375,21 @@ class DOFArray:
         (_, arg), = args.items()
         # Why tuple([...])? https://stackoverflow.com/a/48592299
         return (f"{template_instance_name}.array_context, tuple([{arg}])")
+
+    # {{{ type stubs for arithmetic, will be replaced by @with_container_arithmetic
+
+    def __neg__(self) -> DOFArray: ...
+    def __abs__(self) -> DOFArray: ...
+    def __add__(self, other: ArithType) -> DOFArray: ...
+    def __radd__(self, other: ArithType) -> DOFArray: ...
+    def __sub__(self, other: ArithType) -> DOFArray: ...
+    def __rsub__(self, other: ArithType) -> DOFArray: ...
+    def __mul__(self, other: ArithType) -> DOFArray: ...
+    def __rmul__(self, other: ArithType) -> DOFArray: ...
+    def __truediv__(self, other: ArithType) -> DOFArray: ...
+    def __rtruediv__(self, other: ArithType) -> DOFArray: ...
+
+    # }}}
 
 # }}}
 
