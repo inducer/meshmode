@@ -226,7 +226,7 @@ def make_face_restriction(
 
     # }}}
 
-    from meshmode.mesh import _ModepyElementGroup, make_mesh
+    from meshmode.mesh import ModepyElementGroup, make_mesh
     bdry_mesh_groups = []
     connection_data = {}
 
@@ -235,7 +235,7 @@ def make_face_restriction(
 
         mgrp = grp.mesh_el_group
 
-        if not isinstance(mgrp, _ModepyElementGroup):
+        if not isinstance(mgrp, ModepyElementGroup):
             raise NotImplementedError("can only take boundary of "
                     "meshes based on SimplexElementGroup and "
                     "TensorProductElementGroup")
@@ -301,7 +301,7 @@ def make_face_restriction(
                 bdry_unit_nodes = mp.edge_clustered_nodes_for_space(space, face)
 
                 vol_basis = mp.basis_for_space(
-                        mgrp._modepy_space, mgrp._modepy_shape).functions
+                        mgrp.space, mgrp.shape).functions
 
                 vertex_indices = np.empty(
                         (ngroup_bdry_elements, face.nvertices),

@@ -316,12 +316,12 @@ class VTKConnectivity:
     def connectivity_for_element_group(self, grp):
         import modepy as mp
 
-        from meshmode.mesh import _ModepyElementGroup
+        from meshmode.mesh import ModepyElementGroup
 
-        if isinstance(grp.mesh_el_group, _ModepyElementGroup):
-            shape = grp.mesh_el_group._modepy_shape
+        if isinstance(grp.mesh_el_group, ModepyElementGroup):
+            shape = grp.mesh_el_group.shape
             space = mp.space_for_shape(shape, grp.order)
-            assert type(space) == type(grp.mesh_el_group._modepy_space)  # noqa: E721
+            assert type(space) == type(grp.mesh_el_group.space)  # noqa: E721
 
             node_tuples = mp.node_tuples_for_space(space)
 

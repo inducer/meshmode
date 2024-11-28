@@ -571,9 +571,9 @@ def find_volume_mesh_element_group_orientation(
         each negatively oriented element.
     """
 
-    from meshmode.mesh import _ModepyElementGroup
+    from meshmode.mesh import ModepyElementGroup
 
-    if not isinstance(grp, _ModepyElementGroup):
+    if not isinstance(grp, ModepyElementGroup):
         raise NotImplementedError(
                 "finding element orientations "
                 "only supported on "
@@ -756,7 +756,7 @@ def _get_tensor_product_element_flip_matrix_and_vertex_permutation(
 
     flipped_unit_nodes = np.einsum("ij,jn->in", unit_flip_matrix, grp.unit_nodes)
 
-    basis = mp.basis_for_space(grp._modepy_space, grp._modepy_shape)
+    basis = mp.basis_for_space(grp.space, grp.shape)
     flip_matrix = mp.resampling_matrix(
         basis.functions,
         flipped_unit_nodes,
