@@ -1666,7 +1666,7 @@ def warp_and_refine_until_resolved(
                     n_tail_orders=1 if warped_mesh.dim > 1 else 2)
 
             basis = mp.orthonormal_basis_for_space(
-                egrp._modepy_space, egrp._modepy_shape)
+                egrp.space, egrp.shape)
             vdm_inv = la.inv(mp.vandermonde(basis.functions, egrp.unit_nodes))
 
             mapping_coeffs = np.einsum("ij,dej->dei", vdm_inv, egrp.nodes)

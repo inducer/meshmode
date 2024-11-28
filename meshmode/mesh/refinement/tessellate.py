@@ -32,7 +32,7 @@ import numpy as np
 
 import modepy as mp
 
-from meshmode.mesh import MeshElementGroup, _ModepyElementGroup
+from meshmode.mesh import MeshElementGroup, ModepyElementGroup
 
 
 logger = logging.getLogger(__name__)
@@ -183,11 +183,11 @@ def _get_ref_midpoints(shape, ref_vertices):
 
 # {{{ modepy.shape tessellation and resampling
 
-@get_group_midpoints.register(_ModepyElementGroup)
+@get_group_midpoints.register(ModepyElementGroup)
 def _get_group_midpoints_modepy(
-        meg: _ModepyElementGroup, el_tess_info, elements):
-    shape = meg._modepy_shape
-    space = meg._modepy_space
+        meg: ModepyElementGroup, el_tess_info, elements):
+    shape = meg.shape
+    space = meg.space
 
     # get midpoints in reference coordinates
     midpoints = -1 + np.array(_get_ref_midpoints(shape, el_tess_info.ref_vertices))
@@ -204,11 +204,11 @@ def _get_group_midpoints_modepy(
     return dict(zip(elements, resampled_midpoints, strict=True))
 
 
-@get_group_tessellated_nodes.register(_ModepyElementGroup)
+@get_group_tessellated_nodes.register(ModepyElementGroup)
 def _get_group_tessellated_nodes_modepy(
-        meg: _ModepyElementGroup, el_tess_info, elements):
-    shape = meg._modepy_shape
-    space = meg._modepy_space
+        meg: ModepyElementGroup, el_tess_info, elements):
+    shape = meg.shape
+    space = meg.space
 
     # get child unit node coordinates.
     from meshmode.mesh.refinement.utils import map_unit_nodes_to_children
@@ -234,18 +234,18 @@ def _get_group_tessellated_nodes_modepy(
             }
 
 
-@get_group_tessellation_info.register(_ModepyElementGroup)
-def _get_group_tessellation_info_modepy(meg: _ModepyElementGroup):
-    shape = meg._modepy_shape
+@get_group_tessellation_info.register(ModepyElementGroup)
+def _get_group_tessellation_info_modepy(meg: ModepyElementGroup):
+    shape = meg.shape
     space = mp.space_for_shape(shape, 2)
-    assert type(space) == type(meg._modepy_space)       # noqa: E721
+    assert type(space) == type(meg.space)       # noqa: E721
 
     ref_vertices = mp.node_tuples_for_space(space)
     ref_vertices_to_index = {rv: i for i, rv in enumerate(ref_vertices)}
 
     from pytools import add_tuples
     space = mp.space_for_shape(shape, 1)
-    assert type(space) == type(meg._modepy_space)  # noqa: E721
+    assert type(space) == type(meg.space)  # noqa: E721
     orig_vertices = tuple(add_tuples(vt, vt) for vt in mp.node_tuples_for_space(space))
     orig_vertex_indices = [ref_vertices_to_index[vt] for vt in orig_vertices]
 

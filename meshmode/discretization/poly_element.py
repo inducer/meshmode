@@ -118,10 +118,10 @@ Type-based group factories
 def from_mesh_interp_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
     meg = grp.mesh_el_group
 
-    from meshmode.mesh import _ModepyElementGroup
-    assert isinstance(meg, _ModepyElementGroup)
+    from meshmode.mesh import ModepyElementGroup
+    assert isinstance(meg, ModepyElementGroup)
 
-    meg_basis = mp.basis_for_space(meg._modepy_space, meg._modepy_shape)
+    meg_basis = mp.basis_for_space(meg.space, meg.shape)
     return mp.resampling_matrix(
             meg_basis.functions,
             grp.unit_nodes,
