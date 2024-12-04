@@ -22,7 +22,6 @@ THE SOFTWARE.
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
@@ -165,7 +164,7 @@ def make_face_restriction(
             discr: Discretization,
             group_factory: ElementGroupFactory,
             boundary_tag: BoundaryTag,
-            per_face_groups: Optional[bool] = False
+            per_face_groups: bool | None = False
         ) -> DirectDiscretizationConnection:
     """Create a mesh, a discretization and a connection to restrict
     a function on *discr* to its values on the edges of element faces
@@ -227,16 +226,16 @@ def make_face_restriction(
 
     # }}}
 
-    from meshmode.mesh import _ModepyElementGroup, make_mesh
+    from meshmode.mesh import ModepyElementGroup, make_mesh
     bdry_mesh_groups = []
     connection_data = {}
 
     for igrp, (grp, fagrp_list) in enumerate(
-            zip(discr.groups, discr.mesh.facial_adjacency_groups)):
+            zip(discr.groups, discr.mesh.facial_adjacency_groups, strict=True)):
 
         mgrp = grp.mesh_el_group
 
-        if not isinstance(mgrp, _ModepyElementGroup):
+        if not isinstance(mgrp, ModepyElementGroup):
             raise NotImplementedError("can only take boundary of "
                     "meshes based on SimplexElementGroup and "
                     "TensorProductElementGroup")
@@ -252,7 +251,7 @@ def make_face_restriction(
                 if isinstance(fagrp, InteriorAdjacencyGroup)]
             for fagrp in int_grps:
                 group_boundary_faces.extend(
-                        zip(fagrp.elements, fagrp.element_faces))
+                        zip(fagrp.elements, fagrp.element_faces, strict=True))
 
         elif boundary_tag is FACE_RESTR_ALL:
             group_boundary_faces.extend(
@@ -271,7 +270,8 @@ def make_face_restriction(
                 group_boundary_faces.extend(
                             zip(
                                 bdry_grp.elements,
-                                bdry_grp.element_faces))
+                                bdry_grp.element_faces,
+                                strict=True))
 
         # }}}
 
@@ -301,7 +301,7 @@ def make_face_restriction(
                 bdry_unit_nodes = mp.edge_clustered_nodes_for_space(space, face)
 
                 vol_basis = mp.basis_for_space(
-                        mgrp._modepy_space, mgrp._modepy_shape).functions
+                        mgrp.space, mgrp.shape).functions
 
                 vertex_indices = np.empty(
                         (ngroup_bdry_elements, face.nvertices),
@@ -383,7 +383,7 @@ def make_face_to_all_faces_embedding(
             actx: ArrayContext,
             faces_connection: DirectDiscretizationConnection,
             all_faces_discr: Discretization,
-            from_discr: Optional[Discretization] = None
+            from_discr: Discretization | None = None
         ) -> DirectDiscretizationConnection:
     """Return a
     :class:`meshmode.discretization.connection.DiscretizationConnection`

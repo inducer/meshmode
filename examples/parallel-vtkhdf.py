@@ -69,7 +69,7 @@ def main(*, ambient_dim: int) -> None:
 
     vector_field = actx.thaw(discr.nodes())
     scalar_field = actx.np.sin(vector_field[0])
-    part_id = 1.0 + comm.rank + discr.zeros(actx)     # type: ignore[operator]
+    part_id = 1.0 + comm.rank + discr.zeros(actx)
     logger.info("[%4d] fields: finished", comm.rank)
 
     from meshmode.discretization.visualization import make_visualizer

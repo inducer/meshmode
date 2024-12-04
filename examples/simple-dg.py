@@ -210,7 +210,8 @@ class DGDiscretization:
                 for idim in range(self.volume_discr.dim)]
 
         return make_obj_array([
-            sum(dref_i*ipder_i for dref_i, ipder_i in zip(dref, ipder[iambient]))
+            sum(dref_i*ipder_i
+                for dref_i, ipder_i in zip(dref, ipder[iambient], strict=True))
             for iambient in range(self.volume_discr.ambient_dim)])
 
     def div(self, vecs):
@@ -259,7 +260,7 @@ class DGDiscretization:
                     vec_i,
                     arg_names=("mass_inv_mat", "vec"),
                     tagged=(FirstAxisIsElementsTag(),)
-                ) for grp, vec_i in zip(discr.groups, vec)
+                ) for grp, vec_i in zip(discr.groups, vec, strict=True)
             )
         ) / actx.thaw(self.vol_jacobian())
 
@@ -321,7 +322,8 @@ class DGDiscretization:
                             ),
                             tagged=(FirstAxisIsElementsTag(),))
                 for afgrp, volgrp, vec_i in zip(all_faces_discr.groups,
-                                                vol_discr.groups, vec)
+                                                vol_discr.groups,
+                                                vec, strict=True)
             )
         )
 

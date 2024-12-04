@@ -26,7 +26,7 @@ THE SOFTWARE.
 import logging
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -218,7 +218,7 @@ def _check_discr_same_connectivity(discr, other):
     if not all(
             sg.discretization_key() == og.discretization_key()
             and sg.nelements == og.nelements
-            for sg, og in zip(discr.groups, other.groups)):
+            for sg, og in zip(discr.groups, other.groups, strict=True)):
         return False
 
     return True
@@ -316,12 +316,12 @@ class VTKConnectivity:
     def connectivity_for_element_group(self, grp):
         import modepy as mp
 
-        from meshmode.mesh import _ModepyElementGroup
+        from meshmode.mesh import ModepyElementGroup
 
-        if isinstance(grp.mesh_el_group, _ModepyElementGroup):
-            shape = grp.mesh_el_group._modepy_shape
+        if isinstance(grp.mesh_el_group, ModepyElementGroup):
+            shape = grp.mesh_el_group.shape
             space = mp.space_for_shape(shape, grp.order)
-            assert type(space) == type(grp.mesh_el_group._modepy_space)  # noqa: E721
+            assert type(space) == type(grp.mesh_el_group.space)  # noqa: E721
 
             node_tuples = mp.node_tuples_for_space(space)
 
@@ -482,7 +482,8 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                     grp.nunit_dofs,
                     grp.nelements * grp.nunit_dofs + 1,
                     grp.nunit_dofs)
-                for grp_offset, grp in zip(grp_offsets, self.vis_discr.groups)
+                for grp_offset, grp in zip(grp_offsets[:-1], self.vis_discr.groups,
+                                           strict=True)
                 ])
 
         return self.vis_discr.mesh.nelements, connectivity, offsets
@@ -864,13 +865,13 @@ class Visualizer:
     # {{{ vtkhdf
 
     def write_vtkhdf_file(self,
-            file_name: str, names_and_fields: List[Tuple[str, Any]], *,
+            file_name: str, names_and_fields: list[tuple[str, Any]], *,
             comm=None,
             use_high_order: bool = False,
             real_only: bool = False,
             overwrite: bool = False,
-            h5_file_options: Optional[Dict[str, Any]] = None,
-            dset_options: Optional[Dict[str, Any]] = None) -> None:
+            h5_file_options: dict[str, Any] | None = None,
+            dset_options: dict[str, Any] | None = None) -> None:
         """Write a VTK HDF5 file (typical extension ``'.hdf'``) containing
         the visualization fields in *names_and_fields*.
 
@@ -1161,7 +1162,8 @@ class Visualizer:
 
             grids = []
             node_nr_base = 0
-            for igrp, (vgrp, gnodes) in enumerate(zip(connectivity.groups, nodes)):
+            for igrp, (vgrp, gnodes) in enumerate(
+                    zip(connectivity.groups, nodes, strict=True)):
                 grp_name = f"Group_{igrp:05d}"
                 h5grp = h5grid.create_group(grp_name)
 
@@ -1318,7 +1320,7 @@ def make_visualizer(actx, discr, vis_order=None,
         vis_discr = discr.copy(actx=actx, group_factory=VisGroupFactory(vis_order))
 
         if all(grp.discretization_key() == vgrp.discretization_key()
-                for grp, vgrp in zip(discr.groups, vis_discr.groups)):
+                for grp, vgrp in zip(discr.groups, vis_discr.groups, strict=True)):
             from warnings import warn
             warn("Visualization discretization is identical to base discretization. "
                     "To avoid the creation of a separate discretization for "
@@ -1383,7 +1385,7 @@ def write_nodal_adjacency_vtk_file(file_name, mesh,
             (mesh.ambient_dim, mesh.nelements),
             dtype=mesh.vertices.dtype)
 
-    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups):
+    for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups, strict=True):
         centroids[:, base_element_nr:base_element_nr + grp.nelements] = (
                 np.sum(mesh.vertices[:, grp.vertex_indices], axis=-1)
                 / grp.vertex_indices.shape[-1])

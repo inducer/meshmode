@@ -303,7 +303,8 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
         to_keep = np.isin(int_elements, cells_to_use)
         cells_to_use_inv = dict(zip(cells_to_use,
                                     np.arange(np.size(cells_to_use),
-                                              dtype=IntType)))
+                                              dtype=IntType),
+                                    strict=True))
 
         # Keep the cells that we are using and change old cell index
         # to new cell index
@@ -459,7 +460,8 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
         orient = np.ones(num_cells)
         if normals:
             for i, (normal, vert_indices) in enumerate(
-                    zip(np.array(normals), unflipped_group.vertex_indices)):
+                    zip(np.array(normals), unflipped_group.vertex_indices,
+                        strict=True)):
                 edge = vertices[:, vert_indices[1]] - vertices[:, vert_indices[0]]
                 if np.cross(normal, edge) < 0:
                     orient[i] = -1.0
@@ -612,8 +614,8 @@ build_connection_from_firedrake`.
     # Get all the nodal information we can from the topology
     with ProcessLogger(logger, "Retrieving vertex indices and computing "
                        "NodalAdjacency from firedrake mesh"):
-        vertex_indices, nodal_adjacency = \
-            _get_firedrake_nodal_info(fdrake_mesh, cells_to_use=cells_to_use)
+        vertex_indices, nodal_adjacency = (
+            _get_firedrake_nodal_info(fdrake_mesh, cells_to_use=cells_to_use))
 
         # If only using some cells, vertices may need new indices as many
         # will be removed
@@ -621,9 +623,10 @@ build_connection_from_firedrake`.
             vert_ndx_new2old = np.unique(vertex_indices.flatten())
             vert_ndx_old2new = dict(zip(vert_ndx_new2old,
                                         np.arange(np.size(vert_ndx_new2old),
-                                                  dtype=vertex_indices.dtype)))
-            vertex_indices = \
-                np.vectorize(vert_ndx_old2new.__getitem__)(vertex_indices)
+                                                  dtype=vertex_indices.dtype),
+                                        strict=True))
+            vertex_indices = (
+                np.vectorize(vert_ndx_old2new.__getitem__)(vertex_indices))
 
     with ProcessLogger(logger, "Building (possibly) unflipped "
                        "SimplexElementGroup from firedrake unit nodes/nodes"):
@@ -872,7 +875,8 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
         group = mesh.groups[group_nr]
         fd2mm_indices = np.unique(group.vertex_indices.flatten())
         coords = mesh.vertices[:, fd2mm_indices].T
-        mm2fd_indices = dict(zip(fd2mm_indices, np.arange(np.size(fd2mm_indices))))
+        mm2fd_indices = dict(zip(fd2mm_indices, np.arange(np.size(fd2mm_indices)),
+                                 strict=True))
         cells = np.vectorize(mm2fd_indices.__getitem__)(group.vertex_indices)
 
     # Get a dmplex object and then a mesh topology

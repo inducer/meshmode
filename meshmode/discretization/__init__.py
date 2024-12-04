@@ -24,7 +24,8 @@ THE SOFTWARE.
 """
 
 from abc import ABC, abstractmethod
-from typing import Hashable, Iterable, Optional, Protocol, runtime_checkable
+from collections.abc import Hashable, Iterable
+from typing import Protocol, runtime_checkable
 from warnings import warn
 
 import numpy as np
@@ -353,7 +354,7 @@ class Discretization:
                  actx: ArrayContext,
                  mesh: _Mesh,
                  group_factory: ElementGroupFactory,
-                 real_dtype: Optional[np.dtype] = None,
+                 real_dtype: np.dtype | None = None,
                  _force_actx_clone: bool = True) -> None:
         """
         :arg actx: an :class:`arraycontext.ArrayContext` used to perform
@@ -397,10 +398,10 @@ class Discretization:
         self._cached_nodes = None
 
     def copy(self,
-             actx: Optional[ArrayContext] = None,
-             mesh: Optional[_Mesh] = None,
-             group_factory: Optional[ElementGroupFactory] = None,
-             real_dtype: Optional[np.dtype] = None) -> "Discretization":
+             actx: ArrayContext | None = None,
+             mesh: _Mesh | None = None,
+             group_factory: ElementGroupFactory | None = None,
+             real_dtype: np.dtype | None = None) -> "Discretization":
         """Creates a new object of the same type with all arguments that are not
         *None* replaced. The copy is not recursive.
         """
@@ -461,7 +462,7 @@ class Discretization:
                                  for grp in self.groups)))
 
     def empty(self, actx: ArrayContext,
-              dtype: Optional[np.dtype] = None) -> _DOFArray:
+              dtype: np.dtype | None = None) -> _DOFArray:
         """Return an empty :class:`~meshmode.dof_array.DOFArray`.
 
         :arg dtype: type special value 'c' will result in a
@@ -479,7 +480,7 @@ class Discretization:
         return self._new_array(actx, actx.np.zeros, dtype=dtype)
 
     def zeros(self, actx: ArrayContext,
-              dtype: Optional[np.dtype] = None) -> _DOFArray:
+              dtype: np.dtype | None = None) -> _DOFArray:
         """Return a zero-initialized :class:`~meshmode.dof_array.DOFArray`.
 
         :arg dtype: type special value 'c' will result in a

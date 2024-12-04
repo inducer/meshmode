@@ -25,7 +25,7 @@ Features:
 - Independent of execution environment (GPU/CPU, numpy, ...)
   via `array contexts <https://github.com/inducer/arraycontext/>`__.
 - Simple mesh refinement (via bisection). Adjacency currently only
-  maintained if uniform.
+  maintained if conforming.
 - Input from Gmsh, Visualization to Vtk (both high-order curvilinear).
 - Easy data exchange with `Firedrake <https://www.firedrakeproject.org/>`__.
 

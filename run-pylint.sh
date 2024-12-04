@@ -20,4 +20,4 @@ if [[ -f .pylintrc-local.yml ]]; then
     PYLINT_RUNNER_ARGS+=" --yaml-rcfile=.pylintrc-local.yml"
 fi
 
-python .run-pylint.py $PYLINT_RUNNER_ARGS $(basename $PWD) examples/*.py test/test_*.py experiments/*.py "$@"
+python .run-pylint.py $PYLINT_RUNNER_ARGS $(basename $PWD) examples/*.py test/test_*.py "$@"
