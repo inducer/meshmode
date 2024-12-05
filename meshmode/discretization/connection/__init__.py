@@ -57,6 +57,7 @@ from meshmode.discretization.connection.projection import (
 )
 from meshmode.discretization.connection.refinement import make_refinement_connection
 from meshmode.discretization.connection.same_mesh import make_same_mesh_connection
+from meshmode.discretization.connection.permute import make_element_permutation_connection
 
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ __all__ = [
     "make_partition_connection",
     "make_refinement_connection",
     "make_same_mesh_connection",
+    "make_element_permutation_connection",
 ]
 
 __doc__ = """
@@ -101,6 +103,10 @@ Mapping between modal and nodal representations
 Same-mesh connections
 ---------------------
 .. autofunction:: make_same_mesh_connection
+
+Mesh permutations
+---------------------
+.. autofunction:: make_element_permutation_connection
 
 Restriction to faces
 --------------------
