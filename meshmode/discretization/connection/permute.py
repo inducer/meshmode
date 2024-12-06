@@ -40,11 +40,6 @@ from meshmode.transform_metadata import (
 def make_element_permutation_connection(actx, from_discr):
     """Build discretization connection containing a permuted mesh.
 
-    .. note::
-
-        This function assumes a flattened DOF array, as produced by
-        :class:`~arraycontext.flatten`.
-
     :arg actx: an :class:`~arraycontext.ArrayContext`.
     :arg from_discr: a :class:`Discretization`.
     """
