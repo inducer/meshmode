@@ -1210,20 +1210,32 @@ class Mesh:
         if _nodal_adjacency is None:
             if nodal_adjacency is not None:
                 warn("Passing 'nodal_adjacency' is deprecated and will be removed "
-                     "in 2025. Use the underscore '_nodal_adjacency' instead to "
+                     "in 2025. Use the underscored '_nodal_adjacency' instead to "
                      "match the dataclass field.",
                      DeprecationWarning, stacklevel=2)
 
-                _nodal_adjacency = nodal_adjacency
+            actual_nodal_adjacency = nodal_adjacency
+        else:
+            if nodal_adjacency is not None:
+                raise TypeError("passing both _nodal_adjacency and nodal adjacency "
+                                "is not allowed")
+            else:
+                actual_nodal_adjacency = _nodal_adjacency
 
         if _facial_adjacency_groups is None:
             if facial_adjacency_groups is not None:
                 warn("Passing 'facial_adjacency_groups' is deprecated and will be "
-                     "removed in 2025. Use the underscore '_facial_adjacency_groups'"
+                     "removed in 2025. Use the underscored '_facial_adjacency_groups'"
                      " instead to match the dataclass field.",
                      DeprecationWarning, stacklevel=2)
 
-                _facial_adjacency_groups = facial_adjacency_groups
+            actual_facial_adjacency_groups = facial_adjacency_groups
+        else:
+            if facial_adjacency_groups is not None:
+                raise TypeError("passing both _facial_adjacency_groups "
+                                "and facial adjacency_groups is not allowed")
+            else:
+                actual_facial_adjacency_groups = _facial_adjacency_groups
 
         if not factory_constructed:
             warn(f"Calling '{type(self).__name__}(...)' constructor is deprecated. "
@@ -1239,17 +1251,17 @@ class Mesh:
                 is_conforming = None
 
             if not is_conforming:
-                if _nodal_adjacency is None:
-                    _nodal_adjacency = False
-                if _facial_adjacency_groups is None:
-                    _facial_adjacency_groups = False
+                if actual_nodal_adjacency is None:
+                    actual_nodal_adjacency = False
+                if actual_facial_adjacency_groups is None:
+                    actual_facial_adjacency_groups = False
 
             if (
-                    _nodal_adjacency is not False
-                    and _nodal_adjacency is not None):
-                if not isinstance(_nodal_adjacency, NodalAdjacency):
-                    nb_starts, nbs = _nodal_adjacency
-                    _nodal_adjacency = NodalAdjacency(
+                    actual_nodal_adjacency is not False
+                    and actual_nodal_adjacency is not None):
+                if not isinstance(actual_nodal_adjacency, NodalAdjacency):
+                    nb_starts, nbs = actual_nodal_adjacency
+                    actual_nodal_adjacency = NodalAdjacency(
                             neighbors_starts=nb_starts,
                             neighbors=nbs)
 
@@ -1257,10 +1269,10 @@ class Mesh:
                     del nbs
 
             if (
-                    _facial_adjacency_groups is not False
-                    and _facial_adjacency_groups is not None):
-                _facial_adjacency_groups = _complete_facial_adjacency_groups(
-                    _facial_adjacency_groups,
+                    actual_facial_adjacency_groups is not False
+                    and actual_facial_adjacency_groups is not None):
+                actual_facial_adjacency_groups = _complete_facial_adjacency_groups(
+                    actual_facial_adjacency_groups,
                     element_id_dtype,
                     face_id_dtype)
 
@@ -1270,9 +1282,9 @@ class Mesh:
         object.__setattr__(self, "vertex_id_dtype", vertex_id_dtype)
         object.__setattr__(self, "element_id_dtype", element_id_dtype)
         object.__setattr__(self, "face_id_dtype", face_id_dtype)
-        object.__setattr__(self, "_nodal_adjacency", _nodal_adjacency)
+        object.__setattr__(self, "_nodal_adjacency", actual_nodal_adjacency)
         object.__setattr__(self, "_facial_adjacency_groups",
-                           _facial_adjacency_groups)
+                           actual_facial_adjacency_groups)
 
         if __debug__ and not factory_constructed and not skip_tests:
             check_mesh_consistency(
@@ -1708,7 +1720,9 @@ def _match_faces_by_vertices(
     # faces with the same vertices
     order = np.lexsort(face_vertex_indices_increasing)
     diffs = np.diff(face_vertex_indices_increasing[:, order], axis=1)
-    match_indices, = (~np.any(diffs, axis=0)).nonzero()
+    no_diff_flags = ~np.any(diffs, axis=0)
+    assert isinstance(no_diff_flags, np.ndarray)
+    match_indices, = no_diff_flags.nonzero()
 
     return np.stack((order[match_indices], order[match_indices+1]))
 
