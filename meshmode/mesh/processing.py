@@ -25,7 +25,7 @@ THE SOFTWARE.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from functools import reduce
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import numpy.linalg as la
@@ -1059,7 +1059,8 @@ def _match_vertices(
         for ivertex in range(len(tgt_vertex_indices)):
             tree.insert(ivertex, tgt_vertex_bboxes[:, :, ivertex])
 
-        matched_tgt_vertices = np.full(len(src_vertex_indices), -1)
+        matched_tgt_vertices: np.ndarray[tuple[int, ...], np.dtype[Any]] \
+            = np.full(len(src_vertex_indices), -1)
         for ivertex in range(len(src_vertex_indices)):
             mapped_src_vertex = mapped_src_vertices[:, ivertex]
             matches = np.array(list(tree.generate_matches(mapped_src_vertex)))
