@@ -821,8 +821,7 @@ class Visualizer:
                 # we simply overwrite below, no need to remove
                 pass
             else:
-                raise FileExistsError("output file '%s' already exists"
-                                      % file_name)
+                raise FileExistsError(f"output file '{file_name}' already exists")
 
         if (responsible_for_writing_par_manifest
                 and par_manifest_filename is not None):
@@ -831,10 +830,8 @@ class Visualizer:
                     # we simply overwrite below, no need to remove
                     pass
                 else:
-                    raise FileExistsError("output file '%s' already exists"
-                            % par_manifest_filename)
-            else:
-                pass
+                    raise FileExistsError(
+                        f"output file '{par_manifest_filename}' already exists")
 
         # }}}
 
