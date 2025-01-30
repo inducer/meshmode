@@ -968,6 +968,15 @@ def refine_mesh_and_get_urchin_warper(
 
     .. versionadded: 2018.1
     """
+    try:
+        from scipy.special import sph_harm_y
+    except ImportError:
+        # NOTE: this was deprecated in v1.15 and (will be) removed in v1.17
+        from scipy.special import sph_harm as _sph_harm_y
+
+        def sph_harm_y(n: int, m: int, p: np.ndarray, t: np.ndarray) -> np.ndarray:
+            # NOTE: this swaps both (n, m) and (theta, phi)
+            return _sph_harm_y(m, n, t, p)
 
     def sph_harm(m: int, n: int, pts: np.ndarray) -> np.ndarray:
         assert abs(m) <= n
@@ -976,16 +985,9 @@ def refine_mesh_and_get_urchin_warper(
         theta = np.arccos(z/r)
         phi = np.arctan2(y, x)
 
-        import scipy.special as sps
-
-        # Note: This matches the spherical harmonic
-        # convention in the QBX3D paper:
+        # NOTE: This matches the spherical harmonic convention in the QBX3D paper:
         # https://arxiv.org/abs/1805.06106
-        #
-        # Numpy takes arguments in the order (theta, phi)
-        # *and* swaps their meanings, so passing the
-        # arguments swapped maintains the intended meaning.
-        return sps.sph_harm(m, n, phi, theta)       # pylint: disable=no-member
+        return sph_harm_y(n, m, theta, phi)
 
     def map_coords(pts: np.ndarray) -> np.ndarray:
         r = np.sqrt(np.sum(pts**2, axis=0))
