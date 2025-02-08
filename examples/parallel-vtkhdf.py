@@ -73,7 +73,7 @@ def main(*, ambient_dim: int) -> None:
     logger.info("[%4d] fields: finished", comm.rank)
 
     from meshmode.discretization.visualization import make_visualizer
-    vis = make_visualizer(actx, discr, vis_order=order, force_equidistant=False)
+    vis = make_visualizer(actx, discr, force_equidistant=False)
     logger.info("[%4d] make_visualizer: finished", comm.rank)
 
     filename = f"parallel-vtkhdf-example-{ambient_dim}d.hdf"
