@@ -71,6 +71,7 @@ Surfaces
 .. autofunction:: generate_cube_surface
 .. autofunction:: generate_sphere
 .. autofunction:: generate_torus
+.. autofunction:: generate_cruller
 .. autofunction:: refine_mesh_and_get_urchin_warper
 .. autofunction:: generate_urchin
 .. autofunction:: generate_surface_of_revolution
@@ -761,19 +762,42 @@ def generate_surface_of_revolution(
 
 def generate_torus_and_cycle_vertices(
         r_major: float, r_minor: float,
-        n_major: int = 20, n_minor: int = 10, order: int = 1,
+        *,
+        n_major: int = 20,
+        n_minor: int = 10,
+        order: int = 1,
         node_vertex_consistency_tolerance: float | bool | None = None,
         unit_nodes: np.ndarray | None = None,
+        r_minor_func: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None,
         group_cls: type[MeshElementGroup] | None = None,
-        ) -> Mesh:
+        ) -> tuple[Mesh, list[int], list[int]]:
+    """
+    :arg r_major: This and the other arguments match those of :func:`generate_torus`.
+    :arg r_minor_func: A callable that takes :math:`(u, v)` coordinates on the
+        torus on applies a transformation to them. This is then multiplied into
+        the minor radius ``r_minor`` to create a modulation in its amplitude,
+        i.e. distort the torus. It is used in :func:`generate_cruller`.
+
+    :returns: a tuple of ``(mesh, major_indices, minor_indices)``. The indices
+        are for points around the torus, e.g. ``major_indices`` gives a list of
+        *n_major* points around the major radius of the torus.
+    """
+
+    def default_func(u: np.ndarray, v: np.ndarray) -> np.ndarray:
+        return 1.0
+
     a = r_major
     b = r_minor
 
-    # {{{ create periodic grid
+    if r_minor_func is None:
+        r_minor_func = default_func
 
     from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
+
     if group_cls is None:
         group_cls = SimplexElementGroup
+
+    # {{{ create periodic grid
 
     def idx(i: int, j: int) -> int:
         return i + j * (n_major + 1)
@@ -834,18 +858,20 @@ def generate_torus_and_cycle_vertices(
     vertex_indices = (i % n_major) + (j % n_minor) * n_major
 
     # evaluate vertices on torus
+    bhat = b * r_minor_func(u, v)
     vertices = np.stack([
-        np.cos(u) * (a + b*np.cos(v)),
-        np.sin(u) * (a + b*np.cos(v)),
-        b * np.sin(v)
+        np.cos(u) * (a + bhat * np.cos(v)),
+        np.sin(u) * (a + bhat * np.cos(v)),
+        bhat * np.sin(v)
         ]).reshape(3, -1)
 
     # evaluate nodes on torus
     u, v = grp.nodes
+    bhat = b * r_minor_func(u, v)
     nodes = np.stack([
-        np.cos(u) * (a + b*np.cos(v)),
-        np.sin(u) * (a + b*np.cos(v)),
-        b * np.sin(v)
+        np.cos(u) * (a + bhat * np.cos(v)),
+        np.sin(u) * (a + bhat * np.cos(v)),
+        bhat * np.sin(v)
         ])
 
     # }}}
@@ -868,7 +894,10 @@ def generate_torus_and_cycle_vertices(
 
 def generate_torus(
         r_major: float, r_minor: float,
-        n_major: int = 20, n_minor: int = 10, order: int = 1,
+        n_major: int = 20,
+        n_minor: int = 10,
+        *,
+        order: int = 1,
         node_vertex_consistency_tolerance: float | bool | None = None,
         unit_nodes: np.ndarray | None = None,
         group_cls: type[MeshElementGroup] | None = None) -> Mesh:
@@ -907,9 +936,9 @@ def generate_torus(
     .. math::
 
         \begin{aligned}
-        x &= \cos(u) (r_\text{major} + r_\text{minor} \cos(v)) \\
-        y &= \sin(u) (r_\text{major} + r_\text{minor} \sin(v)) \\
-        z &= r_\text{minor} \sin(v)
+        x &= \cos(u) (r_\text{major} + r_\text{minor} \cos(v)), \\
+        y &= \sin(u) (r_\text{major} + r_\text{minor} \sin(v)). \\
+        z &= r_\text{minor} \sin(v).
         \end{aligned}
 
     where :math:`r_\text{major}` and :math:`r_\text{minor}` are the radii of the
@@ -933,7 +962,59 @@ def generate_torus(
     """
 
     mesh, _, _ = generate_torus_and_cycle_vertices(
-            r_major, r_minor, n_major, n_minor, order,
+            r_major, r_minor,
+            n_major=n_major,
+            n_minor=n_minor,
+            order=order,
+            node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
+            unit_nodes=unit_nodes,
+            group_cls=group_cls)
+
+    return mesh
+
+
+# }}}
+
+
+# {{{ generate_cruller
+
+def generate_cruller(
+        r_major: float, r_minor: float,
+        n_major: int = 20,
+        n_minor: int = 10,
+        *,
+        order: int = 1,
+        node_vertex_consistency_tolerance: float | bool | None = None,
+        unit_nodes: np.ndarray | None = None,
+        group_cls: type[MeshElementGroup] | None = None) -> Mesh:
+    r"""Generate a "cruller" (as the pastry) like geometry.
+
+    The "cruller" is defined by
+
+    .. math::
+
+        \begin{aligned}
+        x &= \cos(u) (r_\text{major} + r_\text{minor} H(u, v) \cos(v)), \\
+        y &= \sin(u) (r_\text{major} + r_\text{minor} H(u, v) \sin(v)), \\
+        z &= r_\text{minor} H(u, v) \sin(v),
+        \end{aligned}
+
+    where :math:`H(u, v) = 1.0 + 0.25 \cos(5 u + 3 v)`. This geometry and
+    parameters are taken from [Barnett2020]_.
+
+    .. [Barnett2020] A. Barnett, L. Greengard, T. Hagstrom,
+        *High-Order Discretization of a Stable Time-Domain Integral Equation for
+        3D Acoustic Scattering*,
+        Journal of Computational Physics, Vol. 402, pp. 109047--109047, 2020,
+        `DOI <https://doi.org/10.1016/j.jcp.2019.109047>`__.
+    """
+
+    mesh, _, _ = generate_torus_and_cycle_vertices(
+            r_major, r_minor,
+            n_major=n_major,
+            n_minor=n_minor,
+            order=order,
+            r_minor_func=lambda u, v: 1.0 + 0.25 * np.cos(5.0 * u + 3.0 * v),
             node_vertex_consistency_tolerance=node_vertex_consistency_tolerance,
             unit_nodes=unit_nodes,
             group_cls=group_cls)

@@ -1118,10 +1118,18 @@ def test_cube_icosphere(actx_factory, order, visualize=False):
 # {{{ test_tensor_torus
 
 @pytest.mark.parametrize("order", [3, 4])
-def test_tensor_torus(actx_factory, order, visualize=False):
-    mesh = mgen.generate_torus(
-            r_major=10.0, r_minor=5,
-            n_major=24, n_minor=12,
+@pytest.mark.parametrize("name", ["torus", "cruller"])
+def test_tensor_torus(actx_factory, order, name, visualize=False):
+    if name == "torus":
+        func = mgen.generate_torus
+    elif name == "cruller":
+        func = mgen.generate_cruller
+    else:
+        raise ValueError(f"Unknown torus type: {name!r}")
+
+    mesh = func(
+            r_major=10.0, r_minor=5.0,
+            n_major=128, n_minor=64,
             order=order,
             group_cls=TensorProductElementGroup,
             )
@@ -1130,9 +1138,10 @@ def test_tensor_torus(actx_factory, order, visualize=False):
         return
 
     from meshmode.mesh.visualization import vtk_visualize_mesh
+
     actx = actx_factory()
     vtk_visualize_mesh(actx, mesh,
-            f"quad_torus_order_{order:03d}.vtu",
+            f"test_tensor_{name}_order_{order:03d}.vtu",
             vtk_high_order=False, overwrite=True)
 
 # }}}
