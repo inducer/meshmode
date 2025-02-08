@@ -18,7 +18,7 @@ from meshmode.mesh import BTAG_ALL, make_mesh
 def main():
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue, force_device_scalars=True)
+    actx = PyOpenCLArrayContext(queue)
 
     npts1d = 100  # use 300 for actual print
     rs_coords = np.linspace(-1, 1, npts1d)

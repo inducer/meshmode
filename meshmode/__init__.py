@@ -85,4 +85,4 @@ def _acf():
 
     context = cl._csc()
     queue = cl.CommandQueue(context)
-    return PyOpenCLArrayContext(queue, force_device_scalars=True)
+    return PyOpenCLArrayContext(queue)
