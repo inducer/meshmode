@@ -11,7 +11,7 @@ order = 4
 def main():
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue, force_device_scalars=True)
+    actx = PyOpenCLArrayContext(queue)
 
     from meshmode.mesh.generation import (  # noqa: F401
         generate_icosahedron,

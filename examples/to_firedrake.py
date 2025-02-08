@@ -52,7 +52,7 @@ def main():
 
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue, force_device_scalars=True)
+    actx = PyOpenCLArrayContext(queue)
 
     nel_1d = 16
     from meshmode.mesh.generation import generate_regular_rect_mesh

@@ -464,7 +464,7 @@ def main(lazy=False):
 
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    actx_outer = PyOpenCLArrayContext(queue, force_device_scalars=True)
+    actx_outer = PyOpenCLArrayContext(queue)
     if lazy:
         actx_rhs = PytatoPyOpenCLArrayContext(queue)
     else:

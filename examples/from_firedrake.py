@@ -57,7 +57,7 @@ def main(visualize=True):
     # Make connections
     cl_ctx = cl.create_some_context()
     queue = cl.CommandQueue(cl_ctx)
-    actx = PyOpenCLArrayContext(queue, force_device_scalars=True)
+    actx = PyOpenCLArrayContext(queue)
 
     fd_connection = build_connection_from_firedrake(actx, fd_fspace)
     fd_bdy_connection = \
