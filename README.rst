@@ -4,10 +4,10 @@ meshmode: High-Order Meshes and Discontinuous Function Spaces
 .. image:: https://gitlab.tiker.net/inducer/meshmode/badges/main/pipeline.svg
     :alt: Gitlab Build Status
     :target: https://gitlab.tiker.net/inducer/meshmode/commits/main
-.. image:: https://github.com/inducer/meshmode/workflows/CI/badge.svg
+.. image:: https://github.com/inducer/meshmode/actions/workflows/ci.yml/badge.svg
     :alt: Github Build Status
-    :target: https://github.com/inducer/meshmode/actions?query=branch%3Amain+workflow%3ACI
-.. image:: https://badge.fury.io/py/meshmode.png
+    :target: https://github.com/inducer/meshmode/actions/workflows/ci.yml
+.. image:: https://badge.fury.io/py/meshmode.svg
     :alt: Python Package Index Release Page
     :target: https://pypi.org/project/meshmode/
 
@@ -35,5 +35,5 @@ Meshmode emerged as the shared discretization layer for `pytential
 
 Places on the web related to meshmode:
 
-* `Source code on Github <https://github.com/inducer/meshmode>`_
-* `Documentation <https://documen.tician.de/meshmode>`_
+* `Source code on Github <https://github.com/inducer/meshmode>`__
+* `Documentation <https://documen.tician.de/meshmode>`__
