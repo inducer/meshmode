@@ -417,7 +417,7 @@ def write_stl_file(mesh: Mesh, stl_name: str, *, overwrite: bool = False) -> Non
 def visualize_mesh_vertex_resampling_error(
         actx: ArrayContext, mesh: Mesh, filename: str, *,
         overwrite: bool = False) -> None:
-    # {{{ comput resampling errors
+    # {{{ compute resampling errors
 
     from meshmode.dof_array import DOFArray
     from meshmode.mesh import _mesh_group_node_vertex_error
