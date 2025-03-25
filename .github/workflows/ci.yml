@@ -78,7 +78,7 @@ jobs:
         steps:
         -   name: "Checkout"
             run: |
-                cd /home/firedrake
+                cd /root
                 mkdir meshmode
                 cd meshmode
                 git init
@@ -89,18 +89,18 @@ jobs:
 
         -   name: "Make a venv"
             run: |
-                cd /home/firedrake
+                cd /root
                 python3 -m venv --system-site-packages myvenv
 
         -   name: "Dependencies"
             run: |
-                cd /home/firedrake/meshmode
+                cd /root/meshmode
                 . .ci/install-for-firedrake.sh
 
         -   name: "Test"
             run: |
-                cd /home/firedrake/meshmode
-                . /home/firedrake/myvenv/bin/activate
+                cd /root/meshmode
+                . /root/myvenv/bin/activate
                 cd test
                 python -m pytest --tb=native -rxsw test_firedrake_interop.py
 
@@ -112,7 +112,7 @@ jobs:
         steps:
         -   name: "Checkout"
             run: |
-                cd /home/firedrake
+                cd /root
                 mkdir meshmode
                 cd meshmode
                 git init
@@ -123,18 +123,18 @@ jobs:
 
         -   name: "Make a venv"
             run: |
-                cd /home/firedrake
+                cd /root
                 python3 -m venv --system-site-packages myvenv
 
         -   name: "Dependencies"
             run: |
-                cd /home/firedrake/meshmode
+                cd /root/meshmode
                 . .ci/install-for-firedrake.sh
 
         -   name: "Examples"
             run: |
-                cd /home/firedrake/meshmode
-                . /home/firedrake/myvenv/bin/activate
+                cd /root/meshmode
+                . /root/myvenv/bin/activate
                 . ./.ci/run_firedrake_examples.sh
 
     examples3:

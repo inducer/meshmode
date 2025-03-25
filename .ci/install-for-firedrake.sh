@@ -5,7 +5,7 @@ sudo apt update
 sudo apt upgrade -y
 sudo apt install time
 
-. "/home/firedrake/myvenv/bin/activate"
+. "/root/myvenv/bin/activate"
 grep -v loopy requirements.txt > /tmp/myreq.txt
 
 # no need for these in the Firedrake tests
