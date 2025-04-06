@@ -132,7 +132,7 @@ class NodalDGContext:
                     f"Nodes{dim}D(N)", nout=dim, verbose=False)
 
             equilat_to_unit_func_name = (
-                    "".join(self.AXES[:dim] + ("to",) + self.REF_AXES[:dim]))
+                    "".join((*self.AXES[:dim], "to", *self.REF_AXES[:dim])))
 
             unit_nodes_arrays = self.octave.feval(
                     equilat_to_unit_func_name, *unit_nodes_arrays,
