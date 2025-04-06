@@ -1025,7 +1025,7 @@ class Visualizer:
                     field = np.stack(field).T
 
                 create_dataset(point_data, name, field,
-                               shape=(global_node_count,) + field.shape[1:],
+                               shape=(global_node_count, *field.shape[1:]),
                                offset=global_node_offset)
 
             # }}}
