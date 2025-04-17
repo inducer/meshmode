@@ -1254,21 +1254,34 @@ def generate_box_mesh(
 
     shape_m1 = tuple(max(si-1, 0) for si in shape)
 
+    box_faces = [
+        side + str(axis)
+        for axis in range(dim)
+        for side in ["-", "+"]]
+
     if dim == 1:
         if mesh_type is not None:
             raise ValueError(f"unsupported mesh type: '{mesh_type}'")
 
         nelements = shape_m1[0]
         nvertices_per_element = 2
-        el_vertices = np.empty((nelements, nvertices_per_element), dtype=np.int32)
 
-        for i in range(shape_m1[0]):
-            # a--b
+        if nelements > 0:
+            i0 = np.arange(shape_m1[0])
 
-            a = vertex_indices[i]
-            b = vertex_indices[i+1]
+            a0 = vertex_indices[i0]
+            a1 = vertex_indices[i0+1]
 
-            el_vertices[i, :] = (a, b)
+            el_vertices = np.array([a0, a1], dtype=np.int32).T
+            box_face_to_elements = {
+                "-0": np.array([0], dtype=np.int32),
+                "+0": np.array([shape_m1[0]-1], dtype=np.int32)}
+
+        else:
+            el_vertices = np.empty((0, nvertices_per_element), dtype=np.int32)
+            box_face_to_elements = {
+                box_face: np.array([], dtype=np.int32)
+                for box_face in box_faces}
 
     elif dim == 2:
         if is_tp:
@@ -1306,38 +1319,76 @@ def generate_box_mesh(
             raise ValueError(f"unsupported mesh type: '{mesh_type}'")
 
         nelements = nsubelements * product(shape_m1)
-        el_vertices = np.empty((nelements, nvertices_per_element), dtype=np.int32)
 
-        iel = 0
-        for i in range(shape_m1[0]):
-            for j in range(shape_m1[1]):
+        if nelements > 0:
+            base_idx_tuples = np.array(list(np.ndindex(shape_m1)))
 
-                # c--d
-                # |  |
-                # a--b
+            i0 = base_idx_tuples[:, 0]
+            j0 = base_idx_tuples[:, 1]
 
-                a = vertex_indices[i, j]
-                b = vertex_indices[i+1, j]
-                c = vertex_indices[i, j+1]
-                d = vertex_indices[i+1, j+1]
+            a00 = vertex_indices[i0, j0]
+            a01 = vertex_indices[i0, j0+1]
+            a10 = vertex_indices[i0+1, j0]
+            a11 = vertex_indices[i0+1, j0+1]
 
-                if is_tp:
-                    el_vertices[iel, :] = (a, b, c, d)
+            if is_tp:
+                el_vertices = np.array([a00, a10, a01, a11], dtype=np.int32).T
 
-                elif mesh_type == "X":
-                    m = midpoint_indices[i, j]
-                    el_vertices[iel:iel+4, :] = [
-                        (a, b, m),
-                        (b, d, m),
-                        (d, c, m),
-                        (c, a, m)]
+                box_face_to_elements = {}
+                for box_face in box_faces:
+                    side, axis = box_face
+                    axis = int(axis)
+                    idx_crit = 0 if side == "-" else shape_m1[axis] - 1
+                    elements, = np.where(base_idx_tuples[:, axis] == idx_crit)
+                    box_face_to_elements[box_face] = elements
 
-                else:
-                    el_vertices[iel:iel+2, :] = [
-                        (a, b, c),
-                        (d, c, b)]
+            elif mesh_type == "X":
+                m = midpoint_indices[i0, j0]
+                el_vertices = np.empty(
+                    (nelements, nvertices_per_element), dtype=np.int32)
+                el_vertices[0::4, :] = np.array([a00, a10, m]).T
+                el_vertices[1::4, :] = np.array([a10, a11, m]).T
+                el_vertices[2::4, :] = np.array([a11, a01, m]).T
+                el_vertices[3::4, :] = np.array([a01, a00, m]).T
 
-                iel += nsubelements
+                box_face_to_subelement_offset = {
+                    "-0": 3,
+                    "+0": 1,
+                    "-1": 0,
+                    "+1": 2}
+
+                box_face_to_elements = {}
+                for box_face in box_faces:
+                    side, axis = box_face
+                    axis = int(axis)
+                    idx_crit = 0 if side == "-" else shape_m1[axis] - 1
+                    box_elements, = np.where(base_idx_tuples[:, axis] == idx_crit)
+                    box_face_to_elements[box_face] = \
+                        4*box_elements + box_face_to_subelement_offset[box_face]
+
+            else:
+                el_vertices = np.empty(
+                    (nelements, nvertices_per_element), dtype=np.int32)
+                el_vertices[0::2, :] = np.array([a00, a10, a01]).T
+                el_vertices[1::2, :] = np.array([a11, a01, a10]).T
+
+                side_to_subelement_offset = {
+                    "-": 0,
+                    "+": 1}
+
+                box_face_to_elements = {}
+                for box_face in box_faces:
+                    side, axis = box_face
+                    axis = int(axis)
+                    idx_crit = 0 if side == "-" else shape_m1[axis] - 1
+                    box_elements, = np.where(base_idx_tuples[:, axis] == idx_crit)
+                    box_face_to_elements[box_face] = \
+                        2*box_elements + side_to_subelement_offset[side]
+        else:
+            el_vertices = np.empty((0, nvertices_per_element), dtype=np.int32)
+            box_face_to_elements = {
+                box_face: np.array([], dtype=np.int32)
+                for box_face in box_faces}
 
     elif dim == 3:
         if is_tp:
@@ -1355,38 +1406,68 @@ def generate_box_mesh(
             raise ValueError(f"unsupported mesh type: '{mesh_type}'")
 
         nelements = nsubelements * product(shape_m1)
-        el_vertices = np.empty((nelements, nvertices_per_element), dtype=np.int32)
 
-        iel = 0
-        for i in range(shape_m1[0]):
-            for j in range(shape_m1[1]):
-                for k in range(shape_m1[2]):
+        if nelements > 0:
+            base_idx_tuples = np.array(list(np.ndindex(shape_m1)))
 
-                    a000 = vertex_indices[i, j, k]
-                    a001 = vertex_indices[i, j, k+1]
-                    a010 = vertex_indices[i, j+1, k]
-                    a011 = vertex_indices[i, j+1, k+1]
+            i0 = base_idx_tuples[:, 0]
+            j0 = base_idx_tuples[:, 1]
+            k0 = base_idx_tuples[:, 2]
 
-                    a100 = vertex_indices[i+1, j, k]
-                    a101 = vertex_indices[i+1, j, k+1]
-                    a110 = vertex_indices[i+1, j+1, k]
-                    a111 = vertex_indices[i+1, j+1, k+1]
+            a000 = vertex_indices[i0, j0, k0]
+            a001 = vertex_indices[i0, j0, k0+1]
+            a010 = vertex_indices[i0, j0+1, k0]
+            a011 = vertex_indices[i0, j0+1, k0+1]
+            a100 = vertex_indices[i0+1, j0, k0]
+            a101 = vertex_indices[i0+1, j0, k0+1]
+            a110 = vertex_indices[i0+1, j0+1, k0]
+            a111 = vertex_indices[i0+1, j0+1, k0+1]
 
-                    if is_tp:
-                        el_vertices[iel, :] = (
-                            a000, a100, a010, a110,
-                            a001, a101, a011, a111)
+            if is_tp:
+                el_vertices = np.array([
+                    a000, a100, a010, a110,
+                    a001, a101, a011, a111], dtype=np.int32).T
 
-                    else:
-                        el_vertices[iel:iel+6, :] = [
-                            (a000, a100, a010, a001),
-                            (a101, a100, a001, a010),
-                            (a101, a011, a010, a001),
-                            (a100, a010, a101, a110),
-                            (a011, a010, a110, a101),
-                            (a011, a111, a101, a110)]
+                box_face_to_elements = {}
+                for box_face in box_faces:
+                    side, axis = box_face
+                    axis = int(axis)
+                    idx_crit = 0 if side == "-" else shape_m1[axis] - 1
+                    elements, = np.where(base_idx_tuples[:, axis] == idx_crit)
+                    box_face_to_elements[box_face] = elements
 
-                    iel += nsubelements
+            else:
+                el_vertices = np.empty(
+                    (nelements, nvertices_per_element), dtype=np.int32)
+                el_vertices[0::6, :] = np.array([a000, a100, a010, a001]).T
+                el_vertices[1::6, :] = np.array([a101, a100, a001, a010]).T
+                el_vertices[2::6, :] = np.array([a101, a011, a010, a001]).T
+                el_vertices[3::6, :] = np.array([a100, a010, a101, a110]).T
+                el_vertices[4::6, :] = np.array([a011, a010, a110, a101]).T
+                el_vertices[5::6, :] = np.array([a011, a111, a101, a110]).T
+
+                box_face_to_subelement_offsets = {
+                    "-0": (0, 2),
+                    "+0": (3, 5),
+                    "-1": (0, 1),
+                    "+1": (4, 5),
+                    "-2": (0, 3),
+                    "+2": (2, 5)}
+
+                box_face_to_elements = {}
+                for box_face in box_faces:
+                    side, axis = box_face
+                    axis = int(axis)
+                    idx_crit = 0 if side == "-" else shape_m1[axis] - 1
+                    box_elements, = np.where(base_idx_tuples[:, axis] == idx_crit)
+                    box_face_to_elements[box_face] = np.concatenate([
+                        6*box_elements + offset
+                        for offset in box_face_to_subelement_offsets[box_face]])
+        else:
+            el_vertices = np.empty((0, nvertices_per_element), dtype=np.int32)
+            box_face_to_elements = {
+                box_face: np.array([], dtype=np.int32)
+                for box_face in box_faces}
 
     else:
         raise NotImplementedError("box meshes of dimension %d" % dim)
@@ -1408,57 +1489,56 @@ def generate_box_mesh(
 
     facial_adjacency_groups = None
     face_vertex_indices_to_tags = {}
-    boundary_tags = list(boundary_tag_to_face.keys())
-    nbnd_tags = len(boundary_tags)
 
-    if nbnd_tags > 0:
+    if boundary_tag_to_face:
         vert_index_to_tuple = {
                 vertex_indices[itup]: itup
                 for itup in np.ndindex(shape)}
 
-        for ielem in range(0, grp.nelements):
-            for ref_fvi in grp.face_vertex_indices():
-                fvi = grp.vertex_indices[ielem, ref_fvi]
+        box_face_to_tags = {}
+        for tag, tagged_box_faces in boundary_tag_to_face.items():
+            for box_face in tagged_box_faces:
+                if len(box_face) != 2:
+                    raise ValueError(
+                        f"face identifier '{box_face}' does not "
+                        "consist of exactly two characters")
+                side, axis = box_face
                 try:
-                    fvi_tuples = [vert_index_to_tuple[i] for i in fvi]
-                except KeyError:
-                    # Happens for interior faces of "X" meshes because
-                    # midpoints aren't in vert_index_to_tuple. We don't
-                    # care about them.
-                    continue
+                    axis = axes.index(axis)
+                except ValueError as exc:
+                    raise ValueError(
+                        "unrecognized axis in face identifier "
+                        f"'{box_face}'") from exc
+                if axis >= dim:
+                    raise ValueError(f"axis in face identifier '{box_face}' "
+                                     f"does not exist in {dim}D")
+                if side not in ("-", "+"):
+                    raise ValueError("first character of face identifier"
+                                     f" '{box_face}' is not '+' or '-'")
+                box_face_to_tags.setdefault(f"{side}{axis}", []).append(tag)
 
-                for tag in boundary_tags:
-                    # Need to map the correct face vertices to the boundary tags
-                    for face in boundary_tag_to_face[tag]:
-                        if len(face) != 2:
-                            raise ValueError(
-                                "face identifier '%s' does not "
-                                "consist of exactly two characters" % face)
+        for box_face, elements in box_face_to_elements.items():
+            try:
+                tags = box_face_to_tags[box_face]
+            except KeyError:
+                continue
+            side, axis = box_face
+            axis = int(axis)
+            vert_crit = 0 if side == "-" else shape[axis] - 1
+            for ielem in elements:
+                for ref_fvi in grp.face_vertex_indices():
+                    fvi = grp.vertex_indices[ielem, ref_fvi]
+                    try:
+                        fvi_tuples = [vert_index_to_tuple[i] for i in fvi]
+                    except KeyError:
+                        # Happens for interior faces of "X" meshes because
+                        # midpoints aren't in vert_index_to_tuple. We don't
+                        # care about them.
+                        continue
 
-                        side, axis = face
-                        try:
-                            axis = axes.index(axis)
-                        except ValueError as exc:
-                            raise ValueError(
-                                "unrecognized axis in face identifier "
-                                f"'{face}'") from exc
-                        if axis >= dim:
-                            raise ValueError("axis in face identifier '%s' "
-                                             "does not exist in %dD" % (face, dim))
-
-                        if side == "-":
-                            vert_crit = 0
-                        elif side == "+":
-                            vert_crit = shape[axis] - 1
-                        else:
-                            raise ValueError("first character of face identifier"
-                                             " '%s' is not '+' or '-'" % face)
-
-                        if all(fvi_tuple[axis] == vert_crit
-                               for fvi_tuple in fvi_tuples):
-                            key = frozenset(fvi)
-                            face_vertex_indices_to_tags.setdefault(key,
-                                                                   []).append(tag)
+                    if all(fvi_tuple[axis] == vert_crit
+                           for fvi_tuple in fvi_tuples):
+                        face_vertex_indices_to_tags[frozenset(fvi)] = tags
 
         from meshmode.mesh import _compute_facial_adjacency_from_vertices
         facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
