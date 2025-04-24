@@ -1307,6 +1307,7 @@ def generate_box_mesh(
 
             midpoints = midpoints.reshape((dim, nmidpoints), order="F")
             vertices = np.concatenate((vertices, midpoints), axis=1)
+            nvertices += nmidpoints
 
             nsubelements = 4
             nvertices_per_element = 3
@@ -1491,10 +1492,6 @@ def generate_box_mesh(
     face_vertex_indices_to_tags = {}
 
     if boundary_tag_to_face:
-        vert_index_to_tuple = {
-                vertex_indices[itup]: itup
-                for itup in np.ndindex(shape)}
-
         box_face_to_tags = {}
         for tag, tagged_box_faces in boundary_tag_to_face.items():
             for box_face in tagged_box_faces:
@@ -1517,6 +1514,12 @@ def generate_box_mesh(
                                      f" '{box_face}' is not '+' or '-'")
                 box_face_to_tags.setdefault(f"{side}{axis}", []).append(tag)
 
+        # Extra vertices added beyond the box vertices don't have corresponding
+        # tuples, so assign them tuple(-1, ...)
+        vert_index_to_tuple = np.full((nvertices, dim), -1)
+        for itup in np.ndindex(shape):
+            vert_index_to_tuple[vertex_indices[itup], :] = itup
+
         for box_face, elements in box_face_to_elements.items():
             try:
                 tags = box_face_to_tags[box_face]
@@ -1525,20 +1528,15 @@ def generate_box_mesh(
             side, axis = box_face
             axis = int(axis)
             vert_crit = 0 if side == "-" else shape[axis] - 1
-            for ielem in elements:
-                for ref_fvi in grp.face_vertex_indices():
-                    fvi = grp.vertex_indices[ielem, ref_fvi]
-                    try:
-                        fvi_tuples = [vert_index_to_tuple[i] for i in fvi]
-                    except KeyError:
-                        # Happens for interior faces of "X" meshes because
-                        # midpoints aren't in vert_index_to_tuple. We don't
-                        # care about them.
-                        continue
 
-                    if all(fvi_tuple[axis] == vert_crit
-                           for fvi_tuple in fvi_tuples):
-                        face_vertex_indices_to_tags[frozenset(fvi)] = tags
+            for ref_fvi in grp.face_vertex_indices():
+                fvis = grp.vertex_indices[elements[:, np.newaxis], ref_fvi]
+                fvi_tuples = vert_index_to_tuple[fvis, :]
+                face_fvis = fvis[
+                    np.all(fvi_tuples[:, :, axis] == vert_crit, axis=1), :]
+                for iface in range(face_fvis.shape[0]):
+                    fvi = face_fvis[iface, :]
+                    face_vertex_indices_to_tags[frozenset(fvi)] = tags
 
         from meshmode.mesh import _compute_facial_adjacency_from_vertices
         facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
