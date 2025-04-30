@@ -1149,7 +1149,7 @@ def generate_box_mesh(
         axis_coords: tuple[np.ndarray, ...],
         order: int = 1, *,
         coord_dtype: Any = np.float64,
-        periodic: bool | None = None,
+        periodic: tuple[bool, ...] | None = None,
         group_cls: type[MeshElementGroup] | None = None,
         boundary_tag_to_face: dict[Any, str] | None = None,
         mesh_type: str | None = None,
