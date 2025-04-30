@@ -25,7 +25,8 @@ THE SOFTWARE.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from functools import reduce
-from typing import Any, Literal
+from typing import Literal
+from warnings import warn
 
 import numpy as np
 import numpy.linalg as la
@@ -1022,79 +1023,121 @@ def split_mesh_groups(
 
 # {{{ vertex matching
 
-def _match_vertices(
-        mesh: Mesh,
+def _rec_match(
+        dim: int,
         src_vertex_indices: np.ndarray,
-        tgt_vertex_indices: np.ndarray, *,
-        aff_map: AffineMap | None = None,
-        tol: float = 1e-12,
-        use_tree: bool | None = None) -> np.ndarray:
-    if mesh.vertices is None:
-        raise ValueError("Mesh must have vertices")
-
-    if aff_map is None:
-        aff_map = AffineMap()
-
-    if use_tree is None:
-        # Empirically, the tree version becomes faster at 2**13.
-        # The temporary (displacements) below at that size requires
-        # 1.6GB, which seems like a lot. Capping at 2**11 instead,
-        # which requires a more reasonable 100M.
-        use_tree = len(tgt_vertex_indices) >= 2**11
-
-    src_vertices = mesh.vertices[:, src_vertex_indices]
-    tgt_vertices = mesh.vertices[:, tgt_vertex_indices]
-
-    mapped_src_vertices = aff_map(src_vertices)
-
-    if use_tree:
-        tgt_vertex_bboxes = np.stack((
-            tgt_vertices - tol,
-            tgt_vertices + tol))
-
-        from pytools.spatial_btree import SpatialBinaryTreeBucket
-        tree = SpatialBinaryTreeBucket(
-            np.min(tgt_vertex_bboxes[0], axis=1),
-            np.max(tgt_vertex_bboxes[1], axis=1))
-        for ivertex in range(len(tgt_vertex_indices)):
-            tree.insert(ivertex, tgt_vertex_bboxes[:, :, ivertex])
-
-        matched_tgt_vertices: np.ndarray[tuple[int, ...], np.dtype[Any]] \
-            = np.full(len(src_vertex_indices), -1)
-        for ivertex in range(len(src_vertex_indices)):
-            mapped_src_vertex = mapped_src_vertices[:, ivertex]
-            matches = np.array(list(tree.generate_matches(mapped_src_vertex)))
-            match_bboxes = tgt_vertex_bboxes[:, :, matches]
-            in_bbox = np.all(
-                (mapped_src_vertex[:, np.newaxis] >= match_bboxes[0, :, :])
-                & (mapped_src_vertex[:, np.newaxis] <= match_bboxes[1, :, :]),
-                axis=0)
-            candidate_indices = matches[in_bbox]
-            if len(candidate_indices) == 0:
-                continue
-            displacements = (
-                mapped_src_vertex.reshape(-1, 1)
-                - tgt_vertices[:, candidate_indices])
-            distances_sq = np.sum(displacements**2, axis=0)
-            matched_tgt_vertices[ivertex] = (
-                tgt_vertex_indices[candidate_indices[np.argmin(distances_sq)]])
-
-    else:
+        tgt_vertex_indices: np.ndarray,
+        mapped_src_vertices: np.ndarray,
+        tgt_vertices: np.ndarray, *,
+        tol: float,
+        max_leaf_vertices: int) -> np.ndarray:
+    if len(src_vertex_indices) <= max_leaf_vertices:
         displacements = (
-            mapped_src_vertices.reshape(mesh.dim, -1, 1)
-            - tgt_vertices.reshape(mesh.dim, 1, -1))
+            mapped_src_vertices.reshape(dim, -1, 1)
+            - tgt_vertices.reshape(dim, 1, -1))
         distances_sq = np.sum(displacements**2, axis=0)
 
         vertex_indices, = np.indices((len(src_vertex_indices),))
         min_distance_sq_indices = np.argmin(distances_sq, axis=1)
         min_distances_sq = distances_sq[vertex_indices, min_distance_sq_indices]
 
-        matched_tgt_vertices = np.where(
+        return np.where(
             min_distances_sq < tol**2,
             tgt_vertex_indices[min_distance_sq_indices],
             -1)
+    else:
+        both_vertices = np.concatenate((tgt_vertices, mapped_src_vertices), axis=1)
 
-    return matched_tgt_vertices
+        idim_largest = np.argmax(
+            np.max(both_vertices, axis=1)
+            - np.min(both_vertices, axis=1))
+
+        # Compute an approximate median vertex coordinate
+        hist, bin_edges = np.histogram(
+            both_vertices[idim_largest, :],
+            both_vertices.shape[1])
+        nvertices_up_to_bin = np.cumsum(hist)
+        median_bin = np.where(nvertices_up_to_bin > both_vertices.shape[1]/2)[0][0]
+        median_coord = bin_edges[median_bin]
+
+        lower_src_idx_to_full_idx, = np.where(
+            mapped_src_vertices[idim_largest, :] <= median_coord + tol)
+        lower_tgt_idx_to_full_idx, = np.where(
+            tgt_vertices[idim_largest, :] <= median_coord + tol)
+
+        upper_src_idx_to_full_idx, = np.where(
+            mapped_src_vertices[idim_largest, :] >= median_coord - tol)
+        upper_tgt_idx_to_full_idx, = np.where(
+            tgt_vertices[idim_largest, :] >= median_coord - tol)
+
+        if __debug__:
+            # No theoretical justification for using 2/3, it just seems like a
+            # reasonable number
+            if (
+                    len(lower_src_idx_to_full_idx) > 2*len(src_vertex_indices)/3
+                    or len(upper_src_idx_to_full_idx) > 2*len(src_vertex_indices)/3):
+                warn(
+                    "bad partitioning of src_vertex_indices, performance may "
+                    "be degraded.", stacklevel=2)
+            if (
+                    len(lower_tgt_idx_to_full_idx) > 2*len(tgt_vertex_indices)/3
+                    or len(upper_tgt_idx_to_full_idx) > 2*len(tgt_vertex_indices)/3):
+                warn(
+                    "bad partitioning of tgt_vertex_indices, performance may "
+                    "be degraded.", stacklevel=2)
+
+        lower_matched_tgt_indices = _rec_match(
+            dim,
+            src_vertex_indices[lower_src_idx_to_full_idx],
+            tgt_vertex_indices[lower_tgt_idx_to_full_idx],
+            mapped_src_vertices[:, lower_src_idx_to_full_idx],
+            tgt_vertices[:, lower_tgt_idx_to_full_idx],
+            tol=tol,
+            max_leaf_vertices=max_leaf_vertices)
+
+        upper_matched_tgt_indices = _rec_match(
+            dim,
+            src_vertex_indices[upper_src_idx_to_full_idx],
+            tgt_vertex_indices[upper_tgt_idx_to_full_idx],
+            mapped_src_vertices[:, upper_src_idx_to_full_idx],
+            tgt_vertices[:, upper_tgt_idx_to_full_idx],
+            tol=tol,
+            max_leaf_vertices=max_leaf_vertices)
+
+        matched_tgt_indices = np.empty(len(tgt_vertex_indices))
+        matched_tgt_indices[lower_tgt_idx_to_full_idx] = lower_matched_tgt_indices
+        matched_tgt_indices[upper_tgt_idx_to_full_idx] = upper_matched_tgt_indices
+
+        return matched_tgt_indices
+
+
+def _match_vertices(
+        mesh: Mesh,
+        src_vertex_indices: np.ndarray,
+        tgt_vertex_indices: np.ndarray, *,
+        aff_map: AffineMap | None = None,
+        tol: float = 1e-12) -> np.ndarray:
+    if mesh.vertices is None:
+        raise ValueError("Mesh must have vertices")
+
+    if aff_map is None:
+        aff_map = AffineMap()
+
+    max_leaf_vertices = 2**8  # *shrug*
+
+    src_vertices = mesh.vertices[:, src_vertex_indices]
+    tgt_vertices = mesh.vertices[:, tgt_vertex_indices]
+
+    mapped_src_vertices = aff_map(src_vertices)
+
+    return _rec_match(
+        mesh.dim,
+        src_vertex_indices,
+        tgt_vertex_indices,
+        mapped_src_vertices,
+        tgt_vertices,
+        tol=tol,
+        max_leaf_vertices=max_leaf_vertices)
 
 # }}}
 
@@ -1170,8 +1213,8 @@ def _get_face_vertex_indices(mesh: Mesh, face_ids: _FaceIDs) -> np.ndarray:
 
 
 def _match_boundary_faces(
-        mesh: Mesh, bdry_pair_mapping: BoundaryPairMapping, tol: float, *,
-        use_tree: bool | None = None) -> tuple[_FaceIDs, _FaceIDs]:
+        mesh: Mesh, bdry_pair_mapping: BoundaryPairMapping, tol: float,
+        ) -> tuple[_FaceIDs, _FaceIDs]:
     """
     Given a :class:`BoundaryPairMapping` *bdry_pair_mapping*, return the
     correspondence between faces of the two boundaries (expressed as a pair of
@@ -1182,8 +1225,6 @@ def _match_boundary_faces(
         whose faces are to be matched.
     :arg tol: The allowed tolerance between the transformed vertex coordinates of
         the first boundary and the vertex coordinates of the second boundary.
-    :arg use_tree: Optional argument indicating whether to use a spatial binary
-        search tree or a (quadratic) numpy algorithm when matching vertices.
     :returns: A pair of :class:`meshmode.mesh._FaceIDs`, each having a number of
         entries equal to the number of faces in the boundary, that represents the
         correspondence between the two boundaries' faces. The first element in the
@@ -1219,7 +1260,7 @@ def _match_boundary_faces(
 
     matched_bdry_n_vertex_indices = _match_vertices(
         mesh, bdry_m_vertex_indices, bdry_n_vertex_indices,
-        aff_map=bdry_pair_mapping.aff_map, tol=tol, use_tree=use_tree)
+        aff_map=bdry_pair_mapping.aff_map, tol=tol)
 
     unmatched_bdry_m_vertex_indices = bdry_m_vertex_indices[
         np.where(matched_bdry_n_vertex_indices < 0)[0]]
@@ -1291,12 +1332,14 @@ def glue_mesh_boundaries(
         coordinates of the first boundary and the vertex coordinates of the second
         boundary when attempting to match the two. Pass at most one mapping for each
         unique (order-independent) pair of boundaries.
-    :arg use_tree: Optional argument indicating whether to use a spatial binary
-        search tree or a (quadratic) numpy algorithm when matching vertices.
     """
     if any(grp.vertex_indices is None for grp in mesh.groups):
         raise ValueError(
             "gluing mesh boundaries requires 'vertex_indices' in all groups")
+
+    if use_tree is not None:
+        warn("Passing 'use_tree' is deprecated and will be removed "
+             "in Q3 2025.", DeprecationWarning, stacklevel=2)
 
     glued_btags = {
         btag
@@ -1320,7 +1363,7 @@ def glue_mesh_boundaries(
         glued_btag_pairs.add(btag_pair)
 
     face_id_pairs_for_mapping = [
-        _match_boundary_faces(mesh, mapping, tol, use_tree=use_tree)
+        _match_boundary_faces(mesh, mapping, tol)
         for mapping, tol in bdry_pair_mappings_and_tols]
 
     facial_adjacency_groups = []
