@@ -1273,7 +1273,7 @@ def generate_box_mesh(
             a0 = vertex_indices[:shape_m1[0]]
             a1 = vertex_indices[1:shape[0]]
 
-            el_vertices = np.array([a0, a1], dtype=vertex_id_dtype).T
+            el_vertices = np.column_stack([a0, a1])
             box_face_to_elements = {
                 "-0": np.array([0], dtype=element_id_dtype),
                 "+0": np.array([shape_m1[0]-1], dtype=element_id_dtype)}
@@ -1334,7 +1334,7 @@ def generate_box_mesh(
             a11 = vertex_indices[i0+1, j0+1]
 
             if is_tp:
-                el_vertices = np.array([a00, a10, a01, a11], dtype=vertex_id_dtype).T
+                el_vertices = np.column_stack([a00, a10, a01, a11])
 
                 box_face_to_elements = {}
                 for box_face in box_faces:
@@ -1426,9 +1426,9 @@ def generate_box_mesh(
             a111 = vertex_indices[i0+1, j0+1, k0+1]
 
             if is_tp:
-                el_vertices = np.array([
+                el_vertices = np.column_stack([
                     a000, a100, a010, a110,
-                    a001, a101, a011, a111], dtype=vertex_id_dtype).T
+                    a001, a101, a011, a111])
 
                 box_face_to_elements = {}
                 for box_face in box_faces:
