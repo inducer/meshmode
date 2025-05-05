@@ -1149,6 +1149,9 @@ def generate_box_mesh(
         axis_coords: tuple[np.ndarray, ...],
         order: int = 1, *,
         coord_dtype: Any = np.float64,
+        vertex_id_dtype: Any = np.int32,
+        element_id_dtype: Any = np.int32,
+        face_id_dtype: Any = np.int8,
         periodic: tuple[bool, ...] | None = None,
         group_cls: type[MeshElementGroup] | None = None,
         boundary_tag_to_face: dict[Any, str] | None = None,
@@ -1232,7 +1235,7 @@ def generate_box_mesh(
     from pytools import product
     nvertices = product(shape)
 
-    vertex_indices = np.arange(nvertices).reshape(*shape)
+    vertex_indices = np.arange(nvertices, dtype=vertex_id_dtype).reshape(*shape)
 
     vertices = np.empty((dim, *shape), dtype=coord_dtype)
     for idim in range(dim):
@@ -1272,15 +1275,15 @@ def generate_box_mesh(
             a0 = vertex_indices[i0]
             a1 = vertex_indices[i0+1]
 
-            el_vertices = np.array([a0, a1], dtype=np.int32).T
+            el_vertices = np.array([a0, a1], dtype=vertex_id_dtype).T
             box_face_to_elements = {
-                "-0": np.array([0], dtype=np.int32),
-                "+0": np.array([shape_m1[0]-1], dtype=np.int32)}
+                "-0": np.array([0], dtype=element_id_dtype),
+                "+0": np.array([shape_m1[0]-1], dtype=element_id_dtype)}
 
         else:
-            el_vertices = np.empty((0, nvertices_per_element), dtype=np.int32)
+            el_vertices = np.empty((0, nvertices_per_element), dtype=vertex_id_dtype)
             box_face_to_elements = {
-                box_face: np.array([], dtype=np.int32)
+                box_face: np.array([], dtype=element_id_dtype)
                 for box_face in box_faces}
 
     elif dim == 2:
@@ -1333,7 +1336,7 @@ def generate_box_mesh(
             a11 = vertex_indices[i0+1, j0+1]
 
             if is_tp:
-                el_vertices = np.array([a00, a10, a01, a11], dtype=np.int32).T
+                el_vertices = np.array([a00, a10, a01, a11], dtype=vertex_id_dtype).T
 
                 box_face_to_elements = {}
                 for box_face in box_faces:
@@ -1346,7 +1349,7 @@ def generate_box_mesh(
             elif mesh_type == "X":
                 m = midpoint_indices[i0, j0]
                 el_vertices = np.empty(
-                    (nelements, nvertices_per_element), dtype=np.int32)
+                    (nelements, nvertices_per_element), dtype=vertex_id_dtype)
                 el_vertices[0::4, :] = np.array([a00, a10, m]).T
                 el_vertices[1::4, :] = np.array([a10, a11, m]).T
                 el_vertices[2::4, :] = np.array([a11, a01, m]).T
@@ -1369,7 +1372,7 @@ def generate_box_mesh(
 
             else:
                 el_vertices = np.empty(
-                    (nelements, nvertices_per_element), dtype=np.int32)
+                    (nelements, nvertices_per_element), dtype=vertex_id_dtype)
                 el_vertices[0::2, :] = np.array([a00, a10, a01]).T
                 el_vertices[1::2, :] = np.array([a11, a01, a10]).T
 
@@ -1386,9 +1389,9 @@ def generate_box_mesh(
                     box_face_to_elements[box_face] = \
                         2*box_elements + side_to_subelement_offset[side]
         else:
-            el_vertices = np.empty((0, nvertices_per_element), dtype=np.int32)
+            el_vertices = np.empty((0, nvertices_per_element), dtype=vertex_id_dtype)
             box_face_to_elements = {
-                box_face: np.array([], dtype=np.int32)
+                box_face: np.array([], dtype=element_id_dtype)
                 for box_face in box_faces}
 
     elif dim == 3:
@@ -1427,7 +1430,7 @@ def generate_box_mesh(
             if is_tp:
                 el_vertices = np.array([
                     a000, a100, a010, a110,
-                    a001, a101, a011, a111], dtype=np.int32).T
+                    a001, a101, a011, a111], dtype=vertex_id_dtype).T
 
                 box_face_to_elements = {}
                 for box_face in box_faces:
@@ -1439,7 +1442,7 @@ def generate_box_mesh(
 
             else:
                 el_vertices = np.empty(
-                    (nelements, nvertices_per_element), dtype=np.int32)
+                    (nelements, nvertices_per_element), dtype=vertex_id_dtype)
                 el_vertices[0::6, :] = np.array([a000, a100, a010, a001]).T
                 el_vertices[1::6, :] = np.array([a101, a100, a001, a010]).T
                 el_vertices[2::6, :] = np.array([a101, a011, a010, a001]).T
@@ -1465,9 +1468,9 @@ def generate_box_mesh(
                         6*box_elements + offset
                         for offset in box_face_to_subelement_offsets[box_face]])
         else:
-            el_vertices = np.empty((0, nvertices_per_element), dtype=np.int32)
+            el_vertices = np.empty((0, nvertices_per_element), dtype=vertex_id_dtype)
             box_face_to_elements = {
-                box_face: np.array([], dtype=np.int32)
+                box_face: np.array([], dtype=element_id_dtype)
                 for box_face in box_faces}
 
     else:
@@ -1540,7 +1543,7 @@ def generate_box_mesh(
 
         from meshmode.mesh import _compute_facial_adjacency_from_vertices
         facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
-                [grp], np.int32, np.int8, face_vertex_indices_to_tags)
+                [grp], element_id_dtype, face_id_dtype, face_vertex_indices_to_tags)
     else:
         facial_adjacency_groups = None
 
@@ -1548,7 +1551,10 @@ def generate_box_mesh(
 
     mesh = make_mesh(vertices, [grp],
             facial_adjacency_groups=facial_adjacency_groups,
-            is_conforming=True)
+            is_conforming=True,
+            vertex_id_dtype=vertex_id_dtype,
+            element_id_dtype=element_id_dtype,
+            face_id_dtype=face_id_dtype)
 
     if any(periodic):
         from meshmode import AffineMap
@@ -1556,7 +1562,7 @@ def generate_box_mesh(
         bdry_pair_mappings_and_tols = []
         for idim in range(dim):
             if periodic[idim]:
-                offset = np.zeros(dim, dtype=np.float64)
+                offset = np.zeros(dim, dtype=coord_dtype)
                 offset[idim] = axis_coords[idim][-1] - axis_coords[idim][0]
                 bdry_pair_mappings_and_tols.append((
                     BoundaryPairMapping(
