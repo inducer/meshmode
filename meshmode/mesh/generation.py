@@ -1270,10 +1270,8 @@ def generate_box_mesh(
         nvertices_per_element = 2
 
         if nelements > 0:
-            i0 = np.arange(shape_m1[0])
-
-            a0 = vertex_indices[i0]
-            a1 = vertex_indices[i0+1]
+            a0 = vertex_indices[:shape_m1[0]]
+            a1 = vertex_indices[1:shape[0]]
 
             el_vertices = np.array([a0, a1], dtype=vertex_id_dtype).T
             box_face_to_elements = {
