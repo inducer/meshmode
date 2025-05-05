@@ -1346,12 +1346,17 @@ def generate_box_mesh(
 
             elif mesh_type == "X":
                 m = midpoint_indices[i0, j0]
+                subelement_to_vertices = [
+                    [a00, a10, m],
+                    [a10, a11, m],
+                    [a11, a01, m],
+                    [a01, a00, m]]
+
                 el_vertices = np.empty(
                     (nelements, nvertices_per_element), dtype=vertex_id_dtype)
-                el_vertices[0::4, :] = np.array([a00, a10, m]).T
-                el_vertices[1::4, :] = np.array([a10, a11, m]).T
-                el_vertices[2::4, :] = np.array([a11, a01, m]).T
-                el_vertices[3::4, :] = np.array([a01, a00, m]).T
+                for isubelement, verts in enumerate(subelement_to_vertices):
+                    for ivert, vert in enumerate(verts):
+                        el_vertices[isubelement::nsubelements, ivert] = vert
 
                 box_face_to_subelement_offset = {
                     "-0": 3,
@@ -1369,10 +1374,15 @@ def generate_box_mesh(
                         4*box_elements + box_face_to_subelement_offset[box_face]
 
             else:
+                subelement_to_vertices = [
+                    [a00, a10, a01],
+                    [a11, a01, a10]]
+
                 el_vertices = np.empty(
                     (nelements, nvertices_per_element), dtype=vertex_id_dtype)
-                el_vertices[0::2, :] = np.array([a00, a10, a01]).T
-                el_vertices[1::2, :] = np.array([a11, a01, a10]).T
+                for isubelement, verts in enumerate(subelement_to_vertices):
+                    for ivert, vert in enumerate(verts):
+                        el_vertices[isubelement::nsubelements, ivert] = vert
 
                 side_to_subelement_offset = {
                     "-": 0,
@@ -1439,14 +1449,19 @@ def generate_box_mesh(
                     box_face_to_elements[box_face] = elements
 
             else:
+                subelement_to_vertices = [
+                    [a000, a100, a010, a001],
+                    [a101, a100, a001, a010],
+                    [a101, a011, a010, a001],
+                    [a100, a010, a101, a110],
+                    [a011, a010, a110, a101],
+                    [a011, a111, a101, a110]]
+
                 el_vertices = np.empty(
                     (nelements, nvertices_per_element), dtype=vertex_id_dtype)
-                el_vertices[0::6, :] = np.array([a000, a100, a010, a001]).T
-                el_vertices[1::6, :] = np.array([a101, a100, a001, a010]).T
-                el_vertices[2::6, :] = np.array([a101, a011, a010, a001]).T
-                el_vertices[3::6, :] = np.array([a100, a010, a101, a110]).T
-                el_vertices[4::6, :] = np.array([a011, a010, a110, a101]).T
-                el_vertices[5::6, :] = np.array([a011, a111, a101, a110]).T
+                for isubelement, verts in enumerate(subelement_to_vertices):
+                    for ivert, vert in enumerate(verts):
+                        el_vertices[isubelement::nsubelements, ivert] = vert
 
                 box_face_to_subelement_offsets = {
                     "-0": (0, 2),
