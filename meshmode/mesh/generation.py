@@ -1340,8 +1340,8 @@ def generate_box_mesh(
                 for box_face in box_faces:
                     side, axis = box_face
                     axis = int(axis)
-                    idx_crit = 0 if side == "-" else shape_m1[axis] - 1
-                    elements, = np.where(base_idx_tuples[:, axis] == idx_crit)
+                    idx_face = 0 if side == "-" else shape_m1[axis] - 1
+                    elements, = np.where(base_idx_tuples[:, axis] == idx_face)
                     box_face_to_elements[box_face] = elements
 
             elif mesh_type == "X":
@@ -1368,8 +1368,8 @@ def generate_box_mesh(
                 for box_face in box_faces:
                     side, axis = box_face
                     axis = int(axis)
-                    idx_crit = 0 if side == "-" else shape_m1[axis] - 1
-                    box_elements, = np.where(base_idx_tuples[:, axis] == idx_crit)
+                    idx_face = 0 if side == "-" else shape_m1[axis] - 1
+                    box_elements, = np.where(base_idx_tuples[:, axis] == idx_face)
                     box_face_to_elements[box_face] = \
                         4*box_elements + box_face_to_subelement_offset[box_face]
 
@@ -1392,8 +1392,8 @@ def generate_box_mesh(
                 for box_face in box_faces:
                     side, axis = box_face
                     axis = int(axis)
-                    idx_crit = 0 if side == "-" else shape_m1[axis] - 1
-                    box_elements, = np.where(base_idx_tuples[:, axis] == idx_crit)
+                    idx_face = 0 if side == "-" else shape_m1[axis] - 1
+                    box_elements, = np.where(base_idx_tuples[:, axis] == idx_face)
                     box_face_to_elements[box_face] = \
                         2*box_elements + side_to_subelement_offset[side]
         else:
@@ -1444,8 +1444,8 @@ def generate_box_mesh(
                 for box_face in box_faces:
                     side, axis = box_face
                     axis = int(axis)
-                    idx_crit = 0 if side == "-" else shape_m1[axis] - 1
-                    elements, = np.where(base_idx_tuples[:, axis] == idx_crit)
+                    idx_face = 0 if side == "-" else shape_m1[axis] - 1
+                    elements, = np.where(base_idx_tuples[:, axis] == idx_face)
                     box_face_to_elements[box_face] = elements
 
             else:
@@ -1475,8 +1475,8 @@ def generate_box_mesh(
                 for box_face in box_faces:
                     side, axis = box_face
                     axis = int(axis)
-                    idx_crit = 0 if side == "-" else shape_m1[axis] - 1
-                    box_elements, = np.where(base_idx_tuples[:, axis] == idx_crit)
+                    idx_face = 0 if side == "-" else shape_m1[axis] - 1
+                    box_elements, = np.where(base_idx_tuples[:, axis] == idx_face)
                     box_face_to_elements[box_face] = np.concatenate([
                         6*box_elements + offset
                         for offset in box_face_to_subelement_offsets[box_face]])
@@ -1543,13 +1543,13 @@ def generate_box_mesh(
                 continue
             side, axis = box_face
             axis = int(axis)
-            vert_crit = 0 if side == "-" else shape[axis] - 1
+            vert_face = 0 if side == "-" else shape[axis] - 1
 
             for ref_fvi in grp.face_vertex_indices():
                 fvis = grp.vertex_indices[elements[:, np.newaxis], ref_fvi]
                 fvi_tuples = vert_index_to_tuple[fvis, :]
                 face_fvis = fvis[
-                    np.all(fvi_tuples[:, :, axis] == vert_crit, axis=1), :]
+                    np.all(fvi_tuples[:, :, axis] == vert_face, axis=1), :]
                 for iface in range(face_fvis.shape[0]):
                     fvi = face_fvis[iface, :]
                     face_vertex_indices_to_tags[frozenset(fvi)] = tags
