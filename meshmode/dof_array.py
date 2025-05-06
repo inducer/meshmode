@@ -73,7 +73,7 @@ ArithType: TypeAlias = Union["DOFArray", int, float, complex, np.generic]
 
 
 @with_container_arithmetic(
-        bcast_obj_array=True,
+        bcasts_across_obj_array=True,
         rel_comparison=True,
 
         # Required for compatibility with mirgecom, for now.
