@@ -1052,13 +1052,7 @@ def _rec_match(
             np.max(both_vertices, axis=1)
             - np.min(both_vertices, axis=1))
 
-        # Compute an approximate median vertex coordinate
-        hist, bin_edges = np.histogram(
-            both_vertices[idim_largest, :],
-            both_vertices.shape[1])
-        nvertices_up_to_bin = np.cumsum(hist)
-        median_bin = np.where(nvertices_up_to_bin > both_vertices.shape[1]/2)[0][0]
-        median_coord = bin_edges[median_bin]
+        median_coord = np.median(both_vertices[idim_largest, :])
 
         lower_src_idx_to_full_idx, = np.where(
             mapped_src_vertices[idim_largest, :] <= median_coord + tol)
