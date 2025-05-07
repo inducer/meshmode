@@ -20,10 +20,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from collections.abc import MutableSequence, Sequence
+
 import numpy as np
+from numpy.typing import NDArray
+from typing_extensions import override
 
 from gmsh_interop.reader import (  # noqa: F401
     FileSource,
+    GmshElementBase,
     GmshMeshReceiverBase,
     GmshSimplexElementBase,
     GmshTensorProductElementBase,
@@ -31,8 +36,9 @@ from gmsh_interop.reader import (  # noqa: F401
     ScriptSource,
     ScriptWithFilesSource,
 )
+from modepy import Shape
 
-from meshmode.mesh import Mesh
+from meshmode.mesh import Mesh, MeshElementGroup
 
 
 __doc__ = """
@@ -53,17 +59,22 @@ __doc__ = """
 # {{{ gmsh receiver
 
 class GmshMeshReceiver(GmshMeshReceiverBase):
+    points: MutableSequence[NDArray[np.floating] | None] | NDArray[np.floating]
+    element_markers: MutableSequence[Sequence[int] | None]
+    element_vertices: MutableSequence[NDArray[np.integer] | None]
+    element_nodes: MutableSequence[NDArray[np.floating] | None]
+    element_types: MutableSequence[GmshElementBase | None]
     tags: list[tuple[str, int]]
     gmsh_tag_index_to_mine: dict[int, int]
 
     def __init__(self, mesh_construction_kwargs=None):
         # Use data fields similar to meshpy.triangle.MeshInfo and
         # meshpy.tet.MeshInfo
-        self.points = None
-        self.element_vertices = None
-        self.element_nodes = None
-        self.element_types = None
-        self.element_markers = None
+        self.points = []
+        self.element_vertices = []
+        self.element_nodes = []
+        self.element_types = []
+        self.element_markers = []
         self.tags = []
         self.groups = None
         self.gmsh_tag_index_to_mine = {}
@@ -79,12 +90,14 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         # in random order.
         self.points = [None] * count
 
-    def add_node(self, node_nr, point):
+    def add_node(self, node_nr: int, point: NDArray[np.floating]) -> None:
         self.points[node_nr] = point
 
+    @override
     def finalize_nodes(self):
         self.points = np.array(self.points, dtype=np.float64)
 
+    @override
     def set_up_elements(self, count):
         # Preallocation of arrays for assignment elements in random order.
         self.element_vertices = [None] * count
@@ -92,19 +105,26 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         self.element_types = [None] * count
         self.element_markers = [None] * count
 
-    def add_element(self, element_nr, element_type, vertex_nrs,
-            lexicographic_nodes, tag_numbers):
+    @override
+    def add_element(self,
+                    element_nr: int,
+                    element_type: GmshElementBase,
+                    vertex_nrs: NDArray[np.integer],
+                    lexicographic_nodes: NDArray[np.floating],
+                    tag_numbers: Sequence[int]) -> None:
         self.element_vertices[element_nr] = vertex_nrs
         self.element_nodes[element_nr] = lexicographic_nodes
         self.element_types[element_nr] = element_type
         if tag_numbers:
             self.element_markers[element_nr] = tag_numbers
 
+    @override
     def finalize_elements(self):
         pass
 
     # May raise ValueError if called multiple times with the same name
-    def add_tag(self, name, index, dimension):
+    @override
+    def add_tag(self, name: str, index: int, dimension: int) -> None:
         # add tag if new
         if index not in self.gmsh_tag_index_to_mine:
             self.gmsh_tag_index_to_mine[index] = len(self.tags)
@@ -116,27 +136,31 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             if recorded_name != name or recorded_dim != dimension:
                 raise ValueError("Distinct tags with the same tag id")
 
+    @override
     def finalize_tags(self):
         pass
 
-    def get_mesh(self, return_tag_to_elements_map=False):
-        el_type_hist = {}
+    def get_mesh(self, return_tag_to_elements_map: bool = False):
+        el_type_hist: dict[GmshElementBase, int] = {}
         for el_type in self.element_types:
+            assert el_type is not None
             el_type_hist[el_type] = el_type_hist.get(el_type, 0) + 1
 
         if not el_type_hist:
             raise RuntimeError("empty mesh in gmsh input")
 
+        assert isinstance(self.points, np.ndarray)
         groups = self.groups = []
         ambient_dim = self.points.shape[-1]
 
         mesh_bulk_dim = max(el_type.dimensions for el_type in el_type_hist)
 
         # map set of face vertex indices to list of tags associated to face
-        face_vertex_indices_to_tags = {}
-        for element, el_vertices in enumerate(self.element_vertices):
+        face_vertex_indices_to_tags: dict[frozenset[int], list[str]] = {}
+        for element_nr, el_vertices in enumerate(self.element_vertices):
+            assert el_vertices is not None
             if self.tags:
-                el_markers = self.element_markers[element]
+                el_markers = self.element_markers[element_nr]
                 el_tag_indexes = (
                     [mytag
                         for t in el_markers
@@ -145,7 +169,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 # record tags of boundary dimension
                 el_tags = [self.tags[i][0] for i in el_tag_indexes if
                            self.tags[i][1] == mesh_bulk_dim - 1]
-                face_vertex_indices = frozenset(el_vertices)
+                face_vertex_indices = frozenset(
+                                    {int(i) for i in el_vertices})
                 if face_vertex_indices not in face_vertex_indices_to_tags:
                     face_vertex_indices_to_tags[face_vertex_indices] = []
                 face_vertex_indices_to_tags[face_vertex_indices] += el_tags
@@ -191,6 +216,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 if el_type is not group_el_type:
                     continue
 
+                assert el_vertices is not None
+
+                assert isinstance(self.points, np.ndarray)
                 nodes[:, i] = self.points[el_nodes].T
                 vertex_indices[i] = el_vertices
 
@@ -210,7 +238,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
             import modepy as mp
             if isinstance(group_el_type, GmshSimplexElementBase):
-                shape = mp.Simplex(group_el_type.dimensions)
+                shape: Shape = mp.Simplex(group_el_type.dimensions)
             elif isinstance(group_el_type, GmshTensorProductElementBase):
                 shape = mp.Hypercube(group_el_type.dimensions)
             else:
@@ -221,7 +249,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             unit_nodes = mp.equispaced_nodes_for_space(space, shape)
 
             if isinstance(group_el_type, GmshSimplexElementBase):
-                group = SimplexElementGroup.make_group(
+                group: MeshElementGroup = SimplexElementGroup.make_group(
                     group_el_type.order,
                     vertex_indices,
                     nodes,
@@ -251,8 +279,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
             group_base_elem_nr += group.nelements
 
-        for tag in tag_to_elements.keys():
-            tag_to_elements[tag] = np.array(tag_to_elements[tag], dtype=np.int32)
+        tag_to_elements_ary = {tag: np.array(els, dtype=np.int32)
+            for tag, els in tag_to_elements.items()}
 
         # FIXME: This is heuristic.
         if len(bulk_el_types) == 1:
@@ -265,7 +293,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         if is_conforming and self.tags:
             from meshmode.mesh import _compute_facial_adjacency_from_vertices
             facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
-                    groups, np.int32, np.int8, face_vertex_indices_to_tags)
+                    groups, np.dtype(np.int32), np.dtype(np.int8),
+                    face_vertex_indices_to_tags)
 
         mesh = make_mesh(
                 vertices, groups,
@@ -273,7 +302,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 facial_adjacency_groups=facial_adjacency_groups,
                 **self.mesh_construction_kwargs)
 
-        return (mesh, tag_to_elements) if return_tag_to_elements_map else mesh
+        return (mesh, tag_to_elements_ary) if return_tag_to_elements_map else mesh
 
 # }}}
 
@@ -368,7 +397,7 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=None,
 
 # {{{ meshpy
 
-def from_meshpy(mesh_info, order=1) -> Mesh:
+def from_meshpy(mesh_info, order: int = 1) -> Mesh:
     """Imports a mesh from a :mod:`meshpy` *mesh_info* data structure,
     which may be generated by either :mod:`meshpy.triangle` or
     :mod:`meshpy.tet`.
@@ -376,8 +405,8 @@ def from_meshpy(mesh_info, order=1) -> Mesh:
     from meshmode.mesh import make_mesh
     from meshmode.mesh.generation import make_group_from_vertices
 
-    vertices = np.array(mesh_info.points).T
-    elements: np.ndarray = np.array(mesh_info.elements, np.int32)
+    vertices: NDArray[np.floating] = np.array(mesh_info.points).T
+    elements: NDArray[np.integer] = np.array(mesh_info.elements, np.int32)
 
     grp = make_group_from_vertices(vertices, elements, order)
 

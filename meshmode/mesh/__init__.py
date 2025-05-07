@@ -1729,8 +1729,8 @@ def _match_faces_by_vertices(
 
 def _compute_facial_adjacency_from_vertices(
         groups: Sequence[MeshElementGroup],
-        element_id_dtype: np.dtype,
-        face_id_dtype: np.dtype,
+        element_id_dtype: np.dtype[np.integer],
+        face_id_dtype: np.dtype[np.integer],
         face_vertex_indices_to_tags: Mapping[
             frozenset[int], Sequence[BoundaryTag]] | None = None,
         ) -> Sequence[Sequence[FacialAdjacencyGroup]]:
