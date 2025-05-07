@@ -95,9 +95,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         self.element_nodes[element_nr] = lexicographic_nodes
         self.element_types[element_nr] = element_type
         if tag_numbers:
-            # only physical tags are supported
-            physical_tag = tag_numbers[0]
-            self.element_markers[element_nr] = [physical_tag]
+            self.element_markers[element_nr] = tag_numbers
 
     def finalize_elements(self):
         pass
