@@ -138,7 +138,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             if self.tags:
                 el_markers = self.element_markers[element]
                 el_tag_indexes = (
-                    [self.gmsh_tag_index_to_mine[t] for t in el_markers]
+                    [mytag
+                        for t in el_markers
+                        if (mytag := self.gmsh_tag_index_to_mine.get(t)) is not None]
                     if el_markers is not None else [])
                 # record tags of boundary dimension
                 el_tags = [self.tags[i][0] for i in el_tag_indexes if
@@ -194,7 +196,11 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
                 if el_markers is not None:
                     for t in el_markers:
-                        tag = self.tags[self.gmsh_tag_index_to_mine[t]][0]
+                        mytag = self.gmsh_tag_index_to_mine.get(t)
+                        if mytag is None:
+                            continue
+
+                        tag, _dim = self.tags[self.gmsh_tag_index_to_mine[t]]
                         if tag not in tag_to_elements:
                             tag_to_elements[tag] = [group_base_elem_nr + i]
                         else:
