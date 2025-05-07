@@ -36,6 +36,7 @@ dependencies = [
     "pymbolic>=2022.2",
     "pytools>=2024.1.17",
     "recursivenodes",
+    "typing_extensions>=4.4",
 ]
 
 [project.optional-dependencies]
@@ -162,6 +163,10 @@ module = [
 ]
 ignore_missing_imports = true
 
+[tool.basedpyright]
+reportImplicitStringConcatenation = "none"
+reportUnnecessaryIsInstance = "none"
+reportUnusedCallResult = "none"
 
 [tool.typos.default]
 extend-ignore-re = [
@@ -173,3 +178,6 @@ extend-ignore-re = [
 "nd" = "nd"
 # TODO: needed by deprecated MPIMeshDistributor.is_mananger_rank
 "mananger" = "mananger"
+
+
+
