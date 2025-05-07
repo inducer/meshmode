@@ -53,6 +53,9 @@ __doc__ = """
 # {{{ gmsh receiver
 
 class GmshMeshReceiver(GmshMeshReceiverBase):
+    tags: list[tuple[str, int]]
+    gmsh_tag_index_to_mine: dict[int, int]
+
     def __init__(self, mesh_construction_kwargs=None):
         # Use data fields similar to meshpy.triangle.MeshInfo and
         # meshpy.tet.MeshInfo
@@ -61,9 +64,9 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         self.element_nodes = None
         self.element_types = None
         self.element_markers = None
-        self.tags = None
+        self.tags = []
         self.groups = None
-        self.gmsh_tag_index_to_mine = None
+        self.gmsh_tag_index_to_mine = {}
 
         if mesh_construction_kwargs is None:
             mesh_construction_kwargs = {}
@@ -102,10 +105,6 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 
     # May raise ValueError if called multiple times with the same name
     def add_tag(self, name, index, dimension):
-        if self.tags is None:
-            self.tags = []
-        if self.gmsh_tag_index_to_mine is None:
-            self.gmsh_tag_index_to_mine = {}
         # add tag if new
         if index not in self.gmsh_tag_index_to_mine:
             self.gmsh_tag_index_to_mine[index] = len(self.tags)
