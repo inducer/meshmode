@@ -46,7 +46,7 @@ from meshmode.mesh import (
     _FaceIDs,
     make_mesh,
 )
-from meshmode.mesh.tools import AffineMap, find_point_permutation
+from meshmode.mesh.tools import AffineMap, find_point_to_point_mapping
 
 
 __doc__ = """
@@ -589,18 +589,18 @@ def find_volume_mesh_element_group_orientation(
         result[i] = 1
         return result
 
-    def unpack_single(ary: np.ndarray | None) -> np.ndarray:
+    def unpack_single(ary: np.ndarray | None) -> int:
         assert ary is not None
         item, = ary
         return item
 
-    base_vertex_index = unpack_single(find_point_permutation(
-             targets=-np.ones(grp.dim),
-             permutees=grp.vertex_unit_coordinates().T))
+    base_vertex_index = unpack_single(find_point_to_point_mapping(
+             src_points=-np.ones(grp.dim).reshape(-1, 1),
+             tgt_points=grp.vertex_unit_coordinates().T))
     spanning_vertex_indices = [
-        unpack_single(find_point_permutation(
-                     targets=-np.ones(grp.dim) + 2 * evec(i),
-                     permutees=grp.vertex_unit_coordinates().T))
+        unpack_single(find_point_to_point_mapping(
+                     src_points=(-np.ones(grp.dim) + 2 * evec(i)).reshape(-1, 1),
+                     tgt_points=grp.vertex_unit_coordinates().T))
         for i in range(grp.dim)
     ]
 
@@ -748,11 +748,10 @@ def _get_tensor_product_element_flip_matrix_and_vertex_permutation(
                  unit_flip_matrix,
                  grp.vertex_unit_coordinates().T)
 
-    vertex_permutation_to = find_point_permutation(
-        targets=flipped_vertices,
-        permutees=grp.vertex_unit_coordinates().T,
-    )
-    if vertex_permutation_to is None:
+    vertex_permutation_to = find_point_to_point_mapping(
+        src_points=flipped_vertices,
+        tgt_points=grp.vertex_unit_coordinates().T)
+    if np.any(vertex_permutation_to < 0):
         raise RuntimeError("flip permutation was not found")
 
     flipped_unit_nodes = np.einsum("ij,jn->in", unit_flip_matrix, grp.unit_nodes)
@@ -1140,7 +1139,6 @@ def _match_boundary_faces(
     bdry_m_vertices = mesh.vertices[:, bdry_m_vertex_indices]
     bdry_n_vertices = mesh.vertices[:, bdry_n_vertex_indices]
 
-    from meshmode.mesh.tools import find_point_to_point_mapping
     m_idx_to_n_idx = find_point_to_point_mapping(
         bdry_pair_mapping.aff_map(bdry_m_vertices),
         bdry_n_vertices)

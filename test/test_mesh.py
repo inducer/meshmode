@@ -931,7 +931,7 @@ def test_point_matching():
             # Perturbed too far
             unmatchable_point = points[:, 0] + 2*tol
             unmatchable_point_to_point = find_point_to_point_mapping(
-                src_points=unmatchable_point,
+                src_points=unmatchable_point.reshape(-1, 1),
                 tgt_points=points,
                 tol=tol)
 
