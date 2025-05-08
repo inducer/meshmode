@@ -1021,121 +1021,6 @@ def split_mesh_groups(
 # }}}
 
 
-# {{{ vertex matching
-
-def _rec_match(
-        dim: int,
-        src_vertex_indices: np.ndarray,
-        tgt_vertex_indices: np.ndarray,
-        mapped_src_vertices: np.ndarray,
-        tgt_vertices: np.ndarray, *,
-        tol: float,
-        max_leaf_vertices: int) -> np.ndarray:
-    if len(src_vertex_indices) <= max_leaf_vertices:
-        displacements = (
-            mapped_src_vertices.reshape(dim, -1, 1)
-            - tgt_vertices.reshape(dim, 1, -1))
-        distances_sq = np.sum(displacements**2, axis=0)
-
-        vertex_indices, = np.indices((len(src_vertex_indices),))
-        min_distance_sq_indices = np.argmin(distances_sq, axis=1)
-        min_distances_sq = distances_sq[vertex_indices, min_distance_sq_indices]
-
-        return np.where(
-            min_distances_sq < tol**2,
-            tgt_vertex_indices[min_distance_sq_indices],
-            -1)
-    else:
-        both_vertices = np.concatenate((tgt_vertices, mapped_src_vertices), axis=1)
-
-        idim_largest = np.argmax(
-            np.max(both_vertices, axis=1)
-            - np.min(both_vertices, axis=1))
-
-        median_coord = np.median(both_vertices[idim_largest, :])
-
-        lower_src_idx_to_full_idx, = np.where(
-            mapped_src_vertices[idim_largest, :] <= median_coord + tol)
-        lower_tgt_idx_to_full_idx, = np.where(
-            tgt_vertices[idim_largest, :] <= median_coord + tol)
-
-        upper_src_idx_to_full_idx, = np.where(
-            mapped_src_vertices[idim_largest, :] >= median_coord - tol)
-        upper_tgt_idx_to_full_idx, = np.where(
-            tgt_vertices[idim_largest, :] >= median_coord - tol)
-
-        if __debug__:
-            # No theoretical justification for using 2/3, it just seems like a
-            # reasonable number
-            if (
-                    len(lower_src_idx_to_full_idx) > 2*len(src_vertex_indices)/3
-                    or len(upper_src_idx_to_full_idx) > 2*len(src_vertex_indices)/3):
-                warn(
-                    "bad partitioning of src_vertex_indices, performance may "
-                    "be degraded.", stacklevel=2)
-            if (
-                    len(lower_tgt_idx_to_full_idx) > 2*len(tgt_vertex_indices)/3
-                    or len(upper_tgt_idx_to_full_idx) > 2*len(tgt_vertex_indices)/3):
-                warn(
-                    "bad partitioning of tgt_vertex_indices, performance may "
-                    "be degraded.", stacklevel=2)
-
-        lower_matched_tgt_indices = _rec_match(
-            dim,
-            src_vertex_indices[lower_src_idx_to_full_idx],
-            tgt_vertex_indices[lower_tgt_idx_to_full_idx],
-            mapped_src_vertices[:, lower_src_idx_to_full_idx],
-            tgt_vertices[:, lower_tgt_idx_to_full_idx],
-            tol=tol,
-            max_leaf_vertices=max_leaf_vertices)
-
-        upper_matched_tgt_indices = _rec_match(
-            dim,
-            src_vertex_indices[upper_src_idx_to_full_idx],
-            tgt_vertex_indices[upper_tgt_idx_to_full_idx],
-            mapped_src_vertices[:, upper_src_idx_to_full_idx],
-            tgt_vertices[:, upper_tgt_idx_to_full_idx],
-            tol=tol,
-            max_leaf_vertices=max_leaf_vertices)
-
-        matched_tgt_indices = np.empty(len(tgt_vertex_indices))
-        matched_tgt_indices[lower_tgt_idx_to_full_idx] = lower_matched_tgt_indices
-        matched_tgt_indices[upper_tgt_idx_to_full_idx] = upper_matched_tgt_indices
-
-        return matched_tgt_indices
-
-
-def _match_vertices(
-        mesh: Mesh,
-        src_vertex_indices: np.ndarray,
-        tgt_vertex_indices: np.ndarray, *,
-        aff_map: AffineMap | None = None,
-        tol: float = 1e-12) -> np.ndarray:
-    if mesh.vertices is None:
-        raise ValueError("Mesh must have vertices")
-
-    if aff_map is None:
-        aff_map = AffineMap()
-
-    max_leaf_vertices = 2**8  # *shrug*
-
-    src_vertices = mesh.vertices[:, src_vertex_indices]
-    tgt_vertices = mesh.vertices[:, tgt_vertex_indices]
-
-    mapped_src_vertices = aff_map(src_vertices)
-
-    return _rec_match(
-        mesh.dim,
-        src_vertex_indices,
-        tgt_vertex_indices,
-        mapped_src_vertices,
-        tgt_vertices,
-        tol=tol,
-        max_leaf_vertices=max_leaf_vertices)
-
-# }}}
-
-
 # {{{ boundary face matching
 
 @dataclass(frozen=True)
@@ -1252,12 +1137,16 @@ def _match_boundary_faces(
     bdry_n_vertex_indices = np.unique(bdry_n_face_vertex_indices)
     bdry_n_vertex_indices = bdry_n_vertex_indices[bdry_n_vertex_indices >= 0]
 
-    matched_bdry_n_vertex_indices = _match_vertices(
-        mesh, bdry_m_vertex_indices, bdry_n_vertex_indices,
-        aff_map=bdry_pair_mapping.aff_map, tol=tol)
+    bdry_m_vertices = mesh.vertices[:, bdry_m_vertex_indices]
+    bdry_n_vertices = mesh.vertices[:, bdry_n_vertex_indices]
+
+    from meshmode.mesh.tools import find_point_to_point_mapping
+    m_idx_to_n_idx = find_point_to_point_mapping(
+        bdry_pair_mapping.aff_map(bdry_m_vertices),
+        bdry_n_vertices)
 
     unmatched_bdry_m_vertex_indices = bdry_m_vertex_indices[
-        np.where(matched_bdry_n_vertex_indices < 0)[0]]
+        np.where(m_idx_to_n_idx < 0)[0]]
     nunmatched = len(unmatched_bdry_m_vertex_indices)
     if nunmatched > 0:
         vertices = mesh.vertices[:, unmatched_bdry_m_vertex_indices]
@@ -1269,6 +1158,9 @@ def _match_boundary_faces(
                 f"{vertices[:, i]} -> {mapped_vertices[:, i]}"
                 for i in range(min(nunmatched, 10))])
             + f"\n...\n({nunmatched-10} more omitted.)" if nunmatched > 10 else "")
+
+    matched_bdry_n_vertex_indices = bdry_n_vertex_indices[
+        m_idx_to_n_idx]
 
     from meshmode.mesh import _concatenate_face_ids
     face_ids = _concatenate_face_ids([bdry_m_face_ids, bdry_n_face_ids])
