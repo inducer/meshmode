@@ -422,11 +422,16 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         ibatch = self.groups[to_group_index].batches[ibatch_index]
         from_grp = self.from_discr.groups[ibatch.from_group_index]
 
-        from meshmode.mesh.tools import find_point_permutation
-        return find_point_permutation(
-                    targets=ibatch.result_unit_nodes,
-                    permutees=from_grp.unit_nodes,
+        from meshmode.mesh.tools import find_point_to_point_mapping
+        src_idx_to_tgt_idx = find_point_to_point_mapping(
+                    src_points=ibatch.result_unit_nodes,
+                    tgt_points=from_grp.unit_nodes,
                     tol_multiplier=tol_multiplier)
+
+        return (
+            src_idx_to_tgt_idx
+            if np.all(src_idx_to_tgt_idx >= 0)
+            else None)
 
     @keyed_memoize_method(lambda actx, to_group_index, ibatch_index,
             tol_multiplier=None: (to_group_index, ibatch_index, tol_multiplier))
