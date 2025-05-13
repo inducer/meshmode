@@ -818,6 +818,130 @@ def test_lookup_tree(visualize=False):
 # }}}
 
 
+# {{{ test point matching
+
+def _find_point_to_point_mapping_brute_force(src_points, tgt_points, *,
+        tol, return_second_match=False):
+    d, n_src_points = src_points.shape
+
+    displacements = (
+        src_points.reshape(d, -1, 1)
+        - tgt_points.reshape(d, 1, -1))
+    distances_sq = np.sum(displacements**2, axis=0)
+
+    src_indices, = np.indices((n_src_points,))
+
+    min_distance_sq_indices = np.argmin(distances_sq, axis=1)
+    min_distances_sq = distances_sq[src_indices, min_distance_sq_indices]
+
+    src_idx_to_tgt_idx = np.where(
+        min_distances_sq < tol**2,
+        min_distance_sq_indices,
+        -1)
+
+    if return_second_match:
+        max_dist_sq = np.max(distances_sq)
+        distances_sq[src_indices, min_distance_sq_indices] = 2*max_dist_sq
+        min_distance_sq_indices = np.argmin(distances_sq, axis=1)
+        min_distances_sq = distances_sq[src_indices, min_distance_sq_indices]
+
+        src_idx_to_tgt_idx_2nd = np.where(
+            min_distances_sq < tol**2,
+            min_distance_sq_indices,
+            -1)
+
+        return src_idx_to_tgt_idx, src_idx_to_tgt_idx_2nd
+    else:
+        return src_idx_to_tgt_idx
+
+
+def test_point_matching():
+    from meshmode.mesh.tools import find_point_to_point_mapping
+
+    rng = np.random.default_rng(seed=42)
+
+    # {{{ Sanity check _find_point_to_point_mapping_brute_force
+
+    x, y = np.meshgrid(np.linspace(0., 1., 50), np.linspace(0., 1., 50))
+    points = np.stack((x.flatten(), y.flatten()))
+    permuted_points_to_points = rng.permutation(points.shape[1])
+    adjusted_points = points[:, permuted_points_to_points]
+    adjusted_points_to_points = _find_point_to_point_mapping_brute_force(
+        src_points=adjusted_points,
+        tgt_points=points,
+        tol=1e-10)
+    assert np.all(adjusted_points_to_points == permuted_points_to_points)
+
+    # }}}
+
+    # {{{ 0D
+
+    points = np.empty((0, 1))
+    points_to_points = find_point_to_point_mapping(
+        src_points=points,
+        tgt_points=points)
+    assert np.all(points_to_points == np.array([0]))
+
+    # }}}
+
+    # {{{ 1D through 3D
+
+    npoints = 1000
+    tol = 1e-10
+
+    for d in range(1, 4):
+        # Generate arrays of point data that don't contain points that are close
+        # to each other so that we can add perturbations without worrying about them
+        # getting too close to others
+        point_data = []
+        nattempts = 0
+        while len(point_data) < 10 and nattempts < 100:
+            points = npoints**(1/d) * rng.random(size=(d, npoints))
+
+            _, points_to_other = \
+                _find_point_to_point_mapping_brute_force(
+                    src_points=points,
+                    tgt_points=points,
+                    tol=100*tol,
+                    return_second_match=True)
+
+            if not np.any(points_to_other >= 0):
+                point_data.append(points)
+
+            nattempts += 1
+
+        if len(point_data) < 10:
+            pytest.fail("unable to generate enough input data.")
+
+        for points in point_data:
+            # Permuted and perturbed by a random amount in a random direction
+            permuted_points_to_points = rng.permutation(npoints)
+            adjusted_points = (
+                points[:, permuted_points_to_points]
+                # Can't quite go to 100% of tol due to cancellation error
+                + 0.9 * tol * (2 * rng.random(size=(d, npoints)) - 1)/np.sqrt(d))
+            adjusted_points_to_points = find_point_to_point_mapping(
+                src_points=adjusted_points,
+                tgt_points=points,
+                tol=tol)
+
+            assert np.all(adjusted_points_to_points >= 0)
+            assert np.all(adjusted_points_to_points == permuted_points_to_points)
+
+            # Perturbed too far
+            unmatchable_point = points[:, 0] + 2*tol
+            unmatchable_point_to_point = find_point_to_point_mapping(
+                src_points=unmatchable_point.reshape(-1, 1),
+                tgt_points=points,
+                tol=tol)
+
+            assert unmatchable_point_to_point == -1
+
+    # }}}
+
+# }}}
+
+
 # {{{ test boundary tags
 
 def test_boundary_tags():

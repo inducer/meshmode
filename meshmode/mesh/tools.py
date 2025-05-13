@@ -20,6 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from warnings import warn
+
 import numpy as np
 import numpy.linalg as la
 
@@ -29,6 +31,8 @@ from pytools.spatial_btree import SpatialBinaryTreeBucket
 
 
 __doc__ = """
+.. autofunction:: find_point_to_point_mapping
+
 .. currentmodule:: meshmode
 
 .. autoclass:: AffineMap
@@ -227,38 +231,141 @@ def find_point_permutation(
     :arg permutees: shaped ``(dim, npoints)``
     :returns: a "from"-style permutation, or None if none was found.
     """
+    warn("find_point_permutation is deprecated and will be removed in Q3 2025. Use "
+         "find_point_to_point_mapping instead.", DeprecationWarning, stacklevel=2)
 
-    if len(targets.shape) == 1:
+    single_target = len(targets.shape) == 1
+    if single_target:
         targets = targets.reshape(-1, 1)
 
-    if tol_multiplier is None:
-        tol_multiplier = 250
+    target_idx_to_permutee_idx = find_point_to_point_mapping(
+        src_points=targets,
+        tgt_points=permutees,
+        tol_multiplier=tol_multiplier)
 
-    tol = np.finfo(targets.dtype).eps * tol_multiplier
+    return (
+        target_idx_to_permutee_idx
+        if np.all(target_idx_to_permutee_idx >= 0)
+        else None)
 
-    dim, ntgt_nodes = targets.shape
+
+def find_point_to_point_mapping(
+        src_points: np.ndarray,
+        tgt_points: np.ndarray, *,
+        tol: float | None = None,
+        tol_multiplier: float | None = None,
+        _max_leaf_points: int | None = None) -> np.ndarray:
+    """
+    Compute a mapping from indices of points in *src_points* to the matching
+    indices of points in *tgt_points*.
+
+    :arg src_points: shaped ``(dim, npoints)`` or just ``(dim,)`` if a single point
+    :arg tgt_points: shaped ``(dim, npoints)``
+    :arg tol: the maximum distance allowed between matching points.
+    :arg tol_multiplier: another way of specifying tolerance: as a multiplier of
+        machine epsilon. Must not specify both *tol* and *tol_multiplier*.
+
+    :returns: an array storing an index into *tgt_points* for each point in
+        *src_points* if a match exists or ``-1`` if not.
+    """
+
+    if tol is not None and tol_multiplier is not None:
+        raise ValueError("cannot specify both tol and tol_multiplier.")
+    elif tol is None:
+        if tol_multiplier is None:
+            tol_multiplier = 250
+        tol = np.finfo(src_points.dtype).eps * tol_multiplier
+
+    if _max_leaf_points is None:
+        _max_leaf_points = 2**8  # *shrug*
+
+    src_dim, n_src_points = src_points.shape
+    tgt_dim, n_tgt_points = tgt_points.shape
+
+    if tgt_dim != src_dim:
+        raise ValueError(
+            "source and target points must have the same ambient dimension.")
+
+    dim = src_dim
+
     if dim == 0:
-        assert ntgt_nodes == 1
-        return np.array([0], dtype=np.int16)
+        assert n_tgt_points == 1
+        return np.array([0])
 
-    dist_vecs = (targets.reshape(dim, -1, 1)
-            - permutees.reshape(dim, 1, -1))
-    dists = la.norm(dist_vecs, axis=0, ord=2)
+    if n_src_points + n_tgt_points <= _max_leaf_points:
+        displacements = (
+            src_points.reshape(dim, -1, 1)
+            - tgt_points.reshape(dim, 1, -1))
+        distances_sq = np.sum(displacements**2, axis=0)
 
-    assert ntgt_nodes < 2**16
+        src_indices, = np.indices((n_src_points,))
+        min_distance_sq_indices = np.argmin(distances_sq, axis=1)
+        min_distances_sq = distances_sq[src_indices, min_distance_sq_indices]
 
-    result: np.ndarray = np.zeros(ntgt_nodes, dtype=np.int16)
+        src_idx_to_tgt_idx = np.where(
+            min_distances_sq < tol**2,
+            min_distance_sq_indices,
+            -1)
 
-    for irow in range(ntgt_nodes):
-        close_indices, = np.where(dists[irow] < tol)
+        return src_idx_to_tgt_idx
 
-        if len(close_indices) != 1:
-            return None
+    else:
+        both_points = np.concatenate((tgt_points, src_points), axis=1)
 
-        close_index, = close_indices
-        result[irow] = close_index
+        idim_largest = np.argmax(
+            np.max(both_points, axis=1)
+            - np.min(both_points, axis=1))
 
-    return result
+        median_coord = np.median(both_points[idim_largest, :])
+
+        lower_src_idx_to_full_idx, = np.where(
+            src_points[idim_largest, :] <= median_coord + tol)
+        lower_tgt_idx_to_full_idx, = np.where(
+            tgt_points[idim_largest, :] <= median_coord + tol)
+
+        upper_src_idx_to_full_idx, = np.where(
+            src_points[idim_largest, :] >= median_coord - tol)
+        upper_tgt_idx_to_full_idx, = np.where(
+            tgt_points[idim_largest, :] >= median_coord - tol)
+
+        if __debug__:
+            n_lower_points = (
+                len(lower_src_idx_to_full_idx)
+                + len(lower_tgt_idx_to_full_idx))
+            n_upper_points = (
+                len(upper_src_idx_to_full_idx)
+                + len(upper_tgt_idx_to_full_idx))
+            if (
+                    # No theoretical justification for using 2/3, it just seems like
+                    # a reasonable number
+                    n_lower_points > 2*both_points.shape[1]/3
+                    or n_upper_points > 2*both_points.shape[1]/3):
+                warn(
+                    "bad partitioning of points, performance may be degraded.",
+                    stacklevel=2)
+
+        lower_src_idx_to_tgt_idx = find_point_to_point_mapping(
+            src_points[:, lower_src_idx_to_full_idx],
+            tgt_points[:, lower_tgt_idx_to_full_idx],
+            tol=tol,
+            _max_leaf_points=_max_leaf_points)
+
+        upper_src_idx_to_tgt_idx = find_point_to_point_mapping(
+            src_points[:, upper_src_idx_to_full_idx],
+            tgt_points[:, upper_tgt_idx_to_full_idx],
+            tol=tol,
+            _max_leaf_points=_max_leaf_points)
+
+        matched_lower_points, = np.where(lower_src_idx_to_tgt_idx >= 0)
+        matched_upper_points, = np.where(upper_src_idx_to_tgt_idx >= 0)
+
+        src_idx_to_tgt_idx = np.full(n_src_points, -1)
+        src_idx_to_tgt_idx[lower_src_idx_to_full_idx[matched_lower_points]] = \
+            lower_tgt_idx_to_full_idx[lower_src_idx_to_tgt_idx[matched_lower_points]]
+        src_idx_to_tgt_idx[upper_src_idx_to_full_idx[matched_upper_points]] = \
+            upper_tgt_idx_to_full_idx[upper_src_idx_to_tgt_idx[matched_upper_points]]
+
+        return src_idx_to_tgt_idx
 
 # }}}
 
