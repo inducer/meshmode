@@ -21,6 +21,7 @@ THE SOFTWARE.
 """
 
 from collections.abc import MutableSequence, Sequence
+from typing import Any, Literal, overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -58,47 +59,42 @@ __doc__ = """
 
 # {{{ gmsh receiver
 
+# NOTE: Keep in sync with definitions from gmsh_interop.reader
+Point = NDArray[np.floating]
+IndexArray = NDArray[np.integer]
+
+
 class GmshMeshReceiver(GmshMeshReceiverBase):
-    points: MutableSequence[NDArray[np.floating] | None] | NDArray[np.floating]
-    element_markers: MutableSequence[Sequence[int] | None]
-    element_vertices: MutableSequence[NDArray[np.integer] | None]
-    element_nodes: MutableSequence[NDArray[np.floating] | None]
-    element_types: MutableSequence[GmshElementBase | None]
-    tags: list[tuple[str, int]]
-    gmsh_tag_index_to_mine: dict[int, int]
-
-    def __init__(self, mesh_construction_kwargs=None):
-        # Use data fields similar to meshpy.triangle.MeshInfo and
-        # meshpy.tet.MeshInfo
-        self.points = []
-        self.element_vertices = []
-        self.element_nodes = []
-        self.element_types = []
-        self.element_markers = []
-        self.tags = []
-        self.groups = None
-        self.gmsh_tag_index_to_mine = {}
-
+    def __init__(self, mesh_construction_kwargs: dict[str, Any] | None = None) -> None:
         if mesh_construction_kwargs is None:
             mesh_construction_kwargs = {}
 
-        self.mesh_construction_kwargs = mesh_construction_kwargs
+        # Use data fields similar to meshpy.triangle.MeshInfo and meshpy.tet.MeshInfo
+        self.points: MutableSequence[Point | None] | Point = []
+        self.element_vertices: MutableSequence[IndexArray | None] = []
+        self.element_nodes: MutableSequence[IndexArray | None] = []
+        self.element_types: MutableSequence[GmshElementBase | None] = []
+        self.element_markers: MutableSequence[Sequence[int] | None] = []
+        self.tags: list[tuple[str, int]] = []
+        self.groups: MutableSequence[MeshElementGroup] | None = None
+        self.gmsh_tag_index_to_mine: dict[int, int] = {}
+        self.mesh_construction_kwargs: dict[str, Any] = mesh_construction_kwargs
 
-    def set_up_nodes(self, count):
+    def set_up_nodes(self, count: int) -> None:
         # Preallocate array of nodes within list; treat None as sentinel value.
         # Preallocation not done for performance, but to assign values at indices
         # in random order.
         self.points = [None] * count
 
-    def add_node(self, node_nr: int, point: NDArray[np.floating]) -> None:
+    def add_node(self, node_nr: int, point: Point) -> None:
         self.points[node_nr] = point
 
     @override
-    def finalize_nodes(self):
+    def finalize_nodes(self) -> None:
         self.points = np.array(self.points, dtype=np.float64)
 
     @override
-    def set_up_elements(self, count):
+    def set_up_elements(self, count: int) -> None:
         # Preallocation of arrays for assignment elements in random order.
         self.element_vertices = [None] * count
         self.element_nodes = [None] * count
@@ -109,8 +105,8 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
     def add_element(self,
                     element_nr: int,
                     element_type: GmshElementBase,
-                    vertex_nrs: NDArray[np.integer],
-                    lexicographic_nodes: NDArray[np.floating],
+                    vertex_nrs: IndexArray,
+                    lexicographic_nodes: IndexArray,
                     tag_numbers: Sequence[int]) -> None:
         self.element_vertices[element_nr] = vertex_nrs
         self.element_nodes[element_nr] = lexicographic_nodes
@@ -119,7 +115,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
             self.element_markers[element_nr] = tag_numbers
 
     @override
-    def finalize_elements(self):
+    def finalize_elements(self) -> None:
         pass
 
     # May raise ValueError if called multiple times with the same name
@@ -137,8 +133,20 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
                 raise ValueError("Distinct tags with the same tag id")
 
     @override
-    def finalize_tags(self):
+    def finalize_tags(self) -> None:
         pass
+
+    @overload
+    def get_mesh(
+        self,
+        return_tag_to_elements_map: Literal[True]
+        ) -> tuple[Mesh, dict[str, IndexArray]]: ...
+
+    @overload
+    def get_mesh(
+        self,
+        return_tag_to_elements_map: Literal[False],
+        ) -> Mesh: ...
 
     def get_mesh(self, return_tag_to_elements_map: bool = False):
         el_type_hist: dict[GmshElementBase, int] = {}
