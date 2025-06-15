@@ -270,11 +270,13 @@ def find_point_to_point_mapping(
     """
 
     if tol is not None and tol_multiplier is not None:
-        raise ValueError("cannot specify both tol and tol_multiplier.")
-    elif tol is None:
+        raise ValueError("cannot specify both 'tol' and 'tol_multiplier'")
+
+    if tol is None:
         if tol_multiplier is None:
             tol_multiplier = 250
-        tol = np.finfo(src_points.dtype).eps * tol_multiplier
+
+        tol = float(np.finfo(src_points.dtype).eps * tol_multiplier)
 
     if _max_leaf_points is None:
         _max_leaf_points = 2**8  # *shrug*
@@ -284,7 +286,8 @@ def find_point_to_point_mapping(
 
     if tgt_dim != src_dim:
         raise ValueError(
-            "source and target points must have the same ambient dimension.")
+            "source and target points must have the same ambient dimension: "
+            f"got shape {src_points.shape} and {tgt_points.shape}")
 
     dim = src_dim
 
