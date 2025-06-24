@@ -27,6 +27,7 @@ import numpy as np
 import pytest
 
 from arraycontext import (
+    ArrayContextFactory,
     dataclass_array_container,
     flatten,
     pytest_generate_tests_for_array_contexts,
@@ -99,7 +100,7 @@ def _get_test_containers(actx, ambient_dim=2):
 
 
 @pytest.mark.parametrize("ord", [2, np.inf])
-def test_container_norm(actx_factory, ord):
+def test_container_norm(actx_factory: ArrayContextFactory, ord):
     actx = actx_factory()
     c_test = _get_test_containers(actx)
 
@@ -133,7 +134,7 @@ def test_container_norm(actx_factory, ord):
 
 # {{{ test_dof_array_pickling
 
-def test_dof_array_pickling(actx_factory):
+def test_dof_array_pickling(actx_factory: ArrayContextFactory):
     actx = actx_factory()
     _, _, mat_of_dofs, dc_of_dofs = _get_test_containers(actx)
 
@@ -160,7 +161,7 @@ class FooAxisTag2(Tag):
     pass
 
 
-def test_dof_array_pickling_tags(actx_factory):
+def test_dof_array_pickling_tags(actx_factory: ArrayContextFactory):
     actx = actx_factory()
 
     from pickle import dumps, loads

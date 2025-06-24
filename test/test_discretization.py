@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 import numpy as np
 
-from arraycontext import pytest_generate_tests_for_array_contexts
+from arraycontext import ArrayContextFactory, pytest_generate_tests_for_array_contexts
 
 import meshmode.mesh.generation as mgen
 from meshmode import _acf  # noqa: F401
@@ -37,7 +37,7 @@ pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         [PytestPyOpenCLArrayContextFactory])
 
 
-def test_discr_nodes_caching(actx_factory):
+def test_discr_nodes_caching(actx_factory: ArrayContextFactory):
     actx = actx_factory()
     nelements = 30
     target_order = 5

@@ -25,7 +25,7 @@ from functools import partial
 
 import pytest
 
-from arraycontext import pytest_generate_tests_for_array_contexts
+from arraycontext import ArrayContextFactory, pytest_generate_tests_for_array_contexts
 
 import meshmode.mesh.generation as mgen
 from meshmode import _acf  # noqa: F401
@@ -55,7 +55,11 @@ pytest_generate_tests = pytest_generate_tests_for_array_contexts(
         ])
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("order", [1, 2, 3, 4, 5])
-def test_bdry_restriction_is_permutation(actx_factory, group_factory, dim, order):
+def test_bdry_restriction_is_permutation(
+            actx_factory: ArrayContextFactory,
+            group_factory,
+            dim,
+            order):
     """Check that restriction to the boundary and opposite-face swap
     for the element groups, orders and dimensions above is actually just
     indirect access.
