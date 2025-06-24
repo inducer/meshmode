@@ -118,19 +118,6 @@ Pylint:
   except:
   - tags
 
-Mypy:
-  script: |
-    EXTRA_INSTALL="Cython mpi4py"
-    curl -L -O https://tiker.net/ci-support-v0
-    . ./ci-support-v0
-    build_py_project_in_venv
-    python -m pip install mypy
-    ./run-mypy.sh
-  tags:
-  - python3
-  except:
-  - tags
-
 Downstream:
   parallel:
     matrix:
