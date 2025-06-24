@@ -25,11 +25,10 @@ THE SOFTWARE.
 
 import operator as op
 import threading
-from collections.abc import Callable, Iterable
 from contextlib import contextmanager
 from functools import partial, update_wrapper
 from numbers import Number
-from typing import Any, TypeAlias, Union
+from typing import TYPE_CHECKING, Any, TypeAlias, Union
 from warnings import warn
 
 import numpy as np
@@ -48,6 +47,10 @@ from arraycontext import (
     with_container_arithmetic,
 )
 from pytools import MovedFunctionDeprecationWrapper, single_valued
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
 
 
 __doc__ = """

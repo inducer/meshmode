@@ -23,13 +23,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from arraycontext import ArrayContext
 
-from meshmode.mesh import Mesh
+if TYPE_CHECKING:
+    from arraycontext import ArrayContext
+
+    from meshmode.mesh import Mesh
 
 
 __doc__ = """

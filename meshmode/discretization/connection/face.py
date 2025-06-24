@@ -25,17 +25,22 @@ THE SOFTWARE.
 
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 import modepy as mp
-from arraycontext import ArrayContext
 from arraycontext.metadata import NameHint
 
-from meshmode.discretization import Discretization, ElementGroupFactory
-from meshmode.discretization.connection.direct import DirectDiscretizationConnection
-from meshmode.mesh import BoundaryTag, Mesh
 from meshmode.transform_metadata import DiscretizationElementAxisTag
+
+
+if TYPE_CHECKING:
+    from arraycontext import ArrayContext
+
+    from meshmode.discretization import Discretization, ElementGroupFactory
+    from meshmode.discretization.connection.direct import DirectDiscretizationConnection
+    from meshmode.mesh import BoundaryTag, Mesh
 
 
 logger = logging.getLogger(__name__)

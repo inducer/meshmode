@@ -73,6 +73,14 @@ __doc__ = """
 Predefined Boundary tags
 ------------------------
 
+.. class:: BoundaryTag
+
+    A type alias of :class:`typing.Hashable`.
+
+.. class:: PartID
+
+    A type alias of :class:`typing.Hashable`.
+
 .. autoclass:: BTAG_NONE
 .. autoclass:: BTAG_ALL
 .. autoclass:: BTAG_REALLY_ALL

@@ -27,8 +27,7 @@ THE SOFTWARE.
 """
 
 import logging
-
-from arraycontext import ArrayContext
+from typing import TYPE_CHECKING
 
 from meshmode.discretization.connection.chained import (
     ChainedDiscretizationConnection,
@@ -60,6 +59,10 @@ from meshmode.discretization.connection.projection import (
 )
 from meshmode.discretization.connection.refinement import make_refinement_connection
 from meshmode.discretization.connection.same_mesh import make_same_mesh_connection
+
+
+if TYPE_CHECKING:
+    from arraycontext import ArrayContext
 
 
 logger = logging.getLogger(__name__)

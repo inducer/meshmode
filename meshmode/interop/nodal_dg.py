@@ -33,13 +33,17 @@ THE SOFTWARE.
 """
 
 
-import numpy as np
+from typing import TYPE_CHECKING
 
-import arraycontext
+import numpy as np
 
 import meshmode.discretization
 import meshmode.dof_array
 import meshmode.mesh
+
+
+if TYPE_CHECKING:
+    import arraycontext
 
 
 class NodalDGContext:

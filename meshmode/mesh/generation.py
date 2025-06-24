@@ -25,8 +25,7 @@ THE SOFTWARE.
 """
 
 import logging
-from collections.abc import Callable, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import numpy.linalg as la
@@ -35,7 +34,12 @@ import modepy as mp
 from pytools import deprecate_keyword, log_process
 
 from meshmode.mesh import Mesh, MeshElementGroup, make_mesh
-from meshmode.mesh.refinement import Refiner
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+    from meshmode.mesh.refinement import Refiner
 
 
 logger = logging.getLogger(__name__)
@@ -313,7 +317,7 @@ class WobblyCircle:
         self.phase = phase
 
     @staticmethod
-    def random(ncoeffs: int, seed: int) -> "WobblyCircle":
+    def random(ncoeffs: int, seed: int) -> WobblyCircle:
         rng = np.random.default_rng(seed)
         coeffs = rng.random(ncoeffs)
 
@@ -351,7 +355,7 @@ class NArmedStarfish(WobblyCircle):
         super().__init__(coeffs, phase=phase)
 
     @staticmethod
-    def random(seed: int) -> "NArmedStarfish":
+    def random(seed: int) -> NArmedStarfish:
         rng = np.random.default_rng(seed)
 
         # NOTE: 32 arms should be enough for everybody!
