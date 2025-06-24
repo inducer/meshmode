@@ -143,6 +143,9 @@ extend-ignore-re = [
 ]
 
 [tool.typos.default.extend-words]
+# as in pt_typ, an import only used for type checking
+"typ" = "typ"
+
 "PN" = "PN"
 "nd" = "nd"
 # TODO: needed by deprecated MPIMeshDistributor.is_mananger_rank
