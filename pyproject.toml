@@ -45,7 +45,6 @@ doc = [
     "sphinx-copybutton",
 ]
 test = [
-    "mypy",
     "pylint",
     "pytest",
     "ruff",
@@ -131,46 +130,6 @@ markers = [
     "mpi: test requires MPI",
     "octave: test requires Octave",
 ]
-
-[tool.mypy]
-python_version = "3.10"
-warn_unused_ignores = true
-
-[[tool.mypy.overrides]]
-module = [
-    "meshmode.discretization.*",
-    "meshmode.dof_array.*",
-    "meshmode.interop.*",
-    "meshmode.mesh.visualization",
-    "meshmode.mesh.generation",
-    "meshmode.mesh.refinement.utils",
-    "meshmode.mesh.refinement.tessellate",
-]
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = [
-    "FIAT.*",
-    "finat.*",
-    "firedrake.*",
-    "gmsh_interop.*",
-    "h5py.*",
-    "loopy.*",
-    "matplotlib.*",
-    "mayavi.*",
-    "mpl_toolkits.*",
-    "oct2py.*",
-    "pymbolic.*",
-    "pymetis.*",
-    "pyop2.*",
-    "pyopencl.*",
-    "pytential.*",
-    "pyvisfile.*",
-    "recursivenodes.*",
-    "scipy.*",
-]
-ignore_missing_imports = true
-
 
 [tool.typos.default]
 extend-ignore-re = [
