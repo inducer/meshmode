@@ -36,6 +36,7 @@ dependencies = [
     "pymbolic>=2022.2",
     "pytools>=2024.1.17",
     "recursivenodes",
+    "typing_extensions>=4.4",
 ]
 
 [project.optional-dependencies]
@@ -150,3 +151,78 @@ extend-ignore-re = [
 "nd" = "nd"
 # TODO: needed by deprecated MPIMeshDistributor.is_mananger_rank
 "mananger" = "mananger"
+
+[tool.basedpyright]
+reportImplicitStringConcatenation = "none"
+reportUnnecessaryIsInstance = "none"
+reportUnusedCallResult = "none"
+reportExplicitAny = "none"
+reportUnusedParameter = "hint"
+
+reportPrivateUsage = "hint"
+reportAny = "none"
+reportUnreachable = "hint"
+
+# This reports even cycles that are qualified by 'if TYPE_CHECKING'. Not what
+# we care about at this moment.
+# https://github.com/microsoft/pyright/issues/746
+reportImportCycles = "none"
+
+ignore = [
+    "doc/conf.py",
+]
+
+pythonVersion = "3.10"
+pythonPlatform = "All"
+
+[[tool.basedpyright.executionEnvironments]]
+root = "test"
+reportArgumentType = "hint"
+reportAttributeAccessIssue = "hint"
+reportMissingImports = "none"
+reportMissingParameterType = "none"
+reportMissingTypeStubs = "none"
+reportUnknownArgumentType = "none"
+reportUnknownMemberType = "hint"
+reportUnknownParameterType = "none"
+reportUnknownVariableType = "none"
+reportUnknownLambdaType = "hint"
+reportOperatorIssue = "hint"
+reportPossiblyUnboundVariable = "hint"
+reportPrivateUsage = "none"
+reportUnusedImport = "hint"
+
+
+[[tool.basedpyright.executionEnvironments]]
+root = "examples"
+reportArgumentType = "hint"
+reportAttributeAccessIssue = "hint"
+reportMissingImports = "none"
+reportMissingParameterType = "none"
+reportMissingTypeStubs = "none"
+reportUnknownArgumentType = "none"
+reportUnknownMemberType = "hint"
+reportUnknownParameterType = "none"
+reportUnknownVariableType = "none"
+reportUnknownLambdaType = "hint"
+reportOperatorIssue = "hint"
+reportPossiblyUnboundVariable = "hint"
+reportPrivateUsage = "none"
+
+reportGeneralTypeIssues = "hint"
+
+[[tool.basedpyright.executionEnvironments]]
+root = "meshmode/interop/firedrake"
+reportMissingImports = "none"
+reportCallIssue = "hint"
+reportArgumentType = "hint"
+
+[[tool.basedpyright.executionEnvironments]]
+root = "meshmode/interop/nodal_dg.py"
+reportMissingImports = "none"
+reportOptionalMemberAccess = "none"
+reportOptionalSubscript = "none"
+
+[[tool.basedpyright.executionEnvironments]]
+root = "meshmode/discretization/visualization.py"
+reportMissingImports = "none"

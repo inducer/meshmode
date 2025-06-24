@@ -42,6 +42,20 @@ jobs:
                 curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
                 . ./prepare-and-run-pylint.sh "$(basename $GITHUB_REPOSITORY)" examples/*.py test/test_*.py
 
+    basedpyright:
+        runs-on: ubuntu-latest
+        steps:
+        -   uses: actions/checkout@v4
+        -   name: "Main Script"
+            run: |
+                curl -L -O https://tiker.net/ci-support-v0
+                . ./ci-support-v0
+                # pyright is happier with missing packages than installed, untyped ones
+                sed -i /oct2py/d .test-conda-env-py3.yml
+                sed -i /h5py/d .test-conda-env-py3.yml
+                build_py_project_in_conda_env
+                python -m pip install basedpyright
+                basedpyright
 
     pytest3:
         name: Pytest Conda Py3
