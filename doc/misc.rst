@@ -106,3 +106,36 @@ AK also gratefully acknowledges a hardware gift from Nvidia Corporation.
 
 The views and opinions expressed herein do not necessarily reflect those of the
 funding agencies.
+
+References
+----------
+
+.. class:: ArrayContext
+
+    See :class:`arraycontext.ArrayContext`.
+
+.. class:: _Mesh
+
+    See :class:`meshmode.mesh.Mesh`.
+
+.. class:: _MeshElementGroup
+
+    See :class:`meshmode.mesh.MeshElementGroup`.
+
+.. class:: _DOFArray
+
+    See :class:`meshmode.dof_array.DOFArray`.
+
+.. class:: DTypeLike
+
+    See :data:`numpy.typing.DTypeLike`.
+
+.. currentmodule:: np
+
+.. class:: dtype
+
+    See :class:`numpy.dtype`.
+
+.. class:: complexfloating
+
+    See :class:`numpy.complexfloating`.

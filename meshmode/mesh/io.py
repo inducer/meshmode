@@ -23,8 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from collections.abc import MutableSequence, Sequence
-from typing import Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -40,9 +39,14 @@ from gmsh_interop.reader import (  # noqa: F401
     ScriptSource,
     ScriptWithFilesSource,
 )
-from modepy import Shape
 
-from meshmode.mesh import Mesh, MeshElementGroup
+
+if TYPE_CHECKING:
+    from collections.abc import MutableSequence, Sequence
+
+    from modepy import Shape
+
+    from meshmode.mesh import Mesh, MeshElementGroup
 
 
 __doc__ = """

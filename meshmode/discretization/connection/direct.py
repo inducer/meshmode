@@ -24,9 +24,8 @@ THE SOFTWARE.
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Generic
+from typing import TYPE_CHECKING, Generic
 
 import numpy as np
 
@@ -44,7 +43,6 @@ from arraycontext import (
 from arraycontext.metadata import NameHint
 from pytools import keyed_memoize_method, memoize_in, memoize_method
 
-from meshmode.discretization import Discretization, ElementGroupBase
 from meshmode.dof_array import DOFArray
 from meshmode.transform_metadata import (
     ConcurrentDOFInameTag,
@@ -52,6 +50,12 @@ from meshmode.transform_metadata import (
     DiscretizationDOFAxisTag,
     DiscretizationElementAxisTag,
 )
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from meshmode.discretization import Discretization, ElementGroupBase
 
 
 def _reshape_and_preserve_tags(
