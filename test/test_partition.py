@@ -30,7 +30,12 @@ import numpy as np
 import pytest
 
 import pyopencl as cl
-from arraycontext import flatten, pytest_generate_tests_for_array_contexts, unflatten
+from arraycontext import (
+    ArrayContextFactory,
+    flatten,
+    pytest_generate_tests_for_array_contexts,
+    unflatten,
+)
 
 from meshmode import _acf  # noqa: F401
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
@@ -65,7 +70,7 @@ TAG_SEND_LOCAL_NODES = TAG_BASE + 4
          (2, [3, 4, 7]),
          (3, [3, 4])
         ])
-def test_partition_interpolation(actx_factory, dim, mesh_pars,
+def test_partition_interpolation(actx_factory: ArrayContextFactory, dim, mesh_pars,
                                  num_parts, num_groups, part_method):
     order = 4
     rng = np.random.default_rng(seed=42)

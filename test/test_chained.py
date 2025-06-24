@@ -25,7 +25,11 @@ import logging
 import numpy as np
 import pytest
 
-from arraycontext import flatten, pytest_generate_tests_for_array_contexts
+from arraycontext import (
+    ArrayContextFactory,
+    flatten,
+    pytest_generate_tests_for_array_contexts,
+)
 
 from meshmode import _acf  # noqa: F401
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
@@ -121,7 +125,7 @@ def create_face_connection(actx, discr):
 
 @pytest.mark.skip(reason="implementation detail")
 @pytest.mark.parametrize("ndim", [2, 3])
-def test_chained_batch_table(actx_factory, ndim, visualize=False):
+def test_chained_batch_table(actx_factory: ArrayContextFactory, ndim, visualize=False):
     from meshmode.discretization.connection.chained import _build_element_lookup_table
 
     actx = actx_factory()
@@ -149,7 +153,10 @@ def test_chained_batch_table(actx_factory, ndim, visualize=False):
 
 @pytest.mark.skip(reason="implementation detail")
 @pytest.mark.parametrize("ndim", [2, 3])
-def test_chained_new_group_table(actx_factory, ndim, visualize=False):
+def test_chained_new_group_table(
+            actx_factory: ArrayContextFactory,
+            ndim: int,
+            visualize: bool = False):
     from meshmode.discretization.connection.chained import _build_new_group_table
 
     actx = actx_factory()
@@ -195,7 +202,7 @@ def test_chained_new_group_table(actx_factory, ndim, visualize=False):
 
 
 @pytest.mark.parametrize("ndim", [2, 3])
-def test_chained_connection(actx_factory, ndim, visualize=False):
+def test_chained_connection(actx_factory: ArrayContextFactory, ndim, visualize=False):
     actx = actx_factory()
 
     discr = create_discretization(actx, ndim, nelements=10)
@@ -221,7 +228,10 @@ def test_chained_connection(actx_factory, ndim, visualize=False):
 
 
 @pytest.mark.parametrize("ndim", [2, 3])
-def test_chained_full_resample_matrix(actx_factory, ndim, visualize=False):
+def test_chained_full_resample_matrix(
+            actx_factory: ArrayContextFactory,
+            ndim,
+            visualize=False):
     from meshmode.discretization.connection.chained import make_full_resample_matrix
 
     actx = actx_factory()
@@ -254,7 +264,7 @@ def test_chained_full_resample_matrix(actx_factory, ndim, visualize=False):
 
 @pytest.mark.parametrize(("ndim", "chain_type"), [
     (2, 1), (2, 2), (3, 1), (3, 3)])
-def test_chained_to_direct(actx_factory, ndim, chain_type,
+def test_chained_to_direct(actx_factory: ArrayContextFactory, ndim, chain_type,
                            nelements=128, visualize=False):
     import time
 
@@ -338,7 +348,10 @@ def test_chained_to_direct(actx_factory, ndim, chain_type,
 @pytest.mark.parametrize(("ndim", "mesh_name"), [
     (2, "starfish"),
     (3, "torus")])
-def test_reversed_chained_connection(actx_factory, ndim, mesh_name):
+def test_reversed_chained_connection(
+            actx_factory: ArrayContextFactory,
+            ndim,
+            mesh_name):
     actx = actx_factory()
 
     def run(nelements, order):

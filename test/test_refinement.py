@@ -27,7 +27,7 @@ from functools import partial
 import numpy as np
 import pytest
 
-from arraycontext import pytest_generate_tests_for_array_contexts
+from arraycontext import ArrayContextFactory, pytest_generate_tests_for_array_contexts
 
 import meshmode.mesh.generation as mgen
 from meshmode import _acf  # noqa: F401
@@ -117,7 +117,7 @@ def uniform_refine_flags(mesh):
 ])
 # test_refinement_connection(cl._csc, PolynomialWarpAndBlend2DRestrictingGroupFactory, 'warp', 2, [4, 5, 6], 5, partial(even_refine_flags, 2))  # noqa: E501
 def test_refinement_connection(
-        actx_factory, group_factory,
+        actx_factory: ArrayContextFactory, group_factory,
         mesh_name, dim, mesh_pars, mesh_order, refine_flags, visualize=False):
 
     if group_factory == "warp_and_blend":
@@ -279,7 +279,7 @@ def test_conformity_of_uniform_mesh(refinement_rounds):
 
 
 @pytest.mark.parametrize("mesh_name", ["torus", "icosphere", "cylinder"])
-def test_refine_surfaces(actx_factory, mesh_name, visualize=False):
+def test_refine_surfaces(actx_factory: ArrayContextFactory, mesh_name, visualize=False):
     if mesh_name == "torus":
         mesh = mgen.generate_torus(10, 1, 40, 4, order=4)
     elif mesh_name == "icosphere":

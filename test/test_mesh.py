@@ -32,7 +32,7 @@ import numpy as np
 import numpy.linalg as la
 import pytest
 
-from arraycontext import pytest_generate_tests_for_array_contexts
+from arraycontext import ArrayContextFactory, pytest_generate_tests_for_array_contexts
 
 import meshmode.mesh.generation as mgen
 import meshmode.mesh.io as mio
@@ -84,8 +84,11 @@ def _get_rotation(amount, axis, center=None):
     (2, "X"),
     (3, None),
     ])
-def test_nonequal_rect_mesh_generation(actx_factory, dim, mesh_type,
-        visualize=False):
+def test_nonequal_rect_mesh_generation(
+            actx_factory: ArrayContextFactory,
+            dim,
+            mesh_type,
+            visualize=False):
     """Test that ``generate_regular_rect_mesh`` works with non-equal arguments
     across axes.
     """
@@ -119,7 +122,7 @@ def test_rect_mesh(visualize=False):
         pt.show()
 
 
-def test_box_mesh(actx_factory, visualize=False):
+def test_box_mesh(actx_factory: ArrayContextFactory, visualize=False):
     mesh = mgen.generate_box_mesh(3*(np.linspace(0, 1, 5),))
 
     if visualize:
@@ -531,7 +534,7 @@ def test_quad_single_element(visualize=False):
     SimplexElementGroup,
     TensorProductElementGroup
     ])
-def test_merge_and_map(actx_factory, group_cls, visualize=False):
+def test_merge_and_map(actx_factory: ArrayContextFactory, group_cls, visualize=False):
     from meshmode.mesh.io import FileSource, generate_gmsh
 
     order = 3
@@ -1220,7 +1223,7 @@ def test_quad_mesh_3d(mesh_name, order=3, visualize=False):
 # {{{ test_cube_icosahedron
 
 @pytest.mark.parametrize("order", [2, 3])
-def test_cube_icosphere(actx_factory, order, visualize=False):
+def test_cube_icosphere(actx_factory: ArrayContextFactory, order, visualize=False):
     mesh = mgen.generate_sphere(
             r=1.0, order=order,
             group_cls=TensorProductElementGroup,
@@ -1243,7 +1246,7 @@ def test_cube_icosphere(actx_factory, order, visualize=False):
 
 @pytest.mark.parametrize("order", [3, 4])
 @pytest.mark.parametrize("name", ["torus", "cruller"])
-def test_tensor_torus(actx_factory, order, name, visualize=False):
+def test_tensor_torus(actx_factory: ArrayContextFactory, order, name, visualize=False):
     if name == "torus":
         func = mgen.generate_torus
     elif name == "cruller":
@@ -1273,7 +1276,7 @@ def test_tensor_torus(actx_factory, order, name, visualize=False):
 
 # {{{ test_node_vertex_consistency_check
 
-def test_node_vertex_consistency_check(actx_factory):
+def test_node_vertex_consistency_check(actx_factory: ArrayContextFactory):
     actx = actx_factory()
 
     from meshmode import InconsistentVerticesError
@@ -1551,7 +1554,11 @@ def test_glued_mesh_offset_only():
 
 @pytest.mark.parametrize("mesh_name", ["starfish3", "dumbbell", "torus"])
 @pytest.mark.parametrize("has_offset", [True, False])
-def test_mesh_grid(actx_factory, mesh_name, has_offset, visualize=False):
+def test_mesh_grid(
+            actx_factory: ArrayContextFactory,
+            mesh_name,
+            has_offset,
+            visualize=False):
 
     target_order = 4
     if mesh_name == "starfish3":

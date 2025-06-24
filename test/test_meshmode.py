@@ -28,7 +28,11 @@ import numpy as np
 import numpy.linalg as la
 import pytest
 
-from arraycontext import flatten, pytest_generate_tests_for_array_contexts
+from arraycontext import (
+    ArrayContextFactory,
+    flatten,
+    pytest_generate_tests_for_array_contexts,
+)
 
 import meshmode.mesh.generation as mgen
 from meshmode import _acf  # noqa: F401
@@ -106,8 +110,14 @@ def normalize_group_factory(dim, grp_factory):
     ("warp", 3, [10, 20, 30]),
     ])
 @pytest.mark.parametrize("per_face_groups", [True, False])
-def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
-        mesh_name, dim, mesh_pars, per_face_groups):
+def test_boundary_interpolation(
+            actx_factory: ArrayContextFactory,
+            group_factory,
+            boundary_tag,
+            mesh_name: str,
+            dim,
+            mesh_pars,
+            per_face_groups):
     if (group_factory is LegendreGaussLobattoTensorProductGroupFactory
             and mesh_name == "blob"):
         pytest.skip("tensor products not implemented on blobs")
@@ -227,7 +237,7 @@ def test_boundary_interpolation(actx_factory, group_factory, boundary_tag,
     ("warp", 3, [10, 20, 30]),
     ])
 @pytest.mark.parametrize("per_face_groups", [False, True])
-def test_all_faces_interpolation(actx_factory, group_factory,
+def test_all_faces_interpolation(actx_factory: ArrayContextFactory, group_factory,
         mesh_name, dim, mesh_pars, per_face_groups):
     if (group_factory is LegendreGaussLobattoTensorProductGroupFactory
             and mesh_name == "blob"):
@@ -355,7 +365,7 @@ def test_all_faces_interpolation(actx_factory, group_factory,
     ("periodic", 2, [3, 5, 7]),
     ("periodic", 3, [5, 7])
     ])
-def test_opposite_face_interpolation(actx_factory, group_factory,
+def test_opposite_face_interpolation(actx_factory: ArrayContextFactory, group_factory,
         mesh_name, dim, mesh_pars):
     if (group_factory is LegendreGaussLobattoTensorProductGroupFactory
             and mesh_name in ["segment", "blob", "periodic"]):
@@ -483,7 +493,11 @@ def test_opposite_face_interpolation(actx_factory, group_factory,
     ("ball", lambda: mgen.generate_icosahedron(1, 1)),
     ("torus", lambda: mgen.generate_torus(5, 1)),
     ])
-def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
+def test_orientation_3d(
+            actx_factory: ArrayContextFactory,
+            what,
+            mesh_gen_func,
+            visualize=False):
     from arraycontext import PyOpenCLArrayContext
     pytest.importorskip("pytential")
 
@@ -548,8 +562,12 @@ def test_orientation_3d(actx_factory, what, mesh_gen_func, visualize=False):
     SimplexElementGroup,
     TensorProductElementGroup,
     ])
-def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
-        visualize=False):
+def test_sanity_single_element(
+            actx_factory: ArrayContextFactory,
+            dim,
+            mesh_order,
+            group_cls,
+            visualize=False):
     from arraycontext import PyOpenCLArrayContext
     pytest.importorskip("pytential")
     actx = actx_factory()
@@ -639,8 +657,12 @@ def test_sanity_single_element(actx_factory, dim, mesh_order, group_cls,
     SimplexElementGroup,
     TensorProductElementGroup,
     ])
-def test_sanity_no_elements(actx_factory, dim, mesh_order, group_cls,
-        visualize=False):
+def test_sanity_no_elements(
+            actx_factory: ArrayContextFactory,
+            dim,
+            mesh_order,
+            group_cls,
+            visualize=False):
     from arraycontext import PyOpenCLArrayContext
     pytest.importorskip("pytential")
     actx = actx_factory()
@@ -706,7 +728,7 @@ def test_sanity_no_elements(actx_factory, dim, mesh_order, group_cls,
 
 @pytest.mark.parametrize("dim", [2, 3, 4])
 @pytest.mark.parametrize("order", [3])
-def test_sanity_qhull_nd(actx_factory, dim, order):
+def test_sanity_qhull_nd(actx_factory: ArrayContextFactory, dim, order):
     pytest.importorskip("scipy")
 
     logging.basicConfig(level=logging.INFO)
@@ -760,7 +782,12 @@ def test_sanity_qhull_nd(actx_factory, dim, order):
     ("ball-radius-1.step", 3),
     ])
 @pytest.mark.parametrize("mesh_order", [1, 2])
-def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
+def test_sanity_balls(
+            actx_factory: ArrayContextFactory,
+            src_file,
+            dim,
+            mesh_order,
+            visualize=False):
     from arraycontext import PyOpenCLArrayContext
     pytest.importorskip("pytential")
 
@@ -878,7 +905,7 @@ def test_sanity_balls(actx_factory, src_file, dim, mesh_order, visualize=False):
 
 # {{{ mesh without vertices
 
-def test_mesh_without_vertices(actx_factory):
+def test_mesh_without_vertices(actx_factory: ArrayContextFactory):
     actx = actx_factory()
 
     # create a mesh
@@ -910,7 +937,10 @@ def test_mesh_without_vertices(actx_factory):
 # {{{ test_mesh_multiple_groups
 
 @pytest.mark.parametrize("ambient_dim", [1, 2, 3])
-def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
+def test_mesh_multiple_groups(
+            actx_factory: ArrayContextFactory,
+            ambient_dim,
+            visualize=False):
     actx = actx_factory()
 
     order = 4
@@ -1028,7 +1058,7 @@ def test_mesh_multiple_groups(actx_factory, ambient_dim, visualize=False):
 
 
 @pytest.mark.parametrize("ambient_dim", [2, 3])
-def test_mesh_with_interior_unit_nodes(actx_factory, ambient_dim):
+def test_mesh_with_interior_unit_nodes(actx_factory: ArrayContextFactory, ambient_dim):
     actx = actx_factory()
 
     # NOTE: smaller orders or coarser meshes make the cases fail the

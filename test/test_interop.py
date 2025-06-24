@@ -25,7 +25,7 @@ import logging
 import numpy as np
 import pytest
 
-from arraycontext import pytest_generate_tests_for_array_contexts
+from arraycontext import ArrayContextFactory, pytest_generate_tests_for_array_contexts
 
 from meshmode import _acf  # noqa: F401
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
@@ -39,7 +39,7 @@ pytest_generate_tests = pytest_generate_tests_for_array_contexts(
 
 @pytest.mark.parametrize("dim", [1, 2, 3])
 @pytest.mark.octave
-def test_nodal_dg_interop(actx_factory, dim):
+def test_nodal_dg_interop(actx_factory: ArrayContextFactory, dim: int):
     pytest.importorskip("oct2py")
     actx = actx_factory()
 

@@ -28,7 +28,7 @@ from functools import partial
 import numpy as np
 import pytest
 
-from arraycontext import pytest_generate_tests_for_array_contexts
+from arraycontext import ArrayContextFactory, pytest_generate_tests_for_array_contexts
 from pytools.obj_array import make_obj_array
 
 import meshmode.mesh.generation as mgen
@@ -52,7 +52,7 @@ thisdir = pathlib.Path(__file__).parent
 # {{{ test visualizer
 
 @pytest.mark.parametrize("dim", [1, 2, 3])
-def test_parallel_vtk_file(actx_factory, dim):
+def test_parallel_vtk_file(actx_factory: ArrayContextFactory, dim):
     r"""
     Simple test just generates a sample parallel PVTU file
     and checks it against the expected result.  The expected
@@ -122,7 +122,7 @@ class VisualizerData:
     (2, TensorProductElementGroup),
     (3, TensorProductElementGroup),
     ])
-def test_visualizers(actx_factory, dim, group_cls):
+def test_visualizers(actx_factory: ArrayContextFactory, dim, group_cls):
     actx = actx_factory()
 
     nelements = 64
@@ -243,7 +243,10 @@ def test_visualizers(actx_factory, dim, group_cls):
 
 
 @pytest.mark.parametrize("ambient_dim", [2, 3])
-def test_copy_visualizer(actx_factory, ambient_dim, visualize=True):
+def test_copy_visualizer(
+            actx_factory: ArrayContextFactory,
+            ambient_dim: int,
+            visualize=True):
     actx = actx_factory()
     target_order = 4
 
@@ -296,7 +299,7 @@ def test_copy_visualizer(actx_factory, ambient_dim, visualize=True):
 
 # {{{ test_vtk_overwrite
 
-def test_vtk_overwrite(actx_factory):
+def test_vtk_overwrite(actx_factory: ArrayContextFactory):
     pytest.importorskip("pyvisfile")
 
     def _try_write_vtk(writer, obj):
@@ -343,7 +346,7 @@ def test_vtk_overwrite(actx_factory):
 
 # {{{ test_visualize_mesh_resampling_error
 
-def test_visualize_mesh_resampling_error(actx_factory):
+def test_visualize_mesh_resampling_error(actx_factory: ArrayContextFactory):
     actx = actx_factory()
     target_order = 4
 
