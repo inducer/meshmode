@@ -124,6 +124,11 @@ known-local-folder = [
     "meshmode",
 ]
 lines-after-imports = 2
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.lint.per-file-ignores]
+"examples/*.py" = ["I002"]
+"doc/conf.py" = ["I002"]
 
 [tool.pytest.ini_options]
 markers = [

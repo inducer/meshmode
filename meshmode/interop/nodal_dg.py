@@ -7,6 +7,8 @@ and Tim Warburton (Springer, 2008).
 
 .. autofunction:: download_nodal_dg_if_not_present
 """
+from __future__ import annotations
+
 
 __copyright__ = "Copyright (C) 2020 Andreas Kloeckner"
 
