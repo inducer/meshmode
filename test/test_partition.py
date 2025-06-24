@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 __copyright__ = """
 Copyright (C) 2017 Ellis Hoag
 Copyright (C) 2017 Andreas Kloeckner

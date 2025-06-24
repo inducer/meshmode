@@ -1,4 +1,6 @@
 # mypy: disallow-untyped-defs
+from __future__ import annotations
+
 
 __copyright__ = "Copyright (C) 2014-6 Shivam Gupta, Andreas Kloeckner"
 

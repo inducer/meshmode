@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 __copyright__ = """
 Copyright (C) 2018 Andreas Kloeckner
 Copyright (C) 2014-6 Shivam Gupta
