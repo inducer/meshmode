@@ -657,8 +657,8 @@ class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
     .. automethod:: __call__
     """
 
-    mesh_group_class: ClassVar[_MeshElementGroup]
-    group_class: ClassVar[ElementGroupBase]
+    mesh_group_class: ClassVar[type[_MeshElementGroup]]
+    group_class: ClassVar[type[ElementGroupBase]]
 
     def __init__(self, order: int) -> None:
         """

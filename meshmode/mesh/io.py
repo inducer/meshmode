@@ -384,6 +384,7 @@ def generate_gmsh(source, dimensions=None, order=None, other_options=None,
             other_options=other_options, extension=extension,
             gmsh_executable=gmsh_executable,
             target_unit=target_unit) as runner:
+        assert runner.output_file
         parse_gmsh(recv, runner.output_file,
                 force_dimension=force_ambient_dim)
 

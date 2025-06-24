@@ -27,11 +27,11 @@ THE SOFTWARE.
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Hashable, Iterable
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
 from warnings import warn
 
 import numpy as np
+from typing_extensions import override
 
 import loopy as lp
 import modepy as mp
@@ -41,7 +41,6 @@ from pytools.obj_array import make_obj_array
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
-from meshmode.mesh import Mesh as _Mesh, MeshElementGroup as _MeshElementGroup
 from meshmode.transform_metadata import (
     ConcurrentDOFInameTag,
     ConcurrentElementInameTag,
@@ -49,6 +48,14 @@ from meshmode.transform_metadata import (
     DiscretizationElementAxisTag,
     FirstAxisIsElementsTag,
 )
+
+
+if TYPE_CHECKING:
+    from collections.abc import Hashable, Iterable, Sequence
+
+    from numpy.typing import DTypeLike
+
+    from meshmode.mesh import Mesh as _Mesh, MeshElementGroup as _MeshElementGroup
 
 
 __doc__ = """
@@ -100,8 +107,8 @@ class ElementGroupBase(ABC):
     These correspond one-to-one with :class:`meshmode.mesh.MeshElementGroup`.
     Responsible for all bulk data handling in :class:`Discretization`.
 
-    .. attribute :: mesh_el_group
-    .. attribute :: order
+    .. autoattribute :: mesh_el_group
+    .. autoattribute :: order
 
     .. autoattribute:: is_affine
     .. autoattribute:: nelements
@@ -114,6 +121,9 @@ class ElementGroupBase(ABC):
     .. automethod:: __init__
     .. automethod:: discretization_key
     """
+
+    mesh_el_group: _MeshElementGroup
+    order: int
 
     def __init__(self,
                  mesh_el_group: _MeshElementGroup,
@@ -173,7 +183,7 @@ class ElementGroupBase(ABC):
         group's reference element.
         """
 
-    def discretization_key(self) -> Hashable:
+    def discretization_key(self) -> Sequence[Hashable]:
         """Return a hashable, equality-comparable object that fully describes
         the per-element discretization used by this element group. (This
         should cover all parts of the
@@ -205,7 +215,7 @@ class ElementGroupFactory(Protocol):
 
 # {{{ Nodal element group base
 
-class NodalElementGroupBase(ElementGroupBase):
+class NodalElementGroupBase(ElementGroupBase, ABC):
     """Base class for nodal element groups, defined as finite elements
     equipped with nodes. Nodes are specific locations defined on the
     reference element (:attr:`~ElementGroupBase.shape`)
@@ -221,6 +231,7 @@ class NodalElementGroupBase(ElementGroupBase):
     """
 
     @property
+    @override
     def nunit_dofs(self) -> int:
         """The number of (nodal) degrees of freedom ("DOFs")
         associated with a single element.
@@ -257,7 +268,7 @@ class NodalElementGroupBase(ElementGroupBase):
 
 # {{{ Element groups with explicit bases
 
-class ElementGroupWithBasis(ElementGroupBase):
+class ElementGroupWithBasis(ElementGroupBase, ABC):
     """Base class for element groups which possess an
     explicit basis for the underlying function space
     :attr:`~ElementGroupBase.space`.
@@ -292,8 +303,10 @@ class ElementGroupWithBasis(ElementGroupBase):
 
 # {{{ Element groups suitable for interpolation
 
-class InterpolatoryElementGroupBase(NodalElementGroupBase,
-                                    ElementGroupWithBasis):
+class InterpolatoryElementGroupBase(
+                                    NodalElementGroupBase,
+                                    ElementGroupWithBasis,
+                                    ABC):
     """An element group equipped with both an explicit basis for the
     underlying :attr:`~ElementGroupBase.space`, and a set of nodal
     locations on the :attr:`~ElementGroupBase.shape`. These element
@@ -311,7 +324,7 @@ class InterpolatoryElementGroupBase(NodalElementGroupBase,
 
 # {{{ modal element group base
 
-class ModalElementGroupBase(ElementGroupWithBasis):
+class ModalElementGroupBase(ElementGroupWithBasis, ABC):
     """An element group equipped with a function space
     and a hierarchical basis that is orthonormal with
     respect to the :math:`L^2` inner product.
@@ -320,6 +333,7 @@ class ModalElementGroupBase(ElementGroupWithBasis):
     """
 
     @property
+    @override
     def nunit_dofs(self) -> int:
         """The number of (modal) degrees of freedom ("DOFs")
         associated with a single element.
@@ -334,9 +348,10 @@ class ModalElementGroupBase(ElementGroupWithBasis):
 class Discretization:
     """An unstructured composite discretization.
 
-    .. attribute:: real_dtype
-    .. attribute:: complex_dtype
-    .. attribute:: mesh
+    .. autoattribute:: real_dtype
+    .. autoattribute:: complex_dtype
+    .. autoattribute:: mesh
+
     .. attribute:: dim
     .. attribute:: ambient_dim
     .. attribute:: ndofs
@@ -353,11 +368,18 @@ class Discretization:
     .. automethod:: quad_weights
     """
 
+    mesh: _Mesh
+    groups: Sequence[ElementGroupBase]
+    real_dtype: np.dtype[np.floating]
+    complex_dtype: np.dtype[np.complexfloating]
+
+    _setup_actx: ArrayContext
+
     def __init__(self,
                  actx: ArrayContext,
                  mesh: _Mesh,
                  group_factory: ElementGroupFactory,
-                 real_dtype: np.dtype | None = None,
+                 real_dtype: DTypeLike = None,
                  _force_actx_clone: bool = True) -> None:
         """
         :arg actx: an :class:`arraycontext.ArrayContext` used to perform
@@ -377,7 +399,7 @@ class Discretization:
         self.mesh = mesh
         self.groups = [group_factory(mg) for mg in mesh.groups]
 
-        self.real_dtype = np.dtype(real_dtype)
+        self.real_dtype = cast("np.dtype[np.floating]", np.dtype(real_dtype))
         self.complex_dtype = np.dtype({
                 np.float32: np.complex64,
                 np.float64: np.complex128
@@ -404,7 +426,7 @@ class Discretization:
              actx: ArrayContext | None = None,
              mesh: _Mesh | None = None,
              group_factory: ElementGroupFactory | None = None,
-             real_dtype: np.dtype | None = None) -> "Discretization":
+             real_dtype: np.dtype | None = None) -> Discretization:
         """Creates a new object of the same type with all arguments that are not
         *None* replaced. The copy is not recursive.
         """
@@ -447,7 +469,11 @@ class Discretization:
         return all(isinstance(grp, ModalElementGroupBase)
                    for grp in self.groups)
 
-    def _new_array(self, actx, creation_func, dtype=None):
+    def _new_array(self,
+                actx: ArrayContext,
+                creation_func,
+                dtype: DTypeLike = None
+            ):
         if dtype is None:
             dtype = self.real_dtype
         elif dtype == "c":
@@ -558,7 +584,7 @@ class Discretization:
         if not self.is_nodal:
             raise ElementGroupTypeError("Element groups must be nodal.")
 
-        def resample_mesh_nodes(grp, iaxis):
+        def resample_mesh_nodes(grp: NodalElementGroupBase, iaxis: int):
             name_hint = f"nodes{iaxis}_{self.ambient_dim}d"
             # TODO: would be nice to have the mesh use an array context already
             nodes = tag_axes(actx,
@@ -624,8 +650,8 @@ def num_reference_derivative(
 
     @keyed_memoize_in(actx,
             (num_reference_derivative, "num_reference_derivative_matrix"),
-            lambda grp, gref_axes: grp.discretization_key() + gref_axes)
-    def get_mat(grp: ElementGroupBase, gref_axes):
+            lambda grp, gref_axes: (*grp.discretization_key(), *gref_axes))
+    def get_mat(grp: ElementGroupBase, gref_axes: Sequence[int]):
         if not isinstance(grp, InterpolatoryElementGroupBase):
             raise ValueError("element groups must be interpolatory "
                              "to allow taking derivatives")
@@ -640,6 +666,7 @@ def num_reference_derivative(
             else:
                 mat = next_mat @ mat
 
+        assert mat is not None
         return actx.from_numpy(mat)
 
     return _DOFArray(actx, tuple(
