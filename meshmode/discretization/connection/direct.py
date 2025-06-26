@@ -262,7 +262,7 @@ class DiscretizationConnectionElementGroup:
 
         A list of :class:`InterpolationBatch` instances.
     """
-    batches: Sequence[InterpolationBatch]
+    batches: Sequence[InterpolationBatch[Array]]
 
     def __init__(self, batches):
         self.batches = batches
