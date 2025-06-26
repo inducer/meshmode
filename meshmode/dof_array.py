@@ -520,7 +520,7 @@ def _reduce_norm(actx, arys, ord):
         raise NotImplementedError(f"unsupported value of 'ord': {ord}")
 
 
-def flat_norm(ary, ord=None) -> Any:
+def flat_norm(ary, ord: float | None = None) -> Any:
     r"""Return an element-wise :math:`\ell^{\text{ord}}` norm of *ary*.
 
     Unlike :attr:`arraycontext.ArrayContext.np`, this function handles

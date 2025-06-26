@@ -25,13 +25,16 @@ THE SOFTWARE.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generic
+from typing import TYPE_CHECKING, Generic, Literal, cast
 
 import numpy as np
+from typing_extensions import override
 
 import loopy as lp
 from arraycontext import (
+    Array,
     ArrayContext,
+    ArrayOrContainerOrScalarT,
     ArrayOrContainerT,
     ArrayT,
     NotAnArrayContainerError,
@@ -55,18 +58,20 @@ from meshmode.transform_metadata import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from pytools.tag import Tag
+
     from meshmode.discretization import Discretization, ElementGroupBase
 
 
 def _reshape_and_preserve_tags(
-        actx: ArrayContext, ary: ArrayT, new_shape: tuple[int, ...]) -> ArrayT:
+        actx: ArrayContext, ary: Array, new_shape: tuple[int, ...]) -> Array:
     try:
-        tags = ary.tags
+        tags = cast("frozenset[Tag]", ary.tags)  # pyright: ignore[reportAttributeAccessIssue]
     except AttributeError:
         # 'ary' might not have a 'tags' attribute (e.g., in case of an np.ndarray)
-        return ary.reshape(new_shape)
+        return ary.reshape(*new_shape)
     else:
-        return actx.tag(tags, ary.reshape(new_shape))
+        return actx.tag(tags, ary.reshape(*new_shape))
 
 
 # {{{ interpolation batch
@@ -500,7 +505,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         if not batch_source_groups:
             return None
 
-        result: list[_FromGroupPickData] = []
+        result: list[_FromGroupPickData[Array]] = []
         for source_group_index in batch_source_groups:
             batch_indices_for_this_source_group = [
                     i for i, batch in enumerate(cgrp.batches)
@@ -565,7 +570,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
     def _global_point_pick_info(
             self, actx: ArrayContext
-            ) -> Sequence[Sequence[_FromGroupPickData] | None]:
+            ) -> Sequence[Sequence[_FromGroupPickData[Array]] | None]:
         if self._global_point_pick_info_cache is not None:
             return self._global_point_pick_info_cache
 
@@ -578,11 +583,12 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
     # {{{ __call__
 
+    @override
     def __call__(
-            self, ary: ArrayOrContainerT, *,
+            self, ary: ArrayOrContainerOrScalarT, *,
             _force_use_loopy: bool = False,
             _force_no_merged_batches: bool = False,
-            ) -> ArrayOrContainerT:
+            ) -> ArrayOrContainerOrScalarT:
         """
         :arg ary: a :class:`~meshmode.dof_array.DOFArray`, or an
             :class:`arraycontext.ArrayContainer` of them, containing nodal
@@ -619,6 +625,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
         assert isinstance(ary, DOFArray)
 
         actx = ary.array_context
+        assert actx is not None
 
         # {{{ kernels
 
@@ -719,11 +726,11 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
         # }}}
 
-        group_arrays = []
+        group_arrays: list[Array | Literal[0]] = []
         for i_tgrp, (cgrp, group_pick_info) in enumerate(
                 zip(self.groups, self._global_point_pick_info(actx), strict=True)):
 
-            group_array_contributions = []
+            group_array_contributions: list[Array] = []
 
             if _force_no_merged_batches:
                 group_pick_info = None
