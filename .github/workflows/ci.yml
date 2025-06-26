@@ -30,18 +30,6 @@ jobs:
                 pip install ruff
                 ruff check
 
-    pylint:
-        name: Pylint
-        runs-on: ubuntu-latest
-        steps:
-        -   uses: actions/checkout@v4
-        -   name: "Main Script"
-            run: |
-                echo "- scipy" >> .test-conda-env-py3.yml
-                USE_CONDA_BUILD=1
-                curl -L -O https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
-                . ./prepare-and-run-pylint.sh "$(basename $GITHUB_REPOSITORY)" examples/*.py test/test_*.py
-
     basedpyright:
         runs-on: ubuntu-latest
         steps:
