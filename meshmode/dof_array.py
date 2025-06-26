@@ -554,7 +554,7 @@ def flat_norm(ary, ord: float | None = None) -> Any:
                 assert actx is _ary.array_context
 
             return _reduce_norm(actx, [
-                actx.np.linalg.norm(actx.np.ravel(subary, order="A"), ord=ord)
+                actx.np.linalg.norm(actx.np.ravel(subary, order="C"), ord=ord)
                 for _, subary in serialize_container(_ary)
                 ], ord=ord)
 
