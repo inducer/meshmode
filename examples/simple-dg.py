@@ -22,6 +22,7 @@ THE SOFTWARE.
 
 import logging
 from dataclasses import dataclass
+from typing import ClassVar
 
 import numpy as np
 import numpy.linalg as la  # noqa
@@ -342,7 +343,7 @@ class TracePair:
     exterior: ArrayContainer
 
     # NOTE: let the container do the broadcasting + arithmetic
-    __array_ufunc__ = None
+    __array_ufunc__: ClassVar[None] = None
 
     def __getattr__(self, name):
         return map_array_container(

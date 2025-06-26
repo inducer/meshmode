@@ -400,6 +400,8 @@ class DOFArray:
     def __rsub__(self, other: ArithType) -> DOFArray: ...
     def __mul__(self, other: ArithType) -> DOFArray: ...
     def __rmul__(self, other: ArithType) -> DOFArray: ...
+    def __pow__(self, other: ArithType) -> DOFArray: ...
+    def __rpow__(self, other: ArithType) -> DOFArray: ...
     def __truediv__(self, other: ArithType) -> DOFArray: ...
     def __rtruediv__(self, other: ArithType) -> DOFArray: ...
 
@@ -518,7 +520,7 @@ def _reduce_norm(actx, arys, ord):
         raise NotImplementedError(f"unsupported value of 'ord': {ord}")
 
 
-def flat_norm(ary, ord=None) -> Any:
+def flat_norm(ary, ord: float | None = None) -> Any:
     r"""Return an element-wise :math:`\ell^{\text{ord}}` norm of *ary*.
 
     Unlike :attr:`arraycontext.ArrayContext.np`, this function handles
@@ -552,7 +554,7 @@ def flat_norm(ary, ord=None) -> Any:
                 assert actx is _ary.array_context
 
             return _reduce_norm(actx, [
-                actx.np.linalg.norm(actx.np.ravel(subary, order="A"), ord=ord)
+                actx.np.linalg.norm(actx.np.ravel(subary, order="C"), ord=ord)
                 for _, subary in serialize_container(_ary)
                 ], ord=ord)
 
