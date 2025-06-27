@@ -468,13 +468,8 @@ def test_opposite_face_interpolation(actx_factory: ArrayContextFactory, group_fa
         bdry_f_2 = opp_face(bdry_f)
 
         # Ensure test coverage for alternate modes in DirectConnection
-        for force_loopy, force_no_merged_batches in [
-                (False, True),
-                (True, False),
-                (True, True),
-                ]:
+        for force_no_merged_batches in [False, True]:
             bdry_f_2_alt = opp_face(bdry_f,
-                    _force_use_loopy=force_loopy,
                     _force_no_merged_batches=force_no_merged_batches)
             assert actx.to_numpy(flat_norm(bdry_f_2 - bdry_f_2_alt, np.inf)) < 1e-14
 
@@ -1029,13 +1024,8 @@ def test_mesh_multiple_groups(
             op_bdry_f = opposite(bdry_f)
 
             # Ensure test coverage for alternate modes in DirectConnection
-            for force_loopy, force_no_merged_batches in [
-                    (False, True),
-                    (True, False),
-                    (True, True),
-                    ]:
+            for force_no_merged_batches in [False, True]:
                 op_bdry_f_2 = opposite(bdry_f,
-                        _force_use_loopy=force_loopy,
                         _force_no_merged_batches=force_no_merged_batches)
                 error = flat_norm(op_bdry_f - op_bdry_f_2, np.inf)
                 assert actx.to_numpy(error) < 1e-15

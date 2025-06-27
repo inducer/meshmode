@@ -580,7 +580,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
     def __call__(
             self, ary: ArrayOrContainerT, *,
-            _force_use_loopy: bool = False,
             _force_no_merged_batches: bool = False,
             ) -> ArrayOrContainerT:
         """
@@ -589,8 +588,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             coefficient data on :attr:`from_discr`.
 
         """
-        # _force_use_loopy, _force_no_merged_batches:
-        # private arguments only used to ensure test coverage of all code paths.
+        # _force_no_merged_batches:
+        # private argument only used to ensure test coverage of all code paths.
 
         # {{{ recurse into array containers
 
@@ -605,7 +604,6 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             else:
                 return deserialize_container(ary, [
                     (key, self(subary,
-                        _force_use_loopy=_force_use_loopy,
                         _force_no_merged_batches=_force_no_merged_batches))
                     for key, subary in iterable
                     ])
@@ -718,6 +716,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                 "idof": ConcurrentDOFInameTag()})
 
         # }}}
+        if not actx.permits_advanced_indexing:
+            raise ValueError("Array context does not allow advanced indexing. "
+                             "This is no longer supported.")
 
         group_arrays = []
         for i_tgrp, (cgrp, group_pick_info) in enumerate(
@@ -731,51 +732,33 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             if group_pick_info is not None:
                 group_array_contributions = []
 
-                if actx.permits_advanced_indexing and not _force_use_loopy:
-                    for fgpd in group_pick_info:
-                        from_element_indices = actx.thaw(fgpd.from_element_indices)
+                for fgpd in group_pick_info:
+                    from_element_indices = actx.thaw(fgpd.from_element_indices)
 
-                        if ary[fgpd.from_group_index].size:
-                            grp_ary_contrib = ary[fgpd.from_group_index][
-                                        _reshape_and_preserve_tags(
-                                            actx, from_element_indices, (-1, 1)),
-                                        actx.thaw(fgpd.dof_pick_lists)[
-                                            actx.thaw(fgpd.dof_pick_list_indices)]
-                                        ]
-
-                            if not fgpd.is_surjective:
-                                from_el_present = actx.thaw(fgpd.from_el_present)
-                                grp_ary_contrib = actx.np.where(
+                    if ary[fgpd.from_group_index].size:
+                        grp_ary_contrib = ary[fgpd.from_group_index][
                                     _reshape_and_preserve_tags(
-                                        actx, from_el_present, (-1, 1)),
-                                    grp_ary_contrib,
-                                    0)
+                                        actx, from_element_indices, (-1, 1)),
+                                    actx.thaw(fgpd.dof_pick_lists)[
+                                        actx.thaw(fgpd.dof_pick_list_indices)]
+                                    ]
 
-                            # attach metadata
-                            grp_ary_contrib = tag_axes(
-                                    actx,
-                                    {0: DiscretizationElementAxisTag(),
-                                        1: DiscretizationDOFAxisTag()},
-                                    grp_ary_contrib)
-
-                            group_array_contributions.append(grp_ary_contrib)
-                else:
-                    for fgpd in group_pick_info:
-                        group_knl_kwargs = {}
                         if not fgpd.is_surjective:
-                            group_knl_kwargs["from_el_present"] = \
-                                    fgpd.from_el_present
+                            from_el_present = actx.thaw(fgpd.from_el_present)
+                            grp_ary_contrib = actx.np.where(
+                                _reshape_and_preserve_tags(
+                                    actx, from_el_present, (-1, 1)),
+                                grp_ary_contrib,
+                                0)
 
-                        group_array_contributions.append(
-                            actx.call_loopy(
-                                group_pick_knl(fgpd.is_surjective),
-                                dof_pick_lists=fgpd.dof_pick_lists,
-                                dof_pick_list_indices=fgpd.dof_pick_list_indices,
-                                ary=ary[fgpd.from_group_index],
-                                from_element_indices=fgpd.from_element_indices,
-                                nunit_dofs_tgt=(
-                                    self.to_discr.groups[i_tgrp].nunit_dofs),
-                                **group_knl_kwargs)["result"])
+                        # attach metadata
+                        grp_ary_contrib = tag_axes(
+                                actx,
+                                {0: DiscretizationElementAxisTag(),
+                                    1: DiscretizationDOFAxisTag()},
+                                grp_ary_contrib)
+
+                        group_array_contributions.append(grp_ary_contrib)
 
                 group_array = sum(group_array_contributions)
             elif cgrp.batches:
@@ -795,47 +778,25 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                     if point_pick_indices is None:
                         grp_ary = ary[batch.from_group_index]
                         mat = self._resample_matrix(actx, i_tgrp, i_batch)
-                        if actx.permits_advanced_indexing and not _force_use_loopy:
-                            batch_result = actx.np.where(
-                                    _reshape_and_preserve_tags(
-                                        actx, from_el_present, (-1, 1)),
-                                    actx.einsum("ij,ej->ei",
-                                        mat, grp_ary[from_element_indices]),
-                                    0)
-                        else:
-                            batch_result = actx.call_loopy(
-                                batch_mat_knl(),
-                                resample_mat=mat,
-                                ary=grp_ary,
-                                from_el_present=from_el_present,
-                                from_element_indices=from_element_indices,
-                                nunit_dofs_tgt=(
-                                    self.to_discr.groups[i_tgrp].nunit_dofs)
-                            )["result"]
+                        batch_result = actx.np.where(
+                                _reshape_and_preserve_tags(
+                                    actx, from_el_present, (-1, 1)),
+                                actx.einsum("ij,ej->ei",
+                                    mat, grp_ary[from_element_indices]),
+                                0)
 
                     else:
                         from_vec = ary[batch.from_group_index]
                         pick_list = actx.thaw(point_pick_indices)
 
-                        if actx.permits_advanced_indexing and not _force_use_loopy:
-                            batch_result = actx.np.where(
+                        batch_result = actx.np.where(
+                            _reshape_and_preserve_tags(
+                                actx, from_el_present, (-1, 1)),
+                            from_vec[
                                 _reshape_and_preserve_tags(
-                                    actx, from_el_present, (-1, 1)),
-                                from_vec[
-                                    _reshape_and_preserve_tags(
-                                        actx, from_element_indices, (-1, 1)),
-                                    pick_list],
-                                0)
-                        else:
-                            batch_result = actx.call_loopy(
-                                batch_pick_knl(),
-                                pick_list=pick_list,
-                                ary=from_vec,
-                                from_el_present=from_el_present,
-                                from_element_indices=from_element_indices,
-                                nunit_dofs_tgt=(
-                                    self.to_discr.groups[i_tgrp].nunit_dofs)
-                            )["result"]
+                                    actx, from_element_indices, (-1, 1)),
+                                pick_list],
+                            0)
 
                     # attach metadata
                     batch_result = tag_axes(actx,
