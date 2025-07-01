@@ -251,7 +251,9 @@ class PyOpenCLArrayContext(PyOpenCLArrayContextBase):
 
 class PytatoPyOpenCLArrayContext(PytatoPyOpenCLArrayContextBase):
     @override
-    def transform_dag(self, dag: pt_typ.DictOfNamedArrays) -> pt_typ.DictOfNamedArrays:
+    def transform_dag(self,
+                dag: pt_typ.AbstractResultWithNamedArrays
+            ) -> pt_typ.AbstractResultWithNamedArrays:
         dag = super().transform_dag(dag)
 
         # {{{ /!\ Remove tags from NamedArrays

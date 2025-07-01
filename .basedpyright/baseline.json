@@ -524,14 +524,6 @@
             {
                 "code": "reportUnknownVariableType",
                 "range": {
-                    "startColumn": 39,
-                    "endColumn": 57,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownVariableType",
-                "range": {
                     "startColumn": 30,
                     "endColumn": 44,
                     "lineCount": 1
@@ -2647,14 +2639,6 @@
             }
         ],
         "./meshmode/discretization/connection/direct.py": [
-            {
-                "code": "reportUnknownVariableType",
-                "range": {
-                    "startColumn": 4,
-                    "endColumn": 22,
-                    "lineCount": 1
-                }
-            },
             {
                 "code": "reportUninitializedInstanceVariable",
                 "range": {
@@ -8255,14 +8239,6 @@
             }
         ],
         "./meshmode/discretization/connection/projection.py": [
-            {
-                "code": "reportUnknownVariableType",
-                "range": {
-                    "startColumn": 4,
-                    "endColumn": 22,
-                    "lineCount": 1
-                }
-            },
             {
                 "code": "reportUnknownParameterType",
                 "range": {
