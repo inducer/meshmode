@@ -264,9 +264,13 @@ class PytatoPyOpenCLArrayContext(PytatoPyOpenCLArrayContextBase):
         def untag_loopy_call_results(
                     expr: pt.Array | pt.AbstractResultWithNamedArrays
                 ) -> pt.Array | pt.AbstractResultWithNamedArrays:
-            if isinstance(expr, pt.NamedArray):
-                return expr.copy(tags=frozenset(),
-                                 axes=(pt.Axis(frozenset()),)*expr.ndim)
+            if isinstance(expr, pt.loopy.LoopyCallResult):
+                new_tags = frozenset()
+                if any(axis.tags for axis in expr.axes):
+                    new_axes = (pt.Axis(frozenset()),)*expr.ndim
+                else:
+                    new_axes = expr.axes
+                return expr.replace_if_different(tags=new_tags, axes=new_axes)
             else:
                 return expr
 
