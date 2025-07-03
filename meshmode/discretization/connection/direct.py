@@ -292,11 +292,11 @@ class DiscretizationConnection(ABC):
     *   computing modal data from nodal coefficients
     *   computing nodal coefficients from modal data
 
-    .. attribute:: from_discr
+    .. autoattribute:: from_discr
 
-    .. attribute:: to_discr
+    .. autoattribute:: to_discr
 
-    .. attribute:: is_surjective
+    .. autoattribute:: is_surjective
 
         A :class:`bool` indicating whether every output degree
         of freedom is set by the connection.
@@ -313,10 +313,10 @@ class DiscretizationConnection(ABC):
             raise ValueError("from_discr and to_discr must agree on the "
                     "element_id_dtype")
 
-        self.from_discr = from_discr
-        self.to_discr = to_discr
+        self.from_discr: Discretization = from_discr
+        self.to_discr: Discretization = to_discr
 
-        self.is_surjective = is_surjective
+        self.is_surjective: bool = is_surjective
 
     @abstractmethod
     def __call__(self, ary: ArrayOrContainerT) -> ArrayOrContainerT:

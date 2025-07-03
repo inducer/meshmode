@@ -74,9 +74,8 @@ def main():
     # Real(e^z) = Real(e^{x+i y})
     #           = e^x Real(e^{i y})
     #           = e^x cos(y)
-    nodes = discr.nodes()
-    for i in range(len(nodes)):
-        nodes[i] = actx.thaw(nodes[i])
+    nodes = actx.thaw(discr.nodes())
+
     # First index is dimension
     candidate_sol = actx.np.exp(nodes[0]) * actx.np.cos(nodes[1])
 

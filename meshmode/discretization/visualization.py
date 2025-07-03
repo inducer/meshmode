@@ -29,17 +29,36 @@ THE SOFTWARE.
 import logging
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from typing_extensions import TypeIs
 
-from arraycontext import flatten
+from arraycontext import (
+    Array,
+    ArrayContext,
+    ArrayOrContainerOrScalar,
+    ScalarLike,
+    flatten,
+)
 from modepy.shapes import Hypercube, Shape, Simplex
 from pytools import memoize_method
-from pytools.obj_array import make_obj_array
+from pytools.obj_array import ObjectArray, ObjectArray1D, make_obj_array
 
 from meshmode.dof_array import DOFArray
 from meshmode.transform_metadata import DiscretizationFlattenedDOFAxisTag
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from numpy.typing import NDArray
+
+    from meshmode.discretization import Discretization, ElementGroupBase
+    from meshmode.discretization.connection.direct import (
+        DirectDiscretizationConnection,
+        DiscretizationConnection,
+    )
 
 
 logger = logging.getLogger(__name__)
@@ -51,20 +70,30 @@ __doc__ = """
 .. autoclass:: Visualizer
 
 .. autofunction:: write_nodal_adjacency_vtk_file
+
+
+References
+----------
+.. class:: Array
+
+    See :class:`arraycontext.Array`.
 """
 
 
 # {{{ helpers
 
-def separate_by_real_and_imag(names_and_fields, real_only):
+def separate_by_real_and_imag(
+            names_and_fields: Sequence[tuple[str,
+                    NDArray[np.inexact]]],
+            real_only: bool,
+        ):
     """
     :arg names_and_fields: input data array must be already flattened into a
         single :mod:`numpy` array using :func:`_resample_to_numpy`.
     """
 
     for name, field in names_and_fields:
-        if isinstance(field, np.ndarray) and field.dtype.char == "O":
-            assert len(field.shape) == 1
+        if isinstance(field, ObjectArray):
             from pytools.obj_array import (
                 obj_array_imag_copy,
                 obj_array_real_copy,
@@ -93,7 +122,7 @@ def separate_by_real_and_imag(names_and_fields, real_only):
                 yield (name, field)
 
 
-def _stack_object_array(vec, *, by_group=False):
+def _stack_object_array(vec, *, by_group: bool = False):
     if not by_group:
         return np.stack(vec)
 
@@ -103,7 +132,14 @@ def _stack_object_array(vec, *, by_group=False):
         ])
 
 
-def _resample_to_numpy(conn, vis_discr, vec, *, stack=False, by_group=False):
+def _resample_to_numpy(
+            conn: DiscretizationConnection,
+            vis_discr: Discretization,
+            vec: Array | ScalarLike | ObjectArray[tuple[int, ...], Array | ScalarLike],
+            *,
+            stack: bool = False,
+            by_group: bool = False
+        ) -> NDArray[Any] | ObjectArray[tuple[int, ...], NDArray[Any]]:
     """
     :arg stack: if *True* object arrays are stacked into a single
         :class:`~numpy.ndarray`.
@@ -114,7 +150,7 @@ def _resample_to_numpy(conn, vis_discr, vec, *, stack=False, by_group=False):
     # "stack" exists as mainly as a workaround for Xdmf. See here:
     # https://github.com/inducer/pyvisfile/pull/12#discussion_r550959081
     # for (minimal) discussion.
-    if isinstance(vec, np.ndarray) and vec.dtype.char == "O":
+    if isinstance(vec, ObjectArray):
         from pytools.obj_array import obj_array_vectorize
         r = obj_array_vectorize(
                 lambda x: _resample_to_numpy(conn, vis_discr, x, by_group=by_group),
@@ -158,22 +194,29 @@ def _resample_to_numpy(conn, vis_discr, vec, *, stack=False, by_group=False):
             raise TypeError(f"unsupported array type: {type(vec).__name__}")
 
 
-def preprocess_fields(names_and_fields):
+def preprocess_fields(
+            names_and_fields: Sequence[tuple[str, ArrayOrContainerOrScalar | None]]
+        ):
     """Gets arrays out of dataclasses and removes empty arrays."""
     from dataclasses import fields, is_dataclass
 
-    def is_empty(field):
-        return field is None or (isinstance(field, np.ndarray)
-            and field.dtype.char == "O" and len(field) == 0)
+    def is_nonempty(
+                field: ArrayOrContainerOrScalar | None
+            ) -> TypeIs[ArrayOrContainerOrScalar]:
+        return not (field is None or (
+            isinstance(field, ObjectArray)
+            and len(field) == 0))
 
-    result = []
+    result: list[tuple[str,
+            Array | ScalarLike
+                | ObjectArray[tuple[int, ...], Array | ScalarLike]]] = []
     for name, field in names_and_fields:
         if is_dataclass(field):
             for attr in fields(field):
                 value = getattr(field, attr.name)
-                if not is_empty(value):
+                if is_nonempty(value):
                     result.append((f"{name}_{attr.name}", value))
-        elif not is_empty(field):
+        elif is_nonempty(field):
             result.append((name, field))
 
     return result
@@ -289,10 +332,10 @@ class VTKConnectivity:
     .. attribute:: groups
     """
 
-    def __init__(self, connection):
-        self.connection = connection
-        self.discr = connection.from_discr
-        self.vis_discr = connection.to_discr
+    def __init__(self, connection: DiscretizationConnection):
+        self.connection: DiscretizationConnection = connection
+        self.discr: Discretization = connection.from_discr
+        self.vis_discr: Discretization = connection.to_discr
 
     @property
     def version(self):
@@ -316,7 +359,7 @@ class VTKConnectivity:
                 3: vtk.VTK_HEXAHEDRON,
                 }
 
-    def connectivity_for_element_group(self, grp):
+    def connectivity_for_element_group(self, grp: ElementGroupBase):
         import modepy as mp
 
         from meshmode.mesh import ModepyElementGroup
@@ -355,13 +398,13 @@ class VTKConnectivity:
 
     @property
     @memoize_method
-    def groups(self):
+    def groups(self) -> Sequence[_VisConnectivityGroup]:
         """
         :return: a list of :class:`_VisConnectivityGroup` instances.
         """
         # Assume that we're using modepy's default node ordering.
 
-        result = []
+        result: list[_VisConnectivityGroup] = []
         subel_nr_base = 0
         node_nr_base = 0
 
@@ -508,25 +551,28 @@ class Visualizer:
     .. automethod:: copy_with_same_connectivity
     """
 
-    def __init__(self, connection,
-            element_shrink_factor=None,
-            is_equidistant=False,
+    def __init__(self, connection: DirectDiscretizationConnection,
+            element_shrink_factor: float | None = None,
+            is_equidistant: bool = False,
             _vtk_linear_connectivity=None,
             _vtk_lagrange_connectivity=None):
 
-        self.connection = connection
-        self.discr = connection.from_discr
-        self.vis_discr = connection.to_discr
+        self.connection: DirectDiscretizationConnection = connection
+        self.discr: Discretization = connection.from_discr
+        self.vis_discr: Discretization = connection.to_discr
 
         if element_shrink_factor is None:
             element_shrink_factor = 1.0
-        self.element_shrink_factor = element_shrink_factor
-        self.is_equidistant = is_equidistant
+        self.element_shrink_factor: float = element_shrink_factor
+        self.is_equidistant: bool = is_equidistant
 
         self._cached_vtk_linear_connectivity = _vtk_linear_connectivity
         self._cached_vtk_lagrange_connectivity = _vtk_lagrange_connectivity
 
-    def copy_with_same_connectivity(self, actx, discr, skip_tests=False):
+    def copy_with_same_connectivity(self,
+                actx: ArrayContext,
+                discr: Discretization,
+                skip_tests: bool = False):
         """Makes a copy of the visualizer for a
         :class:`~meshmode.discretization.Discretization` with the same group
         structure as the original discretization. This can be useful when the
@@ -708,10 +754,16 @@ class Visualizer:
                     ]
                 )
 
-    def write_vtk_file(self, file_name, names_and_fields,
-            compressor=None, real_only=False, overwrite=False,
-            use_high_order=None,
-            par_manifest_filename=None, par_file_names=None):
+    def write_vtk_file(self,
+                file_name: str,
+                names_and_fields: Sequence[tuple[str, ArrayOrContainerOrScalar]],
+                compressor: str | None = None,
+                real_only: bool = False,
+                overwrite: bool = False,
+                use_high_order: bool | None = None,
+                par_manifest_filename: str | None = None,
+                par_file_names: Sequence[str] | None = None,
+            ):
         """Write a Vtk XML file (typical extension ``.vtu``) containing
         the visualization data in *names_and_fields*. Can optionally also write
         manifests for distributed memory simulation (typical extension
@@ -761,11 +813,11 @@ class Visualizer:
 
         nodes = self._vis_nodes_numpy()
 
-        names_and_fields = preprocess_fields(names_and_fields)
-        names_and_fields = [
+        no_container_names_and_fields = preprocess_fields(names_and_fields)
+        np_names_and_fields = [
                 (name, _resample_to_numpy(
                     self.connection, self.vis_discr, fld))
-                for name, fld in names_and_fields
+                for name, fld in no_container_names_and_fields
                 ]
 
         # {{{ shrink elements
@@ -804,7 +856,7 @@ class Visualizer:
                 cells=cells,
                 cell_types=connectivity.cell_types)
 
-        for name, field in separate_by_real_and_imag(names_and_fields, real_only):
+        for name, field in separate_by_real_and_imag(np_names_and_fields, real_only):
             grid.add_pointdata(
                     DataArray(name, field, vector_format=VF_LIST_OF_COMPONENTS)
                     )
@@ -1040,14 +1092,14 @@ class Visualizer:
     # {{{ xdmf
 
     @memoize_method
-    def _xdmf_nodes_numpy(self):
+    def _xdmf_nodes_numpy(self) -> ObjectArray1D[NDArray[np.inexact]]:
         actx = self.vis_discr._setup_actx
         return _resample_to_numpy(
                 lambda x: x, self.vis_discr,
                 actx.thaw(self.vis_discr.nodes()),
                 stack=True, by_group=True)
 
-    def _vtk_to_xdmf_cell_type(self, cell_type):
+    def _vtk_to_xdmf_cell_type(self, cell_type: int):
         import pyvisfile.vtk as vtk
         from pyvisfile.xdmf import TopologyType
         return {
@@ -1058,9 +1110,14 @@ class Visualizer:
                 vtk.VTK_HEXAHEDRON: TopologyType.Hexahedron,
                 }[cell_type]
 
-    def write_xdmf_file(self, file_name, names_and_fields,
-            attrs=None, h5_file_options=None, dataset_options=None,
-            real_only=False, overwrite=False):
+    def write_xdmf_file(self,
+                file_name: str,
+                names_and_fields: Sequence[tuple[str, Array]],
+                attrs: Any = None,
+                h5_file_options: Any = None,
+                dataset_options: Any = None,
+                real_only: bool = False,
+                overwrite: bool = False):
         """Write an XDMF file (with an ``.xmf`` extension) containing the
         arrays in *names_and_fields*. The heavy data is written to binary
         HDF5 files, which requires installing :ref:`h5py <h5py:install>`.
@@ -1293,8 +1350,12 @@ class Visualizer:
 
 # {{{ make_visualizer
 
-def make_visualizer(actx, discr, vis_order=None,
-        element_shrink_factor=None, force_equidistant=False):
+def make_visualizer(
+            actx: ArrayContext,
+            discr: Discretization,
+            vis_order: int | None = None,
+            element_shrink_factor: float | None = None,
+            force_equidistant: bool = False):
     """
     :arg vis_order: order of the visualization DOFs.
     :arg element_shrink_factor: number in :math:`(0, 1]`.

@@ -37,7 +37,7 @@ import loopy as lp
 import modepy as mp
 from arraycontext import ArrayContext, make_loopy_program, tag_axes
 from pytools import keyed_memoize_in, memoize_in, memoize_method
-from pytools.obj_array import make_obj_array
+from pytools.obj_array import ObjectArray, make_obj_array
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
@@ -562,7 +562,7 @@ class Discretization:
                         )["result"])
                 for grp in self.groups))
 
-    def nodes(self, cached: bool = True) -> np.ndarray:
+    def nodes(self, cached: bool = True) -> ObjectArray[tuple[int], _DOFArray]:
         r"""
         :arg cached: A :class:`bool` indicating whether the computed
             nodes should be stored for future use.

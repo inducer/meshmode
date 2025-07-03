@@ -34,7 +34,7 @@ dependencies = [
     "modepy>=2021.1",
     "numpy",
     "pymbolic>=2022.2",
-    "pytools>=2024.1.17",
+    "pytools>=2025.2",
     "recursivenodes",
     "typing_extensions>=4.10",
 ]
