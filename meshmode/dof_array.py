@@ -53,6 +53,8 @@ from pytools import MovedFunctionDeprecationWrapper, single_valued
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
 
+    from meshmode.discretization import Discretization
+
 
 __doc__ = """
 .. autoclass:: DOFArray
@@ -609,7 +611,7 @@ class InconsistentDOFArray(ValueError):
     pass
 
 
-def check_dofarray_against_discr(discr, dof_ary: DOFArray):
+def check_dofarray_against_discr(discr: Discretization, dof_ary: DOFArray):
     """Verify that the :class:`DOFArray` *dof_ary* is consistent with
     the discretization *discr*, in terms of things like group count,
     number of elements, and number of DOFs per element. If a discrepancy is
