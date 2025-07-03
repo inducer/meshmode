@@ -36,7 +36,7 @@ dependencies = [
     "pymbolic>=2022.2",
     "pytools>=2024.1.17",
     "recursivenodes",
-    "typing_extensions>=4.4",
+    "typing_extensions>=4.10",
 ]
 
 [project.optional-dependencies]
