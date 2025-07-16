@@ -25,12 +25,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-
-from abc import abstractmethod
-from typing import ClassVar
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, ClassVar
 from warnings import warn
 
 import numpy as np
+from typing_extensions import deprecated, override
 
 import modepy as mp
 from modepy import Basis
@@ -48,6 +48,10 @@ from meshmode.mesh import (
     SimplexElementGroup as _MeshSimplexElementGroup,
     TensorProductElementGroup as _MeshTensorProductElementGroup,
 )
+
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 __doc__ = """
@@ -143,7 +147,7 @@ def to_mesh_interp_matrix(grp: InterpolatoryElementGroupBase) -> np.ndarray:
 
 # {{{ base class for interpolatory polynomial elements
 
-class PolynomialElementGroupBase(InterpolatoryElementGroupBase):
+class PolynomialElementGroupBase(InterpolatoryElementGroupBase, ABC):
     pass
 
 # }}}
@@ -659,6 +663,7 @@ class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
 
     mesh_group_class: ClassVar[type[_MeshElementGroup]]
     group_class: ClassVar[type[ElementGroupBase]]
+    order: int
 
     def __init__(self, order: int) -> None:
         """
@@ -670,7 +675,8 @@ class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
 
         self.order = order
 
-    def __call__(self, mesh_el_group):
+    @override
+    def __call__(self, mesh_el_group: _MeshElementGroup):
         """
         :returns: an element group of type :attr:`group_class` and order
             :attr:`order`.
@@ -687,19 +693,22 @@ class TypeMappingGroupFactory(ElementGroupFactory):
     :class:`~meshmode.mesh.MeshElementGroup`\ s, defined through the mapping
     :attr:`mesh_group_class_to_factory`.
 
-    .. attribute:: order
-    .. attribute:: mesh_group_class_to_factory
-
-        A :class:`dict` from :class:`~meshmode.mesh.MeshElementGroup`\ s to
-        factory callables that return a corresponding
-        :class:`~meshmode.discretization.ElementGroupBase` of order
-        :attr:`order`.
+    .. autoattribute:: order
+    .. autoattribute:: mesh_group_class_to_factory
 
     .. automethod:: __init__
     .. automethod:: __call__
     """
+    order: int
+    mesh_group_class_to_factory: Mapping[
+            type[_MeshElementGroup],
+            type[ElementGroupBase] | ElementGroupFactory]
 
-    def __init__(self, order, mesh_group_class_to_factory):
+    def __init__(self,
+                order: int,
+                mesh_group_class_to_factory: Mapping[
+            type[_MeshElementGroup],
+            type[ElementGroupBase] | ElementGroupFactory]):
         """
         :arg mesh_group_class_to_factory: a :class:`dict` from
             :class:`~meshmode.mesh.MeshElementGroup` subclasses to
@@ -712,7 +721,8 @@ class TypeMappingGroupFactory(ElementGroupFactory):
         self.order = order
         self.mesh_group_class_to_factory = mesh_group_class_to_factory
 
-    def __call__(self, mesh_el_group):
+    @override
+    def __call__(self, mesh_el_group: _MeshElementGroup):
         cls = self.mesh_group_class_to_factory.get(type(mesh_el_group), None)
 
         if cls is None:
@@ -730,8 +740,12 @@ class TypeMappingGroupFactory(ElementGroupFactory):
             raise TypeError(f"unknown class: '{cls.__name__}'")
 
 
+@deprecated("long overdue for removal")
 class OrderAndTypeBasedGroupFactory(TypeMappingGroupFactory):
-    def __init__(self, order, simplex_group_class, tensor_product_group_class):
+    def __init__(self,
+                order: int,
+                simplex_group_class: type[InterpolatoryElementGroupBase],
+                tensor_product_group_class: type[InterpolatoryElementGroupBase]):
         warn("OrderAndTypeBasedGroupFactory is deprecated and will go away in 2023. "
                 "Use TypeMappingGroupFactory instead.",
                 DeprecationWarning, stacklevel=2)
@@ -759,6 +773,7 @@ class QuadratureSimplexGroupFactory(HomogeneousOrderBasedGroupFactory):
     group_class = QuadratureSimplexElementGroup
 
 
+@deprecated("long overdue for removal")
 class PolynomialWarpAndBlendGroupFactory(HomogeneousOrderBasedGroupFactory):
     def __init__(self, order):
         warn("PolynomialWarpAndBlendGroupFactory is deprecated, since "
@@ -856,10 +871,11 @@ class EquidistantTensorProductGroupFactory(HomogeneousOrderBasedGroupFactory):
 # {{{ mesh element group type-based group factories
 
 class _DefaultPolynomialSimplexGroupFactory(ElementGroupFactory):
-    def __init__(self, order):
-        self.order = order
+    def __init__(self, order: int):
+        self.order: int = order
 
-    def __call__(self, mesh_el_group):
+    @override
+    def __call__(self, mesh_el_group: _MeshElementGroup):
         factory = default_simplex_group_factory(mesh_el_group.dim, self.order)
         return factory(mesh_el_group)
 
@@ -870,7 +886,7 @@ class InterpolatoryEdgeClusteredGroupFactory(TypeMappingGroupFactory):
     element groups with edge-clustered nodes that can be used for interpolation.
     """
 
-    def __init__(self, order):
+    def __init__(self, order: int):
         super().__init__(order, {
             _MeshSimplexElementGroup: _DefaultPolynomialSimplexGroupFactory(order),
             _MeshTensorProductElementGroup:
@@ -885,7 +901,7 @@ class InterpolatoryQuadratureGroupFactory(TypeMappingGroupFactory):
     quadrature.
     """
 
-    def __init__(self, order):
+    def __init__(self, order: int):
         super().__init__(order, {
             _MeshSimplexElementGroup: InterpolatoryQuadratureSimplexElementGroup,
             _MeshTensorProductElementGroup: GaussLegendreTensorProductElementGroup,
@@ -898,7 +914,7 @@ class InterpolatoryEquidistantGroupFactory(TypeMappingGroupFactory):
     element groups with equidistant nodes that can be used for interpolation.
     """
 
-    def __init__(self, order):
+    def __init__(self, order: int):
         super().__init__(order, {
             _MeshSimplexElementGroup: PolynomialEquidistantSimplexElementGroup,
             _MeshTensorProductElementGroup: EquidistantTensorProductElementGroup,
@@ -911,7 +927,7 @@ class QuadratureGroupFactory(TypeMappingGroupFactory):
     element groups with nodes that can be used for high-order quadrature,
     but (not necessarily) for interpolation.
     """
-    def __init__(self, order):
+    def __init__(self, order: int):
         super().__init__(order, {
             _MeshSimplexElementGroup: QuadratureSimplexElementGroup,
             _MeshTensorProductElementGroup: GaussLegendreTensorProductElementGroup,
@@ -923,7 +939,7 @@ class ModalGroupFactory(TypeMappingGroupFactory):
     :class:`~meshmode.mesh.MeshElementGroup`\ s that constructs (recommended)
     element groups with modal degrees of freedom.
     """
-    def __init__(self, order):
+    def __init__(self, order: int):
         super().__init__(order, {
             _MeshSimplexElementGroup: ModalSimplexElementGroup,
             _MeshTensorProductElementGroup: ModalTensorProductElementGroup,

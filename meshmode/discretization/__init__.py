@@ -214,10 +214,11 @@ class ElementGroupFactory(Protocol):
     .. automethod:: __call__
     """
 
-    def __call__(self, mesh_el_group: _MeshElementGroup) -> ElementGroupBase:
+    def __call__(self, mesh_el_group: _MeshElementGroup, /) -> ElementGroupBase:
         """Create a new :class:`~meshmode.discretization.ElementGroupBase`
         for the given *mesh_el_group*.
         """
+        raise NotImplementedError()
 
 # }}}
 
