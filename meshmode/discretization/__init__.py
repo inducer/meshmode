@@ -499,8 +499,7 @@ class Discretization:
                                                dtype=dtype)
                                  for grp in self.groups)))
 
-    def empty(self, actx: ArrayContext,
-              dtype: np.dtype | None = None) -> _DOFArray:
+    def empty(self, actx: ArrayContext, dtype: DTypeLike = None) -> _DOFArray:
         """Return an empty :class:`~meshmode.dof_array.DOFArray`.
 
         :arg dtype: type special value 'c' will result in a
@@ -517,8 +516,7 @@ class Discretization:
 
         return self._new_array(actx, actx.np.zeros, dtype=dtype)
 
-    def zeros(self, actx: ArrayContext,
-              dtype: np.dtype | None = None) -> _DOFArray:
+    def zeros(self, actx: ArrayContext, dtype: DTypeLike = None) -> _DOFArray:
         """Return a zero-initialized :class:`~meshmode.dof_array.DOFArray`.
 
         :arg dtype: type special value 'c' will result in a
