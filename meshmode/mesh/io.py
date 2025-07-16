@@ -29,12 +29,14 @@ import numpy as np
 from numpy.typing import NDArray
 from typing_extensions import override
 
-from gmsh_interop.reader import (  # noqa: F401
-    FileSource,
+from gmsh_interop.reader import (
     GmshElementBase,
     GmshMeshReceiverBase,
     GmshSimplexElementBase,
     GmshTensorProductElementBase,
+)
+from gmsh_interop.runner import (
+    FileSource,
     LiteralSource,
     ScriptSource,
     ScriptWithFilesSource,
@@ -42,8 +44,9 @@ from gmsh_interop.reader import (  # noqa: F401
 
 
 if TYPE_CHECKING:
-    from collections.abc import MutableSequence, Sequence
+    from collections.abc import Mapping, MutableSequence, Sequence
 
+    from gmsh_interop.runner import GmshSource
     from modepy import Shape
 
     from meshmode.mesh import Mesh, MeshElementGroup
@@ -61,6 +64,16 @@ __doc__ = """
 .. autofunction:: from_vertices_and_simplices
 .. autofunction:: to_json
 
+References
+----------
+
+.. class:: GmshSource
+
+    See :mod:`gmsh_interop.runner`, also reexported here.
+
+.. class:: IndexArray
+
+    A :class:`numpy.ndarray` of integer dtype.
 """
 
 
@@ -72,7 +85,8 @@ IndexArray = NDArray[np.integer]
 
 
 class GmshMeshReceiver(GmshMeshReceiverBase):
-    def __init__(self, mesh_construction_kwargs: dict[str, Any] | None = None) -> None:
+    def __init__(self,
+                mesh_construction_kwargs: Mapping[str, Any] | None = None) -> None:
         if mesh_construction_kwargs is None:
             mesh_construction_kwargs = {}
 
@@ -85,7 +99,7 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
         self.tags: list[tuple[str, int]] = []
         self.groups: MutableSequence[MeshElementGroup] | None = None
         self.gmsh_tag_index_to_mine: dict[int, int] = {}
-        self.mesh_construction_kwargs: dict[str, Any] = mesh_construction_kwargs
+        self.mesh_construction_kwargs: Mapping[str, Any] = mesh_construction_kwargs
 
     def set_up_nodes(self, count: int) -> None:
         # Preallocate array of nodes within list; treat None as sentinel value.
@@ -327,9 +341,30 @@ class GmshMeshReceiver(GmshMeshReceiverBase):
 AXIS_NAMES = "xyz"
 
 
+@overload
 def read_gmsh(
-        filename, force_ambient_dim=None, mesh_construction_kwargs=None,
-        return_tag_to_elements_map=False):
+            filename: str,
+            force_ambient_dim: int | None = None,
+            *, mesh_construction_kwargs: Mapping[str, Any] | None = None,
+            return_tag_to_elements_map: Literal[False] = False
+        ) -> Mesh: ...
+
+
+@overload
+def read_gmsh(
+            filename: str,
+            force_ambient_dim: int | None = None,
+            *, mesh_construction_kwargs: Mapping[str, Any] | None = None,
+            return_tag_to_elements_map: Literal[True],
+        ) -> tuple[Mesh, dict[str, IndexArray]]: ...
+
+
+def read_gmsh(
+            filename: str,
+            force_ambient_dim: int | None = None,
+            *, mesh_construction_kwargs: Mapping[str, Any] | None = None,
+            return_tag_to_elements_map: bool = False
+        ) -> tuple[Mesh, dict[str, IndexArray]] | Mesh:
     """Read a gmsh mesh file from *filename* and return a
     :class:`meshmode.mesh.Mesh`.
 
@@ -349,10 +384,48 @@ def read_gmsh(
     return recv.get_mesh(return_tag_to_elements_map=return_tag_to_elements_map)
 
 
-def generate_gmsh(source, dimensions=None, order=None, other_options=None,
-        extension="geo", gmsh_executable="gmsh", force_ambient_dim=None,
-        output_file_name="output.msh", mesh_construction_kwargs=None,
-        target_unit=None, return_tag_to_elements_map=False):
+@overload
+def generate_gmsh(
+            source: GmshSource,
+            dimensions: int | None = None,
+            order: int | None = None,
+            *, other_options: Sequence[str] | None = None,
+            extension: str = "geo",
+            gmsh_executable: str = "gmsh",
+            force_ambient_dim: int | None = None,
+            mesh_construction_kwargs: Mapping[str, Any] | None = None,
+            target_unit: Literal["M", "MM"] | None = None,
+            return_tag_to_elements_map: Literal[False] = False,
+        ) -> Mesh: ...
+
+
+@overload
+def generate_gmsh(
+            source: GmshSource,
+            dimensions: int | None = None,
+            order: int | None = None,
+            *, other_options: Sequence[str] | None = None,
+            extension: str = "geo",
+            gmsh_executable: str = "gmsh",
+            force_ambient_dim: int | None = None,
+            mesh_construction_kwargs: Mapping[str, Any] | None = None,
+            target_unit: Literal["M", "MM"] | None = None,
+            return_tag_to_elements_map: Literal[True],
+        ) -> tuple[Mesh, dict[str, IndexArray]]: ...
+
+
+def generate_gmsh(
+            source: GmshSource,
+            dimensions: int | None = None,
+            order: int | None = None,
+            *, other_options: Sequence[str] | None = None,
+            extension: str = "geo",
+            gmsh_executable: str = "gmsh",
+            force_ambient_dim: int | None = None,
+            mesh_construction_kwargs: Mapping[str, Any] | None = None,
+            target_unit: Literal["M", "MM"] | None = None,
+            return_tag_to_elements_map: bool = False
+        ) -> tuple[Mesh, dict[str, IndexArray]] | Mesh:
     """Run :command:`gmsh` on the input given by *source*, and return a
     :class:`meshmode.mesh.Mesh` based on the result.
 
@@ -478,11 +551,12 @@ def from_vertices_and_simplices(
 
 # {{{ to_json
 
-def to_json(mesh: Mesh) -> dict:
+def to_json(mesh: Mesh) -> dict[str, Any]:
     """Return a JSON-able Python data structure for *mesh*. The structure directly
     reflects the :class:`meshmode.mesh.Mesh` data structure."""
 
-    def group_to_json(group):
+    def group_to_json(group: MeshElementGroup):
+        assert group.vertex_indices is not None
         return {
             "type": type(group).__name__,
             "order": group.order,
@@ -494,7 +568,7 @@ def to_json(mesh: Mesh) -> dict:
 
     from meshmode import DataUnavailableError
 
-    def nodal_adjacency_to_json(mesh):
+    def nodal_adjacency_to_json(mesh: Mesh):
         try:
             na = mesh.nodal_adjacency
         except DataUnavailableError:
@@ -524,4 +598,15 @@ def to_json(mesh: Mesh) -> dict:
 # }}}
 
 
+__all__ = [
+    "FileSource",
+    "LiteralSource",
+    "ScriptSource",
+    "ScriptWithFilesSource",
+    "from_meshpy",
+    "from_vertices_and_simplices",
+    "generate_gmsh",
+    "read_gmsh",
+    "to_json",
+]
 # vim: foldmethod=marker
