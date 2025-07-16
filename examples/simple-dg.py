@@ -22,6 +22,8 @@ THE SOFTWARE.
 
 import logging
 from dataclasses import dataclass
+from functools import reduce
+from operator import add
 from typing import ClassVar
 
 import numpy as np
@@ -29,14 +31,16 @@ import numpy.linalg as la  # noqa
 
 import pyopencl as cl
 import pyopencl.array as cla  # noqa
+import pytools.obj_array as obj_array
 from arraycontext import (
     ArrayContainer,
+    ArrayContext,
     dataclass_array_container,
     map_array_container,
     with_container_arithmetic,
 )
 from pytools import log_process, memoize_method
-from pytools.obj_array import flat_obj_array, make_obj_array
+from pytools.obj_array import ObjectArray1D, ObjectArray2D
 
 from meshmode.array_context import PyOpenCLArrayContext, PytatoPyOpenCLArrayContext
 from meshmode.dof_array import DOFArray, flat_norm
@@ -187,7 +191,7 @@ class DGDiscretization:
         return self._setup_actx.freeze(a*d - b*c)
 
     @memoize_method
-    def inverse_parametrization_derivative(self):
+    def inverse_parametrization_derivative(self) -> ObjectArray2D[DOFArray]:
         [a, b], [c, d] = self._setup_actx.thaw(self.parametrization_derivative())
 
         result = np.zeros((2, 2), dtype=object)
@@ -199,20 +203,22 @@ class DGDiscretization:
 
         return self._setup_actx.freeze(result)
 
-    def zeros(self, actx):
+    def zeros(self, actx: ArrayContext):
         return self.volume_discr.zeros(actx)
 
-    def grad(self, vec):
-        ipder = vec.array_context.thaw(self.inverse_parametrization_derivative())
+    def grad(self, vec: DOFArray) -> ObjectArray1D[DOFArray]:
+        actx = vec.array_context
+        assert actx is not None
+        ipder = actx.thaw(self.inverse_parametrization_derivative())
 
         from meshmode.discretization import num_reference_derivative
         dref = [
                 num_reference_derivative(self.volume_discr, (idim,), vec)
                 for idim in range(self.volume_discr.dim)]
 
-        return make_obj_array([
-            sum(dref_i*ipder_i
-                for dref_i, ipder_i in zip(dref, ipder[iambient], strict=True))
+        return obj_array.new_1d([
+            reduce(add, (dref_i*ipder_i
+                for dref_i, ipder_i in zip(dref, ipder[iambient], strict=True)))
             for iambient in range(self.volume_discr.ambient_dim)])
 
     def div(self, vecs):
@@ -226,7 +232,7 @@ class DGDiscretization:
         ((a,), (b,)) = parametrization_derivative(self._setup_actx, bdry_discr)
 
         nrm = 1/(a**2+b**2)**0.5
-        return self._setup_actx.freeze(flat_obj_array(b*nrm, -a*nrm))
+        return self._setup_actx.freeze(obj_array.flat(b*nrm, -a*nrm))
 
     @memoize_method
     def face_jacobian(self, where):
@@ -433,7 +439,7 @@ def bump(actx, discr, t=0):
     source_omega = 3
 
     nodes = actx.thaw(discr.volume_discr.nodes())
-    center_dist = flat_obj_array([
+    center_dist = obj_array.flat([
         nodes[0] - source_center[0],
         nodes[1] - source_center[1],
         ])
@@ -495,7 +501,7 @@ def main(lazy=False):
 
     fields = WaveState(
             u=bump(actx_outer, discr),
-            v=make_obj_array([discr.zeros(actx_outer) for i in range(discr.dim)]),
+            v=obj_array.new_1d([discr.zeros(actx_outer) for _i in range(discr.dim)]),
             )
 
     from meshmode.discretization.visualization import make_visualizer

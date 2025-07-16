@@ -35,9 +35,9 @@ from typing_extensions import override
 
 import loopy as lp
 import modepy as mp
+import pytools.obj_array as obj_array
 from arraycontext import ArrayContext, make_loopy_program, tag_axes
 from pytools import keyed_memoize_in, memoize_in, memoize_method
-from pytools.obj_array import ObjectArray, make_obj_array
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray
@@ -54,6 +54,8 @@ if TYPE_CHECKING:
     from collections.abc import Hashable, Iterable, Sequence
 
     from numpy.typing import DTypeLike
+
+    from pytools.obj_array import ObjectArray
 
     from meshmode.mesh import Mesh as _Mesh, MeshElementGroup as _MeshElementGroup
 
@@ -81,6 +83,13 @@ Discretization class
 
 .. autofunction:: num_reference_derivative
 .. autoclass:: Discretization
+
+References
+----------
+
+.. class:: ObjectArray
+
+    See :class:`pytools.obj_array.ObjectArray`.
 """
 
 
@@ -612,7 +621,7 @@ class Discretization:
                                    FirstAxisIsElementsTag(),
                                    NameHint(name_hint)))
 
-        result = make_obj_array([
+        result = obj_array.new_1d([
             _DOFArray(None, tuple(actx.freeze(resample_mesh_nodes(grp, iaxis))
                       for grp in self.groups))
             for iaxis in range(self.ambient_dim)])

@@ -31,6 +31,7 @@ import numpy as np
 import numpy.linalg as la
 import pytest
 
+import pytools.obj_array as obj_array
 from arraycontext import (
     ArrayContextFactory,
     flatten,
@@ -520,14 +521,12 @@ def test_orientation_3d(
 
     from pytential import bind, sym
 
-    from pytools.obj_array import make_obj_array
-
     # {{{ check normals point outward
 
     if what == "torus":
         nodes = sym.nodes(mesh.ambient_dim).as_vector()
         angle = sym.arctan2(nodes[1], nodes[0])
-        center_nodes = make_obj_array([
+        center_nodes = obj_array.new_1d([
                 5*sym.cos(angle),
                 5*sym.sin(angle),
                 0*angle])

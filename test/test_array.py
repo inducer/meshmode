@@ -29,6 +29,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
+import pytools.obj_array as obj_array
 from arraycontext import (
     ArrayContextFactory,
     dataclass_array_container,
@@ -36,7 +37,6 @@ from arraycontext import (
     pytest_generate_tests_for_array_contexts,
     with_container_arithmetic,
 )
-from pytools.obj_array import make_obj_array
 from pytools.tag import Tag
 
 from meshmode import _acf  # noqa: F401
@@ -90,11 +90,11 @@ def _get_test_containers(actx, ambient_dim=2):
     dataclass_of_dofs = MyContainer(
             name="container",
             mass=x,
-            momentum=make_obj_array([x, x]),
+            momentum=obj_array.new_1d([x, x]),
             enthalpy=x)
 
     ary_dof = x
-    ary_of_dofs = make_obj_array([x, x, x])
+    ary_of_dofs = obj_array.new_1d([x, x, x])
     mat_of_dofs = np.empty((2, 2), dtype=object)
     for i in np.ndindex(mat_of_dofs.shape):
         mat_of_dofs[i] = x
@@ -109,9 +109,8 @@ def test_container_norm(actx_factory: ArrayContextFactory, ord):
 
     # {{{ flat_norm
 
-    from pytools.obj_array import make_obj_array
-    c = MyContainer(name="hey", mass=1, momentum=make_obj_array([2, 3]), enthalpy=5)
-    c_obj_ary = make_obj_array([c, c])
+    c = MyContainer(name="hey", mass=1, momentum=obj_array.new_1d([2, 3]), enthalpy=5)
+    c_obj_ary = obj_array.new_1d([c, c])
 
     n1 = flat_norm(c_obj_ary, ord)
     n2 = np.linalg.norm([1, 2, 3, 5]*2, ord)

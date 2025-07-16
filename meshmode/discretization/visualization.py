@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from typing_extensions import TypeIs
 
+import pytools.obj_array as obj_array
 from arraycontext import (
     Array,
     ArrayContext,
@@ -43,8 +44,11 @@ from arraycontext import (
 )
 from modepy.shapes import Hypercube, Shape, Simplex
 from pytools import memoize_method
-from pytools.obj_array import ObjectArray, ObjectArray1D, make_obj_array
+from pytools.obj_array import ObjectArray, ObjectArray1D
 
+from meshmode.discretization.connection.direct import (
+    DirectDiscretizationConnection,
+)
 from meshmode.dof_array import DOFArray
 from meshmode.transform_metadata import DiscretizationFlattenedDOFAxisTag
 
@@ -56,7 +60,6 @@ if TYPE_CHECKING:
 
     from meshmode.discretization import Discretization, ElementGroupBase
     from meshmode.discretization.connection.direct import (
-        DirectDiscretizationConnection,
         DiscretizationConnection,
     )
 
@@ -97,18 +100,17 @@ def separate_by_real_and_imag(
             from pytools.obj_array import (
                 obj_array_imag_copy,
                 obj_array_real_copy,
-                obj_array_vectorize,
             )
 
             if field[0].dtype.kind == "c":
                 if real_only:
                     yield (name,
-                            obj_array_vectorize(obj_array_real_copy, field))
+                            obj_array.vectorize(obj_array_real_copy, field))
                 else:
                     yield (f"{name}_r",
-                            obj_array_vectorize(obj_array_real_copy, field))
+                            obj_array.vectorize(obj_array_real_copy, field))
                     yield (f"{name}_i",
-                            obj_array_vectorize(obj_array_imag_copy, field))
+                            obj_array.vectorize(obj_array_imag_copy, field))
             else:
                 yield (name, field)
         else:
@@ -126,7 +128,7 @@ def _stack_object_array(vec, *, by_group: bool = False):
     if not by_group:
         return np.stack(vec)
 
-    return make_obj_array([
+    return obj_array.new_1d([
         np.stack([ri[igrp] for ri in vec])
         for igrp in range(vec[0].size)
         ])
@@ -151,8 +153,7 @@ def _resample_to_numpy(
     # https://github.com/inducer/pyvisfile/pull/12#discussion_r550959081
     # for (minimal) discussion.
     if isinstance(vec, ObjectArray):
-        from pytools.obj_array import obj_array_vectorize
-        r = obj_array_vectorize(
+        r = obj_array.vectorize(
                 lambda x: _resample_to_numpy(conn, vis_discr, x, by_group=by_group),
                 vec)
 
@@ -165,7 +166,7 @@ def _resample_to_numpy(
     from numbers import Number
     if by_group:
         if isinstance(vec, Number):
-            return make_obj_array([
+            return obj_array.new_1d([
                 np.full(grp.ndofs, vec) for grp in conn.to_discr.groups
                 ])
         elif isinstance(vec, DOFArray):
@@ -173,7 +174,7 @@ def _resample_to_numpy(
                 from meshmode.dof_array import check_dofarray_against_discr
                 check_dofarray_against_discr(vis_discr, vec)
 
-            return make_obj_array([
+            return obj_array.new_1d([
                 actx.to_numpy(ivec).reshape(-1) for ivec in vec
                 ])
         else:
@@ -551,13 +552,13 @@ class Visualizer:
     .. automethod:: copy_with_same_connectivity
     """
 
-    def __init__(self, connection: DirectDiscretizationConnection,
+    def __init__(self, connection: DiscretizationConnection,
             element_shrink_factor: float | None = None,
             is_equidistant: bool = False,
             _vtk_linear_connectivity=None,
             _vtk_lagrange_connectivity=None):
 
-        self.connection: DirectDiscretizationConnection = connection
+        self.connection: DiscretizationConnection = connection
         self.discr: Discretization = connection.from_discr
         self.vis_discr: Discretization = connection.to_discr
 
@@ -592,6 +593,7 @@ class Visualizer:
                 raise ValueError("'discr' does not have matching group structures")
 
         vis_discr = self.vis_discr.copy(actx=actx, mesh=discr.mesh)
+        assert isinstance(self.connection, DirectDiscretizationConnection)
         conn = type(self.connection)(
                 discr, vis_discr,
                 groups=self.connection.groups,
@@ -1378,6 +1380,7 @@ def make_visualizer(
                 InterpolatoryEdgeClusteredGroupFactory as VisGroupFactory,
             )
 
+        assert vis_order is not None
         vis_discr = discr.copy(actx=actx, group_factory=VisGroupFactory(vis_order))
 
         if all(grp.discretization_key() == vgrp.discretization_key()
@@ -1389,9 +1392,6 @@ def make_visualizer(
                     stacklevel=2)
 
             vis_discr = discr
-        else:
-            if vis_order is None:
-                raise ValueError("A 'vis_order' must be provided for interpolation.")
 
     from meshmode.discretization.connection import make_same_mesh_connection
     return Visualizer(
