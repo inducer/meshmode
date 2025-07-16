@@ -24,9 +24,14 @@ THE SOFTWARE.
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 from meshmode.mesh.refinement.no_adjacency import RefinerWithoutAdjacency
 from meshmode.mesh.refinement.utils import Refiner
+
+
+if TYPE_CHECKING:
+    from meshmode.mesh import Mesh
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +40,19 @@ __doc__ = """
 .. autoclass:: Refiner
 .. autoclass :: RefinerWithoutAdjacency
 .. autofunction :: refine_uniformly
+
+References
+----------
+
+.. class:: NDArray
+
+    See :data:`numpy.typing.NDArray`
+
+.. currentmodule:: np
+
+.. class:: bool
+
+    See :class:`np.bool`.
 """
 
 __all__ = [
@@ -43,7 +61,11 @@ __all__ = [
 ]
 
 
-def refine_uniformly(mesh, iterations, with_adjacency=False):
+def refine_uniformly(
+            mesh: Mesh,
+            iterations: int,
+            with_adjacency: bool = False
+        ) -> Mesh:
     if with_adjacency:
         # For conforming meshes, even RefinerWithoutAdjacency will reconstruct
         # adjacency from vertex identity.

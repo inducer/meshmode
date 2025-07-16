@@ -30,12 +30,19 @@ THE SOFTWARE.
 import logging
 from dataclasses import dataclass
 from functools import singledispatch
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 import modepy as mp
 
 from meshmode.mesh import MeshElementGroup, ModepyElementGroup
+
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from numpy.typing import NDArray
 
 
 logger = logging.getLogger(__name__)
@@ -101,7 +108,11 @@ class GroupRefinementRecord:
 
 
 @singledispatch
-def get_group_midpoints(meg: MeshElementGroup, el_tess_info, elements):
+def get_group_midpoints(
+            meg: MeshElementGroup,
+            el_tess_info: ElementTessellationInfo,
+            elements: Sequence[int]
+        ) -> Mapping[int, NDArray[np.floating]]:
     """Compute the midpoints of the vertices of the specified elements.
 
     :arg group: an instance of :class:`meshmode.mesh.MeshElementGroup`.
@@ -117,7 +128,11 @@ def get_group_midpoints(meg: MeshElementGroup, el_tess_info, elements):
 
 
 @singledispatch
-def get_group_tessellated_nodes(meg: MeshElementGroup, el_tess_info, elements):
+def get_group_tessellated_nodes(
+            meg: MeshElementGroup,
+            el_tess_info: ElementTessellationInfo,
+            elements: Sequence[int]
+        ) -> Mapping[int, NDArray[np.floating]]:
     """Compute the nodes of the child elements according to the tessellation.
 
     :arg group: An instance of :class:`meshmode.mesh.MeshElementGroup`.
@@ -134,10 +149,7 @@ def get_group_tessellated_nodes(meg: MeshElementGroup, el_tess_info, elements):
 
 
 @singledispatch
-def get_group_tessellation_info(meg: MeshElementGroup):
-    """
-    :returns: a :class:`ElementTessellationInfo` for the element group *meg*.
-    """
+def get_group_tessellation_info(meg: MeshElementGroup) -> ElementTessellationInfo:
     raise NotImplementedError(type(meg).__name__)
 
 # }}}
