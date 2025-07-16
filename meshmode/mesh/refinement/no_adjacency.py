@@ -28,10 +28,19 @@ THE SOFTWARE.
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
+from typing_extensions import override
 
+from meshmode.mesh.refinement.tessellate import GroupRefinementRecord
 from meshmode.mesh.refinement.utils import Refiner
+
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+    from meshmode.mesh import Mesh, MeshElementGroup
 
 
 logger = logging.getLogger(__name__)
@@ -56,19 +65,23 @@ class RefinerWithoutAdjacency(Refiner):
     .. automethod:: get_previous_mesh
     """
 
-    def __init__(self, mesh):
-        self._current_mesh = mesh
-        self._previous_mesh = None
+    _current_mesh: Mesh
+    _previous_mesh: Mesh | None
+
+    def __init__(self, mesh: Mesh):
+        super().__init__(mesh)
         self.group_refinement_records = None
         self.global_vertex_pair_to_midpoint = {}
 
+    @override
     def refine_uniformly(self):
         flags = np.ones(self._current_mesh.nelements, dtype=bool)
         return self.refine(flags)
 
     # {{{ refinement top-level
 
-    def refine(self, refine_flags):
+    @override
+    def refine(self, refine_flags: NDArray[np.bool]):
         """
         :arg refine_flags: an :class:`~numpy.ndarray` of :class:`~numpy.dtype`
             :class:`bool` and length :attr:`meshmode.mesh.Mesh.nelements`
@@ -84,11 +97,9 @@ class RefinerWithoutAdjacency(Refiner):
 
         perform_vertex_updates = mesh.vertices is not None
 
-        new_el_groups = []
-        group_refinement_records = []
+        new_el_groups: list[MeshElementGroup] = []
+        group_refinement_records: list[GroupRefinementRecord] = []
         additional_vertices = []
-        if perform_vertex_updates:
-            inew_vertex = mesh.nvertices
 
         from meshmode.mesh.refinement.tessellate import (
             get_group_midpoints,
@@ -119,7 +130,6 @@ class RefinerWithoutAdjacency(Refiner):
 
             # }}}
 
-            from meshmode.mesh.refinement.tessellate import GroupRefinementRecord
             group_refinement_records.append(
                     GroupRefinementRecord(
                         el_tess_info=el_tess_info,
@@ -132,6 +142,10 @@ class RefinerWithoutAdjacency(Refiner):
             # {{{ get new vertices together
 
             if perform_vertex_updates:
+                assert grp.vertex_indices is not None
+
+                inew_vertex = mesh.nvertices
+
                 midpoints = get_group_midpoints(
                         grp, el_tess_info, refining_el_old_indices)
 
@@ -154,6 +168,9 @@ class RefinerWithoutAdjacency(Refiner):
                     # carry over old vertices
                     refining_vertices[el_tess_info.orig_vertex_indices] = \
                             grp.vertex_indices[old_iel]
+
+                    assert el_tess_info.midpoint_indices is not None
+                    assert el_tess_info.midpoint_vertex_pairs is not None
 
                     for imidpoint, (iref_midpoint, (v1, v2)) in enumerate(zip(
                             el_tess_info.midpoint_indices,
@@ -221,6 +238,7 @@ class RefinerWithoutAdjacency(Refiner):
                     unit_nodes=grp.unit_nodes))
 
         if perform_vertex_updates:
+            assert mesh.vertices is not None
             new_vertices = np.empty(
                     (mesh.ambient_dim, mesh.nvertices + len(additional_vertices)),
                     mesh.vertices.dtype)
@@ -242,9 +260,11 @@ class RefinerWithoutAdjacency(Refiner):
 
     # }}}
 
+    @override
     def get_current_mesh(self):
         return self._current_mesh
 
+    @override
     def get_previous_mesh(self):
         return self._previous_mesh
 

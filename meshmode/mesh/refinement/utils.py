@@ -27,6 +27,7 @@ THE SOFTWARE.
 import logging
 from abc import ABC, abstractmethod
 from functools import singledispatch
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -36,6 +37,10 @@ from meshmode.mesh import (
     SimplexElementGroup,
     TensorProductElementGroup,
 )
+
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 
 logger = logging.getLogger(__name__)
@@ -54,6 +59,9 @@ class Refiner(ABC):
     .. automethod:: refine
     """
 
+    _current_mesh: Mesh
+    _previous_mesh: Mesh | None
+
     def __init__(self, mesh: Mesh) -> None:
         self._current_mesh = mesh
         self._previous_mesh = None
@@ -69,7 +77,7 @@ class Refiner(ABC):
         return self.refine(flags)
 
     @abstractmethod
-    def refine(self, refine_flags: np.ndarray) -> Mesh:
+    def refine(self, refine_flags: NDArray[np.bool]) -> Mesh:
         pass
 
 # }}}
