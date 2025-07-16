@@ -1055,15 +1055,7 @@ def refine_mesh_and_get_urchin_warper(
 
     .. versionadded: 2018.1
     """
-    try:
-        from scipy.special import sph_harm_y
-    except ImportError:
-        # NOTE: this was deprecated in v1.15 and (will be) removed in v1.17
-        from scipy.special import sph_harm as _sph_harm_y
-
-        def sph_harm_y(n: int, m: int, p: np.ndarray, t: np.ndarray) -> np.ndarray:
-            # NOTE: this swaps both (n, m) and (theta, phi)
-            return _sph_harm_y(m, n, t, p)
+    from scipy.special import sph_harm_y
 
     def sph_harm(m: int, n: int, pts: np.ndarray) -> np.ndarray:
         assert abs(m) <= n
