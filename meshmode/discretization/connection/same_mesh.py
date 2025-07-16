@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from meshmode.discretization import NodalElementGroupBase
+
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -23,14 +25,26 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from meshmode.transform_metadata import DiscretizationElementAxisTag
 
 
+if TYPE_CHECKING:
+    from arraycontext import ArrayContext
+
+    from meshmode.discretization import Discretization
+
+
 # {{{ same-mesh constructor
 
-def make_same_mesh_connection(actx, to_discr, from_discr):
+def make_same_mesh_connection(
+            actx: ArrayContext,
+            to_discr: Discretization,
+            from_discr: Discretization,
+        ):
     from meshmode.discretization.connection.direct import (
         DirectDiscretizationConnection,
         DiscretizationConnectionElementGroup,
@@ -57,6 +71,7 @@ def make_same_mesh_connection(actx, to_discr, from_discr):
                                 fgrp.nelements,
                                 dtype=np.intp))))
         all_elements = actx.freeze(all_elements)
+        assert isinstance(tgrp, NodalElementGroupBase)
         ibatch = InterpolationBatch(
                 from_group_index=igrp,
                 from_element_indices=all_elements,
