@@ -25,10 +25,15 @@ import logging
 import numpy as np
 
 import pyopencl as cl
+import pytools.obj_array as obj_array
+from arraycontext import Array, ArrayContext
 from pytools import keyed_memoize_in
-from pytools.obj_array import make_obj_array
 
 from meshmode.array_context import PyOpenCLArrayContext
+from meshmode.discretization import (
+    Discretization,
+    InterpolatoryElementGroupBase,
+)
 from meshmode.transform_metadata import FirstAxisIsElementsTag
 
 
@@ -49,11 +54,14 @@ def plot_solution(actx, vis, filename, discr, t, x):
     vis.write_vtk_file(filename, names_and_fields, overwrite=True)
 
 
-def reconstruct_discr_from_nodes(actx, discr, x):
+def reconstruct_discr_from_nodes(
+            actx: ArrayContext,
+            discr: Discretization,
+            x):
     @keyed_memoize_in(actx,
             (reconstruct_discr_from_nodes, "to_mesh_interp_matrix"),
             lambda grp: grp.discretization_key())
-    def to_mesh_interp_matrix(grp) -> np.ndarray:
+    def to_mesh_interp_matrix(grp: InterpolatoryElementGroupBase) -> Array:
         import modepy as mp
         mat = mp.resampling_matrix(
                 grp.basis_obj().functions,
@@ -62,7 +70,10 @@ def reconstruct_discr_from_nodes(actx, discr, x):
 
         return actx.freeze(actx.from_numpy(mat))
 
-    def resample_nodes_to_mesh(grp, igrp, iaxis):
+    def resample_nodes_to_mesh(
+                grp: InterpolatoryElementGroupBase,
+                igrp: int,
+                iaxis: int):
         discr_nodes = x[iaxis][igrp]
 
         grp_unit_nodes = grp.unit_nodes.reshape(-1)
@@ -182,7 +193,7 @@ def run(actx, *,
     # {{{ ode
 
     def velocity_field(nodes, alpha=1.0):
-        return make_obj_array([
+        return obj_array.new_1d([
             alpha * nodes[0], -alpha * nodes[1], 0.0 * nodes[0]
             ][:ambient_dim])
 

@@ -31,8 +31,8 @@ from functools import partial
 import numpy as np
 import pytest
 
+import pytools.obj_array as obj_array
 from arraycontext import ArrayContextFactory, pytest_generate_tests_for_array_contexts
-from pytools.obj_array import make_obj_array
 
 import meshmode.mesh.generation as mgen
 from meshmode import _acf  # noqa: F401
@@ -102,7 +102,7 @@ def test_parallel_vtk_file(actx_factory: ArrayContextFactory, dim):
             file_name_pattern,
             [
                 ("scalar", discr.zeros(actx)),
-                ("vector", make_obj_array([discr.zeros(actx) for i in range(dim)]))
+                ("vector", obj_array.new_1d([discr.zeros(actx) for i in range(dim)]))
                 ],
             overwrite=True)
 
