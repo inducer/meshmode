@@ -38,7 +38,7 @@ THE SOFTWARE.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 from warnings import warn
 
 import numpy as np
@@ -401,7 +401,12 @@ class MPIBoundaryCommSetupHelper:
 
 
 # FIXME: Move somewhere else, since it's not strictly limited to distributed?
-def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs):
+def get_partition_by_pymetis(
+            mesh: Mesh,
+            num_parts: int,
+            *,
+            connectivity: Literal["nodal", "facial"] = "facial",
+            **kwargs: Any):
     """Return a mesh partition created by :mod:`pymetis`.
 
     :arg mesh: A :class:`meshmode.mesh.Mesh` instance
@@ -418,6 +423,8 @@ def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs
         *connectivity* was added.
     """
 
+    from pymetis import CSRAdjacency, part_graph, zero_copy_dtype
+    tp = zero_copy_dtype()
     if connectivity == "facial":
         # shape: (2, n_el_pairs)
         neighbor_el_pairs = np.hstack([
@@ -431,22 +438,25 @@ def get_partition_by_pymetis(mesh, num_parts, *, connectivity="facial", **kwargs
                 ])
         sorted_neighbor_el_pairs = neighbor_el_pairs[
                 :, np.argsort(neighbor_el_pairs[0])]
-        xadj = np.searchsorted(
+        adj = CSRAdjacency(
+            adj_starts=np.searchsorted(
                 sorted_neighbor_el_pairs[0],
-                np.arange(mesh.nelements+1))
-        adjncy = sorted_neighbor_el_pairs[1]
+                np.arange(mesh.nelements+1)).astype(tp),
+            adjacent=sorted_neighbor_el_pairs[1].astype(tp)
+        )
 
     elif connectivity == "nodal":
-        xadj = mesh.nodal_adjacency.neighbors_starts.tolist()
-        adjncy = mesh.nodal_adjacency.neighbors.tolist()
+        adj = CSRAdjacency(
+            adj_starts=mesh.nodal_adjacency.neighbors_starts.astype(tp),
+            adjacent=mesh.nodal_adjacency.neighbors.astype(tp),
+        )
 
     else:
         raise ValueError("invalid value of connectivity")
 
-    from pymetis import part_graph
-    _, p = part_graph(num_parts, xadj=xadj, adjncy=adjncy, **kwargs)
+    _, p = part_graph(num_parts, adj, **kwargs)
 
-    return np.array(p)
+    return np.array(p, np.intp)
 
 
 def membership_list_to_map(
