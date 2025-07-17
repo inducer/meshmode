@@ -35,7 +35,6 @@ from arraycontext import (
     Array,
     ArrayContext,
     ArrayOrContainerOrScalarT,
-    ArrayOrContainerT,
     ArrayT,
     NotAnArrayContainerError,
     deserialize_container,
@@ -319,7 +318,7 @@ class DiscretizationConnection(ABC):
         self.is_surjective: bool = is_surjective
 
     @abstractmethod
-    def __call__(self, ary: ArrayOrContainerT) -> ArrayOrContainerT:
+    def __call__(self, ary: ArrayOrContainerOrScalarT) -> ArrayOrContainerOrScalarT:
         """Apply the connection. If applicable, may return a view of the data
         instead of a copy, i.e. changes to *ary* may or may not appear
         in the result returned by this method, and vice versa.
@@ -338,7 +337,8 @@ class IdentityDiscretizationConnection(DiscretizationConnection):
     def __init__(self, discr: Discretization) -> None:
         super().__init__(discr, discr, True)
 
-    def __call__(self, ary: ArrayOrContainerT) -> ArrayOrContainerT:
+    @override
+    def __call__(self, ary: ArrayOrContainerOrScalarT) -> ArrayOrContainerOrScalarT:
         return ary
 
 # }}}
