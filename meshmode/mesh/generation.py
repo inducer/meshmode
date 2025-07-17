@@ -1597,8 +1597,8 @@ def generate_box_mesh(
 def generate_regular_rect_mesh(
         a: Sequence[float] = (0, 0),
         b: Sequence[float] = (1, 1), *,
-        nelements_per_axis: int | None = None,
-        npoints_per_axis: int | None = None,
+        nelements_per_axis: int | tuple[int, ...] | None = None,
+        npoints_per_axis: int | tuple[int, ...] | None = None,
         periodic: bool | None = None,
         order: int = 1,
         boundary_tag_to_face: dict[Any, str] | None = None,
