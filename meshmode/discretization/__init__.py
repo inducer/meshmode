@@ -57,7 +57,7 @@ if TYPE_CHECKING:
 
     from pytools.obj_array import ObjectArray
 
-    from meshmode.mesh import Mesh as _Mesh, MeshElementGroup as _MeshElementGroup
+    from meshmode.mesh import Mesh, MeshElementGroup
 
 
 __doc__ = """
@@ -131,15 +131,12 @@ class ElementGroupBase(ABC):
     .. automethod:: discretization_key
     """
 
-    mesh_el_group: _MeshElementGroup
-    order: int
-
     def __init__(self,
-                 mesh_el_group: _MeshElementGroup,
+                 mesh_el_group: MeshElementGroup,
                  order: int,
                  ) -> None:
-        self.mesh_el_group = mesh_el_group
-        self.order = order
+        self.mesh_el_group: MeshElementGroup = mesh_el_group
+        self.order: int = order
 
     @property
     def is_affine(self) -> bool:
@@ -214,7 +211,7 @@ class ElementGroupFactory(Protocol):
     .. automethod:: __call__
     """
 
-    def __call__(self, mesh_el_group: _MeshElementGroup, /) -> ElementGroupBase:
+    def __call__(self, mesh_el_group: MeshElementGroup, /) -> ElementGroupBase:
         """Create a new :class:`~meshmode.discretization.ElementGroupBase`
         for the given *mesh_el_group*.
         """
@@ -378,7 +375,7 @@ class Discretization:
     .. automethod:: quad_weights
     """
 
-    mesh: _Mesh
+    mesh: Mesh
     groups: Sequence[ElementGroupBase]
     real_dtype: np.dtype[np.floating]
     complex_dtype: np.dtype[np.complexfloating]
@@ -387,7 +384,7 @@ class Discretization:
 
     def __init__(self,
                  actx: ArrayContext,
-                 mesh: _Mesh,
+                 mesh: Mesh,
                  group_factory: ElementGroupFactory,
                  real_dtype: DTypeLike = None,
                  _force_actx_clone: bool = True) -> None:
@@ -434,7 +431,7 @@ class Discretization:
 
     def copy(self,
              actx: ArrayContext | None = None,
-             mesh: _Mesh | None = None,
+             mesh: Mesh | None = None,
              group_factory: ElementGroupFactory | None = None,
              real_dtype: np.dtype | None = None) -> Discretization:
         """Creates a new object of the same type with all arguments that are not
