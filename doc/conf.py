@@ -2,8 +2,7 @@ from importlib import metadata
 from urllib.request import urlopen
 
 
-_conf_url = \
-        "https://raw.githubusercontent.com/inducer/sphinxconfig/main/sphinxconfig.py"
+_conf_url = "https://raw.githubusercontent.com/inducer/sphinxconfig/main/sphinxconfig.py"
 with urlopen(_conf_url) as _inf:
     exec(compile(_inf.read(), _conf_url, "exec"), globals())
 
@@ -19,9 +18,9 @@ release = metadata.version("meshmode")
 version = ".".join(release.split(".")[:2])
 
 intersphinx_mapping = {
+    "FInAT": ("https://finat.github.io/FInAT/", None),
     "arraycontext": ("https://documen.tician.de/arraycontext", None),
     "fenics": ("https://fenics.readthedocs.io/projects/fiat/en/latest", None),
-    "FInAT": ("https://finat.github.io/FInAT/", None),
     "firedrake": ("https://www.firedrakeproject.org", None),
     "gmsh_interop": ("https://documen.tician.de/gmsh_interop", None),
     "h5py": ("https://docs.h5py.org/en/stable", None),
@@ -36,6 +35,34 @@ intersphinx_mapping = {
     "pytools": ("https://documen.tician.de/pytools", None),
     "recursivenodes": ("https://tisaac.gitlab.io/recursivenodes", None),
 }
+
+sphinxconfig_missing_reference_aliases = {
+    # numpy
+    "DTypeLike": "obj:numpy.typing.DTypeLike",
+    "NDArray": "obj:numpy.typing.NDArray",
+    "np.bool": "class:numpy.bool",
+    "np.complexfloating": "class:numpy.complexfloating",
+    "np.floating": "class:numpy.floating",
+    "np.random.Generator": "class:numpy.random.Generator",
+    # pytools
+    "ObjectArray": "class:pytools.obj_array.ObjectArray",
+    # modepy
+    "ArrayF": "obj:modepy.typing.ArrayF",
+    # arraycontext
+    "Array": "class:arraycontext.Array",
+    "ArrayContext": "class:arraycontext.ArrayContext",
+    "ArrayOrContainerOrScalar": "obj:arraycontext.ArrayOrContainerOrScalar",
+    "arraycontext.typing.ArrayOrContainerOrScalarT":
+        "obj:arraycontext.ArrayOrContainerOrScalarT",
+    "arraycontext.typing.ArrayT": "obj:arraycontext.ArrayT",
+    # meshmode
+    "_DOFArray": "class:meshmode.dof_array.DOFArray",
+    "_MeshElementGroup": "class:meshmode.mesh.MeshElementGroup",
+}
+
+
+def setup(app):
+    app.connect("missing-reference", process_autodoc_missing_reference)  # noqa: F821
 
 
 # Some modules need to import things just so that sphinx can resolve symbols in

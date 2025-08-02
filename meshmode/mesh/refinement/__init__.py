@@ -40,19 +40,6 @@ __doc__ = """
 .. autoclass:: Refiner
 .. autoclass :: RefinerWithoutAdjacency
 .. autofunction :: refine_uniformly
-
-References
-----------
-
-.. class:: NDArray
-
-    See :data:`numpy.typing.NDArray`
-
-.. currentmodule:: np
-
-.. class:: bool
-
-    See :class:`np.bool`.
 """
 
 __all__ = [

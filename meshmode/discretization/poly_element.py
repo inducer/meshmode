@@ -115,13 +115,6 @@ Type-based group factories
 .. autoclass:: InterpolatoryEquidistantGroupFactory
 .. autoclass:: QuadratureGroupFactory
 .. autoclass:: ModalGroupFactory
-
-Typing references
------------------
-
-.. class:: ArrayF
-
-    See :attr:`modepy.typing.ArrayF`.
 """
 
 
