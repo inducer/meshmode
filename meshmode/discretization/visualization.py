@@ -73,13 +73,6 @@ __doc__ = """
 .. autoclass:: Visualizer
 
 .. autofunction:: write_nodal_adjacency_vtk_file
-
-
-References
-----------
-.. class:: Array
-
-    See :class:`arraycontext.Array`.
 """
 
 

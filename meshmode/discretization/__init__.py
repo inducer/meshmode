@@ -84,13 +84,6 @@ Discretization class
 
 .. autofunction:: num_reference_derivative
 .. autoclass:: Discretization
-
-References
-----------
-
-.. class:: ObjectArray
-
-    See :class:`pytools.obj_array.ObjectArray`.
 """
 
 

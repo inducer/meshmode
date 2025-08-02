@@ -132,27 +132,6 @@ Implementation details
 .. autoclass:: InterpolationBatch
 
 .. autoclass:: DiscretizationConnectionElementGroup
-
-References
-----------
-
-.. currentmodule:: arraycontext.typing
-
-.. class:: ArrayT
-
-    See :class:`arraycontext.ArrayT`.
-
-.. class:: ArrayOrContainerT
-
-    See :class:`arraycontext.ArrayOrContainerT`.
-
-.. class:: ArrayOrContainerOrScalar
-
-    See :attr:`arraycontext.ArrayOrContainerOrScalar`.
-
-.. class:: ArrayOrContainerOrScalarT
-
-    See :class:`arraycontext.ArrayOrContainerOrScalarT`.
 """
 
 
