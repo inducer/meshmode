@@ -31,7 +31,7 @@ import numpy as np
 import numpy.linalg as la
 
 import modepy as mp
-from pytools import deprecate_keyword, log_process
+from pytools import log_process
 
 from meshmode.mesh import Mesh, MeshElementGroup, make_mesh
 
@@ -459,7 +459,6 @@ def make_curve_mesh(
 
 # {{{ make_group_from_vertices
 
-@deprecate_keyword("group_factory", "group_cls")
 def make_group_from_vertices(
         vertices: np.ndarray, vertex_indices: np.ndarray, order: int, *,
         group_cls: type[MeshElementGroup] | None = None,
@@ -1142,7 +1141,6 @@ def generate_urchin(
 
 # {{{ generate_box_mesh
 
-@deprecate_keyword("group_factory", "group_cls")
 def generate_box_mesh(
         axis_coords: tuple[np.ndarray, ...],
         order: int = 1, *,
@@ -1593,7 +1591,6 @@ def generate_box_mesh(
 
 # {{{ generate_regular_rect_mesh
 
-@deprecate_keyword("group_factory", "group_cls")
 def generate_regular_rect_mesh(
         a: Sequence[float] = (0, 0),
         b: Sequence[float] = (1, 1), *,
