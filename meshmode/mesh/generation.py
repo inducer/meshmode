@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import numpy.linalg as la
+from typing_extensions import override
 
 import modepy as mp
 from pytools import log_process
@@ -37,6 +38,8 @@ from meshmode.mesh import Mesh, MeshElementGroup, make_mesh
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+
+    from numpy.typing import NDArray
 
     from meshmode.mesh.refinement import Refiner
 
@@ -98,7 +101,7 @@ Tools for Iterative Refinement
 
 # {{{ test curve parameterizations
 
-def circle(t: np.ndarray) -> np.ndarray:
+def circle(t: NDArray[np.floating]) -> NDArray[np.floating]:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -106,7 +109,7 @@ def circle(t: np.ndarray) -> np.ndarray:
     return ellipse(1.0, t)
 
 
-def ellipse(aspect_ratio: float, t: np.ndarray) -> np.ndarray:
+def ellipse(aspect_ratio: float, t: NDArray[np.floating]) -> NDArray[np.floating]:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -120,7 +123,7 @@ def ellipse(aspect_ratio: float, t: np.ndarray) -> np.ndarray:
         ])
 
 
-def cloverleaf(t: np.ndarray) -> np.ndarray:
+def cloverleaf(t: NDArray[np.floating]) -> NDArray[np.floating]:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -138,7 +141,7 @@ def cloverleaf(t: np.ndarray) -> np.ndarray:
         ])
 
 
-def drop(t: np.ndarray) -> np.ndarray:
+def drop(t: NDArray[np.floating]) -> NDArray[np.floating]:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -153,7 +156,7 @@ def drop(t: np.ndarray) -> np.ndarray:
         ])
 
 
-def n_gon(n_corners: int, t: np.ndarray) -> np.ndarray:
+def n_gon(n_corners: int, t: NDArray[np.floating]) -> NDArray[np.floating]:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -181,7 +184,7 @@ def n_gon(n_corners: int, t: np.ndarray) -> np.ndarray:
     return result
 
 
-def qbx_peanut(t: np.ndarray) -> np.ndarray:
+def qbx_peanut(t: NDArray[np.floating]) -> NDArray[np.floating]:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -195,7 +198,8 @@ def qbx_peanut(t: np.ndarray) -> np.ndarray:
         ])
 
 
-def dumbbell(gamma: float, beta: float, t: np.ndarray):
+def dumbbell(gamma: float, beta: float,
+             t: NDArray[np.floating]) -> NDArray[np.floating]:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -205,7 +209,7 @@ def dumbbell(gamma: float, beta: float, t: np.ndarray):
 
 def wobbly_dumbbell(
         gamma: float, beta: float, p: int, wavenumber: int,
-        t: np.ndarray):
+        t: NDArray[np.floating]) -> NDArray[np.floating]:
     """
     :arg t: the parametrization, runs from :math:`[0, 1]`.
     :return: an array of shape ``(2, t.size)``.
@@ -221,7 +225,7 @@ def wobbly_dumbbell(
         ])
 
 
-def apple(a: float, t: np.ndarray) -> np.ndarray:
+def apple(a: float, t: NDArray[np.floating]) -> NDArray[np.floating]:
     """
     :arg a: roundness parameter in :math:`[0, 1/2]`, where :math:`0` gives
         a circle and :math:`1/2` gives a cardioid.
@@ -231,18 +235,15 @@ def apple(a: float, t: np.ndarray) -> np.ndarray:
     ilength = 2*np.pi
     t = t*ilength
 
-    sin = np.sin
-    cos = np.cos
-
     return np.vstack([
-        cos(t) + a*cos(2*t),
-        sin(t) + a*sin(2*t)
+        np.cos(t) + a*np.cos(2*t),
+        np.sin(t) + a*np.sin(2*t)
         ])
 
 
 def clamp_piecewise(
         r_major: float, r_minor: float, gap: float,
-        t: np.ndarray) -> np.ndarray:
+        t: NDArray[np.floating]) -> NDArray[np.floating]:
     """
     :arg r_major: radius of the outer shell.
     :arg r_minor: radius of the inner shell.
@@ -250,7 +251,7 @@ def clamp_piecewise(
     :return: an array of shape ``(2, t.size)``.
     """
 
-    def rotation_matrix(angle: float) -> np.ndarray:
+    def rotation_matrix(angle: float) -> NDArray[np.floating]:
         return np.array([
             [np.cos(angle), -np.sin(angle)],
             [np.sin(angle), np.cos(angle)]])
@@ -311,12 +312,16 @@ class WobblyCircle:
     .. automethod:: random
     .. automethod:: __call__
     """
-    def __init__(self, coeffs: np.ndarray, phase: float = 0.0) -> None:
+
+    coeffs: NDArray[np.floating]
+    phase: float
+
+    def __init__(self, coeffs: NDArray[np.floating], phase: float = 0.0) -> None:
         self.coeffs = coeffs
         self.phase = phase
 
     @staticmethod
-    def random(ncoeffs: int, seed: int) -> WobblyCircle:
+    def random(ncoeffs: int, seed: int | None = None) -> WobblyCircle:
         rng = np.random.default_rng(seed)
         coeffs = rng.random(ncoeffs)
 
@@ -324,7 +329,7 @@ class WobblyCircle:
 
         return WobblyCircle(coeffs)
 
-    def __call__(self, t: np.ndarray) -> np.ndarray:
+    def __call__(self, t: NDArray[np.floating]) -> NDArray[np.floating]:
         """
         :arg t: the parametrization, runs from :math:`[0, 1]`.
         :return: an array of shape ``(2, t.size)``.
@@ -353,15 +358,16 @@ class NArmedStarfish(WobblyCircle):
         coeffs[-1] = amplitude
         super().__init__(coeffs, phase=phase)
 
+    @override
     @staticmethod
-    def random(seed: int) -> NArmedStarfish:
+    def random(seed: int | None = None) -> NArmedStarfish:  # pyright: ignore[reportIncompatibleMethodOverride]
         rng = np.random.default_rng(seed)
 
         # NOTE: 32 arms should be enough for everybody!
         n_arms = rng.integers(3, 33)
         amplitude = 0.25 + 0.75 * rng.random()
 
-        return NArmedStarfish(n_arms, amplitude)
+        return NArmedStarfish(int(n_arms), amplitude)
 
 
 starfish3 = NArmedStarfish(3, 1 / 2, phase=np.pi / 2)
@@ -375,12 +381,13 @@ starfish = starfish5
 # {{{ make_curve_mesh
 
 def make_curve_mesh(
-        curve_f: Callable[[np.ndarray], np.ndarray],
-        element_boundaries: np.ndarray, order: int, *,
-        unit_nodes: np.ndarray | None = None,
+        curve_f: Callable[[NDArray[np.floating]], NDArray[np.floating]],
+        element_boundaries: NDArray[np.floating], order: int, *,
+        unit_nodes: NDArray[np.floating] | None = None,
         node_vertex_consistency_tolerance: float | bool | None = None,
         closed: bool = True,
-        return_parametrization_points: bool = False) -> Mesh:
+        return_parametrization_points: bool = False
+        ) -> Mesh | tuple[Mesh, NDArray[np.floating]]:
     """
     :arg curve_f: parametrization for a curve, accepting a vector of
         point locations and returning an array of shape ``(2, npoints)``.
@@ -459,9 +466,11 @@ def make_curve_mesh(
 # {{{ make_group_from_vertices
 
 def make_group_from_vertices(
-        vertices: np.ndarray, vertex_indices: np.ndarray, order: int, *,
+        vertices: NDArray[np.floating],
+        vertex_indices: NDArray[np.integer],
+        order: int, *,
         group_cls: type[MeshElementGroup] | None = None,
-        unit_nodes: np.ndarray | None = None) -> MeshElementGroup:
+        unit_nodes: NDArray[np.floating] | None = None) -> MeshElementGroup:
     # shape: (ambient_dim, nelements, nvertices)
     ambient_dim = vertices.shape[0]
     el_vertices = vertices[:, vertex_indices]
@@ -549,14 +558,15 @@ def make_group_from_vertices(
 # {{{ generate_icosahedron
 
 def generate_icosahedron(
-        r: float, order: int, *,
+        r: float,
+        order: int, *,
         node_vertex_consistency_tolerance: float | bool | None = None,
-        unit_nodes: np.ndarray | None = None) -> Mesh:
+        unit_nodes: NDArray[np.floating] | None = None) -> Mesh:
     # https://en.wikipedia.org/w/index.php?title=Icosahedron&oldid=387737307
 
-    phi = (1+5**(1/2))/2
-
     from pytools import flatten
+
+    phi = (1+5**(1/2))/2
     vertices = np.array(sorted(flatten([
             (0, pm1*1, pm2*phi),
             (pm1*1, pm2*phi, 0),
@@ -569,7 +579,7 @@ def generate_icosahedron(
     bottom_point = 6
     top_point = 5
 
-    tris = []
+    tris: list[list[int]] = []
     m = len(top_ring)
     for i in range(m):
         tris.append([top_ring[i], top_ring[(i+1) % m], top_point])
@@ -590,9 +600,11 @@ def generate_icosahedron(
             is_conforming=True)
 
 
-def generate_cube_surface(r: float, order: int, *,
+def generate_cube_surface(
+        r: float,
+        order: int, *,
         node_vertex_consistency_tolerance: float | bool | None = None,
-        unit_nodes: np.ndarray | None = None) -> Mesh:
+        unit_nodes: NDArray[np.floating] | None = None) -> Mesh:
     shape = mp.Hypercube(3)
     vertices = mp.unit_vertices_for_shape(shape)
     vertices *= r / la.norm(vertices, ord=2, axis=0)
@@ -616,10 +628,12 @@ def generate_cube_surface(r: float, order: int, *,
 
 # {{{ generate_icosphere
 
-def generate_icosphere(r: float, order: int, *,
+def generate_icosphere(
+        r: float,
+        order: int, *,
         uniform_refinement_rounds: int = 0,
         node_vertex_consistency_tolerance: float | bool | None = None,
-        unit_nodes: np.ndarray | None = None) -> Mesh:
+        unit_nodes: NDArray[np.floating] | None = None) -> Mesh:
     from warnings import warn
     warn("'generate_icosphere' is deprecated and will be removed in 2023. "
             "Use 'generate_sphere' instead.",
@@ -633,10 +647,12 @@ def generate_icosphere(r: float, order: int, *,
             group_cls=SimplexElementGroup)
 
 
-def generate_sphere(r: float, order: int, *,
+def generate_sphere(
+        r: float,
+        order: int, *,
         uniform_refinement_rounds: int = 0,
         node_vertex_consistency_tolerance: float | bool | None = None,
-        unit_nodes: np.ndarray | None = None,
+        unit_nodes: NDArray[np.floating] | None = None,
         group_cls: type[MeshElementGroup] | None = None) -> Mesh:
     """
     :arg r: radius of the sphere.
@@ -674,8 +690,11 @@ def generate_sphere(r: float, order: int, *,
         mesh = refine_uniformly(mesh, uniform_refinement_rounds)
 
     # ensure vertices and nodes are still on the sphere of radius r
+    vertices = mesh.vertices
+    assert vertices is not None
+    vertices = vertices * r / np.sqrt(np.sum(vertices**2, axis=0))
+
     from dataclasses import replace
-    vertices = mesh.vertices * r / np.sqrt(np.sum(mesh.vertices**2, axis=0))
     grp, = mesh.groups
     grp = replace(
         grp,
@@ -693,12 +712,13 @@ def generate_sphere(r: float, order: int, *,
 # {{{ generate_surface_of_revolution
 
 def generate_surface_of_revolution(
-        get_radius: Callable[[np.ndarray, np.ndarray], np.ndarray],
-        height_discr: np.ndarray,
-        angle_discr: np.ndarray,
+        get_radius: Callable[[NDArray[np.floating], NDArray[np.floating]],
+                             NDArray[np.floating]],
+        height_discr: NDArray[np.floating],
+        angle_discr: NDArray[np.floating],
         order: int, *,
         node_vertex_consistency_tolerance: float | bool | None = None,
-        unit_nodes: np.ndarray | None = None) -> Mesh:
+        unit_nodes: NDArray[np.floating] | None = None) -> Mesh:
     """Return a cylinder aligned with the "height" axis aligned with the Z axis.
 
     :arg get_radius: A callable function that takes in a 1D array of heights
@@ -715,16 +735,18 @@ def generate_surface_of_revolution(
     """
     n = len(angle_discr)
     m = len(height_discr)
-    vertices = np.zeros((3, n*m))
+
     theta, h = np.meshgrid(angle_discr, height_discr)
     theta = theta.flatten()
     h = h.flatten()
     r = get_radius(h, theta)
+
+    vertices = np.zeros((3, n*m))
     vertices[0, :] = np.cos(theta)*r
     vertices[1, :] = np.sin(theta)*r
     vertices[2, :] = h
 
-    tris = []
+    tris: list[list[int]] = []
     for i in range(m-1):
         for j in range(n):
             tris.append([i*n + j, (i + 1)*n + j, (i + 1)*n + (j + 1) % n])
@@ -741,7 +763,7 @@ def generate_surface_of_revolution(
             is_conforming=True)
 
     # ensure vertices and nodes are still on the surface with radius r
-    def ensure_radius(arr: np.ndarray) -> np.ndarray:
+    def ensure_radius(arr: NDArray[np.floating]) -> NDArray[np.floating]:
         res = arr.copy()
         h = res[2, :].flatten()
         theta = np.arctan2(res[1, :].flatten(), res[0, :].flatten())
@@ -771,8 +793,9 @@ def generate_torus_and_cycle_vertices(
         n_minor: int = 10,
         order: int = 1,
         node_vertex_consistency_tolerance: float | bool | None = None,
-        unit_nodes: np.ndarray | None = None,
-        r_minor_func: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None,
+        unit_nodes: NDArray[np.floating] | None = None,
+        r_minor_func: Callable[[NDArray[np.floating], NDArray[np.floating]],
+                               NDArray[np.floating]] | None = None,
         group_cls: type[MeshElementGroup] | None = None,
         ) -> tuple[Mesh, list[int], list[int]]:
     """
@@ -787,8 +810,10 @@ def generate_torus_and_cycle_vertices(
         *n_major* points around the major radius of the torus.
     """
 
-    def default_func(u: np.ndarray, v: np.ndarray) -> np.ndarray:
-        return 1.0
+    def default_func(
+            u: NDArray[np.floating], v: NDArray[np.floating],
+        ) -> NDArray[np.floating]:
+        return 1.0  # pyright: ignore[reportReturnType]
 
     a = r_major
     b = r_minor
@@ -903,7 +928,7 @@ def generate_torus(
         *,
         order: int = 1,
         node_vertex_consistency_tolerance: float | bool | None = None,
-        unit_nodes: np.ndarray | None = None,
+        unit_nodes: NDArray[np.floating] | None = None,
         group_cls: type[MeshElementGroup] | None = None) -> Mesh:
     r"""Generate a torus.
 
@@ -989,7 +1014,7 @@ def generate_cruller(
         *,
         order: int = 1,
         node_vertex_consistency_tolerance: float | bool | None = None,
-        unit_nodes: np.ndarray | None = None,
+        unit_nodes: NDArray[np.floating] | None = None,
         group_cls: type[MeshElementGroup] | None = None) -> Mesh:
     r"""Generate a "cruller" (as the pastry) like geometry.
 
@@ -1055,7 +1080,9 @@ def refine_mesh_and_get_urchin_warper(
     """
     from scipy.special import sph_harm_y
 
-    def sph_harm(m: int, n: int, pts: np.ndarray) -> np.ndarray:
+    def sph_harm(
+            m: int, n: int, pts: NDArray[np.floating]
+        ) -> NDArray[np.complexfloating]:
         assert abs(m) <= n
         x, y, z = pts
         r = np.sqrt(np.sum(pts**2, axis=0))
@@ -1066,7 +1093,7 @@ def refine_mesh_and_get_urchin_warper(
         # https://arxiv.org/abs/1805.06106
         return sph_harm_y(n, m, theta, phi)
 
-    def map_coords(pts: np.ndarray) -> np.ndarray:
+    def map_coords(pts: NDArray[np.floating]) -> NDArray[np.floating]:
         r = np.sqrt(np.sum(pts**2, axis=0))
 
         sph = sph_harm(m, n, pts).real
@@ -1141,7 +1168,7 @@ def generate_urchin(
 # {{{ generate_box_mesh
 
 def generate_box_mesh(
-        axis_coords: tuple[np.ndarray, ...],
+        axis_coords: tuple[NDArray[np.floating], ...],
         order: int = 1, *,
         coord_dtype: Any = np.float64,
         vertex_id_dtype: Any = np.int32,
@@ -1149,9 +1176,9 @@ def generate_box_mesh(
         face_id_dtype: Any = np.int8,
         periodic: tuple[bool, ...] | None = None,
         group_cls: type[MeshElementGroup] | None = None,
-        boundary_tag_to_face: dict[Any, str] | None = None,
+        boundary_tag_to_face: dict[Any, list[str]] | None = None,
         mesh_type: str | None = None,
-        unit_nodes: np.ndarray | None = None) -> Mesh:
+        unit_nodes: NDArray[np.floating] | None = None) -> Mesh:
     r"""Create a semi-structured mesh.
 
     :arg axis_coords: a tuple with a number of entries corresponding
@@ -1318,7 +1345,8 @@ def generate_box_mesh(
         nelements = nsubelements * product(shape_m1)
 
         if nelements > 0:
-            base_idx_tuples = np.array(list(np.ndindex(shape_m1)))
+            base_idx_tuples = np.array(list(np.ndindex(shape_m1)),
+                                       dtype=vertex_id_dtype)
 
             i0 = base_idx_tuples[:, 0]
             j0 = base_idx_tuples[:, 1]
@@ -1341,7 +1369,7 @@ def generate_box_mesh(
 
             elif mesh_type == "X":
                 m = midpoint_indices[i0, j0]
-                subelement_to_vertices = [
+                subelement_to_vertices: list[list[NDArray[np.integer]]] = [
                     [a00, a10, m],
                     [a10, a11, m],
                     [a11, a01, m],
@@ -1415,7 +1443,8 @@ def generate_box_mesh(
         nelements = nsubelements * product(shape_m1)
 
         if nelements > 0:
-            base_idx_tuples = np.array(list(np.ndindex(shape_m1)))
+            base_idx_tuples = np.array(list(np.ndindex(shape_m1)),
+                                       dtype=vertex_id_dtype)
 
             i0 = base_idx_tuples[:, 0]
             j0 = base_idx_tuples[:, 1]
@@ -1492,15 +1521,15 @@ def generate_box_mesh(
 
     for idim in range(dim):
         if periodic[idim]:
-            lower_face = "-" + axes[idim]
-            upper_face = "+" + axes[idim]
-            boundary_tag_to_face["periodic_" + lower_face] = [lower_face]
-            boundary_tag_to_face["periodic_" + upper_face] = [upper_face]
+            lower_face = f"-{axes[idim]}"
+            upper_face = f"+{axes[idim]}"
+            boundary_tag_to_face[f"periodic_{lower_face}"] = [lower_face]
+            boundary_tag_to_face[f"periodic_{upper_face}"] = [upper_face]
 
     # {{{ compute facial adjacency for mesh if there is tag information
 
     facial_adjacency_groups = None
-    face_vertex_indices_to_tags = {}
+    face_vertex_indices_to_tags: dict[frozenset[int], list[str]] = {}
 
     if boundary_tag_to_face:
         box_face_to_tags = {}
@@ -1550,6 +1579,7 @@ def generate_box_mesh(
                     face_vertex_indices_to_tags[frozenset(fvi)] = tags
 
         from meshmode.mesh import _compute_facial_adjacency_from_vertices
+
         facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
                 [grp], element_id_dtype, face_id_dtype, face_vertex_indices_to_tags)
     else:
@@ -1565,17 +1595,18 @@ def generate_box_mesh(
             face_id_dtype=face_id_dtype)
 
     if any(periodic):
-        from meshmode import AffineMap
         from meshmode.mesh.processing import BoundaryPairMapping, glue_mesh_boundaries
-        bdry_pair_mappings_and_tols = []
+        from meshmode.mesh.tools import AffineMap
+
+        bdry_pair_mappings_and_tols: list[tuple[BoundaryPairMapping, int]] = []
         for idim in range(dim):
             if periodic[idim]:
                 offset = np.zeros(dim, dtype=coord_dtype)
                 offset[idim] = axis_coords[idim][-1] - axis_coords[idim][0]
                 bdry_pair_mappings_and_tols.append((
                     BoundaryPairMapping(
-                        "periodic_-" + axes[idim],
-                        "periodic_+" + axes[idim],
+                        f"periodic_-{axes[idim]}",
+                        f"periodic_+{axes[idim]}",
                         AffineMap(offset=offset)),
                     1e-12*offset[idim]))
 
@@ -1593,16 +1624,20 @@ def generate_box_mesh(
 def generate_regular_rect_mesh(
         a: Sequence[float] = (0, 0),
         b: Sequence[float] = (1, 1), *,
-        nelements_per_axis: int | tuple[int, ...] | None = None,
-        npoints_per_axis: int | tuple[int, ...] | None = None,
-        periodic: bool | None = None,
+        nelements_per_axis: tuple[int, ...] | None = None,
+        npoints_per_axis: tuple[int, ...] | None = None,
+        periodic: tuple[bool, ...] | None = None,
         order: int = 1,
-        boundary_tag_to_face: dict[Any, str] | None = None,
+        boundary_tag_to_face: dict[Any, list[str]] | None = None,
         group_cls: type[MeshElementGroup] | None = None,
         mesh_type: str | None = None,
         n: int | None = None,
         ) -> Mesh:
     """Create a semi-structured rectangular mesh with equispaced elements.
+
+    .. note::
+
+        Specify only one of *nelements_per_axis* and *npoints_per_axis*.
 
     :arg a: the lower left hand point of the rectangle.
     :arg b: the upper right hand point of the rectangle.
@@ -1618,42 +1653,41 @@ def generate_regular_rect_mesh(
         See :func:`generate_box_mesh`.
     :arg group_cls: see :func:`generate_box_mesh`.
     :arg mesh_type: see :func:`generate_box_mesh`.
-
-    .. note::
-
-        Specify only one of *nelements_per_axis* and *npoints_per_axis*.
     """
     if n is not None:
         from warnings import warn
-        warn("n parameter to generate_regular_rect_mesh is deprecated. Use "
-                "nelements_per_axis or npoints_per_axis instead. "
-                "n will disappear in 2022.",
+        warn("Argument 'n' to 'generate_regular_rect_mesh' is deprecated. Use "
+                "'nelements_per_axis' or 'npoints_per_axis' instead. "
+                "'n' will be removed in 2022.",
                 DeprecationWarning, stacklevel=2)
+
         if nelements_per_axis is not None:
-            raise TypeError("cannot specify both nelements_per_axis and n")
+            raise TypeError("cannot specify both 'nelements_per_axis' and 'n'")
         if npoints_per_axis is not None:
-            raise TypeError("cannot specify both npoints_per_axis and n")
-        npoints_per_axis = n
+            raise TypeError("cannot specify both 'npoints_per_axis' and 'n'")
+
+        npoints_per_axis = (n,) * len(a)
     else:
         if npoints_per_axis is not None:
             if nelements_per_axis is not None:
-                raise TypeError("cannot specify both nelements_per_axis and "
-                    "npoints_per_axis")
+                raise TypeError(
+                    "cannot specify both 'nelements_per_axis' and 'npoints_per_axis'")
         elif nelements_per_axis is not None:
             npoints_per_axis = tuple(
                 nel_i+1 if nel_i > 0 else 0
                 for nel_i in nelements_per_axis)
         else:
-            raise TypeError("Must specify nelements_per_axis or "
-                "npoints_per_axis")
+            raise TypeError(
+                "must specify 'nelements_per_axis' or 'npoints_per_axis'")
 
     if any(npoints_i == 1 for npoints_i in npoints_per_axis):
         raise ValueError("cannot have a single point along any axis, that would "
             "be a surface mesh. (If you want one of those, make a box mesh of "
             "lower topological dimension and map it.)")
 
-    axis_coords = [np.linspace(a_i, b_i, npoints_i)
-            for a_i, b_i, npoints_i in zip(a, b, npoints_per_axis, strict=False)]
+    axis_coords = tuple(
+        np.linspace(a_i, b_i, npoints_i)
+        for a_i, b_i, npoints_i in zip(a, b, npoints_per_axis, strict=False))
 
     return generate_box_mesh(axis_coords, order=order,
                              periodic=periodic,
@@ -1677,19 +1711,20 @@ def generate_warped_rect_mesh(
     """
     if n is not None:
         from warnings import warn
-        warn("n parameter to generate_warped_rect_mesh is deprecated. Use "
-                "nelements_side or npoints_side instead. n will disappear "
-                "in 2022.", DeprecationWarning, stacklevel=2)
+        warn("Argument 'n' to 'generate_warped_rect_mesh' is deprecated. Use "
+                "'nelements_side' or 'npoints_side' instead. 'n' will be "
+                "removed in 2022.", DeprecationWarning, stacklevel=2)
+
         if nelements_side is not None:
-            raise TypeError("cannot specify both nelements_side and n")
+            raise TypeError("cannot specify both 'nelements_side' and 'n'")
         if npoints_side is not None:
-            raise TypeError("cannot specify both npoints_side and n")
+            raise TypeError("cannot specify both 'npoints_side' and 'n'")
         npoints_side = n
     else:
         if npoints_side is not None:
             if nelements_side is not None:
-                raise TypeError("cannot specify both nelements_side and "
-                    "npoints_side")
+                raise TypeError(
+                    "cannot specify both 'nelements_side' and 'npoints_side'")
         elif nelements_side is not None:
             npoints_side = nelements_side + 1
 
@@ -1701,7 +1736,7 @@ def generate_warped_rect_mesh(
             a=(-0.5,)*dim, b=(0.5,)*dim,
             npoints_per_axis=npoints_per_axis, order=order, group_cls=group_cls)
 
-    def m(x: np.ndarray) -> np.ndarray:
+    def m(x: NDArray[np.floating]) -> NDArray[np.floating]:
         result = np.empty_like(x)
         if len(x) >= 2:
             result[0] = (
@@ -1726,7 +1761,11 @@ def generate_warped_rect_mesh(
 # {{{ generate_annular_cylinder_slice_mesh
 
 def generate_annular_cylinder_slice_mesh(
-        n: int, center: np.ndarray, inner_radius: float, outer_radius: float,
+        n: int,
+        center: NDArray[np.floating],
+        inner_radius: float,
+        outer_radius: float,
+        *,
         periodic: bool = False) -> Mesh:
     r"""
     Generate a slice of a 3D annular cylinder for
@@ -1746,7 +1785,9 @@ def generate_annular_cylinder_slice_mesh(
             "+z": ["+z"],
             })
 
-    def transform(x: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def transform(
+            x: NDArray[np.floating]
+        ) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
         r = inner_radius*(1 - x[0]) + outer_radius*x[0]
         theta = -np.pi/4*(1 - x[1]) + np.pi/4*x[1]
         z = -0.5*(1 - x[2]) + 0.5*x[2]
@@ -1760,8 +1801,8 @@ def generate_annular_cylinder_slice_mesh(
 
     if periodic:
         from meshmode.mesh.processing import _get_rotation_matrix_from_angle_and_axis
-        matrix = _get_rotation_matrix_from_angle_and_axis(
-            np.pi/2, np.array([0, 0, 1]))
+        matrix = _get_rotation_matrix_from_angle_and_axis(np.pi/2, np.array([0, 0, 1]))
+
         from meshmode.mesh.tools import AffineMap
         aff_map = AffineMap(matrix, center - matrix @ center)
 
@@ -1817,14 +1858,16 @@ def warp_and_refine_until_resolved(
         refine_flags = np.zeros(unwarped_mesh.nelements, dtype=bool)
 
         warped_mesh = warp_callable(unwarped_mesh)
+        vertices = warped_mesh.vertices
+        assert vertices is not None
 
         # test whether there are invalid values in warped mesh
-        if not np.isfinite(warped_mesh.vertices).all():
+        if not np.all(np.isfinite(vertices)):
             raise FloatingPointError("Warped mesh contains non-finite vertices "
                                      "(NaN or Inf)")
 
         for group in warped_mesh.groups:
-            if not np.isfinite(group.nodes).all():
+            if not np.all(np.isfinite(group.nodes)):
                 raise FloatingPointError("Warped mesh contains non-finite nodes "
                                          "(NaN or Inf)")
 
