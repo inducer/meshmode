@@ -11,14 +11,17 @@ logger = logging.getLogger(__file__)
 def make_example_mesh(ambient_dim: int, nelements: int, order: int) -> Mesh:
     import meshmode.mesh.generation as mgen
     if ambient_dim == 2:
-        return mgen.make_curve_mesh(
+        mesh = mgen.make_curve_mesh(
             mgen.starfish,
             np.linspace(0.0, 1.0, nelements + 1),
             order=order)
+        assert isinstance(mesh, Mesh)
     else:
-        return mgen.generate_torus(4.0, 2.0,
+        mesh = mgen.generate_torus(4.0, 2.0,
             n_major=nelements, n_minor=nelements // 2,
             order=order)
+
+    return mesh
 
 
 def main(*, ambient_dim: int) -> None:
