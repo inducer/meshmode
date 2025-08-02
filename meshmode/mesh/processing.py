@@ -50,7 +50,7 @@ from meshmode.mesh.tools import AffineMap, find_point_to_point_mapping
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Hashable, Mapping, Sequence
 
 
 __doc__ = """
@@ -1044,13 +1044,13 @@ class BoundaryPairMapping:
         An :class:`meshmode.AffineMap` that maps points on boundary *from_btag* into
         points on boundary *to_btag*.
     """
-    from_btag: int
-    to_btag: int
+    from_btag: Hashable
+    to_btag: Hashable
     aff_map: AffineMap
 
 
-def _get_boundary_face_ids(mesh: Mesh, btag: int) -> _FaceIDs:
-    face_ids_per_boundary_group = []
+def _get_boundary_face_ids(mesh: Mesh, btag: Hashable) -> _FaceIDs:
+    face_ids_per_boundary_group: list[_FaceIDs] = []
     for igrp, fagrp_list in enumerate(mesh.facial_adjacency_groups):
         matching_bdry_grps = [
             fagrp for fagrp in fagrp_list
