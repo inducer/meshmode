@@ -24,7 +24,7 @@ THE SOFTWARE.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import numpy as np
 import numpy.linalg as la
@@ -379,6 +379,27 @@ starfish = starfish5
 
 
 # {{{ make_curve_mesh
+
+@overload
+def make_curve_mesh(
+        curve_f: Callable[[NDArray[np.floating]], NDArray[np.floating]],
+        element_boundaries: NDArray[np.floating], order: int, *,
+        unit_nodes: NDArray[np.floating] | None = None,
+        node_vertex_consistency_tolerance: float | bool | None = None,
+        closed: bool = True,
+        return_parametrization_points: Literal[False] = False,
+        ) -> Mesh: ...
+
+@overload
+def make_curve_mesh(
+        curve_f: Callable[[NDArray[np.floating]], NDArray[np.floating]],
+        element_boundaries: NDArray[np.floating], order: int, *,
+        unit_nodes: NDArray[np.floating] | None = None,
+        node_vertex_consistency_tolerance: float | bool | None = None,
+        closed: bool = True,
+        return_parametrization_points: Literal[True]
+        ) -> tuple[Mesh, NDArray[np.floating]]: ...
+
 
 def make_curve_mesh(
         curve_f: Callable[[NDArray[np.floating]], NDArray[np.floating]],
