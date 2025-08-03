@@ -43,6 +43,7 @@ sphinxconfig_missing_reference_aliases = {
     "np.bool": "class:numpy.bool",
     "np.complexfloating": "class:numpy.complexfloating",
     "np.floating": "class:numpy.floating",
+    "np.dtype": "class:numpy.dtype",
     "np.random.Generator": "class:numpy.random.Generator",
     # pytools
     "ObjectArray": "class:pytools.obj_array.ObjectArray",
