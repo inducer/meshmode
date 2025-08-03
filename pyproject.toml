@@ -153,6 +153,9 @@ extend-ignore-re = [
 "mananger" = "mananger"
 
 [tool.basedpyright]
+pythonVersion = "3.10"
+pythonPlatform = "All"
+
 reportImplicitStringConcatenation = "none"
 reportUnnecessaryIsInstance = "none"
 reportUnusedCallResult = "none"
@@ -171,9 +174,6 @@ reportImportCycles = "none"
 ignore = [
     "doc/conf.py",
 ]
-
-pythonVersion = "3.10"
-pythonPlatform = "All"
 
 [[tool.basedpyright.executionEnvironments]]
 root = "test"

@@ -23,13 +23,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from typing import TYPE_CHECKING, cast
 from warnings import warn
 
 import numpy as np
 import numpy.linalg as la
+from typing_extensions import override
 
 from pytools.spatial_btree import SpatialBinaryTreeBucket
 
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike, NDArray
 
 __doc__ = """
 .. autofunction:: find_point_to_point_mapping
@@ -149,26 +154,31 @@ class AffineMap:
     .. automethod:: __ne__
     """
 
-    def __init__(self, matrix=None, offset=None):
+    matrix: NDArray[np.floating] | None
+    offset: NDArray[np.floating] | None
+
+    def __init__(self,
+                 matrix: ArrayLike | None = None,
+                 offset: ArrayLike | None = None):
         """
         :arg matrix: A :class:`numpy.ndarray` (or something convertible to one),
             or *None*.
         :arg offset: A :class:`numpy.ndarray` (or something convertible to one),
             or *None*.
         """
-        def promote_to_numpy(array):
+        def promote_to_numpy(array: ArrayLike | None) -> NDArray[np.floating] | None:
             if array is not None:
                 if isinstance(array, np.ndarray):
-                    return array
+                    return cast("NDArray[np.floating]", array)
                 else:
-                    return np.array(array)
+                    return np.asarray(array)
             else:
                 return None
 
         self.matrix = promote_to_numpy(matrix)
         self.offset = promote_to_numpy(offset)
 
-    def inverted(self):
+    def inverted(self) -> AffineMap:
         """Return the inverse affine map."""
         if self.matrix is not None:
             inv_matrix = la.inv(self.matrix)
@@ -184,7 +194,7 @@ class AffineMap:
                 inv_offset = None
         return AffineMap(inv_matrix, inv_offset)
 
-    def __call__(self, vecs):
+    def __call__(self, vecs: NDArray[np.floating]) -> NDArray[np.floating]:
         """Apply the affine map to an array *vecs* whose first axis
         length matches ``matrix.shape[1]``.
         """
@@ -192,11 +202,17 @@ class AffineMap:
             result = np.einsum("ij,j...->i...", self.matrix, vecs)
         else:
             result = vecs.copy()
+
         if self.offset is not None:
             result += self.offset.reshape(-1, *((1,) * (vecs.ndim-1)))
+
         return result
 
-    def __eq__(self, other):
+    @override
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, AffineMap):
+            return False
+
         def component_equal(array1, array2):
             if isinstance(array1, np.ndarray) and isinstance(array2, np.ndarray):
                 return np.array_equal(array1, array2)
@@ -207,7 +223,8 @@ class AffineMap:
             component_equal(self.matrix, other.matrix)
             and component_equal(self.offset, other.offset))
 
-    def __ne__(self, other):
+    @override
+    def __ne__(self, other: object) -> bool:
         return not self.__eq__(other)
 
 # }}}
