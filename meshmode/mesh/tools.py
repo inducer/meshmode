@@ -28,8 +28,6 @@ from warnings import warn
 import numpy as np
 import numpy.linalg as la
 
-from modepy.tools import hypercube_submesh
-from pytools import MovedFunctionDeprecationWrapper
 from pytools.spatial_btree import SpatialBinaryTreeBucket
 
 
@@ -62,13 +60,6 @@ def make_element_lookup_tree(mesh, eps=1e-12):
             tree.insert((igrp, iel_grp), (el_bbox_min, el_bbox_max))
 
     return tree
-
-# }}}
-
-
-# {{{ nd_quad_submesh
-
-nd_quad_submesh = MovedFunctionDeprecationWrapper(hypercube_submesh)
 
 # }}}
 
