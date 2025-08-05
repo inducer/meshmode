@@ -38,12 +38,15 @@ intersphinx_mapping = {
 
 sphinxconfig_missing_reference_aliases = {
     # numpy
+    "ArrayLike": "obj:numpy.typing.ArrayLike",
     "DTypeLike": "obj:numpy.typing.DTypeLike",
     "NDArray": "obj:numpy.typing.NDArray",
     "np.bool": "class:numpy.bool",
     "np.complexfloating": "class:numpy.complexfloating",
-    "np.floating": "class:numpy.floating",
     "np.dtype": "class:numpy.dtype",
+    "np.floating": "class:numpy.floating",
+    "np.generic": "class:numpy.generic",
+    "np.integer": "class:numpy.integer",
     "np.random.Generator": "class:numpy.random.Generator",
     # pytools
     "ObjectArray": "class:pytools.obj_array.ObjectArray",
