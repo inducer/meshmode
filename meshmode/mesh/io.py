@@ -393,9 +393,11 @@ def generate_gmsh(
             extension: str = "geo",
             gmsh_executable: str = "gmsh",
             force_ambient_dim: int | None = None,
+            output_file_path: str | None = None,
             mesh_construction_kwargs: Mapping[str, Any] | None = None,
             target_unit: Literal["M", "MM"] | None = None,
             return_tag_to_elements_map: Literal[False] = False,
+            output_file_name: str | None = None,
         ) -> Mesh: ...
 
 
@@ -408,9 +410,11 @@ def generate_gmsh(
             extension: str = "geo",
             gmsh_executable: str = "gmsh",
             force_ambient_dim: int | None = None,
+            output_file_path: str | None = None,
             mesh_construction_kwargs: Mapping[str, Any] | None = None,
             target_unit: Literal["M", "MM"] | None = None,
             return_tag_to_elements_map: Literal[True],
+            output_file_name: str | None = None,
         ) -> tuple[Mesh, dict[str, IndexArray]]: ...
 
 
@@ -422,9 +426,11 @@ def generate_gmsh(
             extension: str = "geo",
             gmsh_executable: str = "gmsh",
             force_ambient_dim: int | None = None,
+            output_file_path: str | None = None,
             mesh_construction_kwargs: Mapping[str, Any] | None = None,
             target_unit: Literal["M", "MM"] | None = None,
-            return_tag_to_elements_map: bool = False
+            return_tag_to_elements_map: bool = False,
+            output_file_name: str | None = None,
         ) -> tuple[Mesh, dict[str, IndexArray]] | Mesh:
     """Run :command:`gmsh` on the input given by *source*, and return a
     :class:`meshmode.mesh.Mesh` based on the result.
@@ -453,10 +459,29 @@ def generate_gmsh(
                 "Not specifying target_unit is deprecated. Set target_unit='MM' "
                 "to retain prior behavior.", DeprecationWarning, stacklevel=2)
 
+    if output_file_name is not None:
+        from warnings import warn
+        warn(
+            "output_file_name is deprecated and will be removed in Q1 2026. "
+            "Use output_file_path instead.", DeprecationWarning, stacklevel=2)
+        output_file_path = output_file_name
+
+    if output_file_path is not None:
+        import os
+        output_file_name = os.path.basename(output_file_path)
+        save_output_file_in = os.path.dirname(output_file_path)
+        if not save_output_file_in:
+            save_output_file_in = os.getcwd()
+    else:
+        output_file_name = None
+        save_output_file_in = None
+
     with GmshRunner(source, dimensions, order=order,
             other_options=other_options, extension=extension,
             gmsh_executable=gmsh_executable,
-            target_unit=target_unit) as runner:
+            output_file_name=output_file_name,
+            target_unit=target_unit,
+            save_output_file_in=save_output_file_in) as runner:
         assert runner.output_file
         parse_gmsh(recv, runner.output_file,
                 force_dimension=force_ambient_dim)
