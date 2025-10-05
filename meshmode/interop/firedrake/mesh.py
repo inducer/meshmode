@@ -589,6 +589,7 @@ build_connection_from_firedrake`.
         raise TypeError("'fdrake_mesh_topology' must be an instance of "
                         "firedrake.mesh.MeshGeometry, "
                         "not '%s'." % type(fdrake_mesh))
+
     if cells_to_use is not None:
         if not isinstance(cells_to_use, np.ndarray):
             raise TypeError("'cells_to_use' must be a np.ndarray or "
@@ -598,21 +599,13 @@ build_connection_from_firedrake`.
             ":arg:`cells_to_use` must have unique entries"
         assert np.all(np.logical_and(cells_to_use >= 0,
                                      cells_to_use < fdrake_mesh.num_cells()))
+
     assert fdrake_mesh.ufl_cell().is_simplex(), "Mesh must use simplex cells"
     gdim = fdrake_mesh.geometric_dimension()
     tdim = fdrake_mesh.topological_dimension()
+
     assert gdim in [1, 2, 3], "Mesh must be in space of ambient dim 1, 2, or 3"
     assert gdim - tdim in [0, 1], "Mesh co-dimension must be 0 or 1"
-    # firedrake meshes are not guaranteed be fully instantiated until
-    # the .init() method is called. In particular, the coordinates function
-    # may not be accessible if we do not call init(). If the mesh has
-    # already been initialized, nothing will change. For more details
-    # on why we need a second initialization, see
-    # this pull request:
-    # https://github.com/firedrakeproject/firedrake/pull/627
-    # which details how Firedrake implements a mesh's coordinates
-    # as a function on that very same mesh
-    fdrake_mesh.init()
 
     # Get all the nodal information we can from the topology
     with ProcessLogger(logger, "Retrieving vertex indices and computing "
@@ -901,7 +894,6 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
         #      vertices from being (locally) reordered on each cell...
         #      the tl;dr is we don't actually save any hassle
         top = fd_mesh.Mesh(plex, dim=mesh.ambient_dim)  # mesh topology
-        top.init()
 
     # Get new element ordering:
     with ProcessLogger(logger, "Determining permutations applied"

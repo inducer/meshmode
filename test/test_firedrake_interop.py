@@ -116,10 +116,7 @@ def make_firedrake_mesh(name: str):
 
     # Firedrake can't read in higher order meshes from gmsh,
     # so we can only use the order1 blobs
-    fd_mesh = Mesh(name)
-    fd_mesh.init()
-
-    return fd_mesh
+    return Mesh(name)
 
 
 # {{{ Basic conversion checks for the function space
