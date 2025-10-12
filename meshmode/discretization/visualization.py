@@ -29,10 +29,10 @@ THE SOFTWARE.
 import logging
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import numpy as np
-from typing_extensions import TypeIs
+from typing_extensions import TypeIs, override
 
 import pytools.obj_array as obj_array
 from arraycontext import (
@@ -54,7 +54,7 @@ from meshmode.transform_metadata import DiscretizationFlattenedDOFAxisTag
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
 
     from numpy.typing import NDArray
 
@@ -75,14 +75,15 @@ __doc__ = """
 .. autofunction:: write_nodal_adjacency_vtk_file
 """
 
+IndexArray: TypeAlias = "NDArray[np.integer]"
+
 
 # {{{ helpers
 
 def separate_by_real_and_imag(
-            names_and_fields: Sequence[tuple[str,
-                    NDArray[np.inexact]]],
+            names_and_fields: Sequence[tuple[str, NDArray[np.inexact]]],
             real_only: bool,
-        ):
+        ) -> Iterator[tuple[str, ArrayOrContainerOrScalar]]:
     """
     :arg names_and_fields: input data array must be already flattened into a
         single :mod:`numpy` array using :func:`_resample_to_numpy`.
@@ -251,7 +252,9 @@ class _VisConnectivityGroup:
         return self.vis_connectivity.shape[2]
 
 
-def _check_discr_same_connectivity(discr, other):
+def _check_discr_same_connectivity(
+            discr: Discretization, other: Discretization
+    ) -> bool:
     if len(discr.groups) != len(other.groups):
         return False
 
@@ -333,17 +336,17 @@ class VTKConnectivity:
     .. attribute:: groups
     """
 
-    def __init__(self, connection: DiscretizationConnection):
+    def __init__(self, connection: DiscretizationConnection) -> None:
         self.connection: DiscretizationConnection = connection
         self.discr: Discretization = connection.from_discr
         self.vis_discr: Discretization = connection.to_discr
 
     @property
-    def version(self):
+    def version(self) -> str:
         return "0.1"
 
     @property
-    def simplex_cell_types(self):
+    def simplex_cell_types(self) -> dict[int, int]:
         import pyvisfile.vtk as vtk
         return {
                 1: vtk.VTK_LINE,
@@ -352,7 +355,7 @@ class VTKConnectivity:
                 }
 
     @property
-    def tensor_cell_types(self):
+    def tensor_cell_types(self) -> dict[int, int]:
         import pyvisfile.vtk as vtk
         return {
                 1: vtk.VTK_LINE,
@@ -360,7 +363,8 @@ class VTKConnectivity:
                 3: vtk.VTK_HEXAHEDRON,
                 }
 
-    def connectivity_for_element_group(self, grp: ElementGroupBase):
+    def connectivity_for_element_group(
+                self, grp: ElementGroupBase) -> tuple[IndexArray, int]:
         import modepy as mp
 
         from meshmode.mesh import ModepyElementGroup
@@ -392,7 +396,7 @@ class VTKConnectivity:
 
     @property
     @memoize_method
-    def cells(self):
+    def cells(self) -> IndexArray:
         return np.hstack([
             vgrp.vis_connectivity.reshape(-1) for vgrp in self.groups
             ])
@@ -432,7 +436,7 @@ class VTKConnectivity:
 
     @property
     @memoize_method
-    def cell_types(self):
+    def cell_types(self) -> IndexArray:
         nsubelements = sum(vgrp.nsubelements for vgrp in self.groups)
         cell_types = np.empty(nsubelements, dtype=np.uint8)
         cell_types.fill(255)
@@ -452,11 +456,13 @@ class VTKLagrangeConnectivity(VTKConnectivity):
     """Connectivity for high-order Lagrange elements."""
 
     @property
-    def version(self):
+    @override
+    def version(self) -> str:
         return "2.0"
 
     @property
-    def simplex_cell_types(self):
+    @override
+    def simplex_cell_types(self) -> dict[int, int]:
         import pyvisfile.vtk as vtk
         return {
                 1: vtk.VTK_LAGRANGE_CURVE,
@@ -465,7 +471,8 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                 }
 
     @property
-    def tensor_cell_types(self):
+    @override
+    def tensor_cell_types(self) -> dict[int, int]:
         import pyvisfile.vtk as vtk
         return {
                 1: vtk.VTK_LAGRANGE_CURVE,
@@ -473,10 +480,13 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                 3: vtk.VTK_LAGRANGE_HEXAHEDRON,
                 }
 
-    def connectivity_for_element_group(self, grp):
+    @override
+    def connectivity_for_element_group(
+                self, grp: ElementGroupBase) -> tuple[IndexArray, int]:
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
-        vtk_version = tuple(int(v) for v in self.version.split("."))
+        vtk_major, vtk_minor = self.version.split(".")
+        vtk_version = (int(vtk_major), int(vtk_minor))
         if isinstance(grp.mesh_el_group, SimplexElementGroup):
             from pyvisfile.vtk.vtk_ordering import (
                 vtk_lagrange_simplex_node_tuples,
@@ -514,7 +524,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
 
     @property
     @memoize_method
-    def cells(self):
+    def cells(self) -> tuple[int, IndexArray, IndexArray]:
         connectivity = np.hstack([
             grp.vis_connectivity.reshape(-1)
             for grp in self.groups
@@ -552,20 +562,30 @@ class Visualizer:
     .. automethod:: copy_with_same_connectivity
     """
 
+    connection: DiscretizationConnection
+    discr: Discretization
+    vis_discr: Discretization
+
+    element_shrink_factor: float
+    is_equidistant: bool
+
+    _cached_vtk_linear_connectivity: VTKConnectivity | None
+    _cached_vtk_lagrange_connectivity: VTKConnectivity | None
+
     def __init__(self, connection: DiscretizationConnection,
             element_shrink_factor: float | None = None,
             is_equidistant: bool = False,
-            _vtk_linear_connectivity=None,
-            _vtk_lagrange_connectivity=None):
+            _vtk_linear_connectivity: VTKConnectivity | None = None,
+            _vtk_lagrange_connectivity: VTKConnectivity | None = None) -> None:
 
-        self.connection: DiscretizationConnection = connection
-        self.discr: Discretization = connection.from_discr
-        self.vis_discr: Discretization = connection.to_discr
+        self.connection = connection
+        self.discr = connection.from_discr
+        self.vis_discr = connection.to_discr
 
         if element_shrink_factor is None:
             element_shrink_factor = 1.0
-        self.element_shrink_factor: float = element_shrink_factor
-        self.is_equidistant: bool = is_equidistant
+        self.element_shrink_factor = element_shrink_factor
+        self.is_equidistant = is_equidistant
 
         self._cached_vtk_linear_connectivity = _vtk_linear_connectivity
         self._cached_vtk_lagrange_connectivity = _vtk_lagrange_connectivity
