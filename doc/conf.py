@@ -36,6 +36,10 @@ intersphinx_mapping = {
     "recursivenodes": ("https://tisaac.gitlab.io/recursivenodes", None),
 }
 
+nitpick_ignore_regex = [
+    ["py:class", r".*VTKConnectivity"],
+]
+
 sphinxconfig_missing_reference_aliases = {
     # numpy
     "ArrayLike": "obj:numpy.typing.ArrayLike",
