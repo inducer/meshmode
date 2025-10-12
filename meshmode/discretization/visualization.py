@@ -269,23 +269,29 @@ def _check_discr_same_connectivity(discr, other):
 # {{{ vtk submeshes
 
 @singledispatch
-def vtk_submesh_for_shape(shape: Shape, node_tuples):
+def vtk_submesh_for_shape(
+            shape: Shape, node_tuples: Sequence[tuple[int, ...]]
+    ) -> Sequence[tuple[int, ...]]:
     raise NotImplementedError(type(shape).__name__)
 
 
 @vtk_submesh_for_shape.register(Simplex)
-def _(shape: Simplex, node_tuples):
+def vtk_submesh_for_simplex(
+            shape: Simplex, node_tuples: Sequence[tuple[int, ...]]
+    ) -> Sequence[tuple[int, ...]]:
     import modepy as mp
     return mp.submesh_for_shape(shape, node_tuples)
 
 
 @vtk_submesh_for_shape.register(Hypercube)
-def _(shape: Hypercube, node_tuples):
+def vtk_submesh_for_hypercube(
+            shape: Hypercube, node_tuples: Sequence[tuple[int, ...]]
+    ) -> Sequence[tuple[int, ...]]:
     node_tuple_to_index = {nt: i for i, nt in enumerate(node_tuples)}
 
     # NOTE: this can't use mp.submesh_for_shape because VTK vertex order is
     # counterclockwise instead of z order
-    el_offsets = {
+    el_offsets: list[tuple[int, ...]] = {
             1: [(0,), (1,)],
             2: [(0, 0), (1, 0), (1, 1), (0, 1)],
             3: [
@@ -301,7 +307,8 @@ def _(shape: Hypercube, node_tuples):
             }[shape.dim]
 
     from pytools import add_tuples
-    elements = []
+
+    elements: list[tuple[int, ...]] = []
     for origin in node_tuples:
         try:
             elements.append(tuple(
