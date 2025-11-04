@@ -619,7 +619,8 @@ def check_dofarray_against_discr(discr: Discretization, dof_ary: DOFArray):
         against which *dof_ary* is to be checked.
     """
     if not isinstance(dof_ary, DOFArray):
-        raise TypeError("non-array passed to check_dofarray_against_discr")
+        raise TypeError(
+            f"invalid class passed to 'check_dofarray_against_discr': {type(dof_ary)}")
 
     if len(dof_ary) != len(discr.groups):
         raise InconsistentDOFArray(
