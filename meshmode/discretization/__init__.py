@@ -389,7 +389,7 @@ class Discretization:
                  actx: ArrayContext,
                  mesh: Mesh,
                  group_factory: ElementGroupFactory,
-                 real_dtype: DTypeLike = None,
+                 real_dtype: DTypeLike | None = None,
                  _force_actx_clone: bool = True) -> None:
         """
         :arg actx: an :class:`arraycontext.ArrayContext` used to perform
@@ -485,7 +485,7 @@ class Discretization:
     def _new_array(self,
                 actx: ArrayContext,
                 creation_func: Callable[[tuple[int, int], np.dtype[Any]], Array],
-                dtype: DTypeLike = None
+                dtype: DTypeLike | None = None
             ):
         if dtype is None:
             dtype = self.real_dtype
@@ -503,7 +503,7 @@ class Discretization:
                     1: DiscretizationDOFAxisTag()
                 }, result)
 
-    def empty(self, actx: ArrayContext, dtype: DTypeLike = None) -> _DOFArray:
+    def empty(self, actx: ArrayContext, dtype: DTypeLike | None = None) -> _DOFArray:
         """Return an empty :class:`~meshmode.dof_array.DOFArray`.
 
         :arg dtype: type special value 'c' will result in a
@@ -519,7 +519,7 @@ class Discretization:
 
         return self._new_array(actx, actx.np.zeros, dtype=dtype)
 
-    def zeros(self, actx: ArrayContext, dtype: DTypeLike = None) -> _DOFArray:
+    def zeros(self, actx: ArrayContext, dtype: DTypeLike | None = None) -> _DOFArray:
         """Return a zero-initialized :class:`~meshmode.dof_array.DOFArray`.
 
         :arg dtype: type special value 'c' will result in a
