@@ -307,7 +307,7 @@ def _find_src_unit_nodes_via_gauss_newton(
         niter += 1
         if niter > 10:
             raise RuntimeError("Gauss-Newton (for finding opposite-face reference "
-                    "coordinates) did not converge (residual: %g)" % max_resid)
+                    f"coordinates) did not converge (residual: {max_resid})")
 
     raise AssertionError()
 

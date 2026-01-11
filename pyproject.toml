@@ -83,9 +83,9 @@ extend-select = [
     "NPY",  # numpy
     "Q",    # flake8-quotes
     "RUF",  # ruff
+    "TC",   # flake8-type-checking
     "UP",   # pyupgrade
     "W",    # pycodestyle
-    "TC",
 ]
 extend-ignore = [
     "C90",  # McCabe complexity
@@ -98,7 +98,6 @@ extend-ignore = [
     "N803", # argument name should be lowercase
     "N806", # variable name should be lowercase
     "N818", # error suffix in exception names
-    "UP031", # use f-strings instead of % format
     "UP032", # use f-strings instead of .format
     "RUF067", # no code in __init__ *shrug*
 ]

@@ -187,8 +187,7 @@ def test_boundary_interpolation(
         # }}}
 
         vol_discr = Discretization(actx, mesh, group_factory(order))
-        print("h=%s -> %d elements" % (
-                h, sum(mgrp.nelements for mgrp in mesh.groups)))
+        print(f"h={h} -> {mesh.nelements} elements")
 
         x = actx.thaw(vol_discr.nodes()[0])
         vol_f = f(x)
@@ -300,8 +299,7 @@ def test_all_faces_interpolation(actx_factory: ArrayContextFactory, group_factor
         # }}}
 
         vol_discr = Discretization(actx, mesh, group_factory(order))
-        print("h=%s -> %d elements" % (
-                h, sum(mgrp.nelements for mgrp in mesh.groups)))
+        print(f"h={h} -> {mesh.nelements} elements")
 
         all_face_bdry_connection = make_face_restriction(
                 actx, vol_discr, group_factory(order),
@@ -453,8 +451,7 @@ def test_opposite_face_interpolation(actx_factory: ArrayContextFactory, group_fa
         # }}}
 
         vol_discr = Discretization(actx, mesh, group_factory(order))
-        print("h=%s -> %d elements" % (
-                h, sum(mgrp.nelements for mgrp in mesh.groups)))
+        print(f"h={h} -> {mesh.nelements} elements")
 
         bdry_connection = make_face_restriction(
                 actx, vol_discr, group_factory(order),

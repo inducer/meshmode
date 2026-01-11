@@ -236,9 +236,7 @@ class NodalToModalDiscretizationConnection(DiscretizationConnection):
             else:
                 raise NotImplementedError(
                     "Don't know how to project from group types "
-                    "%s to %s" % (grp.__class__.__name__,
-                                  mgrp.__class__.__name__)
-                    )
+                    f"{grp.__class__} to {grp.__class__}")
 
             result_data.append(output)
 

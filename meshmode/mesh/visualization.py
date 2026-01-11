@@ -102,7 +102,7 @@ def draw_2d_mesh(
                 if len(mesh.groups) == 1:
                     el_label = str(iel)
                 else:
-                    el_label = "%d:%d" % (igrp, iel)
+                    el_label = f"{igrp}:{iel}"
 
                 pt.text(centroid[0], centroid[1], el_label, fontsize=17,
                         ha="center", va="center",
@@ -207,7 +207,7 @@ def draw_curve(
     for i, group in enumerate(mesh.groups):
         plt.plot(
                 group.nodes[0].T,
-                group.nodes[1].T, node_style, label="Group %d" % i,
+                group.nodes[1].T, node_style, label=f"Group {i}",
                 **node_kwargs)
 
 # }}}
@@ -312,8 +312,8 @@ def write_vertex_vtk_file(
 def mesh_to_tikz(mesh: Mesh) -> str:
     lines = []
 
-    lines.append(r"\def\nelements{%s}" % mesh.nelements)
-    lines.append(r"\def\nvertices{%s}" % mesh.nvertices)
+    lines.append(fr"\def\nelements{{{mesh.nelements}}}")
+    lines.append(fr"\def\nvertices{{{mesh.nvertices}}}")
     lines.append("")
 
     drawel_lines = []
@@ -325,17 +325,17 @@ def mesh_to_tikz(mesh: Mesh) -> str:
             elverts = mesh.vertices[:, el]
 
             centroid = np.average(elverts, axis=1)
-            lines.append(r"\coordinate (cent%d) at (%s);"
-                    % (el_nr, ", ".join(f"{vi:.5f}" for vi in centroid)))
+            coords = ", ".join(f"{vi:.5f}" for vi in centroid)
+            lines.append(fr"\coordinate (cent{el_nr}) at ({coords});")
 
             for ivert, vert in enumerate(elverts.T):
-                lines.append(r"\coordinate (v%d-%d) at (%s);"
-                        % (el_nr, ivert+1, ", ".join(f"{vi:.5f}" for vi in vert)))
-            drawel_lines.append(
-                    r"\draw [#1] %s -- cycle;"
-                    % " -- ".join(
-                        "(v%d-%d)" % (el_nr, vi+1)
-                        for vi in range(elverts.shape[1])))
+                coords = ", ".join(f"{vi:.5f}" for vi in vert)
+                lines.append(fr"\coordinate (v{el_nr}-{ivert + 1}) at ({coords});")
+
+            cycle = " -- ".join(f"(v{el_nr}-{vi + 1})"
+                                for vi in range(elverts.shape[1]))
+            drawel_lines.append(fr"\draw [#1] {cycle} -- cycle;")
+
     drawel_lines.append("}")
     lines.append("")
 

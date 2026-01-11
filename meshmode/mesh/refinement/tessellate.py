@@ -161,7 +161,7 @@ def _midpoint_tuples(a, b):
     def midpoint(x, y):
         d, r = divmod(x + y, 2)
         if r:
-            raise ValueError("%s is not evenly divisible by two" % x)
+            raise ValueError(f"'{x}' is not evenly divisible by two")
 
         return d
 

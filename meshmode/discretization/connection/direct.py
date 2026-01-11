@@ -402,10 +402,10 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             if len(from_grp_basis_fcts) != nfrom_unit_nodes:
                 from meshmode.discretization import NoninterpolatoryElementGroupError
                 raise NoninterpolatoryElementGroupError(
-                        "%s does not support interpolation because it is not "
-                        "unisolvent (its unit node count does not match its "
+                        f"{type(from_grp)} does not support interpolation because "
+                        "it is not unisolvent (its unit node count does not match its "
                         "number of basis functions). Using connections requires "
-                        "the ability to interpolate." % type(from_grp).__name__)
+                        "the ability to interpolate.")
 
             result = mp.resampling_matrix(
                     from_grp_basis_fcts,
