@@ -88,6 +88,13 @@ Predefined Boundary tags
 .. autoclass:: BTAG_INDUCED_BOUNDARY
 """
 
+IndexArray: TypeAlias = np.ndarray[tuple[int], np.dtype[np.integer[Any]]]
+
+VertexIndices: TypeAlias = np.ndarray[tuple[int, int], np.dtype[np.integer[Any]]]
+VertexArray: TypeAlias = np.ndarray[tuple[int, int], np.dtype[np.floating[Any]]]
+
+NodesArray: TypeAlias = np.ndarray[tuple[int, int, int], np.dtype[np.floating[Any]]]
+RefNodesArray: TypeAlias = np.ndarray[tuple[int, int], np.dtype[np.floating[Any]]]
 
 # {{{ element tags
 
@@ -225,16 +232,16 @@ class MeshElementGroup(ABC):
     """"The maximum degree used for interpolation. The exact meaning depends on
     the element type, e.g. for :class:`SimplexElementGroup` this is the total degree.
     """
-    vertex_indices: np.ndarray | None
+    vertex_indices: VertexIndices | None
     """An array of shape ``(nelements, nvertices)`` of (mesh-wide) vertex indices.
     This can also be *None* to support the case where the associated mesh does
     not have any :attr:`~Mesh.vertices`.
     """
-    nodes: np.ndarray
+    nodes: NodesArray
     """An array of node coordinates with shape
     ``(mesh.ambient_dim, nelements, nunit_nodes)``.
     """
-    unit_nodes: np.ndarray
+    unit_nodes: RefNodesArray
     """An array with shape ``(dim, nunit_nodes)`` of nodes on the reference
     element. The coordinates :attr:`nodes` are a mapped version
     of these reference nodes.
@@ -302,7 +309,7 @@ class MeshElementGroup(ABC):
         """
 
     @abstractmethod
-    def vertex_unit_coordinates(self) -> np.ndarray:
+    def vertex_unit_coordinates(self) -> RefNodesArray:
         """
         :returns: an array of shape ``(nfaces, dim)`` with the unit
             coordinates of each vertex.
@@ -360,17 +367,17 @@ class ModepyElementGroup(MeshElementGroup):
         return tuple(face.volume_vertex_indices for face in self._modepy_faces)
 
     @memoize_method
-    def vertex_unit_coordinates(self) -> np.ndarray:
+    def vertex_unit_coordinates(self) -> RefNodesArray:
         return mp.unit_vertices_for_shape(self.shape).T
 
     @classmethod
     @override
     def make_group(cls,
                    order: int,
-                   vertex_indices: np.ndarray | None,
-                   nodes: np.ndarray,
+                   vertex_indices: VertexIndices | None,
+                   nodes: NodesArray,
                    *,
-                   unit_nodes: np.ndarray | None = None,
+                   unit_nodes: RefNodesArray | None = None,
                    dim: int | None = None) -> ModepyElementGroup:
 
         if unit_nodes is None:
@@ -459,7 +466,7 @@ class NodalAdjacency:
     .. automethod:: __eq__
     """
 
-    neighbors_starts: np.ndarray
+    neighbors_starts: IndexArray
     """"
     ``element_id_t [nelements+1]``
 
@@ -468,7 +475,7 @@ class NodalAdjacency:
     :attr:`neighbors` which are adjacent to *iel*.
     """
 
-    neighbors: np.ndarray
+    neighbors: IndexArray
     """
     ``element_id_t []``
 
@@ -526,8 +533,8 @@ class FacialAdjacencyGroup:
 
     igroup: int
     """The mesh element group number of this group."""
-    elements: np.ndarray
-    element_faces: np.ndarray
+    elements: IndexArray
+    element_faces: IndexArray
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -581,22 +588,22 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
     to :attr:`igroup`, then this contains the self-connectivity in this group.
     """
 
-    elements: np.ndarray
+    elements: IndexArray
     """``element_id_t [nfagrp_elements]``. ``elements[i]`` gives the
     element number within :attr:`igroup` of the interior face."""
 
-    element_faces: np.ndarray
+    element_faces: IndexArray
     """``face_id_t [nfagrp_elements]``. ``element_faces[i]`` gives the face
     index of the interior face in element ``elements[i]``.
     """
 
-    neighbors: np.ndarray
+    neighbors: IndexArray
     """``element_id_t [nfagrp_elements]``. ``neighbors[i]`` gives the element
     number within :attr:`ineighbor_group` of the element opposite
     ``elements[i]``.
     """
 
-    neighbor_faces: np.ndarray
+    neighbor_faces: IndexArray
     """``face_id_t [nfagrp_elements]``. ``neighbor_faces[i]`` gives the
     face index of the opposite face in element ``neighbors[i]``
     """
@@ -654,13 +661,13 @@ class BoundaryAdjacencyGroup(FacialAdjacencyGroup):
     boundary_tag: BoundaryTag
     """"The boundary tag identifier of this group."""
 
-    elements: np.ndarray
+    elements: IndexArray
     """"
     ``element_id_t [nfagrp_elements]``. ``elements[i]`` gives the
     element number within :attr:`igroup` of the boundary face.
     """
 
-    element_faces: np.ndarray
+    element_faces: IndexArray
     """"
     ``face_id_t [nfagrp_elements]``. ``element_faces[i]`` gives the face
     index of the boundary face in element ``elements[i]``.
@@ -725,7 +732,7 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     """The identifier of the neighboring part.
     """
 
-    elements: np.ndarray
+    elements: IndexArray
     """Group-local element numbers.
     Element ``element_id_dtype elements[i]`` and face
     ``face_id_dtype element_faces[i]`` is connected to neighbor element
@@ -733,12 +740,12 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     ``face_id_dtype neighbor_faces[i]``.
     """
 
-    element_faces: np.ndarray
+    element_faces: IndexArray
     """``face_id_dtype element_faces[i]`` gives the face of
     ``element_id_dtype elements[i]`` that is connected to ``neighbors[i]``.
     """
 
-    neighbors: np.ndarray
+    neighbors: IndexArray
     """``element_id_dtype neighbors[i]`` gives the volume element number
     within the neighboring part of the element connected to
     ``element_id_dtype elements[i]`` (which is a boundary element index). Use
@@ -747,7 +754,7 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     element of the group.
     """
 
-    neighbor_faces: np.ndarray
+    neighbor_faces: IndexArray
     """``face_id_dtype global_neighbor_faces[i]`` gives face index within the
     neighboring part of the face connected to ``element_id_dtype elements[i]``
     """
@@ -791,7 +798,7 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
 
 DTypeLike = np.dtype | np.generic
 NodalAdjacencyLike = (
-    Literal[False] | Iterable[np.ndarray] | NodalAdjacency
+    Literal[False] | Iterable[IndexArray] | NodalAdjacency
     )
 FacialAdjacencyLike = (
     Literal[False] | Sequence[Sequence[FacialAdjacencyGroup]]
@@ -973,7 +980,7 @@ def is_mesh_consistent(
 
 
 def make_mesh(
-        vertices: np.ndarray | None,
+        vertices: VertexArray | None,
         groups: Iterable[MeshElementGroup],
         *,
         nodal_adjacency: NodalAdjacencyLike | None = None,
@@ -1152,7 +1159,7 @@ class Mesh:
     groups: tuple[MeshElementGroup, ...]
     """A tuple of :class:`MeshElementGroup` instances."""
 
-    vertices: np.ndarray | None
+    vertices: VertexArray | None
     """*None* or an array of vertex coordinates with shape
     *(ambient_dim, nvertices)*. If *None*, vertices are not known for this mesh
     and no adjacency information can be constructed.
@@ -1206,7 +1213,7 @@ class Mesh:
 
     def __init__(
             self,
-            vertices: np.ndarray | None,
+            vertices: VertexArray | None,
             groups: Iterable[MeshElementGroup],
             is_conforming: bool | None = None,
             vertex_id_dtype: DTypeLike = np.dtype("int32"),  # noqa: B008
@@ -1361,7 +1368,7 @@ class Mesh:
 
     @property
     @memoize_method
-    def base_element_nrs(self) -> np.ndarray:
+    def base_element_nrs(self) -> IndexArray:
         """An array of size ``(len(groups),)`` of starting element indices for
         each group in the mesh.
         """
@@ -1369,7 +1376,7 @@ class Mesh:
 
     @property
     @memoize_method
-    def base_node_nrs(self) -> np.ndarray:
+    def base_node_nrs(self) -> IndexArray:
         """An array of size ``(len(groups),)`` of starting node indices for
         each group in the mesh.
         """
@@ -1521,7 +1528,7 @@ class Mesh:
 
 # {{{ node-vertex consistency test
 
-def _mesh_group_node_vertex_error(mesh: Mesh, mgrp: MeshElementGroup) -> np.ndarray:
+def _mesh_group_node_vertex_error(mesh: Mesh, mgrp: MeshElementGroup) -> VertexArray:
     if isinstance(mgrp, ModepyElementGroup):
         basis = mp.basis_for_space(mgrp.space, mgrp.shape).functions
     else:
@@ -1656,11 +1663,11 @@ class _FaceIDs:
     .. autoattribute:: faces
     """
 
-    groups: np.ndarray
+    groups: IndexArray
     """The index of the group containing the face."""
-    elements: np.ndarray
+    elements: IndexArray
     """The group-relative index of the element containing the face."""
-    faces: np.ndarray
+    faces: IndexArray
     """The element-relative index of face."""
 
 
@@ -1682,8 +1689,8 @@ def _assert_not_none(val: T | None) -> T:
 def _match_faces_by_vertices(
             groups: Sequence[MeshElementGroup],
             face_ids: _FaceIDs,
-            vertex_index_map_func: Callable[[np.ndarray], np.ndarray] | None = None
-        ) -> np.ndarray:
+            vertex_index_map_func: Callable[[IndexArray], IndexArray] | None = None
+        ) -> IndexArray:
     """
     Return matching faces in *face_ids* (expressed as pairs of indices into
     *face_ids*), where two faces match if they have the same vertices.
@@ -1702,7 +1709,7 @@ def _match_faces_by_vertices(
         in *face_ids*.
     """
     if vertex_index_map_func is None:
-        def default_vertex_index_map_func(vertices: np.ndarray) -> np.ndarray:
+        def default_vertex_index_map_func(vertices: IndexArray) -> IndexArray:
             return vertices
 
         vertex_index_map_func = default_vertex_index_map_func
@@ -1996,7 +2003,8 @@ def _boundary_tag_as_python(boundary_tag: BoundaryTag) -> str:
         return boundary_tag.as_python()
 
 
-def _numpy_array_as_python(array: np.ndarray | None) -> str:
+def _numpy_array_as_python(
+        array: np.ndarray[tuple[int, ...], np.dtype[Any]] | None) -> str:
     if array is not None:
         return "np.array({}, dtype=np.{})".format(
                 repr(array.tolist()),
@@ -2165,7 +2173,9 @@ def check_bc_coverage(
             if isinstance(fagrp, BoundaryAdjacencyGroup)
             and fagrp.boundary_tag in boundary_tags]
 
-        def get_bdry_counts(bdry_grp: BoundaryAdjacencyGroup) -> np.ndarray:
+        def get_bdry_counts(
+                bdry_grp: BoundaryAdjacencyGroup
+            ) -> np.ndarray[tuple[int, int], np.dtype[np.integer[Any]]]:
             counts = np.full((grp.nfaces, grp.nelements), 0)  # noqa: B023
             counts[bdry_grp.element_faces, bdry_grp.elements] += 1
             return counts
