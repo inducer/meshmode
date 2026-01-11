@@ -2026,24 +2026,21 @@ def as_python(mesh: Mesh, function_name: str = "make_mesh") -> str:
 
         """)
 
-    cg("def %s():" % function_name)
+    cg(f"def {function_name}():")
     with Indentation(cg):
         cg("vertices = " + _numpy_array_as_python(mesh.vertices))
         cg("")
         cg("groups = []")
         cg("")
         for group in mesh.groups:
-            cg("import %s" % type(group).__module__)
+            cg(f"import {type(group).__module__}")
             cg("groups.append({}.{}.make_group(".format(
                 type(group).__module__,
                 type(group).__name__))
-            cg("    order=%s," % group.order)
-            cg("    vertex_indices=%s,"
-                    % _numpy_array_as_python(group.vertex_indices))
-            cg("    nodes=%s,"
-                    % _numpy_array_as_python(group.nodes))
-            cg("    unit_nodes=%s))"
-                    % _numpy_array_as_python(group.unit_nodes))
+            cg(f"    order={group.order},")
+            cg(f"    vertex_indices={_numpy_array_as_python(group.vertex_indices)},")
+            cg(f"    nodes={_numpy_array_as_python(group.nodes)},")
+            cg(f"    unit_nodes={_numpy_array_as_python(group.unit_nodes)}))")
 
         # {{{ facial adjacency groups
 
@@ -2058,13 +2055,13 @@ def as_python(mesh: Mesh, function_name: str = "make_mesh") -> str:
                 cg("])")
 
         else:
-            cg("facial_adjacency_groups = %r" % mesh._facial_adjacency_groups)
+            cg(f"facial_adjacency_groups = {mesh._facial_adjacency_groups!r}")
 
         # }}}
 
         cg("return mm_make_mesh(vertices, groups, skip_tests=True,")
-        cg("    vertex_id_dtype=np.%s," % mesh.vertex_id_dtype.name)
-        cg("    element_id_dtype=np.%s," % mesh.element_id_dtype.name)
+        cg(f"    vertex_id_dtype=np.{mesh.vertex_id_dtype.name},")
+        cg(f"    element_id_dtype=np.{mesh.element_id_dtype.name},")
 
         if isinstance(mesh._nodal_adjacency, NodalAdjacency):
             el_con_str = "({}, {})".format(
@@ -2076,9 +2073,9 @@ def as_python(mesh: Mesh, function_name: str = "make_mesh") -> str:
         else:
             el_con_str = repr(mesh._nodal_adjacency)
 
-        cg("    nodal_adjacency=%s," % el_con_str)
+        cg(f"    nodal_adjacency={el_con_str},")
         cg("    facial_adjacency_groups=facial_adjacency_groups,")
-        cg("    is_conforming=%s)" % repr(mesh.is_conforming))
+        cg(f"    is_conforming={mesh.is_conforming!r})")
 
         # FIXME: Handle facial adjacency, boundary tags
 
@@ -2215,8 +2212,7 @@ def is_affine_simplex_group(
         abs_tol = 1.0e-13
 
     if not isinstance(group, SimplexElementGroup):
-        raise TypeError("expected a 'SimplexElementGroup' not '%s'" %
-                type(group).__name__)
+        raise TypeError(f"expected a 'SimplexElementGroup': {type(group)}")
 
     if group.nelements == 0:
         # All zero of them are affine! :)

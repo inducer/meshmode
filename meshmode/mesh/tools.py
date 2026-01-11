@@ -94,7 +94,7 @@ def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None, rng=None):
     # from https://blog.lostinmyterminal.com/python/2015/05/12/random-rotation-matrix.html  # noqa: E501
 
     if ambient_dim != 3:
-        raise NotImplementedError("ambient_dim=%d" % ambient_dim)
+        raise NotImplementedError(f"ambient_dim: {ambient_dim}")
 
     if randnums is None:
         if rng is None:

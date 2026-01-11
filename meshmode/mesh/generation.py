@@ -1532,7 +1532,7 @@ def generate_box_mesh(
                 for box_face in box_faces}
 
     else:
-        raise NotImplementedError("box meshes of dimension %d" % dim)
+        raise NotImplementedError(f"box meshes of dimension {dim}")
 
     grp = make_group_from_vertices(
             vertices.reshape(dim, product(vertices.shape[1:])), el_vertices, order,

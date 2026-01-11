@@ -389,7 +389,7 @@ class VTKConnectivity:
 
         else:
             raise NotImplementedError("visualization for element groups "
-                    "of type '%s'" % type(grp.mesh_el_group).__name__)
+                                      f"of type {type(grp.mesh_el_group)}")
 
         assert len(node_tuples) == grp.nunit_dofs
         return el_connectivity, vtk_cell_type
@@ -517,7 +517,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
 
         else:
             raise NotImplementedError("visualization for element groups "
-                    "of type '%s'" % type(grp.mesh_el_group).__name__)
+                                      f"of type '{type(grp.mesh_el_group)}'")
 
         assert len(node_tuples) == grp.nunit_dofs
         return el_connectivity, vtk_cell_type
@@ -681,8 +681,8 @@ class Visualizer:
             mlab.triangular_mesh(*args, **kwargs)
 
         else:
-            raise RuntimeError("meshes of bulk dimension %d are currently "
-                    "unsupported" % self.vis_discr.dim)
+            raise RuntimeError(f"meshes of bulk dimension {self.vis_discr.dim} "
+                               "are currently unsupported")
 
         if do_show:
             mlab.show()
@@ -1359,8 +1359,8 @@ class Visualizer:
             ax.auto_scale_xyz(xt, yt, zt, had_data)
 
         else:
-            raise RuntimeError("meshes of bulk dimension %d are currently "
-                    "unsupported" % self.vis_discr.dim)
+            raise RuntimeError(f"meshes of bulk dimension {self.vis_discr.dim} "
+                               "are currently unsupported")
 
         if do_show:
             plt.show()
@@ -1444,7 +1444,7 @@ def draw_curve(discr):
                 color=color[igrp])
 
         if artist_handles:
-            artist_handles[0].set_label("Group %d" % igrp)
+            artist_handles[0].set_label(f"Group {igrp}")
 
 # }}}
 
@@ -1496,7 +1496,7 @@ def write_nodal_adjacency_vtk_file(file_name, mesh,
         if overwrite:
             os.remove(file_name)
         else:
-            raise FileExistsError("output file '%s' already exists" % file_name)
+            raise FileExistsError(f"output file '{file_name}' already exists")
 
     with open(file_name, "w") as outf:
         AppendedDataXMLGenerator(compressor)(grid).write(outf)

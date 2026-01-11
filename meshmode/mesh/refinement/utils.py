@@ -137,8 +137,7 @@ def is_symmetric(relation, debug=False):
         for b in other_list:
             if a not in relation[b]:
                 if debug:
-                    print("Relation is not symmetric: %s -> %s, but not %s -> %s"
-                            % (a, b, b, a))
+                    print(f"Relation is not symmetric: {a} -> {b}, but not {b} -> {a}")
                 return False
 
     return True
