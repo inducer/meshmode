@@ -31,13 +31,16 @@ import pytest
 from arraycontext import ArrayContextFactory, pytest_generate_tests_for_array_contexts
 
 from meshmode import _acf  # noqa: F401
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.array_context import (
+    PytestPyOpenCLArrayContextFactory,
+)
 from meshmode.dof_array import flat_norm
 
 
 logger = logging.getLogger(__name__)
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
+pytest_generate_tests = pytest_generate_tests_for_array_contexts([
+    PytestPyOpenCLArrayContextFactory,
+    ])
 
 
 @pytest.mark.parametrize("dim", [1, 2, 3])
