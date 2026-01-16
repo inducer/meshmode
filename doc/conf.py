@@ -38,6 +38,11 @@ intersphinx_mapping = {
 
 nitpick_ignore_regex = [
     ["py:class", r".*VTKConnectivity"],
+    # NOTE: optype does not have Sphinx compatible documentation
+    ["py:class", r"onp.*"],
+    # NOTE: don't want to document these
+    ["py:class", r".*NodalAdjacencyLike"],
+    ["py:class", r".*FacialAdjacencyLike"],
 ]
 
 sphinxconfig_missing_reference_aliases = {
@@ -56,6 +61,8 @@ sphinxconfig_missing_reference_aliases = {
     "ObjectArray": "class:pytools.obj_array.ObjectArray",
     # modepy
     "ArrayF": "obj:modepy.typing.ArrayF",
+    "mp.FunctionSpace": "class:modepy.FunctionSpace",
+    "mp.Shape": "class:modepy.Shape",
     # arraycontext
     "Array": "class:arraycontext.Array",
     "ArrayContext": "class:arraycontext.ArrayContext",
