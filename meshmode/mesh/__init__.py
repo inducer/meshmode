@@ -28,6 +28,7 @@ from collections.abc import Callable, Collection, Hashable, Iterable, Mapping, S
 from dataclasses import InitVar, dataclass, field, replace
 from functools import partial
 from typing import (
+    TYPE_CHECKING,
     Any,
     ClassVar,
     Literal,
@@ -44,6 +45,10 @@ import modepy as mp
 from pytools import memoize_method, module_getattr_for_deprecations
 
 from meshmode.mesh.tools import AffineMap, optional_array_equal
+
+
+if TYPE_CHECKING:
+    import optype.numpy as onp
 
 
 __doc__ = """
@@ -87,14 +92,6 @@ Predefined Boundary tags
 .. autoclass:: BTAG_PARTITION
 .. autoclass:: BTAG_INDUCED_BOUNDARY
 """
-
-IndexArray: TypeAlias = np.ndarray[tuple[int], np.dtype[np.integer[Any]]]
-
-VertexIndices: TypeAlias = np.ndarray[tuple[int, int], np.dtype[np.integer[Any]]]
-VertexArray: TypeAlias = np.ndarray[tuple[int, int], np.dtype[np.floating[Any]]]
-
-NodesArray: TypeAlias = np.ndarray[tuple[int, int, int], np.dtype[np.floating[Any]]]
-RefNodesArray: TypeAlias = np.ndarray[tuple[int, int], np.dtype[np.floating[Any]]]
 
 # {{{ element tags
 
@@ -232,16 +229,16 @@ class MeshElementGroup(ABC):
     """"The maximum degree used for interpolation. The exact meaning depends on
     the element type, e.g. for :class:`SimplexElementGroup` this is the total degree.
     """
-    vertex_indices: VertexIndices | None
+    vertex_indices: onp.Array2D[np.integer[Any]] | None
     """An array of shape ``(nelements, nvertices)`` of (mesh-wide) vertex indices.
     This can also be *None* to support the case where the associated mesh does
     not have any :attr:`~Mesh.vertices`.
     """
-    nodes: NodesArray
+    nodes: onp.Array3D[np.floating[Any]]
     """An array of node coordinates with shape
     ``(mesh.ambient_dim, nelements, nunit_nodes)``.
     """
-    unit_nodes: RefNodesArray
+    unit_nodes: onp.Array2D[np.floating[Any]]
     """An array with shape ``(dim, nunit_nodes)`` of nodes on the reference
     element. The coordinates :attr:`nodes` are a mapped version
     of these reference nodes.
@@ -309,7 +306,7 @@ class MeshElementGroup(ABC):
         """
 
     @abstractmethod
-    def vertex_unit_coordinates(self) -> RefNodesArray:
+    def vertex_unit_coordinates(self) -> onp.Array2D[np.floating[Any]]:
         """
         :returns: an array of shape ``(nfaces, dim)`` with the unit
             coordinates of each vertex.
@@ -367,17 +364,17 @@ class ModepyElementGroup(MeshElementGroup):
         return tuple(face.volume_vertex_indices for face in self._modepy_faces)
 
     @memoize_method
-    def vertex_unit_coordinates(self) -> RefNodesArray:
+    def vertex_unit_coordinates(self) -> onp.Array2D[np.floating[Any]]:
         return mp.unit_vertices_for_shape(self.shape).T
 
     @classmethod
     @override
     def make_group(cls,
                    order: int,
-                   vertex_indices: VertexIndices | None,
-                   nodes: NodesArray,
+                   vertex_indices: onp.Array2D[np.integer[Any]] | None,
+                   nodes: onp.Array3D[np.floating[Any]],
                    *,
-                   unit_nodes: RefNodesArray | None = None,
+                   unit_nodes: onp.Array2D[np.floating[Any]] | None = None,
                    dim: int | None = None) -> ModepyElementGroup:
 
         if unit_nodes is None:
@@ -466,7 +463,7 @@ class NodalAdjacency:
     .. automethod:: __eq__
     """
 
-    neighbors_starts: IndexArray
+    neighbors_starts: onp.Array1D[np.integer[Any]]
     """"
     ``element_id_t [nelements+1]``
 
@@ -475,7 +472,7 @@ class NodalAdjacency:
     :attr:`neighbors` which are adjacent to *iel*.
     """
 
-    neighbors: IndexArray
+    neighbors: onp.Array1D[np.integer[Any]]
     """
     ``element_id_t []``
 
@@ -533,8 +530,8 @@ class FacialAdjacencyGroup:
 
     igroup: int
     """The mesh element group number of this group."""
-    elements: IndexArray
-    element_faces: IndexArray
+    elements: onp.Array1D[np.integer[Any]]
+    element_faces: onp.Array1D[np.integer[Any]]
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -588,22 +585,22 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
     to :attr:`igroup`, then this contains the self-connectivity in this group.
     """
 
-    elements: IndexArray
+    elements: onp.Array1D[np.integer[Any]]
     """``element_id_t [nfagrp_elements]``. ``elements[i]`` gives the
     element number within :attr:`igroup` of the interior face."""
 
-    element_faces: IndexArray
+    element_faces: onp.Array1D[np.integer[Any]]
     """``face_id_t [nfagrp_elements]``. ``element_faces[i]`` gives the face
     index of the interior face in element ``elements[i]``.
     """
 
-    neighbors: IndexArray
+    neighbors: onp.Array1D[np.integer[Any]]
     """``element_id_t [nfagrp_elements]``. ``neighbors[i]`` gives the element
     number within :attr:`ineighbor_group` of the element opposite
     ``elements[i]``.
     """
 
-    neighbor_faces: IndexArray
+    neighbor_faces: onp.Array1D[np.integer[Any]]
     """``face_id_t [nfagrp_elements]``. ``neighbor_faces[i]`` gives the
     face index of the opposite face in element ``neighbors[i]``
     """
@@ -661,13 +658,13 @@ class BoundaryAdjacencyGroup(FacialAdjacencyGroup):
     boundary_tag: BoundaryTag
     """"The boundary tag identifier of this group."""
 
-    elements: IndexArray
+    elements: onp.Array1D[np.integer[Any]]
     """"
     ``element_id_t [nfagrp_elements]``. ``elements[i]`` gives the
     element number within :attr:`igroup` of the boundary face.
     """
 
-    element_faces: IndexArray
+    element_faces: onp.Array1D[np.integer[Any]]
     """"
     ``face_id_t [nfagrp_elements]``. ``element_faces[i]`` gives the face
     index of the boundary face in element ``elements[i]``.
@@ -732,7 +729,7 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     """The identifier of the neighboring part.
     """
 
-    elements: IndexArray
+    elements: onp.Array1D[np.integer[Any]]
     """Group-local element numbers.
     Element ``element_id_dtype elements[i]`` and face
     ``face_id_dtype element_faces[i]`` is connected to neighbor element
@@ -740,12 +737,12 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     ``face_id_dtype neighbor_faces[i]``.
     """
 
-    element_faces: IndexArray
+    element_faces: onp.Array1D[np.integer[Any]]
     """``face_id_dtype element_faces[i]`` gives the face of
     ``element_id_dtype elements[i]`` that is connected to ``neighbors[i]``.
     """
 
-    neighbors: IndexArray
+    neighbors: onp.Array1D[np.integer[Any]]
     """``element_id_dtype neighbors[i]`` gives the volume element number
     within the neighboring part of the element connected to
     ``element_id_dtype elements[i]`` (which is a boundary element index). Use
@@ -754,7 +751,7 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     element of the group.
     """
 
-    neighbor_faces: IndexArray
+    neighbor_faces: onp.Array1D[np.integer[Any]]
     """``face_id_dtype global_neighbor_faces[i]`` gives face index within the
     neighboring part of the face connected to ``element_id_dtype elements[i]``
     """
@@ -796,9 +793,9 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
 
 # {{{ mesh
 
-DTypeLike = np.dtype | np.generic
+DTypeLike = np.dtype[Any] | np.generic
 NodalAdjacencyLike = (
-    Literal[False] | Iterable[IndexArray] | NodalAdjacency
+    Literal[False] | Iterable["onp.Array1D[np.integer[Any]]"] | NodalAdjacency
     )
 FacialAdjacencyLike = (
     Literal[False] | Sequence[Sequence[FacialAdjacencyGroup]]
@@ -980,7 +977,7 @@ def is_mesh_consistent(
 
 
 def make_mesh(
-        vertices: VertexArray | None,
+        vertices: onp.Array2D[np.floating[Any]] | None,
         groups: Iterable[MeshElementGroup],
         *,
         nodal_adjacency: NodalAdjacencyLike | None = None,
@@ -1159,7 +1156,7 @@ class Mesh:
     groups: tuple[MeshElementGroup, ...]
     """A tuple of :class:`MeshElementGroup` instances."""
 
-    vertices: VertexArray | None
+    vertices: onp.Array2D[np.floating[Any]] | None
     """*None* or an array of vertex coordinates with shape
     *(ambient_dim, nvertices)*. If *None*, vertices are not known for this mesh
     and no adjacency information can be constructed.
@@ -1171,15 +1168,15 @@ class Mesh:
     neither of the two is known.
     """
 
-    vertex_id_dtype: np.dtype
+    vertex_id_dtype: np.dtype[np.integer[Any]]
     """The :class:`~numpy.dtype` used to index into the vertex array."""
 
-    element_id_dtype: np.dtype
+    element_id_dtype: np.dtype[np.integer[Any]]
     """The :class:`~numpy.dtype` used to index into the element array (relative
     to each group).
     """
 
-    face_id_dtype: np.dtype
+    face_id_dtype: np.dtype[np.integer[Any]]
     """The :class:`~numpy.dtype` used to index element faces (relative to each
     element).
     """
@@ -1213,7 +1210,7 @@ class Mesh:
 
     def __init__(
             self,
-            vertices: VertexArray | None,
+            vertices: onp.Array2D[np.floating] | None,
             groups: Iterable[MeshElementGroup],
             is_conforming: bool | None = None,
             vertex_id_dtype: DTypeLike = np.dtype("int32"),  # noqa: B008
@@ -1368,7 +1365,7 @@ class Mesh:
 
     @property
     @memoize_method
-    def base_element_nrs(self) -> IndexArray:
+    def base_element_nrs(self) -> onp.Array1D[np.integer[Any]]:
         """An array of size ``(len(groups),)`` of starting element indices for
         each group in the mesh.
         """
@@ -1376,14 +1373,14 @@ class Mesh:
 
     @property
     @memoize_method
-    def base_node_nrs(self) -> IndexArray:
+    def base_node_nrs(self) -> onp.Array1D[np.integer[Any]]:
         """An array of size ``(len(groups),)`` of starting node indices for
         each group in the mesh.
         """
         return np.cumsum([0] + [grp.nnodes for grp in self.groups[:-1]])
 
     @property
-    def vertex_dtype(self) -> np.dtype:
+    def vertex_dtype(self) -> np.dtype[np.floating[Any]]:
         """The :class:`~numpy.dtype` of the :attr:`~Mesh.vertices` array, if any."""
         if self.vertices is None:
             from meshmode import DataUnavailableError
@@ -1528,7 +1525,9 @@ class Mesh:
 
 # {{{ node-vertex consistency test
 
-def _mesh_group_node_vertex_error(mesh: Mesh, mgrp: MeshElementGroup) -> VertexArray:
+def _mesh_group_node_vertex_error(
+        mesh: Mesh, mgrp: MeshElementGroup
+    ) -> onp.Array3D[np.floating[Any]]:
     if isinstance(mgrp, ModepyElementGroup):
         basis = mp.basis_for_space(mgrp.space, mgrp.shape).functions
     else:
@@ -1663,11 +1662,11 @@ class _FaceIDs:
     .. autoattribute:: faces
     """
 
-    groups: IndexArray
+    groups: onp.Array1D[np.integer[Any]]
     """The index of the group containing the face."""
-    elements: IndexArray
+    elements: onp.Array1D[np.integer[Any]]
     """The group-relative index of the element containing the face."""
-    faces: IndexArray
+    faces: onp.Array1D[np.integer[Any]]
     """The element-relative index of face."""
 
 
@@ -1689,8 +1688,10 @@ def _assert_not_none(val: T | None) -> T:
 def _match_faces_by_vertices(
             groups: Sequence[MeshElementGroup],
             face_ids: _FaceIDs,
-            vertex_index_map_func: Callable[[IndexArray], IndexArray] | None = None
-        ) -> IndexArray:
+            vertex_index_map_func: (
+                Callable[[onp.Array1D[np.integer[Any]]],
+                         onp.Array1D[np.integer[Any]]] | None) = None
+        ) -> onp.Array1D[np.integer[Any]]:
     """
     Return matching faces in *face_ids* (expressed as pairs of indices into
     *face_ids*), where two faces match if they have the same vertices.
@@ -1709,7 +1710,9 @@ def _match_faces_by_vertices(
         in *face_ids*.
     """
     if vertex_index_map_func is None:
-        def default_vertex_index_map_func(vertices: IndexArray) -> IndexArray:
+        def default_vertex_index_map_func(
+                vertices: onp.Array1D[np.integer[Any]]
+            ) -> onp.Array1D[np.integer[Any]]:
             return vertices
 
         vertex_index_map_func = default_vertex_index_map_func
@@ -1751,8 +1754,8 @@ def _match_faces_by_vertices(
 
 def _compute_facial_adjacency_from_vertices(
         groups: Sequence[MeshElementGroup],
-        element_id_dtype: np.dtype[np.integer],
-        face_id_dtype: np.dtype[np.integer],
+        element_id_dtype: np.dtype[np.integer[Any]],
+        face_id_dtype: np.dtype[np.integer[Any]],
         face_vertex_indices_to_tags: Mapping[
             frozenset[int], Sequence[BoundaryTag]] | None = None,
         ) -> Sequence[Sequence[FacialAdjacencyGroup]]:
@@ -1899,8 +1902,8 @@ def _merge_boundary_adjacency_groups(
             igrp: int,
             bdry_grps: Sequence[BoundaryAdjacencyGroup],
             merged_btag: BoundaryTag,
-            element_id_dtype: np.dtype,
-            face_id_dtype: np.dtype,
+            element_id_dtype: np.dtype[np.integer[Any]],
+            face_id_dtype: np.dtype[np.integer[Any]],
         ) -> BoundaryAdjacencyGroup:
     """
     Create a new :class:`~meshmode.mesh.BoundaryAdjacencyGroup` containing all of
@@ -1939,8 +1942,8 @@ def _merge_boundary_adjacency_groups(
 
 def _complete_facial_adjacency_groups(
             facial_adjacency_groups: Sequence[Sequence[FacialAdjacencyGroup]],
-            element_id_dtype: np.dtype,
-            face_id_dtype: np.dtype
+            element_id_dtype: np.dtype[np.integer[Any]],
+            face_id_dtype: np.dtype[np.integer[Any]]
         ) -> tuple[tuple[FacialAdjacencyGroup, ...], ...]:
     """
     Add :class:`~meshmode.mesh.BoundaryAdjacencyGroup` instances for

@@ -42,7 +42,7 @@ jobs:
                 sed -i /oct2py/d .test-conda-env-py3.yml
                 sed -i /h5py/d .test-conda-env-py3.yml
                 build_py_project_in_conda_env
-                python -m pip install basedpyright scipy-stubs
+                python -m pip install basedpyright scipy-stubs optype
                 basedpyright
 
     pytest3:
