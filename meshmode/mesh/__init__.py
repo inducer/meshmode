@@ -49,6 +49,7 @@ from meshmode.mesh.tools import AffineMap, optional_array_equal
 
 if TYPE_CHECKING:
     import optype.numpy as onp
+    from numpy.typing import DTypeLike
 
 
 __doc__ = """
@@ -793,7 +794,6 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
 
 # {{{ mesh
 
-DTypeLike = np.dtype[Any] | np.generic
 NodalAdjacencyLike = (
     Literal[False] | Iterable["onp.Array1D[np.integer[Any]]"] | NodalAdjacency
     )
@@ -980,8 +980,15 @@ def make_mesh(
         vertices: onp.Array2D[np.floating[Any]] | None,
         groups: Iterable[MeshElementGroup],
         *,
-        nodal_adjacency: NodalAdjacencyLike | None = None,
-        facial_adjacency_groups: FacialAdjacencyLike | None = None,
+        nodal_adjacency: (
+            Literal[False]
+            | Iterable[onp.Array1D[np.integer[Any]]]
+            | NodalAdjacency
+            | None) = None,
+        facial_adjacency_groups: (
+            Literal[False]
+            | Sequence[Sequence[FacialAdjacencyGroup]]
+            | None) = None,
         is_conforming: bool | None = None,
         # dtypes
         vertex_id_dtype: DTypeLike = np.dtype("int32"),  # noqa: B008
