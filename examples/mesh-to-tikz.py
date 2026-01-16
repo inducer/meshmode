@@ -9,7 +9,7 @@ mesh = generate_gmsh(
         FileSource("../test/blob-2d.step"), 2, order=order,
         force_ambient_dim=2,
         other_options=[
-            "-string", "Mesh.CharacteristicLengthMax = %s;" % h]
+            "-string", f"Mesh.CharacteristicLengthMax = {h};"]
         )
 
 print(mesh_to_tikz(mesh))

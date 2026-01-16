@@ -28,6 +28,7 @@ from collections.abc import Callable, Collection, Hashable, Iterable, Mapping, S
 from dataclasses import InitVar, dataclass, field, replace
 from functools import partial
 from typing import (
+    TYPE_CHECKING,
     Any,
     ClassVar,
     Literal,
@@ -38,11 +39,17 @@ from warnings import warn
 
 import numpy as np
 import numpy.linalg as la
+from typing_extensions import override
 
 import modepy as mp
 from pytools import memoize_method, module_getattr_for_deprecations
 
 from meshmode.mesh.tools import AffineMap, optional_array_equal
+
+
+if TYPE_CHECKING:
+    import optype.numpy as onp
+    from numpy.typing import DTypeLike
 
 
 __doc__ = """
@@ -86,7 +93,6 @@ Predefined Boundary tags
 .. autoclass:: BTAG_PARTITION
 .. autoclass:: BTAG_INDUCED_BOUNDARY
 """
-
 
 # {{{ element tags
 
@@ -137,22 +143,29 @@ class BTAG_PARTITION(BTAG_NO_BOUNDARY):  # noqa: N801
     another :class:`Mesh`. The part identifier of the adjacent mesh is given
     by ``part_id``.
 
-    .. attribute:: part_id
+    .. autoattribute:: part_id
+    .. automethod:: as_python
 
     .. versionadded:: 2017.1
     """
+
+    part_id: PartID
+
     def __init__(self, part_id: PartID) -> None:
         self.part_id = part_id
 
+    @override
     def __hash__(self) -> int:
         return hash((type(self), self.part_id))
 
+    @override
     def __eq__(self, other: object) -> bool:
         if isinstance(other, BTAG_PARTITION):
             return self.part_id == other.part_id
         else:
             return False
 
+    @override
     def __repr__(self) -> str:
         return "<{}({})>".format(type(self).__name__, repr(self.part_id))
 
@@ -186,67 +199,24 @@ SYSTEM_TAGS = {BTAG_NONE, BTAG_ALL, BTAG_REALLY_ALL, BTAG_NO_BOUNDARY,
 class MeshElementGroup(ABC):
     """A group of elements sharing a common reference element.
 
-    .. attribute:: order
+    .. autoattribute:: order
+    .. autoattribute:: vertex_indices
+    .. autoattribute:: nodes
+    .. autoattribute:: unit_nodes
 
-        The maximum degree used for interpolation. The exact meaning depends
-        on the element type, e.g. for :class:`SimplexElementGroup` this is
-        the total degree.
-
-    .. attribute:: dim
-
-        The number of dimensions spanned by the element.
-        *Not* the ambient dimension, see :attr:`Mesh.ambient_dim`
-        for that.
-
-    .. attribute:: nvertices
-
-        Number of vertices in the reference element.
-
-    .. attribute:: nfaces
-
-        Number of faces of the reference element.
-
-    .. attribute:: nunit_nodes
-
-        Number of nodes on the reference element.
-
-    .. attribute:: nelements
-
-        Number of elements in the group.
-
-    .. attribute:: nnodes
-
-        Total number of nodes in the group (equivalent to
-        ``nelements * nunit_nodes``).
-
-    .. attribute:: vertex_indices
-
-        An array of shape ``(nelements, nvertices)`` of (mesh-wide)
-        vertex indices. This can also be *None* to support the case where the
-        associated mesh does not have any :attr:`~Mesh.vertices`.
-
-    .. attribute:: nodes
-
-        An array of node coordinates with shape
-        ``(mesh.ambient_dim, nelements, nunit_nodes)``.
-
-    .. attribute:: unit_nodes
-
-        An array with shape ``(dim, nunit_nodes)`` of nodes on the reference
-        element. The coordinates :attr:`nodes` are a mapped version
-        of these reference nodes.
-
-    .. attribute:: is_affine
-
-        A :class:`bool` flag that is *True* if the local-to-global
-        parametrization of all the elements in the group is affine.
+    .. autoproperty:: dim
+    .. autoproperty:: nvertices
+    .. autoproperty:: nfaces
+    .. autoproperty:: nunit_nodes
+    .. autoproperty:: nelements
+    .. autoproperty:: nnodes
+    .. autoproperty:: is_affine
 
     Element groups can also be compared for equality using the following
     methods. Note that these are *very* expensive, as they compare all
     the :attr:`nodes`.
 
     .. automethod:: __eq__
-
     .. automethod:: __init__
 
     The following abstract methods must be implemented by subclasses.
@@ -257,34 +227,59 @@ class MeshElementGroup(ABC):
     """
 
     order: int
-    vertex_indices: np.ndarray | None
-    nodes: np.ndarray
-    unit_nodes: np.ndarray
+    """"The maximum degree used for interpolation. The exact meaning depends on
+    the element type, e.g. for :class:`SimplexElementGroup` this is the total degree.
+    """
+    vertex_indices: onp.Array2D[np.integer[Any]] | None
+    """An array of shape ``(nelements, nvertices)`` of (mesh-wide) vertex indices.
+    This can also be *None* to support the case where the associated mesh does
+    not have any :attr:`~Mesh.vertices`.
+    """
+    nodes: onp.Array3D[np.floating[Any]]
+    """An array of node coordinates with shape
+    ``(mesh.ambient_dim, nelements, nunit_nodes)``.
+    """
+    unit_nodes: onp.Array2D[np.floating[Any]]
+    """An array with shape ``(dim, nunit_nodes)`` of nodes on the reference
+    element. The coordinates :attr:`nodes` are a mapped version
+    of these reference nodes.
+    """
 
     @property
     def dim(self) -> int:
+        """The number of dimensions spanned by the element. *Not* the ambient
+        dimension, see :attr:`Mesh.ambient_dim` for that.
+        """
         return self.unit_nodes.shape[0]
 
     @property
     def nvertices(self) -> int:
+        """Number of vertices in the reference element."""
         return self.vertex_unit_coordinates().shape[-1]
 
     @property
     def nfaces(self) -> int:
+        """Number of faces of the reference element."""
         return len(self.face_vertex_indices())
 
     @property
     def nunit_nodes(self) -> int:
+        """Number of nodes on the reference element."""
         return self.unit_nodes.shape[-1]
 
     @property
     def nelements(self) -> int:
+        """Number of elements in the group."""
         return self.nodes.shape[1]
 
     @property
     def nnodes(self) -> int:
+        """Total number of nodes in the group (equivalent to
+        ``nelements * nunit_nodes``).
+        """
         return self.nelements * self.unit_nodes.shape[-1]
 
+    @override
     def __eq__(self, other: object) -> bool:
         if type(self) is not type(other):
             return False
@@ -298,6 +293,9 @@ class MeshElementGroup(ABC):
 
     @property
     def is_affine(self) -> bool:
+        """A :class:`bool` flag that is *True* if the local-to-global
+        parametrization of all the elements in the group is affine.
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -309,7 +307,7 @@ class MeshElementGroup(ABC):
         """
 
     @abstractmethod
-    def vertex_unit_coordinates(self) -> np.ndarray:
+    def vertex_unit_coordinates(self) -> onp.Array2D[np.floating[Any]]:
         """
         :returns: an array of shape ``(nfaces, dim)`` with the unit
             coordinates of each vertex.
@@ -331,6 +329,7 @@ class MeshElementGroup(ABC):
 
 # https://stackoverflow.com/a/13624858
 class _classproperty(property):  # noqa: N801
+    @override
     def __get__(self, owner_self: Any, owner_cls: type | None = None) -> Any:
         assert self.fget is not None
         return self.fget(owner_cls)
@@ -339,20 +338,20 @@ class _classproperty(property):  # noqa: N801
 @dataclass(frozen=True, eq=False)
 class ModepyElementGroup(MeshElementGroup):
     """
-    .. attribute:: modepy_shape_cls
-
-        Must be set by subclasses to generate the correct shape and spaces
-        attributes for the group.
-
-    .. attribute:: shape
-    .. attribute:: space
+    .. autoattribute:: shape_cls
+    .. autoattribute:: shape
+    .. autoattribute:: space
     """
 
     shape_cls: ClassVar[type[mp.Shape]]
+    """Must be set by subclasses to generate the correct shape and spaces
+    attributes for the group.
+    """
     shape: mp.Shape = field(repr=False)
     space: mp.FunctionSpace = field(repr=False)
 
     @property
+    @override
     def nvertices(self) -> int:
         return self.shape.nvertices     # pylint: disable=no-member
 
@@ -366,16 +365,17 @@ class ModepyElementGroup(MeshElementGroup):
         return tuple(face.volume_vertex_indices for face in self._modepy_faces)
 
     @memoize_method
-    def vertex_unit_coordinates(self) -> np.ndarray:
+    def vertex_unit_coordinates(self) -> onp.Array2D[np.floating[Any]]:
         return mp.unit_vertices_for_shape(self.shape).T
 
     @classmethod
+    @override
     def make_group(cls,
                    order: int,
-                   vertex_indices: np.ndarray | None,
-                   nodes: np.ndarray,
+                   vertex_indices: onp.Array2D[np.integer[Any]] | None,
+                   nodes: onp.Array3D[np.floating[Any]],
                    *,
-                   unit_nodes: np.ndarray | None = None,
+                   unit_nodes: onp.Array2D[np.floating[Any]] | None = None,
                    dim: int | None = None) -> ModepyElementGroup:
 
         if unit_nodes is None:
@@ -387,6 +387,8 @@ class ModepyElementGroup(MeshElementGroup):
 
             if unit_nodes.shape[0] != dim:
                 raise ValueError("'dim' does not match 'unit_nodes' dimension")
+
+        assert dim is not None
 
         # pylint: disable=abstract-class-instantiated
         shape = cls.shape_cls(dim)
@@ -440,6 +442,7 @@ class TensorProductElementGroup(ModepyElementGroup):
     shape_cls: ClassVar[type[mp.Shape]] = mp.Hypercube
 
     @property
+    @override
     def is_affine(self) -> bool:
         # Tensor product mappings are generically bilinear.
         # FIXME: Are affinely mapped ones a 'juicy' enough special case?
@@ -461,7 +464,7 @@ class NodalAdjacency:
     .. automethod:: __eq__
     """
 
-    neighbors_starts: np.ndarray
+    neighbors_starts: onp.Array1D[np.integer[Any]]
     """"
     ``element_id_t [nelements+1]``
 
@@ -470,13 +473,14 @@ class NodalAdjacency:
     :attr:`neighbors` which are adjacent to *iel*.
     """
 
-    neighbors: np.ndarray
+    neighbors: onp.Array1D[np.integer[Any]]
     """
     ``element_id_t []``
 
     See :attr:`neighbors_starts`.
     """
 
+    @override
     def __eq__(self, other: object) -> bool:
         if type(self) is not type(other):
             return False
@@ -521,16 +525,16 @@ class FacialAdjacencyGroup:
     .. autoattribute:: igroup
     .. autoattribute:: elements
     .. autoattribute:: element_faces
+
+    .. automethod:: as_python
     """
 
     igroup: int
-    """
-    The mesh element group number of this group.
-    """
+    """The mesh element group number of this group."""
+    elements: onp.Array1D[np.integer[Any]]
+    element_faces: onp.Array1D[np.integer[Any]]
 
-    elements: np.ndarray
-    element_faces: np.ndarray
-
+    @override
     def __eq__(self, other: object) -> bool:
         if type(self) is not type(other):
             return False
@@ -572,39 +576,42 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
     .. autoattribute:: neighbors
     .. autoattribute:: neighbor_faces
     .. autoattribute:: aff_map
+
     .. automethod:: __eq__
+    .. automethod:: as_python
     """
 
     ineighbor_group: int
     """ID of neighboring group, or *None* for boundary faces. If identical
-    to :attr:`igroup`, then this contains the self-connectivity in this
-    group."""
+    to :attr:`igroup`, then this contains the self-connectivity in this group.
+    """
 
-    elements: np.ndarray
+    elements: onp.Array1D[np.integer[Any]]
     """``element_id_t [nfagrp_elements]``. ``elements[i]`` gives the
     element number within :attr:`igroup` of the interior face."""
 
-    element_faces: np.ndarray
+    element_faces: onp.Array1D[np.integer[Any]]
     """``face_id_t [nfagrp_elements]``. ``element_faces[i]`` gives the face
-    index of the interior face in element ``elements[i]``."""
+    index of the interior face in element ``elements[i]``.
+    """
 
-    neighbors: np.ndarray
+    neighbors: onp.Array1D[np.integer[Any]]
     """``element_id_t [nfagrp_elements]``. ``neighbors[i]`` gives the element
     number within :attr:`ineighbor_group` of the element opposite
     ``elements[i]``.
     """
 
-    neighbor_faces: np.ndarray
+    neighbor_faces: onp.Array1D[np.integer[Any]]
     """``face_id_t [nfagrp_elements]``. ``neighbor_faces[i]`` gives the
     face index of the opposite face in element ``neighbors[i]``
     """
 
     aff_map: AffineMap
-    """
-    An :class:`~meshmode.AffineMap` representing the mapping from the group's
+    """An :class:`~meshmode.AffineMap` representing the mapping from the group's
     faces to their corresponding neighbor faces.
     """
 
+    @override
     def __eq__(self, other: object) -> bool:
         if not super().__eq__(other):
             return False
@@ -618,6 +625,7 @@ class InteriorAdjacencyGroup(FacialAdjacencyGroup):
             and np.array_equal(self.neighbor_faces, other.neighbor_faces)
             and self.aff_map == other.aff_map)
 
+    @override
     def as_python(self) -> str:
         if type(self) is not InteriorAdjacencyGroup:
             raise NotImplementedError(f"Not implemented for {type(self)}.")
@@ -644,23 +652,26 @@ class BoundaryAdjacencyGroup(FacialAdjacencyGroup):
     .. autoattribute:: boundary_tag
     .. autoattribute:: elements
     .. autoattribute:: element_faces
+
+    .. automethod:: as_python
     """
 
     boundary_tag: BoundaryTag
     """"The boundary tag identifier of this group."""
 
-    elements: np.ndarray
+    elements: onp.Array1D[np.integer[Any]]
     """"
     ``element_id_t [nfagrp_elements]``. ``elements[i]`` gives the
     element number within :attr:`igroup` of the boundary face.
     """
 
-    element_faces: np.ndarray
+    element_faces: onp.Array1D[np.integer[Any]]
     """"
     ``face_id_t [nfagrp_elements]``. ``element_faces[i]`` gives the face
     index of the boundary face in element ``elements[i]``.
     """
 
+    @override
     def __eq__(self, other: object) -> bool:
         if not super().__eq__(other):
             return False
@@ -671,6 +682,7 @@ class BoundaryAdjacencyGroup(FacialAdjacencyGroup):
             and np.array_equal(self.elements, other.elements)
             and np.array_equal(self.element_faces, other.element_faces))
 
+    @override
     def as_python(self) -> str:
         if type(self) is not BoundaryAdjacencyGroup:
             raise NotImplementedError(f"Not implemented for {type(self)}.")
@@ -689,8 +701,7 @@ class BoundaryAdjacencyGroup(FacialAdjacencyGroup):
 @dataclass(frozen=True, eq=False)
 class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     """
-    Describes inter-part adjacency information for one
-    :class:`MeshElementGroup`.
+    Describes inter-part adjacency information for one :class:`MeshElementGroup`.
 
     .. autoattribute:: igroup
     .. autoattribute:: boundary_tag
@@ -700,6 +711,8 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     .. autoattribute:: neighbors
     .. autoattribute:: neighbor_faces
     .. autoattribute:: aff_map
+
+    .. automethod:: as_python
 
     .. versionadded:: 2017.1
     """
@@ -717,7 +730,7 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     """The identifier of the neighboring part.
     """
 
-    elements: np.ndarray
+    elements: onp.Array1D[np.integer[Any]]
     """Group-local element numbers.
     Element ``element_id_dtype elements[i]`` and face
     ``face_id_dtype element_faces[i]`` is connected to neighbor element
@@ -725,12 +738,12 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     ``face_id_dtype neighbor_faces[i]``.
     """
 
-    element_faces: np.ndarray
+    element_faces: onp.Array1D[np.integer[Any]]
     """``face_id_dtype element_faces[i]`` gives the face of
     ``element_id_dtype elements[i]`` that is connected to ``neighbors[i]``.
     """
 
-    neighbors: np.ndarray
+    neighbors: onp.Array1D[np.integer[Any]]
     """``element_id_dtype neighbors[i]`` gives the volume element number
     within the neighboring part of the element connected to
     ``element_id_dtype elements[i]`` (which is a boundary element index). Use
@@ -739,7 +752,7 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     element of the group.
     """
 
-    neighbor_faces: np.ndarray
+    neighbor_faces: onp.Array1D[np.integer[Any]]
     """``face_id_dtype global_neighbor_faces[i]`` gives face index within the
     neighboring part of the face connected to ``element_id_dtype elements[i]``
     """
@@ -749,6 +762,7 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
     faces to their corresponding neighbor faces.
     """
 
+    @override
     def __eq__(self, other: object) -> bool:
         if not super().__eq__(other):
             return False
@@ -760,6 +774,7 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
             and np.array_equal(self.neighbor_faces, other.neighbor_faces)
             and self.aff_map == other.aff_map)
 
+    @override
     def as_python(self) -> str:
         if type(self) is not InterPartAdjacencyGroup:
             raise NotImplementedError(f"Not implemented for {type(self)}.")
@@ -779,9 +794,8 @@ class InterPartAdjacencyGroup(BoundaryAdjacencyGroup):
 
 # {{{ mesh
 
-DTypeLike = np.dtype | np.generic
 NodalAdjacencyLike = (
-    Literal[False] | Iterable[np.ndarray] | NodalAdjacency
+    Literal[False] | Iterable["onp.Array1D[np.integer[Any]]"] | NodalAdjacency
     )
 FacialAdjacencyLike = (
     Literal[False] | Sequence[Sequence[FacialAdjacencyGroup]]
@@ -963,11 +977,18 @@ def is_mesh_consistent(
 
 
 def make_mesh(
-        vertices: np.ndarray | None,
+        vertices: onp.Array2D[np.floating[Any]] | None,
         groups: Iterable[MeshElementGroup],
         *,
-        nodal_adjacency: NodalAdjacencyLike | None = None,
-        facial_adjacency_groups: FacialAdjacencyLike | None = None,
+        nodal_adjacency: (
+            Literal[False]
+            | Iterable[onp.Array1D[np.integer[Any]]]
+            | NodalAdjacency
+            | None) = None,
+        facial_adjacency_groups: (
+            Literal[False]
+            | Sequence[Sequence[FacialAdjacencyGroup]]
+            | None) = None,
         is_conforming: bool | None = None,
         # dtypes
         vertex_id_dtype: DTypeLike = np.dtype("int32"),  # noqa: B008
@@ -1142,7 +1163,7 @@ class Mesh:
     groups: tuple[MeshElementGroup, ...]
     """A tuple of :class:`MeshElementGroup` instances."""
 
-    vertices: np.ndarray | None
+    vertices: onp.Array2D[np.floating[Any]] | None
     """*None* or an array of vertex coordinates with shape
     *(ambient_dim, nvertices)*. If *None*, vertices are not known for this mesh
     and no adjacency information can be constructed.
@@ -1154,15 +1175,15 @@ class Mesh:
     neither of the two is known.
     """
 
-    vertex_id_dtype: np.dtype
+    vertex_id_dtype: np.dtype[np.integer[Any]]
     """The :class:`~numpy.dtype` used to index into the vertex array."""
 
-    element_id_dtype: np.dtype
+    element_id_dtype: np.dtype[np.integer[Any]]
     """The :class:`~numpy.dtype` used to index into the element array (relative
     to each group).
     """
 
-    face_id_dtype: np.dtype
+    face_id_dtype: np.dtype[np.integer[Any]]
     """The :class:`~numpy.dtype` used to index element faces (relative to each
     element).
     """
@@ -1196,7 +1217,7 @@ class Mesh:
 
     def __init__(
             self,
-            vertices: np.ndarray | None,
+            vertices: onp.Array2D[np.floating] | None,
             groups: Iterable[MeshElementGroup],
             is_conforming: bool | None = None,
             vertex_id_dtype: DTypeLike = np.dtype("int32"),  # noqa: B008
@@ -1351,7 +1372,7 @@ class Mesh:
 
     @property
     @memoize_method
-    def base_element_nrs(self) -> np.ndarray:
+    def base_element_nrs(self) -> onp.Array1D[np.integer[Any]]:
         """An array of size ``(len(groups),)`` of starting element indices for
         each group in the mesh.
         """
@@ -1359,14 +1380,14 @@ class Mesh:
 
     @property
     @memoize_method
-    def base_node_nrs(self) -> np.ndarray:
+    def base_node_nrs(self) -> onp.Array1D[np.integer[Any]]:
         """An array of size ``(len(groups),)`` of starting node indices for
         each group in the mesh.
         """
         return np.cumsum([0] + [grp.nnodes for grp in self.groups[:-1]])
 
     @property
-    def vertex_dtype(self) -> np.dtype:
+    def vertex_dtype(self) -> np.dtype[np.floating[Any]]:
         """The :class:`~numpy.dtype` of the :attr:`~Mesh.vertices` array, if any."""
         if self.vertices is None:
             from meshmode import DataUnavailableError
@@ -1471,6 +1492,7 @@ class Mesh:
 
         return facial_adjacency_groups
 
+    @override
     def __eq__(self, other: object) -> bool:
         """Compare two meshes for equality.
 
@@ -1510,7 +1532,9 @@ class Mesh:
 
 # {{{ node-vertex consistency test
 
-def _mesh_group_node_vertex_error(mesh: Mesh, mgrp: MeshElementGroup) -> np.ndarray:
+def _mesh_group_node_vertex_error(
+        mesh: Mesh, mgrp: MeshElementGroup
+    ) -> onp.Array3D[np.floating[Any]]:
     if isinstance(mgrp, ModepyElementGroup):
         basis = mp.basis_for_space(mgrp.space, mgrp.shape).functions
     else:
@@ -1548,7 +1572,7 @@ def _test_group_node_vertex_consistency_resampling(
         np.max(np.abs(per_vertex_errors), axis=-1), axis=0)
 
     if tol is None:
-        tol = 1e3 * np.finfo(per_element_vertex_errors.dtype).eps
+        tol = float(1e3 * np.finfo(per_element_vertex_errors.dtype).eps)
 
     grp_vertices = mesh.vertices[:, mgrp.vertex_indices]
 
@@ -1593,7 +1617,7 @@ def _compute_nodal_adjacency_from_vertices(mesh: Mesh) -> NodalAdjacency:
         raise ValueError("unable to compute nodal adjacency without vertices")
 
     _, nvertices = mesh.vertices.shape
-    vertex_to_element: list[list[int]] = [[] for i in range(nvertices)]
+    vertex_to_element: list[list[int]] = [[] for _ in range(nvertices)]
 
     for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups, strict=True):
         if grp.vertex_indices is None:
@@ -1603,7 +1627,7 @@ def _compute_nodal_adjacency_from_vertices(mesh: Mesh) -> NodalAdjacency:
             for ivertex in grp.vertex_indices[iel_grp]:
                 vertex_to_element[ivertex].append(base_element_nr + iel_grp)
 
-    element_to_element: list[set[int]] = [set() for i in range(mesh.nelements)]
+    element_to_element: list[set[int]] = [set() for _ in range(mesh.nelements)]
     for base_element_nr, grp in zip(mesh.base_element_nrs, mesh.groups, strict=True):
         assert grp.vertex_indices is not None
 
@@ -1640,21 +1664,17 @@ class _FaceIDs:
     Data structure for storage of a list of face identifiers (group, element, face).
     Each attribute is a :class:`numpy.ndarray` of shape ``(nfaces,)``.
 
-    .. attribute:: groups
-
-        The index of the group containing the face.
-
-    .. attribute:: elements
-
-        The group-relative index of the element containing the face.
-
-    .. attribute:: faces
-
-        The element-relative index of face.
+    .. autoattribute:: groups
+    .. autoattribute:: elements
+    .. autoattribute:: faces
     """
-    groups: np.ndarray
-    elements: np.ndarray
-    faces: np.ndarray
+
+    groups: onp.Array1D[np.integer[Any]]
+    """The index of the group containing the face."""
+    elements: onp.Array1D[np.integer[Any]]
+    """The group-relative index of the element containing the face."""
+    faces: onp.Array1D[np.integer[Any]]
+    """The element-relative index of face."""
 
 
 def _concatenate_face_ids(face_ids_list: Sequence[_FaceIDs]) -> _FaceIDs:
@@ -1675,8 +1695,10 @@ def _assert_not_none(val: T | None) -> T:
 def _match_faces_by_vertices(
             groups: Sequence[MeshElementGroup],
             face_ids: _FaceIDs,
-            vertex_index_map_func: Callable[[np.ndarray], np.ndarray] | None = None
-        ) -> np.ndarray:
+            vertex_index_map_func: (
+                Callable[[onp.Array1D[np.integer[Any]]],
+                         onp.Array1D[np.integer[Any]]] | None) = None
+        ) -> onp.Array1D[np.integer[Any]]:
     """
     Return matching faces in *face_ids* (expressed as pairs of indices into
     *face_ids*), where two faces match if they have the same vertices.
@@ -1695,8 +1717,12 @@ def _match_faces_by_vertices(
         in *face_ids*.
     """
     if vertex_index_map_func is None:
-        def vertex_index_map_func(vertices: np.ndarray) -> np.ndarray:
+        def default_vertex_index_map_func(
+                vertices: onp.Array1D[np.integer[Any]]
+            ) -> onp.Array1D[np.integer[Any]]:
             return vertices
+
+        vertex_index_map_func = default_vertex_index_map_func
 
     from pytools import single_valued
     vertex_id_dtype = single_valued(
@@ -1735,8 +1761,8 @@ def _match_faces_by_vertices(
 
 def _compute_facial_adjacency_from_vertices(
         groups: Sequence[MeshElementGroup],
-        element_id_dtype: np.dtype[np.integer],
-        face_id_dtype: np.dtype[np.integer],
+        element_id_dtype: np.dtype[np.integer[Any]],
+        face_id_dtype: np.dtype[np.integer[Any]],
         face_vertex_indices_to_tags: Mapping[
             frozenset[int], Sequence[BoundaryTag]] | None = None,
         ) -> Sequence[Sequence[FacialAdjacencyGroup]]:
@@ -1744,7 +1770,7 @@ def _compute_facial_adjacency_from_vertices(
         return []
 
     if face_vertex_indices_to_tags is not None:
-        boundary_tags = {
+        boundary_tags: set[BoundaryTag] = {
             tag
             for tags in face_vertex_indices_to_tags.values()
             for tag in tags
@@ -1756,19 +1782,20 @@ def _compute_facial_adjacency_from_vertices(
 
     # Match up adjacent faces according to their vertex indices
 
-    face_ids_per_group = []
+    face_ids_per_group: list[_FaceIDs] = []
     for igrp, grp in enumerate(groups):
         indices = np.indices((grp.nfaces, grp.nelements), dtype=element_id_dtype)
         face_ids_per_group.append(_FaceIDs(
             groups=np.full(grp.nelements * grp.nfaces, igrp),
             elements=indices[1].flatten(),
             faces=indices[0].flatten().astype(face_id_dtype)))
+
     face_ids = _concatenate_face_ids(face_ids_per_group)
 
     face_index_pairs = _match_faces_by_vertices(groups, face_ids)
 
-    del igrp
-    del grp
+    del igrp  # pyright: ignore[reportPossiblyUnboundVariable]
+    del grp   # pyright: ignore[reportPossiblyUnboundVariable]
 
     # Get ((grp#, elem#, face#), (neighbor grp#, neighbor elem#, neighbor face#))
     # for every face (both ways)
@@ -1800,7 +1827,7 @@ def _compute_facial_adjacency_from_vertices(
 
     # {{{ build facial_adjacency_groups data structure
 
-    facial_adjacency_groups = []
+    facial_adjacency_groups: list[list[FacialAdjacencyGroup]] = []
     for igrp, grp in enumerate(groups):
         assert grp.vertex_indices is not None
 
@@ -1882,8 +1909,8 @@ def _merge_boundary_adjacency_groups(
             igrp: int,
             bdry_grps: Sequence[BoundaryAdjacencyGroup],
             merged_btag: BoundaryTag,
-            element_id_dtype: np.dtype,
-            face_id_dtype: np.dtype,
+            element_id_dtype: np.dtype[np.integer[Any]],
+            face_id_dtype: np.dtype[np.integer[Any]],
         ) -> BoundaryAdjacencyGroup:
     """
     Create a new :class:`~meshmode.mesh.BoundaryAdjacencyGroup` containing all of
@@ -1922,8 +1949,8 @@ def _merge_boundary_adjacency_groups(
 
 def _complete_facial_adjacency_groups(
             facial_adjacency_groups: Sequence[Sequence[FacialAdjacencyGroup]],
-            element_id_dtype: np.dtype,
-            face_id_dtype: np.dtype
+            element_id_dtype: np.dtype[np.integer[Any]],
+            face_id_dtype: np.dtype[np.integer[Any]]
         ) -> tuple[tuple[FacialAdjacencyGroup, ...], ...]:
     """
     Add :class:`~meshmode.mesh.BoundaryAdjacencyGroup` instances for
@@ -1986,7 +2013,8 @@ def _boundary_tag_as_python(boundary_tag: BoundaryTag) -> str:
         return boundary_tag.as_python()
 
 
-def _numpy_array_as_python(array: np.ndarray | None) -> str:
+def _numpy_array_as_python(
+        array: np.ndarray[tuple[int, ...], np.dtype[Any]] | None) -> str:
     if array is not None:
         return "np.array({}, dtype=np.{})".format(
                 repr(array.tolist()),
@@ -2002,8 +2030,9 @@ def _affine_map_as_python(aff_map: AffineMap) -> str:
 
 
 def as_python(mesh: Mesh, function_name: str = "make_mesh") -> str:
-    """Return a snippet of Python code (as a string) that will
-    recreate the mesh given as an input parameter.
+    """
+    :returns: a snippet of Python code (as a string) that will recreate the
+        mesh given as an input parameter.
     """
 
     from pytools.py_codegen import Indentation, PythonCodeGenerator
@@ -2026,24 +2055,21 @@ def as_python(mesh: Mesh, function_name: str = "make_mesh") -> str:
 
         """)
 
-    cg("def %s():" % function_name)
+    cg(f"def {function_name}():")
     with Indentation(cg):
         cg("vertices = " + _numpy_array_as_python(mesh.vertices))
         cg("")
         cg("groups = []")
         cg("")
         for group in mesh.groups:
-            cg("import %s" % type(group).__module__)
+            cg(f"import {type(group).__module__}")
             cg("groups.append({}.{}.make_group(".format(
                 type(group).__module__,
                 type(group).__name__))
-            cg("    order=%s," % group.order)
-            cg("    vertex_indices=%s,"
-                    % _numpy_array_as_python(group.vertex_indices))
-            cg("    nodes=%s,"
-                    % _numpy_array_as_python(group.nodes))
-            cg("    unit_nodes=%s))"
-                    % _numpy_array_as_python(group.unit_nodes))
+            cg(f"    order={group.order},")
+            cg(f"    vertex_indices={_numpy_array_as_python(group.vertex_indices)},")
+            cg(f"    nodes={_numpy_array_as_python(group.nodes)},")
+            cg(f"    unit_nodes={_numpy_array_as_python(group.unit_nodes)}))")
 
         # {{{ facial adjacency groups
 
@@ -2058,13 +2084,13 @@ def as_python(mesh: Mesh, function_name: str = "make_mesh") -> str:
                 cg("])")
 
         else:
-            cg("facial_adjacency_groups = %r" % mesh._facial_adjacency_groups)
+            cg(f"facial_adjacency_groups = {mesh._facial_adjacency_groups!r}")
 
         # }}}
 
         cg("return mm_make_mesh(vertices, groups, skip_tests=True,")
-        cg("    vertex_id_dtype=np.%s," % mesh.vertex_id_dtype.name)
-        cg("    element_id_dtype=np.%s," % mesh.element_id_dtype.name)
+        cg(f"    vertex_id_dtype=np.{mesh.vertex_id_dtype.name},")
+        cg(f"    element_id_dtype=np.{mesh.element_id_dtype.name},")
 
         if isinstance(mesh._nodal_adjacency, NodalAdjacency):
             el_con_str = "({}, {})".format(
@@ -2076,9 +2102,9 @@ def as_python(mesh: Mesh, function_name: str = "make_mesh") -> str:
         else:
             el_con_str = repr(mesh._nodal_adjacency)
 
-        cg("    nodal_adjacency=%s," % el_con_str)
+        cg(f"    nodal_adjacency={el_con_str},")
         cg("    facial_adjacency_groups=facial_adjacency_groups,")
-        cg("    is_conforming=%s)" % repr(mesh.is_conforming))
+        cg(f"    is_conforming={mesh.is_conforming!r})")
 
         # FIXME: Handle facial adjacency, boundary tags
 
@@ -2157,7 +2183,9 @@ def check_bc_coverage(
             if isinstance(fagrp, BoundaryAdjacencyGroup)
             and fagrp.boundary_tag in boundary_tags]
 
-        def get_bdry_counts(bdry_grp: BoundaryAdjacencyGroup) -> np.ndarray:
+        def get_bdry_counts(
+                bdry_grp: BoundaryAdjacencyGroup
+            ) -> np.ndarray[tuple[int, int], np.dtype[np.integer[Any]]]:
             counts = np.full((grp.nfaces, grp.nelements), 0)  # noqa: B023
             counts[bdry_grp.element_faces, bdry_grp.elements] += 1
             return counts
@@ -2215,8 +2243,7 @@ def is_affine_simplex_group(
         abs_tol = 1.0e-13
 
     if not isinstance(group, SimplexElementGroup):
-        raise TypeError("expected a 'SimplexElementGroup' not '%s'" %
-                type(group).__name__)
+        raise TypeError(f"expected a 'SimplexElementGroup': {type(group)}")
 
     if group.nelements == 0:
         # All zero of them are affine! :)
@@ -2232,7 +2259,8 @@ def is_affine_simplex_group(
 
     # construct all second derivative matrices (including cross terms)
     from itertools import product
-    mats = []
+
+    mats: list[np.ndarray[tuple[int, int], np.dtype[np.floating[Any]]]] = []
     for n in product(range(group.dim), repeat=2):
         if n[0] > n[1]:
             continue

@@ -29,7 +29,7 @@ THE SOFTWARE.
 import logging
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from typing_extensions import TypeIs, override
@@ -56,13 +56,12 @@ from meshmode.transform_metadata import DiscretizationFlattenedDOFAxisTag
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
-    from numpy.typing import NDArray
+    import optype.numpy as onp
 
     from meshmode.discretization import Discretization, ElementGroupBase
     from meshmode.discretization.connection.direct import (
         DiscretizationConnection,
     )
-
 
 logger = logging.getLogger(__name__)
 
@@ -75,13 +74,11 @@ __doc__ = """
 .. autofunction:: write_nodal_adjacency_vtk_file
 """
 
-IndexArray: TypeAlias = "NDArray[np.integer]"
-
 
 # {{{ helpers
 
 def separate_by_real_and_imag(
-            names_and_fields: Sequence[tuple[str, NDArray[np.inexact]]],
+            names_and_fields: Sequence[tuple[str, ArrayOrContainerOrScalar]],
             real_only: bool,
         ) -> Iterator[tuple[str, ArrayOrContainerOrScalar]]:
     """
@@ -135,7 +132,8 @@ def _resample_to_numpy(
             *,
             stack: bool = False,
             by_group: bool = False
-        ) -> NDArray[Any] | ObjectArray[tuple[int, ...], NDArray[Any]]:
+        ) -> (onp.ArrayND[np.inexact]
+              | ObjectArray[tuple[int, ...], onp.ArrayND[np.inexact]]):
     """
     :arg stack: if *True* object arrays are stacked into a single
         :class:`~numpy.ndarray`.
@@ -231,7 +229,7 @@ class _VisConnectivityGroup:
         Starting index for subelements in :attr:`vis_connectivity`.
     """
 
-    vis_connectivity: np.ndarray
+    vis_connectivity: onp.Array3D[np.integer[Any]]
     vtk_cell_type: int
     subelement_nr_base: int
 
@@ -364,7 +362,8 @@ class VTKConnectivity:
                 }
 
     def connectivity_for_element_group(
-                self, grp: ElementGroupBase) -> tuple[IndexArray, int]:
+            self, grp: ElementGroupBase
+        ) -> tuple[onp.Array3D[np.integer[Any]], int]:
         import modepy as mp
 
         from meshmode.mesh import ModepyElementGroup
@@ -389,14 +388,14 @@ class VTKConnectivity:
 
         else:
             raise NotImplementedError("visualization for element groups "
-                    "of type '%s'" % type(grp.mesh_el_group).__name__)
+                                      f"of type {type(grp.mesh_el_group)}")
 
         assert len(node_tuples) == grp.nunit_dofs
         return el_connectivity, vtk_cell_type
 
     @property
     @memoize_method
-    def cells(self) -> IndexArray:
+    def cells(self) -> onp.Array2D[np.integer[Any]]:
         return np.hstack([
             vgrp.vis_connectivity.reshape(-1) for vgrp in self.groups
             ])
@@ -436,7 +435,7 @@ class VTKConnectivity:
 
     @property
     @memoize_method
-    def cell_types(self) -> IndexArray:
+    def cell_types(self) -> onp.Array1D[np.integer[Any]]:
         nsubelements = sum(vgrp.nsubelements for vgrp in self.groups)
         cell_types = np.empty(nsubelements, dtype=np.uint8)
         cell_types.fill(255)
@@ -482,7 +481,8 @@ class VTKLagrangeConnectivity(VTKConnectivity):
 
     @override
     def connectivity_for_element_group(
-                self, grp: ElementGroupBase) -> tuple[IndexArray, int]:
+            self, grp: ElementGroupBase
+        ) -> tuple[onp.Array3D[np.integer[Any]], int]:
         from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
         vtk_major, vtk_minor = self.version.split(".")
@@ -495,9 +495,10 @@ class VTKLagrangeConnectivity(VTKConnectivity):
 
             node_tuples = vtk_lagrange_simplex_node_tuples(
                     grp.dim, grp.order, vtk_version=vtk_version)
+
             el_connectivity = np.array(
                     vtk_lagrange_simplex_node_tuples_to_permutation(node_tuples),
-                    dtype=np.intp).reshape((1, 1, -1))
+                    dtype=np.intp).reshape(1, 1, -1)
 
             vtk_cell_type = self.simplex_cell_types[grp.dim]
 
@@ -511,20 +512,22 @@ class VTKLagrangeConnectivity(VTKConnectivity):
                     grp.dim, grp.order, vtk_version=vtk_version)
             el_connectivity = np.array(
                     vtk_lagrange_quad_node_tuples_to_permutation(node_tuples),
-                    dtype=np.intp).reshape((1, 1, -1))
+                    dtype=np.intp).reshape(1, 1, -1)
 
             vtk_cell_type = self.tensor_cell_types[grp.dim]
 
         else:
             raise NotImplementedError("visualization for element groups "
-                    "of type '%s'" % type(grp.mesh_el_group).__name__)
+                                      f"of type '{type(grp.mesh_el_group)}'")
 
         assert len(node_tuples) == grp.nunit_dofs
         return el_connectivity, vtk_cell_type
 
     @property
     @memoize_method
-    def cells(self) -> tuple[int, IndexArray, IndexArray]:
+    def cells(self) -> tuple[int,
+                             onp.Array2D[np.integer[Any]],
+                             onp.Array1D[np.integer[Any]]]:
         connectivity = np.hstack([
             grp.vis_connectivity.reshape(-1)
             for grp in self.groups
@@ -681,8 +684,8 @@ class Visualizer:
             mlab.triangular_mesh(*args, **kwargs)
 
         else:
-            raise RuntimeError("meshes of bulk dimension %d are currently "
-                    "unsupported" % self.vis_discr.dim)
+            raise RuntimeError(f"meshes of bulk dimension {self.vis_discr.dim} "
+                               "are currently unsupported")
 
         if do_show:
             mlab.show()
@@ -1114,7 +1117,7 @@ class Visualizer:
     # {{{ xdmf
 
     @memoize_method
-    def _xdmf_nodes_numpy(self) -> ObjectArray1D[NDArray[np.inexact]]:
+    def _xdmf_nodes_numpy(self) -> ObjectArray1D[onp.Array2D[np.floating]]:
         actx = self.vis_discr._setup_actx
         return _resample_to_numpy(
                 lambda x: x, self.vis_discr,
@@ -1359,8 +1362,8 @@ class Visualizer:
             ax.auto_scale_xyz(xt, yt, zt, had_data)
 
         else:
-            raise RuntimeError("meshes of bulk dimension %d are currently "
-                    "unsupported" % self.vis_discr.dim)
+            raise RuntimeError(f"meshes of bulk dimension {self.vis_discr.dim} "
+                               "are currently unsupported")
 
         if do_show:
             plt.show()
@@ -1444,7 +1447,7 @@ def draw_curve(discr):
                 color=color[igrp])
 
         if artist_handles:
-            artist_handles[0].set_label("Group %d" % igrp)
+            artist_handles[0].set_label(f"Group {igrp}")
 
 # }}}
 
@@ -1496,7 +1499,7 @@ def write_nodal_adjacency_vtk_file(file_name, mesh,
         if overwrite:
             os.remove(file_name)
         else:
-            raise FileExistsError("output file '%s' already exists" % file_name)
+            raise FileExistsError(f"output file '{file_name}' already exists")
 
     with open(file_name, "w") as outf:
         AppendedDataXMLGenerator(compressor)(grid).write(outf)

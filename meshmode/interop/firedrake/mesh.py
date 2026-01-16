@@ -588,7 +588,7 @@ build_connection_from_firedrake`.
     if not isinstance(fdrake_mesh, MeshGeometry):
         raise TypeError("'fdrake_mesh_topology' must be an instance of "
                         "firedrake.mesh.MeshGeometry, "
-                        "not '%s'." % type(fdrake_mesh))
+                        f"not '{type(fdrake_mesh)}'.")
 
     if cells_to_use is not None:
         if not isinstance(cells_to_use, np.ndarray):
@@ -841,7 +841,7 @@ def export_mesh_to_firedrake(mesh, group_nr=None, comm=None):
     """
     if not isinstance(mesh, Mesh):
         raise TypeError("'mesh' must of type meshmode.mesh.Mesh,"
-                        " not '%s'." % type(mesh))
+                        f" not '{type(mesh)}'.")
     if group_nr is None:
         if len(mesh.groups) != 1:
             raise ValueError("'group_nr' is *None* but 'mesh' has "

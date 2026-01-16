@@ -723,8 +723,9 @@ class HomogeneousOrderBasedGroupFactory(ElementGroupFactory):
             :attr:`order`.
         """
         if not isinstance(mesh_el_group, self.mesh_group_class):
-            raise TypeError("only mesh element groups of type '%s' "
-                    "are supported" % self.mesh_group_class.__name__)
+            raise TypeError(
+                    f"only mesh element groups of type {self.mesh_group_class} "
+                    "are supported")
 
         return self.group_class(mesh_el_group, self.order)
 

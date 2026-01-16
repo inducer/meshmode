@@ -163,36 +163,36 @@ class FiredrakeConnection:
         if not isinstance(discr, Discretization):
             raise TypeError("'discr' must be of type "
                             "meshmode.discretization.Discretization, "
-                            "not '%s'`." % type(discr))
+                            f"not {type(discr)}`")
         from firedrake.functionspaceimpl import WithGeometry
         if not isinstance(fdrake_fspace, WithGeometry):
             raise TypeError("'fdrake_fspace' must be of type "
                             "firedrake.functionspaceimpl.WithGeometry, "
-                            "not '%s'." % type(fdrake_fspace))
+                            f"not {type(fdrake_fspace)}")
         if not isinstance(mm2fd_node_mapping, np.ndarray):
             raise TypeError("'mm2fd_node_mapping' must be of type "
                             "numpy.ndarray, "
-                            "not '%s'." % type(mm2fd_node_mapping))
+                            f"not {type(mm2fd_node_mapping)}")
         if not isinstance(group_nr, int) and group_nr is not None:
             raise TypeError("'group_nr' must be of type int or be "
-                            "*None*, not of type '%s'." % type(group_nr))
+                            f"*None*, not of type '{type(group_nr)}'")
         # Convert group_nr to an integer if *None*
         if group_nr is None:
             if len(discr.groups) != 1:
                 raise ValueError("'group_nr' is *None* but 'discr' "
-                                 "has '%s' != 1 groups." % len(discr.groups))
+                                 f"has '{len(discr.groups)}' != 1 groups")
             group_nr = 0
         # store element_grp as variable for convenience
         element_grp = discr.groups[group_nr]
 
         if group_nr < 0 or group_nr >= len(discr.groups):
-            raise ValueError("'group_nr' has value '%s', which an invalid "
-                             "index into list 'discr.groups' of length '%s'."
-                             % (group_nr, len(discr.groups)))
+            raise ValueError(f"'group_nr' has value '{group_nr}', which an invalid "
+                             "index into list 'discr.groups' of length "
+                             f"'{len(discr.groups)}'")
         if not isinstance(element_grp, InterpolatoryElementGroupBase):
             raise TypeError("'discr.groups[group_nr]' must be of type "
                             "InterpolatoryElementGroupBase"
-                            ", not '%s'." % type(element_grp))
+                            f", not '{type(element_grp)}'")
         if fdrake_fspace.ufl_element().family() != "Discontinuous Lagrange":
             raise TypeError("'fdrake_fspace.ufl_element().family()' must be"
                             "'Discontinuous Lagrange', not "
@@ -200,13 +200,12 @@ class FiredrakeConnection:
         if mm2fd_node_mapping.shape != (element_grp.nelements,
                                         element_grp.nunit_dofs):
             raise ValueError("'mm2fd_node_mapping' must be of shape ",
-                             "(%s,), not '%s'"
-                             % ((discr.groups[group_nr].ndofs,),
-                                mm2fd_node_mapping.shape))
+                             f"({discr.groups[group_nr].ndofs},), not "
+                             f"'{mm2fd_node_mapping.shape}'")
         if mm2fd_node_mapping.dtype != fdrake_fspace.cell_node_list.dtype:
             raise ValueError("'mm2fd_node_mapping' must have dtype "
-                             "%s, not '%s'" % (fdrake_fspace.cell_node_list.dtype,
-                                             mm2fd_node_mapping.dtype))
+                             f"{fdrake_fspace.cell_node_list.dtype}, not "
+                             f"'{mm2fd_node_mapping.dtype}'")
         if np.size(np.unique(mm2fd_node_mapping)) != np.size(mm2fd_node_mapping):
             raise ValueError("'mm2fd_node_mapping' must have unique entries; "
                              "no two meshmode nodes may be associated to the "
@@ -275,8 +274,7 @@ class FiredrakeConnection:
                                        shape=shape)
         else:
             raise TypeError("'shape' must be *None*, an integer, "
-                            " or a tuple of integers, not of type '%s'."
-                            % type(shape))
+                            f" or a tuple of integers, not of type '{type(shape)}'")
 
     def _validate_function(self, function, function_name,
                            shape=None, dtype=None):
@@ -354,8 +352,8 @@ class FiredrakeConnection:
 
         if isinstance(field, DOFArray):
             if shape is not None and shape != ():
-                raise ValueError("shape != () and '%s' is of type DOFArray"
-                                 " instead of np.ndarray." % field_name)
+                raise ValueError(f"shape != () and '{field_name}' is of type DOFArray"
+                                 " instead of np.ndarray.")
             check_dof_array(field, field_name)
         elif isinstance(field, np.ndarray) and field.dtype == object:
             if shape is not None and field.shape != shape:
@@ -369,7 +367,7 @@ class FiredrakeConnection:
                     msg = type_err.args[0]
                     prefix = f"'{field_name}' is a numpy array of shape " \
                         f"{field.shape}, which is interpreted as a mapping" \
-                        f" into a space of sahpe {field.shape}. For each " \
+                        f" into a space of shape {field.shape}. For each " \
                         r" multi-index *mi*, the *mi*\ th coordinate values " \
                         f" of '{field_name}' should be represented as a " \
                         f"DOFArray stored in '{field_name}[mi]'. If you are " \
@@ -381,7 +379,7 @@ class FiredrakeConnection:
                     raise TypeError(f"{prefix}\n{msg}") from None
         else:
             raise TypeError("'field' must be of type DOFArray or a numpy object "
-                            "array of those, not '%s'." % type(field))
+                            f"array of those, not '{type(field)}'.")
 
     def from_firedrake(self, function, out=None, actx=None):
         """
@@ -442,7 +440,7 @@ class FiredrakeConnection:
             from arraycontext import ArrayContext
             if not isinstance(actx, ArrayContext):
                 raise TypeError("If 'out' is *None*, 'actx' must be of type "
-                                "ArrayContext, not '%s'." % type(actx))
+                                f"ArrayContext, not '{type(actx)}'")
             if fspace_shape == ():
                 out = self.discr.empty(actx, dtype=function_data.dtype)
             else:
@@ -651,15 +649,12 @@ def build_connection_from_firedrake(actx, fdrake_fspace, grp_factory=None,
     from firedrake.functionspaceimpl import WithGeometry
     if not isinstance(fdrake_fspace, WithGeometry):
         raise TypeError("'fdrake_fspace' must be of firedrake type "
-                        "WithGeometry, not '%s'."
-                        % type(fdrake_fspace))
+                        f"WithGeometry, not '{type(fdrake_fspace)}'.")
     ufl_elt = fdrake_fspace.ufl_element()
 
     if ufl_elt.family() != "Discontinuous Lagrange":
-        raise ValueError("the 'fdrake_fspace.ufl_element().family()' of "
-                         "must be be "
-                         "'Discontinuous Lagrange', not '%s'."
-                         % ufl_elt.family())
+        raise ValueError("the 'fdrake_fspace.ufl_element().family()' of must be "
+                         f"'Discontinuous Lagrange', not '{ufl_elt.family()}'.")
 
     # If only converting a portion of the mesh near the boundary, get
     # *cells_to_use* as described in
@@ -675,16 +670,14 @@ def build_connection_from_firedrake(actx, fdrake_fspace, grp_factory=None,
     if grp_factory is not None:
         if not isinstance(grp_factory, ElementGroupFactory):
             raise TypeError("'grp_factory' must inherit from "
-                            "meshmode.discretization.ElementGroupFactory,"
-                            "but is instead of type "
-                            "'%s'." % type(grp_factory))
+                            "meshmode.discretization.ElementGroupFactory, "
+                            f"but is instead of type '{type(grp_factory)}'")
         if not issubclass(grp_factory.group_class,
                           InterpolatoryElementGroupBase):
             raise TypeError("'grp_factory.group_class' must inherit from"
-                            "meshmode.discretization."
-                            "InterpolatoryElementGroupBase, but"
-                            " is instead of type '%s'"
-                            % type(grp_factory.group_class))
+                            "meshmode.discretization.InterpolatoryElementGroupBase, but"
+                            f" is instead of type '{grp_factory.group_class}'")
+
     # If not provided, make one
     else:
         grp_factory = default_simplex_group_factory(
@@ -709,7 +702,7 @@ def build_connection_from_firedrake(actx, fdrake_fspace, grp_factory=None,
                                     "entry must be of type int")
                 if bdy_id not in firedrake_bdy_ids:
                     raise ValueError(f"Unrecognized boundary id {bdy_id}. Valid"
-                                     f" boundary ids: {firedrake_bdy_ids}.")
+                                     f" boundary ids: {firedrake_bdy_ids}")
         # String case, must be "on_boundary"
         elif isinstance(restrict_to_boundary, str):
             if restrict_to_boundary != "on_boundary":
@@ -719,7 +712,7 @@ def build_connection_from_firedrake(actx, fdrake_fspace, grp_factory=None,
         else:
             raise TypeError(f"Invalid type {type(restrict_to_boundary)} for "
                             "restrict_to_boundary. Must be an int, a tuple "
-                            "of ints, or the string 'on_boundary'.")
+                            "of ints, or the string 'on_boundary'")
 
     # Create to_discr
     to_discr = Discretization(actx, mm_mesh, grp_factory)
@@ -780,8 +773,8 @@ InterpolatoryQuadratureSimplexElementGroup`.
     """
     if group_nr is None:
         if len(discr.groups) != 1:
-            raise ValueError("'group_nr' is *None*, but 'discr' has '%s' "
-                             "!= 1 groups." % len(discr.groups))
+            raise ValueError("'group_nr' is *None*, but 'discr' has "
+                             f"'{len(discr.groups)}' != 1 groups.")
         group_nr = 0
     el_group = discr.groups[group_nr]
 

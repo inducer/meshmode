@@ -975,12 +975,12 @@ def test_boundary_tags():
 
     # raise errors if wrong number of elements marked
     if num_marked_inner_bdy != num_on_inner_bdy:
-        raise ValueError("%i marked on inner boundary, should be %i" %
-                         (num_marked_inner_bdy, num_on_inner_bdy))
+        raise ValueError(f"%{num_marked_inner_bdy} marked on inner boundary, "
+                         f"should be {num_on_inner_bdy}")
 
     if num_marked_outer_bdy != num_on_outer_bdy:
-        raise ValueError("%i marked on outer boundary, should be %i" %
-                         (num_marked_outer_bdy, num_on_outer_bdy))
+        raise ValueError(f"{num_marked_outer_bdy} marked on outer boundary, "
+                         f"should be {num_on_outer_bdy}")
 
     # ensure boundary is covered
     from meshmode.mesh import check_bc_coverage
@@ -1098,11 +1098,12 @@ def test_box_boundary_tags(dim, nelem, mesh_type, group_cls, visualize=False):
 
     # raise errors if wrong number of elements marked
     if num_marked_bdy_1 != num_on_bdy:
-        raise ValueError("%i marked on custom boundary 1, should be %i" %
-                         (num_marked_bdy_1, num_on_bdy))
+        raise ValueError(f"{num_marked_bdy_1} marked on custom boundary 1, "
+                         f"should be {num_on_bdy}")
+
     if num_marked_bdy_2 != num_on_bdy:
-        raise ValueError("%i marked on custom boundary 2, should be %i" %
-                         (num_marked_bdy_2, num_on_bdy))
+        raise ValueError(f"{num_marked_bdy_2} marked on custom boundary 2, "
+                         f"should be {num_on_bdy}")
 
 # }}}
 

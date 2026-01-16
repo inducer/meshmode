@@ -612,7 +612,7 @@ def test_mpi_communication(num_parts, order):
         "--oversubscribe",
         "-np", str(num_ranks),
         "-x", "RUN_WITHIN_MPI=1",
-        "-x", "order=%d" % order,
+        "-x", f"order={order}",
 
         # https://mpi4py.readthedocs.io/en/stable/mpi4py.run.html
         sys.executable, "-m", "mpi4py.run", __file__],

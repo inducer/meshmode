@@ -235,7 +235,7 @@ def test_refinement_connection(
             fine_vis = make_visualizer(actx, fine_discr, mesh_order)
 
             fine_vis.write_vtk_file(
-                    "refine-fine-%s-%dd-%s.vtu" % (mesh_name, dim, mesh_par), [
+                    f"refine-fine-{mesh_name}-{dim}d-{mesh_par}.vtu", [
                         ("f_interp", f_interp),
                         ("f_true", f_true),
                         ])
