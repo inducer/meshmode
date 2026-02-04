@@ -41,6 +41,7 @@ from arraycontext import (
 import meshmode.mesh.generation as mgen
 from meshmode import _acf  # noqa: F401
 from meshmode.array_context import (
+    PytestNumpyArrayContextFactory,
     PytestPyOpenCLArrayContextFactory,
     PytestPytatoPyOpenCLArrayContextFactory,
 )
@@ -66,10 +67,11 @@ from meshmode.mesh import (
 
 
 logger = logging.getLogger(__name__)
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPytatoPyOpenCLArrayContextFactory,
-         PytestPyOpenCLArrayContextFactory,
-         ])
+pytest_generate_tests = pytest_generate_tests_for_array_contexts([
+    PytestNumpyArrayContextFactory,
+    PytestPytatoPyOpenCLArrayContextFactory,
+    PytestPyOpenCLArrayContextFactory,
+    ])
 
 thisdir = pathlib.Path(__file__).parent
 

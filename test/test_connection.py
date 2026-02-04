@@ -32,7 +32,9 @@ from arraycontext import ArrayContextFactory, pytest_generate_tests_for_array_co
 
 import meshmode.mesh.generation as mgen
 from meshmode import _acf  # noqa: F401
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.array_context import (
+    PytestPyOpenCLArrayContextFactory,
+)
 from meshmode.discretization import Discretization
 from meshmode.discretization.connection import FACE_RESTR_ALL
 from meshmode.discretization.poly_element import (
@@ -46,8 +48,9 @@ from meshmode.mesh import SimplexElementGroup, TensorProductElementGroup
 
 
 logger = logging.getLogger(__name__)
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
+pytest_generate_tests = pytest_generate_tests_for_array_contexts([
+    PytestPyOpenCLArrayContextFactory,
+    ])
 
 
 @pytest.mark.parametrize("group_factory", [

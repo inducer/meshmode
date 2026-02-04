@@ -35,13 +35,16 @@ from arraycontext import (
 )
 
 from meshmode import _acf  # noqa: F401
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.array_context import (
+    PytestPyOpenCLArrayContextFactory,
+)
 from meshmode.dof_array import flat_norm
 
 
 logger = logging.getLogger(__name__)
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
+pytest_generate_tests = pytest_generate_tests_for_array_contexts([
+        PytestPyOpenCLArrayContextFactory,
+        ])
 
 
 def create_discretization(actx, ndim,

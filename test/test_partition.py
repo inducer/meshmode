@@ -41,7 +41,9 @@ from arraycontext import (
 )
 
 from meshmode import _acf  # noqa: F401
-from meshmode.array_context import PytestPyOpenCLArrayContextFactory
+from meshmode.array_context import (
+    PytestPyOpenCLArrayContextFactory,
+)
 from meshmode.discretization.poly_element import default_simplex_group_factory
 from meshmode.dof_array import flat_norm
 from meshmode.mesh import (
@@ -53,8 +55,9 @@ from meshmode.mesh import (
 
 
 logger = logging.getLogger(__name__)
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPyOpenCLArrayContextFactory])
+pytest_generate_tests = pytest_generate_tests_for_array_contexts([
+    PytestPyOpenCLArrayContextFactory,
+    ])
 
 # Is there a smart way of choosing this number?
 # Currently it is the same as the base from MPIBoundaryCommSetupHelper

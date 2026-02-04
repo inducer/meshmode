@@ -41,6 +41,7 @@ from pytools.tag import Tag
 
 from meshmode import _acf  # noqa: F401
 from meshmode.array_context import (
+    PytestNumpyArrayContextFactory,
     PytestPyOpenCLArrayContextFactory,
     PytestPytatoPyOpenCLArrayContextFactory,
 )
@@ -50,10 +51,11 @@ from meshmode.dof_array import DOFArray, array_context_for_pickling, flat_norm
 
 
 logger = logging.getLogger(__name__)
-pytest_generate_tests = pytest_generate_tests_for_array_contexts(
-        [PytestPytatoPyOpenCLArrayContextFactory,
-         PytestPyOpenCLArrayContextFactory,
-         ])
+pytest_generate_tests = pytest_generate_tests_for_array_contexts([
+        PytestNumpyArrayContextFactory,
+        PytestPytatoPyOpenCLArrayContextFactory,
+        PytestPyOpenCLArrayContextFactory,
+        ])
 
 
 @with_container_arithmetic(bcast_obj_array=False,
@@ -165,6 +167,10 @@ class FooAxisTag2(Tag):
 
 def test_dof_array_pickling_tags(actx_factory: ArrayContextFactory):
     actx = actx_factory()
+
+    from meshmode.array_context import NumpyArrayContext
+    if isinstance(actx, NumpyArrayContext):
+        pytest.skip(f"{type(actx).__name__} does not support tags")
 
     from pickle import dumps, loads
 
