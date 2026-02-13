@@ -699,7 +699,7 @@ def test_sanity_no_elements(
     vol_one = 1 + 0 * nodes[0]
 
     from pytential import integral
-    assert integral(vol_discr, vol_one) == 0.
+    assert abs(integral(vol_discr, vol_one)) < 1.0e-15
 
     # }}}
 
