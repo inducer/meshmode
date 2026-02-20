@@ -5,7 +5,7 @@ import numpy as np
 from meshmode.mesh import Mesh
 
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 def make_example_mesh(ambient_dim: int, nelements: int, order: int) -> Mesh:

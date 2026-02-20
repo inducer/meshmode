@@ -29,7 +29,6 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-import pytools.obj_array as obj_array
 from arraycontext import (
     ArrayContextFactory,
     dataclass_array_container,
@@ -37,6 +36,7 @@ from arraycontext import (
     pytest_generate_tests_for_array_contexts,
     with_container_arithmetic,
 )
+from pytools import obj_array
 from pytools.tag import Tag
 
 from meshmode import _acf  # noqa: F401

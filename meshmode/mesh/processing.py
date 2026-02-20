@@ -119,7 +119,7 @@ def _compute_global_elem_to_part_elem(
         ``global_elem_to_part_elem[ielement, 1]`` gives its part-wide element index.
     """
     global_elem_to_part_elem = np.empty((nelements, 2), dtype=element_id_dtype)
-    for part_id in part_id_to_elements.keys():
+    for part_id in part_id_to_elements:
         elements = part_id_to_elements[part_id]
         global_elem_to_part_elem[elements, 0] = part_id_to_part_index[part_id]
         global_elem_to_part_elem[elements, 1] = np.indices(

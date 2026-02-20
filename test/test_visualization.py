@@ -31,8 +31,8 @@ from functools import partial
 import numpy as np
 import pytest
 
-import pytools.obj_array as obj_array
 from arraycontext import ArrayContextFactory, pytest_generate_tests_for_array_contexts
+from pytools import obj_array
 
 import meshmode.mesh.generation as mgen
 from meshmode import _acf  # noqa: F401

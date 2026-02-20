@@ -31,12 +31,12 @@ import numpy as np
 import numpy.linalg as la
 import pytest
 
-import pytools.obj_array as obj_array
 from arraycontext import (
     ArrayContextFactory,
     flatten,
     pytest_generate_tests_for_array_contexts,
 )
+from pytools import obj_array
 
 import meshmode.mesh.generation as mgen
 from meshmode import _acf  # noqa: F401
@@ -430,7 +430,7 @@ def test_opposite_face_interpolation(actx_factory: ArrayContextFactory, group_fa
 
             h = 1/mesh_par
         elif mesh_name == "periodic":
-            assert dim == 2 or dim == 3
+            assert dim in {2, 3}
 
             if dim == 2:
                 mesh = mgen.generate_regular_rect_mesh(

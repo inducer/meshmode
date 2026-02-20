@@ -128,8 +128,7 @@ def rand_rotation_matrix(ambient_dim, deflection=1.0, randnums=None, rng=None):
 
     # Construct the rotation matrix  ( V Transpose(V) - I ) R.
 
-    M = (np.outer(V, V) - np.eye(3)).dot(R)
-    return M
+    return (np.outer(V, V) - np.eye(3)).dot(R)
 
 # }}}
 
@@ -316,12 +315,10 @@ def find_point_to_point_mapping(
         min_distance_sq_indices = np.argmin(distances_sq, axis=1)
         min_distances_sq = distances_sq[src_indices, min_distance_sq_indices]
 
-        src_idx_to_tgt_idx = np.where(
+        return np.where(
             min_distances_sq < tol**2,
             min_distance_sq_indices,
             -1)
-
-        return src_idx_to_tgt_idx
 
     else:
         both_points = np.concatenate((tgt_points, src_points), axis=1)

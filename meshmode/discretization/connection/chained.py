@@ -215,9 +215,8 @@ def flatten_chained_connection(actx, connection):
 
     # recursively build direct connections
     connections = connection.connections
-    direct_connections = []
-    for conn in connections:
-        direct_connections.append(flatten_chained_connection(actx, conn))
+    direct_connections = [
+        flatten_chained_connection(actx, conn) for conn in connections]
 
     direct_connections = [conn for conn in direct_connections
             if not isinstance(conn, IdentityDiscretizationConnection)]

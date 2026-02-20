@@ -34,7 +34,6 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from typing_extensions import TypeIs, override
 
-import pytools.obj_array as obj_array
 from arraycontext import (
     Array,
     ArrayContext,
@@ -43,7 +42,7 @@ from arraycontext import (
     flatten,
 )
 from modepy.shapes import Hypercube, Shape, Simplex
-from pytools import memoize_method
+from pytools import memoize_method, obj_array
 from pytools.obj_array import ObjectArray, ObjectArray1D
 
 from meshmode.discretization.connection.direct import (
@@ -256,13 +255,10 @@ def _check_discr_same_connectivity(
     if len(discr.groups) != len(other.groups):
         return False
 
-    if not all(
-            sg.discretization_key() == og.discretization_key()
-            and sg.nelements == og.nelements
-            for sg, og in zip(discr.groups, other.groups, strict=True)):
-        return False
-
-    return True
+    return all(
+        sg.discretization_key() == og.discretization_key()
+        and sg.nelements == og.nelements
+        for sg, og in zip(discr.groups, other.groups, strict=True))
 
 # }}}
 
@@ -345,7 +341,7 @@ class VTKConnectivity:
 
     @property
     def simplex_cell_types(self) -> dict[int, int]:
-        import pyvisfile.vtk as vtk
+        from pyvisfile import vtk
         return {
                 1: vtk.VTK_LINE,
                 2: vtk.VTK_TRIANGLE,
@@ -354,7 +350,7 @@ class VTKConnectivity:
 
     @property
     def tensor_cell_types(self) -> dict[int, int]:
-        import pyvisfile.vtk as vtk
+        from pyvisfile import vtk
         return {
                 1: vtk.VTK_LINE,
                 2: vtk.VTK_QUAD,
@@ -462,7 +458,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
     @property
     @override
     def simplex_cell_types(self) -> dict[int, int]:
-        import pyvisfile.vtk as vtk
+        from pyvisfile import vtk
         return {
                 1: vtk.VTK_LAGRANGE_CURVE,
                 2: vtk.VTK_LAGRANGE_TRIANGLE,
@@ -472,7 +468,7 @@ class VTKLagrangeConnectivity(VTKConnectivity):
     @property
     @override
     def tensor_cell_types(self) -> dict[int, int]:
-        import pyvisfile.vtk as vtk
+        from pyvisfile import vtk
         return {
                 1: vtk.VTK_LAGRANGE_CURVE,
                 2: vtk.VTK_LAGRANGE_QUADRILATERAL,
@@ -645,7 +641,7 @@ class Visualizer:
 
     def show_scalar_in_mayavi(self, field, **kwargs):
         # pylint: disable=import-error
-        import mayavi.mlab as mlab
+        from mayavi import mlab
 
         do_show = kwargs.pop("do_show", True)
 
@@ -1125,7 +1121,7 @@ class Visualizer:
                 stack=True, by_group=True)
 
     def _vtk_to_xdmf_cell_type(self, cell_type: int):
-        import pyvisfile.vtk as vtk
+        from pyvisfile import vtk
         from pyvisfile.xdmf import TopologyType
         return {
                 vtk.VTK_LINE: TopologyType.Polyline,
@@ -1301,7 +1297,7 @@ class Visualizer:
         import matplotlib.pyplot as plt
 
         # This import also registers the 3D projection.
-        import mpl_toolkits.mplot3d.art3d as art3d
+        from mpl_toolkits.mplot3d import art3d
 
         do_show = kwargs.pop("do_show", True)
         vmin = kwargs.pop("vmin", None)
