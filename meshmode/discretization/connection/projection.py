@@ -67,9 +67,9 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
 
             return cls(connections.connections, is_surjective=is_surjective)
         else:
-            conns = []
-            for cnx in reversed(connections):
-                conns.append(cls(cnx, is_surjective=is_surjective))
+            conns = [
+                cls(cnx, is_surjective=is_surjective)
+                for cnx in reversed(connections)]
 
             return ChainedDiscretizationConnection(conns)
 
@@ -217,9 +217,8 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 sgrp = self.from_discr.groups[batch.from_group_index]
 
                 # Generate the basis tabulation matrix
-                tabulations = []
-                for basis_fn in sgrp.basis_obj().functions:
-                    tabulations.append(basis_fn(batch.result_unit_nodes).flatten())
+                tabulations = [basis_fn(batch.result_unit_nodes).flatten()
+                    for basis_fn in sgrp.basis_obj().functions]
                 tabulations = actx.from_numpy(np.asarray(tabulations))
 
                 # NOTE: batch.*_element_indices are reversed here because

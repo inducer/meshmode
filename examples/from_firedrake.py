@@ -107,7 +107,7 @@ def main(visualize=True):
         ax2.set_title("cos(x+y) in\nFiredrakeConnection 'on_boundary'")
         bdy_vis.show_scalar_in_matplotlib_3d(bdy_field, do_show=False)
 
-        import matplotlib.cm as cm
+        from matplotlib import cm
         fig.colorbar(cm.ScalarMappable(), ax=ax2)
         plt.show()
 

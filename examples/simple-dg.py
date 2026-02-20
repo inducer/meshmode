@@ -31,7 +31,6 @@ import numpy.linalg as la  # noqa
 
 import pyopencl as cl
 import pyopencl.array as cla  # noqa
-import pytools.obj_array as obj_array
 from arraycontext import (
     ArrayContainer,
     ArrayContext,
@@ -39,7 +38,7 @@ from arraycontext import (
     map_array_container,
     with_container_arithmetic,
 )
-from pytools import log_process, memoize_method
+from pytools import log_process, memoize_method, obj_array
 from pytools.obj_array import ObjectArray1D, ObjectArray2D
 
 from meshmode.array_context import PyOpenCLArrayContext, PytatoPyOpenCLArrayContext
@@ -156,9 +155,7 @@ class DGDiscretization:
             return self.all_faces_connection()
         elif src_tgt == ("vol", BTAG_ALL):
             return self.boundary_connection(tgt)
-        elif src_tgt == ("int_faces", "all_faces"):
-            return self.get_to_all_face_embedding(src)
-        elif src_tgt == (BTAG_ALL, "all_faces"):
+        elif src_tgt in (("int_faces", "all_faces"), (BTAG_ALL, "all_faces")):
             return self.get_to_all_face_embedding(src)
         else:
             raise ValueError(f"locations '{src}'->'{tgt}' not understood")

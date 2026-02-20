@@ -25,9 +25,8 @@ import logging
 import numpy as np
 
 import pyopencl as cl
-import pytools.obj_array as obj_array
 from arraycontext import Array, ArrayContext
-from pytools import keyed_memoize_in
+from pytools import keyed_memoize_in, obj_array
 
 from meshmode.array_context import PyOpenCLArrayContext
 from meshmode.discretization import (

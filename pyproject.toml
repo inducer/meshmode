@@ -100,6 +100,8 @@ extend-ignore = [
     "N818", # error suffix in exception names
     "UP032", # use f-strings instead of .format
     "RUF067", # no code in __init__ *shrug*
+    "TRY004",
+    "SIM102",
 ]
 
 [tool.ruff.lint.flake8-quotes]
@@ -130,7 +132,8 @@ required-imports = ["from __future__ import annotations"]
 
 [tool.ruff.lint.per-file-ignores]
 "examples/*.py" = ["I002"]
-"doc/conf.py" = ["I002"]
+"doc/conf.py" = ["I002", "S102"]
+"test/test_*.py" = ["S102"]
 
 [tool.pytest.ini_options]
 markers = [

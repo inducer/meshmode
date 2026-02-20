@@ -84,10 +84,8 @@ def draw_2d_mesh(
             pathdata = [
                 (Path.MOVETO, (elverts[0, 0], elverts[1, 0])),
                 ]
-            for i in range(1, elverts.shape[1]):
-                pathdata.append(
-                    (Path.LINETO, (elverts[0, i], elverts[1, i]))
-                    )
+            pathdata.extend((Path.LINETO, (elverts[0, i], elverts[1, i]))
+                for i in range(1, elverts.shape[1]))
             pathdata.append(
                 (Path.CLOSEPOLY, (elverts[0, 0], elverts[1, 0])))
 

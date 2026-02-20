@@ -86,10 +86,8 @@ def create_discretization(actx, ndim,
     from meshmode.discretization.poly_element import (
         InterpolatoryQuadratureSimplexGroupFactory,
     )
-    discr = Discretization(actx, mesh,
+    return Discretization(actx, mesh,
             InterpolatoryQuadratureSimplexGroupFactory(order))
-
-    return discr
 
 
 def create_refined_connection(actx, discr, threshold=0.3):
@@ -105,10 +103,8 @@ def create_refined_connection(actx, discr, threshold=0.3):
     refiner.refine(flags)
 
     discr_order = discr.groups[0].order
-    connection = make_refinement_connection(actx, refiner, discr,
+    return make_refinement_connection(actx, refiner, discr,
             InterpolatoryQuadratureSimplexGroupFactory(discr_order))
-
-    return connection
 
 
 def create_face_connection(actx, discr):
@@ -118,12 +114,10 @@ def create_face_connection(actx, discr):
     )
 
     discr_order = discr.groups[0].order
-    connection = make_face_restriction(actx, discr,
+    return make_face_restriction(actx, discr,
             InterpolatoryQuadratureSimplexGroupFactory(discr_order),
             FACE_RESTR_ALL,
             per_face_groups=True)
-
-    return connection
 
 
 @pytest.mark.skip(reason="implementation detail")

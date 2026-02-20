@@ -209,7 +209,7 @@ def _get_firedrake_boundary_tags(fdrake_mesh, tag_induced_boundary=False):
 def _get_facet_markers(dm, facets):
     # based on code removed in
     # https://github.com/firedrakeproject/firedrake/commit/9125a65c0cb5bb671c62c33f05a0d42b983e06ed
-    import firedrake.cython.dmcommon as dmcommon
+    from firedrake.cython import dmcommon
 
     ids = np.empty_like(facets)
     ids.fill(-1)

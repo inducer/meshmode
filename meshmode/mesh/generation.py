@@ -1631,9 +1631,8 @@ def generate_box_mesh(
                         AffineMap(offset=offset)),
                     1e-12*offset[idim]))
 
-        periodic_mesh = glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols)
+        return glue_mesh_boundaries(mesh, bdry_pair_mappings_and_tols)
 
-        return periodic_mesh
     else:
         return mesh
 
@@ -1828,11 +1827,10 @@ def generate_annular_cylinder_slice_mesh(
         aff_map = AffineMap(matrix, center - matrix @ center)
 
         from meshmode.mesh.processing import BoundaryPairMapping, glue_mesh_boundaries
-        periodic_mesh = glue_mesh_boundaries(
+        return glue_mesh_boundaries(
             mesh, bdry_pair_mappings_and_tols=[
                 (BoundaryPairMapping("-theta", "+theta", aff_map), 1e-12)])
 
-        return periodic_mesh
     else:
         return mesh
 

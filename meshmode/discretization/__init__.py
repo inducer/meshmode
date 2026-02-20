@@ -35,9 +35,8 @@ from typing_extensions import override
 
 import loopy as lp
 import modepy as mp
-import pytools.obj_array as obj_array
 from arraycontext import Array, ArrayContext, make_loopy_program, tag_axes
-from pytools import keyed_memoize_in, memoize_in, memoize_method
+from pytools import keyed_memoize_in, memoize_in, memoize_method, obj_array
 
 # underscored because it shouldn't be imported from here.
 from meshmode.dof_array import DOFArray as _DOFArray

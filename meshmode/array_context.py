@@ -277,11 +277,9 @@ class PytatoPyOpenCLArrayContext(PytatoPyOpenCLArrayContextBase):
             else:
                 return expr
 
-        dag = pt.transform.map_and_copy(dag, untag_loopy_call_results)
+        return pt.transform.map_and_copy(dag, untag_loopy_call_results)
 
         # }}}
-
-        return dag
 
     @override
     def transform_loopy_program(self, t_unit: TranslationUnit):

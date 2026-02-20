@@ -216,8 +216,8 @@ def test_refinement_connection(
         f_true = f(x_fine)
 
         if visualize == "dots":
-            import matplotlib.cm as cm
             import matplotlib.pyplot as plt
+            from matplotlib import cm
 
             x = x.get(actx.queue)
             err = np.array(np.log10(
