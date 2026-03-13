@@ -10710,6 +10710,14 @@
                 }
             },
             {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 36,
+                    "endColumn": 41,
+                    "lineCount": 1
+                }
+            },
+            {
                 "code": "reportUnknownParameterType",
                 "range": {
                     "startColumn": 12,
@@ -26250,6 +26258,14 @@
                 "range": {
                     "startColumn": 46,
                     "endColumn": 50,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 20,
+                    "endColumn": 33,
                     "lineCount": 1
                 }
             },
