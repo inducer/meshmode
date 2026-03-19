@@ -1624,6 +1624,43 @@ def test_urchin():
     mgen.generate_urchin(3, 2, 4, 1e-4)
 
 
+def test_warp_and_refine_until_resolved_tensor_product():
+    """Test that warp_and_refine_until_resolved works with TensorProductElementGroup."""
+    from dataclasses import replace
+
+    from meshmode.mesh import TensorProductElementGroup, make_mesh
+    from meshmode.mesh.generation import warp_and_refine_until_resolved
+
+    def warp_mesh(mesh):
+        def warp_coords(coords):
+            x, y = coords
+            new_x = x + 0.1 * np.sin(2 * np.pi * y)
+            new_y = y + 0.1 * np.sin(2 * np.pi * x)
+            return np.array([new_x, new_y])
+
+        groups = [
+            replace(grp, nodes=warp_coords(grp.nodes))
+            for grp in mesh.groups]
+
+        return make_mesh(
+            warp_coords(mesh.vertices),
+            groups,
+            node_vertex_consistency_tolerance=False,
+            is_conforming=mesh.is_conforming,
+        )
+
+    mesh = mgen.generate_regular_rect_mesh(
+        a=(0, 0), b=(1, 1), nelements_per_axis=(3, 3),
+        group_cls=TensorProductElementGroup, order=4)
+
+    result = warp_and_refine_until_resolved(mesh, warp_mesh, 1e-3)
+
+    # The result must still be tensor product elements
+    assert isinstance(result.groups[0], TensorProductElementGroup)
+    # The highly oscillatory warp should have triggered refinement
+    assert result.nelements > mesh.nelements
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
