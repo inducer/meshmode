@@ -1899,7 +1899,7 @@ def warp_and_refine_until_resolved(
 
             interp_err_est_mat = simplex_interp_error_coefficient_estimator_matrix(
                     egrp.unit_nodes, egrp.order,
-                    n_tail_orders=1 if warped_mesh.dim > 1 else 2)
+                    n_tail_orders=2)
 
             basis = mp.orthonormal_basis_for_space(
                 egrp.space, egrp.shape)
