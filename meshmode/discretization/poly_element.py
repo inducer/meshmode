@@ -564,9 +564,7 @@ class TensorProductElementGroupBase(
         quads: list[mp.Quadrature] = []
 
         if self.dim != 1:
-            nodes_tp = cast(
-                "ArrayF",
-                reshape_array_for_tensor_product_space(self.space, self._nodes))
+            nodes_tp = reshape_array_for_tensor_product_space(self.space, self._nodes)
         else:
             nodes_tp = self._nodes
 
