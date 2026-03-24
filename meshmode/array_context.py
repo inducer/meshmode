@@ -273,7 +273,10 @@ class PytatoPyOpenCLArrayContext(PytatoPyOpenCLArrayContextBase):
                     new_axes = (pt.Axis(frozenset()),)*expr.ndim
                 else:
                     new_axes = expr.axes
-                return expr.replace_if_different(tags=new_tags, axes=new_axes)
+                return expr.replace_if_different(
+                    tags=expr.tags if expr.tags == new_tags else new_tags,
+                    axes=expr.axes if expr.axes == new_axes else new_axes,
+                )
             else:
                 return expr
 
