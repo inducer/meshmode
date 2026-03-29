@@ -30,7 +30,7 @@ from meshmode.array_context import PyOpenCLArrayContext
 
 # Nb: Some of the initial setup was adapted from meshmode/examplse/simple-dg.py
 #     written by Andreas Klockner:
-#    https://gitlab.tiker.net/inducer/meshmode/-/blob/7826fa5e13854bf1dae425b4226865acc10ee01f/examples/simple-dg.py  # noqa : E501
+#    https://gitlab.tiker.net/inducer/meshmode/-/blob/7826fa5e13854bf1dae425b4226865acc10ee01f/examples/simple-dg.py
 def main():
     # If can't import firedrake, do nothing
     #
