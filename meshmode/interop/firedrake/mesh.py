@@ -258,7 +258,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     # (ordered lexicographically by the vertex excluded from the face,
     #  search for "local facet number" in the following paper for
     #  a reference on this...
-    # https://spiral.imperial.ac.uk/bitstream/10044/1/28819/2/mlange-firedrake-dmplex-accepted.pdf  # noqa : E501
+    # https://spiral.imperial.ac.uk/bitstream/10044/1/28819/2/mlange-firedrake-dmplex-accepted.pdf
     # )
     # and meshmode's facet ordering: obtained from a simplex element group
     import modepy as mp
@@ -476,7 +476,7 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
         # In this case we have a 2-surface embedded in 3-space.
         # In this case, we assume the user has called
         # :func:`firedrake.mesh.MeshGeometry.init_cell_orientations`, see
-        # https://www.firedrakeproject.org/variational-problems.html#ensuring-consistent-cell-orientations  # noqa : E501
+        # https://www.firedrakeproject.org/variational-problems.html#ensuring-consistent-cell-orientations
         # for a tutorial on how these are usually initialized.
         #
         # Unfortunately, *init_cell_orientations* is currently only implemented

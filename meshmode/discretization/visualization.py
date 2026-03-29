@@ -661,7 +661,7 @@ class Visualizer:
 
             args = (*nodes, field)
 
-            # https://docs.enthought.com/mayavi/mayavi/auto/example_plotting_many_lines.html  # noqa: E501
+            # https://docs.enthought.com/mayavi/mayavi/auto/example_plotting_many_lines.html
             src = mlab.pipeline.scalar_scatter(*args)
 
             src.mlab_source.dataset.lines = vis_connectivity.reshape(-1, 2)

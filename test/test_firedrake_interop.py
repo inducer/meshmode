@@ -158,7 +158,7 @@ def check_consistency(fdrake_fspace, discr, group_nr=0):
 
     # Ensure that the vertex sets are identical up to reordering
     # Nb: I got help on this from stack overflow:
-    # https://stackoverflow.com/questions/38277143/sort-2d-numpy-array-lexicographically  # noqa: E501
+    # https://stackoverflow.com/questions/38277143/sort-2d-numpy-array-lexicographically
     lex_sorted_mm_verts = meshmode_verts[:, np.lexsort(meshmode_verts)]
     lex_sorted_fdrake_verts = fdrake_verts[np.lexsort(fdrake_verts.T)]
     np.testing.assert_allclose(lex_sorted_mm_verts, lex_sorted_fdrake_verts.T,
@@ -278,7 +278,7 @@ def test_from_boundary_consistency(actx_factory: ArrayContextFactory,
     # the boundary are identical to the resultant meshes' vertices up to
     # reordering
     # Nb: I got help on this from stack overflow:
-    # https://stackoverflow.com/questions/38277143/sort-2d-numpy-array-lexicographically  # noqa: E501
+    # https://stackoverflow.com/questions/38277143/sort-2d-numpy-array-lexicographically
     lex_sorted_mm_verts = meshmode_verts[:, np.lexsort(meshmode_verts)]
     lex_sorted_fdrake_verts = fdrake_verts[np.lexsort(fdrake_verts.T)]
     np.testing.assert_allclose(lex_sorted_mm_verts, lex_sorted_fdrake_verts.T,

@@ -895,7 +895,7 @@ def generate_torus_and_cycle_vertices(
 
     # {{{ evaluate on torus
 
-    # https://web.archive.org/web/20160410151837/https://www.math.hmc.edu/~gu/curves_and_surfaces/surfaces/torus.html  # noqa: E501
+    # https://web.archive.org/web/20160410151837/https://www.math.hmc.edu/~gu/curves_and_surfaces/surfaces/torus.html
 
     # create new vertices without the endpoints
     u = np.linspace(0.0, 2.0 * np.pi, n_major, endpoint=False)
