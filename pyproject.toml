@@ -176,6 +176,7 @@ reportImportCycles = "none"
 
 ignore = [
     "doc/conf.py",
+    ".venv",
 ]
 
 [[tool.basedpyright.executionEnvironments]]
