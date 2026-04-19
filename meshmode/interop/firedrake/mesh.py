@@ -111,7 +111,7 @@ def _get_firedrake_nodal_info(fdrake_mesh_topology, cells_to_use=None):
     else:
         num_cells = np.size(cells_to_use)
     from pyop2.datatypes import IntType
-    vertex_indices = -np.ones((num_cells, top.ufl_cell().num_vertices()),
+    vertex_indices = -np.ones((num_cells, top.ufl_cell().num_vertices),
                               dtype=IntType)
     # This will map fd cell ndx (or its new index as dictated by
     #                            *cells_to_use* if *cells_to_use*
@@ -269,7 +269,7 @@ def _get_firedrake_facial_adjacency_groups(fdrake_mesh_topology,
     fd_loc_fac_nr_to_mm = {}
     # Figure out which vertex is excluded to get the corresponding
     # firedrake local index
-    all_local_facet_nrs = set(range(top.ufl_cell().num_vertices()))
+    all_local_facet_nrs = set(range(top.ufl_cell().num_vertices))
     for mm_local_facet_nr, face in enumerate(mm_face_vertex_indices):
         fd_local_facet_nr = all_local_facet_nrs - set(face)
         assert len(fd_local_facet_nr) == 1
@@ -439,8 +439,8 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
         *cells_to_use[i]*\ th element.
     """
     # compute orientations
-    tdim = fdrake_mesh.topological_dimension()
-    gdim = fdrake_mesh.geometric_dimension()
+    tdim = fdrake_mesh.topological_dimension
+    gdim = fdrake_mesh.geometric_dimension
 
     orient = None
     if gdim == tdim:
@@ -600,9 +600,9 @@ build_connection_from_firedrake`.
         assert np.all(np.logical_and(cells_to_use >= 0,
                                      cells_to_use < fdrake_mesh.num_cells()))
 
-    assert fdrake_mesh.ufl_cell().is_simplex(), "Mesh must use simplex cells"
-    gdim = fdrake_mesh.geometric_dimension()
-    tdim = fdrake_mesh.topological_dimension()
+    assert fdrake_mesh.ufl_cell().is_simplex, "Mesh must use simplex cells"
+    gdim = fdrake_mesh.geometric_dimension
+    tdim = fdrake_mesh.topological_dimension
 
     assert gdim in [1, 2, 3], "Mesh must be in space of ambient dim 1, 2, or 3"
     assert gdim - tdim in [0, 1], "Mesh co-dimension must be 0 or 1"
