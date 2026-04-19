@@ -215,7 +215,7 @@ class FiredrakeConnection:
         # Get meshmode unit nodes
         mm_unit_nodes = element_grp.unit_nodes
         # get firedrake unit nodes and map onto meshmode reference element
-        tdim = fdrake_fspace.mesh().topological_dimension()
+        tdim = fdrake_fspace.mesh().topological_dimension
         fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(tdim, True)
         fd_unit_nodes = get_finat_element_unit_nodes(fdrake_fspace.finat_element)
         fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)
@@ -783,7 +783,7 @@ InterpolatoryQuadratureSimplexElementGroup`.
         export_mesh_to_firedrake(discr.mesh, group_nr, comm)
     fspace = FunctionSpace(fd_mesh, "DG", el_group.order)
     # get firedrake unit nodes and map onto meshmode reference element
-    dim = fspace.mesh().topological_dimension()
+    dim = fspace.mesh().topological_dimension
     fd_ref_cell_to_mm = get_affine_reference_simplex_mapping(dim, True)
     fd_unit_nodes = get_finat_element_unit_nodes(fspace.finat_element)
     fd_unit_nodes = fd_ref_cell_to_mm(fd_unit_nodes)

@@ -141,7 +141,7 @@ def check_consistency(fdrake_fspace, discr, group_nr=0):
     fdrake_vert_indices = cfspace.cell_node_list[:, fdrake_unit_vert_indices]
     fdrake_vert_indices = np.unique(fdrake_vert_indices)
     fdrake_verts = fdrake_mesh.coordinates.dat.data[fdrake_vert_indices, ...]
-    if fdrake_mesh.geometric_dimension() == 1:
+    if fdrake_mesh.geometric_dimension == 1:
         fdrake_verts = fdrake_verts[:, np.newaxis]
 
     meshmode_verts = discr.mesh.vertices
@@ -151,7 +151,7 @@ def check_consistency(fdrake_fspace, discr, group_nr=0):
     assert len(discr.mesh.groups) == 1
     fdrake_mesh_fspace = fdrake_mesh.coordinates.function_space()
     fdrake_mesh_order = fdrake_mesh_fspace.finat_element.degree
-    assert discr.mesh.groups[group_nr].dim == fdrake_mesh.topological_dimension()
+    assert discr.mesh.groups[group_nr].dim == fdrake_mesh.topological_dimension
     assert discr.mesh.groups[group_nr].order == fdrake_mesh_order
     assert discr.mesh.groups[group_nr].nelements == fdrake_mesh.num_cells()
     assert discr.mesh.nvertices == fdrake_mesh.num_vertices()
@@ -246,7 +246,7 @@ def test_from_boundary_consistency(actx_factory: ArrayContextFactory,
     assert len(discr.mesh.groups) == 1
     fdrake_mesh_fspace = fdrake_mesh.coordinates.function_space()
     fdrake_mesh_order = fdrake_mesh_fspace.finat_element.degree
-    assert discr.mesh.groups[0].dim == fdrake_mesh.topological_dimension()
+    assert discr.mesh.groups[0].dim == fdrake_mesh.topological_dimension
     assert discr.mesh.groups[0].order == fdrake_mesh_order
 
     # Get the unit vertex indices (in each cell)
@@ -269,7 +269,7 @@ def test_from_boundary_consistency(actx_factory: ArrayContextFactory,
                                fdrake_unit_vert_indices[:, np.newaxis]]
     fdrake_vert_indices = np.unique(fdrake_vert_indices)
     fdrake_verts = fdrake_mesh.coordinates.dat.data[fdrake_vert_indices, ...]
-    if fdrake_mesh.geometric_dimension() == 1:
+    if fdrake_mesh.geometric_dimension == 1:
         fdrake_verts = fdrake_verts[:, np.newaxis]
     # Get meshmode vertices (shaped like (dim, nverts))
     meshmode_verts = discr.mesh.vertices
@@ -642,7 +642,7 @@ def test_from_fd_idempotency(actx_factory: ArrayContextFactory,
         fdrake_fspace = TensorFunctionSpace(fdrake_mesh, "DG", fspace_degree)
         # use the coordinates, duplicated into the right tensor shape
         xx = SpatialCoordinate(fdrake_fspace.mesh())
-        dim = fdrake_fspace.mesh().geometric_dimension()
+        dim = fdrake_fspace.mesh().geometric_dimension
         unique_expr = as_tensor([xx for _ in range(dim)])
         fdrake_unique = Function(fdrake_fspace).interpolate(unique_expr)
 
