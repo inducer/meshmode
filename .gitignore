@@ -24,5 +24,6 @@ a.out
 .pytest_cache
 .pylintrc.yml
 .run-pylint.py
+.venv
 
 test/nodal-dg
