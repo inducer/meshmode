@@ -22954,6 +22954,14 @@
             {
                 "code": "reportUnknownVariableType",
                 "range": {
+                    "startColumn": 15,
+                    "endColumn": 43,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnknownVariableType",
+                "range": {
                     "startColumn": 8,
                     "endColumn": 14,
                     "lineCount": 1
