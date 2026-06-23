@@ -156,7 +156,7 @@ extend-ignore-re = [
 "mananger" = "mananger"
 
 [tool.basedpyright]
-pythonVersion = "3.10"
+pythonVersion = "3.12"
 pythonPlatform = "All"
 
 reportImplicitStringConcatenation = "none"
