@@ -293,6 +293,7 @@ class DOFArray:
 
     # {{{ pickling
 
+    @override
     def __getstate__(self):
         try:
             actx = _ARRAY_CONTEXT_FOR_PICKLING_TLS.actx
