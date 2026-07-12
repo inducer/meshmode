@@ -436,7 +436,7 @@ def _deserialize_dof_container(
         return type(template)(
                 template.array_context,
                 # NOTE: tuple([]) is faster, and this is a cost-sensitive code path.
-                data=tuple([v for _i, v in iterable]))  # noqa: C409
+                data=tuple([v for _i, v in iterable]))
 
 
 @with_array_context.register(DOFArray)
