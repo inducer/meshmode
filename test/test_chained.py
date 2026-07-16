@@ -34,7 +34,7 @@ from arraycontext import (
     pytest_generate_tests_for_array_contexts,
 )
 
-from meshmode import _acf  # noqa: F401
+from meshmode import _acf  # ruff:ignore[unused-import]
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from meshmode.dof_array import flat_norm
 

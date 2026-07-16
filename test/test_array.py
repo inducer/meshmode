@@ -39,7 +39,7 @@ from arraycontext import (
 from pytools import obj_array
 from pytools.tag import Tag
 
-from meshmode import _acf  # noqa: F401
+from meshmode import _acf  # ruff:ignore[unused-import]
 from meshmode.array_context import (
     PytestPyOpenCLArrayContextFactory,
     PytestPytatoPyOpenCLArrayContextFactory,

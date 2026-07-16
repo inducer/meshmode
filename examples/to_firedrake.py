@@ -37,7 +37,7 @@ def main():
     # filename MUST include "firedrake" (i.e. match *firedrake*.py) in order
     # to be run during CI
     try:
-        import firedrake  # noqa : F401
+        import firedrake  # ruff:ignore[unused-import]
     except ImportError:
         return 0
 

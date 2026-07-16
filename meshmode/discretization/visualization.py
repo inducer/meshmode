@@ -367,7 +367,7 @@ class VTKConnectivity:
         if isinstance(grp.mesh_el_group, ModepyElementGroup):
             shape = grp.mesh_el_group.shape
             space = mp.space_for_shape(shape, grp.order)
-            assert type(space) == type(grp.mesh_el_group.space)  # noqa: E721
+            assert type(space) == type(grp.mesh_el_group.space)  # ruff:ignore[type-comparison]
 
             node_tuples = mp.node_tuples_for_space(space)
 

@@ -1019,7 +1019,7 @@ def default_simplex_group_factory(base_dim: int, order: int) -> ElementGroupFact
     try:
         # FIXME: this is a hard dependency (in pyproject.toml) now, so this
         # shouldn't be needed
-        import recursivenodes  # noqa: F401
+        import recursivenodes  # ruff:ignore[unused-import]
     except ImportError:
         # If it cannot be imported, use warp-and-blend nodes.
         if base_dim <= 2:

@@ -253,14 +253,14 @@ def _get_group_tessellated_nodes_modepy(
 def _get_group_tessellation_info_modepy(meg: ModepyElementGroup):
     shape = meg.shape
     space = mp.space_for_shape(shape, 2)
-    assert type(space) == type(meg.space)       # noqa: E721
+    assert type(space) == type(meg.space)       # ruff:ignore[type-comparison]
 
     ref_vertices = mp.node_tuples_for_space(space)
     ref_vertices_to_index = {rv: i for i, rv in enumerate(ref_vertices)}
 
     from pytools import add_tuples
     space = mp.space_for_shape(shape, 1)
-    assert type(space) == type(meg.space)  # noqa: E721
+    assert type(space) == type(meg.space)  # ruff:ignore[type-comparison]
     orig_vertices = tuple(add_tuples(vt, vt) for vt in mp.node_tuples_for_space(space))
     orig_vertex_indices = [ref_vertices_to_index[vt] for vt in orig_vertices]
 
