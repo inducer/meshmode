@@ -1,4 +1,4 @@
-import numpy as np  # noqa
+import numpy as np  # ruff:ignore[unused-import]
 
 import pyopencl as cl
 
@@ -13,7 +13,7 @@ def main():
     queue = cl.CommandQueue(cl_ctx)
     actx = PyOpenCLArrayContext(queue)
 
-    from meshmode.mesh.generation import (  # noqa: F401
+    from meshmode.mesh.generation import (  # ruff:ignore[unused-import]
         generate_icosahedron,
         generate_sphere,
         generate_torus,

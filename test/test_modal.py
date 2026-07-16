@@ -32,7 +32,7 @@ import pytest
 from arraycontext import ArrayContextFactory, pytest_generate_tests_for_array_contexts
 
 import meshmode.mesh.generation as mgen
-from meshmode import _acf  # noqa: F401
+from meshmode import _acf  # ruff:ignore[unused-import]
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from meshmode.discretization import Discretization
 from meshmode.discretization.connection.modal import (

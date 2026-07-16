@@ -40,7 +40,7 @@ from arraycontext import (
     unflatten,
 )
 
-from meshmode import _acf  # noqa: F401
+from meshmode import _acf  # ruff:ignore[unused-import]
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from meshmode.discretization.poly_element import default_simplex_group_factory
 from meshmode.dof_array import flat_norm

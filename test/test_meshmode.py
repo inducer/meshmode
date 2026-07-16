@@ -39,7 +39,7 @@ from arraycontext import (
 from pytools import obj_array
 
 import meshmode.mesh.generation as mgen
-from meshmode import _acf  # noqa: F401
+from meshmode import _acf  # ruff:ignore[unused-import]
 from meshmode.array_context import (
     PytestPyOpenCLArrayContextFactory,
     PytestPytatoPyOpenCLArrayContextFactory,
@@ -489,7 +489,7 @@ def test_opposite_face_interpolation(actx_factory: ArrayContextFactory, group_fa
 
 # {{{ element orientation: canned 3D meshes
 
-# python test_meshmode.py "test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)"  # noqa: E501
+# python test_meshmode.py "test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)"  # ruff:ignore[line-too-long]
 @pytest.mark.parametrize(("what", "mesh_gen_func"), [
     ("ball", lambda: mgen.generate_icosahedron(1, 1)),
     ("torus", lambda: mgen.generate_torus(5, 1)),
@@ -777,7 +777,7 @@ def test_sanity_qhull_nd(actx_factory: ArrayContextFactory, dim, order):
 
 # {{{ sanity checks: ball meshes
 
-# python test_meshmode.py "test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)"  # noqa: E501
+# python test_meshmode.py "test_sanity_balls(cl._csc, "disk-radius-1.step", 2, 2, visualize=True)"  # ruff:ignore[line-too-long]
 @pytest.mark.parametrize(("src_file", "dim"), [
     ("disk-radius-1.step", 2),
     ("ball-radius-1.step", 3),

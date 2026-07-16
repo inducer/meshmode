@@ -6,7 +6,7 @@ _conf_url = "https://raw.githubusercontent.com/inducer/sphinxconfig/main/sphinxc
 with urlopen(_conf_url) as _inf:
     exec(compile(_inf.read(), _conf_url, "exec"), globals())
 
-extensions.extend([  # noqa: F821
+extensions.extend([  # ruff:ignore[undefined-name]
     "sphinx.ext.graphviz",
     "sphinxcontrib.tikz",
 ])
@@ -77,7 +77,7 @@ sphinxconfig_missing_reference_aliases = {
 
 
 def setup(app):
-    app.connect("missing-reference", process_autodoc_missing_reference)  # noqa: F821
+    app.connect("missing-reference", process_autodoc_missing_reference)  # ruff:ignore[undefined-name]
 
 
 # Some modules need to import things just so that sphinx can resolve symbols in

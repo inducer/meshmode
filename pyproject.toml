@@ -89,19 +89,19 @@ extend-select = [
 ]
 extend-ignore = [
     "C90",  # McCabe complexity
-    "E226", # missing whitespace around arithmetic operator
-    "E241", # multiple spaces after comma
-    "E242", # tab after comma
-    "E265", # comment should have a space
-    "E402", # module level import not at the top of file
-    "N802", # function name should be lowercase
-    "N803", # argument name should be lowercase
-    "N806", # variable name should be lowercase
-    "N818", # error suffix in exception names
-    "UP032", # use f-strings instead of .format
-    "RUF067", # no code in __init__ *shrug*
-    "TRY004",
-    "SIM102",
+    "missing-whitespace-around-arithmetic-operator",
+    "multiple-spaces-after-comma",
+    "tab-after-comma",
+    "no-space-after-block-comment",
+    "module-import-not-at-top-of-file",
+    "invalid-function-name",
+    "invalid-argument-name",
+    "non-lowercase-variable-in-function",
+    "error-suffix-on-exception-name",
+    "f-string",
+    "non-empty-init-module",
+    "type-check-without-type-error",
+    "collapsible-if",
 ]
 
 [tool.ruff.lint.flake8-quotes]
@@ -131,9 +131,9 @@ lines-after-imports = 2
 required-imports = ["from __future__ import annotations"]
 
 [tool.ruff.lint.per-file-ignores]
-"examples/*.py" = ["I002"]
-"doc/conf.py" = ["I002", "S102"]
-"test/test_*.py" = ["S102"]
+"examples/*.py" = ["missing-required-import"]
+"doc/conf.py" = ["missing-required-import", "exec-builtin"]
+"test/test_*.py" = ["exec-builtin"]
 
 [tool.pytest.ini_options]
 markers = [

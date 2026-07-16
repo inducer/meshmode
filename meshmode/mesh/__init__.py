@@ -100,11 +100,11 @@ BoundaryTag: TypeAlias = Hashable
 PartID = Hashable
 
 
-class BTAG_NONE:  # noqa: N801
+class BTAG_NONE:  # ruff:ignore[invalid-class-name]
     """A boundary tag representing an empty boundary or volume."""
 
 
-class BTAG_ALL:  # noqa: N801
+class BTAG_ALL:  # ruff:ignore[invalid-class-name]
     """A boundary tag representing the entire boundary or volume.
 
     In the case of the boundary, :class:`BTAG_ALL` does not include rank boundaries,
@@ -117,7 +117,7 @@ class BTAG_ALL:  # noqa: N801
     """
 
 
-class BTAG_REALLY_ALL:  # noqa: N801
+class BTAG_REALLY_ALL:  # ruff:ignore[invalid-class-name]
     """A boundary tag representing the entire boundary.
 
     Unlike :class:`BTAG_ALL`, this includes rank boundaries,
@@ -130,14 +130,14 @@ class BTAG_REALLY_ALL:  # noqa: N801
     """
 
 
-class BTAG_NO_BOUNDARY:  # noqa: N801
+class BTAG_NO_BOUNDARY:  # ruff:ignore[invalid-class-name]
     """A boundary tag indicating that this edge should not fall under
     :class:`BTAG_ALL`. Among other things, this is used to keep rank boundaries
     out of :class:`BTAG_ALL`.
     """
 
 
-class BTAG_PARTITION(BTAG_NO_BOUNDARY):  # noqa: N801
+class BTAG_PARTITION(BTAG_NO_BOUNDARY):  # ruff:ignore[invalid-class-name]
     """
     A boundary tag indicating that this edge is adjacent to an element of
     another :class:`Mesh`. The part identifier of the adjacent mesh is given
@@ -173,7 +173,7 @@ class BTAG_PARTITION(BTAG_NO_BOUNDARY):  # noqa: N801
         return f"{self.__class__.__name__}({self.part_id})"
 
 
-class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # noqa: N801
+class BTAG_INDUCED_BOUNDARY(BTAG_NO_BOUNDARY):  # ruff:ignore[invalid-class-name]
     """When a :class:`Mesh` is created as an element-by-element subset of another
     (as, for example, when using the Firedrake interop features
     while passing *restrict_to_boundary*), boundaries may arise where there
@@ -328,7 +328,7 @@ class MeshElementGroup(ABC):
 # {{{ modepy-based element group
 
 # https://stackoverflow.com/a/13624858
-class _classproperty(property):  # noqa: N801
+class _classproperty(property):  # ruff:ignore[invalid-class-name]
     @override
     def __get__(self, owner_self: Any, owner_cls: type | None = None) -> Any:
         assert self.fget is not None
@@ -409,7 +409,7 @@ class ModepyElementGroup(MeshElementGroup):
                    space=space)
 
     @_classproperty
-    def _modepy_shape_cls(cls) -> type[mp.Shape]:  # noqa: N805  # pylint: disable=no-self-argument
+    def _modepy_shape_cls(cls) -> type[mp.Shape]:  # ruff:ignore[invalid-first-argument-name-for-method]  # pylint: disable=no-self-argument
         return cls.shape_cls
 
     @property
@@ -991,9 +991,9 @@ def make_mesh(
             | None) = None,
         is_conforming: bool | None = None,
         # dtypes
-        vertex_id_dtype: DTypeLike = np.dtype("int32"),  # noqa: B008
-        element_id_dtype: DTypeLike = np.dtype("int32"),  # noqa: B008
-        face_id_dtype: DTypeLike = np.dtype("int8"),  # noqa: B008
+        vertex_id_dtype: DTypeLike = np.dtype("int32"),  # ruff:ignore[function-call-in-default-argument]
+        element_id_dtype: DTypeLike = np.dtype("int32"),  # ruff:ignore[function-call-in-default-argument]
+        face_id_dtype: DTypeLike = np.dtype("int8"),  # ruff:ignore[function-call-in-default-argument]
         # tests
         skip_tests: bool = False,
         node_vertex_consistency_tolerance: float | None = None,
@@ -1220,9 +1220,9 @@ class Mesh:
             vertices: onp.Array2D[np.floating] | None,
             groups: Iterable[MeshElementGroup],
             is_conforming: bool | None = None,
-            vertex_id_dtype: DTypeLike = np.dtype("int32"),  # noqa: B008
-            element_id_dtype: DTypeLike = np.dtype("int32"),  # noqa: B008
-            face_id_dtype: DTypeLike = np.dtype("int8"),  # noqa: B008
+            vertex_id_dtype: DTypeLike = np.dtype("int32"),  # ruff:ignore[function-call-in-default-argument]
+            element_id_dtype: DTypeLike = np.dtype("int32"),  # ruff:ignore[function-call-in-default-argument]
+            face_id_dtype: DTypeLike = np.dtype("int8"),  # ruff:ignore[function-call-in-default-argument]
             # cached variables
             nodal_adjacency: NodalAdjacencyLike | None = None,
             facial_adjacency_groups: FacialAdjacencyLike | None = None,
@@ -2186,7 +2186,7 @@ def check_bc_coverage(
         def get_bdry_counts(
                 bdry_grp: BoundaryAdjacencyGroup
             ) -> np.ndarray[tuple[int, int], np.dtype[np.integer[Any]]]:
-            counts = np.full((grp.nfaces, grp.nelements), 0)  # noqa: B023
+            counts = np.full((grp.nfaces, grp.nelements), 0)  # ruff:ignore[function-uses-loop-variable]
             counts[bdry_grp.element_faces, bdry_grp.elements] += 1
             return counts
 

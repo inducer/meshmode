@@ -33,7 +33,7 @@ import pytest
 from arraycontext import ArrayContextFactory, pytest_generate_tests_for_array_contexts
 
 import meshmode.mesh.generation as mgen
-from meshmode import _acf  # noqa: F401
+from meshmode import _acf  # ruff:ignore[unused-import]
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from meshmode.discretization.poly_element import (
     GaussLegendreTensorProductGroupFactory,
@@ -118,7 +118,7 @@ def uniform_refine_flags(mesh):
     #partial(random_refine_flags, 0.4)
     partial(even_refine_flags, 2)
 ])
-# test_refinement_connection(cl._csc, PolynomialWarpAndBlend2DRestrictingGroupFactory, 'warp', 2, [4, 5, 6], 5, partial(even_refine_flags, 2))  # noqa: E501
+# test_refinement_connection(cl._csc, PolynomialWarpAndBlend2DRestrictingGroupFactory, 'warp', 2, [4, 5, 6], 5, partial(even_refine_flags, 2))  # ruff:ignore[line-too-long]
 def test_refinement_connection(
         actx_factory: ArrayContextFactory, group_factory,
         mesh_name, dim, mesh_pars, mesh_order, refine_flags, visualize=False):
@@ -193,7 +193,7 @@ def test_refinement_connection(
 
             for iaxis in range(len(x)):
                 result = result * actx.np.sin(
-                        factor * (x[iaxis]/mesh_ext[iaxis]))  # noqa: B023
+                        factor * (x[iaxis]/mesh_ext[iaxis]))  # ruff:ignore[function-uses-loop-variable]
 
             return result
 

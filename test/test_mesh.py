@@ -40,7 +40,7 @@ from arraycontext import ArrayContextFactory, pytest_generate_tests_for_array_co
 import meshmode.mesh.generation as mgen
 import meshmode.mesh.io as mio
 import meshmode.mesh.processing as mproc
-from meshmode import _acf  # noqa: F401
+from meshmode import _acf  # ruff:ignore[unused-import]
 from meshmode.array_context import PytestPyOpenCLArrayContextFactory
 from meshmode.discretization.poly_element import (
     LegendreGaussLobattoTensorProductGroupFactory,

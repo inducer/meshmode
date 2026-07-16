@@ -34,9 +34,9 @@ __doc__ = """
 .. autoexception:: InconsistentAdjacencyError
 """
 
-from builtins import FileExistsError  # noqa: F401
+from builtins import FileExistsError  # ruff:ignore[unused-import]
 
-from meshmode.mesh.tools import AffineMap  # noqa: F401
+from meshmode.mesh.tools import AffineMap  # ruff:ignore[unused-import]
 
 
 class Error(RuntimeError):

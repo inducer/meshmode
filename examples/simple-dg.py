@@ -27,10 +27,10 @@ from operator import add
 from typing import ClassVar
 
 import numpy as np
-import numpy.linalg as la  # noqa
+import numpy.linalg as la  # ruff:ignore[unused-import]
 
 import pyopencl as cl
-import pyopencl.array as cla  # noqa
+import pyopencl.array as cla  # ruff:ignore[unused-import]
 from arraycontext import (
     ArrayContainer,
     ArrayContext,
@@ -43,7 +43,7 @@ from pytools.obj_array import ObjectArray1D, ObjectArray2D
 
 from meshmode.array_context import PyOpenCLArrayContext, PytatoPyOpenCLArrayContext
 from meshmode.dof_array import DOFArray, flat_norm
-from meshmode.mesh import BTAG_ALL, BTAG_NONE  # noqa
+from meshmode.mesh import BTAG_ALL, BTAG_NONE  # ruff:ignore[unused-import]
 from meshmode.transform_metadata import FirstAxisIsElementsTag
 
 
