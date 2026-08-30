@@ -1412,10 +1412,10 @@ def test_node_vertex_consistency_check(actx_factory: ArrayContextFactory):
         actx, vol_discr, group_factory, FACE_RESTR_ALL, per_face_groups=False)
 
     # Element vertex indices rotated
+    vol_mesh_unrotated = mgen.generate_regular_rect_mesh(
+        a=(-1,)*2, b=(1,)*2,
+        nelements_per_axis=(8,)*2)
     with pytest.raises(InconsistentVerticesError):
-        vol_mesh_unrotated = mgen.generate_regular_rect_mesh(
-            a=(-1,)*2, b=(1,)*2,
-            nelements_per_axis=(8,)*2)
         vol_mesh = vol_mesh_unrotated.copy(
             groups=[
                 replace(

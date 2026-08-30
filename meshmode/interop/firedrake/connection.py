@@ -238,7 +238,7 @@ class FiredrakeConnection:
 
     @memoize_method
     def firedrake_fspace(self, shape=None):
-        """
+        r"""
         Return a firedrake function space that
         *self.discr.groups[self.group_nr]* is connected to
         of the appropriate vector dimension
