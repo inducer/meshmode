@@ -603,10 +603,11 @@ def generate_icosahedron(
     tris: list[list[int]] = []
     m = len(top_ring)
     for i in range(m):
-        tris.append([top_ring[i], top_ring[(i+1) % m], top_point])
-        tris.append([bottom_ring[i], bottom_point, bottom_ring[(i+1) % m], ])
-        tris.append([bottom_ring[i], bottom_ring[(i+1) % m], top_ring[i]])
-        tris.append([top_ring[i], bottom_ring[(i+1) % m], top_ring[(i+1) % m]])
+        tris.extend((
+            [top_ring[i], top_ring[(i + 1) % m], top_point],
+            [bottom_ring[i], bottom_point, bottom_ring[(i + 1) % m]],
+            [bottom_ring[i], bottom_ring[(i + 1) % m], top_ring[i]],
+            [top_ring[i], bottom_ring[(i + 1) % m], top_ring[(i + 1) % m]]))
 
     vertices *= r/la.norm(vertices[:, 0])
 
@@ -770,8 +771,9 @@ def generate_surface_of_revolution(
     tris: list[list[int]] = []
     for i in range(m-1):
         for j in range(n):
-            tris.append([i*n + j, (i + 1)*n + j, (i + 1)*n + (j + 1) % n])
-            tris.append([i*n + j, i*n + (j + 1) % n, (i + 1)*n + (j + 1) % n])
+            tris.extend((
+                [i * n + j, (i + 1) * n + j, (i + 1) * n + (j + 1) % n],
+                [i * n + j, i * n + (j + 1) % n, (i + 1) * n + (j + 1) % n]))
 
     vertex_indices = np.array(tris, dtype=np.int32)
 

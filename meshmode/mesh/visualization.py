@@ -310,9 +310,10 @@ def write_vertex_vtk_file(
 def mesh_to_tikz(mesh: Mesh) -> str:
     lines = []
 
-    lines.append(fr"\def\nelements{{{mesh.nelements}}}")
-    lines.append(fr"\def\nvertices{{{mesh.nvertices}}}")
-    lines.append("")
+    lines.extend((
+        rf"\def\nelements{{{mesh.nelements}}}",
+        rf"\def\nvertices{{{mesh.nvertices}}}",
+        ""))
 
     drawel_lines = []
     drawel_lines.append(r"\def\drawelements#1{")

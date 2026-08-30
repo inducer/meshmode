@@ -117,8 +117,8 @@ def test_partition_interpolation(actx_factory: ArrayContextFactory, dim, mesh_pa
         for i_local_part, part_mesh in part_meshes.items():
             from meshmode.distributed import get_connected_parts
             neighbors = get_connected_parts(part_mesh)
-            for i_remote_part in neighbors:
-                connected_parts.add((i_local_part, i_remote_part))
+            connected_parts.update((i_local_part, i_remote_part)
+                for i_remote_part in neighbors)
 
         from meshmode.discretization import Discretization
         vol_discrs = [Discretization(actx, part_mesh, group_factory)
@@ -259,8 +259,8 @@ def test_partition_mesh(mesh_size, num_parts, num_groups, dim, scramble_parts):
     for i_local_part in range(num_parts):
         from meshmode.distributed import get_connected_parts
         neighbors = get_connected_parts(part_meshes[i_local_part])
-        for i_remote_part in neighbors:
-            connected_parts.add((i_local_part, i_remote_part))
+        connected_parts.update((i_local_part, i_remote_part)
+            for i_remote_part in neighbors)
 
     from meshmode.mesh import BTAG_PARTITION
     from meshmode.mesh.processing import find_group_indices

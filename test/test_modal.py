@@ -160,7 +160,7 @@ def test_modal_coefficients_by_projection(
     w_diag = np.diag(quad.weights)
 
     modal_data = []
-    for _, nodal_data in enumerate(nodal_f_data):
+    for nodal_data in nodal_f_data:
         # Compute modal data in each element: V.T * W * nodal_data
         elem_modal_f = np.dot(vdm.T, np.dot(w_diag, nodal_data))
         modal_data.append(elem_modal_f)

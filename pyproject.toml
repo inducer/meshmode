@@ -102,6 +102,7 @@ extend-ignore = [
     "non-empty-init-module",
     "type-check-without-type-error",
     "collapsible-if",
+    "pytest-parameter-with-default-argument",
 ]
 
 [tool.ruff.lint.flake8-quotes]

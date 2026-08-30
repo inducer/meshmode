@@ -1417,7 +1417,7 @@ class Mesh:
                     )
 
             nodal_adjacency = _compute_nodal_adjacency_from_vertices(self)
-            object.__setattr__(self, "_nodal_adjacency", nodal_adjacency)
+            object.__setattr__(self, "_nodal_adjacency", nodal_adjacency)  # ruff: ignore[unnecessary-dunder-call]
 
         return nodal_adjacency
 
@@ -1485,7 +1485,7 @@ class Mesh:
 
             facial_adjacency_groups = _compute_facial_adjacency_from_vertices(
                 self.groups, self.element_id_dtype, self.face_id_dtype)
-            object.__setattr__(self, "_facial_adjacency_groups",
+            object.__setattr__(self, "_facial_adjacency_groups",  # ruff: ignore[unnecessary-dunder-call]
                                facial_adjacency_groups)
         else:
             facial_adjacency_groups = fagrps_in

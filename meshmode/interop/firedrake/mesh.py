@@ -503,7 +503,7 @@ def _get_firedrake_orientations(fdrake_mesh, unflipped_group, vertices,
 
 def import_firedrake_mesh(fdrake_mesh, cells_to_use=None,
                           normals=None, no_normals_warn=None):
-    """
+    r"""
     Create a :class:`meshmode.mesh.Mesh`
     from a `firedrake.mesh.MeshGeometry`
     with the same cells/elements, vertices, nodes,
