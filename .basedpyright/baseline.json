@@ -24905,22 +24905,6 @@
                 "code": "reportUnknownMemberType",
                 "range": {
                     "startColumn": 4,
-                    "endColumn": 16,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 4,
-                    "endColumn": 16,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 4,
                     "endColumn": 23,
                     "lineCount": 1
                 }
