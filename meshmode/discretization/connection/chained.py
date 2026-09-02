@@ -95,7 +95,7 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
 class _ConnectionBatchData:
     result_unit_nodes: np.ndarray
     from_group_index: int
-    to_element_face: int
+    to_element_face: int | None
 
 
 def _iterbatches(groups):
@@ -159,7 +159,6 @@ def _build_new_group_table(
                 igrp_new = n_to_groups * igrp + jgrp
                 ibatch_new = len(batch_info[igrp_new])
 
-                assert tbatch.to_element_face is not None
                 batch_info[igrp_new].append(_ConnectionBatchData(
                     from_group_index=fbatch.from_group_index,
                     result_unit_nodes=result_unit_nodes,
