@@ -165,7 +165,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                     "{[iel_init]: 0 <= iel_init < n_to_elements}",
                     "{[idof_init]: 0 <= idof_init < n_to_nodes}",
                     "{[iel]: 0 <= iel < nelements}",
-                    "{[i_quad]: 0 <= i_quad < n_to_nodes}",
+                    "{[i_quad]: 0 <= i_quad < n_from_nodes}",
                     "{[ibasis]: 0 <= ibasis < n_to_nodes}"
                 ],
                 """
@@ -184,7 +184,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                                  shape=("n_to_elements", "n_to_nodes"),
                                  is_input=False),
                     lp.GlobalArg("basis_tabulation", None,
-                                 shape=("n_to_nodes", "n_to_nodes")),
+                                 shape=("n_to_nodes", "n_from_nodes")),
                     lp.GlobalArg("weights", None,
                                  shape="n_from_nodes"),
                     lp.ValueArg("n_from_elements", np.int32),
