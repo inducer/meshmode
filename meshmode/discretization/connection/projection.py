@@ -28,6 +28,7 @@ import numpy as np
 import loopy as lp
 import modepy as mp
 from arraycontext import (
+    ArrayContext,
     NotAnArrayContainerError,
     deserialize_container,
     make_loopy_program,
@@ -87,7 +88,7 @@ class L2ProjectionInverseDiscretizationConnection(DiscretizationConnection):
                 is_surjective=is_surjective)
 
     @keyed_memoize_method(key=lambda actx: ())
-    def _batch_weights(self, actx):
+    def _batch_weights(self, actx: ArrayContext):
         """Computes scaled quadrature weights for each interpolation batch in
         :attr:`conn`. The quadrature weights can be used to integrate over
         child elements in the domain of the parent element, by a change of

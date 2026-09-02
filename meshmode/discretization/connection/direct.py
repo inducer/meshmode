@@ -873,7 +873,9 @@ class DirectDiscretizationConnection(DiscretizationConnection):
 
 # {{{ dense resampling matrix
 
-def make_direct_full_resample_matrix(actx, conn):
+def make_direct_full_resample_matrix(
+            actx: ArrayContext,
+            conn: DirectDiscretizationConnection):
     """Build a dense matrix representing this discretization connection.
 
     .. warning::

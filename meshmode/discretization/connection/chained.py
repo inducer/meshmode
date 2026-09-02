@@ -24,12 +24,25 @@ THE SOFTWARE.
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 import modepy as mp
 
-from meshmode.discretization.connection.direct import DiscretizationConnection
+from meshmode.discretization import InterpolatoryElementGroupBase
+from meshmode.discretization.connection.direct import (
+    DirectDiscretizationConnection,
+    DiscretizationConnection,
+)
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from arraycontext import ArrayContext
+
+    from meshmode.discretization import Discretization
 
 
 # {{{ chained discretization connection
@@ -40,8 +53,11 @@ class ChainedDiscretizationConnection(DiscretizationConnection):
 
     .. attribute:: connections
     """
+    connections: Sequence[DiscretizationConnection]
 
-    def __init__(self, connections, from_discr=None):
+    def __init__(self,
+            connections: Sequence[DiscretizationConnection],
+            from_discr: Discretization | None = None):
         if connections:
             if from_discr is not None:
                 assert from_discr is connections[0].from_discr
@@ -99,7 +115,10 @@ def _build_element_lookup_table(actx, conn):
     return el_table
 
 
-def _build_new_group_table(from_conn, to_conn):
+def _build_new_group_table(
+            from_conn: DirectDiscretizationConnection,
+            to_conn: DirectDiscretizationConnection
+        ):
     def find_batch(nodes, gtb):
         for igrp, batches in enumerate(gtb):
             for ibatch, batch in enumerate(batches):
@@ -119,6 +138,7 @@ def _build_new_group_table(from_conn, to_conn):
         for (jgrp, jbatch), (_, tbatch) in _iterbatches(to_conn.groups):
             # compute result_unit_nodes
             ffgrp = from_conn.from_discr.groups[fbatch.from_group_index]
+            assert isinstance(ffgrp, InterpolatoryElementGroupBase)
             from_matrix = mp.resampling_matrix(
                     ffgrp.basis_obj().functions,
                     fbatch.result_unit_nodes,
@@ -126,6 +146,7 @@ def _build_new_group_table(from_conn, to_conn):
             result_unit_nodes = from_matrix.dot(ffgrp.unit_nodes.T)
 
             tfgrp = to_conn.from_discr.groups[tbatch.from_group_index]
+            assert isinstance(tfgrp, InterpolatoryElementGroupBase)
             to_matrix = mp.resampling_matrix(
                     tfgrp.basis_obj().functions,
                     tbatch.result_unit_nodes,
@@ -138,6 +159,7 @@ def _build_new_group_table(from_conn, to_conn):
                 igrp_new = n_to_groups * igrp + jgrp
                 ibatch_new = len(batch_info[igrp_new])
 
+                assert tbatch.to_element_face is not None
                 batch_info[igrp_new].append(_ConnectionBatchData(
                     from_group_index=fbatch.from_group_index,
                     result_unit_nodes=result_unit_nodes,
@@ -163,7 +185,10 @@ def _build_batches(actx, from_bins, to_bins, batch):
                 to_element_face=batch[ibatch].to_element_face)
 
 
-def flatten_chained_connection(actx, connection):
+def flatten_chained_connection(
+            actx: ArrayContext,
+            connection: DiscretizationConnection
+        ):
     """Collapse a connection into a direct connection.
 
     If the given connection is already a
@@ -205,7 +230,7 @@ def flatten_chained_connection(actx, connection):
         make_same_mesh_connection,
     )
 
-    if not hasattr(connection, "connections"):
+    if not isinstance(connection, ChainedDiscretizationConnection):
         return connection
 
     if not connection.connections:
@@ -268,7 +293,11 @@ def flatten_chained_connection(actx, connection):
 
 # {{{ build chained resample matrix
 
-def make_full_resample_matrix(actx, connection):
+def make_full_resample_matrix(
+            actx: ArrayContext,
+            connection:
+                DirectDiscretizationConnection | ChainedDiscretizationConnection,
+        ):
     """Build a dense matrix representing the discretization connection.
 
     This is based on
@@ -302,9 +331,14 @@ def make_full_resample_matrix(actx, connection):
         result = np.eye(connection.to_discr.ndofs)
         return actx.from_numpy(result)
 
+    if not isinstance(connection.connections[0], DirectDiscretizationConnection):
+        raise TypeError("only direct connections are supported")
+
     acc = actx.to_numpy(
             make_full_resample_matrix(actx, connection.connections[0]))
     for conn in connection.connections[1:]:
+        if not isinstance(conn, DirectDiscretizationConnection):
+            raise TypeError("only direct connections are supported")
         resampler = actx.to_numpy(make_full_resample_matrix(actx, conn))
         acc = resampler @ acc
 
