@@ -459,6 +459,49 @@ def get_partition_by_pymetis(
     return np.array(p, np.intp)
 
 
+# FIXME: Move somewhere else, since it's not strictly limited to distributed?
+def get_reordering_by_pymetis(mesh, *, connectivity="facial", **kwargs):
+    """Return a reordered mesh created by :mod:`pymetis`.
+
+    :arg mesh: A :class:`meshmode.mesh.Mesh` instance
+    :arg connectivity: the adjacency graph to be used for partitioning. Either
+        ``"facial"`` or ``"nodal"`` (based on vertices).
+    :arg kwargs: Passed unmodified to :func:`pymetis.nested_dissection`.
+    :returns: a :class:`numpy.ndarray` with the permutation in p[0] and inverse
+        permutation in p[1]
+    """
+
+    if connectivity == "facial":
+        # shape: (2, n_el_pairs)
+        neighbor_el_pairs = np.hstack([
+                np.array([
+                    fagrp.elements + mesh.base_element_nrs[fagrp.igroup],
+                    fagrp.neighbors + mesh.base_element_nrs[fagrp.ineighbor_group]
+                    ])
+                for fagrp_list in mesh.facial_adjacency_groups
+                for fagrp in fagrp_list
+                if isinstance(fagrp, InteriorAdjacencyGroup)
+                ])
+        sorted_neighbor_el_pairs = neighbor_el_pairs[
+                :, np.argsort(neighbor_el_pairs[0])]
+        xadj = np.searchsorted(
+                sorted_neighbor_el_pairs[0],
+                np.arange(mesh.nelements+1))
+        adjncy = sorted_neighbor_el_pairs[1]
+
+    elif connectivity == "nodal":
+        xadj = mesh.nodal_adjacency.neighbors_starts.tolist()
+        adjncy = mesh.nodal_adjacency.neighbors.tolist()
+
+    else:
+        raise ValueError("invalid value of connectivity")
+
+    from pymetis import nested_dissection
+    p = nested_dissection(xadj=xadj, adjncy=adjncy, **kwargs)
+
+    return np.array(p)
+
+
 def membership_list_to_map(
             membership_list: np.ndarray[Any, Any]
         ) -> Mapping[Hashable, np.ndarray]:
