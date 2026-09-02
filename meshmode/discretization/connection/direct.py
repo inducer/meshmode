@@ -255,6 +255,12 @@ class _FromGroupPickData(Generic[ArrayT]):
     from_element_indices: ArrayT
     is_surjective: bool
 
+    @keyed_memoize_method(key=lambda actx: type(actx))
+    def indexed_dof_pick_lists(self, actx):
+        assert actx.permits_advanced_indexing
+        return actx.freeze(
+            actx.thaw(self.dof_pick_lists)[actx.thaw(self.dof_pick_list_indices)])
+
 # }}}
 
 
@@ -383,7 +389,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
     # {{{ _resample_matrix
 
     @keyed_memoize_method(key=lambda actx, to_group_index, ibatch_index:
-            (to_group_index, ibatch_index))
+            (type(actx), to_group_index, ibatch_index))
     def _resample_matrix(self, actx: ArrayContext, to_group_index: int,
             ibatch_index: int):
         import modepy as mp
@@ -446,7 +452,8 @@ class DirectDiscretizationConnection(DiscretizationConnection):
             else None)
 
     @keyed_memoize_method(lambda actx, to_group_index, ibatch_index,
-            tol_multiplier=None: (to_group_index, ibatch_index, tol_multiplier))
+            tol_multiplier=None: (type(actx), to_group_index,
+                                  ibatch_index, tol_multiplier))
     def _frozen_resample_point_pick_indices(self, actx: ArrayContext,
             to_group_index: int, ibatch_index: int,
             tol_multiplier: float | None = None):
@@ -746,8 +753,7 @@ class DirectDiscretizationConnection(DiscretizationConnection):
                             grp_ary_contrib = ary[fgpd.from_group_index][
                                         _reshape_and_preserve_tags(
                                             actx, from_element_indices, (-1, 1)),
-                                        actx.thaw(fgpd.dof_pick_lists)[
-                                            actx.thaw(fgpd.dof_pick_list_indices)]
+                                        actx.thaw(fgpd.indexed_dof_pick_lists(actx))
                                         ]
 
                             if not fgpd.is_surjective:
